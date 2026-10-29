@@ -1,0 +1,11 @@
+# Never commit game data, dumps, saves or local build output
+build/
+**/out/
+d2r-data/
+__pycache__/
+*.pyc
+*.dmp
+*.mdmp
+*.bin
+*_dump.exe
+callidx.npz
