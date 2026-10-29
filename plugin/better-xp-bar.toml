@@ -1,0 +1,20 @@
+# Better XP Bar settings (D2RLoader writes this file from the plugin's built-in defaults when it is missing).
+# Restart the game after a change, or type "better-xp-bar reload" in the D2RLoader console.
+
+[display]
+visible = true              # shown when a game starts (toggle with the hotkey)
+anchor = "bottom-center"    # top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
+offset_x = 0                # pixels from the anchor, + = right
+offset_y = -160             # pixels from the anchor, + = down
+text_size = 0               # 0 = D2RLoader's default text size
+background = 0.55           # background opacity 0..1 (0 = no background)
+text_color = [1.0, 0.86, 0.55]
+lines = ["level", "xp", "session", "rate", "time", "eta"]   # which lines, in this order
+
+[session]
+scope = "game"              # game: a new session every game. character: one session per character across games
+window_seconds = 600        # rolling window for the live XP/hour (60..86400)
+eta_from = "window"         # window: time to level from the live rate. session: from the session average
+
+[log]
+xp_changes = false          # true: log XP changes (sampled 1st, 100th, 10,000th ...)

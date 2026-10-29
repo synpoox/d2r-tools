@@ -18,6 +18,7 @@
 #include <D2RLPlugin/api.h>
 
 #include "build_guard.h"
+#include "display.h"
 #include "env_guard.h"
 #include "log.h"
 #include "off_switch.h"
@@ -68,8 +69,12 @@ void InstallEnvironment(const D2RL::PluginContext* context, char* report, size_t
 	EnvironmentStatus(report, size);
 }
 
+// Order matters: overlay needs xp. Hotkeys use no game address (they only queue work).
 Part g_parts[] = {
 	{"envguard", false, InstallEnvironment, ""},
+	{"xp", true, display::InstallTracking, ""},
+	{"overlay", true, display::InstallOverlay, ""},
+	{"hotkeys", false, display::InstallHotkeys, ""},
 };
 
 void InstallParts(const D2RL::PluginContext* context, bool imageOk) noexcept {
@@ -94,6 +99,35 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		return D2RL::ConsoleCommandResult::Failed;
 	}
 	char line[1100];
+	const char* args = command->args != nullptr ? command->args : "";
+	while (*args == ' ') {
+		++args;
+	}
+	if (std::strncmp(args, "reset", 5) == 0) {
+		display::RequestReset();
+		command->plugin->WriteConsoleMessage("better-xp-bar: session reset");
+		return D2RL::ConsoleCommandResult::Handled;
+	}
+	if (std::strncmp(args, "toggle", 6) == 0) {
+		display::RequestToggle();
+		command->plugin->WriteConsoleMessage("better-xp-bar: display toggled");
+		return D2RL::ConsoleCommandResult::Handled;
+	}
+	if (std::strncmp(args, "reload", 6) == 0) {
+		display::RequestReload();
+		command->plugin->WriteConsoleMessage("better-xp-bar: config reload queued (see the plugin log)");
+		return D2RL::ConsoleCommandResult::Handled;
+	}
+	if (std::strncmp(args, "show", 4) == 0) {
+		display::Lines(line, sizeof(line));
+		command->plugin->WriteConsoleMessage(line);
+		plog::Info("show: %s", line);
+		return D2RL::ConsoleCommandResult::Handled;
+	}
+	if (args[0] != '\0' && std::strncmp(args, "status", 6) != 0) {
+		command->plugin->WriteConsoleMessage("usage: better-xp-bar [status|show|reset|toggle|reload]");
+		return D2RL::ConsoleCommandResult::InvalidArguments;
+	}
 	char image[200];
 	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
 	std::snprintf(line, sizeof(line), "%s %s | %s | mod %s | file %s", PluginName, PluginVersion, image,
@@ -108,6 +142,10 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		char state[sizeof(p.report) + 64];
 		if (std::strcmp(p.word, "envguard") == 0 && !off_switch::Off(p.word)) {
 			EnvironmentStatus(state, sizeof(state));
+		} else if (std::strcmp(p.word, "xp") == 0 && std::strncmp(p.report, "on", 2) == 0) {
+			char live[900];
+			display::Status(live, sizeof(live));
+			std::snprintf(state, sizeof(state), "%s | %s", p.report, live);
 		} else {
 			std::snprintf(state, sizeof(state), "%s", p.report);
 		}
@@ -147,8 +185,11 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	if (!imageOk) {
 		plog::Warn("not the expected game image: every engine part stays off");
 	}
+	display::LoadConfig(context);
 	InstallParts(context, imageOk);
-	return context->RegisterConsoleCommand(PluginName, StatusCommand, "Status of Better XP Bar and its parts.");
+	auto cmd = D2RL::MakeConsoleCommand(PluginName, StatusCommand, "Better XP Bar: status, show, reset, toggle, reload.");
+	cmd.usage = "better-xp-bar [status|show|reset|toggle|reload]";
+	return context->RegisterConsoleCommand(cmd);
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {

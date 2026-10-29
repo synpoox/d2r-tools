@@ -10,9 +10,13 @@ add_library(bxb_plugin SHARED
 	src/log.cpp
 	src/off_switch.cpp
 	src/env_guard.cpp
+	src/xp_reader.cpp
+	src/display.cpp
 	better-xp-bar.rc
 )
-target_link_libraries(bxb_plugin PRIVATE D2RLPlugin::D2RLPlugin)
+target_link_libraries(bxb_plugin PRIVATE D2RLPlugin::D2RLPlugin bxb_core)
+# D2RLoader writes <scope>/d2rloader/config/better-xp-bar.toml from this when the file is missing.
+d2rlplugin_embed_config(TARGET bxb_plugin FILE "${CMAKE_CURRENT_SOURCE_DIR}/better-xp-bar.toml")
 target_compile_definitions(bxb_plugin PRIVATE
 	BXB_PLUGIN_NAME="${BXB_PLUGIN_NAME}"
 	BXB_PLUGIN_VERSION="${BXB_PLUGIN_VERSION}"

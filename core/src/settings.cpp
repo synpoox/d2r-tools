@@ -36,6 +36,44 @@ auto Split(const std::string& s, char sep) -> std::vector<std::string> {
 	return out;
 }
 
+// TOML scalars: "text" or 'text' -> text; anything else as written.
+auto Unquote(const std::string& v) -> std::string {
+	if (v.size() >= 2 && (v.front() == '"' || v.front() == '\'') && v.back() == v.front()) {
+		return v.substr(1, v.size() - 2);
+	}
+	return v;
+}
+
+// TOML array [a, "b", c] -> items (unquoted). Not an array -> false.
+auto ParseArray(const std::string& v, std::vector<std::string>* out) -> bool {
+	if (v.size() < 2 || v.front() != '[' || v.back() != ']') {
+		return false;
+	}
+	out->clear();
+	for (const std::string& item : Split(v.substr(1, v.size() - 2), ',')) {
+		out->push_back(Unquote(item));
+	}
+	return true;
+}
+
+// Cut a '#' comment that is not inside a quoted string.
+auto StripComment(const std::string& line) -> std::string {
+	char quote = 0;
+	for (size_t i = 0; i < line.size(); ++i) {
+		const char c = line[i];
+		if (quote != 0) {
+			if (c == quote) {
+				quote = 0;
+			}
+		} else if (c == '"' || c == '\'') {
+			quote = c;
+		} else if (c == '#') {
+			return line.substr(0, i);
+		}
+	}
+	return line;
+}
+
 auto ParseFloat(const std::string& v, float* out) -> bool {
 	char* end = nullptr;
 	const double d = std::strtod(v.c_str(), &end);
@@ -90,11 +128,7 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 		if (n == 1 && line.size() >= 3 && static_cast<unsigned char>(line[0]) == 0xEF) {
 			line = line.substr(3);  // UTF-8 BOM
 		}
-		const size_t comment = line.find_first_of(";#");
-		if (comment != std::string::npos) {
-			line = line.substr(0, comment);
-		}
-		line = Trim(line);
+		line = Trim(StripComment(line));
 		if (line.empty()) {
 			continue;
 		}
@@ -108,8 +142,11 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 			continue;
 		}
 		const std::string key = section + "." + Lower(Trim(line.substr(0, eq)));
-		const std::string value = Trim(line.substr(eq + 1));
+		const std::string rawValue = Trim(line.substr(eq + 1));
+		const std::string value = Unquote(rawValue);
 		const std::string lvalue = Lower(value);
+		std::vector<std::string> items;
+		const bool isArray = ParseArray(rawValue, &items);
 		float f = 0.0f;
 		bool ok = true;
 		if (key == "display.visible") {
@@ -135,18 +172,22 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 				s.background = f;
 			}
 		} else if (key == "display.text_color") {
-			const auto parts = Split(value, ',');
 			std::array<float, 3> c{};
-			ok = parts.size() == 3;
+			ok = isArray && items.size() == 3;
 			for (size_t i = 0; ok && i < 3; ++i) {
-				ok = ParseFloat(parts[i], &c[i]) && c[i] >= 0.0f && c[i] <= 1.0f;
+				ok = ParseFloat(items[i], &c[i]) && c[i] >= 0.0f && c[i] <= 1.0f;
 			}
 			if (ok) {
 				s.textColor = c;
 			}
 		} else if (key == "display.lines") {
+			if (!isArray) {
+				warn(n, "'display.lines' must be an array, e.g. [\"level\", \"xp\"] (default kept)");
+				continue;
+			}
 			std::vector<LineId> lines;
-			for (const std::string& name : Split(lvalue, ',')) {
+			for (const std::string& item : items) {
+				const std::string name = Lower(item);
 				const auto it = std::find(LineNames.begin(), LineNames.end(), name);
 				if (it == LineNames.end()) {
 					warn(n, "unknown line '" + name + "'");
@@ -183,27 +224,27 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 	return s;
 }
 
-auto DefaultIni() -> std::string {
-	return R"(; Better XP Bar settings. Delete this file to get the defaults back. Restart the game after a change
-; (or type "better-xp-bar reload" in the D2RLoader console).
+auto DefaultToml() -> std::string {
+	return R"(# Better XP Bar settings (D2RLoader writes this file from the plugin's built-in defaults when it is missing).
+# Restart the game after a change, or type "better-xp-bar reload" in the D2RLoader console.
 
 [display]
-visible = true          ; shown when a game starts (toggle with the hotkey)
-anchor = bottom-center  ; top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
-offset_x = 0            ; pixels from the anchor, + = right
-offset_y = -160         ; pixels from the anchor, + = down
-text_size = 0           ; 0 = D2RLoader's default text size
-background = 0.55       ; background opacity 0..1 (0 = no background)
-text_color = 1.0, 0.86, 0.55
-lines = level, xp, session, rate, time, eta   ; which lines, in this order
+visible = true              # shown when a game starts (toggle with the hotkey)
+anchor = "bottom-center"    # top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
+offset_x = 0                # pixels from the anchor, + = right
+offset_y = -160             # pixels from the anchor, + = down
+text_size = 0               # 0 = D2RLoader's default text size
+background = 0.55           # background opacity 0..1 (0 = no background)
+text_color = [1.0, 0.86, 0.55]
+lines = ["level", "xp", "session", "rate", "time", "eta"]   # which lines, in this order
 
 [session]
-scope = game            ; game: a new session every game. character: one session per character across games
-window_seconds = 600    ; rolling window for the live XP/hour (60..86400)
-eta_from = window       ; window: time to level from the live rate. session: from the session average
+scope = "game"              # game: a new session every game. character: one session per character across games
+window_seconds = 600        # rolling window for the live XP/hour (60..86400)
+eta_from = "window"         # window: time to level from the live rate. session: from the session average
 
 [log]
-xp_changes = false      ; true: log XP changes (sampled 1st, 100th, 10,000th ...)
+xp_changes = false          # true: log XP changes (sampled 1st, 100th, 10,000th ...)
 )";
 }
 

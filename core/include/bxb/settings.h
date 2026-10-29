@@ -1,4 +1,4 @@
-// better-xp-bar.ini: parsing and defaults. Pure C++ (the plugin reads the file, this parses the text).
+// better-xp-bar.toml (D2RLoader plugin config): parsing and defaults. Pure C++ (the plugin reads the file, this parses the text).
 #pragma once
 
 #include "bxb/format.h"
@@ -25,12 +25,13 @@ struct Settings {
 	bool logXpChanges = false;              // [log] xp_changes: one log line per XP change (sampled)
 };
 
-// Parses ini text ("[section]", "key = value", ';' or '#' comments). Unknown keys and bad values keep the default
+// Parses the TOML subset the file uses ("[section]", key = value with numbers, booleans, "strings" and [arrays],
+// '#' comments). Unknown keys and bad values keep the default
 // and add a warning. Never throws.
 auto ParseSettings(const std::string& text, std::vector<std::string>* warnings = nullptr) -> Settings;
 
-// The commented default file the plugin writes when there is none.
-auto DefaultIni() -> std::string;
+// The commented default file (the same text is embedded in the DLL as plugin/better-xp-bar.toml).
+auto DefaultToml() -> std::string;
 
 auto AnchorName(Anchor a) -> const char*;
 auto LineName(LineId id) -> const char*;
