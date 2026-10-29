@@ -22,29 +22,30 @@ item type check. MultiSpec adds no sounds or item types.
 
 ## Hooks
 
-| # | Need | Status | Source / notes |
+Second pass, after the owner supplied a memory dump (stamp `0x6ab3782c`). Details and evidence for every "found" row:
+[knowledge/d2r-93847-skills-respec.md](../knowledge/d2r-93847-skills-respec.md). "Static" = read from code, not yet run
+in game.
+
+| # | Need | Status | Address / notes |
 |---|---|---|---|
-| 1 | Command dispatch (`/spec N`, `/spec`, `multispec`) | **SDK** | `RegisterConsoleCommand` with `ConsoleCommandRegistration` (aliases, `ConsoleCommandScope`). **Open:** it is not confirmed that D2RLoader routes a chat line that starts with `/` to its console commands. Verify in a game slot. Fallback: a `SharedEventService` UI-message listener on the chat submit message, also unverified |
-| 2 | Town check | **In registry** | `0x34b440` (unit) -> room, `0x2f0750` (room) -> nonzero in town. Hooked or called in game per the registry. SDK alternative: `GetLevelIdFromUnit` (reimplementation ordinal 2000) |
-| 3 | Unspent skill points | **In registry (function)** | Stat `newskills` (classic id 5; confirm the id from itemstatcost at load). Read `0x2f48c0` (unit, stat, layer) base value, write `0x2f7d10` (unit, stat, value, layer). Whether a server-side set reaches the client without another call: **needs verification** |
-| 4 | Read a hard skill level | **Needs RE** | No unit skill-list function or offset in the registry (classic: unit skill list, `SKILLS_GetSkill`, skill +level) |
-| 5 | Set hard skill levels (server, synced to the client) | **Needs RE** | Preferred: D2R's own skills respec (the Akara / Token of Absolution path) plus D2R's spend-a-point handler, so prerequisites, passives, auras and client sync stay D2R's job. Alternative: the add-skill / set-level function plus its client update |
-| 6 | Server player unit from a command / game callback | **Needs RE** | The SDK gives a `PlayerHandle`, never a unit pointer. Needs the client -> player unit path, or the game's player list |
-| 7 | Class of a skill (which skills belong to a spec) | **Needs RE (small)** | Skills record (0x2ec bytes, getter `0x97790`) `charclass` offset is not in the registry. Can also be checked against `DataTableService` Skills rows |
-| 8 | Character identity (name, class) for per-character storage | **Needs RE** | Player data name offset is not in the registry. Class: unit +0x08 for players (registry: class id) |
-| 9 | Save read/write | **Not needed for the MVP** | Proposed design keeps the active spec in the `.d2s` as D2R saves it, and stores the other specs in a plugin-owned file next to the save. No `.d2s` write by the plugin. A save hook would only be needed for an exact "saved" moment |
-| 10 | Skill hotkeys per spec (F1-F16, left/right) | **Needs RE, optional** | In the `.d2s` header at 0x28 (saves.md); the live copy is not in the registry |
+| 1 | Command dispatch (`/spec N`) | **SDK; routing to verify in game** | `RegisterConsoleCommand`. Unverified: that a chat line `/spec 2` reaches it, and that the callback's `Client*` is the server client on the game thread. The plugin checks the round trip before using it |
+| 2 | Town check | **In registry, confirmed** | `0x2f0750(0x34b440(unit))`, the same pair D2R's own `UnitIsInTown(player)` test uses |
+| 3 | Unspent skill points | **Found (static)** | Stat 5 = `STATS_NEWSKILLS` (D2R's test). Read `0x2f48c0` / `0x2f5020`. Written only by D2R's own respec and spend functions, which sync the client |
+| 4 | Read a hard skill level | **Found (static)** | `0x33dcd0(unit, id, -1)` -> skill, then skill +0x40, or `0x33d1e0(unit, skill, 0, 0)` (D2RLoader-hooked: call, never hook) |
+| 5 | Set hard skill levels with client sync | **Found (static)** | Reset: `0x4360f0(game, player)`, D2R's skills-only respec (Akara and Token use it). Replay: per point the checks `0x436bd0`, `0x339330`, `0x339c00` and maxlvl, then `0x438670(dataFlag, player, id)`, exactly as the add-skill packet handler `0x4b3ee0` does. Both send the levels to the client |
+| 6 | Server player unit from a command | **Found (static)** | `0x484c90(client, 0)` = `ClientGetControlUnit`; game at client +0x2b0 or unit +0xd8; dataFlag game +0x106 |
+| 7 | Class skill list | **Found (static)** | `0x33cb30(dataFlag, class)` count, `0x33dde0(dataFlag, class, i)` id: the save's "if" byte order. Record +0x2c = charclass |
+| 8 | Character name | **Found (static), two sources** | PlayerData +0x00 (`0x34b240(unit)`) and Client +0x2c. The plugin logs both and refuses when they differ |
+| 9 | Save read/write | **Not needed** | Active spec stays in the `.d2s`, saved by D2R. Other specs in a plugin-owned file |
+| 10 | Skill hotkeys per spec | **Not found, optional** | Not looked for. D2R's respec leaves the hotkeys as they are; so would MultiSpec |
 
-## RE spike: blocked
+Tooling note: rea's Ghidra provider is not installed here (`/opt/ghidra` missing), so the analysis used capstone over the
+dump plus a `.pdata` function index. The fastest lead was D2R's compiled-in test cases (`BC_ASSERT:` strings naming
+`SkillsGetLevel`, `UnitIsInTown`, `ClientGetControlUnit`).
 
-Nothing in the "needs RE" rows could be resolved in this session:
-
-- **No game image.** D2R.exe's code is encrypted on disk; the toolkit's method needs an in-memory dump of a running game
-  (`tools/dump_image.py`, Windows). This container is Linux with no D2R install, no dump and no Ghidra project. No
-  computer folder was shared through Remote Control.
-- **No Ghidra.** `rea`'s Ghidra provider reports `executable_missing`: `/opt/ghidra` does not exist.
-
-No address was guessed. Rows 4-8 stay "needs RE" until a session has the dump (see the questions to the owner).
+Constraint found: the respec refunds the **sum of levels**, while spending charges the skills.txt `skpoints` formula
+(record +0x210; -1 = 1). A mod whose skpoints costs are not 1 would gain or lose points on every swap. MultiSpec refuses
+to swap when any class skill's skpoints is not -1/1 (checked at load and per swap).
 
 ## Engine limits that shape the design
 
