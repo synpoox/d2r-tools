@@ -3,7 +3,7 @@
 WoW-style dual spec for D2R 3.3 (build 93847, D2RLoader 1.3.1): a character keeps N saved skill allocations ("specs")
 and switches between them with a command, without paying for a respec.
 
-Status: **draft for the owner's OK**. Engine facts come from [recon.md](recon.md) and
+Status: **approved by the owner** (town only, empty new specs). Engine facts come from [recon.md](recon.md) and
 [knowledge/d2r-93847-skills-respec.md](../knowledge/d2r-93847-skills-respec.md); all of them are static so far, and
 three need a check in a game slot before the MVP can be trusted (section 9).
 
@@ -12,7 +12,7 @@ three need a check in a game slot before the MVP can be trusted (section 9).
 | Asked | Verdict | Why |
 |---|---|---|
 | Spec = hard skill levels + unspent points | **Changed: a spec stores hard levels only; unspent points are derived** | A character's total skill points T only grows (level-ups, Den of Evil, Radament, Izual, Book of Skill). If spec 2 stored its own unspent count, every point earned while in spec 1 would never reach spec 2. With T = (sum of live hard levels) + `newskills`, spec k's unspent points are T - sum(spec k). They are still shown per spec, and the "unspent points preserved" test still holds |
-| Swap anywhere | **Challenged: default town only, `anywhere` as a config value** | Your own Phase 3 list has "swap refused outside town". In the field a swap removes auras, passives and the skills that keep summons going, mid-fight, and could be used to cheat (cast with spec A's skills, swap). Town also bounds what can go wrong. WoW allows it anywhere out of combat; D2R has no "out of combat" flag to reuse |
+| Swap anywhere | **Changed (owner's decision): town only, not configurable** | Your own Phase 3 list has "swap refused outside town". In the field a swap removes auras, passives and the skills that keep summons going, mid-fight, and could be used to cheat (cast with spec A's skills, swap). Town also bounds what can go wrong. WoW allows it anywhere out of combat; D2R has no "out of combat" flag to reuse |
 | 2 specs, N in config | **Confirmed** | `spec_count`, 2 by default, 1-8. The file format allows up to 255 |
 | Trigger `/spec N` first, UI later | **Confirmed, one open check** | A D2RLoader console command. Whether a line typed in the chat box reaches it is not verified yet (section 9). If not, Phase 2 adds a chat-message listener for `/spec` |
 | Per character, survives save/load, never corrupts `.d2s` | **Confirmed, with zero `.d2s` writes** | Section 3 |
@@ -20,7 +20,7 @@ three need a check in a game slot before the MVP can be trusted (section 9).
 
 Other choices made here (change any of them):
 
-- A new spec starts **empty** (all points unspent). Config `new_spec = "copy"` copies the active one instead.
+- A new spec starts **empty** (all points unspent). Owner's decision; not configurable.
 - Gold cost and cooldown are Phase 4 config values, both off by default.
 - Skill hotkeys (F1-F16, left/right) are not part of a spec. After a swap they stay as they are, as after D2R's own
   respec. Per-spec hotkeys would need RE not done yet; listed as a later option.
@@ -40,7 +40,7 @@ CharacterSpecs
 - **n comes from the loaded tables**, not a constant 30, so a mod using D2RLoader's extended save format with more
   class skills works.
 - The active spec's truth is the **live character** (and so the `.d2s`). The stored copy of the active spec is
-  refreshed from the live levels before every swap and at every load, so normal point spending, Akara and the Token of
+  refreshed from the live levels at every `spec` command, so normal point spending, Akara and the Token of
   Absolution need no special handling: they change the active spec.
 - Points: T = sum(live levels) + live `newskills` (stat 5). A stored spec with sum(levels) > T is `invalid` (only a
   save edit or a data change can cause it) and cannot be loaded; it is kept, never deleted.
@@ -86,7 +86,7 @@ All of a swap runs **in one game-thread callback** on the server (single player,
 /spec N
  1  checks (refuse with a message, change nothing):
       engine parts on; player unit valid (round trip client -> unit -> client, type 0); alive;
-      in town (unless swap_where = anywhere); 1 <= N <= spec_count; N != active; no swap running;
+      in town; 1 <= N <= spec_count; N != active; no swap running;
       every class skill's skpoints is -1 or 1 (section 8); spec N not invalid; cost/cooldown (Phase 4)
  2  snapshot  L_old = live hard levels (0x33dcd0 + skill+0x40); U_old = newskills; T = sum(L_old) + U_old
  3  file: specs[active] = L_old, pending = active>N           (atomic write; abort if it fails)
@@ -100,24 +100,29 @@ All of a swap runs **in one game-thread callback** on the server (single player,
               ok: file active = N, pending none; log "spec 1 -> 2: 54 points in 11 skills, 3 unspent"
  7  on failure: reset again and replay L_old the same way (rollback)
               ok: file active unchanged, pending none; tell the player why the swap failed
-              rollback fails too: leave the character reset (every point unspent, nothing lost), file pending
-              cleared, active spec = what the live character now is; log an error with both spec lines
+              rollback fails too: leave the character reset (every point unspent, nothing lost) and keep `pending`
+              in the file: "recovery". No spec is overwritten while in recovery; `spec N` loads any spec (the
+              active one too) and clears it. Log an error with both reasons
 ```
 
 The steps D2R does itself (removing auras and passives, states, client updates) stay D2R's job: MultiSpec never writes
 a skill level or `newskills` directly.
 
-## 5. Load and reconciliation
+## 5. Reconciliation
 
-On `LocalPlayerReady` (lifecycle service), a game-thread callback reads the live levels and the file:
+**Built in Phase 2: at the start of every `spec` command** (status or swap), in the same game-thread callback, before
+anything else. Doing it on `LocalPlayerReady` instead would need the server player without a command's client, which
+needs RE not done yet; the rules are the same, and D2R saves the live (active) spec either way, so nothing is lost by
+waiting for the first command. The file is simply created or brought up to date then.
 
 | Found | Action |
 |---|---|
-| No file | Create it: spec 1 = live, others empty (or copies, per `new_spec`) |
-| Name or class differ from the file (a new character with an old name) | Move the old file to `.bad-<date>`, start fresh |
+| No file | Create it: spec 1 = live, others empty |
+| Name or class differ from the file (a new character with an old name) | Start fresh; the old file stays as `.bak` |
 | Live == specs[active] | Nothing |
 | Live == specs[k], k != active | The game was not saved after a swap (crash, Alt-F4): active = k, logged |
 | `pending a>b` and live == specs[a] or specs[b] | Same rule: whichever matches becomes active; pending cleared |
+| `pending a>b` and live matches no spec | Recovery (a swap failed both ways): no spec is changed; the player is told to load one with `spec N` |
 | Live matches no spec | The player spent points or respecced in the active spec: specs[active] = live |
 | A stored spec's skill ids differ from the loaded class list (mod data changed) | Remap by skill id; levels of skills that are gone become unspent; state `adjusted`, logged once |
 | A spec's sum > T | State `invalid`: shown, never applied |
@@ -126,13 +131,15 @@ On `LocalPlayerReady` (lifecycle service), a game-thread callback reads the live
 
 | Failure | What happens |
 |---|---|
-| Crash or kill during a swap | The swap is one game-thread callback, so the `.d2s` holds either the old or the new spec, never a mix; the file has both and `pending`. Next load: section 5 picks the matching spec |
+| Crash or kill during a swap | The swap is one game-thread callback, so the `.d2s` holds either the old or the new spec, never a mix; the file has both and `pending`. The next `spec` command (section 5) picks the matching spec |
 | Crash between the file write and the swap | Same: the file still has both specs; live matches the old one |
 | File write fails (disk, permissions) | Step 3 aborts; nothing changed; message and log line |
 | Corrupt or unknown-version file | Kept as `.bad-<date>`; never overwritten in place; fresh file from the live character |
 | D2R refuses a point during replay (prerequisite, stat requirement, data changed) | Rollback (step 7); the message names the skill |
 | Game or loader update (image stamp differs) | Build guard: every engine part stays off; `/spec` answers "MultiSpec is off: this game version is not supported"; files untouched, so nothing is lost and the active spec just stays active |
-| Same stamp but a called function's bytes differ (another plugin patched it) | `specswap` and `specsync` stay off, the status names the function |
+| Same stamp but a called function's bytes differ (another plugin patched it) | `specswap` stays off, the status names the function |
+| A failed swap whose rollback fails too | Character reset (all points unspent), file in recovery: specs untouched until `spec N` |
+| A game session ends while a request is queued | D2RLoader drops the queued callback; the command is free again after 10 s |
 | Plugin removed | The character keeps its active spec (it is in the `.d2s`). The other specs wait in the file |
 | skpoints cost not 1 in the mod | Swaps refused with a message (section 8) |
 | TCP/IP client types `/spec` | MVP: refused ("only the host can swap"); the command is `LocalOnly` |
@@ -147,10 +154,9 @@ after the jump), so a changed function turns its part off instead of being calle
 | Word | Part | Needs the image | Depends on |
 |---|---|---|---|
 | `envguard` | Environment guard (template) | no | |
-| `specstore` | Spec file: path, read, atomic write, CRC | no | |
-| `specsync` | Load reconciliation on `LocalPlayerReady` | yes | `specstore` |
-| `specswap` | The swap (section 4) | yes | `specstore`; works without `specsync` (it snapshots first) |
-| `speccmd` | `/spec` command (and the chat route if needed) | no (refuses when `specswap` is off) | |
+| `specstore` | Spec file: save folder from modinfo.json, fallback folder | no | |
+| `specswap` | Every engine call: reading the character, reconciliation (section 5), the swap (section 4) | yes | `specstore` |
+| `speccmd` | `spec` console command (and a chat route if section 9 check 1 needs one) | no (refuses when `specswap` or `specstore` is off) | |
 | `specui` | Phase 4 button / panel | no | `speccmd` |
 
 Status command `multispec` (and `/spec` with no number): plugin version, image check, parts, off-file words,
@@ -163,11 +169,9 @@ Config (`multispec.toml`, embedded default; the gameplay keys listed in `[d2rl] 
 ```toml
 [multispec]
 spec_count = 2          # 1-8
-swap_where = "town"     # "town" | "anywhere"
-new_spec = "empty"      # "empty" | "copy"
-cost_gold = 0           # Phase 4
-cooldown_seconds = 0    # Phase 4
 ```
+
+Phase 4 adds `cost_gold` and `cooldown_seconds`.
 
 ## 8. Engine limits that constrain this
 
