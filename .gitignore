@@ -1,0 +1,5 @@
+build/
+*.multispec
+*.multispec.*
+*.d2s
+*.d2rl

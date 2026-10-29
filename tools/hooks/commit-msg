@@ -1,0 +1,15 @@
+#!/bin/sh
+# Commit-msg: the commit message goes through the toolkit's privacy scan too.
+root=$(git rev-parse --show-toplevel) || exit 1
+kit="${D2RAI_TOOLKIT:-$root/../d2rAI-toolkit}"
+if [ ! -f "$kit/tools/check_public.py" ]; then
+	echo "commit-msg: no toolkit at $kit (set D2RAI_TOOLKIT); cannot run the privacy scan" >&2
+	exit 1
+fi
+for py in python3 python "py -3"; do
+	if $py -c "import sys; sys.exit(sys.version_info < (3, 9))" >/dev/null 2>&1; then
+		exec $py "$kit/tools/check_public.py" --root "$root" --message-file "$1" --quiet
+	fi
+done
+echo "commit-msg: no Python 3 found" >&2
+exit 1

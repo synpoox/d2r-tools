@@ -1,0 +1,10 @@
+# MultiSpec settings. D2RLoader writes this file to <scope>/d2rloader/config/multispec.toml the first time and never
+# replaces it; edit that copy. Restart the game after a change.
+
+[multispec]
+# Number of specs per character, 1-8. Lowering it keeps the extra specs in each character's file.
+spec_count = 2
+
+# Host and clients must agree on these in TCP/IP games.
+[d2rl]
+match = ["multispec.spec_count"]
