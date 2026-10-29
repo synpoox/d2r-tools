@@ -238,7 +238,18 @@ auto Parse(const char* text, size_t size, CharSpecs* out, char* error, size_t er
 	}
 	std::memcpy(crcText, crcLine, crcLen);
 	crcText[crcLen] = '\0';
-	if (std::sscanf(crcText, "crc %8x", &stored) != 1) {
+	// "crc " then exactly 8 hex digits, then the end of the line
+	size_t digits = 0;
+	for (const char* h = crcText + 4; *h != '\0' && *h != '\n' && *h != '\r'; ++h, ++digits) {
+		const char ch = *h;
+		const int v = (ch >= '0' && ch <= '9') ? ch - '0' : (ch >= 'a' && ch <= 'f') ? ch - 'a' + 10 : -1;
+		if (v < 0 || digits >= 8) {
+			digits = 0;
+			break;
+		}
+		stored = (stored << 4) | static_cast<unsigned>(v);
+	}
+	if (digits != 8) {
 		Fail(error, errorSize, "bad crc line");
 		return false;
 	}

@@ -134,6 +134,17 @@ void TestCrcAndRoundTrip() {
 	text[20] ^= 1;
 	// truncated: refused
 	CHECK(!ms::Parse(text, len - 5, &back, err, sizeof(err)));
+	// malformed crc lines: refused
+	{
+		char bad[ms::MaxFileBytes];
+		const char* crc = std::strstr(text, "crc ");
+		const size_t body = static_cast<size_t>(crc - text);
+		std::memcpy(bad, text, body);
+		const int n1 = std::snprintf(bad + body, sizeof(bad) - body, "crc 1234567\n");
+		CHECK(!ms::Parse(bad, body + static_cast<size_t>(n1), &back, err, sizeof(err)));
+		const int n2 = std::snprintf(bad + body, sizeof(bad) - body, "crc 12345678x\n");
+		CHECK(!ms::Parse(bad, body + static_cast<size_t>(n2), &back, err, sizeof(err)));
+	}
 	// unknown version: refused even with a good CRC
 	s.pendingFrom = 1;
 	s.pendingTo = 2;
