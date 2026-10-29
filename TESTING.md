@@ -7,7 +7,7 @@
 | Decision logic: vendor vs non-vendor classification, click and hotkey edge, repeated-input suppression, timeouts, feature off, unsupported build, refused or already-taken hooks, missing services | `cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests` | 212 checks, 0 failed (GCC 13, `-Wall -Wextra -Wpedantic -Werror`, ASan + UBSan) |
 | Every address, entry byte, code pattern and table layout against the 93847 dump | `python tools/verify_dump.py <dump> --table` | all checks passed; 48 menu rows, 16 vendor classes |
 | Plugin compiles and links against PluginSDK 0.3.0 and the Windows headers | MinGW-w64 GCC 13 cross build (see CI) | links; exports `D2RLoaderGetPluginInfo`, `D2RLoaderLoadPlugin`, `D2RLoaderUnloadPlugin`; manifest resource embedded |
-| MSVC build with the toolkit's `build.ps1` | CI job `plugin-msvc` (Windows runner) | see the CI run for the pushed commit |
+| MSVC build with the toolkit's `build.ps1` | CI job `plugin-msvc` (Windows runner, MSVC 19.51, `/W4 /permissive-`) | builds `quick-npc.dll` with no warnings (CI run 2, commit 331d3d9); the DLL is the `quick-npc-dll` artifact |
 
 ## In game (game-copy slot, toolkit `testing/`)
 
