@@ -24,8 +24,11 @@ set(BXB_PLUGIN_NAME "better-xp-bar" CACHE STRING "Plugin id, DLL name, console c
 set(BXB_PLUGIN_VERSION "0.1.0" CACHE STRING "PluginInfo::version")
 set(BXB_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
+add_subdirectory(core)
+
 if(BXB_BUILD_TESTS)
 	enable_testing()
+	add_subdirectory(tests)
 endif()
 
 if(BXB_BUILD_PLUGIN)
