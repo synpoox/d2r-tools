@@ -8,3 +8,10 @@ disassembly lines to the terminal; do not commit their bulk output.
     pip install pefile capstone
     python3 -I tools/re/pe_inventory.py ~/d2r-dump/D2RLoader_6ab3782c_dump.exe
     python3 -I tools/re/registry_entry_check.py ~/d2r-dump/D2RLoader_6ab3782c_dump.exe <toolkit>/knowledge/d2r-93847-addresses.md
+
+`d2rre.py` stands in for the toolkit's Ghidra query scripts (StringXrefs, Refs, Disasm, function bounds from `.pdata`):
+
+    python3 -I tools/re/d2rre.py <dump> strxref 'D2Client\src\UI\Widgets\ExpBarWidget.cpp'
+    python3 -I tools/re/d2rre.py <dump> disf 0x14cc8c0
+    python3 -I tools/re/d2rre.py <dump> calls 0x300920
+    python3 -I tools/re/d2rre.py <dump> qword 0x1fd8fc0 8
