@@ -16,7 +16,7 @@ jobs:
           cmake -S tests -B build-tests -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"
           cmake --build build-tests
           ctest --test-dir build-tests --output-on-failure
-      - name: verify_dump.py runs (usage only: no game image in CI)
+      - name: "verify_dump.py runs (usage only, no game image in CI)"
         run: python3 tools/verify_dump.py || test $? -eq 2
 
   plugin-mingw:
