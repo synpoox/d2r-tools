@@ -61,6 +61,8 @@ Notes:
   character key is evidence-only: class id + XP continuity (a character's XP cannot change between games; a first
   read in a new game with another class or another XP than the last value seen is another character). Known miss:
   two characters of the same class with identical XP (for example two fresh level 1 characters) count as one.
+  With the default per-game session scope this rule is not needed (a character switch always leaves the game, which
+  ends the session); it only matters for the optional `session_scope = character`.
 
 ## (b) The experience table and level thresholds
 
@@ -147,4 +149,4 @@ How the plugin uses it:
    leaving a game.
 4. The overlay renders, where, and how it looks at your resolution; whether it covers anything important.
 5. The stock XP bar's widget name/rectangle (optional anchoring).
-6. Character-switch detection with the class + XP-continuity rule.
+6. Session reset on leaving a game (default scope); character-switch detection only with `session_scope = character`.

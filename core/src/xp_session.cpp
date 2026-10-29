@@ -48,9 +48,8 @@ void XpSession::EnterGame(double now) {
 	if (inGame_) {
 		return;
 	}
-	if (config_.resetOnNewGame) {
-		Clear();
-		++resets_;
+	if (config_.scope == SessionScope::Game) {
+		Clear();  // normally already clear from LeaveGame; also covers a missed leave
 	}
 	inGame_ = true;
 	enteredAt_ = now;
@@ -63,6 +62,10 @@ void XpSession::LeaveGame(double now) {
 	}
 	activeBefore_ += std::max(0.0, now - enteredAt_);
 	inGame_ = false;
+	if (config_.scope == SessionScope::Game) {
+		Clear();
+		++resets_;
+	}
 }
 
 void XpSession::Reset(double now) {

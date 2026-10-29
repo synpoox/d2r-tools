@@ -8,6 +8,7 @@
 
 using bxb::ExpTable;
 using bxb::SessionConfig;
+using bxb::SessionScope;
 using bxb::Snapshot;
 using bxb::XpSession;
 
@@ -251,7 +252,9 @@ TEST(session_zero_rate_eta_unavailable) {
 }
 
 TEST(session_time_counts_only_in_game) {
-	XpSession s = InGame(Linear(100, 100000), 0);
+	SessionConfig cfg;
+	cfg.scope = SessionScope::Character;
+	XpSession s = InGame(Linear(100, 100000), 0, cfg);
 	s.Sample(50.0, 500);
 	s.LeaveGame(100.0);
 	CHECK_NEAR(s.Get(5000.0).activeSeconds, 100.0, 1e-12);   // frozen while out of game
@@ -266,7 +269,9 @@ TEST(session_time_counts_only_in_game) {
 }
 
 TEST(session_xp_change_between_games_is_not_counted) {
-	XpSession s = InGame(Linear(100, 100000), 1000);
+	SessionConfig cfg;
+	cfg.scope = SessionScope::Character;
+	XpSession s = InGame(Linear(100, 100000), 1000, cfg);
 	s.Sample(10.0, 2000);
 	s.LeaveGame(20.0);
 	s.Sample(30.0, 99999);        // out of game: ignored
@@ -281,7 +286,9 @@ TEST(session_xp_change_between_games_is_not_counted) {
 }
 
 TEST(session_rejoin_same_xp_continues) {
-	XpSession s = InGame(Small(), 150);
+	SessionConfig cfg;
+	cfg.scope = SessionScope::Character;
+	XpSession s = InGame(Small(), 150, cfg);
 	s.Sample(10.0, 200);
 	s.LeaveGame(20.0);
 	s.EnterGame(100.0);
@@ -294,21 +301,55 @@ TEST(session_rejoin_same_xp_continues) {
 	CHECK_NEAR(g.activeSeconds, 30.0, 1e-12);
 }
 
-TEST(session_reset_on_new_game_option) {
-	SessionConfig cfg;
-	cfg.resetOnNewGame = true;
-	XpSession s = InGame(Small(), 150, cfg);
+TEST(session_game_scope_is_default_and_resets_on_leave) {
+	CHECK(SessionConfig{}.scope == SessionScope::Game);
+	XpSession s = InGame(Small(), 150);
+	s.Sample(10.0, 200);
+	CHECK_EQ(s.Get(10.0).sessionXp, 50);
+	s.LeaveGame(20.0);
+	const Snapshot left = s.Get(25.0);           // back in the lobby: nothing left of the game's session
+	CHECK(!left.valid);
+	CHECK_EQ(left.grossXp, 0u);
+	CHECK_NEAR(left.activeSeconds, 0.0, 1e-12);
+	s.EnterGame(30.0);
+	s.Sample(30.0, 200);                         // the new game's first read is its start
+	s.Sample(40.0, 260);
+	const Snapshot g = s.Get(40.0);
+	CHECK_EQ(g.sessionXp, 60);
+	CHECK_EQ(g.grossXp, 60u);
+	CHECK_NEAR(g.activeSeconds, 10.0, 1e-12);
+	CHECK(!g.live.has_value());                  // 60 s rule restarts with the game
+}
+
+TEST(session_game_scope_missed_leave_still_starts_fresh) {
+	XpSession s = InGame(Small(), 150);
 	s.Sample(10.0, 200);
 	s.LeaveGame(20.0);
+	s.LeaveGame(21.0);                           // duplicate leave: harmless
 	s.EnterGame(30.0);
-	s.Sample(30.0, 200);
-	const Snapshot g = s.Get(30.0);
+	s.EnterGame(31.0);                           // duplicate enter: ignored, keeps the clock from 30
+	s.Sample(31.0, 500);
+	CHECK_EQ(s.Get(31.0).sessionXp, 0);
+	CHECK_NEAR(s.Get(40.0).activeSeconds, 10.0, 1e-12);
+}
+
+TEST(session_game_scope_death_then_leave) {
+	XpSession s = InGame(Linear(100, 1000), 5000);
+	s.Sample(60.0, 6000);
+	s.Sample(70.0, 5500);
+	CHECK_EQ(s.Get(70.0).lostXp, 500u);
+	s.LeaveGame(80.0);
+	s.EnterGame(90.0);
+	s.Sample(90.0, 5500);
+	const Snapshot g = s.Get(90.0);
+	CHECK_EQ(g.lostXp, 0u);
 	CHECK_EQ(g.sessionXp, 0);
-	CHECK_NEAR(g.activeSeconds, 0.0, 1e-12);
 }
 
 TEST(session_character_switch_resets) {
-	XpSession s = InGame(Small(), 150);
+	SessionConfig cfg;
+	cfg.scope = SessionScope::Character;
+	XpSession s = InGame(Small(), 150, cfg);
 	s.Sample(10.0, 200);
 	CHECK(!s.BeginCharacter("hero", 10.0));          // same key: no reset
 	CHECK_EQ(s.Get(10.0).sessionXp, 50);

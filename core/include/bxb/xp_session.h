@@ -5,9 +5,12 @@
 // tests drive it directly.
 //
 // Rules (see README "Metrics"):
-//  - A session belongs to one character. It survives leaving and joining games; it resets when the character changes
-//    (BeginCharacter with another key), on Reset() (the hotkey / command), and on EnterGame when
-//    Config::resetOnNewGame is set.
+//  - Scope (SessionConfig::scope):
+//      Game (default): a session is one game. It starts when the game is entered and is cleared when the game is left
+//      (back to the main menu / lobby); the next game starts a new one.
+//      Character: a session belongs to one character and survives leaving and joining games; it resets when the
+//      character changes (BeginCharacter with another key).
+//    In both scopes Reset() (the hotkey / command) starts a new session at once.
 //  - Session length counts only time between EnterGame and LeaveGame.
 //  - Session XP (flat) = current XP - XP at session start: net, so a death's loss shows. Session XP % = the same in
 //    level-equivalents: Position(now) - Position(start) (half of level 80 plus a quarter of level 81 = 0.75).
@@ -29,10 +32,15 @@
 
 namespace bxb {
 
+enum class SessionScope {
+	Game,       // one session per game (default)
+	Character,  // one session per character, across games
+};
+
 struct SessionConfig {
+	SessionScope scope = SessionScope::Game;
 	double windowSeconds = 600.0;  // rolling window for the live XP/hour (clamped to >= minDataSeconds)
 	double minDataSeconds = 60.0;  // no rate before this much in-game time is covered
-	bool resetOnNewGame = false;   // true: every EnterGame starts a new session
 	bool etaFromSessionRate = false;  // false: time to level from the live rate; true: from the session average
 };
 
@@ -74,10 +82,11 @@ public:
 	void SetTable(ExpTable table);
 	[[nodiscard]] auto Table() const noexcept -> const ExpTable& { return table_; }
 
-	// Identifies the character (any stable key: name, name + class, ...). A different key resets the session.
+	// Identifies the character (any stable key). A different key resets the session (in both scopes).
 	// Returns true when it reset. A reset while in a game starts the session clock at `now`.
 	auto BeginCharacter(const std::string& key, double now) -> bool;
 
+	// Game scope: EnterGame starts a fresh session, LeaveGame clears it. Character scope: time pauses between games.
 	void EnterGame(double now);
 	void LeaveGame(double now);
 
