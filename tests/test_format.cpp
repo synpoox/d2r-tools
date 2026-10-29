@@ -15,6 +15,8 @@ TEST(format_numbers) {
 	CHECK_EQ(FormatCompact(98765), std::string("98.8K"));
 	CHECK_EQ(FormatCompact(1234567), std::string("1.23M"));
 	CHECK_EQ(FormatCompact(2.5e9), std::string("2.50B"));
+	CHECK_EQ(FormatCompact(-1234567), std::string("-1.23M"));
+	CHECK_EQ(FormatCompact(-512), std::string("-512"));
 	CHECK_EQ(FormatPercent(0.5), std::string("50.00%"));
 	CHECK_EQ(FormatSignedPercent(0.75), std::string("+75.00%"));
 	CHECK_EQ(FormatSignedPercent(-0.125), std::string("-12.50%"));
@@ -55,6 +57,11 @@ TEST(format_lines) {
 	s.etaSeconds = 600;
 	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h 1.50M  12.30%  (avg 1.20M)"));
 	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level 10m 00s"));
+	s.live = Rate{-45000.0, -0.0123};          // a death outweighed the gains in the window
+	s.etaSeconds.reset();
+	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h -45.0K  -1.23%  (avg 1.20M)"));
+	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level --"));
+	s.live = Rate{1.5e6, 0.123};
 	s.atMaxLevel = true;
 	s.level = 99;
 	CHECK_EQ(FormatLine(s, LineId::Level), std::string("Level 99 (max)"));

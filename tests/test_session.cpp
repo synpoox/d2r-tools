@@ -2,6 +2,7 @@
 #include "bxb/xp_session.h"
 #include "check.h"
 
+#include <cmath>
 #include <cstdint>
 #include <random>
 #include <vector>
@@ -107,33 +108,52 @@ TEST(session_rate_not_shown_before_60s) {
 	CHECK_NEAR(*g.etaSeconds, 40.0, 1e-9);
 }
 
-TEST(session_death_loss_does_not_corrupt_rates) {
+TEST(session_death_loss_lowers_rates) {
 	XpSession s = InGame(Linear(100, 1000), 5000);
 	s.Sample(60.0, 6000);    // +1000
+	const double before = s.Get(120.0).session->xpPerHour;
 	s.Sample(120.0, 5500);   // death: -500
 	const Snapshot g = s.Get(120.0);
 	CHECK_EQ(g.lostXp, 500u);
 	CHECK_EQ(g.losses, 1u);
 	CHECK_EQ(g.grossXp, 1000u);
-	CHECK_EQ(g.sessionXp, 500);                 // net
-	CHECK_NEAR(g.session->xpPerHour, 1000.0 * 30.0, 1e-6);  // gains only: 1000 XP / 2 min
-	CHECK(g.live->xpPerHour >= 0.0);
-	CHECK(g.etaSeconds.has_value());
-	CHECK(*g.etaSeconds > 0.0);
-	CHECK_EQ(g.remaining, 500u);
+	CHECK_EQ(g.sessionXp, 500);
+	CHECK_NEAR(g.session->xpPerHour, 500.0 * 30.0, 1e-6);   // net: 500 XP / 2 min
+	CHECK(g.session->xpPerHour < before);
+	CHECK_NEAR(g.live->xpPerHour, 500.0 * 30.0, 1e-6);
+	CHECK_NEAR(g.live->levelsPerHour, 0.5 * 30.0, 1e-9);
+	CHECK(g.etaSeconds.has_value());                        // still positive: ETA from the lower rate
+	CHECK_NEAR(*g.etaSeconds, 500.0 / (15000.0 / 3600.0), 1e-6);
 }
 
-TEST(session_death_below_start_gives_negative_net_but_positive_eta) {
+TEST(session_death_can_make_rate_negative_eta_unavailable) {
 	XpSession s = InGame(Linear(100, 1000), 5500);
 	s.Sample(10.0, 5600);
 	s.Sample(20.0, 5000);    // lost more than gained, back to the level start
 	const Snapshot g = s.Get(90.0);
 	CHECK_EQ(g.sessionXp, -500);
 	CHECK_NEAR(g.sessionLevels, -0.5, 1e-12);
-	CHECK(g.session->xpPerHour > 0.0);
-	CHECK(g.etaSeconds.has_value());
-	CHECK(*g.etaSeconds > 0.0);
+	CHECK_NEAR(g.session->xpPerHour, -500.0 * 3600.0 / 90.0, 1e-6);
+	CHECK(g.live->xpPerHour < 0.0);
+	CHECK(!g.etaSeconds.has_value());            // never a negative ETA
 	CHECK_EQ(g.level, 6u);
+	// earning it back brings the rate up again
+	s.Sample(100.0, 6200);
+	const Snapshot h = s.Get(100.0);
+	CHECK(h.live->xpPerHour > 0.0);
+	CHECK(h.etaSeconds.has_value());
+	CHECK(*h.etaSeconds > 0.0);
+}
+
+TEST(session_loss_leaves_the_window_later) {
+	SessionConfig cfg;
+	cfg.windowSeconds = 120;
+	XpSession s = InGame(Linear(100, 100000), 10000, cfg);
+	s.Sample(10.0, 9000);    // death at t=10
+	s.Sample(200.0, 9600);   // gain at t=200
+	const Snapshot g = s.Get(250.0);           // window (130, 250]: only the gain
+	CHECK_NEAR(g.live->xpPerHour, 600.0 * 30.0, 1e-6);
+	CHECK_NEAR(g.session->xpPerHour, -400.0 * 3600.0 / 250.0, 1e-6);  // the session still remembers it
 }
 
 TEST(session_death_across_level_boundary) {
@@ -201,7 +221,7 @@ TEST(session_rolling_window_matches_brute_force) {
 	std::mt19937 rng(1234);
 	std::uniform_real_distribution<double> dt(0.1, 20.0);
 	std::uniform_int_distribution<int> gain(0, 500);
-	std::vector<std::pair<double, uint64_t>> gains;  // (t, amount)
+	std::vector<std::pair<double, int64_t>> changes;  // (t, signed amount)
 	double t = 0.0;
 	uint64_t xp = 0;
 	for (int i = 0; i < 3000; ++i) {
@@ -210,22 +230,25 @@ TEST(session_rolling_window_matches_brute_force) {
 		if (g < 50) {
 			const uint64_t loss = std::min<uint64_t>(xp, 300);  // occasional death
 			xp -= loss;
-		} else {
+			if (loss > 0) {
+				changes.emplace_back(t, -static_cast<int64_t>(loss));
+			}
+		} else if (g > 0) {
 			xp += static_cast<uint64_t>(g);
-			gains.emplace_back(t, static_cast<uint64_t>(g));
+			changes.emplace_back(t, g);
 		}
 		s.Sample(t, xp);
 		if (i % 97 == 0 && t >= 60.0) {
 			const double query = t + dt(rng);
 			const double start = query - std::min(300.0, query);
 			double sum = 0.0;
-			for (const auto& [gt, amount] : gains) {
+			for (const auto& [gt, amount] : changes) {
 				if (gt > start && gt <= query) {
 					sum += static_cast<double>(amount);
 				}
 			}
 			const double expected = sum * 3600.0 / std::min(300.0, query);
-			CHECK_NEAR(s.Get(query).live->xpPerHour, expected, 1e-6 * std::max(1.0, expected));
+			CHECK_NEAR(s.Get(query).live->xpPerHour, expected, 1e-6 * std::max(1.0, std::fabs(expected)));
 		}
 	}
 }

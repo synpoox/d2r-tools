@@ -25,10 +25,12 @@ void XpSession::Clear() {
 	startXp_ = lastXp_ = 0;
 	grossXp_ = 0;
 	grossLevels_ = 0.0;
+	netXp_ = 0;
+	netLevels_ = 0.0;
 	lostXp_ = 0;
 	losses_ = 0;
 	levelUps_ = 0;
-	gains_.clear();
+	changes_.clear();
 }
 
 auto XpSession::BeginCharacter(const std::string& key, double now) -> bool {
@@ -107,35 +109,38 @@ void XpSession::Sample(double now, uint64_t xp) {
 	if (xp == lastXp_) {
 		return;
 	}
+	const double t = ActiveSeconds(now);
+	const double levelDelta = table_.Position(xp) - table_.Position(lastXp_);
 	if (xp < lastXp_) {
 		lostXp_ += lastXp_ - xp;
 		++losses_;
-		lastXp_ = xp;
-		return;
+		netXp_ -= static_cast<int64_t>(lastXp_ - xp);
+	} else {
+		const uint32_t before = table_.LevelForXp(lastXp_);
+		const uint32_t after = table_.LevelForXp(xp);
+		if (after > before) {
+			levelUps_ += after - before;
+		}
+		grossXp_ += xp - lastXp_;
+		grossLevels_ += std::max(0.0, levelDelta);
+		netXp_ += static_cast<int64_t>(xp - lastXp_);
 	}
-	const double t = ActiveSeconds(now);
-	const uint32_t before = table_.LevelForXp(lastXp_);
-	const uint32_t after = table_.LevelForXp(xp);
-	if (after > before) {
-		levelUps_ += after - before;
-	}
-	grossXp_ += xp - lastXp_;
-	grossLevels_ += std::max(0.0, table_.Position(xp) - table_.Position(lastXp_));
+	netLevels_ += levelDelta;
 	lastXp_ = xp;
-	gains_.push_back({t, grossXp_, grossLevels_});
-	// keep the last gain at or before the window start: it is the window's starting value
+	changes_.push_back({t, netXp_, netLevels_});
+	// keep the last change at or before the window start: it is the window's starting value
 	const double windowStart = t - Window();
-	while (gains_.size() >= 2 && gains_[1].t <= windowStart) {
-		gains_.pop_front();
+	while (changes_.size() >= 2 && changes_[1].t <= windowStart) {
+		changes_.pop_front();
 	}
 }
 
-auto XpSession::RateOver(double gross, double grossLevels, double fromGross, double fromLevels, double seconds) const
+auto XpSession::RateOver(double net, double netLevels, double fromNet, double fromLevels, double seconds) const
 	-> Rate {
 	Rate r;
 	if (seconds > 0.0) {
-		r.xpPerHour = std::max(0.0, gross - fromGross) * 3600.0 / seconds;
-		r.levelsPerHour = std::max(0.0, grossLevels - fromLevels) * 3600.0 / seconds;
+		r.xpPerHour = (net - fromNet) * 3600.0 / seconds;
+		r.levelsPerHour = (netLevels - fromLevels) * 3600.0 / seconds;
 	}
 	return r;
 }
@@ -164,21 +169,21 @@ auto XpSession::Get(double now) const -> Snapshot {
 
 	const double t = s.activeSeconds;
 	if (t >= config_.minDataSeconds && t > 0.0) {
-		s.session = RateOver(static_cast<double>(grossXp_), grossLevels_, 0.0, 0.0, t);
+		s.session = RateOver(static_cast<double>(netXp_), netLevels_, 0.0, 0.0, t);
 
-		// gross at the window start = the last gain at or before it (0 when the session is younger than the window)
+		// net at the window start = the last change at or before it (0 when the session is younger than the window)
 		const double span = std::min(Window(), t);
 		const double windowStart = t - span;
-		double fromGross = 0.0;
+		double fromNet = 0.0;
 		double fromLevels = 0.0;
-		for (const Point& p : gains_) {
+		for (const Point& p : changes_) {
 			if (p.t > windowStart) {
 				break;
 			}
-			fromGross = static_cast<double>(p.gross);
-			fromLevels = p.grossLevels;
+			fromNet = static_cast<double>(p.net);
+			fromLevels = p.netLevels;
 		}
-		s.live = RateOver(static_cast<double>(grossXp_), grossLevels_, fromGross, fromLevels, span);
+		s.live = RateOver(static_cast<double>(netXp_), netLevels_, fromNet, fromLevels, span);
 	}
 
 	const std::optional<Rate>& etaRate = config_.etaFromSessionRate ? s.session : s.live;
