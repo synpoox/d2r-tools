@@ -1,0 +1,58 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-game-files:
+    # Second line of defence behind .gitignore: Blizzard files, dumps and binaries must never be tracked.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse tracked dumps / binaries
+        run: |
+          bad=$(git ls-files | grep -E -i '\.(exe|dll|dmp|bin|zip|7z|rar|mpq|casc|idx|gpr)$|_dump\.|\.part[0-9]' || true)
+          if [ -n "$bad" ]; then echo "::error::tracked game/binary files:"; echo "$bad"; exit 1; fi
+          big=$(git ls-files -z | xargs -0 -I{} sh -c 'test $(stat -c%s "{}") -gt 1048576 && echo "{}"' || true)
+          if [ -n "$big" ]; then echo "::error::tracked files over 1 MiB:"; echo "$big"; exit 1; fi
+          echo "clean"
+
+  core-tests-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DBXB_BUILD_PLUGIN=OFF -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  plugin-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DBXB_BUILD_PLUGIN=ON -DBXB_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test (core, MSVC)
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Check DLL
+        shell: pwsh
+        run: |
+          $dll = "build/plugin/Release/better-xp-bar.dll"
+          if (-not (Test-Path $dll)) { throw "missing $dll" }
+          Get-Item $dll | Format-List Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: better-xp-bar-dll
+          path: build/plugin/Release/better-xp-bar.dll
+          if-no-files-found: error

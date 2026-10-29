@@ -1,0 +1,5 @@
+// D2RLoader plugin manifest (required by PluginSDK 0.3.0: "embed the D2RLoader plugin manifest resource").
+#include <D2RLPlugin/resource.h>
+#include <D2RLPlugin/version.h>
+
+D2RL_PLUGIN_MANIFEST_RESOURCE_ID RCDATA { D2RL_PLUGIN_RESOURCE_DWORD(D2RL_PLUGIN_ABI_VERSION) }
