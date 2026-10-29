@@ -1,0 +1,7 @@
+build/
+build-*/
+plugin/build/
+*.dll
+*.exe
+*.dmp
+__pycache__/
