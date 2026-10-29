@@ -1,0 +1,6 @@
+add_executable(bxb_tests test_main.cpp test_exp_table.cpp test_session.cpp test_format.cpp)
+target_link_libraries(bxb_tests PRIVATE bxb_core)
+if(MSVC)
+	set_property(TARGET bxb_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+endif()
+add_test(NAME core COMMAND bxb_tests)
