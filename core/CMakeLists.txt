@@ -3,6 +3,7 @@ add_library(bxb_core STATIC
 	src/exp_table.cpp
 	src/xp_session.cpp
 	src/format.cpp
+	src/settings.cpp
 )
 target_include_directories(bxb_core PUBLIC include)
 target_compile_features(bxb_core PUBLIC cxx_std_20)
