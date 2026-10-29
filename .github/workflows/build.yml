@@ -53,6 +53,6 @@ jobs:
           Get-Item $dll | Format-List Name, Length
       - uses: actions/upload-artifact@v4
         with:
-          name: better-xp-bar-dll
+          name: better-xp-bar  # download: better-xp-bar.zip containing better-xp-bar.dll
           path: build/plugin/Release/better-xp-bar.dll
           if-no-files-found: error
