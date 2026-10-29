@@ -17,7 +17,8 @@ work; don't copy it here, link to it.
 |---|---|
 | Unit tests (any OS, no game) | `tests/run_tests.sh` |
 | Windows build check on Linux | `tools/mingw_check.sh` |
-| Build (Windows, MSVC; also runs the tests) | `powershell -ExecutionPolicy Bypass -File build.ps1 [-Mod <ModFolder>]` |
+| Build the DLL (normal way) | GitHub Actions `build` workflow (`.github/workflows/build.yml`) on every push: MSVC x64 Release + unit tests; download the `multispec` artifact (DLL, sha256, default config) |
+| Build locally (Windows, MSVC; optional) | `powershell -ExecutionPolicy Bypass -File build.ps1 [-Mod <ModFolder>]` |
 | Install into a game slot (game closed) | `powershell -ExecutionPolicy Bypass -File install.ps1 -Game <slot dir> -Mod <ModFolder>` |
 | In-game checks (Phase 3) | toolkit `testing/` game slots: see [TESTING.md](TESTING.md) |
 | Entry bytes vs a new dump | `python tools/check_entries.py <dump.exe>` |

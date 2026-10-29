@@ -3,3 +3,4 @@ build/
 *.multispec.*
 *.d2s
 *.d2rl
+third_party/
