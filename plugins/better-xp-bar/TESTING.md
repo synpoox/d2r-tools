@@ -27,6 +27,18 @@ better-xp-bar: hotkeys on: 2/2 actions (...)
 
 If any part says `off: ...`, stop and paste the log: the rest depends on it.
 
+## 0b. Native panel (part `hud`, findings (f))
+
+1. Start the game; the log must show `hud on: 4 byte checks passed; panel better-xp-bar/XpPanel with 6 lines` and
+   the generated layout.
+2. Enter a game. Expected log: `hud: panel opened`, then `hud: native panel better-xp-bar/XpPanel found`.
+3. The lines appear in D2R's font above the bottom centre. Open/close inventory, character screen, Esc menu; walk and
+   click under the text (it must not block clicks).
+4. `better-xp-bar` in the console: the `hud` line shows `panel open, native found, text sets N` with N growing as
+   XP changes.
+
+**Paste back:** the `hud` log lines, the console `hud` line, a screenshot, and whatever closed or moved the panel.
+
 ## 1. Display appears (needs live check: findings (a), (b), (d))
 
 1. Enter a game with a character that is **not** level 1 (so the level percentage is visible).

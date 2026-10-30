@@ -11,6 +11,7 @@
 #include "bxb/format.h"
 #include "bxb/settings.h"
 #include "bxb/xp_session.h"
+#include "hud_text.h"
 #include "log.h"
 #include "xp_reader.h"
 
@@ -59,7 +60,7 @@ uint32_t g_lastLevelUps = 0;
 uint64_t g_reads = 0;
 uint64_t g_badReads = 0;
 
-constexpr int64_t TickIntervalMs = 250;
+constexpr int64_t TickIntervalMs = 50;  // also the delay before hovering the stock XP bar shows the hidden display
 constexpr float FallbackTextSize = 18.0f;  // when neither the config nor the loader gives a usable size
 
 std::atomic<uint64_t> g_frames{0};
@@ -91,14 +92,43 @@ auto NowMs() noexcept -> int64_t {
 	return static_cast<int64_t>(NowSeconds() * 1000.0);
 }
 
-void RebuildLines(const bxb::Snapshot& s) {
+// XP/h and time to level drift every read; they are refreshed every RateRefreshSeconds / EtaRefreshSeconds (or at once
+// when they appear or go away) so the numbers do not flicker. Cleared with the lines (game left, reset).
+constexpr double RateRefreshSeconds = 5.0;
+constexpr double EtaRefreshSeconds = 2.0;
+struct Throttled {
+	std::string line;
+	double at = -1e9;
+};
+Throttled g_rateLine;  // g_lock
+Throttled g_etaLine;   // g_lock
+
+auto Refresh(Throttled* t, const std::string& line, double now, double every) -> const std::string& {
+	const auto unavailable = [](const std::string& l) { return l.find(bxb::NotAvailable) != std::string::npos; };
+	if (t->line.empty() || now - t->at >= every || unavailable(line) != unavailable(t->line)) {
+		t->line = line;
+		t->at = now;
+	}
+	return t->line;
+}
+
+void RebuildLines(const bxb::Snapshot& s, double now) {
 	std::vector<std::string> lines;
 	if (s.valid) {
 		for (const bxb::LineId id : g_settings.lines) {
-			lines.push_back(bxb::FormatLine(s, id));
+			const std::string line = bxb::FormatLine(s, id, g_settings.xpFormat);
+			lines.push_back(id == bxb::LineId::Rate ? Refresh(&g_rateLine, line, now, RateRefreshSeconds)
+			                : id == bxb::LineId::Eta ? Refresh(&g_etaLine, line, now, EtaRefreshSeconds)
+			                                         : line);
 		}
 	}
 	g_lines = std::move(lines);
+}
+
+void ClearLines() {
+	g_lines.clear();
+	g_rateLine = {};
+	g_etaLine = {};
 }
 
 void LogSummary(const char* why) {
@@ -193,7 +223,10 @@ void __cdecl Tick(const D2RL::PluginContext*, void*) noexcept {
 	}
 	g_lastLosses = s.losses;
 	g_lastLevelUps = s.levelUps;
-	RebuildLines(s);
+	RebuildLines(s, now);
+	if (hud_text::Update(g_lines, g_visible)) {  // needs live check
+		RequestToggle();  // clicked the stock XP bar
+	}
 }
 
 void QueueTick() noexcept {
@@ -215,7 +248,7 @@ void __cdecl DoReset(const D2RL::PluginContext*, void*) noexcept {
 	LogSummary("reset by the player");
 	g_session.Reset(NowSeconds());
 	g_lastLosses = g_lastLevelUps = 0;
-	g_lines.clear();
+	ClearLines();
 	plog::Info("session reset");
 }
 
@@ -245,7 +278,8 @@ void OnGameplay(const D2RL::PluginContext*, const D2RL::Lifecycle::GameplayEvent
 		LogSummary("game left");
 		g_ready = false;
 		g_session.LeaveGame(now);
-		g_lines.clear();
+		ClearLines();
+		(void)hud_text::Update(g_lines, false);
 		break;
 	case D2RL::Lifecycle::GameplayEventKind::PlayerLevelChanged:
 		plog::Info("level changed event: %d -> %d", e->previousValue, e->currentValue);
@@ -298,7 +332,7 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 			plog::Info("overlay: test pattern frame #%u drawn (%.0f x %.0f)", s_testFrames.load(), w, h);
 		}
 	}
-	if (!g_visible || !g_ready) {
+	if (!g_visible || !g_ready || hud_text::Installed()) {  // part hud draws the lines natively
 		return;
 	}
 	std::vector<std::string> lines;
@@ -435,8 +469,8 @@ void LoadConfig(const D2RL::PluginContext* context) noexcept {
 	for (const bxb::LineId id : s.lines) {
 		lines += std::string(lines.empty() ? "" : ",") + bxb::LineName(id);
 	}
-	plog::Info("config: visible %d, anchor %s, offset %.0f,%.0f, text size %.1f, background %.2f, lines [%s], scope %s, window %.0f s, eta from %s",
-	           s.visible ? 1 : 0, bxb::AnchorName(s.anchor), s.offsetX, s.offsetY, s.textSize, s.background, lines.c_str(),
+	plog::Info("config: visible %d, anchor %s, text align %s, offset %.0f,%.0f, text size %.1f, background %.2f, lines [%s], scope %s, window %.0f s, eta from %s",
+	           s.visible ? 1 : 0, bxb::AnchorName(s.anchor), bxb::TextAlignName(s.textAlign), s.offsetX, s.offsetY, s.textSize, s.background, lines.c_str(),
 	           s.session.scope == bxb::SessionScope::Game ? "game" : "character", s.session.windowSeconds,
 	           s.session.etaFromSessionRate ? "session" : "window");
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -494,6 +528,19 @@ void InstallOverlay(const D2RL::PluginContext* context, char* report, size_t siz
 		return;
 	}
 	std::snprintf(report, size, "on: overlay frame callback registered");
+}
+
+void InstallHud(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
+	if (!g_tracking || g_overlay == nullptr) {
+		std::snprintf(report, size, "off: needs parts xp and overlay (the overlay frame callback drives the reads)");
+		return;
+	}
+	bxb::Settings s;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		s = g_settings;
+	}
+	hud_text::Install(context, s, report, size);
 }
 
 void InstallHotkeys(const D2RL::PluginContext* context, char* report, size_t size) noexcept {

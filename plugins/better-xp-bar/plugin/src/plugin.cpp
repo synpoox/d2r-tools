@@ -20,6 +20,7 @@
 #include "build_guard.h"
 #include "display.h"
 #include "env_guard.h"
+#include "hud_text.h"
 #include "log.h"
 #include "off_switch.h"
 
@@ -74,6 +75,7 @@ Part g_parts[] = {
 	{"envguard", false, InstallEnvironment, ""},
 	{"xp", true, display::InstallTracking, ""},
 	{"overlay", true, display::InstallOverlay, ""},
+	{"hud", true, display::InstallHud, ""},
 	{"hotkeys", false, display::InstallHotkeys, ""},
 };
 
@@ -150,6 +152,10 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		} else if (std::strcmp(p.word, "xp") == 0 && std::strncmp(p.report, "on", 2) == 0) {
 			char live[900];
 			display::Status(live, sizeof(live));
+			std::snprintf(state, sizeof(state), "%s | %s", p.report, live);
+		} else if (std::strcmp(p.word, "hud") == 0 && std::strncmp(p.report, "on", 2) == 0) {
+			char live[200];
+			hud_text::Status(live, sizeof(live));
 			std::snprintf(state, sizeof(state), "%s | %s", p.report, live);
 		} else {
 			std::snprintf(state, sizeof(state), "%s", p.report);
