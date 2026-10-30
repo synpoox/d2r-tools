@@ -14,7 +14,7 @@ set(MODKIT_PLUGIN_NAME "mod-core" CACHE STRING "Plugin id, DLL name, console com
 set(MODKIT_PLUGIN_VERSION "0.1.0" CACHE STRING "PluginInfo::version (shared plugins must match in multiplayer)")
 set(MODKIT_MOD_NAME "" CACHE STRING "Mod folder the plugin ships in (mods/<name>); the environment guard warns when another runs")
 set(MODKIT_SOUND_ROWS "0" CACHE STRING "Rows of the mod's sounds.txt (0 = no new sounds); below it the sound guard asks for a restart")
-set(MODKIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
+set(MODKIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
 set(D2RLPLUGIN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
