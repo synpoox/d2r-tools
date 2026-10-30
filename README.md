@@ -4,7 +4,15 @@ Monorepo for my D2RLoader plugins for Diablo II: Resurrected.
 
 ## Plugins
 
-<!--PLUGINS-->
+| Plugin | Notes |
+|---|---|
+| [better-auras](plugins/better-auras) | [CHANGELOG](plugins/better-auras/CHANGELOG.md) |
+| [multispec](plugins/multispec) | [CHANGELOG](plugins/multispec/CHANGELOG.md) |
+| [monster-count](plugins/monster-count) | [CHANGELOG](plugins/monster-count/CHANGELOG.md) |
+| [better-automap](plugins/better-automap) | [CHANGELOG](plugins/better-automap/CHANGELOG.md) |
+| [better-xp-bar](plugins/better-xp-bar) | [CHANGELOG](plugins/better-xp-bar/CHANGELOG.md) |
+| [quick-npc](plugins/quick-npc) | [CHANGELOG](plugins/quick-npc/CHANGELOG.md) |
+| [scrollable-waypoints](plugins/scrollable-waypoints) | [CHANGELOG](plugins/scrollable-waypoints/CHANGELOG.md) |
 
 ## Layout
 
