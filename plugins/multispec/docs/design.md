@@ -47,18 +47,16 @@ CharacterSpecs
 
 ## 3. Where specs are stored, and why
 
-One file per character, **next to its save**: `<save folder>\<name>.multispec`, where the save folder is the folder
-that holds `<name>.d2s`. The plugin searches `<Saved Games>\Diablo II Resurrected\` (Saved Games from
-`SHGetKnownFolderPath(FOLDERID_SavedGames)`) and `mods\` under it, down three folder levels. It does not read any mod
-file (`modinfo.json` is not used), so the plugin does not depend on the active mod's layout. When several same-name
-saves exist, the newest `.d2s` wins and the note says so.
+One file per character, **next to its save**: `<save folder>\<name>.multispec`, where the save folder is
+`<Saved Games>\Diablo II Resurrected\mods\<savepath>\` (Saved Games from `SHGetKnownFolderPath(FOLDERID_SavedGames)`,
+`savepath` from the active mod's `modinfo.json`).
 
 | Option | Verdict |
 |---|---|
 | Inside the `.d2s` (a skill-bytes copy, a stat, a quest word) | **No.** Checksums, the `.d2rl` hashes and the extended format punish hand edits (characters vanish); new stats need save bits and change the format for every player |
 | Item stats on a hidden item | No: items are where extended-format edits fail worst; and items can be lost or traded |
 | Plugin memory | No: lost on exit |
-| **Plugin file next to the save** | **Yes.** D2R never reads it (it lists `*.d2s`), so it cannot break loading. It sits in the folder of the character's save, so a copy of the save folder takes it along. Same-name characters in different slots are told apart only by which save is newest (the note says so); give test characters unique names |
+| **Plugin file next to the save** | **Yes.** D2R never reads it (it lists `*.d2s`), so it cannot break loading. It follows the mod's own save folder, so test slots (each with its own `savepath`) stay separate, and a copy of the save folder takes it along |
 | Plugin file in the mod folder | Fallback only (used, and logged, when the save folder cannot be resolved): it is lost on a mod reinstall and is shared by all slots of one install |
 
 File format: plain text, versioned, small, written by the plugin only.
@@ -156,7 +154,7 @@ after the jump), so a changed function turns its part off instead of being calle
 | Word | Part | Needs the image | Depends on |
 |---|---|---|---|
 | `envguard` | Environment guard (template) | no | |
-| `specstore` | Spec file: next to the character's save (search, no mod files), fallback folder | no | |
+| `specstore` | Spec file: save folder from modinfo.json, fallback folder | no | |
 | `specswap` | Every engine call: reading the character, reconciliation (section 5), the swap (section 4) | yes | `specstore` |
 | `speccmd` | `spec` console command (and a chat route if section 9 check 1 needs one) | no (refuses when `specswap` or `specstore` is off) | |
 | `specui` | Phase 4 button / panel | no | `speccmd` |

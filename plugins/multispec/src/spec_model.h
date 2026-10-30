@@ -61,6 +61,9 @@ auto Parse(const char* text, size_t size, CharSpecs* out, char* error, size_t er
 // spec_count from the plugin's TOML text ([multispec] spec_count = N); `fallback` when absent or out of 1..MaxSpecs.
 auto ConfigSpecCount(const char* toml, int32_t fallback) noexcept -> int32_t;
 
+// "savepath" value from a modinfo.json text ("" when absent). False only when `out` is too small.
+auto ModinfoSavePath(const char* json, char* out, size_t size) noexcept -> bool;
+
 // A character name safe as a file name: letters, digits, '-' and '_' (D2R's name rules), 2-15 characters.
 auto ValidName(const char* name) noexcept -> bool;
 

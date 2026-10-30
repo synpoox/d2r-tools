@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-- Spec files are found next to the character's `.d2s` by searching the Saved Games folder and its `mods` subfolders.
-  The plugin no longer reads the active mod's `modinfo.json`, so it works without the mod's layout. Same-name saves in
-  different slots: the newest save wins, and the note says how many matched.
-- The plugin is global: `ModScopedOnly` is removed (it loads with or without a mod).
+- The plugin is global: `ModScopedOnly` is removed, so it loads with or without a mod. Spec files are still stored next
+  to the character's save, in the save folder named by the active mod's `modinfo.json` `savepath` (the mod D2RLoader
+  runs, e.g. `default_mod`), and fall back to the plugin's own folder when there is none.

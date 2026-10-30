@@ -18,9 +18,7 @@ namespace ms {
 
 namespace {
 
-constexpr int MaxModDepth = 3;  // mods\<savepath> may be nested a few folders deep
-
-wchar_t g_saveRoot[520] = L"";     // ...\Saved Games\Diablo II Resurrected
+wchar_t g_saveDir[520] = L"";      // ...\Saved Games\Diablo II Resurrected\[mods\<savepath>]
 wchar_t g_fallbackDir[520] = L"";  // <mod support dir or plugin dir>\multispec
 
 auto ReadSmallFile(const wchar_t* path, char* out, size_t size, size_t* length) noexcept -> bool {
@@ -52,55 +50,57 @@ void Utf8(const wchar_t* w, char* out, size_t size) noexcept {
 	}
 }
 
-// The folders holding a character's save, and how many were found. Several slots can hold a same-name character, so
-// the newest save wins and the count is reported.
-struct SaveSearch {
-	wchar_t dir[520] = L"";
-	FILETIME written {};
-	int count = 0;
-};
-
-// Checks <dir>\<file>, then the subfolders of <dir> down to `depth` levels.
-void SearchSaves(const wchar_t* dir, const wchar_t* file, int depth, SaveSearch* found) noexcept {
-	wchar_t save[520];
-	std::swprintf(save, 520, L"%ls\\%ls", dir, file);
-	WIN32_FILE_ATTRIBUTE_DATA info {};
-	if (GetFileAttributesExW(save, GetFileExInfoStandard, &info) &&
-	    (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0) {
-		if (found->count == 0 || CompareFileTime(&info.ftLastWriteTime, &found->written) > 0) {
-			std::swprintf(found->dir, 520, L"%ls", dir);
-			found->written = info.ftLastWriteTime;
+// modinfo.json of the active mod: <mod dir>\modinfo.json or <mod dir>\<mod>.mpq\modinfo.json.
+auto FindSavePath(const D2RL::PluginContext* context, char* savepath, size_t size, wchar_t* used, size_t usedSize) noexcept
+	-> bool {
+	savepath[0] = '\0';
+	if (context->modDirectory == nullptr) {
+		return false;
+	}
+	wchar_t mod[128] = L"";
+	if (context->activeMod != nullptr) {
+		MultiByteToWideChar(CP_UTF8, 0, context->activeMod, -1, mod, 128);
+	}
+	wchar_t candidates[2][520];
+	std::swprintf(candidates[0], 520, L"%ls\\modinfo.json", context->modDirectory);
+	std::swprintf(candidates[1], 520, L"%ls\\%ls.mpq\\modinfo.json", context->modDirectory, mod);
+	for (const auto& path : candidates) {
+		char text[8192];
+		size_t len = 0;
+		if (ReadSmallFile(path, text, sizeof(text), &len)) {
+			std::swprintf(used, usedSize, L"%ls", path);
+			return ModinfoSavePath(text, savepath, size);
 		}
-		++found->count;
 	}
-	if (depth == 0) {
-		return;
-	}
-	wchar_t pattern[520];
-	std::swprintf(pattern, 520, L"%ls\\*", dir);
-	WIN32_FIND_DATAW entry {};
-	HANDLE h = FindFirstFileW(pattern, &entry);
-	if (h == INVALID_HANDLE_VALUE) {
-		return;
-	}
-	do {
-		const bool folder = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-		if (folder && std::wcscmp(entry.cFileName, L".") != 0 && std::wcscmp(entry.cFileName, L"..") != 0) {
-			wchar_t sub[520];
-			std::swprintf(sub, 520, L"%ls\\%ls", dir, entry.cFileName);
-			SearchSaves(sub, file, depth - 1, found);
-		}
-	} while (FindNextFileW(h, &entry));
-	FindClose(h);
+	return false;
 }
 
 }  // namespace
 
 void InitStorePaths(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
-	g_saveRoot[0] = g_fallbackDir[0] = L'\0';
+	g_saveDir[0] = g_fallbackDir[0] = L'\0';
+	char savepath[260] = "";
+	wchar_t modinfo[520] = L"";
+	const bool haveModinfo = FindSavePath(context, savepath, sizeof(savepath), modinfo, 520);
+
 	PWSTR saved = nullptr;
 	if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_SavedGames, 0, nullptr, &saved)) && saved != nullptr) {
-		std::swprintf(g_saveRoot, 520, L"%ls\\Diablo II Resurrected", saved);
+		wchar_t sp[260] = L"";
+		MultiByteToWideChar(CP_UTF8, 0, savepath, -1, sp, 260);
+		size_t n = std::wcslen(sp);
+		while (n > 0 && (sp[n - 1] == L'/' || sp[n - 1] == L'\\')) {
+			sp[--n] = L'\0';
+		}
+		for (wchar_t* c = sp; *c != L'\0'; ++c) {
+			if (*c == L'/') {
+				*c = L'\\';
+			}
+		}
+		if (n > 0) {
+			std::swprintf(g_saveDir, 520, L"%ls\\Diablo II Resurrected\\mods\\%ls", saved, sp);
+		} else {
+			std::swprintf(g_saveDir, 520, L"%ls\\Diablo II Resurrected", saved);
+		}
 		CoTaskMemFree(saved);
 	}
 	const wchar_t* base = context->modSupportDirectory != nullptr ? context->modSupportDirectory : context->pluginDirectory;
@@ -109,10 +109,12 @@ void InitStorePaths(const D2RL::PluginContext* context, char* report, size_t siz
 	}
 	char a[600];
 	char b[600];
-	Utf8(g_saveRoot, a, sizeof(a));
+	char m[600];
+	Utf8(g_saveDir, a, sizeof(a));
 	Utf8(g_fallbackDir, b, sizeof(b));
-	std::snprintf(report, size, "saves searched under %s (root and mods subfolders); fallback %s", a[0] ? a : "?",
-	              b[0] ? b : "?");
+	Utf8(modinfo, m, sizeof(m));
+	std::snprintf(report, size, "saves %s (savepath \"%s\" from %s); fallback %s", a[0] ? a : "?", savepath,
+	              haveModinfo ? m : "no modinfo.json found", b[0] ? b : "?");
 }
 
 auto FileStore::Open(const char* name, char* note, size_t size) noexcept -> bool {
@@ -123,19 +125,11 @@ auto FileStore::Open(const char* name, char* note, size_t size) noexcept -> bool
 	}
 	wchar_t wname[MaxName];
 	MultiByteToWideChar(CP_UTF8, 0, name, -1, wname, MaxName);
-	wchar_t d2s[MaxName + 8];
-	std::swprintf(d2s, MaxName + 8, L"%ls.d2s", wname);
-	SaveSearch found;
-	if (g_saveRoot[0] != L'\0') {
-		SearchSaves(g_saveRoot, d2s, 0, &found);
-		wchar_t mods[520];
-		std::swprintf(mods, 520, L"%ls\\mods", g_saveRoot);
-		SearchSaves(mods, d2s, MaxModDepth, &found);
-	}
-	if (found.count > 0) {
-		std::swprintf(m_path, 520, L"%ls\\%ls.multispec", found.dir, wname);
-		std::snprintf(note, size, found.count == 1 ? "next to the save" : "next to the newest of %d same-name saves",
-		              found.count);
+	wchar_t d2s[600];
+	std::swprintf(d2s, 600, L"%ls\\%ls.d2s", g_saveDir, wname);
+	if (g_saveDir[0] != L'\0' && Exists(d2s)) {
+		std::swprintf(m_path, 520, L"%ls\\%ls.multispec", g_saveDir, wname);
+		std::snprintf(note, size, "next to the save");
 		return true;
 	}
 	if (g_fallbackDir[0] == L'\0') {
