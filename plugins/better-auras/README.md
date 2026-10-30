@@ -5,10 +5,12 @@ A D2RLoader plugin that gives a Diablo II: Resurrected mod Path of Exile-style a
 
 - **Toggle**: choosing (or, optionally, using) a listed aura turns it on; doing it again turns it off. It stays on until
   you turn it off, you die, or its drain/reservation can't be paid.
-- **Drain**: optional mana or life per second. When the pool can't pay, the aura turns off. Life drain never kills
-  (one point stays).
-- **Reservation**: optional percent-of-max or flat mana/life. It lowers the pool's max while the aura is on and is
-  refused when the pool can't cover it. Turning the aura off gives it back.
+- **Drain**: optional mana or life per second, taken smoothly every frame by the game's own regen (as negative
+  regeneration). When less than a second of drain is left at its upkeep tick, the aura turns off. Life drain never kills (one point stays).
+- **Reservation**: optional percent-of-max or flat mana/life. Max stays the same; the current value can't rise above
+  max minus what is reserved, so the orb shows the reserved part empty and its text reads unreserved/max
+  (Path of Exile style). Refused when the pool can't cover it. Turning the aura off lifts the cap: you keep the value
+  you have and regenerate from there.
 - **Decoupled from the skill bar**: a toggled aura stays on whatever skill is on the right button. Several auras can
   run at once.
 
@@ -55,7 +57,8 @@ loose `skills.txt` when there is one, else from D2R's aura names. A listed skill
 | Death | every aura turns off, newest first, and its reservation is released |
 | Area change, waypoint, town portal | auras stay on |
 | In town | as vanilla: a skill without `InTown` does nothing in town (and drains nothing) but stays toggled |
-| Save and exit / load | auras start off; nothing is written to the save |
+| Save and exit / load | auras start off, also the one on the right button; nothing is written to the save |
+| Weapon swap | auras stay as they are: only choosing a skill yourself toggles it |
 | Several reservations | each is checked against the pool's max before any reservation; at least one point stays free; released newest first |
 | Level-up, gear changes | percent reservations follow the new max; flat ones stay. If the pool can't cover them all, the newest aura turns off |
 | Two listed auras with the same `aurastate` | the second one is refused |
@@ -71,17 +74,25 @@ per aura on/off/refusal with the reason.
 
 ## How it works
 
+<<<<<<< HEAD
 Addresses, guards and evidence: [docs/reverse-engineering/better-auras.md](../../docs/reverse-engineering/better-auras.md). In short: vanilla keeps the right-skill aura alive
+=======
+See [docs/reverse-engineering/better-auras.md](../../docs/reverse-engineering/better-auras.md). In short: vanilla keeps the right-skill aura alive
+>>>>>>> 7ad78a7 (better-auras: drain through the game's regen, reservation as a cap on current life/mana)
 with unit timer event 8 keyed -1, and a skill switch removes that event and the aura's state list. The same event can
 be keyed with the skill id; those timers survive a switch. A toggled aura is started the vanilla way and moved to its
-own timer. Drain and reservation run in the timer's handler; the reservation is a negative max-life/mana stat inside
-the aura's own state list, so whatever removes the aura also releases it.
+own timer.
+
+Drain is a negative `hpregen` (stat 74) or `manarecovery` (stat 26) inside the aura's own state list: the per-frame
+player regen tick (`0x42e600`, mana step `0x42e350`) applies it, and it goes away with the list. Reservation is a cap
+the plugin applies right after that regen tick every frame: current life/mana at most max - reserved.
 
 Hook sites (image `0x6ab3782c`; the registry above is authoritative):
 
 | Hook | RVA | Why |
 |---|---|---|
-| aura upkeep tick (event 8) | `0x437460` | drain, reservation upkeep |
+| aura upkeep tick (event 8) | `0x437460` | drain stop check, percent reservations follow the pool |
+| player regen tick (event 3, every frame) | `0x42e600` | reservation cap |
 | start right-skill aura | `0x43b680` | toggled skills don't start on select |
 | skill select (past its first branch) | `0x438a7a` | select trigger; rebuild a toggled aura's list after a switch |
 | start skill | `0x43b3e0` | cast trigger |

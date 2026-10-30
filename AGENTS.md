@@ -20,6 +20,7 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
   signature, as `plugins/scrollable-waypoints` does.
 - Never commit game binaries or extracted game assets, dumps, saves, personal config, logs, build output (`build/`,
   `dist/`) or credentials. Tests that need a game slot use a test save, never the owner's own install or characters.
+  Agents test in the starting town only: area changes and anything outside town are the owner's to run.
 - `d2rAI-toolkit` is a separate repository (templates, game-slot testing). Do not copy it in; reference it.
 - Outward-facing steps (pushing, tagging, releases, issues, comments) happen only when the owner asks.
 

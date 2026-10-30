@@ -147,7 +147,7 @@ def ba_reserve_refusal(ctx):
 
 @check("ba-reserve-apply", tags=["ba-scenario"])
 def ba_reserve_apply(ctx):
-    """A reservation was applied (amount in the on line). The max going down and back up is read on screen."""
+    """A reservation was applied (amount in the on line). The capped orb is read on screen."""
     return _scenario(ctx, r"aura \d+ on \(level \d+, reserve [1-9]\d* (?:mana|life)\)", "an aura with a reservation")
 
 

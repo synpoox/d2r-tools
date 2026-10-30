@@ -12,7 +12,7 @@
 #                               it off); "cast": using the skill toggles it
 #   drain   = { resource = "mana"|"life", perSecond = <number> }      stops the aura when the pool can't pay
 #   reserve = { resource = "mana"|"life", mode = "percent"|"flat", value = <number> }
-#                               lowers the pool's max while the aura is on; refused when the pool can't cover it
+#                               caps current life/mana at max - reserved; refused when the pool can't cover it
 
 [defaults]
 enabled = true

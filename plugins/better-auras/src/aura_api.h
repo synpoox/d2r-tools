@@ -1,6 +1,6 @@
 // Aura engine interface: the D2Game functions Better Auras calls or hooks (D2R 3.3.0 build 93847, image 0x6ab3782c).
 //
-// Found with the toolkit's Ghidra scripts on the dumped image (knowledge/d2r-93847-addresses.md, "Auras"). Every
+// Found with the toolkit's Ghidra scripts on the dumped image (docs/reverse-engineering/better-auras.md). Every
 // signature below was read from the decompiled callers in the game's own aura code (Skills.cpp / SkilPal.cpp) unless
 // marked [A] (assumed: verify in game). plugin.cpp binds these only after the image check.
 #pragma once
@@ -36,6 +36,10 @@ inline constexpr uint64_t RvaSelectSkillBody = 0x438a7a;
 inline constexpr uint8_t SelectSkillBodyEntry[] = {0x44, 0x89, 0x4c, 0x24, 0x20, 0x55, 0x41,
                                                    0x56, 0x41, 0x57, 0x48, 0x83, 0xec, 0x40};
 
+// Return address of the 0x438a70 call in the player's skill-choice handler (0x4b4250), read in game: load returns to
+// 0x5313f6, weapon swap to 0x4bfe16. shortcut: a fixed RVA, move it to a signature with the hooks.
+inline constexpr uint64_t RvaPlayerSelectReturn = 0x4b451e;
+
 // Start a skill (server): (game, unit, skill, level, force) -> nonzero started. Already in the registry.
 inline constexpr uint64_t RvaStartSkill = 0x43b3e0;
 inline constexpr uint8_t StartSkillEntry[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c,
@@ -46,7 +50,16 @@ inline constexpr uint64_t RvaUnitDeath = 0x44db20;
 inline constexpr uint8_t UnitDeathEntry[] = {0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x6c, 0x24, 0x10, 0x48, 0x89,
                                              0x74, 0x24, 0x18, 0x57, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xec, 0x50};
 
+// Player regen tick (event 3, every frame; D2Game\src\Player\PlrModes.cpp): (game, unit, a3, a4). Life += stat 74
+// hpregen (<< 8 per frame) up to max life, never below 1 point; then the mana step 0x42e350: mana += max mana /
+// (charstats ManaRegen * 25) * (100 + stat 27) / 100 + stat 26 manarecovery, up to max mana, never below 0.
+inline constexpr uint64_t RvaRegenTick = 0x42e600;
+// MOV [RSP+0x20],RBX / PUSH RBP / SUB RSP,0x40 / MOV EAX,R9D / MOV dword [RSP+0x30],0: 21 bytes
+inline constexpr uint8_t RegenTickEntry[] = {0x48, 0x89, 0x5c, 0x24, 0x20, 0x55, 0x48, 0x83, 0xec, 0x40, 0x41,
+                                             0x8b, 0xc1, 0xc7, 0x44, 0x24, 0x30, 0x00, 0x00, 0x00, 0x00};
+
 using AuraTickFn = void (*)(Game* game, Unit* unit, int32_t key, int32_t a4, int32_t a5) noexcept;
+using RegenTickFn = void (*)(Game* game, Unit* unit, int32_t a3, int32_t a4) noexcept;
 using StartRightAuraFn = void (*)(Game* game, Unit* unit, int32_t skill) noexcept;
 using SelectSkillFn = void (*)(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept;
 using StartSkillFn = int32_t (*)(Game* game, Unit* unit, int32_t skill, int32_t level, int32_t force) noexcept;
@@ -107,6 +120,8 @@ inline constexpr int GameFrame = 0x170;    // int32 current game frame (25 per s
 inline constexpr int FramesPerSecond = 25;
 
 inline constexpr int StatLife = 6, StatMaxLife = 7, StatMana = 8, StatMaxMana = 9;  // values << 8
+// Per-frame regen added by 0x42e600 / 0x42e350, << 8 per frame: negative values drain
+inline constexpr int StatManaRecovery = 26, StatHpRegen = 74;
 inline constexpr int StatAuraSkill = 350;  // in the aurastate list: the skill id (0x15e)
 inline constexpr int EventAura = 8;
 

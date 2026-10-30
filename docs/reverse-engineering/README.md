@@ -16,8 +16,13 @@ record them here first, then copy them there.
 - [Better XP Bar](better-xp-bar.md): XP and level readers; [dump inventory](better-xp-bar-dump-inventory.md).
 - [Monster Count](monster-count.md): RE spike (nothing hooked yet); [address notes](monster-count-addresses.md).
 - [MultiSpec](multispec.md): skills and respec functions; [recon](multispec-recon.md).
+<<<<<<< HEAD
 - [Better Auras](better-auras.md): aura upkeep timers, right-skill select, player life/mana regen, proposed aura
   and regen interception points.
+=======
+- [Better Auras](better-auras.md): aura upkeep timers, right-skill select, player life/mana regen, the five aura
+  hooks and the regen hook.
+>>>>>>> 7ad78a7 (better-auras: drain through the game's regen, reservation as a cap on current life/mana)
 
 The pre-registry documents above (all except Quick NPC) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
@@ -65,11 +70,19 @@ Plugins do not gate on this image: there is no version check, and addresses here
 | D2R.exe | `0x2a4875c` / `0x2a48760` / `0x2a48764` / `0x2a486a4` / `0x2a487b0` | Open-menu NPC id / has-NPC / class / NPC UI state / menu widget | [quick-npc.md](quick-npc.md#4-menu-option-handlers) |
 | D2R.exe | unit `+0` / `+4` / `+8` | Type (`0x34b9d0`) / class (`0x349860`) / unit id (`0x34a330`) | [quick-npc.md](quick-npc.md#6-unit-layout) |
 | D2R.exe | `0x22a92b0`, `0x22a9820` | Default key-binding tables (Run = Ctrl, Stand Still = Shift, Show Items = Alt) | [quick-npc.md](quick-npc.md#2-modifier-keys) |
+<<<<<<< HEAD
 | D2R.exe | `0x437460` | Event 8 handler: aura upkeep tick `(game, unit, key, a4, a5)`; proposed hook | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x43b2b0` / `0x48b890` | Schedule event 8 (key -1 right skill, or skill id) / remove timer events by key | [better-auras.md](better-auras.md#2-aura-system-server) |
 | D2R.exe | `0x438a70` (hook at `0x438a7a`) | Server skill select `(unit, isLeft, skill, a4)`: tears down the old right-skill aura | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x43b680` | Start the right-skill aura `(game, unit, skill)`; proposed hook | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x42e600` / `0x42e350` | Player regen tick (every frame; hpregen 74) / mana step (manarecovery 26); `0x42e600` proposed hook | [better-auras.md](better-auras.md#4-player-regen) |
+=======
+| D2R.exe | `0x437460` | Event 8 handler: aura upkeep tick `(game, unit, key, a4, a5)`; hooked by Better Auras | [better-auras.md](better-auras.md#1-hooks) |
+| D2R.exe | `0x43b2b0` / `0x48b890` | Schedule event 8 (key -1 right skill, or skill id) / remove timer events by key | [better-auras.md](better-auras.md#2-aura-system-server) |
+| D2R.exe | `0x438a70` (hook at `0x438a7a`) | Server skill select `(unit, isLeft, skill, a4)`: tears down the old right-skill aura | [better-auras.md](better-auras.md#1-hooks) |
+| D2R.exe | `0x43b680` | Start the right-skill aura `(game, unit, skill)`; hooked by Better Auras | [better-auras.md](better-auras.md#1-hooks) |
+| D2R.exe | `0x42e600` / `0x42e350` | Player regen tick (every frame; hpregen 74) / mana step (manarecovery 26); `0x42e600` hooked by Better Auras | [better-auras.md](better-auras.md#4-player-regen) |
+>>>>>>> 7ad78a7 (better-auras: drain through the game's regen, reservation as a cap on current life/mana)
 
 This table is an index. The feature documents hold the guards and evidence; an entry here is not enough to justify
 an unguarded hook.

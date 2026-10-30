@@ -8,6 +8,7 @@
 
 #define NOMINMAX
 #include <windows.h>
+#include <intrin.h>
 
 #include <algorithm>
 #include <atomic>
@@ -34,6 +35,7 @@ aura::AuraTickFn g_tickOriginal = nullptr;
 aura::SelectSkillFn g_selectOriginal = nullptr;
 aura::StartSkillFn g_startSkillOriginal = nullptr;
 aura::UnitDeathFn g_deathOriginal = nullptr;
+aura::RegenTickFn g_regenOriginal = nullptr;
 
 std::atomic<uint32_t> g_toggledOn {0}, g_toggledOff {0}, g_refused {0}, g_drainStops {0}, g_rearms {0}, g_deaths {0};
 
@@ -47,13 +49,12 @@ struct Active {
 	int32_t state;
 	bool managed;
 	int32_t reserveStat;  // StatMaxMana / StatMaxLife, 0 = none
-	int32_t reserved;     // << 8
-	int32_t lastFrame;
-	double drainCarry;    // fraction of a point (<< 8 units) not charged yet
+	int32_t reserved;     // << 8: current life/mana is capped at max - all reservations (max itself never changes)
 	uint32_t order;       // activation order: reservations are released newest first
 };
 std::vector<Active> g_active;
 uint32_t g_order = 0;
+std::atomic<int> g_reservations {0};  // entries with a reservation: the per-frame regen hook skips the lock when 0
 // Hooks run on the game thread; the status command reads from the console. Recursive: a hooked function can run
 // inside another (a death inside an aura tick), and every hook looks its entry up again after calling the game.
 struct CriticalSection {
@@ -142,9 +143,13 @@ auto ReservedTotal(Unit* unit, int32_t maxStat, const Active* except) -> int64_t
 	return total;
 }
 
-// The pool's max before any of our reservations (<< 8).
+// The pool's max (<< 8). Reservations don't lower it: they cap the current value.
 auto BaseMax(Unit* unit, int32_t maxStat) -> int64_t {
-	return static_cast<int64_t>(api.stat(unit, maxStat, 0)) + ReservedTotal(unit, maxStat, nullptr);
+	return api.stat(unit, maxStat, 0);
+}
+
+void CountReservations() {
+	g_reservations = static_cast<int>(std::count_if(g_active.begin(), g_active.end(), [](const Active& a) { return a.reserveStat != 0; }));
 }
 
 auto ReserveAmount(const config::SkillConfig& cfg, int64_t baseMax) -> int32_t {
@@ -154,23 +159,57 @@ auto ReserveAmount(const config::SkillConfig& cfg, int64_t baseMax) -> int32_t {
 	return static_cast<int32_t>(std::llround(cfg.reserveValue * 256.0));
 }
 
-// Writes the entry's reservation into its aura list and clamps the current value to the new max.
-void ApplyReservation(Game* game, Unit* unit, const Active& a) {
-	if (a.reserveStat == 0) {
+// Caps current life/mana at max - reserved, so the orb shows the reserved part empty and its "current/max" text reads
+// unreserved/max. Runs after every regen frame; whatever raised the value elsewhere (a potion, leech) is back under
+// the cap one frame later. Releasing a reservation only lifts the cap: the player keeps the value they have.
+void ApplyCap(Unit* unit) {
+	for (int32_t maxStat : {aura::StatMaxMana, aura::StatMaxLife}) {
+		const int64_t reserved = ReservedTotal(unit, maxStat, nullptr);
+		if (reserved <= 0) {
+			continue;
+		}
+		const int32_t cur = CurrentStat(maxStat);
+		const int64_t cap = std::max<int64_t>(BaseMax(unit, maxStat) - reserved, maxStat == aura::StatMaxLife ? 256 : 0);
+		if (api.stat(unit, cur, 0) > cap) {
+			api.setStat(unit, cur, static_cast<int32_t>(cap), 0);
+		}
+	}
+}
+
+// Drain as negative regen inside the aura's own list: the engine's regen tick takes it every frame (life never below
+// 1 point, mana never below 0), and it goes away with the list. 0 in town for a skill without InTown.
+void ApplyDrain(Game* game, Unit* unit, const Active& a, const config::SkillConfig& cfg, const uint8_t* rec) {
+	if (!g_on[Drain] || cfg.drainResource == config::Resource::None || cfg.drainPerSecond <= 0) {
 		return;
 	}
 	void* list = api.stateList(unit, a.state);
 	if (list == nullptr) {
 		return;
 	}
-	if (api.listStat(Df(game), list, a.reserveStat, 0) != -a.reserved) {
-		api.setListStat(Df(game), list, a.reserveStat, -a.reserved, 0);
+	const int32_t stat = cfg.drainResource == config::Resource::Mana ? aura::StatManaRecovery : aura::StatHpRegen;
+	const int32_t perFrame = std::max(1, static_cast<int32_t>(std::lround(cfg.drainPerSecond * 256.0 / aura::FramesPerSecond)));
+	const int32_t want = rec != nullptr && TownBlocked(rec, unit) ? 0 : -perFrame;
+	if (api.listStat(Df(game), list, stat, 0) != want) {
+		api.setListStat(Df(game), list, stat, want, 0);
 	}
-	const int32_t cur = CurrentStat(a.reserveStat);
-	const int32_t max = api.stat(unit, a.reserveStat, 0);
-	if (api.stat(unit, cur, 0) > max) {
-		api.setStat(unit, cur, max, 0);
+}
+
+// The pool can't pay the next second of drain: the aura stops (the engine itself would just stop at the floor).
+auto DrainExhausted(Unit* unit, const config::SkillConfig& cfg) -> bool {
+	if (!g_on[Drain] || cfg.drainResource == config::Resource::None || cfg.drainPerSecond <= 0) {
+		return false;
 	}
+	const bool life = cfg.drainResource == config::Resource::Life;
+	const int32_t have = api.stat(unit, life ? aura::StatLife : aura::StatMana, 0);
+	return have - (life ? 256 : 0) < static_cast<int32_t>(cfg.drainPerSecond * 256.0);
+}
+
+void ApplyAll(Game* game, Unit* unit, const Active& a) {
+	const config::SkillConfig* cfg = config::Find(a.skill);
+	if (cfg != nullptr) {
+		ApplyDrain(game, unit, a, *cfg, Record(game, a.skill));
+	}
+	ApplyCap(unit);
 }
 
 // Restarts the right-skill timer of a vanilla aura on the right button: starting a toggled aura goes through the
@@ -211,7 +250,8 @@ auto StartManaged(Game* game, Unit* unit, int32_t skill, int32_t level, int32_t 
 	return true;
 }
 
-// Removes the aura (timer, list, state); the reservation goes with the list.
+// Removes the aura (timer, list, state); its drain goes with the list. The caller erases the entry, which lifts the
+// reservation cap.
 void Stop(Game* game, Unit* unit, const Active& a) {
 	api.removeEvents(game, unit, aura::EventAura, a.managed ? a.skill : -1);
 	void* list = api.stateList(unit, a.state);
@@ -224,6 +264,7 @@ void Stop(Game* game, Unit* unit, const Active& a) {
 
 void Erase(const Active* a) {
 	g_active.erase(g_active.begin() + (a - g_active.data()));
+	CountReservations();
 }
 
 void StopAndErase(Game* game, Unit* unit, Active* a, const char* why) {
@@ -263,8 +304,8 @@ auto ToggleOn(Game* game, Unit* unit, int32_t skill, const config::SkillConfig& 
 	}
 	int32_t maxStat = 0;
 	const int32_t reserve = PlanReservation(unit, cfg, maxStat);
-	if (level <= 0 || reserve < 0) {
-		plog::Info("aura %d refused: %s", skill, level <= 0 ? "no skill level" : "not enough to reserve");
+	if (level <= 0 || reserve < 0 || DrainExhausted(unit, cfg)) {
+		plog::Info("aura %d refused: %s", skill, level <= 0 ? "no skill level" : reserve < 0 ? "not enough to reserve" : "not enough to drain");
 		++g_refused;
 		return false;
 	}
@@ -273,8 +314,9 @@ auto ToggleOn(Game* game, Unit* unit, int32_t skill, const config::SkillConfig& 
 		++g_refused;
 		return false;
 	}
-	g_active.push_back({game, unit, skill, level, state, true, maxStat, reserve, Frame(game), 0.0, ++g_order});
-	ApplyReservation(game, unit, g_active.back());
+	g_active.push_back({game, unit, skill, level, state, true, maxStat, reserve, ++g_order});
+	CountReservations();
+	ApplyAll(game, unit, g_active.back());
 	plog::Info("aura %d on (level %d, reserve %d %s)", skill, level, reserve >> 8, maxStat == aura::StatMaxMana ? "mana" : maxStat ? "life" : "-");
 	++g_toggledOn;
 	return true;
@@ -289,30 +331,6 @@ void ToggleSkill(Game* game, Unit* unit, int32_t skill, const config::SkillConfi
 	}
 }
 
-// Charges the drain since the last tick. False when the pool can't pay: the aura stops.
-auto ChargeDrain(Game* game, Unit* unit, Active& a, const config::SkillConfig& cfg, const uint8_t* rec) -> bool {
-	const int32_t now = Frame(game);
-	const int32_t elapsed = std::max(0, now - a.lastFrame);
-	a.lastFrame = now;
-	if (!g_on[Drain] || cfg.drainResource == config::Resource::None || cfg.drainPerSecond <= 0 || TownBlocked(rec, unit)) {
-		return true;
-	}
-	a.drainCarry += cfg.drainPerSecond * 256.0 * elapsed / aura::FramesPerSecond;
-	const int32_t cost = static_cast<int32_t>(a.drainCarry);
-	if (cost <= 0) {
-		return true;
-	}
-	const int32_t stat = cfg.drainResource == config::Resource::Mana ? aura::StatMana : aura::StatLife;
-	const int32_t have = api.stat(unit, stat, 0);
-	// life drain never kills: one point stays
-	if (have - cost < (stat == aura::StatLife ? 256 : 0)) {
-		return false;
-	}
-	api.addStat(unit, stat, -cost, 0);
-	a.drainCarry -= cost;
-	return true;
-}
-
 // Percent reservations follow the pool (level-up, gear). When the pool can't cover them all, the newest go first.
 void RefreshReservations(Game* game, Unit* unit) {
 	for (int32_t maxStat : {aura::StatMaxMana, aura::StatMaxLife}) {
@@ -325,7 +343,7 @@ void RefreshReservations(Game* game, Unit* unit) {
 					}
 				}
 			}
-			if (base - ReservedTotal(unit, maxStat, nullptr) >= 256) {
+			if (ReservedTotal(unit, maxStat, nullptr) == 0 || base - ReservedTotal(unit, maxStat, nullptr) >= 256) {
 				break;
 			}
 			Active* newest = nullptr;
@@ -361,7 +379,7 @@ void AuraTick(Game* game, Unit* unit, int32_t key, int32_t a4, int32_t a5) noexc
 			a = nullptr;
 		}
 		if (a != nullptr) {
-			if (!ChargeDrain(game, unit, *a, *cfg, rec)) {
+			if (!TownBlocked(rec, unit) && DrainExhausted(unit, *cfg)) {
 				++g_drainStops;
 				StopAndErase(game, unit, a, "drain could not be paid");
 				return;
@@ -373,8 +391,17 @@ void AuraTick(Game* game, Unit* unit, int32_t key, int32_t a4, int32_t a5) noexc
 	if (skill > 0) {
 		Lock lock;
 		if (const Active* a = FindEntry(game, unit, skill); a != nullptr && a->managed == (key > 0)) {
-			ApplyReservation(game, unit, *a);  // the do-function may rebuild the list
+			ApplyAll(game, unit, *a);  // the do-function may rebuild the list
 		}
+	}
+}
+
+// Every frame, per player: vanilla regen, then the reservation cap.
+void RegenTick(Game* game, Unit* unit, int32_t a3, int32_t a4) noexcept {
+	g_regenOriginal(game, unit, a3, a4);
+	if (g_reservations.load(std::memory_order_relaxed) > 0 && game != nullptr && IsPlayer(unit)) {
+		Lock lock;
+		ApplyCap(unit);
 	}
 }
 
@@ -399,16 +426,17 @@ void StartRightAura(Game* game, Unit* unit, int32_t skill) noexcept {
 	}
 	int32_t maxStat = 0;
 	const int32_t reserve = PlanReservation(unit, *cfg, maxStat);
-	Active a {game, unit, skill, Level(unit, skill), AuraState(rec), false, maxStat, std::max(reserve, 0), Frame(game), 0.0, ++g_order};
-	if (reserve < 0) {
-		plog::Info("aura %d refused: not enough to reserve", skill);
+	Active a {game, unit, skill, Level(unit, skill), AuraState(rec), false, maxStat, std::max(reserve, 0), ++g_order};
+	if (reserve < 0 || DrainExhausted(unit, *cfg)) {
+		plog::Info("aura %d refused: not enough to %s", skill, reserve < 0 ? "reserve" : "drain");
 		++g_refused;
 		Stop(game, unit, a);
 		return;
 	}
 	if (maxStat != 0 || (g_on[Drain] && cfg->drainResource != config::Resource::None)) {
 		g_active.push_back(a);
-		ApplyReservation(game, unit, g_active.back());
+		CountReservations();
+		ApplyAll(game, unit, g_active.back());
 	}
 }
 
@@ -441,7 +469,7 @@ void SelectSkill(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept
 		if (Active* a = FindEntry(game, unit, old); a != nullptr && api.hasState(unit, a->state) == 0) {
 			// the switch removed its list: build it again (its per-skill timer survived the switch)
 			if (StartManaged(game, unit, a->skill, a->level, a->state)) {
-				ApplyReservation(game, unit, *a);
+				ApplyAll(game, unit, *a);
 				++g_rearms;
 				plog::Info("aura %d kept through the skill switch", a->skill);
 			} else {
@@ -449,7 +477,9 @@ void SelectSkill(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept
 			}
 		}
 	}
-	const config::SkillConfig* cfg = config::Find(skill);
+	// loading a character and swapping weapons reselect the skills too: only the player's own choice toggles
+	const bool chosen = reinterpret_cast<uintptr_t>(_ReturnAddress()) - reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)) == aura::RvaPlayerSelectReturn;
+	const config::SkillConfig* cfg = chosen ? config::Find(skill) : nullptr;
 	if (cfg != nullptr && cfg->toggle && cfg->trigger == config::Trigger::Select && g_on[Toggle]) {
 		ToggleSkill(game, unit, skill, *cfg);
 	}
@@ -503,7 +533,7 @@ auto InstallHooks(const D2RL::PluginContext* context) -> bool {
 		bool ok;
 	} hooks[] = {{"tick", aura::RvaAuraTick, false}, {"start", aura::RvaStartRightAura, false},
 	             {"select", aura::RvaSelectSkillBody, false}, {"cast", aura::RvaStartSkill, false},
-	             {"death", aura::RvaUnitDeath, false}};
+	             {"death", aura::RvaUnitDeath, false}, {"regen", aura::RvaRegenTick, false}};
 	for (H& h : hooks) {
 		if (AlreadyHooked(context->exeBase, h.rva)) {
 			std::snprintf(g_hookReport, sizeof(g_hookReport), "%s 0x%llx already hooked by someone else", h.name, static_cast<unsigned long long>(h.rva));
@@ -515,6 +545,7 @@ auto InstallHooks(const D2RL::PluginContext* context) -> bool {
 	hooks[2].ok = context->InstallInlineHook(aura::RvaSelectSkillBody, aura::SelectSkillBodyEntry, sizeof(aura::SelectSkillBodyEntry), SelectSkill, &g_selectOriginal);
 	hooks[3].ok = context->InstallInlineHook(aura::RvaStartSkill, aura::StartSkillEntry, sizeof(aura::StartSkillEntry), StartSkill, &g_startSkillOriginal);
 	hooks[4].ok = context->InstallInlineHook(aura::RvaUnitDeath, aura::UnitDeathEntry, sizeof(aura::UnitDeathEntry), UnitDeath, &g_deathOriginal);
+	hooks[5].ok = context->InstallInlineHook(aura::RvaRegenTick, aura::RegenTickEntry, sizeof(aura::RegenTickEntry), RegenTick, &g_regenOriginal);
 	g_hooksOk = true;
 	int n = 0;
 	n += std::snprintf(g_hookReport, sizeof(g_hookReport), "hooks");

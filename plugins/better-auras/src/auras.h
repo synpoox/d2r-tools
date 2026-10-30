@@ -1,13 +1,13 @@
-// Better Auras core: the active-aura manager and the five engine hooks (auras.cpp).
+// Better Auras core: the active-aura manager and the engine hooks (auras.cpp).
 //
-// How it uses the engine (build 93847, knowledge/d2r-93847-addresses.md "Auras"):
+// How it uses the engine (build 93847, docs/reverse-engineering/better-auras.md):
 //  - vanilla keeps the right-skill aura alive with unit timer event 8 keyed -1; selecting another right skill
 //    removes that event and the aura's state list (0x438a70);
 //  - the same event can be keyed with a skill id instead (0x43b2b0 rightSkill = 0). Such per-skill timers are not
 //    touched by a skill switch. A toggled aura is started the vanilla way, then moved to a per-skill timer;
-//  - drain and reservation run in the upkeep tick (event 8 handler 0x437460); the reservation is a negative max
-//    life/mana stat inside the aura's own state list, so whatever removes the aura (toggle off, death, game end)
-//    also releases the reservation.
+//  - drain is negative regen inside the aura's own state list, applied by the player regen tick (0x42e600) and gone
+//    with the list; the upkeep tick (event 8 handler 0x437460) stops an aura that can't pay;
+//  - the reservation is a cap on current life/mana, applied after every regen frame (max never changes).
 //
 // All state lives on the server (the game host in TCP/IP): the hooked functions are D2Game code. Clients see the
 // result through the normal state and stat sync.

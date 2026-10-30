@@ -1,7 +1,7 @@
 # Better Auras native contracts (`better-auras`)
 
-**Dates:** 2026-10-29 (aura system, hooks), 2026-10-30 (player regen, reservation cap)
-**Consumer:** Better Auras (planned toggled-aura plugin); no plugin code is part of this record
+**Dates:** 2026-10-29 (aura system, hooks), 2026-10-30 (player regen, reservation cap), 2026-10-31 (select callers, slot test)
+**Consumer:** [Better Auras](../../plugins/better-auras/README.md) (`better-auras.dll`)
 **Module:** `D2R.exe`, D2R 3.3 build 93847 (Battle.net) / 94995 (Steam) under D2RLoader 1.3.1, PE image stamp
 `0x6ab3782c`. Values are RVAs (image base `0x140000000` + RVA).
 **Evidence source:** a memory-layout dump of the running game (d2rAI-toolkit `tools/dump_image.py`), analysed with
@@ -9,16 +9,22 @@ Ghidra 12.2 headless through d2rAI-toolkit `tools/ghidra_query.ps1` (`Decompile`
 `StringXrefs`, `FindDisp`). Entry bytes were read from the dump at file offset = RVA. Skill table facts come from
 the game's own `skills.txt` (93847).
 **Reproduce:** `tools/ghidra_query.ps1 Decompile.java <rva>` / `Disasm.java <rva>` on a dump of the same image; no
-dump checker for this plugin yet (see [Open items](#7-open-items)).
+dump checker for this plugin yet (see [Open items](#8-open-items)).
 
-**Validation, by level** (as of 2026-10-30): static analysis of the dump only. No contract below is validated in game,
-and no plugin code is part of this record.
+**Validation, by level** (as of 2026-10-30):
 
-## 1. Interception points
+- Clean build of every revision below; no unit tests for the hooks.
+- In game: the owner installed the build before the regen rework (game-wide plugin, config in `d2rloader\config`) and
+  reported that "some features work as intended" and that life drain did not work. Which rows that covers was not
+  itemised, so no single contract below is marked validated in game.
+- 2026-10-31, slot 2, town only (`plugins/better-auras/TESTING.md`): hooks `0x437460`, `0x43b680`, `0x438a7a` and `0x42e600` ran as
+  described, including drain and the cap. `0x44db20` (death) and `0x43b3e0` (cast trigger) did not run; out-of-town tests are the owner's.
 
-Proposed hook sites for a toggled-aura system, each with a guard of whole instructions of at least 14 bytes and no
-RIP-relative instruction. None of these entries started with `FF 25` in the dump. A plugin using them should check the
-image stamp first, install them in one transaction, and on any mismatch log it and leave every aura feature off.
+## 1. Hooks
+
+Every hook checks its entry bytes through `InstallInlineHook`; a mismatch refuses that hook. All five aura hooks and
+the regen hook are installed together; if any is refused, every feature stays off (the installed ones pass straight
+through) and the part lines in the plugin log say which one. None of these entries started with `FF 25` in the dump.
 
 | RVA | Guard (whole instructions) | Contract | Evidence |
 |---|---|---|---|
@@ -29,9 +35,9 @@ image stamp first, install them in one transaction, and on any mismatch log it a
 | `0x44db20` | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 50` (24) | Unit death `void(game, victim, killer, flag)` (already in d2rAI-toolkit's registry) | |
 | `0x42e600` | `48 89 5C 24 20 55 48 83 EC 40 41 8B C1 C7 44 24 30 00 00 00 00` (21) | **Player regen tick** `void(game, unit, a3, a4)`, see [section 4](#4-player-regen) | `D2Game\src\Player\PlrModes.cpp`; event 3, reschedules itself every frame |
 
-**Failure mode (required of a consumer):** a refused hook or a stamp mismatch logs the reason and leaves every aura
-feature off; the game plays vanilla. **Coexistence:** no D2RLoader hook was found on these entries (no `FF 25`); a
-second hook on the same entry fails the byte check and must stay off.
+**Failure mode:** a refused hook logs the reason and leaves every Better Auras feature off; the
+game plays vanilla. **Coexistence:** no D2RLoader hook was found on these entries (no `FF 25`); another plugin
+hooking the same entries makes this plugin's hook fail its byte check and stay off.
 
 ## 2. Aura system (server)
 
@@ -66,7 +72,7 @@ Code in `D2Game\src\Skills\Skills.cpp` and `SkilPal.cpp`.
 | +0xa0 / +0xa2 | i16 aurastate / auratargetstate | d2rAI-toolkit registry |
 | +0x180 | perdelay formula | `0x43b2b0` |
 
-A workable "uses aura functions" rule: aura bit, or srvdofunc 65/66/81/82, and an aurastate >= 0. In 93847's
+"Uses aura functions" in Better Auras: aura bit, or srvdofunc 65/66/81/82, and an aurastate >= 0. In 93847's
 skills.txt that is every paladin aura plus Barbs/Wolverine/Oak Sage and the monster holy auras; the barbarian
 masteries have `aura=1` but no srvdofunc and are excluded.
 
@@ -83,17 +89,27 @@ masteries have `aura=1` but no srvdofunc and are excluded.
 Found from the `ManaRegen` column name in the charstats parser `0x30c560` (entry `{name, type 4, offset 0x36}`), then
 `FindDisp.java 0x36 MOVZX` → `0x42e350` (reads `+0x36` and stats 8, 26, 27) → its only caller `0x42e600`.
 
-What this allows (design, not implemented here): a drain as a negative stat 74 (life) or 26 (mana) inside an aura's
-own state list, applied every frame by the engine; a reservation as a cap after `0x42e600` limiting current life/mana
-to max - reserved, which leaves the orb's reserved part empty without changing max.
+How Better Auras uses it: drain is a negative stat 74 (life) or 26 (mana) inside the aura's own state list; the
+reservation cap runs after `0x42e600` and limits current life/mana to max - reserved.
 
-## 5. Client UI
+## 5. Skill select callers
+
+`0x438a70` has about 15 callers and the same arguments from each (`a4` -1), so only the return address tells them apart.
+Read in game by logging it in the `0x438a7a` hook on 2026-10-31:
+
+| Return RVA | Caller | Trigger |
+|---|---|---|
+| `0x4b451e` | `0x4b4250` | The player chooses a skill. Better Auras toggles only on this one |
+| `0x5313f6` | `0x5311f0` | Character load: right skill, game frame 1 |
+| `0x4bfdc7` / `0x4bfe16` | `0x4bea50` | Weapon swap: left, then right, same frame |
+
+## 6. Client UI
 
 | RVA | Notes |
 |---|---|
 | `0x8bd030` | HD UI setup that registers `SetShowLifeOrbText` / `SetShowManaOrbText`; too large for the decompiler's response buffer. The orb widget itself is not mapped |
 
-## 6. Ghidra notes
+## 7. Ghidra notes
 
 - Ghidra 12.2 + JDK 25 on Windows: every headless run aborted with Felix "The data file must be inside the data dir"
   (NPE in `Felix.handleJavaVersionChange`). Workaround: set
@@ -101,10 +117,10 @@ to max - reserved, which leaves the orb's reserved part empty without changing m
   93847 dump then took 9 minutes.
 - `dump_image.py` needs the same rights as the game: OpenProcess error 5 when D2RLoader runs as administrator.
 
-## 7. Open items
+## 8. Open items
 
-- A dump checker (workflow step 6) re-checking every guard above.
-- In-game proof of each row; whether `0x43b3e0` sees aura use.
+- A dump checker in `plugins/better-auras/tools/` (workflow step 6) re-checking every guard above.
+- In-game proof of the death hook; whether `0x43b3e0` sees aura use (cast trigger).
 - Whether auras started through the do-function branch of `0x43b680` (record +0x25 bit 0x80) build their list with
-  stat 350, which the per-skill tick requires.
+  stat 350; the plugin writes it itself when missing.
 - The HD orb widget, for a tinted reserved band.
