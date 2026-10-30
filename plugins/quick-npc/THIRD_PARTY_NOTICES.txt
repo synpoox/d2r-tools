@@ -30,7 +30,7 @@ SOFTWARE.
 
 D2RLoader PluginSDK
 -------------------
-The plugin builds against the PluginSDK headers (git submodule third_party/PluginSDK); plugin/src/plugin.rc follows
+The plugin builds against the PluginSDK headers (the monorepo's shared third_party/PluginSDK submodule); plugin/src/plugin.rc follows
 the SDK examples.
 
 MIT License

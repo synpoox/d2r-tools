@@ -9,7 +9,7 @@ The console is D2RLoader's console (open it with its key; type the command and E
 
 ## 0. Install
 
-1. Download the `better-xp-bar` artifact from the latest green CI run (Actions > build > Artifacts), unzip it.
+1. Download the `better-xp-bar` artifact from the latest green CI run of the monorepo (Actions > ci > Artifacts > better-xp-bar), unzip it.
 2. Copy `better-xp-bar.dll` to `<game>\d2rloader\plugins\` (works with every mod) or to
    `<game>\mods\<Mod>\d2rloader\plugins\`.
 3. Start the game through D2RLoader.

@@ -25,8 +25,8 @@ By Synpoo. For D2R 3.3.0 (build 93847, Battle.net; 94995 on Steam) with D2RLoade
 
 ## Installation
 
-1. Download `better-automap.dll` from the latest build (the `better-automap` artifact of the
-   [build workflow](../../actions/workflows/build.yml)).
+1. Download `better-automap.dll` from the latest build (the `better-automap` artifact of the monorepo's
+   [ci workflow](https://github.com/synpoox/d2r-tools/actions/workflows/ci.yml)).
 2. Close the game.
 3. Copy `better-automap.dll` into `<D2R folder>\d2rloader\plugins\` (create the folder if it is missing). It then
    works with every mod.
@@ -62,4 +62,4 @@ you can also list features to leave out (`minimap`, `overlay`, `zoom`) in `bette
 - Works only on the build listed above; any other build leaves the plugin inactive until it is updated.
 
 For developers: `docs/hook-sites.md` lists every game address with its evidence, `docs/TESTING.md` the in-game test
-checklist. Builds run on GitHub Actions (`.github/workflows/build.yml`, CMake, `windows-latest`, x64 Release).
+checklist. Builds run on GitHub Actions (the monorepo's `.github/workflows/ci.yml`, CMake, `windows-latest`, x64 Release).

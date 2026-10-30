@@ -89,10 +89,13 @@ the aura's own state list, so whatever removes the aura also releases it.
 
 ## Build
 
+From the monorepo root (the PluginSDK is the shared `third_party/PluginSDK` submodule: `git submodule update --init`):
+
 ```
-git submodule update --init
-powershell -ExecutionPolicy Bypass -File build.ps1
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin better-auras
 ```
+
+Standalone: `powershell -ExecutionPolicy Bypass -File plugins\better-auras\build.ps1` (uses the same submodule).
 
 Output: `build\Release\better-auras.dll`. Checks for d2rAI-toolkit's `testing/` framework: `tests\better_auras_checks.py`;
 manual steps: `TESTING.md`.

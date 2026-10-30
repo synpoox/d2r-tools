@@ -26,7 +26,7 @@ one game image. The plugin checks the image's PE timestamp (`0x6ab3782c`). On an
 ## Build
 
 You need CMake 3.29 or newer and Visual Studio with the C++ workload. The PluginSDK comes from
-`../third_party/PluginSDK` (a git submodule of d2r-modkit).
+`../../../third_party/PluginSDK` (the monorepo's shared PluginSDK submodule; `git submodule update --init` at the repo root).
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File build.ps1                    # -> build\Release\mod-core.dll

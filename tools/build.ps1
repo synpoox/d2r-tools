@@ -38,7 +38,7 @@ foreach ($n in $names) {
 
     $out = Join-Path $repo "dist\$n"
     New-Item -ItemType Directory -Force $out | Out-Null
-    $dlls = Get-ChildItem (Join-Path $bld 'Release') -Filter *.dll -ErrorAction SilentlyContinue
+    $dlls = Get-ChildItem $bld -Recurse -Filter *.dll -ErrorAction SilentlyContinue | Where-Object { $_.Directory.Name -eq 'Release' -and $_.FullName -notmatch '[\\/](PluginSDK|_deps|CMakeFiles)[\\/]' }
     if (-not $dlls) { throw "${n}: no DLL produced" }
     $dlls | Copy-Item -Destination $out -Force
     $dlls | ForEach-Object { Write-Host "  built: $($_.Name)" }
@@ -63,9 +63,10 @@ foreach ($n in $names) {
             }
         }
         # tests\*.py are d2rAI-toolkit game_checks modules (need the toolkit and a game slot): syntax-check only.
-        $py = Get-Command python -ErrorAction SilentlyContinue
+        $py = @('py', 'python') | ForEach-Object { Get-Command $_ -ErrorAction SilentlyContinue } |
+            Where-Object { & $_.Source --version *> $null; $LASTEXITCODE -eq 0 } | Select-Object -First 1   # skips the Store shim
         foreach ($f in Get-ChildItem (Join-Path $dir 'tests') -Filter *.py -ErrorAction SilentlyContinue) {
-            if ($py) { Run "$n $($f.Name) syntax" { python -I -c "import ast,sys; ast.parse(open(sys.argv[1], encoding='utf-8').read())" $f.FullName } }
+            if ($py) { Run "$n $($f.Name) syntax" { & $py.Source -I -c "import ast,sys; ast.parse(open(sys.argv[1], encoding='utf-8').read())" $f.FullName } }
             Write-Host "  $($f.Name): in-game check module (d2rAI-toolkit game_checks + game slot); syntax-checked only"
             $ran = $true
         }

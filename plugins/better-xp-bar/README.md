@@ -90,15 +90,17 @@ mod's) from the defaults built into the DLL ([plugin/better-xp-bar.toml](plugin/
 
 ## Build
 
-CI builds the DLL on `windows-latest` (see `.github/workflows/build.yml`). By hand on Windows (CMake 3.29+, Visual
+CI (the monorepo's `.github/workflows/ci.yml`) builds the DLL on `windows-latest`. By hand on Windows (CMake 3.29+, Visual
 Studio with C++):
 
 ```bash
-git clone --recursive https://github.com/synpoox/better-xp-bar
+git clone --recursive https://github.com/synpoox/d2r-tools
+cd d2r-tools
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin better-xp-bar   # or by hand from plugins/better-xp-bar:
 ```
 
 ```bash
-cmake -S . -B build -A x64
+cmake -S plugins/better-xp-bar -B build -A x64 -DBXB_SDK_DIR=third_party/PluginSDK
 ```
 
 ```bash
