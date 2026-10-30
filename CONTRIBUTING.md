@@ -17,6 +17,27 @@ executable); `plugins/<name>/tests/*.py` are d2rAI-toolkit in-game check modules
 Report results in separate levels: automated tests, a clean build, installed into a game, and live in-game testing
 (for example a plugin's `TESTING.md`). For documentation-only changes, check links and paths instead.
 
+## Worktrees
+
+Use a [git worktree](https://git-scm.com/docs/git-worktree) per active feature branch so parallel work does not share a
+checkout, `build/` or `dist/`. Stay in the main checkout for `main`, releases (`tools\release.ps1`) and quick edits, and
+keep the number of long-lived worktrees low.
+
+```powershell
+git fetch origin
+git worktree add ..\d2r-tools-<topic> -b <plugin>/<topic> origin/main
+cd ..\d2r-tools-<topic>; git submodule update --init --recursive
+
+# after the squash-merge
+git worktree remove ..\d2r-tools-<topic>; git branch -D <plugin>/<topic>; git worktree prune
+```
+
+- A new worktree starts with `third_party/PluginSDK` empty, so initialize the submodule (`tools\build.ps1` stops if it
+  is missing). Each worktree configures its own `build/`; never copy one between worktrees.
+- Worktrees share the game install: two that install the same plugin DLL overwrite each other, so test in game one at a
+  time. Keep worktree paths short (MSBuild/CMake can hit the 260-character limit).
+- Name sibling folders `d2r-tools-<topic>`, check `git worktree list` now and then, and prune stale ones.
+
 ## Native findings
 
 New or changed native addresses, offsets, signatures, byte guards or ABI details go in the owning plugin's source and
