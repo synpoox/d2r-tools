@@ -49,7 +49,9 @@ CharacterSpecs
 
 One file per character, **next to its save**: `<save folder>\<name>.multispec`, where the save folder is
 `<Saved Games>\Diablo II Resurrected\mods\<savepath>\` (Saved Games from `SHGetKnownFolderPath(FOLDERID_SavedGames)`,
-`savepath` from the active mod's `modinfo.json`).
+`savepath` from the active mod's `modinfo.json`). With **no mod selected** D2R runs as retail and saves into
+`<Saved Games>\Diablo II Resurrected\` itself, so that is the save folder; the same holds for a mod whose `modinfo.json`
+has no `savepath`. `modinfo.json` is read only when a mod is active.
 
 | Option | Verdict |
 |---|---|
