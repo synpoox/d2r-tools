@@ -4,6 +4,17 @@
     "d2rloader": "1.3.1"
   },
   "plugins": {
+    "quick-npc": {
+      "version": "1.0.0",
+      "validation": [
+        "Clean x64 Release build with MSVC on GitHub Actions, and the host tests of its decision logic pass.",
+        "Targets Diablo II: Resurrected 3.3.0 build 93847 with D2RLoader 1.3.1, as stated by the plugin's README. No in-game test log is recorded in this repository."
+      ],
+      "limits": [
+        "Works only on the game image it was built for (3.3, Battle.net build 93847 or Steam build 94995). On any other game or D2RLoader version it logs that and changes nothing.",
+        "Shift cannot be the hotkey (it is D2R's Stand Still key). Alt is D2R's Show Items key, so a click on an item label picks the item up instead."
+      ]
+    },
     "better-xp-bar": {
       "version": "1.0.0",
       "validation": [
