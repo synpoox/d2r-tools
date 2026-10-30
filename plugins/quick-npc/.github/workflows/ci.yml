@@ -1,0 +1,63 @@
+# CI: host tests for the decision logic, a MinGW compile/link check, and the real MSVC build of the plugin
+# (the toolkit's plugin/build.ps1) whose DLL is uploaded as an artifact.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host tests (ASan + UBSan)
+        run: |
+          cmake -S tests -B build-tests -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"
+          cmake --build build-tests
+          ctest --test-dir build-tests --output-on-failure
+      - name: "verify_dump.py runs (usage only, no game image in CI)"
+        run: python3 tools/verify_dump.py || test $? -eq 2
+
+  plugin-mingw:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64-posix
+      - name: Compile and link
+        run: |
+          mkdir -p out
+          for f in plugin/src/*.cpp; do
+            x86_64-w64-mingw32-g++-posix -std=c++20 -Wall -Wextra -Wno-missing-field-initializers \
+              -Ithird_party/PluginSDK/include -c "$f" -o "out/$(basename "$f").o"
+          done
+          x86_64-w64-mingw32-windres -Ithird_party/PluginSDK/include plugin/src/plugin.rc -O coff -o out/plugin.res.o
+          # the default quick-npc.toml, embedded as d2rlplugin_embed_config does for the MSVC build
+          sed "s#@D2RLPLUGIN_EMBEDDED_CONFIG_PATH@#$PWD/plugin/quick-npc.toml#" \
+            third_party/PluginSDK/cmake/D2RLPluginConfigResource.rc.in > out/default-config.rc
+          x86_64-w64-mingw32-windres -Ithird_party/PluginSDK/include out/default-config.rc -O coff -o out/config.res.o
+          x86_64-w64-mingw32-g++-posix -shared -static -o out/quick-npc.dll out/*.o
+          x86_64-w64-mingw32-objdump -p out/quick-npc.dll | grep -E 'D2RLoader(GetPluginInfo|LoadPlugin|UnloadPlugin)'
+          grep -c 'hotkey = "LeftCtrl"' out/quick-npc.dll
+
+  plugin-msvc:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Build (plugin/build.ps1)
+        shell: pwsh
+        run: |
+          cmake --version
+          ./plugin/build.ps1
+          if (-not (Select-String -Path plugin/build/Release/quick-npc.dll -Pattern 'hotkey = "LeftCtrl"' -SimpleMatch -Quiet)) {
+            throw "the default quick-npc.toml is not embedded in the DLL"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quick-npc-dll
+          path: plugin/build/Release/quick-npc.dll

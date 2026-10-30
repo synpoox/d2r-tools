@@ -1,0 +1,590 @@
+// Host tests for plugin/src/quick_npc_logic.cpp and quick_npc_config.cpp: no game, no Windows, no SDK.
+//   cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure
+//
+// The menu rows below are synthetic: they use D2R's row layout (0x48 bytes, handlers at +0x18) with made-up class ids
+// and handler addresses, not data copied from the game.
+#include "quick_npc_config.h"
+#include "quick_npc_logic.h"
+
+#include <cstdio>
+#include <cstring>
+#include <vector>
+
+using namespace quick_npc;
+
+namespace {
+
+int g_failures = 0;
+int g_checks = 0;
+
+void Check(bool ok, const char* what, int line) {
+	++g_checks;
+	if (!ok) {
+		++g_failures;
+		std::printf("FAIL line %d: %s\n", line, what);
+	}
+}
+#define CHECK(x) Check((x), #x, __LINE__)
+
+constexpr uint64_t Talk = 0x140112eb0;
+constexpr uint64_t Trade = 0x140112f30;
+constexpr uint64_t Gamble = 0x140112c80;
+constexpr uint64_t Identify = 0x140114000;
+constexpr uint64_t Resurrect = 0x140113130;
+constexpr uint64_t Hire = 0x140112620;
+constexpr uint64_t Travel = 0x1401162f0;
+
+constexpr uint32_t VendorClass = 148;      // Talk, Trade
+constexpr uint32_t TalkOnlyClass = 146;    // Talk (a quest/story NPC)
+constexpr uint32_t GambleOnlyClass = 514;  // Talk, Gamble
+constexpr uint32_t HirelingClass = 198;    // Talk, Hire (Resurrect is added while the mercenary is dead)
+constexpr uint32_t HireVendorClass = 252;  // Talk, Hire, Trade (Asheara)
+constexpr uint32_t CainClass = 244;        // Talk, Identify
+constexpr uint32_t TravelClass = 175;      // Talk, Travel
+constexpr uint32_t DupClass = 257;         // first row: Trade; second row: Talk
+constexpr uint32_t WideClass = 0x10000 + 148;
+constexpr uint32_t UnknownClass = 999;     // no row: ordinary monster
+
+auto Row(uint32_t classId, std::initializer_list<uint64_t> options) -> MenuRow {
+	MenuRow row {};
+	row.classId = classId;
+	row.count = static_cast<uint32_t>(options.size()) + 1;  // plus Cancel
+	int i = 0;
+	for (const uint64_t h : options) {
+		row.handlers[i++] = h;
+	}
+	return row;
+}
+
+auto Table() -> std::vector<MenuRow> {
+	return {Row(VendorClass, {Talk, Trade}),        Row(TalkOnlyClass, {Talk}),
+	        Row(GambleOnlyClass, {Talk, Gamble}),   Row(HirelingClass, {Talk, Hire}),
+	        Row(HireVendorClass, {Talk, Hire, Trade}), Row(CainClass, {Talk, Identify}),
+	        Row(TravelClass, {Talk, Travel}),       Row(DupClass, {Trade}),
+	        Row(DupClass, {Talk})};
+}
+
+auto All() -> Handlers {
+	Handlers h;
+	h[Action::Trade] = Trade;
+	h[Action::Identify] = Identify;
+	h[Action::Resurrect] = Resurrect;
+	h[Action::Travel] = Travel;
+	return h;
+}
+
+auto Press(uint32_t id, uint32_t classId, uint32_t flags = cmd::Left | cmd::Press) -> ClickInfo {
+	ClickInfo c;
+	c.unitType = UnitTypeMonster;
+	c.unitId = id;
+	c.flags = flags;
+	c.hasTarget = true;
+	c.targetType = UnitTypeMonster;
+	c.targetId = id;
+	c.targetClass = classId;
+	return c;
+}
+
+// The open menu of `npc`, built from `row` the way the engine part reads it.
+auto Open(uint32_t npc, const MenuRow& row, const Handlers& h = All()) -> MenuState {
+	MenuState m;
+	m.shown = true;
+	m.npcId = npc;
+	ReadOffers(row, h, &m);
+	return m;
+}
+
+// --- Menu rows and option choice ------------------------------------------------------------------------------------
+void TestRowsAndChoice() {
+	const auto rows = Table();
+	const MenuRow* t = rows.data();
+	const size_t n = rows.size();
+	const Handlers h = All();
+
+	CHECK(FindMenuRow(t, n, DupClass) == 7);  // first matching row, as D2R's lookup
+	CHECK(FindMenuRow(t, n, WideClass) == 0); // 16-bit compare
+	CHECK(FindMenuRow(t, n, UnknownClass) == -1);
+	CHECK(FindMenuRow(nullptr, 0, VendorClass) == -1);
+
+	CHECK(RowShows(rows[0], Trade) && !RowShows(rows[0], Hire));
+	CHECK(!RowShows(rows[0], 0));
+	MenuRow hidden = Row(CainClass, {Talk, Identify});
+	hidden.count = 2;  // D2R hides Identify when nothing needs identifying
+	CHECK(!RowShows(hidden, Identify));
+	MenuRow broken = Row(VendorClass, {Talk, Trade});
+	broken.count = 0;
+	CHECK(!RowShows(broken, Trade));
+	broken.count = 200;  // only the 5 slots are read
+	CHECK(RowShows(broken, Trade));
+
+	CHECK(ChooseAction(Open(1, rows[0]), h) == Action::Trade);
+	CHECK(ChooseAction(Open(1, rows[1]), h) == Action::None);      // quest/story NPC
+	CHECK(ChooseAction(Open(1, rows[2]), h) == Action::None);      // gamble only: not pressed
+	CHECK(ChooseAction(Open(1, rows[3]), h) == Action::None);      // living mercenary: Hire stays manual
+	CHECK(ChooseAction(Open(1, rows[4]), h) == Action::Trade);     // Asheara: Trade before Hire
+	CHECK(ChooseAction(Open(1, rows[5]), h) == Action::Identify);
+	CHECK(ChooseAction(Open(1, hidden), h) == Action::None);       // Cain with nothing to identify
+	CHECK(ChooseAction(Open(1, rows[6]), h) == Action::Travel);
+
+	MenuRow dead = Row(HirelingClass, {Talk, Resurrect, Hire});   // mercenary dead: Resurrect added at run time
+	CHECK(ChooseAction(Open(1, dead), h) == Action::Resurrect);
+
+	Handlers noTrade = h;
+	noTrade[Action::Trade] = 0;
+	CHECK(ChooseAction(Open(1, rows[4], noTrade), noTrade) == Action::None);  // trade = false: Hire is never pressed
+	CHECK(ChooseAction(Open(1, rows[0], noTrade), noTrade) == Action::None);
+	Handlers noMerc = h;
+	noMerc[Action::Resurrect] = 0;
+	CHECK(ChooseAction(Open(1, dead, noMerc), noMerc) == Action::None);
+	Handlers noTravel = h;
+	noTravel[Action::Travel] = 0;
+	CHECK(ChooseAction(Open(1, rows[6], noTravel), noTravel) == Action::None);
+	Handlers noCain = h;
+	noCain[Action::Identify] = 0;
+	CHECK(ChooseAction(Open(1, rows[5], noCain), noCain) == Action::None);
+	// An offer read with another handler set never counts for a switched-off option.
+	CHECK(ChooseAction(Open(1, rows[5], h), noCain) == Action::None);
+	MenuState notShown = Open(1, rows[0]);
+	notShown.shown = false;
+	CHECK(ChooseAction(notShown, h) == Action::Trade);  // ChooseAction looks at offers only; Controller checks shown
+}
+
+// --- Clicks ---------------------------------------------------------------------------------------------------------
+void TestClicks() {
+	CHECK(IsLeftPress(cmd::Left | cmd::Press));
+	CHECK(IsLeftPress(cmd::Left | cmd::Press | 0x80));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Held));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Release));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Press | cmd::Held));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Press | cmd::Release));
+	CHECK(!IsLeftPress(cmd::Right | cmd::Press));
+	CHECK(!IsLeftPress(cmd::Left));
+
+	const auto rows = Table();
+	const MenuRow* t = rows.data();
+	const size_t n = rows.size();
+	CHECK(ClassifyClick(Press(7, VendorClass), true, t, n) == Click::Npc);
+	CHECK(ClassifyClick(Press(7, TalkOnlyClass), true, t, n) == Click::Npc);  // decided when the menu is open
+	CHECK(ClassifyClick(Press(7, UnknownClass), true, t, n) == Click::NoMenu);
+	CHECK(ClassifyClick(Press(7, VendorClass), false, t, n) == Click::Vanilla);
+	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Left | cmd::Held), true, t, n) == Click::Vanilla);
+	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Right | cmd::Press), true, t, n) == Click::Vanilla);
+	ClickInfo object = Press(7, VendorClass);
+	object.unitType = object.targetType = UnitTypeObject;
+	CHECK(ClassifyClick(object, true, t, n) == Click::Vanilla);
+	ClickInfo player = Press(7, VendorClass);
+	player.unitType = player.targetType = UnitTypePlayer;
+	CHECK(ClassifyClick(player, true, t, n) == Click::Vanilla);
+	ClickInfo noTarget = Press(7, VendorClass);
+	noTarget.hasTarget = false;
+	CHECK(ClassifyClick(noTarget, true, t, n) == Click::Vanilla);
+	ClickInfo mismatch = Press(7, VendorClass);
+	mismatch.targetId = 8;
+	CHECK(ClassifyClick(mismatch, true, t, n) == Click::Vanilla);
+}
+
+// --- One interaction, repeats, timeouts -----------------------------------------------------------------------------
+void TestInteraction() {
+	const auto rows = Table();
+	const MenuRow* t = rows.data();
+	const size_t n = rows.size();
+	const Handlers h = All();
+	Controller c;
+	c.SetEnabled(true);
+
+	c.OnInteract(Press(7, VendorClass), true, t, n, 1000);
+	CHECK(c.interaction().state() == Interaction::State::Armed);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 4000));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 4001));  // opens again: no second queue
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 1 && c.counters().queued == 1);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 5000));  // the next dialog is vanilla
+
+	// Without the hotkey: vanilla, and it cancels an earlier hotkey click.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 6000);
+	c.OnInteract(Press(7, VendorClass), false, t, n, 6100);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 6200));
+
+	// A quest NPC: armed, but its menu shows nothing to press, so it stays open.
+	c.OnInteract(Press(9, TalkOnlyClass), true, t, n, 7000);
+	CHECK(c.OnMenuOpened(Open(9, rows[1]), 7100));
+	CHECK(c.OnQueuedCallback(Open(9, rows[1]), h) == Action::None);
+	CHECK(c.counters().dropped == 1);
+
+	// A monster: not armed.
+	c.OnInteract(Press(9, UnknownClass), true, t, n, 7500);
+	CHECK(c.interaction().state() == Interaction::State::Idle && c.counters().noMenu == 1);
+
+	// Kashya before her quest: Talk only at click time, options added when the dialog opens. The live menu decides.
+	MenuRow kashya = Row(150, {Talk});
+	std::vector<MenuRow> withKashya = rows;
+	withKashya.push_back(kashya);
+	c.OnInteract(Press(4, 150), true, withKashya.data(), withKashya.size(), 7600);
+	CHECK(c.OnMenuOpened(Open(4, kashya), 7700));
+	MenuRow kashyaDeadMerc = Row(150, {Talk, Resurrect, Hire});
+	CHECK(c.OnQueuedCallback(Open(4, kashyaDeadMerc), h) == Action::Resurrect);
+
+	// Another NPC's dialog first: over, nothing pressed.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 8000);
+	CHECK(!c.OnMenuOpened(Open(11, rows[0]), 8100));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 8200));
+
+	// Timeout.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 10000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 10000 + Interaction::DefaultTimeoutMs + 1));
+	c.OnInteract(Press(7, VendorClass), true, t, n, 20000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 20000 + Interaction::DefaultTimeoutMs));
+	CHECK(c.OnQueuedCallback(Open(12, rows[0]), h) == Action::None);  // another NPC's menu is open now
+	c.OnInteract(Press(7, VendorClass), true, t, n, 30000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 30100));
+	MenuState closed;
+	closed.npcId = 7;
+	CHECK(c.OnQueuedCallback(closed, h) == Action::None);  // closed meanwhile
+
+	// A menu that is not shown does not consume the interaction.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 40000);
+	CHECK(!c.OnMenuOpened(closed, 40100));
+	CHECK(c.interaction().state() == Interaction::State::Armed);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 40200));
+	c.OnQueueFailed();
+	CHECK(c.interaction().state() == Interaction::State::Idle && c.counters().queueFailed == 1);
+	c.OnInteract(Press(7, VendorClass), true, t, n, 50000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 49000));  // clock going backwards
+
+	// Configured timeout.
+	c.SetTimeout(5000);
+	c.OnInteract(Press(7, VendorClass), true, t, n, 60000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 65001));
+	c.OnInteract(Press(7, VendorClass), true, t, n, 70000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 75000));
+}
+
+void TestEachService() {
+	const auto rows = Table();
+	const Handlers h = All();
+	struct Case {
+		uint32_t cls;
+		MenuRow menu;
+		Action want;
+	};
+	const Case cases[] = {
+		{VendorClass, rows[0], Action::Trade},
+		{CainClass, rows[5], Action::Identify},
+		{HirelingClass, Row(HirelingClass, {Talk, Resurrect, Hire}), Action::Resurrect},
+		{HirelingClass, rows[3], Action::None},  // mercenary alive: normal menu
+		{TravelClass, rows[6], Action::Travel},
+		{GambleOnlyClass, rows[2], Action::None},
+	};
+	for (const Case& k : cases) {
+		Controller c;
+		c.SetEnabled(true);
+		c.OnInteract(Press(3, k.cls), true, rows.data(), rows.size(), 1);
+		CHECK(c.OnMenuOpened(Open(3, k.menu), 2));
+		CHECK(c.OnQueuedCallback(Open(3, k.menu), h) == k.want);
+		if (k.want != Action::None) {
+			CHECK(c.counters().pressed[static_cast<int>(k.want)] == 1);
+		}
+	}
+}
+
+void TestRepeatedInput() {
+	const auto rows = Table();
+	const Handlers h = All();
+	Controller c;
+	c.SetEnabled(true);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 1500));
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
+	for (int i = 0; i < 100; ++i) {
+		c.OnInteract(Press(7, VendorClass, cmd::Left | cmd::Held), true, rows.data(), rows.size(), 1600 + i);
+		CHECK(!c.OnMenuOpened(Open(7, rows[0]), 1600 + i));
+	}
+	CHECK(c.counters().npcClicks == 1);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 5000);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 5100);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 6000));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 6001));
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 2);
+}
+
+// --- Feature off ----------------------------------------------------------------------------------------------------
+void TestDisabled() {
+	const auto rows = Table();
+	const Handlers h = All();
+	Controller c;  // starts disabled
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1000);
+	CHECK(c.interaction().state() == Interaction::State::Idle);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 1100));
+	CHECK(c.counters().npcClicks == 0);
+
+	c.SetEnabled(true);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 2000);
+	c.SetEnabled(false);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 2100));
+
+	c.SetEnabled(true);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 3000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 3100));
+	c.SetEnabled(false);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 0);
+}
+
+// --- Install: unsupported build, failed hooks -----------------------------------------------------------------------
+struct FakeEngine {
+	bool services = true;
+	bool hooked[2] = {false, false};  // [0] interact, [1] open-menu: FF 25 at the entry
+	bool hooksOk = true;              // the transaction commits (entry bytes match)
+	int hookCalls = 0;
+	bool hooksInstalled = false;
+};
+
+auto Steps(FakeEngine& e) -> InstallSteps {
+	InstallSteps s;
+	s.user = &e;
+	s.servicesReady = [](void* u, char* why, size_t n) {
+		const bool ok = static_cast<FakeEngine*>(u)->services;
+		if (!ok) {
+			std::snprintf(why, n, "D2RLoader has no thread service");
+		}
+		return ok;
+	};
+	s.alreadyHooked = [](void* u, uint64_t rva) { return static_cast<FakeEngine*>(u)->hooked[rva == RvaInteract ? 0 : 1]; };
+	s.installHooks = [](void* u, char* why, size_t n) {
+		auto* e = static_cast<FakeEngine*>(u);
+		++e->hookCalls;
+		if (!e->hooksOk) {
+			std::snprintf(why, n, "commit refused (result 4, reason 4)");
+			return false;
+		}
+		e->hooksInstalled = true;
+		return true;
+	};
+	return s;
+}
+
+void TestInstall() {
+	// Unsupported build: the engine part is never installed; the environment guard still is.
+	CHECK(DecidePart(false, true, false) == PartDecision::OffImage);
+	CHECK(DecidePart(false, false, false) == PartDecision::Install);
+	CHECK(DecidePart(false, true, true) == PartDecision::Install);
+	CHECK(DecidePart(true, true, true) == PartDecision::OffByFile);  // "quicknpc" in quick-npc-off.txt
+	CHECK(DecidePart(true, false, false) == PartDecision::OffByFile);
+
+	char report[300];
+	{
+		FakeEngine e;
+		CHECK(RunInstall(Steps(e), report, sizeof(report)) == InstallResult::On);
+		CHECK(e.hooksInstalled);
+		CHECK(std::strncmp(report, "on:", 3) == 0);
+	}
+	{
+		FakeEngine e;
+		e.services = false;
+		CHECK(RunInstall(Steps(e), report, sizeof(report)) == InstallResult::NoServices);
+		CHECK(e.hookCalls == 0 && !e.hooksInstalled);
+		CHECK(std::strstr(report, "thread service") != nullptr);
+	}
+	for (int which = 0; which < 2; ++which) {
+		FakeEngine e;
+		e.hooked[which] = true;  // D2RLoader or another plugin already patched the entry
+		CHECK(RunInstall(Steps(e), report, sizeof(report)) == InstallResult::AlreadyHooked);
+		CHECK(e.hookCalls == 0 && !e.hooksInstalled);
+		CHECK(std::strstr(report, which == 0 ? "0x101910" : "0x1141d0") != nullptr);
+	}
+	{
+		FakeEngine e;
+		e.hooksOk = false;  // entry bytes differ (another build, someone else's patch): the transaction patches nothing
+		CHECK(RunInstall(Steps(e), report, sizeof(report)) == InstallResult::HooksRefused);
+		CHECK(!e.hooksInstalled);
+		CHECK(std::strstr(report, "nothing patched") != nullptr);
+		CHECK(std::strstr(report, "commit refused") != nullptr);
+	}
+	{
+		InstallSteps missing;  // no callbacks at all: refuse, don't crash
+		CHECK(RunInstall(missing, report, sizeof(report)) == InstallResult::NoServices);
+	}
+	{
+		// A controller that was never enabled (any failed install) acts on nothing.
+		const auto rows = Table();
+		Controller c;
+		c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1);
+		CHECK(!c.OnMenuOpened(Open(7, rows[0]), 2));
+		CHECK(c.OnQueuedCallback(Open(7, rows[0]), All()) == Action::None);
+	}
+}
+
+// --- Settings (quick-npc.toml) --------------------------------------------------------------------------------------
+auto Key(const char* name) -> uint32_t {
+	uint32_t vk = 0xFFFF;
+	return KeyFromName(name, &vk) ? vk : 0xFFFF;
+}
+
+void TestKeyNames() {
+	CHECK(Key("LeftCtrl") == 0xA2);
+	CHECK(Key("left ctrl") == 0xA2);
+	CHECK(Key("LEFT_CONTROL") == 0xA2);
+	CHECK(Key("LCtrl") == 0xA2);
+	CHECK(Key("RightCtrl") == 0xA3);
+	CHECK(Key("Ctrl") == 0x11);
+	CHECK(Key("LeftAlt") == 0xA4);
+	CHECK(Key("Alt") == 0x12);
+	CHECK(Key("LeftShift") == 0xA0);
+	CHECK(Key("g") == 'G');
+	CHECK(Key("7") == '7');
+	CHECK(Key("F1") == 0x70);
+	CHECK(Key("F24") == 0x87);
+	CHECK(Key("Numpad5") == 0x65);
+	CHECK(Key("Mouse4") == 0x05);
+	CHECK(Key("XButton2") == 0x06);
+	CHECK(Key("Mouse3") == 0x04);
+	CHECK(Key("Backquote") == 0xC0);
+	CHECK(Key("0xA2") == 0xA2);
+	CHECK(Key("0x01") == 0xFFFF);  // the left mouse button is the click itself
+	CHECK(Key("0x02") == 0xFFFF);  // right mouse button
+	CHECK(Key("0x100") == 0xFFFF);
+	CHECK(Key("F0") == 0xFFFF);
+	CHECK(Key("F25") == 0xFFFF);
+	CHECK(Key("Hyper") == 0xFFFF);
+	CHECK(Key("") == 0xFFFF);
+	CHECK(Key("AB") == 0xFFFF);
+	uint32_t vk = 0;
+	CHECK(!KeyFromName(nullptr, &vk));
+
+	CHECK(HotkeyBlocksInteraction(0xA0) && HotkeyBlocksInteraction(0xA1) && HotkeyBlocksInteraction(0x10));
+	CHECK(!HotkeyBlocksInteraction(0xA2));
+	CHECK(HotkeyNote(0xA2) != nullptr && std::strstr(HotkeyNote(0xA2), "Run") != nullptr);
+	CHECK(HotkeyNote(0x10) != nullptr && std::strstr(HotkeyNote(0x10), "Stand Still") != nullptr);
+	CHECK(HotkeyNote('G') == nullptr);
+}
+
+auto Parse(const char* text, Config* config, int* count, ConfigIssue* issues = nullptr) -> int {
+	static ConfigIssue local[8];
+	*count = ParseConfig(text, std::strlen(text), config, issues != nullptr ? issues : local, 8);
+	return *count;
+}
+
+void TestConfig() {
+	int n = 0;
+	{
+		Config d;  // built-in defaults: what the user asked for
+		CHECK(d.enabled && d.hotkeyVk == 0xA2 && std::strcmp(d.hotkeyName, "LeftCtrl") == 0 && d.timeoutMs == 60000);
+	}
+	{
+		// The shipped default file (plugin/quick-npc.toml) parses with no issues and gives the defaults.
+		const char* shipped =
+			"# Quick NPC settings.\n"
+			"\n"
+			"[quick-npc]\n"
+			"# comment\n"
+			"enabled = true\n"
+			"hotkey = \"LeftCtrl\"\n"
+			"timeout_seconds = 60\n";
+		Config c;
+		CHECK(Parse(shipped, &c, &n) == 0);
+		CHECK(c.enabled && c.hotkeyVk == 0xA2 && c.timeoutMs == 60000);
+	}
+	{
+		// The real default file embedded in the DLL.
+		std::FILE* f = std::fopen(QUICK_NPC_DEFAULT_TOML, "rb");
+		CHECK(f != nullptr);
+		if (f != nullptr) {
+			static char text[16384];
+			const size_t len = std::fread(text, 1, sizeof(text), f);
+			std::fclose(f);
+			Config c;
+			ConfigIssue issues[4];
+			CHECK(ParseConfig(text, len, &c, issues, 4) == 0);
+			CHECK(c.enabled && c.hotkeyVk == 0xA2 && std::strcmp(c.hotkeyName, "LeftCtrl") == 0 && c.timeoutMs == 60000);
+			CHECK(c.cainIdentify && c.trade && c.mercenary && c.travel);
+		}
+	}
+	{
+		Config c;
+		CHECK(Parse("[quick-npc]\ntrade = false\nmercenary = false\ntravel = false\n", &c, &n) == 0);
+		CHECK(!c.trade && !c.mercenary && !c.travel && c.cainIdentify);
+		CHECK(Parse("[quick-npc]\ntravel = 0\n", &c, &n) == 1);
+		CHECK(!c.travel);
+	}
+	{
+		Config c;
+		CHECK(Parse("[quick-npc]\ncain_identify = false\n", &c, &n) == 0);
+		CHECK(!c.cainIdentify);
+		CHECK(Parse("[quick-npc]\ncain_identify = \"no\"\n", &c, &n) == 1);  // not a boolean: kept
+		CHECK(!c.cainIdentify);
+		Config d;
+		CHECK(Parse("[quick-npc]\nhotkey = \"LeftCtrl\"\n", &d, &n) == 0);  // a 0.2.0 file without the setting: on
+		CHECK(d.cainIdentify);
+	}
+	{
+		Config c;
+		CHECK(Parse("[quick-npc]\r\nenabled = false  # off\r\nhotkey = 'F5' # single quotes\r\ntimeout_seconds = 1_20\r\n", &c, &n) == 0);
+		CHECK(!c.enabled && c.hotkeyVk == 0x74 && std::strcmp(c.hotkeyName, "F5") == 0 && c.timeoutMs == 120000);
+	}
+	{
+		Config c;
+		CHECK(Parse("\xEF\xBB\xBF[ \"quick-npc\" ]\nhotkey = \"Right Ctrl\"\n", &c, &n) == 0);  // BOM, quoted table
+		CHECK(c.hotkeyVk == 0xA3);
+	}
+	{
+		// Other tables (D2RLoader's [d2rl]) and their keys are ignored without complaint.
+		Config c;
+		CHECK(Parse("[quick-npc]\nhotkey = \"Mouse4\"\n[d2rl]\nmatch = [\"x\"]\nhotkey = \"G\"\n", &c, &n) == 0);
+		CHECK(c.hotkeyVk == 0x05);
+	}
+	{
+		ConfigIssue issues[8];
+		Config c;
+		Parse("[quick-npc]\nhotkey = \"Hyper\"\nenabled = 1\ntimeout_seconds = 4\ntimeout_seconds = 601\ncolour = 3\n"
+		      "hotkey = LeftCtrl\nnot a setting\nhotkey = \"unterminated\n",
+		      &c, &n, issues);
+		CHECK(n == 8);
+		CHECK(c.enabled && c.hotkeyVk == 0xA2 && c.timeoutMs == 60000);  // every bad value keeps the default
+		CHECK(issues[0].line == 2 && std::strstr(issues[0].text, "Hyper") != nullptr);
+		CHECK(issues[1].line == 3 && std::strstr(issues[1].text, "enabled") != nullptr);
+		CHECK(issues[2].line == 4 && issues[3].line == 5);
+		CHECK(std::strstr(issues[4].text, "unknown setting colour") != nullptr);
+		CHECK(issues[5].line == 7);  // bare word: not a string
+		CHECK(issues[6].line == 8 && std::strstr(issues[6].text, "key = value") != nullptr);
+		CHECK(issues[7].line == 9);  // unterminated string
+	}
+	{
+		Config c;
+		ConfigIssue issues[8];
+		Parse("hotkey = \"G\"\n", &c, &n, issues);  // no table: the key is outside [quick-npc]
+		CHECK(c.hotkeyVk == 0xA2);
+		CHECK(n == 2 && std::strstr(issues[0].text, "outside [quick-npc]") != nullptr);
+		CHECK(std::strstr(issues[1].text, "no [quick-npc] table") != nullptr);
+	}
+	{
+		Config c;
+		CHECK(ParseConfig(nullptr, 0, &c, nullptr, 0) == 1);  // empty file: defaults, one issue, no crash
+		CHECK(c.hotkeyVk == 0xA2);
+		CHECK(Parse("[quick-npc]\nhotkey = \"G\" trailing\n", &c, &n) == 1);  // junk after a value
+		CHECK(c.hotkeyVk == 0xA2);
+		CHECK(Parse("[quick-npc]\nhotkey = \"0123456789012345678901234567890123456789012345678901234567890123456789\"\n", &c, &n) == 1);
+		const char noNul[] = {'[', 'q', 'u', 'i', 'c', 'k', '-', 'n', 'p', 'c', ']', '\n', 'e', 'n', 'a', 'b', 'l', 'e', 'd', '=',
+		                      'f', 'a', 'l', 's', 'e'};
+		CHECK(ParseConfig(noNul, sizeof(noNul), &c, nullptr, 0) == 0);  // not null-terminated, no final newline
+		CHECK(!c.enabled);
+	}
+}
+
+}  // namespace
+
+int main() {
+	TestRowsAndChoice();
+	TestClicks();
+	TestInteraction();
+	TestEachService();
+	TestRepeatedInput();
+	TestDisabled();
+	TestInstall();
+	TestKeyNames();
+	TestConfig();
+	std::printf("%d checks, %d failed\n", g_checks, g_failures);
+	return g_failures == 0 ? 0 : 1;
+}

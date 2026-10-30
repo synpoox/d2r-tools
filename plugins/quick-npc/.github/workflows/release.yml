@@ -1,0 +1,45 @@
+# Release: push a tag vX.Y.Z (matching MODKIT_PLUGIN_VERSION in plugin/CMakeLists.txt). This builds the plugin with
+# MSVC, runs the host tests, packages quick-npc-X.Y.Z.zip and creates a DRAFT GitHub release with it. Review the draft
+# on GitHub and publish it by hand.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Tag matches the plugin version
+        shell: pwsh
+        run: |
+          $cmake = Get-Content plugin/CMakeLists.txt -Raw
+          if ($cmake -notmatch 'MODKIT_PLUGIN_VERSION "([0-9.]+)"') { throw "no version" }
+          if ("v$($Matches[1])" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }} != v$($Matches[1])" }
+      - name: Host tests
+        shell: pwsh
+        run: |
+          cmake -S tests -B build-tests
+          cmake --build build-tests --config Release
+          ctest --test-dir build-tests -C Release --output-on-failure
+      - name: Build
+        shell: pwsh
+        run: ./plugin/build.ps1
+      - name: Package
+        shell: pwsh
+        run: ./tools/package.ps1
+      - name: Draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          gh release create "${{ github.ref_name }}" --draft --title "Quick NPC $v" --generate-notes `
+            "dist/quick-npc-$v.zip" "dist/quick-npc-$v.zip.sha256"
