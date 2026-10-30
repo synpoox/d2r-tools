@@ -19,7 +19,7 @@ Next level 23m 40s
 5. Session time (in-game time only)
 6. Time to the next level at the current rate
 
-Definitions: [docs/metrics.md](docs/metrics.md). Status: **not yet tested in game**; see [TESTING.md](TESTING.md).
+Definitions: [docs/metrics.md](docs/metrics.md). Tested in game on D2R 3.3 build 93847 with D2RLoader 1.3.1; see [TESTING.md](TESTING.md).
 
 ## Supported game
 

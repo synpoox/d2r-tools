@@ -75,6 +75,67 @@ inline constexpr ExpectedBytes Checks[] = {
 	{0x3009b8, BytesExpRowStride, sizeof(BytesExpRowStride), "exp row stride 0x3009b8"},
 };
 
+// --- UI widgets (part "hud"; docs/reverse-engineering/better-xp-bar.md, findings (f)) ----------------------------
+struct Widget;
+struct TypeDesc;
+
+// (const char* name) -> Panel* or null: PanelManager [0x3440170] lookup by panel name.
+inline constexpr uint64_t RvaFindPanel = 0x846170;
+// (Widget* parent, const char* name) -> Widget* or null: direct children only. Used by 0x1536020.
+inline constexpr uint64_t RvaFindChild = 0x856220;
+// () -> TypeDesc*: the TextBoxWidget type. Widget vtable +0x58 returns a widget's type; the base type is at +0x10.
+inline constexpr uint64_t RvaTextBoxType = 0x86d960;
+// (Widget* textBox, const StringView*) -> void: TextBoxWidget::SetText. Assigns the text at +0x88 and refreshes the
+// shown text (0x86e570). Hundreds of UI call sites. (0x3e2b124, used before, is D2RCore's redirected build-version
+// setter: it ignores the argument and shows "D2RLoader".)
+inline constexpr uint64_t RvaSetText = 0x86dd50;
+inline constexpr uint32_t VtblGetType = 0x58 / 8;
+inline constexpr uint32_t TypeDescBase = 0x10;
+
+struct StringView {
+	const char* data;
+	uint64_t size;
+};
+
+inline constexpr uint8_t BytesFindPanel[] = {0x48, 0x8B, 0xD1, 0x48, 0x8B, 0x0D, 0xF6, 0x9F, 0xBF, 0x02, 0x48, 0x85, 0xC9, 0x0F, 0x85};
+inline constexpr uint8_t BytesFindChild[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18, 0x57, 0x48, 0x83, 0xEC, 0x20};
+inline constexpr uint8_t BytesTextBoxType[] = {0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8D, 0x0D, 0xAB, 0x8A, 0x45, 0x01};
+inline constexpr uint8_t BytesSetText[] = {0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0x4C, 0x8B, 0x42, 0x08, 0x48, 0x8B, 0xD9, 0x48, 0x8B, 0x12};
+
+inline constexpr ExpectedBytes HudChecks[] = {
+	{RvaFindPanel, BytesFindPanel, sizeof(BytesFindPanel), "find panel 0x846170"},
+	{RvaFindChild, BytesFindChild, sizeof(BytesFindChild), "find child 0x856220"},
+	{RvaTextBoxType, BytesTextBoxType, sizeof(BytesTextBoxType), "text box type 0x86d960"},
+	{RvaSetText, BytesSetText, sizeof(BytesSetText), "set text 0x86dd50"},
+};
+
+// --- Stock XP bar hover (part "hud": shown while the hidden display's bar is hovered) -------------------------------
+// () -> TypeDesc*: the ExpBarWidget type (a ProgressBarWidget). Property "isHireling" (bool) at +0x168.
+inline constexpr uint64_t RvaExpBarType = 0x14cc700;
+// (void* hoverTarget) -> bool: PanelManager[0x3440170]+0x178 == hoverTarget. The XP bar's per-frame function
+// 0x14cc3e0 shows its popup when this is true for *(bar + 0x160).
+inline constexpr uint64_t RvaIsHovered = 0x876180;
+inline constexpr uint32_t ExpBarIsHireling = 0x168;
+inline constexpr uint32_t ExpBarHoverTarget = 0x160;
+inline constexpr uint32_t WidgetChildren = 0x58;      // Widget** (owned children)
+inline constexpr uint32_t WidgetChildCount = 0x60;    // u64
+
+inline constexpr uint8_t BytesExpBarType[] = {0x48, 0x83, 0xEC, 0x28, 0x48, 0x8D, 0x0D, 0x85, 0x59, 0x82, 0x00, 0xE8};
+inline constexpr uint8_t BytesIsHovered[] = {0x40, 0x53, 0x48, 0x83, 0xEC, 0x20, 0x48, 0x8B, 0xD9, 0xE8, 0x92, 0xFE, 0xFC, 0xFF, 0x48, 0x39};
+
+inline constexpr ExpectedBytes HoverChecks[] = {
+	{RvaExpBarType, BytesExpBarType, sizeof(BytesExpBarType), "xp bar type 0x14cc700"},
+	{RvaIsHovered, BytesIsHovered, sizeof(BytesIsHovered), "hover check 0x876180"},
+};
+
+using ExpBarTypeFn = TypeDesc* (*)() noexcept;
+using IsHoveredFn = bool (*)(const void* hoverTarget) noexcept;
+
+using FindPanelFn = Widget* (*)(const char* name) noexcept;
+using FindChildFn = Widget* (*)(Widget* parent, const char* name) noexcept;
+using TextBoxTypeFn = TypeDesc* (*)() noexcept;
+using SetTextFn = void (*)(Widget* textBox, const StringView* text) noexcept;
+
 using LocalSlotFn = uint32_t (*)() noexcept;
 using PlayerUnitFn = Unit* (*)(uint32_t slot) noexcept;
 using UnitClassFn = int32_t (*)(Unit* unit, const char* file, int32_t line) noexcept;

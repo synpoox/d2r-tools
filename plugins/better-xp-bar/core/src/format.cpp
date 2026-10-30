@@ -72,10 +72,9 @@ auto FormatEta(const std::optional<double>& seconds) -> std::string {
 	const auto t = static_cast<uint64_t>(std::ceil(*seconds));
 	char buf[32];
 	if (t < 60) {
-		std::snprintf(buf, sizeof(buf), "%llus", static_cast<unsigned long long>(t));
+		return "<1m";
 	} else if (t < 3600) {
-		std::snprintf(buf, sizeof(buf), "%llum %02llus", static_cast<unsigned long long>(t / 60),
-		              static_cast<unsigned long long>(t % 60));
+		std::snprintf(buf, sizeof(buf), "%llum", static_cast<unsigned long long>((t + 59) / 60));  // whole minutes, rounded up
 	} else if (t < 86400) {
 		std::snprintf(buf, sizeof(buf), "%lluh %02llum", static_cast<unsigned long long>(t / 3600),
 		              static_cast<unsigned long long>((t / 60) % 60));
@@ -86,7 +85,43 @@ auto FormatEta(const std::optional<double>& seconds) -> std::string {
 	return buf;
 }
 
-auto FormatLine(const Snapshot& s, LineId which) -> std::string {
+auto FormatXp(const Snapshot& s, const std::string& format) -> std::string {
+	const auto perLevel = [&](uint64_t v, bool full) {
+		if (s.atMaxLevel) {
+			return std::string(NotAvailable);
+		}
+		return full ? FormatCount(v) : FormatCompact(static_cast<double>(v));
+	};
+	std::string out;
+	size_t i = 0;
+	while (i < format.size()) {
+		const size_t open = format.find('{', i);
+		const size_t close = open == std::string::npos ? std::string::npos : format.find('}', open);
+		if (close == std::string::npos) {
+			out += format.substr(i);
+			break;
+		}
+		out += format.substr(i, open - i);
+		const std::string token = format.substr(open + 1, close - open - 1);
+		if (token == "current" || token == "current_full") {
+			out += perLevel(s.levelXp, token == "current_full");
+		} else if (token == "needed" || token == "needed_full") {
+			out += perLevel(s.levelSpan, token == "needed_full");
+		} else if (token == "remaining" || token == "remaining_full") {
+			out += perLevel(s.remaining, token == "remaining_full");
+		} else if (token == "total") {
+			out += FormatCount(s.xp);
+		} else if (token == "percent") {
+			out += s.atMaxLevel ? std::string(NotAvailable) : FormatPercent(s.levelProgress);
+		} else {
+			out += format.substr(open, close - open + 1);
+		}
+		i = close + 1;
+	}
+	return out;
+}
+
+auto FormatLine(const Snapshot& s, LineId which, const std::string& xpFormat) -> std::string {
 	if (!s.valid) {
 		return {};
 	}
@@ -94,16 +129,11 @@ auto FormatLine(const Snapshot& s, LineId which) -> std::string {
 	case LineId::Level:
 		return "Level " + std::to_string(s.level) + (s.atMaxLevel ? " (max)" : "");
 	case LineId::Xp:
-		return "XP " + FormatCount(s.xp) + "  " + (s.atMaxLevel ? std::string(NotAvailable) : FormatPercent(s.levelProgress));
+		return FormatXp(s, xpFormat);
 	case LineId::Session:
 		return "Session " + FormatSigned(s.sessionXp) + "  " + FormatSignedPercent(s.sessionLevels);
 	case LineId::Rate: {
-		std::string line = "XP/h ";
-		line += s.live ? FormatCompact(s.live->xpPerHour) + "  " + FormatPercent(s.live->levelsPerHour) : std::string(NotAvailable);
-		line += "  (avg ";
-		line += s.session ? FormatCompact(s.session->xpPerHour) : std::string(NotAvailable);
-		line += ")";
-		return line;
+		return "XP/h " + (s.live ? FormatCompact(s.live->xpPerHour) : std::string(NotAvailable));
 	}
 	case LineId::Time:
 		return "Time " + FormatClock(s.activeSeconds);

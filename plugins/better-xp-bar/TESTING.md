@@ -17,7 +17,7 @@ The console is D2RLoader's console (open it with its key; type the command and E
 **Paste back:** every `better-xp-bar:` line of the log up to this point. Expected:
 
 ```
-better-xp-bar: 0.1.0 loaded (mod ..., D2R 3.3.<build>, image 0x6ab3782c (expects 0x6ab3782c, match), file ...)
+better-xp-bar: 1.0.0 loaded (mod ..., D2R 3.3.<build>, image 0x6ab3782c (expects 0x6ab3782c, match), file ...)
 better-xp-bar: config: visible 1, anchor bottom-center, offset 0,-160, ...
 better-xp-bar: envguard ok ...
 better-xp-bar: xp on: 9 byte checks passed; game events registered
@@ -26,6 +26,18 @@ better-xp-bar: hotkeys on: 2/2 actions (...)
 ```
 
 If any part says `off: ...`, stop and paste the log: the rest depends on it.
+
+## 0b. Native panel (part `hud`, findings (f))
+
+1. Start the game; the log must show `hud on: 4 byte checks passed; panel better-xp-bar/XpPanel with 6 lines` and
+   the generated layout.
+2. Enter a game. Expected log: `hud: panel opened`, then `hud: native panel better-xp-bar/XpPanel found`.
+3. The lines appear in D2R's font above the bottom centre. Open/close inventory, character screen, Esc menu; walk and
+   click under the text (it must not block clicks).
+4. `better-xp-bar` in the console: the `hud` line shows `panel open, native found, text sets N` with N growing as
+   XP changes.
+
+**Paste back:** the `hud` log lines, the console `hud` line, a screenshot, and whatever closed or moved the panel.
 
 ## 1. Display appears (needs live check: findings (a), (b), (d))
 

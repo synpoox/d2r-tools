@@ -140,6 +140,79 @@ How the plugin uses it:
 | A wrong address on another image | Build guard: all engine parts off unless the image stamp is 0x6ab3782c; the read part also checks the first bytes of every function it calls (`CheckExpectedBytes`) and refuses on a mismatch |
 | D2RCore patches applied after the dump was taken | Those byte checks run live; the status command shows the result |
 
+## (e) OverlayService draws nothing on screen (live result, 2026-10-29)
+
+Live test on the owner's install (D2RLoader 1.3.1, D2RCore with ImGui, 3440x1440, Reimagined + 12 plugins): the
+frame callback runs every frame, every `drawText` / `drawFilledRectangle` / `measureText` returns `Success`, and
+`better-xp-bar test` (opaque full-screen-centre magenta rectangle, 100+ frames) shows **nothing**, with or without
+`debug_mode`. D2RCore draws plugin overlays into an ImGui window `##D2RLoaderPluginOverlay` from
+`FinalizeImGuiFrameWithPluginOverlays` (strings in D2RCore.dll); that pass never reaches the screen here. Treat
+`OverlayService` as unusable until D2RLoader fixes it; option 1 above is withdrawn.
+
+Ghidra note: under the Claude desktop app, `%APPDATA%\ghidra` is redirected into the app's package cache and
+Ghidra's OSGi (Felix) cache fails ("The data file must be inside the data dir"). Run headless with
+`JAVA_TOOL_OPTIONS=-Dapplication.settingsdir=C:\ghidra-work\settings`.
+
+## (f) Native HUD text: widget APIs in 93847 (static, from the dump; NOT RUN IN GAME YET)
+
+Goal: draw the lines as D2R `TextBoxWidget`s under `HUDPanel`, built from a layout the plugin ships under its own
+name (global `.mpq`, like other global plugins), so no mod's `hudpanelhd.json` is overridden.
+
+| RVA | What | Evidence |
+|---|---|---|
+| `0x856220` | `Widget* FindChild(Widget* parent, const char* name)`: direct children only; children = `Widget**` at `+0x58`, count at `+0x60`; child name (string) at `+0x8`, compared by `0x12277a0` | decompile; used by `0x1536020` for `"BuildVersionTextBox"`, `"InputPrompt"` |
+| `0x86d960` | `TypeDesc* TextBoxWidget::Type()` (registers properties `style`, `altStyle`, `fitToText`, `truncateWithEllipsis` ...) | decompile |
+| vtable `+0x58` | `TypeDesc* GetType()`; TypeDesc base at TypeDesc `+0x10`; is-a = walk that chain | `0x1536020` loop before the text set |
+| vtable `+0x50`, `+0x48` | `(Widget*, bool)`: visible / enabled-like setters (`ExpBarWidget` uses `+0x50` to show/hide itself) | `0x14cc8c0`, `0x1536020` |
+| `0x86dd50` | `TextBoxWidget::SetText(Widget*, const StringView* {const char* ptr, u64 len})`: assigns the `text` property (string at `+0x88`, length `+0x90`) and refreshes the shown text (`0x86e570`, cached at `+0x200`) | hundreds of UI callers; entry `mov r8,[rdx+8]; mov rbx,rcx; mov rdx,[rdx]`; `text` property entry at `0x2535310` = {"text", kind 3, offset 0x88} |
+| `0x3e2b124` | **Not** a general setter: only caller is `0x1536020` (BuildVersionTextBox); D2RCore redirects it (`jmp [0x3e2a618]`) and it shows D2RLoader's build text whatever it is given. Live: every line read "D2RLOADER" in red | `Refs` = 1 caller; live 2026-10-30 |
+| `0x8c70f0` | `BuildLayout(const char* name, int profile, out*)`: prefixes `data/global/ui/Layouts/`, reads with `0x8c7a90`, builds the tree | decompile |
+| `0x854640` | result of `0x8c70f0` -> root `Widget*` | caller `0x89fe20` (creates panels by layout name, checks the root type against `UI\Panel`) |
+| `0x8c7a90` | `bool ReadLayoutJson(doc*, const char* path)`; failure logs "Could not open the layout file/parse the JSON" (`0x8af5e0`) | decompile |
+| `0x8c80d0` | loads the global style profiles (not widgets) | decompile |
+| `0x14cc8c0` | `ExpBarWidget` update (section (c)); `0x1500fe0` = `HUDPanelHD` | string xrefs |
+
+| `0x854de0` | `AddChild(Widget* parent, Widget* child)`: appends to the owned-children array (`+0x58` data, `+0x60` count, `+0x68` capacity). Does **not** set the child's parent or run layout/style init | the layout `children` parser `0x8c8cc0` calls it right after building each child |
+| `0x854640` | `Panel* AsPanel(Widget*)`: is-a against `0x857f30` (`Panel` TypeDesc), else null | decompile |
+| `0x846170` | `Panel* FindPanel(const char* name)`: PanelManager at `[0x3440170]`; searches its lists at `+0x88` / `+0xa0`, then the root's children; null when the UI is not up | decompile; `0x14c6760` uses it for `"HUDPanel"` |
+| `0x3440840` | static `TextBoxWidget` TypeDesc (what `0x86d960` returns) | disasm |
+
+Entry bytes (dump = memory layout, file offset = RVA): `0x846170` `48 8B D1 48 8B 0D F6 9F BF 02 48 85 C9 0F 85`;
+`0x856220` `48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20`; `0x86d960` `40 53 48 83 EC 20 48 8D 0D AB 8A 45 01`;
+`0x86dd50` `40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12`.
+
+Stock XP bar hover (show the hidden display while the bar is hovered):
+
+| RVA | What | Evidence |
+|---|---|---|
+| `0x14cc3e0` | `ExpBarWidget` per-frame function (vtable entry `0x1fd8fd8`): shows the popup `TooltipHUDExperienceBar` only when `0x876180(*(this + 0x160))` | decompile |
+| `0x876180` | `bool IsHovered(void* target)`: `PanelManager()[+0x178] == target`; entry `40 53 48 83 EC 20 48 8B D9 E8 92 FE FC FF 48 39` | decompile |
+| `0x846020` | `PanelManager()`: `[0x3440170]`, asserts when null | disasm |
+| `0x14cc700` | `TypeDesc* ExpBarWidget::Type()` (base `ProgressBarWidget`); property `isHireling` = {kind 1 (bool), offset `0x168`} (table `0x29eb260`); entry `48 83 EC 28 48 8D 0D 85 59 82 00 E8` | decompile + dump |
+
+The plugin finds the player's bar by a bounded depth-first walk under `FindPanel("HUDPanel")` (children `+0x58`,
+count `+0x60`) for an ExpBarWidget with `isHireling == 0`, then polls `0x876180` on the UI thread (every 50 ms).
+Tooltip style for the background (profile): `inGameBackgroundColor` `[0, 0, 0, 0.8]`, padding `[20, 12, 20, 12]`,
+no border; `RectangleWidget` takes `"color": [r, g, b, a]`.
+
+### Chosen design: an SDK panel, filled natively
+
+Adding widgets to the live `HUDPanel` with `0x854de0` skips parent/style/layout init, so it is not used. Instead:
+
+1. The plugin registers its layout from memory with `ResourceService` at
+   `data/global/ui/layouts/better-xp-bar/XpPanelhd.json` (the plugin's own namespace: no mod file is overridden,
+   works as a global plugin, a mod can still replace it) and a panel `XpPanel` with `PanelService` (no flags).
+   The layout is a `Panel` named `better-xp-bar/XpPanel` with `TextBoxWidget`s `Line1`..`Line6` (inline style:
+   no mod-specific profile names).
+2. On the UI thread, while in a game and shown: open the panel when it is closed (`getPanelInfo` / `openPanel`),
+   then `FindPanel("better-xp-bar/XpPanel")` -> `FindChild(panel, "LineN")` -> TextBox is-a (vtable `+0x58`
+   chain vs `0x86d960()`) -> `SetText` when the text changed. Hide = `closePanel`.
+
+No hook, no patch; every native call is behind the build guard, its byte check and an SEH guard.
+
+Live checks: the panel opens and stays open in gameplay (and what closes it: Esc menu, other panels); it does not
+eat clicks; where the anchor/rect land at different resolutions; the text actually updates.
+
 ## Summary of "needs live check" items
 
 1. The XP/level reads return the character sheet's values (compare with the character screen).

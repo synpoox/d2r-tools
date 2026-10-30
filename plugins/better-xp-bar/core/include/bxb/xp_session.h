@@ -58,6 +58,8 @@ struct Snapshot {
 	bool atMaxLevel = false;
 	double levelProgress = 0.0;    // [0, 1] of the current level
 	uint64_t remaining = 0;        // XP to the next level (0 at the maximum)
+	uint64_t levelXp = 0;          // XP gained inside the current level (0 at the maximum)
+	uint64_t levelSpan = 0;        // XP the current level takes, start to next start (0 at the maximum)
 	int64_t sessionXp = 0;         // net: xp - session start xp (may be negative after a death)
 	double sessionLevels = 0.0;    // net level-equivalents gained (x100 = session %)
 	uint64_t grossXp = 0;          // gains only

@@ -99,11 +99,16 @@ auto ParseBool(const std::string& v, bool* out) -> bool {
 
 constexpr std::array<const char*, 6> AnchorNames{"top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right"};
 constexpr std::array<const char*, 6> LineNames{"level", "xp", "session", "rate", "time", "eta"};
+constexpr std::array<const char*, 3> TextAlignNames{"left", "center", "right"};
 
 }  // namespace
 
 auto AnchorName(Anchor a) -> const char* {
 	return AnchorNames[static_cast<size_t>(a)];
+}
+
+auto TextAlignName(TextAlign a) -> const char* {
+	return TextAlignNames[static_cast<size_t>(a)];
 }
 
 auto LineName(LineId id) -> const char* {
@@ -157,6 +162,12 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 			if (ok) {
 				s.anchor = static_cast<Anchor>(it - AnchorNames.begin());
 			}
+		} else if (key == "display.text_align") {
+			const auto it = std::find(TextAlignNames.begin(), TextAlignNames.end(), lvalue);
+			ok = it != TextAlignNames.end();
+			if (ok) {
+				s.textAlign = static_cast<TextAlign>(it - TextAlignNames.begin());
+			}
 		} else if (key == "display.offset_x") {
 			ok = ParseFloat(value, &s.offsetX);
 		} else if (key == "display.offset_y") {
@@ -165,6 +176,16 @@ auto ParseSettings(const std::string& text, std::vector<std::string>* warnings) 
 			ok = ParseFloat(value, &f) && f >= 0.0f && f <= 200.0f;
 			if (ok) {
 				s.textSize = f;
+			}
+		} else if (key == "display.scale") {
+			ok = ParseFloat(value, &f) && f >= 0.25f && f <= 4.0f;
+			if (ok) {
+				s.scale = f;
+			}
+		} else if (key == "display.xp_format") {
+			ok = !value.empty() && value.size() <= 200;
+			if (ok) {
+				s.xpFormat = value;
 			}
 		} else if (key == "display.background") {
 			ok = ParseFloat(value, &f) && f >= 0.0f && f <= 1.0f;
@@ -231,12 +252,15 @@ auto DefaultToml() -> std::string {
 [display]
 visible = true              # shown when a game starts (toggle with the hotkey)
 anchor = "bottom-center"    # top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
-offset_x = 0                # pixels from the anchor, + = right
-offset_y = -160             # pixels from the anchor, + = down
-text_size = 0               # 0 = D2RLoader's default text size
-background = 0.55           # background opacity 0..1 (0 = no background)
+text_align = "left"         # left, center, right: the lines' alignment, and which box edge sits at offset_x
+offset_x = -764             # layout units from the anchor to that edge, + = right (-764: the skill bar's left edge)
+offset_y = -345             # layout units from the anchor to the box's bottom (top for top anchors) edge, + = down
+text_size = 0               # 0 = 30 (layout units; the HUD's small text is about 22)
+scale = 1.0                 # size of the whole box: text, lines and padding (0.25..4; e.g. 0.75 = smaller)
+xp_format = "XP {current}/{needed}  {percent}"   # tokens: {current} {needed} {remaining} (add _full: 1,350,000), {total}, {percent}
+background = 0.7            # black box behind the lines, opacity 0..1 (0 = none)
 text_color = [1.0, 0.86, 0.55]
-lines = ["level", "xp", "session", "rate", "time", "eta"]   # which lines, in this order
+lines = ["level", "xp", "session", "rate", "eta"]   # which lines, in this order (also: "time", the session clock)
 
 [session]
 scope = "game"              # game: a new session every game. character: one session per character across games
