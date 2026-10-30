@@ -3,8 +3,8 @@
 // Target: D2R 3.3.0 build 93847 under D2RLoader 1.3.1, PluginSDK 0.3.0.
 //
 // What it does at load:
-//  - declares itself Shared (server + client behaviour), ModScopedOnly (loads only from
-//    <game>/mods/<Mod>/d2rloader/plugins/ while that mod runs) and NativeHooks (patches game code);
+//  - declares itself Shared (server + client behaviour), global (not ModScopedOnly: loads from
+//    <game>/d2rloader/plugins/ with or without a mod) and NativeHooks (patches game code);
 //  - log.h: one log line for the plugin (version, D2R version, image stamp, mod, this DLL's path) and one per part;
 //  - build_guard.h: checks the game image (PE TimeDateStamp). Every RVA belongs to one image; on any other image the
 //    engine parts stay off and say so, so a D2R/D2RLoader update cannot make the plugin patch random code;
@@ -62,7 +62,7 @@ constexpr D2RL::PluginInfo Info {
 	.version     = MODKIT_PLUGIN_VERSION,
 	.author      = "Synpoo",
 	.description = "Engine changes for this mod (skill functions, hooks, guards).",
-	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::ModScopedOnly | D2RL::PluginFlags::NativeHooks,
+	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
 };
 
 // --- Parts --------------------------------------------------------------------------------------------------------

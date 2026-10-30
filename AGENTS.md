@@ -21,6 +21,8 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 
 ## Working
 
+- New plugins are global by default: `PluginInfo.flags` never includes `ModScopedOnly`, and a plugin does not depend on
+  the active mod shipping layouts or other files (UI goes in plugin panels and plugin resources).
 - Every plugin's `PluginInfo` (`plugin.cpp`) has `.author = "Synpoo"` and a readable `.name` ("Quick NPC", not the
   id `quick-npc`); `.description` says what the plugin does in one sentence.
 - Change only the plugin you were asked about; keep fixes minimal and mechanical unless asked for more. Match the
