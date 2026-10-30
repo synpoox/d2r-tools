@@ -28,6 +28,9 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - Build and test with `tools\build.ps1 -Plugin <name> -Test`; build the others too after touching shared files.
 - Keep build output and scratch work in `build/`, `dist/` or outside the repo; delete superseded scratch builds.
 - Work on a branch and keep unrelated local changes intact.
+- Prefer a git worktree per feature branch (`git worktree add ..\d2r-tools-<topic> -b <plugin>/<topic> origin/main`, then
+  `git submodule update --init --recursive`); remove it after the squash-merge. Do not copy `build/` between worktrees or
+  install the same plugin DLL to the game from two at once. Details in [CONTRIBUTING.md](CONTRIBUTING.md#worktrees).
 
 ## Finishing
 
