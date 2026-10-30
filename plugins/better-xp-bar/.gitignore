@@ -1,0 +1,44 @@
+# --- Blizzard game files: NEVER commit -----------------------------------------------------------------------------
+# Image dumps, process dumps, crash dumps, archives of them and any extracted game data stay outside git.
+# Keep them outside the repo tree (e.g. ~/d2r-dump/); this block is a second line of defence.
+dumps/
+d2r-dump/
+d2r-data/
+*.dmp
+*.exe
+*.bin
+*.zip
+*.7z
+*.rar
+*.gpr
+*.rep/
+ghidra-project/
+*_dump.*
+*.part[0-9]*
+# extracted tables / assets
+*.txt.bin
+excel/
+data/global/
+data/hd/
+
+# --- Build output ------------------------------------------------------------------------------------------------
+build/
+out/
+*.dll
+*.lib
+*.pdb
+*.obj
+*.exp
+*.ilk
+
+# --- Editors / OS ------------------------------------------------------------------------------------------------
+.vs/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Local RE output (decompiled text, script logs): may contain bulk decompiled code ------------------------------
+re-local/
+*.decomp.c
+ghidra-out/
