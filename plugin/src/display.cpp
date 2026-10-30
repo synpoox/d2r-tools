@@ -60,6 +60,25 @@ uint64_t g_reads = 0;
 uint64_t g_badReads = 0;
 
 constexpr int64_t TickIntervalMs = 250;
+constexpr float FallbackTextSize = 18.0f;  // when neither the config nor the loader gives a usable size
+
+std::atomic<uint64_t> g_frames{0};
+std::atomic<uint64_t> g_drawn{0};       // frames where lines were drawn
+std::atomic<uint32_t> g_drawErrors{0};
+std::atomic<uint32_t> g_lastDrawResult{0};
+float g_lastScreenW = 0, g_lastScreenH = 0, g_lastDefaultSize = 0;  // draw thread only; read approximately by Status
+
+void NoteDrawResult(D2RL::Overlay::Result r, const char* what) noexcept {
+	if (r == D2RL::Overlay::Result::Success) {
+		return;
+	}
+	g_lastDrawResult = static_cast<uint32_t>(r);
+	static std::atomic<uint32_t> s_logged{0};
+	++g_drawErrors;
+	if (plog::Sample(s_logged)) {
+		plog::Error("overlay: %s failed with result %u (%u errors so far)", what, static_cast<uint32_t>(r), g_drawErrors.load());
+	}
+}
 
 auto NowSeconds() noexcept -> double {
 	using namespace std::chrono;
@@ -242,7 +261,18 @@ void __cdecl OnGameplayCdecl(const D2RL::PluginContext* c, const D2RL::Lifecycle
 // --- Overlay (draw thread) ----------------------------------------------------------------------------------------
 void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame* frame, void*) noexcept {
 	QueueTick();  // the frame callback is the clock that drives the UI-thread reads
-	if (frame == nullptr || !g_visible || !g_ready) {
+	if (frame == nullptr) {
+		return;
+	}
+	const uint64_t n = ++g_frames;
+	g_lastScreenW = frame->screenWidth;
+	g_lastScreenH = frame->screenHeight;
+	g_lastDefaultSize = frame->defaultTextSize;
+	if (n == 1) {
+		plog::Info("overlay: first frame: screen %.0f x %.0f, default text size %.2f, struct size %u", frame->screenWidth,
+		           frame->screenHeight, frame->defaultTextSize, frame->structSize);
+	}
+	if (!g_visible || !g_ready) {
 		return;
 	}
 	std::vector<std::string> lines;
@@ -255,7 +285,12 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 	if (lines.empty()) {
 		return;
 	}
-	const float size = s.textSize > 0.0f ? s.textSize : frame->defaultTextSize;
+	float size = s.textSize > 0.0f ? s.textSize : frame->defaultTextSize;
+	if (!(size >= 6.0f)) {
+		size = FallbackTextSize;
+	}
+	const float screenW = frame->screenWidth > 0.0f ? frame->screenWidth : 1920.0f;
+	const float screenH = frame->screenHeight > 0.0f ? frame->screenHeight : 1080.0f;
 	constexpr float Pad = 6.0f;
 	float width = 0.0f;
 	std::vector<float> heights;
@@ -268,7 +303,9 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 		m.textLength = static_cast<uint32_t>(std::min<size_t>(line.size(), D2RL::Overlay::MaxTextBytes));
 		D2RL::Overlay::TextMetrics tm {};
 		tm.structSize = D2RL::Overlay::TextMetricsSize;
-		if (g_overlay->measureText(context, &m, &tm) != D2RL::Overlay::Result::Success) {
+		const auto mr = g_overlay->measureText(context, &m, &tm);
+		NoteDrawResult(mr, "measureText");
+		if (mr != D2RL::Overlay::Result::Success || !(tm.height > 0.0f)) {
 			tm.width = size * 0.55f * static_cast<float>(line.size());
 			tm.height = size;
 		}
@@ -285,14 +322,14 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 	float y = 0.0f;
 	switch (s.anchor) {
 	case bxb::Anchor::TopLeft: x = 0; y = 0; break;
-	case bxb::Anchor::TopCenter: x = (frame->screenWidth - boxW) / 2; y = 0; break;
-	case bxb::Anchor::TopRight: x = frame->screenWidth - boxW; y = 0; break;
-	case bxb::Anchor::BottomLeft: x = 0; y = frame->screenHeight - boxH; break;
-	case bxb::Anchor::BottomCenter: x = (frame->screenWidth - boxW) / 2; y = frame->screenHeight - boxH; break;
-	case bxb::Anchor::BottomRight: x = frame->screenWidth - boxW; y = frame->screenHeight - boxH; break;
+	case bxb::Anchor::TopCenter: x = (screenW - boxW) / 2; y = 0; break;
+	case bxb::Anchor::TopRight: x = screenW - boxW; y = 0; break;
+	case bxb::Anchor::BottomLeft: x = 0; y = screenH - boxH; break;
+	case bxb::Anchor::BottomCenter: x = (screenW - boxW) / 2; y = screenH - boxH; break;
+	case bxb::Anchor::BottomRight: x = screenW - boxW; y = screenH - boxH; break;
 	}
-	x = std::clamp(x + s.offsetX, 0.0f, std::max(0.0f, frame->screenWidth - boxW));
-	y = std::clamp(y + s.offsetY, 0.0f, std::max(0.0f, frame->screenHeight - boxH));
+	x = std::clamp(x + s.offsetX, 0.0f, std::max(0.0f, screenW - boxW));
+	y = std::clamp(y + s.offsetY, 0.0f, std::max(0.0f, screenH - boxH));
 	if (s.background > 0.0f) {
 		D2RL::Overlay::FilledRectangleRequest bg {};
 		bg.structSize = D2RL::Overlay::FilledRectangleRequestSize;
@@ -300,7 +337,7 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 		bg.rect = {x, y, x + boxW, y + boxH};
 		bg.color = {0.0f, 0.0f, 0.0f, s.background};
 		bg.rounding = 4.0f;
-		(void)g_overlay->drawFilledRectangle(context, &bg);
+		NoteDrawResult(g_overlay->drawFilledRectangle(context, &bg), "drawFilledRectangle");
 	}
 	float ty = y + Pad;
 	for (size_t i = 0; i < lines.size(); ++i) {
@@ -312,8 +349,11 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 		t.textSize = size;
 		t.text = lines[i].c_str();
 		t.textLength = static_cast<uint32_t>(std::min<size_t>(lines[i].size(), D2RL::Overlay::MaxTextBytes));
-		(void)g_overlay->drawText(context, &t);
+		NoteDrawResult(g_overlay->drawText(context, &t), "drawText");
 		ty += heights[i];
+	}
+	if (++g_drawn == 1) {
+		plog::Info("overlay: first draw: %zu lines, text size %.1f, box %.0f,%.0f %.0f x %.0f", lines.size(), size, x, y, boxW, boxH);
 	}
 }
 
@@ -490,11 +530,14 @@ void Status(char* out, size_t size) noexcept {
 	const bxb::Snapshot s = g_session.Get(NowSeconds());
 	std::snprintf(out, size,
 	              "%s, display %s | last read: %s | %s | reads %llu (%llu without a player) | session %s XP, gained %s, lost %s (%u), "
-	              "%u level-up(s), time %s, resets %u",
+	              "%u level-up(s), time %s, resets %u | overlay frames %llu, drawn %llu, draw errors %u (last %u), screen %.0fx%.0f, "
+	              "default text %.1f",
 	              g_ready ? "in game" : "not in game", g_visible ? "shown" : "hidden", g_lastRead.c_str(), g_tableInfo.c_str(),
 	              static_cast<unsigned long long>(g_reads), static_cast<unsigned long long>(g_badReads), bxb::FormatSigned(s.sessionXp).c_str(),
 	              bxb::FormatCount(s.grossXp).c_str(), bxb::FormatCount(s.lostXp).c_str(), s.losses, s.levelUps,
-	              bxb::FormatClock(s.activeSeconds).c_str(), g_session.Resets());
+	              bxb::FormatClock(s.activeSeconds).c_str(), g_session.Resets(), static_cast<unsigned long long>(g_frames.load()),
+	              static_cast<unsigned long long>(g_drawn.load()), g_drawErrors.load(), g_lastDrawResult.load(), g_lastScreenW, g_lastScreenH,
+	              g_lastDefaultSize);
 }
 
 void Lines(char* out, size_t size) noexcept {
