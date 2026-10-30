@@ -4,7 +4,8 @@
 # Build:  powershell -ExecutionPolicy Bypass -File build.ps1            (or by hand:)
 #         cmake -S . -B build -A x64
 #         cmake --build build --config Release
-# Output: build/Release/better-auras.dll -> copy it and better-auras.toml to <game>/mods/<Mod>/d2rloader/plugins/
+# Output: build/Release/better-auras.dll -> copy it to <game>/d2rloader/plugins/ (a game-wide plugin). On its first
+# start D2RLoader writes better-auras.toml (embedded below) to <game>/d2rloader/config/.
 cmake_minimum_required(VERSION 3.29)
 project(better_auras LANGUAGES CXX RC)
 
@@ -22,6 +23,13 @@ set(D2RLPLUGIN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(${MODKIT_SDK_DIR} PluginSDK EXCLUDE_FROM_ALL)
 
+# better-auras.toml becomes the defaults D2RLoader writes when the config is missing (EnsureConfig).
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/better-auras.toml")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/better-auras.toml" BETTER_AURAS_DEFAULT_TOML)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/default_config.h"
+	"// Generated from better-auras.toml by CMakeLists.txt: do not edit.\n#pragma once\n"
+	"inline constexpr const char* DefaultConfig = R\"BA_TOML(${BETTER_AURAS_DEFAULT_TOML})BA_TOML\";\n")
+
 add_library(better_auras SHARED
 	src/plugin.cpp
 	src/d2r.cpp
@@ -36,6 +44,7 @@ add_library(better_auras SHARED
 	src/plugin.rc  # ABI manifest resource: D2RLoader rejects a plugin DLL without it
 )
 target_link_libraries(better_auras PRIVATE D2RLPlugin::D2RLPlugin)
+target_include_directories(better_auras PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_compile_definitions(better_auras PRIVATE
 	MODKIT_PLUGIN_NAME="${MODKIT_PLUGIN_NAME}"
 	MODKIT_PLUGIN_VERSION="${MODKIT_PLUGIN_VERSION}"

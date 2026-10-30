@@ -148,6 +148,16 @@ void Check(bool atLoad) noexcept {
 			add(line);
 		}
 	}
+	if (g_expectedMod[0] == '\0' && g_selfPath[0] != '\0') {
+		// no mod named: a game-wide plugin, expected in <game>\d2rloader\plugins
+		char place[160];
+		PlaceOf(g_selfPath, place, sizeof(place));
+		if (std::strcmp(place, "game-wide") != 0) {
+			std::snprintf(line, sizeof(line), "this game-wide plugin is loaded from %s (%s), not from <game>\\d2rloader\\plugins",
+			              g_selfPath, place);
+			add(line);
+		}
+	}
 	const char* ourId = g_context->pluginId;
 	ForEachOtherPlugin([&](const char* path, HMODULE module) {
 		const char* id = PluginIdOf(module);

@@ -14,24 +14,22 @@ namespace {
 char g_words[512] = "";
 }  // namespace
 
-void Read() noexcept {
+void Read(const wchar_t* configPath) noexcept {
 	g_words[0] = '\0';
-	HMODULE self = nullptr;
-	char path[MAX_PATH] = "";
-	if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-	                        reinterpret_cast<LPCSTR>(&Read), &self) ||
-	    GetModuleFileNameA(self, path, MAX_PATH) == 0) {
+	if (configPath == nullptr || configPath[0] == L'\0') {
 		return;
 	}
-	// <dir>\<name>.dll -> <dir>\<name>-off.txt
-	char* dot = std::strrchr(path, '.');
-	char* slash = std::strrchr(path, '\\');
-	if (dot == nullptr || slash == nullptr || dot < slash || static_cast<size_t>(dot - path) + 9 >= sizeof(path)) {
+	// <dir>\<name>.toml -> <dir>\<name>-off.txt
+	wchar_t path[MAX_PATH] = L"";
+	wcsncpy_s(path, configPath, _TRUNCATE);
+	wchar_t* dot = wcsrchr(path, L'.');
+	wchar_t* slash = wcsrchr(path, L'\\');
+	if (dot == nullptr || slash == nullptr || dot < slash || static_cast<size_t>(dot - path) + 9 >= MAX_PATH) {
 		return;
 	}
-	strcpy_s(dot, sizeof(path) - static_cast<size_t>(dot - path), "-off.txt");
+	wcscpy_s(dot, MAX_PATH - static_cast<size_t>(dot - path), L"-off.txt");
 	FILE* f = nullptr;
-	if (fopen_s(&f, path, "rb") != 0 || f == nullptr) {
+	if (_wfopen_s(&f, path, L"rb") != 0 || f == nullptr) {
 		return;
 	}
 	const size_t n = std::fread(g_words, 1, sizeof(g_words) - 1, f);

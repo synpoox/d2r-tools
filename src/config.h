@@ -1,4 +1,4 @@
-// Better Auras config: better-auras.toml next to the DLL (mods\<Mod>\d2rloader\plugins\better-auras.toml).
+// Better Auras config: <game>\d2rloader\config\better-auras.toml (D2RLoader's config folder; the plugin is game-wide).
 //
 // Only skills listed under [skills.<id or name>] are touched; every other skill stays vanilla. Each listed skill
 // starts from [defaults] and overrides what it sets:
@@ -15,6 +15,8 @@
 //
 // The parser reads the TOML this needs: tables, dotted keys, inline tables, strings, numbers, booleans, comments.
 #pragma once
+
+#include <D2RLPlugin/api.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -38,9 +40,11 @@ struct SkillConfig {
 	double reserveValue = 0;
 };
 
-// Reads the file. Names are resolved through the mod's skills.txt when it is a loose file, else the vanilla aura
-// names built in. Returns false (and logs why) when the file is missing or wrong; no skill is managed then.
-auto Load(const wchar_t* gameDir, const char* mod, char* report, size_t reportSize) noexcept -> bool;
+// Reads the plugin's config through D2RLoader (<game>\d2rloader\config\better-auras.toml; written with the repo's
+// better-auras.toml as defaults when missing). Names are resolved through the running mod's skills.txt when it is a
+// loose file, else the vanilla aura names built in. Returns false (and says why) when the file is unreadable or
+// wrong; no skill is managed then.
+auto Load(const D2RL::PluginContext* context, char* report, size_t reportSize) noexcept -> bool;
 
 // The config of a listed, enabled skill, or null (vanilla).
 auto Find(int32_t skill) noexcept -> const SkillConfig*;

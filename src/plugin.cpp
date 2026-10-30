@@ -5,13 +5,14 @@
 // Target: D2R 3.3.0 build 93847 under D2RLoader 1.3.1, PluginSDK 0.3.0.
 //
 // What it does at load:
-//  - declares itself Shared (server + client behaviour), ModScopedOnly (loads only from
-//    <game>/mods/<Mod>/d2rloader/plugins/ while that mod runs) and NativeHooks (patches game code);
+//  - declares itself Shared (server + client behaviour) and NativeHooks (patches game code). It is a game-wide plugin:
+//    it lives in <game>/d2rloader/plugins/ and runs with every mod; D2RLoader keeps its config in
+//    <game>/d2rloader/config/better-auras.toml (written with the defaults on the first start);
 //  - log.h: one log line for the plugin (version, D2R version, image stamp, mod, this DLL's path) and one per part;
 //  - build_guard.h: checks the game image (PE TimeDateStamp). Every RVA belongs to one image; on any other image the
 //    engine parts stay off and say so, so a D2R/D2RLoader update cannot make the plugin patch random code;
-//  - off_switch.h: reads "<plugin>-off.txt" next to the DLL: words naming parts to leave out (bisecting a crash);
-//  - env_guard.h: warns when D2RLoader runs another mod, when this DLL is not in the mod's own folder, or when a second
+//  - off_switch.h: reads "<plugin>-off.txt" next to the config: words naming parts to leave out (bisecting a crash);
+//  - env_guard.h: warns when this DLL is loaded from a mod's folder instead of the game-wide one, or when a second
 //    copy of it is loaded; names the other plugins (no game address: runs even on a wrong image);
 //  - installs each part and logs one line per part;
 //  - registers the console command "<plugin>" that prints the state of every part.
@@ -67,7 +68,7 @@ constexpr D2RL::PluginInfo Info {
 	.version     = MODKIT_PLUGIN_VERSION,
 	.author      = "d2r-modkit",
 	.description = "Toggled auras with mana/life drain and reservation, independent of the skill bar.",
-	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::ModScopedOnly | D2RL::PluginFlags::NativeHooks,
+	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
 };
 
 // --- Parts --------------------------------------------------------------------------------------------------------
@@ -80,15 +81,11 @@ struct Part {
 	char report[512];
 };
 
-// better-auras.toml: no engine address, read even on another image (its report says what it found).
+// <game>\d2rloader\config\better-auras.toml: no engine address, read even on another image.
 bool g_configOk = false;
 
 void InstallConfig(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
-	wchar_t gameDir[MAX_PATH] = L"";
-	if (GetModuleFileNameW(nullptr, gameDir, MAX_PATH) != 0) {
-		if (wchar_t* slash = wcsrchr(gameDir, L'\\'); slash != nullptr) *slash = L'\0';
-	}
-	g_configOk = config::Load(gameDir, context->activeMod, report, size);
+	g_configOk = config::Load(context, report, size);
 }
 
 template <auras::Feature F>
@@ -200,7 +197,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	char image[200];
 	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
 	plog::Info("%s loaded (mod %s, %s, file %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "?", image, g_selfPath);
-	off_switch::Read();
+	off_switch::Read(context->pluginConfigPath);
 	if (off_switch::Words()[0] != '\0') {
 		plog::Info("%s-off.txt leaves out: %s", PluginName, off_switch::Words());
 	}

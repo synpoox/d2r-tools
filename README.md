@@ -17,14 +17,19 @@ PluginSDK 0.3.0. On any other game image the plugin installs nothing and says so
 
 ## Install
 
-1. With the game closed, copy `build\Release\better-auras.dll` and `better-auras.toml` to
-   `<game>\mods\<Mod>\d2rloader\plugins\`.
-2. Edit `better-auras.toml` (below) and start the mod through D2RLoader.
-3. In game, the console command `better-auras` prints every part's state, the counters and the active auras.
+Better Auras is a game-wide plugin: it runs with every mod D2RLoader starts.
+
+1. With the game closed, copy `build\Release\better-auras.dll` to `<game>\d2rloader\plugins\`. Don't put a copy in a
+   mod's own `d2rloader\plugins\` folder (the plugin warns when it finds one).
+2. Start the game through D2RLoader once: D2RLoader writes the default config to
+   `<game>\d2rloader\config\better-auras.toml` (the repo's `better-auras.toml`, built into the DLL).
+3. Close the game, edit that file (below), start again.
+4. In game, the console command `better-auras` prints every part's state, the config path, the counters and the active
+   auras.
 
 The plugin is `Shared`: in TCP/IP every player needs the same version. All aura state lives on the host.
 
-## Config (`better-auras.toml`)
+## Config (`<game>\d2rloader\config\better-auras.toml`)
 
 Only skills listed under `[skills.<name or id>]` are changed. Each one starts from `[defaults]`.
 
@@ -61,10 +66,10 @@ loose `skills.txt` when there is one, else from D2R's aura names. A listed skill
 
 ## Off switches and diagnosis
 
-`better-auras-off.txt` next to the DLL, words separated by spaces: `toggle`, `drain`, `reserve`, `decouple` (and the
-template's `config`, `envguard`, `soundguard`, `typeids`). Restart after a change. The plugin log
-(`<game>\mods\<Mod>\d2rloader\logs\`) has one line per part at load and one line per aura on/off/refusal with the
-reason.
+`<game>\d2rloader\config\better-auras-off.txt` (next to the config), words separated by spaces: `toggle`, `drain`,
+`reserve`, `decouple` (and the template's `config`, `envguard`, `soundguard`, `typeids`). Restart after a change. The
+plugin's log (the file D2RLoader gives it, under `<game>\d2rloader\logs\`) has one line per part at load and one line
+per aura on/off/refusal with the reason.
 
 ## How it works
 

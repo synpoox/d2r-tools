@@ -1,5 +1,5 @@
-# Better Auras config. Put this file next to better-auras.dll (mods\<Mod>\d2rloader\plugins\) and restart the game
-# after every change.
+# Better Auras config: <game>\d2rloader\config\better-auras.toml. D2RLoader writes these defaults on the plugin's
+# first start; edit the file there and restart the game after every change. It applies to every mod.
 #
 # Only skills listed under [skills.<name or id>] are changed; every other skill stays vanilla. A listed skill starts
 # from [defaults] and overrides what it sets. Names are skills.txt "skill" names (the mod's own skills.txt when it

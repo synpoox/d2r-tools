@@ -1,6 +1,7 @@
 // better-auras.toml reader (config.h).
 #include "config.h"
 
+#include "default_config.h"  // DefaultConfig: better-auras.toml, embedded by CMake
 #include "log.h"
 
 #define NOMINMAX
@@ -44,13 +45,14 @@ auto Lower(std::string s) -> std::string {
 	return s;
 }
 
-void ReadModSkillNames(const wchar_t* gameDir, const char* mod) noexcept {
+// The running mod's loose skills.txt (<mod dir>\<mod>.mpq\data\global\excel\), when it has one.
+void ReadModSkillNames(const wchar_t* modDir, const char* mod) noexcept {
 	g_modNames.clear();
-	if (gameDir == nullptr || mod == nullptr || mod[0] == '\0') {
+	if (modDir == nullptr || modDir[0] == L'\0' || mod == nullptr || mod[0] == '\0') {
 		return;
 	}
 	wchar_t path[MAX_PATH];
-	swprintf_s(path, L"%ls\\mods\\%hs\\%hs.mpq\\data\\global\\excel\\skills.txt", gameDir, mod, mod);
+	swprintf_s(path, L"%ls\\%hs.mpq\\data\\global\\excel\\skills.txt", modDir, mod);
 	FILE* f = nullptr;
 	if (_wfopen_s(&f, path, L"rb") != 0 || f == nullptr) {
 		return;
@@ -309,33 +311,27 @@ auto Join(const std::vector<std::string>& v, size_t from) -> std::string {
 
 }  // namespace
 
-auto Load(const wchar_t* gameDir, const char* mod, char* report, size_t reportSize) noexcept -> bool {
+auto Load(const D2RL::PluginContext* context, char* report, size_t reportSize) noexcept -> bool {
 	g_skills.clear();
-	HMODULE self = nullptr;
-	wchar_t path[MAX_PATH] = L"";
-	if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-	                        reinterpret_cast<LPCWSTR>(&Load), &self) ||
-	    GetModuleFileNameW(self, path, MAX_PATH) == 0) {
-		std::snprintf(report, reportSize, "off: cannot find this DLL's folder");
+	const wchar_t* path = context->pluginConfigPath != nullptr ? context->pluginConfigPath : L"<d2rloader config>";
+	// D2RLoader keeps the file (<game>\d2rloader\config\<id>.toml) and writes the defaults when it is missing
+	if (!context->EnsureConfig(DefaultConfig)) {
+		std::snprintf(report, reportSize, "off: D2RLoader could not create %ls (no skill is managed)", path);
 		return false;
 	}
-	wchar_t* dot = wcsrchr(path, L'.');
-	if (dot == nullptr) {
-		std::snprintf(report, reportSize, "off: odd DLL path");
+	uint32_t need = 0;
+	std::string text(16384, '\0');
+	if (!context->ReadConfig(text.data(), static_cast<uint32_t>(text.size()), &need) && need > text.size()) {
+		text.assign(need, '\0');
+		if (!context->ReadConfig(text.data(), static_cast<uint32_t>(text.size()), &need)) {
+			need = 0;
+		}
+	}
+	text.resize(std::strlen(text.c_str()));
+	if (text.empty()) {
+		std::snprintf(report, reportSize, "off: could not read %ls (no skill is managed)", path);
 		return false;
 	}
-	wcscpy_s(dot, MAX_PATH - static_cast<size_t>(dot - path), L".toml");
-	FILE* f = nullptr;
-	if (_wfopen_s(&f, path, L"rb") != 0 || f == nullptr) {
-		std::snprintf(report, reportSize, "off: no %ls (no skill is managed)", path);
-		return false;
-	}
-	std::string text;
-	char buf[16384];
-	for (size_t n; (n = std::fread(buf, 1, sizeof(buf), f)) > 0;) {
-		text.append(buf, n);
-	}
-	std::fclose(f);
 	if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xef) {
 		text.erase(0, 3);  // UTF-8 BOM
 	}
@@ -346,7 +342,7 @@ auto Load(const wchar_t* gameDir, const char* mod, char* report, size_t reportSi
 		std::snprintf(report, reportSize, "off: %ls %s", path, parser.error.c_str());
 		return false;
 	}
-	ReadModSkillNames(gameDir, mod);
+	ReadModSkillNames(context->modDirectory, context->activeMod);
 
 	SkillConfig defaults;
 	int problems = 0;

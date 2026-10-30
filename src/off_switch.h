@@ -1,4 +1,4 @@
-// Diagnosis switch: "<plugin>-off.txt" next to the DLL (e.g. mods\<Mod>\d2rloader\plugins\mod-core-off.txt) lists
+// Diagnosis switch: "<plugin>-off.txt" next to the plugin's config (<game>\d2rloader\config\better-auras-off.txt) lists
 // the words of parts to leave out, separated by spaces, commas or lines, case-insensitive. Delete the file for normal
 // play.
 //
@@ -11,8 +11,9 @@
 
 namespace off_switch {
 
-// Reads the file named after this DLL (<dir>\<dll name>-off.txt, so a renamed plugin reads its own file).
-void Read() noexcept;
+// Reads <dir>\<name>-off.txt for the config path D2RLoader gives the plugin (context->pluginConfigPath,
+// <dir>\<name>.toml). No path: no file.
+void Read(const wchar_t* configPath) noexcept;
 
 // True when the file names this word (whole words only: "hook" does not match "hooks").
 auto Off(const char* word) noexcept -> bool;

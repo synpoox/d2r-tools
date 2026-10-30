@@ -1,7 +1,8 @@
 """Better Auras named checks for d2rAI-toolkit's testing/ framework (game_checks.py).
 
-Use: add this folder to [checks] paths and "better_auras_checks" to [checks] modules in modkit-testing.toml, set
-[mod] plugin_dlls = ["better-auras.dll"] and [logs] plugin_log to the plugin's log (mods/{folder}/d2rloader/logs/...).
+Use: add this folder to [checks] paths and "better_auras_checks" to [checks] modules in modkit-testing.toml and set
+[logs] plugin_log to the plugin's log (under d2rloader/logs/). Better Auras is game-wide: the checks look for the DLL in
+<slot>/d2rloader/plugins/ and its config in <slot>/d2rloader/config/, not in the mod folder.
 
   python testing/game_checks.py run ba-smoke --slot N        unattended: files, load, every part on, no crash
   python testing/game_checks.py run ba-scenario --slot N     after a play session in that slot (TESTING.md): reads
@@ -46,11 +47,15 @@ def _last_session(text: str) -> str:
 
 @check("ba-files", tags=["ba-smoke", "offline"])
 def ba_files(ctx):
-    """better-auras.dll and better-auras.toml are in the slot's plugins folder, and the TOML parses."""
-    d = ctx.cfg.plugins_dir(ctx.slot)
-    dll, toml = os.path.join(d, f"{PLUGIN}.dll"), os.path.join(d, f"{PLUGIN}.toml")
+    """better-auras.dll is in the game-wide plugins folder (and not in the mod's), and its config parses."""
+    root = ctx.cfg.slot_dir(ctx.slot)
+    dll = os.path.join(root, "d2rloader", "plugins", f"{PLUGIN}.dll")
+    toml = os.path.join(root, "d2rloader", "config", f"{PLUGIN}.toml")
     assert os.path.isfile(dll), f"missing {dll}"
-    assert os.path.isfile(toml), f"missing {toml} (no skill would be managed)"
+    stray = os.path.join(ctx.cfg.plugins_dir(ctx.slot), f"{PLUGIN}.dll")
+    assert not os.path.isfile(stray), f"a second copy in the mod folder: {stray}"
+    if not os.path.isfile(toml):
+        ctx.skip(f"no {toml} yet: D2RLoader writes it on the plugin's first start")
     if tomllib is None:
         return "files present (no tomllib to parse the config)"
     with open(toml, "rb") as f:

@@ -1,7 +1,8 @@
 # Better Auras: in-game tests
 
-Setup: a Paladin with Might, Prayer, Concentration, Vigor and Conviction learned (a test save, backed up first), the
-sample `better-auras.toml`, plugin log at `<game>\mods\<Mod>\d2rloader\logs\`. Run `better-auras` in the console after
+Setup: better-auras.dll in `<game>\d2rloader\plugins\` (game-wide), a Paladin with Might, Prayer, Concentration,
+Vigor and Conviction learned (a test save, backed up first), the default config D2RLoader writes to
+`<game>\d2rloader\config\better-auras.toml`, plugin log under `<game>\d2rloader\logs\`. Run `better-auras` in the console after
 each step. After a session, `python testing/game_checks.py run ba-scenario --slot N` reads the log for the evidence.
 
 Status: **not run yet**. Every row below is unverified.
@@ -24,4 +25,4 @@ Status: **not run yet**. Every row below is unverified.
 | 14 | Mercenary / party | Might on with a mercenary / second player near | they get the aura as vanilla | — | |
 | 15 | TCP/IP second client | host + client both with the plugin; client toggles Might, switches skill | aura works and stays on the client; host log shows the lines | host log | |
 | 16 | Cast trigger | set `trigger = "cast"` for Might, use it | toggles on/off **[assumption: may not reach the server]** | `aura 98 on` | |
-| 17 | Off switches | `better-auras-off.txt` with `decouple` | Might drops on skill switch | part line `decouple off` | |
+| 17 | Off switches | `<game>\d2rloader\config\better-auras-off.txt` with `decouple` | Might drops on skill switch | part line `decouple off` | |
