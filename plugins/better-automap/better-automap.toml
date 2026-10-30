@@ -1,0 +1,29 @@
+# Better Automap settings.
+#
+# D2RLoader creates <game>\d2rloader\config\better-automap.toml from these defaults the first time the plugin
+# loads, and never overwrites it. A copy next to better-automap.dll (<game>\d2rloader\plugins\better-automap.toml)
+# is read instead when it exists. Restart the game after a change.
+#
+# Every part has its own switch: `enabled = false` leaves that part out, and D2R behaves exactly as without it.
+
+[minimap]
+# Put the mini map ("Automap Size: Mini Map") on one side of the screen.
+enabled = true
+# "right" (top right, default) or "left" (top left). This replaces the left/right choice of the in-game option and
+# of the Toggle Minimap key. D2R still moves it to the left while a right-side panel (inventory, stash) is open.
+position = "right"
+
+[overlay]
+# While the mini map is shown, the Automap key (Tab) opens the full-screen map in its place; the next press brings
+# the mini map back. With the full-screen size set in the options, Tab works as usual.
+enabled = true
+
+[zoom]
+# Mouse wheel up zooms in, wheel down zooms out on the full-screen map. Only while the full-screen map is shown and
+# no panel (inventory, stash, character, skills, chat, menus) uses the wheel; otherwise the wheel works as usual.
+enabled = true
+# Zoom factor range: 1.0 is D2R's own size. min: above 0, at most 1.0. max: 1.0 to 8.0.
+min = 0.5
+max = 2.5
+# Zoom change per wheel notch.
+step = 0.25
