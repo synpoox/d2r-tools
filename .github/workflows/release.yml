@@ -1,8 +1,14 @@
 name: release
-# Push a plugin-scoped tag, e.g. better-auras/v0.2.0
+# Push a plugin-scoped tag, e.g. better-auras/v0.2.0. Or run it by hand with an existing tag as input
+# (for tags created before this workflow existed, such as an imported tag): it builds the checked-out ref.
 on:
   push:
     tags: ['*/v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing plugin tag to publish, e.g. scrollable-waypoints/v1.0.0'
+        required: true
 
 permissions:
   contents: write
@@ -17,12 +23,15 @@ jobs:
       - name: Build and publish
         shell: pwsh
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           GH_TOKEN: ${{ github.token }}
         run: |
           $plugin, $version = $env:TAG -split '/', 2
           if (-not (Test-Path "plugins/$plugin")) { throw "Unknown plugin in tag: $env:TAG" }
+          git ls-remote --exit-code --tags origin "refs/tags/$env:TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Tag $env:TAG does not exist on origin" }
           ./tools/build.ps1 -Plugin $plugin
+          if ($LASTEXITCODE -ne 0) { throw "build failed" }
           $zip = "$plugin-$version.zip"
           Compress-Archive -Path "dist/$plugin/*" -DestinationPath $zip
-          gh release create $env:TAG $zip --title "$plugin $version" --generate-notes
+          gh release create $env:TAG $zip --title "$plugin $version" --generate-notes --verify-tag
