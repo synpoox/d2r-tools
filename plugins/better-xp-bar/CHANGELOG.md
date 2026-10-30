@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 - 2026-10-30
+
+First public release, for Diablo II: Resurrected 3.3 under D2RLoader 1.3.1.
 
 - New part `hud`: the lines are drawn as D2R's own text boxes in a plugin panel (layout served from memory under
   `data/global/ui/layouts/better-xp-bar/XpPanelhd.json`, no mod file replaced). D2RLoader's overlay accepted every
@@ -20,4 +22,4 @@
 - New setting `display.scale` (0.25..4, default 1): sizes the whole box (text, line height, padding).
 - The XP line now shows progress through the level, `XP 1.35M/1.50M  73.31%`, formatted by the new setting
   `display.xp_format` (tokens `{current}`, `{needed}`, `{remaining}`, their `_full` forms, `{total}`, `{percent}`).
-- Clicking the stock XP bar toggles the display, like the hotkey (needs live check).
+- Clicking the stock XP bar toggles the display, like the hotkey.

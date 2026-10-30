@@ -8,7 +8,7 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 |---|---|---|
 | [better-auras](plugins/better-auras) | Unreleased | Toggled, Path of Exile-style auras with mana/life drain and reservation. |
 | [better-automap](plugins/better-automap) | Unreleased | Pick the mini map's side, open the full map over it with one key, zoom it with the mouse wheel. |
-| [better-xp-bar](plugins/better-xp-bar) | Unreleased | HUD panel with level, XP, session gain and XP per hour. |
+| [better-xp-bar](plugins/better-xp-bar) | 1.0.0 | HUD panel with level, XP, session gain and XP per hour. |
 | [monster-count](plugins/monster-count) | Unreleased | Monster counter; reverse-engineering spike only, nothing hooked in game yet. |
 | [multispec](plugins/multispec) | Unreleased | Two (or more) saved skill allocations per character, swapped in town without a respec token. |
 | [quick-npc](plugins/quick-npc) | Unreleased | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |

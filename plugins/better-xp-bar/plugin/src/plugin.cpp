@@ -32,7 +32,7 @@
 #define BXB_PLUGIN_NAME "better-xp-bar"
 #endif
 #ifndef BXB_PLUGIN_VERSION
-#define BXB_PLUGIN_VERSION "0.1.0"
+#define BXB_PLUGIN_VERSION "1.0.0"
 #endif
 
 namespace {

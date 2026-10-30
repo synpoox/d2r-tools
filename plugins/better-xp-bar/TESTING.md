@@ -17,7 +17,7 @@ The console is D2RLoader's console (open it with its key; type the command and E
 **Paste back:** every `better-xp-bar:` line of the log up to this point. Expected:
 
 ```
-better-xp-bar: 0.1.0 loaded (mod ..., D2R 3.3.<build>, image 0x6ab3782c (expects 0x6ab3782c, match), file ...)
+better-xp-bar: 1.0.0 loaded (mod ..., D2R 3.3.<build>, image 0x6ab3782c (expects 0x6ab3782c, match), file ...)
 better-xp-bar: config: visible 1, anchor bottom-center, offset 0,-160, ...
 better-xp-bar: envguard ok ...
 better-xp-bar: xp on: 9 byte checks passed; game events registered
