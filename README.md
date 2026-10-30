@@ -20,8 +20,8 @@ Each plugin's README has its features, config and supported game build; its `CHA
 
 Requires Diablo II: Resurrected with D2RLoader 1.3.1 (offline or TCP/IP; never Battle.net online play).
 
-1. Download the plugin's `<plugin>-vX.Y.Z.zip` from [Releases](../../releases) (or a `ci` run's artifact for an
-   unreleased build) and extract the DLL.
+1. Download a plugin's `<plugin>-X.Y.Z.zip` (or the bundle with every plugin) from the latest
+   [release](../../releases/latest), and extract the DLL. Unreleased plugins are only available as a `ci` run's artifact.
 2. Close the game. Copy the DLL to `<game>\d2rloader\plugins\` (works with every mod), or to
    `<game>\mods\<Mod>\d2rloader\plugins\` for one mod only. Use one location per plugin, never both.
 3. Start the game through D2RLoader. On first start the plugin writes its default config to
@@ -60,5 +60,5 @@ plugins/<name>/          one plugin each: sources, tests, README.md, CHANGELOG.m
 third_party/PluginSDK/   D2RLoader PluginSDK submodule, pinned once for every plugin
 tools/build.ps1          build (and test) one or all plugins
 docs/                    RELEASING.md
-.github/workflows/       ci (build matrix), release (tag-driven)
+.github/workflows/       ci (build matrix), release (suite release, run by hand)
 ```

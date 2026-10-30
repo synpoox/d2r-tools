@@ -26,8 +26,8 @@ open), and what has not been validated.
 ## Changelog and docs
 
 Add player-visible or compatibility changes to the plugin's `CHANGELOG.md` under `## Unreleased`. At release, move them
-under `## X.Y.Z - YYYY-MM-DD` (release date), as in [docs/RELEASING.md](docs/RELEASING.md). Update the root `README.md`
-plugin table (version, description) when either changes.
+under `## X.Y.Z - YYYY-MM-DD` (release date), as in [docs/RELEASING.md](docs/RELEASING.md). The release notes quote that
+section, so write it for players. Update the root `README.md` plugin table (version, description) when either changes.
 
 ## Review
 
