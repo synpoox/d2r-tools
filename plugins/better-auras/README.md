@@ -73,11 +73,13 @@ per aura on/off/refusal with the reason.
 
 ## How it works
 
-See `knowledge/d2r-93847-addresses.md` ("Auras") in d2rAI-toolkit. In short: vanilla keeps the right-skill aura alive
+Addresses, guards and evidence: [docs/reverse-engineering/better-auras.md](../../docs/reverse-engineering/better-auras.md). In short: vanilla keeps the right-skill aura alive
 with unit timer event 8 keyed -1, and a skill switch removes that event and the aura's state list. The same event can
 be keyed with the skill id; those timers survive a switch. A toggled aura is started the vanilla way and moved to its
 own timer. Drain and reservation run in the timer's handler; the reservation is a negative max-life/mana stat inside
 the aura's own state list, so whatever removes the aura also releases it.
+
+Hook sites (image `0x6ab3782c`; the registry above is authoritative):
 
 | Hook | RVA | Why |
 |---|---|---|
