@@ -4,16 +4,17 @@
 
 | Check | Command | Result (this commit) |
 |---|---|---|
-| Decision logic and settings: vendor vs non-vendor classification, click edge, repeated-input suppression, timeouts (default and configured), feature off, unsupported build, refused or already-taken hooks, missing services, `quick-npc.toml` parsing (the real default file, key names, bad values, BOM, CRLF, other tables) | `cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests` | 272 checks, 0 failed (GCC 13, `-Wall -Wextra -Wpedantic -Werror`, ASan + UBSan) |
-| Every address, entry byte, code pattern and table layout against the 93847 dump | `python tools/verify_dump.py <dump> --table` | all checks passed, including D2R's default Run = Ctrl and Stand Still = Shift bindings; 48 menu rows, 16 vendor classes |
+| Decision logic and settings: vendor vs non-vendor classification, click edge, repeated-input suppression, timeouts (default and configured), feature off, Deckard Cain identify (shown, hidden when nothing to identify, switched off), unsupported build, refused or already-taken hooks, missing services, `quick-npc.toml` parsing (the real default file, key names, bad values, BOM, CRLF, other tables) | `cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests` | 308 checks, 0 failed (GCC 13, `-Wall -Wextra -Wpedantic -Werror`, ASan + UBSan) |
+| Every address, entry byte, code pattern and table layout against the 93847 dump | `python tools/verify_dump.py <dump> --table` | all checks passed, including D2R's default Run = Ctrl and Stand Still = Shift bindings and Cain's Identify handler (rows 244, 245, 246, 265, 520); 48 menu rows, 16 vendor classes |
 | Plugin compiles and links against PluginSDK 0.3.0 and the Windows headers | MinGW-w64 GCC 13 cross build (see CI) | links; exports `D2RLoaderGetPluginInfo`, `D2RLoaderLoadPlugin`, `D2RLoaderUnloadPlugin`; manifest and default `quick-npc.toml` resources embedded |
-| MSVC build with the toolkit's `build.ps1` | CI job `plugin-msvc` (Windows runner, MSVC 19.51, `/W4 /permissive-`) | 0.1.0: no warnings (CI run 2). 0.2.0: see the CI run for this commit; the DLL is the `quick-npc-dll` artifact |
+| MSVC build with the toolkit's `build.ps1` | CI job `plugin-msvc` (Windows runner, MSVC 19.51, `/W4 /permissive-`) | 0.1.0 (CI run 2) and 0.2.0 (run 40984226487) pass. 0.3.0: see the CI run for this commit; the DLL is the `quick-npc-dll` artifact |
 
 ## In game (game-copy slot, toolkit `testing/`)
 
 They need Windows, the game and D2RLoader 1.3.1 (a game-copy slot from the toolkit's `testing/game_slots.py`). Each
 row is what to do and what should happen. Record the result and the `quick-npc` console output after each one.
-"The hotkey" is Left Ctrl unless `quick-npc.toml` says otherwise.
+"The hotkey" is Left Ctrl unless `quick-npc.toml` says otherwise. The user confirmed in game that 0.2.0 works as
+intended (the vendor steps below); the Cain steps 18-22 are new in 0.3.0.
 
 | # | Do | Expect | Result |
 |---|---|---|---|
@@ -36,3 +37,8 @@ row is what to do and what should happen. Record the result and the `quick-npc` 
 | 15 | Set `hotkey = "Hyper"`, `quick-npc reload` | Log `config line N: hotkey "Hyper" is not a key ...`; hotkey stays LeftCtrl | not run |
 | 16 | Set `enabled = false`, restart | `quick-npc` says disabled; vendor clicks are vanilla; `quick-npc on` enables it | not run |
 | 17 | Set `hotkey = "LeftShift"`, reload, try 1 | Log warning about Stand Still. With D2R's default controls you stand still and no menu opens (expected) | not run |
+| 18 | Have an unidentified item, a town with Cain (Act 1 after rescuing him, or Acts 2-5). Hold the hotkey, left-click Cain | You run to him; your items are identified (his usual price); his menu doesn't stay open. Counters: Cain 1, identified 1 | not run |
+| 19 | As 18 with nothing unidentified | His normal menu (Talk / Cancel, no Identify). Counter "dropped" +1, nothing else | not run |
+| 20 | Left-click Cain without the hotkey | His normal menu, with Identify when you have something to identify | not run |
+| 21 | `cain_identify = false`, `quick-npc reload`, repeat 18 | His normal menu: Cain is left alone. `quick-npc` shows `cain identify off` | not run |
+| 22 | Before his quest is done, with too little gold for his price, repeat 18 | What his menu's Identify does in vanilla (the server refuses or charges as usual); no crash | not run |

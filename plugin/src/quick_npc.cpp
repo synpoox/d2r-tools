@@ -14,6 +14,7 @@
 //      offers Trade in D2R's live NPC menu table -> remember that unit. Any other interaction click forgets it.
 //   2. hook 0x1141d0 (pass-through, after the original): the remembered NPC's menu is open -> queue a UI-thread
 //      callback (ThreadService), which checks the menu again and calls the Trade handler, as a click on "Trade" does.
+//   Deckard Cain (his row has the Identify handler 0x114000): the same, pressing "Identify" instead (cain_identify).
 // Movement, range, quest and server-side vendor checks stay D2R's: nothing here sends a packet or opens a panel.
 // The decisions live in quick_npc_logic.cpp (host-tested); this file reads game memory and talks to D2RLoader.
 #include "quick_npc.h"
@@ -51,6 +52,9 @@ static_assert(sizeof(InteractEntry) >= 14 && sizeof(OpenNpcMenuEntry) >= 14, "in
 
 // The menu's "Trade" option: () -> bool. Uses the menu globals below, closes the menu, sends CCMD 0x38 mode 1.
 constexpr uint64_t RvaTradeHandler = 0x112f30;
+// Deckard Cain's "Identify" option: () -> bool. Closes the menu, works out his price (free after his quest), sends
+// CCMD_IDENTIFY_TRANSACTION (0x34) for the NPC in the menu globals; the server checks the gold.
+constexpr uint64_t RvaIdentifyHandler = 0x114000;
 
 // NPC menu globals (.data).
 constexpr uint64_t RvaMenuRows = 0x2a48830;      // MenuRow* (vector data); u64 row count at +8
@@ -73,7 +77,7 @@ constexpr int UnitId = 0x08;
 
 using InteractFn = uint64_t (*)(void* command, int32_t unitType, uint32_t unitId) noexcept;
 using OpenNpcMenuFn = uint64_t (*)(void* npc, int32_t flag) noexcept;
-using TradeFn = bool (*)() noexcept;
+using MenuOptionFn = bool (*)() noexcept;
 
 // --- State ----------------------------------------------------------------------------------------------------------
 const D2RL::PluginContext* g_context = nullptr;
@@ -112,6 +116,11 @@ auto TradeHandler() noexcept -> uint64_t {
 	return g_base + RvaTradeHandler;
 }
 
+// The options this plugin may press; Identify only while quick-npc.toml has cain_identify = true. Caller holds g_lock.
+auto HandlersLocked() noexcept -> quick_npc::Handlers {
+	return quick_npc::Handlers(TradeHandler(), g_config.cainIdentify ? g_base + RvaIdentifyHandler : 0);
+}
+
 auto MenuRows(size_t* count) noexcept -> const quick_npc::MenuRow* {
 	const auto* rows = At<const quick_npc::MenuRow*>(g_base + RvaMenuRows);
 	const uint64_t n = At<uint64_t>(g_base + RvaMenuRows + 8);
@@ -131,7 +140,12 @@ auto ReadMenu(bool withTrade) noexcept -> quick_npc::MenuState {
 	if (withTrade && menu.shown) {
 		size_t count = 0;
 		const quick_npc::MenuRow* rows = MenuRows(&count);
-		menu.offersTrade = quick_npc::IsVendorClass(rows, count, At<uint16_t>(g_base + RvaMenuNpcClass), TradeHandler());
+		const int row = quick_npc::FindMenuRow(rows, count, At<uint16_t>(g_base + RvaMenuNpcClass));
+		if (row >= 0) {
+			// the live row after the menu was built: its count says which options are on screen
+			menu.offersTrade = quick_npc::RowOffersTrade(rows[row], TradeHandler());
+			menu.offersIdentify = quick_npc::RowOffersTrade(rows[row], g_base + RvaIdentifyHandler);
+		}
 	}
 	return menu;
 }
@@ -165,7 +179,7 @@ auto InteractHook(void* command, int32_t unitType, uint32_t unitId) noexcept -> 
 		size_t rows = 0;
 		const quick_npc::MenuRow* table = MenuRows(&rows);
 		Lock lock;
-		g_controller.OnInteract(click, hotkey, table, rows, TradeHandler(), GetTickCount64());
+		g_controller.OnInteract(click, hotkey, table, rows, HandlersLocked(), GetTickCount64());
 	}
 	const InteractFn original = g_interactOriginal.load(std::memory_order_acquire);
 	return original != nullptr ? original(command, unitType, unitId) : 0;
@@ -176,20 +190,21 @@ void __cdecl PressTrade(const D2RL::PluginContext* context, void* userData) noex
 	(void)context;
 	(void)userData;
 	const quick_npc::MenuState menu = ReadMenu(true);
-	bool go = false;
-	uint32_t traded = 0;
+	quick_npc::Action action = quick_npc::Action::None;
+	uint32_t count = 0;
 	{
 		Lock lock;
-		go = g_controller.OnQueuedCallback(menu);
-		traded = g_controller.counters().traded;
+		action = g_controller.OnQueuedCallback(menu);
+		count = action == quick_npc::Action::Trade ? g_controller.counters().traded : g_controller.counters().identified;
 	}
-	if (!go) {
+	if (action == quick_npc::Action::None) {
 		return;
 	}
-	const auto trade = reinterpret_cast<TradeFn>(TradeHandler());
-	trade();  // what D2R's menu runs when the player clicks "Trade"
-	if (traded == 1) {
-		plog::Info("quicknpc: first trade opened (npc %u)", menu.npcId);
+	const bool trade = action == quick_npc::Action::Trade;
+	const auto option = reinterpret_cast<MenuOptionFn>(g_base + (trade ? RvaTradeHandler : RvaIdentifyHandler));
+	option();  // what D2R's menu runs when the player clicks "Trade" / "Identify"
+	if (count == 1) {
+		plog::Info("quicknpc: first %s (npc %u)", trade ? "trade opened" : "identify with Cain", menu.npcId);
 	}
 }
 
@@ -337,8 +352,8 @@ void ApplyConfig(const quick_npc::Config& config, bool setEnabled) noexcept {
 	if (setEnabled) {
 		g_enabled = config.enabled;
 	}
-	plog::Info("config: hotkey %s (vk 0x%02x), timeout %u s, %s", config.hotkeyName, config.hotkeyVk,
-	           config.timeoutMs / 1000, config.enabled ? "enabled" : "disabled");
+	plog::Info("config: hotkey %s (vk 0x%02x), timeout %u s, cain identify %s, %s", config.hotkeyName, config.hotkeyVk,
+	           config.timeoutMs / 1000, config.cainIdentify ? "on" : "off", config.enabled ? "enabled" : "disabled");
 	if (const char* note = quick_npc::HotkeyNote(config.hotkeyVk)) {
 		if (quick_npc::HotkeyBlocksInteraction(config.hotkeyVk)) {
 			plog::Warn("config: %s", note);
@@ -388,10 +403,11 @@ void QuickNpcStatus(char* out, size_t size) noexcept {
 		enabled = g_controller.enabled();
 	}
 	std::snprintf(out, size,
-	              "%s, hotkey %s (vk 0x%02x), timeout %u s | hotkey clicks on NPCs %u (not vendors %u, vendors %u) | trade queued %u, "
-	              "opened %u, dropped %u, queue failed %u",
+	              "%s, hotkey %s (vk 0x%02x), timeout %u s, cain identify %s | hotkey clicks on NPCs %u (not vendors %u, vendors %u, "
+	              "Cain %u) | queued %u, traded %u, identified %u, dropped %u, queue failed %u",
 	              enabled ? "enabled" : "disabled (quick-npc on)", config.hotkeyName, config.hotkeyVk, config.timeoutMs / 1000,
-	              c.npcClicks, c.notVendor, c.armed, c.queued, c.traded, c.dropped, c.queueFailed);
+	              config.cainIdentify ? "on" : "off", c.npcClicks, c.notVendor, c.armed, c.armedCain, c.queued, c.traded,
+	              c.identified, c.dropped, c.queueFailed);
 }
 
 auto ReloadQuickNpcConfig() noexcept -> bool {

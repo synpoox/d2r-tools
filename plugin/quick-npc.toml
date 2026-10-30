@@ -15,3 +15,7 @@ hotkey = "LeftCtrl"
 
 # How long a click waits for the vendor's dialog to open (walking there, an NPC greeting), 5 to 600 seconds.
 timeout_seconds = 60
+
+# Hold the hotkey and left-click Deckard Cain to have him identify your items (his menu's Identify option; you pay his
+# usual price). With nothing to identify, his normal menu opens. false: Cain is left alone.
+cain_identify = true

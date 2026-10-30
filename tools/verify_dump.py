@@ -37,6 +37,11 @@ CODE = [
     ("Trade handler: mov edx, 1 (mode trade)", 0x112FC6, "ba 01 00 00 00"),
     ("Trade handler: mov cl, 0x38 (CCMD_SUBSCRIBE_TO_VENDOR)", 0x112FCB, "b1 38"),
     ("Trade handler entry", 0x112F30, "40 53 48 83 ec 20 33 db"),
+    ("Cain's Identify handler entry", 0x114000, "48 89 5c 24 08 48 89 6c 24 18"),
+    ("Identify handler: mov cl, 0x34 (CCMD_IDENTIFY_TRANSACTION)", 0x1141AB, "b1 34"),
+    ("menu builder: Identify option is string 0xfb4", 0x114A3C, "b9 b4 0f 00 00"),
+    ("menu builder: Identify shown (row count 3)", 0x114B09, "c7 44 c8 04 03 00 00 00"),
+    ("menu builder: Identify hidden, nothing to identify (row count 2)", 0x114BCA, "c7 44 c8 04 02 00 00 00"),
     # Ctrl (the default hotkey) is D2R's default Run key; Run only adds the run flag, Stand Still blocks interaction.
     ("Run state read from key binding 0x22 (Run)", 0x83EEF, "8d 4b 22"),
     ("Run held adds command flag 0x40", 0xFE603, "83 ca 40"),
@@ -64,6 +69,7 @@ GLOBALS = [
 ]
 
 TRADE_RVA = 0x112F30
+IDENTIFY_RVA = 0x114000
 INIT_RVA, INIT_COPY_RVA = 0x360D0, 0x37210  # NPC menu table initializer; stop before it copies the stack array out
 ROW_SIZE, ROWS = 0x48, 0x30
 BASE = 0x140000000
@@ -159,6 +165,9 @@ def main(argv: list[str]) -> int:
             others = sorted({c for c, _, _ in rows} - set(vendors))
             print(f"     vendor classes (Trade shown): {', '.join(str(c) for c in vendors)}")
             print(f"     other menu classes (no Trade): {', '.join(str(c) for c in others)}")
+            identify = BASE + IDENTIFY_RVA
+            cain = sorted({c for c, _, h in rows if identify in h and not first_vendor_rule(rows, c, trade)})
+            report(len(cain) > 0, f"Deckard Cain rows with Identify (0x{IDENTIFY_RVA:x}): {', '.join(str(c) for c in cain)}")
 
     print("all checks passed" if failed == 0 else f"{failed} check(s) failed: re-find these before using this image")
     return 0 if failed == 0 else 1

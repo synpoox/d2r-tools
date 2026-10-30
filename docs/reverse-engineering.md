@@ -70,8 +70,12 @@ Option handlers (each referenced only by the initializer, apart from Talk):
 | **Trade** (string `0xd44` "Trade", `0xd06` "Trade/Repair") | `0x112f30` | Closes the menu, sets UI state 2 (`0x2a486a4`), gamble flag 0 (`0x2a48808`), sends `CCMD_SUBSCRIBE_TO_VENDOR` (`0x38`) mode 1 for the NPC `0x2a4875c` (`mov edx,1` `0x112fc6`, `mov cl,0x38` `0x112fcb`) |
 | Gamble | `0x112c80` | Same with mode 2 and gamble flag 1 |
 | Hire | `0x112620` | |
-| Identify | `0x114000` | |
+| Identify (Deckard Cain: rows 244, 245, 246, 265, 520) | `0x114000` | Closes the menu, opens a wait dialog, works out the price (`0x325c50` quest checks; free after his quest, else per unidentified item), sends `CCMD_IDENTIFY_TRANSACTION` (`0x34`, `mov cl,0x34` at `0x1141ab`) for the NPC `0x2a4875c`, UI state 7 |
 | Travel | `0x1162f0` | |
+
+In `0x1147a0` the Identify option (string `0xfb4`, `0x114a3c`) is shown only when the player has something to identify:
+it sets the live row's count to 3 (`0x114b09`), otherwise to 2 (`0x114bca`) so the option drops off the menu. The plugin
+therefore arms Cain from the handler being in any slot of his row, and presses Identify only if the open menu shows it.
 
 The plugin's vendor test is "the class's first row shows the Trade handler". This is the game's own data, not a name
 list. Emulating the initializer on this dump gives 16 vendor classes (147, 148, 154, 177, 178, 199, 202, 252, 253, 254,

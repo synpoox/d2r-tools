@@ -346,6 +346,12 @@ auto ParseConfig(const char* toml, size_t length, Config* out, ConfigIssue* issu
 				out->hotkeyVk = vk;
 				std::snprintf(out->hotkeyName, sizeof(out->hotkeyName), "%s", v.s);
 			}
+		} else if (std::strcmp(key, "cain_identify") == 0) {
+			if (v.kind != ValueKind::Bool) {
+				found.Add(line, "cain_identify must be true or false");
+			} else {
+				out->cainIdentify = v.b;
+			}
 		} else if (std::strcmp(key, "timeout_seconds") == 0) {
 			if (v.kind != ValueKind::Integer || v.i < MinTimeoutSeconds || v.i > MaxTimeoutSeconds) {
 				found.Add(line, "timeout_seconds must be a whole number from 5 to 600");

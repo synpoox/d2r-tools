@@ -1,7 +1,8 @@
 # Quick NPC
 
 A D2RLoader plugin for Diablo II: Resurrected. **Hold Left Ctrl and left-click a vendor** to go straight to its trade
-screen, skipping the Talk / Trade / Cancel menu. The key is configurable in a TOML file.
+screen, skipping the Talk / Trade / Cancel menu. **Hold Left Ctrl and left-click Deckard Cain** to have him identify
+your items. The key is configurable in a TOML file.
 
 The game still does all the real work. It walks (or, with Ctrl, runs) you to the NPC, checks range, and opens the
 dialog. The plugin then presses the menu's own "Trade" option for you, which is the same function a mouse click on
@@ -19,14 +20,17 @@ dialog. The plugin then presses the menu's own "Trade" option for you, which is 
 | What | State |
 |---|---|
 | Reverse engineering on the 93847 dump | done: [docs/reverse-engineering.md](docs/reverse-engineering.md); `tools/verify_dump.py` passes |
-| Decision logic and settings parser | 272 host checks pass (`tests/`) |
+| Decision logic and settings parser | 308 host checks pass (`tests/`) |
 | Plugin build | MinGW-w64 cross build and the MSVC build (`plugin/build.ps1`) pass in CI |
-| In-game tests | step 0 (loads, hooks on, image match) confirmed in game on 0.1.0; the rest not run yet: see [TESTING.md](TESTING.md) |
+| In-game tests | 0.2.0 confirmed working in game by the user. 0.3.0 (Cain identify) not tested in game yet: see [TESTING.md](TESTING.md) |
 
 ## Use
 
 1. Install (below), start the game through D2RLoader, and load a character.
 2. In town, hold **Left Ctrl** and left-click a vendor. You run there and the trade screen opens.
+3. Hold **Left Ctrl** and left-click **Deckard Cain**. You run there and he identifies your items, exactly as if you
+   had picked "Identify" in his menu: same price (free once his quest is done), and the server checks your gold. If
+   nothing needs identifying, his menu has no Identify option and it opens as usual.
 
 Ctrl is also D2R's default **Run** key, so the game makes you run to the vendor instead of walking. That's the only
 difference from a normal click.
@@ -52,7 +56,11 @@ never overwrites your copy after that. Edit it, then restart the game or type `q
 enabled = true            # false: start switched off
 hotkey = "LeftCtrl"       # hold this, then left-click a vendor
 timeout_seconds = 60      # how long a click waits for the vendor's dialog (5 to 600)
+cain_identify = true      # hotkey + left-click on Deckard Cain identifies your items
 ```
+
+A `quick-npc.toml` written by 0.2.0 has no `cain_identify` line; the default (`true`) applies. Add
+`cain_identify = false` to leave Cain alone.
 
 `hotkey` names: `LeftCtrl`, `RightCtrl`, `Ctrl` (either), `LeftAlt`, `RightAlt`, `Alt`, `A`-`Z`, `0`-`9`, `F1`-`F24`,
 `Numpad0`-`Numpad9`, `Space`, `Tab`, `CapsLock`, `Backquote`, `Mouse3` (middle button), `Mouse4`, `Mouse5` (side
@@ -70,6 +78,10 @@ A bad value is reported in the log with its line number, and the default is kept
 An NPC whose dialog offers **Trade** in D2R's own NPC menu table, read live from the game. That covers every
 Trade and Trade/Repair NPC. Quest and story NPCs (Talk only), mercenary, travel and gamble-only menus, monsters,
 objects and players are left alone: the click works as it always does.
+
+**Deckard Cain** is the one special case: the NPC whose menu row holds D2R's Identify option (`0x114000`). That's Cain
+in every town, monstats rows 265 (Act 1), 244, 245, 246 and 520 (Act 5). The caged Cain in Tristram (146) has only
+Talk and is left alone.
 
 ## Build
 
@@ -118,7 +130,7 @@ where D2RLoader keeps the log and the config.
 
 - Build 93847 / image `0x6ab3782c` only. Another game or D2RLoader version needs the addresses re-found
   (`docs/reverse-engineering.md`, then `tools/verify_dump.py`).
-- Only step 0 of TESTING.md has been confirmed in game.
+- The Cain identify feature (0.3.0) hasn't been tested in game yet.
 - Gamble-only NPCs aren't treated as vendors, and Gamble isn't pressed for NPCs that have both Trade and Gamble.
   customnpcs.txt NPCs get only Talk in D2R's menu table, so they are not covered.
 - If an NPC first plays a greeting or quest speech, the trade screen opens after the speech, when the menu appears.
