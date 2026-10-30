@@ -1,0 +1,3 @@
+# False positives for the d2rAI-toolkit privacy scan (tools/check_public.py --root .).
+# PluginInfo::author is a display name, not a credential.
+src/plugin.cpp :: \.author\s*=
