@@ -13,7 +13,7 @@ set(MODKIT_PLUGIN_NAME "better-auras" CACHE STRING "Plugin id, DLL name, console
 set(MODKIT_PLUGIN_VERSION "0.1.0" CACHE STRING "PluginInfo::version (shared plugins must match in multiplayer)")
 set(MODKIT_MOD_NAME "" CACHE STRING "Mod folder the plugin ships in (mods/<name>); \"\" = any mod")
 set(MODKIT_SOUND_ROWS "0" CACHE STRING "Rows of the mod's sounds.txt (0 = no new sounds)")
-set(MODKIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
+set(MODKIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
 if(NOT EXISTS "${MODKIT_SDK_DIR}/CMakeLists.txt")
 	message(FATAL_ERROR "PluginSDK not found at ${MODKIT_SDK_DIR}: run `git submodule update --init`")
