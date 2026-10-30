@@ -75,12 +75,6 @@ enum class Click {
 auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount,
                    uint64_t tradeHandler) noexcept -> Click;
 
-// --- Hotkey ---------------------------------------------------------------------------------------------------------
-// `eventDown`: D2RLoader's input action sent Pressed and no Released since. `physicalDown`: the bound key is down
-// right now (GetAsyncKeyState); `physicalKnown` false when no key is bound or it can't be read. The physical check
-// covers a Released event lost to alt-tab.
-auto HotkeyHeld(bool eventDown, bool physicalKnown, bool physicalDown) noexcept -> bool;
-
 // --- One interaction ------------------------------------------------------------------------------------------------
 // Tracks the one NPC the player asked to trade with:
 //   hotkey + left click on vendor X      -> Arm(X)
@@ -89,9 +83,12 @@ auto HotkeyHeld(bool eventDown, bool physicalKnown, bool physicalDown) noexcept 
 //   queued callback runs                 -> TakeQueued(X) true: call Trade once
 class Interaction {
 public:
-	static constexpr uint64_t TimeoutMs = 60000;  // walking across town plus an NPC greeting; stale clicks expire
+	static constexpr uint64_t DefaultTimeoutMs = 60000;  // walking across town plus an NPC greeting; stale clicks expire
 
 	enum class State { Idle, Armed, Queued };
+
+	void SetTimeout(uint64_t ms) noexcept { m_timeoutMs = ms; }
+	auto timeout() const noexcept -> uint64_t { return m_timeoutMs; }
 
 	void Arm(uint32_t unitId, uint64_t nowMs) noexcept;
 	void Clear() noexcept;
@@ -109,6 +106,7 @@ private:
 	State m_state = State::Idle;
 	uint32_t m_unit = 0;
 	uint64_t m_armedAt = 0;
+	uint64_t m_timeoutMs = DefaultTimeoutMs;
 };
 
 // --- The feature's state machine ------------------------------------------------------------------------------------
@@ -134,6 +132,7 @@ class Controller {
 public:
 	void SetEnabled(bool enabled) noexcept;
 	auto enabled() const noexcept -> bool { return m_enabled; }
+	void SetTimeout(uint64_t ms) noexcept { m_interaction.SetTimeout(ms); }
 
 	// Hook 1, before D2R's interact function runs (which always runs).
 	void OnInteract(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount, uint64_t tradeHandler,
@@ -168,7 +167,6 @@ struct InstallSteps {
 	bool (*alreadyHooked)(void* user, uint64_t rva) = nullptr;
 	// Both hooks in one MutationService transaction: both are installed, or neither (D2RLoader rolls back).
 	bool (*installHooks)(void* user, char* why, size_t whySize) = nullptr;
-	bool (*registerAction)(void* user, char* why, size_t whySize) = nullptr;
 };
 
 inline constexpr uint64_t RvaInteract = 0x101910;
@@ -179,7 +177,6 @@ enum class InstallResult {
 	NoServices,
 	AlreadyHooked,
 	HooksRefused,  // nothing was patched
-	NoAction,      // both hooks are in and pass through: the feature stays disabled
 };
 
 auto RunInstall(const InstallSteps& steps, char* report, size_t reportSize) noexcept -> InstallResult;

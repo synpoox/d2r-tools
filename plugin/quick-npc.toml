@@ -1,0 +1,17 @@
+# Quick NPC settings. D2RLoader copies this file to <game>\d2rloader\config\quick-npc.toml the first time the plugin
+# loads and never overwrites your copy afterwards. Edit that copy, then restart the game or type "quick-npc reload" in
+# the console.
+
+[quick-npc]
+# false: the plugin starts switched off ("quick-npc on" in the console switches it on until the game restarts).
+enabled = true
+
+# Hold this key, then left-click a vendor to go straight to its trade screen.
+# Names: LeftCtrl, RightCtrl, Ctrl (either), LeftAlt, RightAlt, Alt, A-Z, 0-9, F1-F24, Numpad0-9, Space, Tab,
+# CapsLock, Backquote, Mouse3 (middle button), Mouse4, Mouse5 (side buttons), or a virtual-key code such as "0xA2".
+# Ctrl is also D2R's default Run key, so you run to the vendor. Shift does not work with D2R's default controls:
+# it is Stand Still, which stops NPC interaction.
+hotkey = "LeftCtrl"
+
+# How long a click waits for the vendor's dialog to open (walking there, an NPC greeting), 5 to 600 seconds.
+timeout_seconds = 60

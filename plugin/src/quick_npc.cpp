@@ -9,7 +9,8 @@
 //
 // This part changes none of that. It watches two points and, for one interaction the player asked for, presses
 // "Trade" for them:
-//   1. hook 0x101910 (pass-through): a left press on a monster-type unit while the hotkey is held, and the unit's class
+//   1. hook 0x101910 (pass-through): a left press on a monster-type unit while the hotkey (quick-npc.toml, default
+//      Left Ctrl) is held, and the unit's class
 //      offers Trade in D2R's live NPC menu table -> remember that unit. Any other interaction click forgets it.
 //   2. hook 0x1141d0 (pass-through, after the original): the remembered NPC's menu is open -> queue a UI-thread
 //      callback (ThreadService), which checks the menu again and calls the Trade handler, as a click on "Trade" does.
@@ -17,11 +18,11 @@
 // The decisions live in quick_npc_logic.cpp (host-tested); this file reads game memory and talks to D2RLoader.
 #include "quick_npc.h"
 
-#include <D2RLPlugin/input.h>
 #include <D2RLPlugin/mutations.h>
 #include <D2RLPlugin/threads.h>
 
 #include "log.h"
+#include "quick_npc_config.h"
 #include "quick_npc_logic.h"
 
 #define NOMINMAX
@@ -30,6 +31,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <initializer_list>
 
 namespace {
@@ -75,10 +77,8 @@ using TradeFn = bool (*)() noexcept;
 
 // --- State ----------------------------------------------------------------------------------------------------------
 const D2RL::PluginContext* g_context = nullptr;
-const D2RL::InputService* g_input = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
 const D2RL::MutationService* g_mutations = nullptr;
-D2RL::Input::ActionHandle g_action = D2RL::Input::InvalidHandle;
 uint64_t g_base = 0;
 
 // Trampolines to D2R's original functions, published after the hook transaction commits. Both hooks are only reached
@@ -89,10 +89,11 @@ std::atomic<OpenNpcMenuFn> g_openMenuOriginal{nullptr};
 
 std::atomic<bool> g_installed{false};
 std::atomic<bool> g_enabled{false};  // mirror of the controller's switch, read without the lock on every hook call
-std::atomic<bool> g_keyDown{false};
+std::atomic<uint32_t> g_hotkeyVk{quick_npc::Config{}.hotkeyVk};
 
 SRWLOCK g_lock = SRWLOCK_INIT;
 quick_npc::Controller g_controller;  // guarded by g_lock
+quick_npc::Config g_config;          // guarded by g_lock
 
 class Lock {
 public:
@@ -135,27 +136,11 @@ auto ReadMenu(bool withTrade) noexcept -> quick_npc::MenuState {
 	return menu;
 }
 
-auto KeyPhysicallyDown(D2RL::Input::Key key) noexcept -> bool {
-	return key != D2RL::Input::Key::None && (GetAsyncKeyState(static_cast<int>(key)) & 0x8000) != 0;
-}
-
+// The configured key (quick-npc.toml "hotkey", default Left Ctrl) is down right now. GetAsyncKeyState tells left and
+// right Ctrl apart; the click itself arrives through D2R's own command flags (left press), not from here.
 auto HotkeyHeld() noexcept -> bool {
-	if (!g_keyDown.load()) {
-		return false;
-	}
-	bool known = false;
-	bool down = false;
-	if (g_input != nullptr && g_action != D2RL::Input::InvalidHandle) {
-		for (const auto slot : {D2RL::Input::BindingSlot::Primary, D2RL::Input::BindingSlot::Secondary}) {
-			D2RL::Input::Binding binding {};
-			if (g_input->getBinding(g_context, g_action, slot, &binding) == D2RL::Input::Result::Success &&
-			    binding.key != D2RL::Input::Key::None) {
-				known = true;
-				down = down || KeyPhysicallyDown(binding.key);
-			}
-		}
-	}
-	return quick_npc::HotkeyHeld(true, known, down);
+	const uint32_t vk = g_hotkeyVk.load();
+	return vk != 0 && (GetAsyncKeyState(static_cast<int>(vk)) & 0x8000) != 0;
 }
 
 // --- 1. The click -----------------------------------------------------------------------------------------------------
@@ -238,39 +223,9 @@ auto OpenNpcMenuHook(void* npc, int32_t flag) noexcept -> uint64_t {
 	return result;
 }
 
-// --- Input action -----------------------------------------------------------------------------------------------------
-auto __cdecl OnAction(const D2RL::PluginContext* context, const D2RL::Input::ActionEvent* event, void* userData) noexcept
-	-> D2RL::Input::ActionResult {
-	(void)context;
-	(void)userData;
-	if (D2RL::Input::HasActionEventField(event, D2RL::Input::ActionEventRequiredSize)) {
-		g_keyDown.store(event->kind == D2RL::Input::ActionEventKind::Pressed);
-	}
-	return D2RL::Input::ActionResult::Ignored;  // never consume the key
-}
-
-void DescribeBinding(char* out, size_t size) noexcept {
-	D2RL::Input::Binding binding {};
-	if (g_input == nullptr || g_action == D2RL::Input::InvalidHandle ||
-	    g_input->getBinding(g_context, g_action, D2RL::Input::BindingSlot::Primary, &binding) != D2RL::Input::Result::Success) {
-		std::snprintf(out, size, "key ?");
-	} else if (binding.key == D2RL::Input::Key::None) {
-		std::snprintf(out, size, "no key bound: set one in Options > Controls > Quick NPC");
-	} else {
-		std::snprintf(out, size, "key vk 0x%02x%s", static_cast<unsigned>(binding.key),
-		              binding.modifier != D2RL::Input::Modifier::None ? " + modifier" : "");
-	}
-}
-
 // --- Install steps (quick_npc::RunInstall) ----------------------------------------------------------------------------
 auto ServicesReady(void* user, char* why, size_t whySize) -> bool {
 	const auto* context = static_cast<const D2RL::PluginContext*>(user);
-	if (context->QueryService(&g_input) != D2RL::ServiceQueryResult::Success ||
-	    !D2RL::HasInputServiceField(g_input, D2RL::InputServiceRequiredSize)) {
-		g_input = nullptr;
-		std::snprintf(why, whySize, "D2RLoader has no input service");
-		return false;
-	}
 	if (context->QueryService(&g_threads) != D2RL::ServiceQueryResult::Success ||
 	    !D2RL::HasThreadServiceField(g_threads, D2RL::ThreadServiceRequiredSize) || g_threads->runOnUiThread == nullptr) {
 		g_threads = nullptr;
@@ -343,31 +298,54 @@ auto InstallHooks(void* user, char* why, size_t whySize) -> bool {
 	return true;
 }
 
-auto RegisterAction(void* user, char* why, size_t whySize) -> bool {
-	const auto* context = static_cast<const D2RL::PluginContext*>(user);
-	D2RL::Input::ActionRegistration registration {
-		.structSize       = D2RL::Input::ActionRegistrationSize,
-		.flags            = 0,
-		.logicalId        = "trade-with-npc",
-		.displayName      = "Quick NPC: hold, then left-click a vendor to trade",
-		.category         = "Quick NPC",
-		.defaultPrimary   = {.key = D2RL::Input::Key::Y, .modifier = D2RL::Input::Modifier::None},
-		.defaultSecondary = {.key = D2RL::Input::Key::None, .modifier = D2RL::Input::Modifier::None},
-		.callback         = OnAction,
-		.userData         = nullptr,
-	};
-	D2RL::Input::Result result = g_input->registerAction(context, &registration, &g_action);
-	if (result == D2RL::Input::Result::Conflict) {
-		// Y is taken: register without a default; the player binds a key in Options > Controls.
-		registration.defaultPrimary = {.key = D2RL::Input::Key::None, .modifier = D2RL::Input::Modifier::None};
-		result = g_input->registerAction(context, &registration, &g_action);
-	}
-	if (result != D2RL::Input::Result::Success || g_action == D2RL::Input::InvalidHandle) {
-		std::snprintf(why, whySize, "input action not registered (result %u)", static_cast<unsigned>(result));
-		g_action = D2RL::Input::InvalidHandle;
+// Reads quick-npc.toml (D2RLoader created it from the embedded default if it was missing) and logs what it found.
+auto ReadConfigFile(quick_npc::Config* config) noexcept -> bool {
+	static char text[64 * 1024];
+	std::memset(text, 0, sizeof(text));  // reused on reload: no tail of a longer earlier file
+	uint32_t required = 0;
+	if (g_context == nullptr || !g_context->ReadConfig(text, sizeof(text) - 1, &required)) {
+		plog::Warn("config: could not read %ls (needs %u bytes): defaults used",
+		           g_context != nullptr && g_context->pluginConfigPath != nullptr ? g_context->pluginConfigPath : L"?", required);
 		return false;
 	}
+	size_t length = 0;
+	const size_t limit = required != 0 && required < sizeof(text) - 1 ? required : sizeof(text) - 1;
+	while (length < limit && text[length] != '\0') {
+		++length;
+	}
+	quick_npc::ConfigIssue issues[8];
+	const int n = quick_npc::ParseConfig(text, length, config, issues, 8);
+	for (int i = 0; i < n && i < 8; ++i) {
+		plog::Warn("config line %d: %s", issues[i].line, issues[i].text);
+	}
+	if (n > 8) {
+		plog::Warn("config: %d more problems", n - 8);
+	}
 	return true;
+}
+
+void ApplyConfig(const quick_npc::Config& config, bool setEnabled) noexcept {
+	{
+		Lock lock;
+		g_config = config;
+		g_controller.SetTimeout(config.timeoutMs);
+		if (setEnabled) {
+			g_controller.SetEnabled(config.enabled);
+		}
+	}
+	g_hotkeyVk = config.hotkeyVk;
+	if (setEnabled) {
+		g_enabled = config.enabled;
+	}
+	plog::Info("config: hotkey %s (vk 0x%02x), timeout %u s, %s", config.hotkeyName, config.hotkeyVk,
+	           config.timeoutMs / 1000, config.enabled ? "enabled" : "disabled");
+	if (const char* note = quick_npc::HotkeyNote(config.hotkeyVk)) {
+		if (quick_npc::HotkeyBlocksInteraction(config.hotkeyVk)) {
+			plog::Warn("config: %s", note);
+		} else {
+			plog::Info("config: %s", note);
+		}
+	}
 }
 
 }  // namespace
@@ -380,23 +358,18 @@ auto InstallQuickNpc(const D2RL::PluginContext* context, char* report, size_t re
 	steps.servicesReady = [](void* u, char* w, size_t n) { return ServicesReady(u, w, n); };
 	steps.alreadyHooked = [](void* u, uint64_t rva) { return AlreadyHooked(u, rva); };
 	steps.installHooks = [](void* u, char* w, size_t n) { return InstallHooks(u, w, n); };
-	steps.registerAction = [](void* u, char* w, size_t n) { return RegisterAction(u, w, n); };
 	char result[300];
 	if (quick_npc::RunInstall(steps, result, sizeof(result)) != quick_npc::InstallResult::On) {
 		std::snprintf(report, reportSize, "%s", result);
 		return false;
 	}
 	g_installed = true;
-	{
-		Lock lock;
-		g_controller.SetEnabled(true);
-	}
-	g_enabled = true;
+	quick_npc::Config config;
+	(void)ReadConfigFile(&config);
+	ApplyConfig(config, true);
 	size_t rows = 0;
 	(void)MenuRows(&rows);
-	char key[100];
-	DescribeBinding(key, sizeof(key));
-	std::snprintf(report, reportSize, "%s, %zu NPC menu rows, %s", result, rows, key);
+	std::snprintf(report, reportSize, "%s, %zu NPC menu rows, hotkey %s", result, rows, config.hotkeyName);
 	return true;
 }
 
@@ -406,18 +379,29 @@ void QuickNpcStatus(char* out, size_t size) noexcept {
 		return;
 	}
 	quick_npc::Counters c;
+	quick_npc::Config config;
 	bool enabled = false;
 	{
 		Lock lock;
 		c = g_controller.counters();
+		config = g_config;
 		enabled = g_controller.enabled();
 	}
-	char key[100];
-	DescribeBinding(key, sizeof(key));
 	std::snprintf(out, size,
-	              "%s, %s | hotkey clicks on NPCs %u (not vendors %u, vendors %u) | trade queued %u, opened %u, dropped %u, queue failed %u",
-	              enabled ? "enabled" : "disabled (quick-npc on)", key, c.npcClicks, c.notVendor, c.armed, c.queued, c.traded,
-	              c.dropped, c.queueFailed);
+	              "%s, hotkey %s (vk 0x%02x), timeout %u s | hotkey clicks on NPCs %u (not vendors %u, vendors %u) | trade queued %u, "
+	              "opened %u, dropped %u, queue failed %u",
+	              enabled ? "enabled" : "disabled (quick-npc on)", config.hotkeyName, config.hotkeyVk, config.timeoutMs / 1000,
+	              c.npcClicks, c.notVendor, c.armed, c.queued, c.traded, c.dropped, c.queueFailed);
+}
+
+auto ReloadQuickNpcConfig() noexcept -> bool {
+	if (!g_installed.load()) {
+		return false;
+	}
+	quick_npc::Config config;
+	const bool read = ReadConfigFile(&config);
+	ApplyConfig(config, true);
+	return read;
 }
 
 void SetQuickNpcEnabled(bool enabled) noexcept {

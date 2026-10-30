@@ -1,7 +1,8 @@
 # Quick NPC: feasibility analysis
 
 **Result: feasible and implemented** for D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (image `0x6ab3782c`), with two
-pass-through native hooks, a supported input action and a UI-thread callback. Not yet tested in game.
+pass-through native hooks, a TOML-configured hotkey (default Left Ctrl) and a UI-thread callback. In game, only
+loading and hook installation (TESTING.md step 0) have been confirmed so far.
 
 The first version of this file stopped before implementation, because no dump of the game image was available. With
 the dump the user supplied, every hook site, signature and data layout was found and checked. Details and evidence:
@@ -15,8 +16,10 @@ the dump the user supplied, every hook site, signature and data layout was found
    `0x101910(cmd, 1, unitId)`. That function sends `CCMD_GET_QUEST_DIALOG` in range, or walks there and sends it on
    arrival.
 2. **Input layer.** PluginSDK 0.3.0's `InputService` exposes keyboard actions only (`Pressed`/`Released`, one
-   optional modifier, saved in D2R's Controls menu). It has no mouse or hovered-unit API. The left press comes from
-   D2R's own command flags inside the `0x101910` hook.
+   optional modifier, saved in D2R's Controls menu). It can't bind a lone modifier key and has no mouse or
+   hovered-unit API. The left press comes from D2R's own command flags inside the `0x101910` hook. The hotkey (default
+   Left Ctrl, set in `quick-npc.toml`) is read with `GetAsyncKeyState` at that moment. D2R binds Ctrl to Run by
+   default, which only adds the run flag; Shift is Stand Still, which stops NPC interaction.
 3. **NPC identification and vendor services.** D2R's client keeps an NPC menu table (`npcmenu.cpp`): 0x48-byte rows of
    class, option count, string ids and option handlers. It's built by `0x360d0`, extended for customnpcs.txt and quest
    options, and looked up first-match by `0x113990`. An NPC can open the vendor screen exactly when its row shows the
@@ -27,9 +30,9 @@ the dump the user supplied, every hook site, signature and data layout was found
 5. **Relevant functions and evidence.** See the tables in docs/reverse-engineering.md. Evidence includes D2R's own
    assert paths and `CCMD`/`SCMD` name switches, the `SCMD` handler table, the emulated menu table, and the entry
    bytes checked against the dump.
-6. **Supported API or native hook.** A hybrid: the hotkey uses the supported `InputService` and the trade press uses
-   `ThreadService`. The click and the dialog need native hooks: `0x101910` (before the original) and `0x1141d0`
-   (after it). Both always call the original, and neither is hooked by D2RLoader.
+6. **Supported API or native hook.** A hybrid: the settings use the SDK's config file (embedded default TOML,
+   `ReadConfig`) and the trade press uses `ThreadService`. The click and the dialog need native hooks: `0x101910`
+   (before the original) and `0x1141d0` (after it). Both always call the original, and neither is hooked by D2RLoader.
 
 ## Design choices that keep vanilla behavior
 
@@ -37,11 +40,11 @@ the dump the user supplied, every hook site, signature and data layout was found
   D2R's.
 - Clicks without the key, non-vendors, held repeats, right clicks, objects and players: the hooks only record that a
   vanilla interaction happened.
-- One trade per interaction. A new click, another NPC's dialog, the feature switch or a 60-second timeout cancels it.
+- One trade per interaction. A new click, another NPC's dialog, the feature switch or the timeout (`timeout_seconds`, default 60) cancels it.
   The UI callback checks the menu again before pressing Trade.
 - The Trade press runs from `ThreadService::runOnUiThread`, not inside the packet handler, because the handler writes
   the menu globals after `0x1141d0` returns.
-- Fails closed: wrong image, an `FF 25` at a hook entry, mismatched entry bytes, a missing service or a failed action
-  registration installs nothing that acts (see `RunInstall`).
+- Fails closed: wrong image, an `FF 25` at a hook entry, mismatched entry bytes or a missing service installs nothing
+  that acts (see `RunInstall`). A bad `quick-npc.toml` value is logged and the default kept.
 - Both hooks go in through one `MutationService` transaction (both or neither), which D2RLoader removes at plugin
-  unload. The unload handler switches the feature off, and D2RLoader drops the queued callback and the input action.
+  unload. The unload handler switches the feature off, and D2RLoader drops the queued callback.

@@ -35,8 +35,13 @@ jobs:
               -Ithird_party/PluginSDK/include -c "$f" -o "out/$(basename "$f").o"
           done
           x86_64-w64-mingw32-windres -Ithird_party/PluginSDK/include plugin/src/plugin.rc -O coff -o out/plugin.res.o
+          # the default quick-npc.toml, embedded as d2rlplugin_embed_config does for the MSVC build
+          sed "s#@D2RLPLUGIN_EMBEDDED_CONFIG_PATH@#$PWD/plugin/quick-npc.toml#" \
+            third_party/PluginSDK/cmake/D2RLPluginConfigResource.rc.in > out/default-config.rc
+          x86_64-w64-mingw32-windres -Ithird_party/PluginSDK/include out/default-config.rc -O coff -o out/config.res.o
           x86_64-w64-mingw32-g++-posix -shared -static -o out/quick-npc.dll out/*.o
           x86_64-w64-mingw32-objdump -p out/quick-npc.dll | grep -E 'D2RLoader(GetPluginInfo|LoadPlugin|UnloadPlugin)'
+          grep -c 'hotkey = "LeftCtrl"' out/quick-npc.dll
 
   plugin-msvc:
     runs-on: windows-latest
@@ -49,6 +54,9 @@ jobs:
         run: |
           cmake --version
           ./plugin/build.ps1
+          if (-not (Select-String -Path plugin/build/Release/quick-npc.dll -Pattern 'hotkey = "LeftCtrl"' -SimpleMatch -Quiet)) {
+            throw "the default quick-npc.toml is not embedded in the DLL"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: quick-npc-dll

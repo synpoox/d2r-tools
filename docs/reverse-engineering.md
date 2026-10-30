@@ -27,10 +27,28 @@ UI clicks never become player actions on a unit, so a click on a panel, chat or 
 ## 2. Input layer
 
 - PluginSDK 0.3.0 `InputService` registers **keyboard** actions only (`Key` = virtual-key codes, at most one modifier;
-  `Pressed` / `Released` events; inactive while chat or another text field has focus). It has no mouse button,
-  cursor or hovered-unit API, so the left click comes from the native hook on `0x101910`.
-- The hook reads the button and press from D2R's own command flags (`+0`: bit 1 left, bit 4 press, bit 8 held,
-  bit 0x10 release).
+  `Pressed` / `Released` events; inactive while chat or another text field has focus). Its `Key` list has no Ctrl,
+  Shift or Alt key on its own, so it cannot express "hold Left Ctrl". It also has no mouse button, cursor or
+  hovered-unit API. The plugin doesn't use it.
+- The left click comes from the native hook on `0x101910`. The hook reads the button and press from D2R's own
+  command flags (`+0`: bit 1 left, bit 4 press, bit 8 held, bit 0x10 release).
+- The hotkey (`quick-npc.toml`, default `LeftCtrl` = VK `0xA2`) is read with `GetAsyncKeyState` when that click
+  arrives. It distinguishes Left and Right Ctrl.
+
+### Modifier keys in D2R's own click handling (why Left Ctrl works and Shift doesn't)
+
+| What | RVA / value |
+|---|---|
+| Key-binding names, by binding id (switch `0x121e9c`, 0..0x44) | `0x121b20`: 0x22 Run, 0x23 Run Lock, 0x24 Stand Still, 0x25 Show Items, 0x3b Force Move |
+| Default binding tables: 20-byte records `{u16 key, ..., u32 binding id, ...}` | `0x22a92b0` and `0x22a9820`. Both have **Run = VK 0x11 (Ctrl)**, Stand Still = 0x10 (Shift), Show Items = 0x12 (Alt) |
+| Run held state, from binding 0x22 (`lea ecx,[rbx+0x22]` `0x83eef`) | `0x2a23758` |
+| Stand Still held state | `0x2a23760` |
+| `0x8afd0` packs them for the player action: high byte = Run (and `0x2a2375c`), low byte = Stand Still | read at `0x8afdd`, `0x8b018` |
+| `0xfe3b0`: Run held and stamina (stat 0xa) > 0 → command flag `0x40` (`0xfe603`); Stand Still → flag `0x20` (`0xfe619`) | |
+| `0x102490`: flag `0x20` takes the stand-still branch before the NPC interaction (`and ebp,0x20; jne 0x102992` at `0x102626`) | Shift + click never reaches `0x101910` |
+| Flag `0x40` is not tested on the NPC interaction path (`0x102490` → `0x101910`) | Ctrl + click interacts normally; the player runs |
+
+The left-button handler `0x83fc0` itself checks no modifier: it always passes action 0 (left press) to `0xfe3b0`.
 
 ## 3. Which NPCs are vendors: D2R's NPC menu table (`D2Client\src\UI\npcmenu.cpp`)
 
@@ -97,7 +115,7 @@ call-through pointers, then applies both or neither. D2RLoader removes them when
 
 | Need | Answer |
 |---|---|
-| Hotkey | Supported API: `InputService` action (configurable in Options > Controls) |
+| Hotkey | `quick-npc.toml` (SDK config file: embedded default, `ReadConfig`), read with `GetAsyncKeyState` at click time. `InputService` can't bind a lone modifier such as Left Ctrl |
 | Left click on an NPC | Native hook `0x101910`. No SDK API |
 | Vendor test | Reads D2R's live menu table. No SDK API |
 | Start trading | Calls the menu's own Trade handler `0x112f30` from `ThreadService::runOnUiThread`. No SDK API |

@@ -49,10 +49,6 @@ auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows,
 	return IsVendorClass(rows, rowCount, click.targetClass, tradeHandler) ? Click::Vendor : Click::NotVendor;
 }
 
-auto HotkeyHeld(bool eventDown, bool physicalKnown, bool physicalDown) noexcept -> bool {
-	return eventDown && (!physicalKnown || physicalDown);
-}
-
 void Interaction::Arm(uint32_t unitId, uint64_t nowMs) noexcept {
 	m_state = State::Armed;
 	m_unit = unitId;
@@ -69,7 +65,7 @@ auto Interaction::MenuOpened(uint32_t unitId, uint64_t nowMs) noexcept -> bool {
 	if (m_state != State::Armed) {
 		return false;  // idle, or Trade is already queued for this interaction
 	}
-	if (unitId != m_unit || nowMs < m_armedAt || nowMs - m_armedAt > TimeoutMs) {
+	if (unitId != m_unit || nowMs < m_armedAt || nowMs - m_armedAt > m_timeoutMs) {
 		Clear();  // another NPC's dialog, or a stale click: this interaction is over
 		return false;
 	}
@@ -151,7 +147,7 @@ auto DecidePart(bool offByFile, bool needsImage, bool imageOk) noexcept -> PartD
 auto RunInstall(const InstallSteps& steps, char* report, size_t reportSize) noexcept -> InstallResult {
 	char why[160] = "";
 	if (steps.servicesReady == nullptr || steps.alreadyHooked == nullptr || steps.installHooks == nullptr ||
-	    steps.registerAction == nullptr || !steps.servicesReady(steps.user, why, sizeof(why))) {
+	    !steps.servicesReady(steps.user, why, sizeof(why))) {
 		std::snprintf(report, reportSize, "off: %s", why[0] != '\0' ? why : "D2RLoader services missing");
 		return InstallResult::NoServices;
 	}
@@ -167,11 +163,6 @@ auto RunInstall(const InstallSteps& steps, char* report, size_t reportSize) noex
 		              static_cast<unsigned long long>(RvaInteract), static_cast<unsigned long long>(RvaOpenNpcMenu),
 		              why[0] != '\0' ? why : "entry bytes differ");
 		return InstallResult::HooksRefused;
-	}
-	why[0] = '\0';
-	if (!steps.registerAction(steps.user, why, sizeof(why))) {
-		std::snprintf(report, reportSize, "off: %s; hooks pass through", why[0] != '\0' ? why : "input action not registered");
-		return InstallResult::NoAction;
 	}
 	std::snprintf(report, reportSize, "on: hooks 0x%llx + 0x%llx", static_cast<unsigned long long>(RvaInteract),
 	              static_cast<unsigned long long>(RvaOpenNpcMenu));

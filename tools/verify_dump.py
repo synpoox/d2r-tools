@@ -37,6 +37,15 @@ CODE = [
     ("Trade handler: mov edx, 1 (mode trade)", 0x112FC6, "ba 01 00 00 00"),
     ("Trade handler: mov cl, 0x38 (CCMD_SUBSCRIBE_TO_VENDOR)", 0x112FCB, "b1 38"),
     ("Trade handler entry", 0x112F30, "40 53 48 83 ec 20 33 db"),
+    # Ctrl (the default hotkey) is D2R's default Run key; Run only adds the run flag, Stand Still blocks interaction.
+    ("Run state read from key binding 0x22 (Run)", 0x83EEF, "8d 4b 22"),
+    ("Run held adds command flag 0x40", 0xFE603, "83 ca 40"),
+    ("Stand Still adds command flag 0x20", 0xFE619, "83 ca 20"),
+    ("flag 0x20 (Stand Still) skips the interaction branch", 0x102624, "8b eb 83 e5 20 0f 85 63 03 00 00"),
+    ("default bindings A: Run (0x22) = Ctrl (VK 0x11)", 0x22A9556, "00 00 11 00 01 00 00 00 22 00"),
+    ("default bindings A: Stand Still (0x24) = Shift (VK 0x10)", 0x22A957E, "00 00 10 00 01 00 00 00 24 00"),
+    ("default bindings B: Run (0x22) = Ctrl (VK 0x11)", 0x22A9AC6, "00 00 11 00 01 00 00 00 22 00"),
+    ("default bindings B: Stand Still (0x24) = Shift (VK 0x10)", 0x22A9AEE, "00 00 10 00 01 00 00 00 24 00"),
 ]
 
 # (what, instruction RVA, instruction length, offset of disp32 in the instruction, expected target RVA)
@@ -49,6 +58,9 @@ GLOBALS = [
     ("NPC UI state = 1 at menu build", 0x114913, 6, 2, 0x2A486A4),
     ("menu object", 0x11485B, 7, 3, 0x2A487B0),
     ("Trade handler sets UI state 2", 0x112FA7, 10, 2, 0x2A486A4),
+    ("Run held state written", 0x83F0A, 6, 2, 0x2A23758),
+    ("player action reads Run held state", 0x8AFDD, 7, 2, 0x2A23758),
+    ("player action reads Stand Still state", 0x8B018, 7, 2, 0x2A23760),
 ]
 
 TRADE_RVA = 0x112F30

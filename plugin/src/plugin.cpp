@@ -4,15 +4,15 @@
 //
 // What it does at load (the template's lifecycle):
 //  - declares itself Client (a client-side UI convenience: not recorded in the character's plugin history, no
-//    multiplayer version match), ModScopedOnly (loads only from <game>/mods/<Mod>/d2rloader/plugins/ while that mod
-//    runs) and NativeHooks (patches game code);
+//    multiplayer version match) and NativeHooks (patches game code). It is a global plugin: installed in
+//    <game>/d2rloader/plugins/, it loads with every mod and with the unmodded game;
 //  - log.h: one log line for the plugin (version, D2R version, image stamp, mod, this DLL's path) and one per part;
 //  - build_guard.h: checks the game image (PE TimeDateStamp). On any other image the engine part stays off and says so;
 //  - off_switch.h: reads "<plugin>-off.txt" next to the DLL: words naming parts to leave out;
-//  - env_guard.h: warns when D2RLoader runs another mod, when this DLL is outside the mod's folder, or a second copy;
+//  - env_guard.h: warns when a second copy of this plugin is loaded and lists the other plugins (no mod check: global);
 //  - installs each part and logs one line per part;
 //  - registers the console command "<plugin>": status of every part; "<plugin> off" / "<plugin> on" switches the
-//    feature at runtime.
+//    feature at runtime; "<plugin> reload" re-reads <game>/d2rloader/config/<plugin>.toml.
 #include <D2RLPlugin/api.h>
 
 #include "build_guard.h"
@@ -30,10 +30,7 @@
 #define MODKIT_PLUGIN_NAME "quick-npc"
 #endif
 #ifndef MODKIT_PLUGIN_VERSION
-#define MODKIT_PLUGIN_VERSION "0.1.0"
-#endif
-#ifndef MODKIT_MOD_NAME
-#define MODKIT_MOD_NAME ""  // the mod folder this plugin ships in (mods\<name>); "" skips the mod checks
+#define MODKIT_PLUGIN_VERSION "0.2.0"
 #endif
 
 namespace {
@@ -52,8 +49,8 @@ constexpr D2RL::PluginInfo Info {
 	.name        = MODKIT_PLUGIN_NAME,
 	.version     = MODKIT_PLUGIN_VERSION,
 	.author      = "quick-npc",
-	.description = "Hold the Quick NPC key and left-click a vendor to go straight to trading.",
-	.flags       = D2RL::PluginFlags::Client | D2RL::PluginFlags::ModScopedOnly | D2RL::PluginFlags::NativeHooks,
+	.description = "Hold Left Ctrl (configurable) and left-click a vendor to go straight to trading.",
+	.flags       = D2RL::PluginFlags::Client | D2RL::PluginFlags::NativeHooks,
 };
 
 // --- Parts --------------------------------------------------------------------------------------------------------
@@ -67,7 +64,7 @@ struct Part {
 };
 
 void InstallEnvironment(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
-	StartEnvironmentGuard(context, MODKIT_MOD_NAME);
+	StartEnvironmentGuard(context, "");  // global plugin: no mod to check
 	EnvironmentStatus(report, size);
 }
 
@@ -129,12 +126,18 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 	if (std::strcmp(arg, "on") == 0 || std::strcmp(arg, "off") == 0) {
 		SetQuickNpcEnabled(arg[1] == 'n');
 		plog::Info("quicknpc switched %s from the console", QuickNpcEnabled() ? "on" : "off");
+	} else if (std::strcmp(arg, "reload") == 0) {
+		command->plugin->WriteConsoleMessage(ReloadQuickNpcConfig() ? "quick-npc.toml reloaded"
+		                                                            : "quick-npc.toml could not be read: defaults in use (see the log)");
 	}
 	char line[1100];
 	char image[200];
 	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
 	std::snprintf(line, sizeof(line), "%s %s | %s | mod %s | file %s", PluginName, PluginVersion, image,
-	              g_context->activeMod != nullptr ? g_context->activeMod : "?", g_selfPath);
+	              g_context->activeMod != nullptr && g_context->activeMod[0] != '\0' ? g_context->activeMod : "(none)", g_selfPath);
+	command->plugin->WriteConsoleMessage(line);
+	std::snprintf(line, sizeof(line), "config %ls | log %ls", g_context->pluginConfigPath != nullptr ? g_context->pluginConfigPath : L"?",
+	              g_context->pluginLogPath != nullptr ? g_context->pluginLogPath : L"?");
 	command->plugin->WriteConsoleMessage(line);
 	if (off_switch::Words()[0] != '\0') {
 		std::snprintf(line, sizeof(line), "off-file: %s", off_switch::Words());
@@ -190,7 +193,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	InstallParts(context, imageOk);
 	return context->RegisterConsoleCommand(PluginName, StatusCommand,
-	                                       "Quick NPC status; 'quick-npc off' / 'quick-npc on' switches the feature.");
+	                                       "Quick NPC status; 'quick-npc off' / 'on' switches it, 'quick-npc reload' re-reads quick-npc.toml.");
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
