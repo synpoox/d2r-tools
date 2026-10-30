@@ -415,50 +415,6 @@ auto ConfigSpecCount(const char* toml, int32_t fallback) noexcept -> int32_t {
 	return fallback;
 }
 
-auto ModinfoSavePath(const char* json, char* out, size_t size) noexcept -> bool {
-	if (out == nullptr || size == 0) {
-		return false;
-	}
-	out[0] = '\0';
-	if (json == nullptr) {
-		return true;
-	}
-	const char* key = std::strstr(json, "\"savepath\"");
-	if (key == nullptr) {
-		return true;
-	}
-	const char* c = key + 10;
-	while (*c == ' ' || *c == '\t' || *c == '\r' || *c == '\n') {
-		++c;
-	}
-	if (*c != ':') {
-		return true;
-	}
-	++c;
-	while (*c == ' ' || *c == '\t' || *c == '\r' || *c == '\n') {
-		++c;
-	}
-	if (*c != '"') {
-		return true;
-	}
-	++c;
-	size_t n = 0;
-	for (; *c != '\0' && *c != '"'; ++c) {
-		char ch = *c;
-		if (ch == '\\' && c[1] != '\0') {
-			++c;
-			ch = *c;
-		}
-		if (n + 1 >= size) {
-			out[0] = '\0';
-			return false;
-		}
-		out[n++] = ch;
-	}
-	out[n] = '\0';
-	return true;
-}
-
 auto ValidName(const char* name) noexcept -> bool {
 	if (name == nullptr) {
 		return false;

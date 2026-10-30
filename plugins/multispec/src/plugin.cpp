@@ -3,7 +3,7 @@
 // At load: one log line for the plugin (version, D2R version, image stamp, mod, DLL path), the off-file words, then one
 // line per part. Parts (off-file words in multispec-off.txt next to the DLL):
 //   envguard   environment guard from the toolkit template (other mod running, stray copies, other plugins)
-//   specstore  where the spec files live (save folder from modinfo.json savepath, fallback folder)
+//   specstore  where the spec files live (next to the character's save, fallback folder)
 //   specswap   every engine call: reading the character, reconciling the file, swapping. Needs the expected image and
 //              the entry bytes of every function it calls (d2r.cpp)
 //   speccmd    the "spec" console command (spec, spec N)

@@ -152,18 +152,14 @@ void TestCrcAndRoundTrip() {
 	CHECK(ms::Parse(text, len2, &back, err, sizeof(err)) && back.pendingFrom == 1 && back.pendingTo == 2);
 }
 
-void TestConfigAndModinfo() {
-	std::printf("config and modinfo\n");
+void TestConfigAndNames() {
+	std::printf("config and names\n");
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 3\n", 2) == 3);
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 3 # three\n", 2) == 3);
 	CHECK(ms::ConfigSpecCount("[other]\nspec_count = 5\n[multispec]\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 0\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 9\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount(nullptr, 2) == 2);
-	char sp[64];
-	CHECK(ms::ModinfoSavePath("{\"name\": \"MyMod\", \"savepath\": \"MyMod-s2/\"}", sp, sizeof(sp)) &&
-	      std::strcmp(sp, "MyMod-s2/") == 0);
-	CHECK(ms::ModinfoSavePath("{\"name\": \"MyMod\"}", sp, sizeof(sp)) && sp[0] == '\0');
 	CHECK(ms::ValidName("Lyra") && ms::ValidName("A_b-c") && !ms::ValidName("a") && !ms::ValidName("..\\x") &&
 	      !ms::ValidName("ThisNameIsTooLong"));
 }
@@ -312,7 +308,7 @@ void TestSwap() {
 
 int main() {
 	TestCrcAndRoundTrip();
-	TestConfigAndModinfo();
+	TestConfigAndNames();
 	TestReconcile();
 	TestSwap();
 	std::printf("%d checks, %d failed\n", g_checks, g_failed);
