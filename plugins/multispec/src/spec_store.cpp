@@ -50,17 +50,21 @@ void Utf8(const wchar_t* w, char* out, size_t size) noexcept {
 	}
 }
 
+// No mod selected: D2R runs as retail and saves straight into Saved Games\Diablo II Resurrected (a mod's savepath
+// puts its saves in mods\<savepath>, apart from retail).
+auto HasActiveMod(const D2RL::PluginContext* context) noexcept -> bool {
+	return context->activeMod != nullptr && context->activeMod[0] != '\0';
+}
+
 // modinfo.json of the active mod: <mod dir>\modinfo.json or <mod dir>\<mod>.mpq\modinfo.json.
 auto FindSavePath(const D2RL::PluginContext* context, char* savepath, size_t size, wchar_t* used, size_t usedSize) noexcept
 	-> bool {
 	savepath[0] = '\0';
-	if (context->modDirectory == nullptr) {
+	if (!HasActiveMod(context) || context->modDirectory == nullptr) {
 		return false;
 	}
 	wchar_t mod[128] = L"";
-	if (context->activeMod != nullptr) {
-		MultiByteToWideChar(CP_UTF8, 0, context->activeMod, -1, mod, 128);
-	}
+	MultiByteToWideChar(CP_UTF8, 0, context->activeMod, -1, mod, 128);
 	wchar_t candidates[2][520];
 	std::swprintf(candidates[0], 520, L"%ls\\modinfo.json", context->modDirectory);
 	std::swprintf(candidates[1], 520, L"%ls\\%ls.mpq\\modinfo.json", context->modDirectory, mod);
@@ -113,6 +117,11 @@ void InitStorePaths(const D2RL::PluginContext* context, char* report, size_t siz
 	Utf8(g_saveDir, a, sizeof(a));
 	Utf8(g_fallbackDir, b, sizeof(b));
 	Utf8(modinfo, m, sizeof(m));
+	if (!HasActiveMod(context)) {
+		std::snprintf(report, size, "saves %s (no active mod: retail save folder); fallback %s", a[0] ? a : "?",
+		              b[0] ? b : "?");
+		return;
+	}
 	std::snprintf(report, size, "saves %s (savepath \"%s\" from %s); fallback %s", a[0] ? a : "?", savepath,
 	              haveModinfo ? m : "no modinfo.json found", b[0] ? b : "?");
 }

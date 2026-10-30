@@ -1,6 +1,6 @@
 # D2RLoader plugin template
 
-A minimal mod-scoped D2RLoader plugin for Diablo II: Resurrected. Copy this folder into your mod project and extend
+A minimal global D2RLoader plugin for Diablo II: Resurrected. Copy this folder into your mod project and extend
 it. It is the part of an overhaul that data files alone cannot do: new skill functions, formula codes, hooks on
 engine functions.
 
@@ -55,15 +55,14 @@ build uses the static CRT, so the DLL does not need the VC++ redistributable, an
 Copy `build\Release\<name>.dll` to:
 
 ```text
-<game>\mods\<Mod>\d2rloader\plugins\
+<game>\d2rloader\plugins\
 ```
 
-The plugin declares `Shared | ModScopedOnly | NativeHooks`:
+The plugin declares `Shared | NativeHooks`:
 
 - **Shared**: it runs on both server and client. It is recorded in the character's plugin history and must match in
   TCP/IP games.
-- **ModScopedOnly**: it loads only from the mod's own plugin folder, and only while that mod is active
-  (`-mod <Mod>`). Your hooks never touch the unmodded game or other mods.
+- Not `ModScopedOnly`: it is a global plugin and loads with or without a mod. Plugins are global by default.
 - **NativeHooks**: it may patch game code.
 
 Fully restart the game after replacing the DLL.
