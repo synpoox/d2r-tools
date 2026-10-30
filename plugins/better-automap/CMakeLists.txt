@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.29)
 project(better_automap LANGUAGES CXX RC)
 
 set(BETTER_AUTOMAP_VERSION "0.1.0" CACHE STRING "PluginInfo::version")
-set(BETTER_AUTOMAP_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
+set(BETTER_AUTOMAP_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
 set(D2RLPLUGIN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
