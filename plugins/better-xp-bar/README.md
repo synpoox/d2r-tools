@@ -120,7 +120,7 @@ cmake -S . -B build-tests -DBXB_BUILD_PLUGIN=OFF && cmake --build build-tests &&
 | `core/` | metrics, formatting, config parsing: pure C++20, no game or Windows code |
 | `tests/` | unit tests for `core/` |
 | `plugin/` | the D2RLoader DLL; `src/d2r.h` holds every game address with its evidence |
-| `docs/re/` | dump inventory and reverse-engineering findings (addresses, evidence, confidence) |
+| [`docs/reverse-engineering/better-xp-bar*.md`](../../docs/reverse-engineering/better-xp-bar.md) (repo root) | dump inventory and reverse-engineering findings (addresses, evidence, confidence) |
 | `tools/re/` | the small static-analysis scripts used for the findings |
 
 This repository contains no game files. Diablo II: Resurrected is (c) Blizzard Entertainment. See

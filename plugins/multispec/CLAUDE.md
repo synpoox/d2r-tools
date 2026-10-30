@@ -2,7 +2,7 @@
 
 MultiSpec is a D2RLoader plugin for D2R 3.3 (offline): WoW-style dual spec. A character keeps N saved skill
 allocations ("specs", 2 by default) and loads one with the `spec N` console command, in town only.
-Design: [docs/design.md](docs/design.md). Recon: [docs/recon.md](docs/recon.md).
+Design: [docs/design.md](docs/design.md). Recon: [docs/reverse-engineering/multispec-recon.md](../../docs/reverse-engineering/multispec-recon.md).
 
 ## The toolkit
 
@@ -41,11 +41,11 @@ Status: the `multispec` console command (version, image check, every part, count
 
 ## Rules for this repo
 
-- **Any new engine address goes in `knowledge/` with the build number and its evidence** (signature, entry bytes, how
+- **Any new engine address goes in `docs/reverse-engineering/multispec.md` (repo root) with the build number and its evidence** (signature, entry bytes, how
   it was verified: static or in game), then into `src/d2r.h` / `src/d2r.cpp`. Run `tools/check_entries.py` on the dump.
 - Target build: **D2R 3.3 build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1**. On a mismatch the plugin turns
   every engine part off by itself. To support a new image: re-dump (toolkit `tools/dump_image.py`), re-find every
-  function in `knowledge/d2r-93847-skills-respec.md`, record them in a new `knowledge/d2r-<build>-*.md`, run
+  function in `docs/reverse-engineering/multispec.md` (repo root), record them there, run
   `tools/check_entries.py`, and only then change `ExpectedImage` in `src/build_guard.h`.
 - MultiSpec never writes `.d2s` / `.d2rl` files, never hooks a function, and never writes a skill level or `newskills`
   directly: only D2R's own respec and spend functions change skills.

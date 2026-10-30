@@ -20,8 +20,10 @@ Report results in separate levels: automated tests, a clean build, installed int
 ## Native findings
 
 New or changed native addresses, offsets, signatures, byte guards or ABI details go in the owning plugin's source and
-docs with: the game build or module they apply to, the evidence, the guard, what happens when the guard fails (fail
-open), and what has not been validated.
+in [docs/reverse-engineering/](docs/reverse-engineering/README.md): one feature document per plugin, plus a row in the
+registry's index. Record the game build or module they apply to, the evidence, the guard, what happens when the guard
+fails (fail open), and what has not been validated, as its recording format and
+[workflow](docs/reverse-engineering/RVA-AND-INTERCEPTION-WORKFLOW.md) describe.
 
 ## Changelog and docs
 

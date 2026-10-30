@@ -2,7 +2,7 @@
 //
 // EVERYTHING IN THIS FILE IS FOR ONE GAME IMAGE: D2R 3.3.0 build 93847 running under D2RLoader 1.3.1 (PE header
 // TimeDateStamp 0x6ab3782c, checked by build_guard.h before any of it is used). Found in the dumped in-memory image
-// (D2RLoader_6ab3782c_dump.exe); the evidence for every row is in docs/hook-sites.md. A different D2R patch or
+// (D2RLoader_6ab3782c_dump.exe); the evidence for every row is in docs/reverse-engineering/better-automap.md. A different D2R patch or
 // D2RLoader release moves them: re-find each one before changing build_guard::ExpectedImage.
 //
 // Calling convention: plain Windows x64 (rcx, rdx, r8, r9).

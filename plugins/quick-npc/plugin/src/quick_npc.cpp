@@ -1,5 +1,6 @@
 // Quick NPC engine part (quick_npc.h). D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (image 0x6ab3782c) only.
 //
+// Evidence for every address below: docs/reverse-engineering/quick-npc.md (repository root).
 // D2R's own path when the player left-clicks an NPC (client side, checked by tools/verify_dump.py):
 //   0xfe3b0 player action (left press: flags 1|4) -> 0x102490 (D2Client Unit/Player.cpp) -> 0x101910 interact(cmd, 1, id):
 //       in range: CCMD_GET_QUEST_DIALOG (0x2f); out of range: walk, and send it on arrival (player path +0x1c8..+0x1d4)

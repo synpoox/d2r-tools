@@ -15,7 +15,7 @@ void BindOne(Fn& slot, uintptr_t exeBase, uint64_t rva) noexcept {
 	slot = reinterpret_cast<Fn>(exeBase + rva);
 }
 
-// Entry bytes from the dump (knowledge/d2r-93847-skills-respec.md). `at` > 0: the function starts with D2RLoader's
+// Entry bytes from the dump (docs/reverse-engineering/multispec.md). `at` > 0: the function starts with D2RLoader's
 // 6-byte `jmp [rip+x]`, so the bytes checked are the ones after it.
 struct Entry {
 	uint64_t rva;

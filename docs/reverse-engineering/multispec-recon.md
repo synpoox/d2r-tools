@@ -23,7 +23,7 @@ item type check. MultiSpec adds no sounds or item types.
 ## Hooks
 
 Second pass, after the owner supplied a memory dump (stamp `0x6ab3782c`). Details and evidence for every "found" row:
-[knowledge/d2r-93847-skills-respec.md](../knowledge/d2r-93847-skills-respec.md). "Static" = read from code, not yet run
+[multispec.md](multispec.md). "Static" = read from code, not yet run
 in game.
 
 | # | Need | Status | Address / notes |
