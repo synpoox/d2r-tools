@@ -24,6 +24,8 @@ void LoadConfig(const D2RL::PluginContext* context) noexcept;
 void RequestReset() noexcept;
 void RequestToggle() noexcept;
 void RequestReload() noexcept;
+// Draws a large test pattern in the screen centre for 15 s (diagnosing an invisible overlay).
+void RequestTest() noexcept;
 
 // One status line for the status command: game state, the last reading, counters.
 void Status(char* out, size_t size) noexcept;

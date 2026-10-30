@@ -63,6 +63,7 @@ constexpr int64_t TickIntervalMs = 250;
 constexpr float FallbackTextSize = 18.0f;  // when neither the config nor the loader gives a usable size
 
 std::atomic<uint64_t> g_frames{0};
+std::atomic<int64_t> g_testUntilMs{0};  // "better-xp-bar test": draw a test pattern until then
 std::atomic<uint64_t> g_drawn{0};       // frames where lines were drawn
 std::atomic<uint32_t> g_drawErrors{0};
 std::atomic<uint32_t> g_lastDrawResult{0};
@@ -271,6 +272,31 @@ void __cdecl Draw(const D2RL::PluginContext* context, const D2RL::Overlay::Frame
 	if (n == 1) {
 		plog::Info("overlay: first frame: screen %.0f x %.0f, default text size %.2f, struct size %u", frame->screenWidth,
 		           frame->screenHeight, frame->defaultTextSize, frame->structSize);
+	}
+	if (NowMs() < g_testUntilMs) {
+		// Diagnostic pattern: big, opaque, centre of the screen, independent of game state and config.
+		const float w = frame->screenWidth > 0 ? frame->screenWidth : 1920.0f;
+		const float h = frame->screenHeight > 0 ? frame->screenHeight : 1080.0f;
+		D2RL::Overlay::FilledRectangleRequest bg {};
+		bg.structSize = D2RL::Overlay::FilledRectangleRequestSize;
+		bg.canvas = frame->canvas;
+		bg.rect = {w * 0.3f, h * 0.35f, w * 0.7f, h * 0.65f};
+		bg.color = {1.0f, 0.0f, 1.0f, 1.0f};
+		NoteDrawResult(g_overlay->drawFilledRectangle(context, &bg), "test rectangle");
+		static constexpr char Text[] = "BETTER XP BAR OVERLAY TEST";
+		D2RL::Overlay::TextRequest t {};
+		t.structSize = D2RL::Overlay::TextRequestSize;
+		t.canvas = frame->canvas;
+		t.position = {w * 0.32f, h * 0.45f};
+		t.color = {1.0f, 1.0f, 1.0f, 1.0f};
+		t.textSize = 48.0f;
+		t.text = Text;
+		t.textLength = sizeof(Text) - 1;
+		NoteDrawResult(g_overlay->drawText(context, &t), "test text");
+		static std::atomic<uint32_t> s_testFrames{0};
+		if (plog::Sample(s_testFrames)) {
+			plog::Info("overlay: test pattern frame #%u drawn (%.0f x %.0f)", s_testFrames.load(), w, h);
+		}
 	}
 	if (!g_visible || !g_ready) {
 		return;
@@ -517,6 +543,11 @@ void RequestToggle() noexcept {
 	const bool now = !g_visible.load();
 	g_visible = now;
 	plog::Info("display %s", now ? "shown" : "hidden");
+}
+
+void RequestTest() noexcept {
+	g_testUntilMs = NowMs() + 15000;
+	plog::Info("overlay: test pattern for 15 s (frames so far %llu)", static_cast<unsigned long long>(g_frames.load()));
 }
 
 void RequestReload() noexcept {

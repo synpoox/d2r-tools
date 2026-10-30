@@ -118,6 +118,11 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		command->plugin->WriteConsoleMessage("better-xp-bar: config reload queued (see the plugin log)");
 		return D2RL::ConsoleCommandResult::Handled;
 	}
+	if (std::strncmp(args, "test", 4) == 0) {
+		display::RequestTest();
+		command->plugin->WriteConsoleMessage("better-xp-bar: drawing a magenta test rectangle in the screen centre for 15 s");
+		return D2RL::ConsoleCommandResult::Handled;
+	}
 	if (std::strncmp(args, "show", 4) == 0) {
 		display::Lines(line, sizeof(line));
 		command->plugin->WriteConsoleMessage(line);
@@ -125,7 +130,7 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		return D2RL::ConsoleCommandResult::Handled;
 	}
 	if (args[0] != '\0' && std::strncmp(args, "status", 6) != 0) {
-		command->plugin->WriteConsoleMessage("usage: better-xp-bar [status|show|reset|toggle|reload]");
+		command->plugin->WriteConsoleMessage("usage: better-xp-bar [status|show|reset|toggle|reload|test]");
 		return D2RL::ConsoleCommandResult::InvalidArguments;
 	}
 	char image[200];
@@ -188,7 +193,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	display::LoadConfig(context);
 	InstallParts(context, imageOk);
 	auto cmd = D2RL::MakeConsoleCommand(PluginName, StatusCommand, "Better XP Bar: status, show, reset, toggle, reload.");
-	cmd.usage = "better-xp-bar [status|show|reset|toggle|reload]";
+	cmd.usage = "better-xp-bar [status|show|reset|toggle|reload|test]";
 	return context->RegisterConsoleCommand(cmd);
 }
 
