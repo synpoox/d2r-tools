@@ -141,12 +141,9 @@ auto Controller::OnQueuedCallback(const MenuState& menu, const Handlers& handler
 	return action;
 }
 
-auto DecidePart(bool offByFile, bool needsImage, bool imageOk) noexcept -> PartDecision {
+auto DecidePart(bool offByFile) noexcept -> PartDecision {
 	if (offByFile) {
 		return PartDecision::OffByFile;
-	}
-	if (needsImage && !imageOk) {
-		return PartDecision::OffImage;
 	}
 	return PartDecision::Install;
 }

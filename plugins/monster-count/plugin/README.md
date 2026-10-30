@@ -4,21 +4,18 @@ A minimal global D2RLoader plugin for Diablo II: Resurrected. Copy this folder i
 it. It is the part of an overhaul that data files alone cannot do: new skill functions, formula codes, hooks on
 engine functions.
 
-Target: **D2R 3.3.0 build 93847 + D2RLoader 1.3.1, PluginSDK 0.3.0.** Every address in `src/d2r.h` belongs to that
-one game image. The plugin checks the image's PE timestamp (`0x6ab3782c`). On any other image it loads, logs
-"not the expected game image: every engine part stays off", and changes nothing.
+Tested on **D2R 3.3 + D2RLoader 1.3.1, PluginSDK 0.3.0.** Every address in `src/d2r.h` comes from that game image. On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 | File | What it is |
 | --- | --- |
 | `src/plugin.cpp` | Entry point: `PluginInfo`, the parts table (`g_parts`), the status console command |
 | `src/log.*` | Log helper (`plog::Info/Warn/Error`, prefixed with the plugin name; `plog::Sample` for hot paths) |
-| `src/build_guard.h` | Image check: PE TimeDateStamp of the running game against `ExpectedImage` |
 | `src/off_switch.*` | Reads `<name>-off.txt`: part words to leave out |
 | `src/env_guard.*` | Environment guard: another mod running, this DLL outside its mod folder, a second copy, other plugins |
 | `src/sound_guard.*` | Sound-table guard: catches sound ids past the loaded table (the first-start cache) and asks for a restart |
 | `src/item_type_check.*`, `src/item_type_ids.h` | Item type id self-check: the ids D2R.exe tests by number, against the mod's |
 | `tools/item_type_ids.py` | Checks a built itemtypes.txt and writes `item_type_ids.h` |
-| `src/d2r.h`, `src/d2r.cpp` | Address registry for build 93847: RVAs, typed function pointers (`d2r::api`), record offsets, `MissileParams`/`SummonParams`, `At<T>`, D2 RNG |
+| `src/d2r.h`, `src/d2r.cpp` | Address registry for image `0x6ab3782c`: RVAs, typed function pointers (`d2r::api`), record offsets, `MissileParams`/`SummonParams`, `At<T>`, D2 RNG |
 | `src/skill_functions.*` | Example of a new server skill function (`srvdofunc` 172, a missile fan) |
 | `src/hook_example.*` | Example inline hook (Whirlwind's hit delay `0x56ac00`, passed through and counted) |
 | `CMakeLists.txt`, `build.ps1` | Build |
@@ -108,7 +105,6 @@ command. Keep them in every release: they turn "it crashes" into one log line.
 
 | Guard | What it catches | What it does |
 | --- | --- | --- |
-| Build (`build_guard.h`) | Another D2R or D2RLoader image (TimeDateStamp is not `0x6ab3782c`) | Every engine part stays off. Logs the stamp and D2R's version string |
 | Environment (`env_guard.*`) | D2RLoader runs another mod (`default_mod`), this DLL sits outside `mods\<Mod>`, a second copy is loaded, other plugins | Warns at load and again 15 s later. Lists other plugins. It does not try to work with them |
 | Sound table (`sound_guard.*`) | The first start after an install builds D2R's cache and loads only D2R's sounds; the mod's sound ids are past the table | Makes the read return "no sound" instead of crashing; logs once and asks for a restart |
 | Item type ids (`item_type_check.*`) | The mod's itemtypes.txt moved a row D2R.exe tests by number (for example rune 75) | Logs each mismatch. Fix the data |
@@ -195,8 +191,8 @@ Plan it with [knowledge/new-game-systems.md](../knowledge/new-game-systems.md) b
 
 ## Rules
 
-- Every RVA, offset and entry byte sequence is for build 93847 only. After a game or D2RLoader update, dump the
-  image again, re-find each address, and only then change `ExpectedImage` in `build_guard.h`.
+- Every RVA, offset and entry byte sequence is for image `0x6ab3782c` only. After a game or D2RLoader update, dump the
+  image again, re-find each address.
 - Inline hooks need whole instructions, at least 14 bytes, with REX prefixes included. Hook function types must be
   `noexcept`.
 - Check for an existing D2RLoader hook (`jmp [rip+x]` at the entry) before you patch any engine function.

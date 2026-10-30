@@ -368,11 +368,10 @@ auto Steps(FakeEngine& e) -> InstallSteps {
 
 void TestInstall() {
 	// Unsupported build: the engine part is never installed; the environment guard still is.
-	CHECK(DecidePart(false, true, false) == PartDecision::OffImage);
-	CHECK(DecidePart(false, false, false) == PartDecision::Install);
-	CHECK(DecidePart(false, true, true) == PartDecision::Install);
-	CHECK(DecidePart(true, true, true) == PartDecision::OffByFile);  // "quicknpc" in quick-npc-off.txt
-	CHECK(DecidePart(true, false, false) == PartDecision::OffByFile);
+	CHECK(DecidePart(false) == PartDecision::Install);
+	CHECK(DecidePart(false) == PartDecision::Install);
+	CHECK(DecidePart(true) == PartDecision::OffByFile);  // "quicknpc" in quick-npc-off.txt
+	CHECK(DecidePart(true) == PartDecision::OffByFile);
 
 	char report[300];
 	{

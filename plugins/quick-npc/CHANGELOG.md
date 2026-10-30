@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- No version gate: the plugin attempts to load, hook and run on any D2R or D2RLoader version. It declares PluginSDK ABI 4
+  and reads optional context through the SDK getters. On game code that has moved it can crash; hooks whose entry bytes
+  differ are still refused.
+- Any crash while the plugin is loaded is written to the plugin's log with the fault, its cause and whether the
+  plugin was involved.
+
 ## 1.0.0 - 2026-10-30
 
 First public release, for Diablo II: Resurrected 3.3 under D2RLoader 1.3.1.
@@ -13,5 +21,5 @@ First public release, for Diablo II: Resurrected 3.3 under D2RLoader 1.3.1.
 - A global plugin: works with every mod and the unmodded game. Settings are in `d2rloader\config\quick-npc.toml`
   (hotkey, per-option switches, timeout); console command `quick-npc` shows status and `quick-npc on|off|reload`.
 - D2RLoader's plugin list shows the name Quick NPC, the author Synpoo and a description that covers every NPC option.
-- Built for D2R 3.3.0 (Battle.net build 93847, Steam build 94995) with D2RLoader 1.3.1. On any other game or
+- Built for D2R 3.3 (Battle.net or Steam) with D2RLoader 1.3.1. On any other game image or
   D2RLoader version it logs that and changes nothing.

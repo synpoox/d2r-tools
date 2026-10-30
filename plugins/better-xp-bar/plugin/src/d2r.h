@@ -1,7 +1,6 @@
 // Game image interface for Better XP Bar: ONLY the addresses this plugin uses, each with its evidence.
 //
-// EVERYTHING HERE IS FOR ONE IMAGE: D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (TimeDateStamp 0x6ab3782c), checked by
-// build_guard.h before any of it is used, and every function's first bytes are checked again live (VerifyImage).
+// EVERYTHING HERE IS FOR ONE IMAGE: D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (TimeDateStamp 0x6ab3782c); every function's first bytes are checked again live (VerifyImage).
 // Evidence: docs/reverse-engineering/better-xp-bar.md (dump analysis) and the d2rAI-toolkit registry. Nothing is guessed.
 //
 // NOT RUN IN GAME YET. Every function in xp_reader.cpp that touches these is marked "needs live check".

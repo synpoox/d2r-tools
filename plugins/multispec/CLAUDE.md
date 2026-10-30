@@ -33,7 +33,7 @@ work; don't copy it here, link to it.
 | `src/spec_engine.*` | `specswap` | The real engine: D2R's respec and spend-a-point functions, player lookup, town/alive checks |
 | `src/spec_store.*` | `specstore` | `<name>.multispec` next to the save; atomic write, `.bak`, quarantine of bad files |
 | `src/d2r.*` | `specswap` | RVAs, types, entry-byte checks (build 93847) |
-| `src/env_guard.*`, `build_guard.h`, `off_switch.*`, `log.*` | `envguard` | From the toolkit's `plugin-template` |
+| `src/env_guard.*`, `off_switch.*`, `log.*` | `envguard` | From the toolkit's `plugin-template` |
 | (command) | `speccmd` | The `spec` console command |
 
 Off-switch: `multispec-off.txt` next to the DLL, words separated by spaces: `envguard specstore specswap speccmd`.
@@ -43,10 +43,7 @@ Status: the `multispec` console command (version, image check, every part, count
 
 - **Any new engine address goes in `docs/reverse-engineering/multispec.md` (repo root) with the build number and its evidence** (signature, entry bytes, how
   it was verified: static or in game), then into `src/d2r.h` / `src/d2r.cpp`. Run `tools/check_entries.py` on the dump.
-- Target build: **D2R 3.3 build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1**. On a mismatch the plugin turns
-  every engine part off by itself. To support a new image: re-dump (toolkit `tools/dump_image.py`), re-find every
-  function in `docs/reverse-engineering/multispec.md` (repo root), record them there, run
-  `tools/check_entries.py`, and only then change `ExpectedImage` in `src/build_guard.h`.
+- Tested on **D2R 3.3, image stamp `0x6ab3782c`, D2RLoader 1.3.1**. Other versions are attempted, not tested: `CheckEntries` still refuses a function whose entry bytes differ, and `crash_guard.h` logs any fault.
 - MultiSpec never writes `.d2s` / `.d2rl` files, never hooks a function, and never writes a skill level or `newskills`
   directly: only D2R's own respec and spend functions change skills.
 - Keep the portable core free of Windows and game calls, and add a unit test with every change to it.

@@ -7,13 +7,12 @@
 // See wp_scroll.cpp.
 //
 // Guards (from d2rAI-toolkit's template; they change nothing in the game, they say what runs):
-//  - build_guard.h: the game image, and whether it is the verified one (reported only: see build_guard.h);
 //  - env_guard.h: a second loaded copy of this plugin, and the other plugins, at load and again 15 s later.
 //
 // Console command "scrollable-waypoints" prints the live state (image, guards, window, panel, tab bar, counters).
 #include <D2RLPlugin/api.h>
 
-#include "build_guard.h"
+#include "crash_guard.h"
 #include "env_guard.h"
 #include "log.h"
 #include "wp_scroll.h"
@@ -26,7 +25,6 @@ constexpr const char* PluginName = "scrollable-waypoints";
 constexpr const char* PluginVersion = "1.0.0";  // PluginInfo::version too; CHANGELOG.md
 
 const D2RL::PluginContext* g_context = nullptr;
-uint32_t g_stamp = 0;
 
 constexpr D2RL::PluginInfo Info {
 	.infoSize    = D2RL::PluginInfoSize,
@@ -47,7 +45,7 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 		return D2RL::ConsoleCommandResult::Failed;
 	}
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, g_context != nullptr ? g_context->buildVersion : nullptr);
+	crash_guard::Describe(image, sizeof(image), g_context != nullptr ? D2RL::GetBuildVersion(g_context) : nullptr);
 	char state[700];
 	ScrollableWaypointsStatus(state, sizeof(state));
 	char line[1100];
@@ -76,13 +74,10 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	g_context = context;
 	plog::Init(context, PluginName);
-	g_stamp = build_guard::ImageStamp(context->exeBase);
+	crash_guard::Install(PluginVersion, context->exeBase);
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "none", image);
-	if (!build_guard::Matches(g_stamp)) {
-		plog::Warn("untested game image: if anything goes wrong, report it with this log");
-	}
 	StartEnvironmentGuard(context, "");  // global plugin: no mod folder to check; catches a second copy, lists others
 	char report[300];
 	(void)InstallScrollableWaypoints(context, report, sizeof(report));
@@ -92,6 +87,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	crash_guard::Remove();
 	UninstallScrollableWaypoints();
 	g_context = nullptr;
 }

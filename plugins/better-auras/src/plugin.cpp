@@ -9,8 +9,6 @@
 //    it lives in <game>/d2rloader/plugins/ and runs with every mod; D2RLoader keeps its config in
 //    <game>/d2rloader/config/better-auras.toml (written with the defaults on the first start);
 //  - log.h: one log line for the plugin (version, D2R version, image stamp, mod, this DLL's path) and one per part;
-//  - build_guard.h: checks the game image (PE TimeDateStamp). Every RVA belongs to one image; on any other image the
-//    engine parts stay off and say so, so a D2R/D2RLoader update cannot make the plugin patch random code;
 //  - off_switch.h: reads "<plugin>-off.txt" next to the config: words naming parts to leave out (bisecting a crash);
 //  - env_guard.h: warns when this DLL is loaded from a mod's folder instead of the game-wide one, or when a second
 //    copy of it is loaded; names the other plugins (no game address: runs even on a wrong image);
@@ -22,7 +20,7 @@
 #include <D2RLPlugin/api.h>
 
 #include "auras.h"
-#include "build_guard.h"
+#include "crash_guard.h"
 #include "config.h"
 #include "d2r.h"
 #include "env_guard.h"
@@ -57,7 +55,6 @@ constexpr const char* PluginName = MODKIT_PLUGIN_NAME;
 constexpr const char* PluginVersion = MODKIT_PLUGIN_VERSION;
 
 const D2RL::PluginContext* g_context = nullptr;
-uint32_t g_stamp = 0;
 char g_selfPath[520] = "?";
 
 constexpr D2RL::PluginInfo Info {
@@ -76,7 +73,7 @@ using InstallFn = void (*)(const D2RL::PluginContext* context, char* report, siz
 
 struct Part {
 	const char* word;   // off-file word and status label
-	bool engine;        // uses game addresses: installed only on the expected image
+	bool engine;        // uses game addresses
 	InstallFn install;
 	char report[512];
 };
@@ -121,12 +118,10 @@ Part g_parts[] = {
 	{"decouple", true, InstallFeature<auras::Decouple>, ""},
 };
 
-void InstallParts(const D2RL::PluginContext* context, bool imageOk) noexcept {
+void InstallParts(const D2RL::PluginContext* context) noexcept {
 	for (Part& p : g_parts) {
 		if (off_switch::Off(p.word)) {
 			std::snprintf(p.report, sizeof(p.report), "off: left out by %s-off.txt", PluginName);
-		} else if (p.engine && !imageOk) {
-			std::snprintf(p.report, sizeof(p.report), "off: game image differs from the one this plugin was built for");
 		} else {
 			p.install(context, p.report, sizeof(p.report));
 		}
@@ -144,7 +139,7 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 	}
 	char line[1100];
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(g_context));
 	std::snprintf(line, sizeof(line), "%s %s | %s | mod %s | file %s", PluginName, PluginVersion, image,
 	              g_context->activeMod != nullptr ? g_context->activeMod : "?", g_selfPath);
 	command->plugin->WriteConsoleMessage(line);
@@ -189,27 +184,23 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	g_context = context;
 	plog::Init(context, PluginName);
-	g_stamp = build_guard::ImageStamp(context->exeBase);
-	const bool imageOk = build_guard::Matches(g_stamp);
-	if (context->pluginPath != nullptr) {
-		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", context->pluginPath);
+	crash_guard::Install(PluginVersion, context->exeBase);
+	if (D2RL::GetPluginPath(context) != nullptr) {
+		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", D2RL::GetPluginPath(context));
 	}
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s, file %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "?", image, g_selfPath);
 	off_switch::Read(context->pluginConfigPath);
 	if (off_switch::Words()[0] != '\0') {
 		plog::Info("%s-off.txt leaves out: %s", PluginName, off_switch::Words());
 	}
-	if (imageOk) {
-		d2r::Bind(context->exeBase);
-	} else {
-		plog::Warn("not the expected game image: every engine part stays off");
-	}
-	InstallParts(context, imageOk);
+	d2r::Bind(context->exeBase);
+	InstallParts(context);
 	return context->RegisterConsoleCommand(PluginName, StatusCommand, "Better Auras: every part (toggle, drain, reserve, decouple), the config and the active auras.");
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	crash_guard::Remove();
 	g_context = nullptr;
 }

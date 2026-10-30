@@ -170,9 +170,9 @@ private:
 };
 
 // --- Install ----------------------------------------------------------------------------------------------------------
-// Template parts: left out by the off-file, left out on another game image, or installed.
-enum class PartDecision { Install, OffByFile, OffImage };
-auto DecidePart(bool offByFile, bool needsImage, bool imageOk) noexcept -> PartDecision;
+// Template parts: left out by the off-file, or installed.
+enum class PartDecision { Install, OffByFile };
+auto DecidePart(bool offByFile) noexcept -> PartDecision;
 
 // The feature's install steps, in order, with the engine work behind callbacks (the tests pass fakes).
 // Fails closed: the first failing step stops the install and nothing is enabled.

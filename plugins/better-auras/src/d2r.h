@@ -4,7 +4,7 @@
 // TimeDateStamp 0x6ab3782c, checked by plugin.cpp before any of it is used). The values come from the Ghidra
 // analysis of the dumped image (tools/dump_image.py, tools/ghidra_analyze.ps1) and were used in game by a
 // large overhaul port. A different D2R patch or D2RLoader release moves them: re-find each one before
-// changing ExpectedImage in plugin.cpp.
+// updating the plugin.
 //
 // Calling convention: plain Windows x64 (rcx, rdx, r8, r9, then stack). Unit/Game are opaque; read fields with At<T>.
 #pragma once

@@ -12,8 +12,8 @@ A D2RLoader plugin that gives a Diablo II: Resurrected mod Path of Exile-style a
 - **Decoupled from the skill bar**: a toggled aura stays on whatever skill is on the right button. Several auras can
   run at once.
 
-Target: D2R 3.3 (engine addresses for image `0x6ab3782c`: Battle.net 93847 / Steam 94995), D2RLoader 1.3.1,
-PluginSDK 0.3.0. On any other game image the plugin installs nothing and says so.
+Tested on: D2R 3.3 (Battle.net or Steam; engine addresses from image `0x6ab3782c`), D2RLoader 1.3.1,
+PluginSDK 0.3.0. On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Install
 

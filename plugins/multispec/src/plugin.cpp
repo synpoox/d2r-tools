@@ -13,7 +13,7 @@
 // all of a swap in one callback, then the answer is printed from the UI thread.
 #include <D2RLPlugin/api.h>
 
-#include "build_guard.h"
+#include "crash_guard.h"
 #include "d2r.h"
 #include "env_guard.h"
 #include "log.h"
@@ -48,8 +48,6 @@ constexpr int32_t DefaultSpecCount = 2;
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
-uint32_t g_stamp = 0;
-bool g_imageOk = false;
 bool g_engineOk = false;  // specswap installed: image, binding and entry bytes all good
 bool g_storeOk = false;
 int32_t g_specCount = DefaultSpecCount;
@@ -306,8 +304,7 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 		return D2RL::ConsoleCommandResult::InvalidArguments;
 	}
 	if (!g_engineOk || !g_storeOk) {
-		ctx->WriteConsoleWarning(g_imageOk ? "MultiSpec is off (see the multispec command)"
-		                                   : "MultiSpec is off: this game version is not supported");
+		ctx->WriteConsoleWarning("MultiSpec is off (see the multispec command)");
 		return D2RL::ConsoleCommandResult::Failed;
 	}
 	bool expected = false;
@@ -353,8 +350,6 @@ void InstallParts(const D2RL::PluginContext* context) noexcept {
 	for (Part& p : g_parts) {
 		if (off_switch::Off(p.word)) {
 			std::snprintf(p.report, sizeof(p.report), "off: left out by %s-off.txt", PluginName);
-		} else if (p.engine && !g_imageOk) {
-			std::snprintf(p.report, sizeof(p.report), "off: game image differs from the one this plugin was built for");
 		} else {
 			p.install(context, p.report, sizeof(p.report));
 		}
@@ -371,7 +366,7 @@ auto StatusCommand(D2R::Game::Client*, const D2RL::ConsoleCommandContext* comman
 	const D2RL::PluginContext* ctx = command->plugin;
 	char line[1100];
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(g_context));
 	std::snprintf(line, sizeof(line), "%s %s | %s | mod %s | file %s", PluginName, MULTISPEC_VERSION, image,
 	              g_context->activeMod != nullptr ? g_context->activeMod : "?", g_selfPath);
 	ctx->WriteConsoleMessage(line);
@@ -423,21 +418,17 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	g_context = context;
 	plog::Init(context, PluginName);
-	g_stamp = build_guard::ImageStamp(context->exeBase);
-	g_imageOk = build_guard::Matches(g_stamp);
-	if (context->pluginPath != nullptr) {
-		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", context->pluginPath);
+	crash_guard::Install(MULTISPEC_VERSION, context->exeBase);
+	if (D2RL::GetPluginPath(context) != nullptr) {
+		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", D2RL::GetPluginPath(context));
 	}
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s, file %s)", MULTISPEC_VERSION,
 	           context->activeMod != nullptr ? context->activeMod : "?", image, g_selfPath);
 	off_switch::Read();
 	if (off_switch::Words()[0] != '\0') {
 		plog::Info("%s-off.txt leaves out: %s", PluginName, off_switch::Words());
-	}
-	if (!g_imageOk) {
-		plog::Warn("not the expected game image: every engine part stays off");
 	}
 	ReadConfig(context);
 	InstallParts(context);
@@ -445,5 +436,6 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	crash_guard::Remove();
 	g_context = nullptr;
 }
