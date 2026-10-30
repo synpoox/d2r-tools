@@ -129,3 +129,126 @@ Whole instructions, at least 14 bytes. For a byte check before calling, not for 
   `0x48fde0(0x484c90(client, 0)) == client` and unit type 0, before anything else.
 - Whether a chat line `/spec 2` reaches a registered console command.
 - Calling `0x4360f0` and `0x438670` from a plugin (outside the NPC, item and packet paths) leaves the client in sync.
+
+## Skill tree layout (Spike 1, static): build 93847
+
+Source: pristine 93847 cache (CASC), `data/global/ui/layouts/`. Not yet loaded in a game slot.
+
+| File | Size | Notes |
+|---|---|---|
+| `skillstreepanelhd.json` | 8307 B | HD, keyboard and mouse. Root `SkillsTreePanel`, rect `$RightPanelRect` (1162 x 1507, anchor `$RightPanelAnchor` 1.0 / 0.397) |
+| `controller/skillstreepanelhd.json` | 11884 B | `basedOn` the HD file, `$ConsoleCenterPanelRect`, 4 tabs, own widget positions. Out of scope (design section 11) |
+| `skillstreepanel.json` | 7757 B | Legacy (non-HD) UI |
+
+Widgets of the HD file, top to bottom (panel coordinates): `Cancel` close button (1075, 9); `Title`
+`$InGamePanelTitleRect` (91, 64, 972 x 71); `TreeBackground` `PANEL_SkillTreeBG` at (68, 145); tabs `Tab0-2`
+`activationRect` y 160-259 (x 130 / 428 / 724, 294 wide) with `TextTab0-2`; skill icons by the fields `skillRow`
+296 / 478 / 654 / 834 / 1014 / 1190 and `skillColumn` 253 / 515 / 775; `SkillCounter` (91, 1388, 972 x 60) with a
+`Tooltip`; `CounterTemplate`, `ClickCatcher`, `MainBackground`, `RightHinge` (1076, 630).
+
+Where a bar fits, by coordinates only (the sprite sizes were not read: the cache has no HD sprites):
+
+- **Bottom strip, y ~1448-1500**, below `SkillCounter`: full width (91-1063), free of every stock widget. First
+  choice: 5 slots + 2 arrows at about 100 px each fit in 972 px. The panel frame art may cover the last ~30 px.
+- Between the last skill row (1190 + icon) and `SkillCounter` (1388): about 80 px if the icons are ~110 px. Inside
+  the tree art, so a bar there sits over the background.
+- Moving `SkillCounter` up or shrinking it is possible (it is found by name; only its rect changes).
+
+SDK limit found: `registerChildLayout` takes only `StockPanel::PlayerInventory` (PluginSDK `panels.h`, 0.3.0), and a
+plugin's resources are limited to `d2rloader/<plugin-id>/` and `ui/layouts/<plugin-id>/` (SDK README, "Resources and
+Companion MPQs"). So **the plugin cannot add widgets to the skill tree or replace `skillstreepanelhd.json` itself**. MultiSpec is a
+global plugin and ships nothing through the mod, so the spec UI is a plugin panel docked to the tree's left edge
+(design section 11). The strips above are kept as layout facts only.
+
+Still to check in a game slot: design section 11, spikes 4-6 (the tree's open and close messages, a right-anchored
+plugin panel beside it, placement at other resolutions). Spike 4's probe is the `uiprobe` part (`msprobe` command,
+`plugins/multispec/src/ui_probe.*`); steps in `plugins/multispec/TESTING.md`, rows P1-P11.
+
+## Skill tree open and close messages (spike 4, in game): build 93847, D2RLoader 1.3.1
+
+One owner run, 2026-10-30, global plugin with mod Reimagined active, 9038 UI messages logged in about 90 s. Seen by a
+`UiMessageListener` (priority 1000):
+
+| Event | Messages, in order |
+|---|---|
+| Tree opens (key or HUD button) | `PanelManager` `OpenPanel` text `SkillsTreePanel` (6 opens, every one seen) |
+| Tree closes (key) | `InputMessage` `KeyDown`, `BindingDown`, then `PanelManager` `ClosePanel` `SkillsTreePanel` |
+| Tree closes (its X button) | `SkillsTreePanelMessage` `Close`, then `PanelManager` `ClosePanel` `SkillsTreePanel` |
+| Another right panel opened over it (inventory) | `PanelManager` `ClosePanel` `SkillsTreePanel`, then `OpenPanel` `PlayerInventoryExpansionLayout` |
+| Escape with panels open | One `ClosePanel` per stock panel (inventory, `DropGoldModal`, `BankExpansionLayout`, `HoradricCubeLayout`, `VendorPanelLayout`, ...) |
+| Noise | `MonsterHealth` `ClearInfo` (85%), `InputMessage` `MouseMove` / keys / mouse buttons, `ConsolePanelMessage` `SubmitInput` |
+
+So **`PanelManager:OpenPanel:SkillsTreePanel` and `PanelManager:ClosePanel:SkillsTreePanel` are the open and close
+signals**, whatever the route (key, button, X, a panel that replaces it). Match target, command and text; return
+`Continue`.
+
+- `dispatchUiAction` `PanelManager` `TogglePanel` `SkillsTreePanel` returns 0 and the listener sees it (twice per
+  dispatch) and **the tree toggles on screen** (owner), but **no `OpenPanel` / `ClosePanel` follows**. A plugin that
+  toggles the tree this way must open or close its own panel itself: the listener never hears about it.
+- `findPanel("SkillsTreePanel")` finds it **open or closed** (same rect -1394, -651, 1162 x 1507 = `$RightPanelRect`),
+  so it can't tell whether the tree is open. Only the messages can. The rect is a logged value only: nothing draws it.
+
+## Plugin panel beside the skill tree (spike 5, in game): build 93847, D2RLoader 1.3.1
+
+Run 1, 2026-10-30, test panel `multispec/ProbePanel` (`ui_probe.cpp`): root `Panel`, `anchor` `$RightPanelAnchor`,
+`rect` -1564, -651, 170 x 1507, `priority` 8500, flag `CloseOnEscape`, given with `registerResource`.
+
+- Loads and draws: `registerResource` + `registerPanel` succeed; `togglePanel` / `openPanel` / `closePanel` return 0.
+  `$` variables (`$RightPanelAnchor`, `$MediumPanelFontSize`) resolve in a plugin layout.
+- **Placement works**: the rect lines up with the tree's left edge at the owner's resolution. Widgets in it use
+  panel coordinates, as in stock layouts.
+- **Opening it doesn't close the tree, and the tree doesn't close it**: both stay open together.
+- **Docking works**: an `openPanel` / `closePanel` queued with `runOnUiThread` from the listener on `PanelManager`
+  `OpenPanel` / `ClosePanel` `SkillsTreePanel` opened and closed the strip with the tree every time (8 cycles,
+  result 0).
+- **`CloseOnEscape` takes Escape away from the tree**: Escape closed only the strip, so the tree stayed open. A docked
+  panel must not set it.
+- **Button clicks did not reach the `UiMessageListener`**: `onClickMessage` `MultiSpec:Probe:<n>` produced no
+  message with target `MultiSpec`. Run 2 checks whether a stock message from the same button works
+  (`PanelManager:ClosePanel:multispec/ProbePanel`) and logs any message naming `MultiSpec` or `Probe`.
+Run 2, 2026-10-30 (icons at x 100 of the 170 strip, no `CloseOnEscape`, a 4th icon sending a stock message):
+
+- **Flush**: the icons sit against the tree's frame (owner screenshot). Content x 100 + ~62 px sprite fills the strip.
+- **A button's own target never reaches the listener**: with every message logged, a click on icon 1
+  (`MultiSpec:Probe:1`) gave only `InputMessage` `LeftMouseButtonDown` / `Up`. The strip's `PanelManager`
+  `OpenPanel` / `ClosePanel` messages do arrive. Run 3 sends `PanelManager:OpenPanel:multispec/ProbeSwap<n>` from
+  the icons (the listener matches the text and returns `Consume`).
+Run 3, 2026-10-30 (icons 1-3 send `PanelManager:OpenPanel:multispec/ProbeSwap<n>`):
+
+- **Slot clicks work**: each icon gave one `PanelManager` `OpenPanel` with its own text, seen by the listener and
+  consumed (`Consume`); nothing opened or closed.
+- **A stock `onClickMessage` works from a plugin panel**: icon 4 (`PanelManager:ClosePanel:multispec/ProbePanel`)
+  closes the strip.
+- **Escape closes both** once the strip has no `CloseOnEscape` (tree first, the dock closes the strip).
+- **No click-through**: clicking empty strip space (full-size `ClickCatcherWidget`) moves no character, in town or in
+  the field.
+
+Result: a docked plugin panel works. Root `Panel` on `$RightPanelAnchor` at x -1394 - width, no `CloseOnEscape`,
+opened and closed from the listener on the tree's `PanelManager` messages, buttons sending `PanelManager:OpenPanel`
+with text `multispec/<name>` that the listener consumes. A button's own target (`MultiSpec:...`) is never delivered.
+## Strip placement (spike 6, in game): build 93847
+
+Owner run, 2026-10-30, test panel from spike 5 docked, a left panel open as well.
+
+- **4:3**: no overlap. The strip fits between a left panel (quest log) and the tree, with room to spare. The
+  prediction (overlap of about 80 if the UI is 2160 units tall at every size) was wrong: D2R's UI space is wider than
+  that at 4:3. So the 170-wide strip fits at every ratio tried.
+- **21:9**: D2R pulls the left and right panels in from the screen edges, and the strip moves with the tree
+  (it shares the tree's anchor).
+- Not reported: other 16:9 sizes, 16:10, legacy graphics (G), large font mode.
+- The strip has no background, so it looks like it floats; the owner wants a background that matches the panels
+  (design section 11, "Strip art").
+## Strip art (spike 8, in game): build 93847
+
+Run 1, 2026-10-30, option A (`PANEL\PANEL_BG` in the strip, `priority` -5) plus a 64 x 64 sprite built by the plugin:
+
+- **`priority` sets draw order between panels**: at -5 the strip draws under the tree (the stock tree layout sets no
+  priority; the stock help button's -1 is commented "Lower than all right panels"). The tree draws over the part of
+  the strip's image that runs under it.
+- **A plugin's own sprite works**: `registerResource` at `data/hd/global/ui/d2rloader/multispec/probeswatch.sprite`
+  (+ `.lowend.sprite`), `filename` `d2rloader\\multispec\\probeswatch` in the layout: drawn. Built in memory at load
+  (header + RGBA, version 31), no file shipped.
+- Still drawn with a left panel open too (character sheet).
+- Owner's verdict on the look: no. The X icons must be numbered slots, the strip must be only as tall as its slots,
+  the heading gold, the slots centred (or the strip narrower). Run 2 draws own art in code (`strip_art.*`) sized to
+  the slots.

@@ -1,7 +1,8 @@
-// Unit tests for the portable core (spec_model, swap). No game needed:
+// Unit tests for the portable core (spec_model, swap, strip_art). No game needed:
 //   tests/run_tests.sh            (g++ or clang++ on any system)
 //   cmake -DMULTISPEC_TESTS=ON    (builds multispec_tests next to the plugin)
 #include "../src/spec_model.h"
+#include "../src/strip_art.h"
 #include "../src/swap.h"
 
 #include <cstdio>
@@ -308,6 +309,44 @@ void TestSwap() {
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
 }
 
+void TestStripArt() {
+	namespace art = ms::art;
+	// Geometry: sockets centred in the visible wing, inside the frame, and the wing ends below the last one.
+	CHECK(art::SocketX >= art::WingFrame);
+	CHECK(art::SocketX + art::SocketSize <= art::VisibleWidth);
+	CHECK(art::SocketX - art::WingFrame == art::VisibleWidth - (art::SocketX + art::SocketSize) ||
+	      art::SocketX - art::WingFrame + 1 == art::VisibleWidth - (art::SocketX + art::SocketSize));
+	for (int32_t slots = 1; slots <= 8; ++slots) {
+		CHECK(art::WingHeight(slots) >= art::SlotY(slots - 1) + art::SocketSize + art::WingFrame);
+		CHECK(art::WingHeight(slots) < 1507);  // never taller than the tree
+	}
+	static uint8_t wing[art::SpriteBytes(art::WingWidth, art::WingHeight(3))];
+	const size_t n = art::DrawWing(3, 1, wing, sizeof(wing));
+	CHECK(n == sizeof(wing));
+	CHECK(std::memcmp(wing, "SpA1", 4) == 0 && wing[4] == 31 && wing[5] == 0);
+	uint32_t w = 0;
+	uint32_t h = 0;
+	uint32_t data = 0;
+	std::memcpy(&w, wing + 8, 4);
+	std::memcpy(&h, wing + 12, 4);
+	std::memcpy(&data, wing + 32, 4);
+	CHECK(w == static_cast<uint32_t>(art::WingWidth) && h == static_cast<uint32_t>(art::WingHeight(3)));
+	CHECK(data == w * h * 4);
+	CHECK(wing[art::SpriteHeaderSize + 3] == 255);  // opaque
+	CHECK(art::DrawWing(3, 1, wing, sizeof(wing) - 1) == 0);  // refuses a short buffer
+	CHECK(art::DrawWing(0, 1, wing, sizeof(wing)) == 0);
+	static uint8_t socket[art::SpriteBytes(art::SocketSize * 2, art::SocketSize)];
+	CHECK(art::DrawSocket(1, socket, sizeof(socket)) == sizeof(socket));
+	uint32_t frames = 0;
+	std::memcpy(&frames, socket + 20, 4);
+	CHECK(frames == 2 && socket[6] == art::SocketSize);
+	static uint8_t low[art::SpriteBytes(art::SocketSize, art::SocketSize / 2)];
+	CHECK(art::DrawSocket(2, low, sizeof(low)) == sizeof(low));
+	// Same art every time (no randomness).
+	static uint8_t again[sizeof(wing)];
+	CHECK(art::DrawWing(3, 1, again, sizeof(again)) == n && std::memcmp(wing, again, n) == 0);
+}
+
 }  // namespace
 
 int main() {
@@ -315,6 +354,7 @@ int main() {
 	TestConfigAndModinfo();
 	TestReconcile();
 	TestSwap();
+	TestStripArt();
 	std::printf("%d checks, %d failed\n", g_checks, g_failed);
 	return g_failed == 0 ? 0 : 1;
 }

@@ -1,4 +1,4 @@
-// Diagnosis switch: "<plugin>-off.txt" next to the DLL (e.g. mods\<Mod>\d2rloader\plugins\mod-core-off.txt) lists
+// Diagnosis switch: "<plugin>-off.txt" next to the DLL (e.g. <game>\d2rloader\plugins\multispec-off.txt) lists
 // the words of parts to leave out, separated by spaces, commas or lines, case-insensitive. Delete the file for normal
 // play.
 //

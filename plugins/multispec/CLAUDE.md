@@ -1,13 +1,13 @@
 # MultiSpec: instructions for Claude
 
-MultiSpec is a D2RLoader plugin for D2R 3.3 (offline): WoW-style dual spec. A character keeps N saved skill
+MultiSpec is a global D2RLoader plugin (never mod-scoped) for D2R 3.3 (offline): WoW-style dual spec. A character keeps N saved skill
 allocations ("specs", 2 by default) and loads one with the `spec N` console command, in town only.
 Design: [docs/design.md](docs/design.md). Recon: [docs/reverse-engineering/multispec-recon.md](../../docs/reverse-engineering/multispec-recon.md).
 
 ## The toolkit
 
 The toolkit lives at `../d2rAI-toolkit` (override with `$D2RAI_TOOLKIT`). **Its [CLAUDE.md](../d2rAI-toolkit/CLAUDE.md)
-rules apply here**: no game files in git, data before code, plugins tied to one image, ask before anything public,
+rules apply here**: no game files in git, data before code, ask before anything public,
 paid or destructive, never touch the owner's own install (test in game slots). Read its `knowledge/` before engine
 work; don't copy it here, link to it.
 
@@ -19,7 +19,7 @@ work; don't copy it here, link to it.
 | Windows build check on Linux | `tools/mingw_check.sh` |
 | Build the DLL (normal way) | monorepo CI (`.github/workflows/ci.yml` at the repo root, `tools\build.ps1 -Plugin multispec -Test`) on every push: MSVC x64 Release + unit tests; download the `multispec` artifact (DLL, sha256, default config) |
 | Build locally (Windows, MSVC; optional) | `powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin multispec -Test` from the repo root (SDK: shared `third_party/PluginSDK`) |
-| Install into a game slot (game closed) | `powershell -ExecutionPolicy Bypass -File install.ps1 -Game <slot dir> -Mod <ModFolder>` |
+| Install into a game slot (game closed) | `powershell -ExecutionPolicy Bypass -File install.ps1 -Game <slot dir>` (global: `<slot>\d2rloader\plugins`) |
 | In-game checks (Phase 3) | toolkit `testing/` game slots: see [TESTING.md](TESTING.md) |
 | Entry bytes vs a new dump | `python tools/check_entries.py <dump.exe>` |
 
@@ -35,6 +35,8 @@ work; don't copy it here, link to it.
 | `src/d2r.*` | `specswap` | RVAs, types, entry-byte checks (build 93847) |
 | `src/env_guard.*`, `off_switch.*`, `log.*` | `envguard` | From the toolkit's `plugin-template` |
 | (command) | `speccmd` | The `spec` console command |
+| `src/strip_art.*` | | Portable: the spec strip's sprites (wing, sockets) drawn in code; geometry constants (tested in `tests/`) |
+| `src/ui_probe.*` | `uiprobe` | Spike 4 diagnosis: `msprobe` logs UI messages, dispatches the tree toggle, finds the tree panel |
 
 Off-switch: `multispec-off.txt` next to the DLL, words separated by spaces: `envguard specstore specswap speccmd`.
 Status: the `multispec` console command (version, image check, every part, counters, last error).

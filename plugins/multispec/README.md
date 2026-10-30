@@ -27,5 +27,6 @@ Your active spec is in your character's save as always; MultiSpec never edits sa
 
 Every push is built by the monorepo's GitHub Actions `ci` workflow: open the run in the Actions tab and download the `multispec`
 artifact (`multispec.dll`, its sha256, the default `multispec.toml`). Copy the DLL to
-`<game slot>\mods\<Mod>\d2rloader\plugins\` with the game closed (or use `install.ps1 -Dll <downloaded dll>`).
+`<game slot>\d2rloader\plugins\` with the game closed (or use `install.ps1 -Dll <downloaded dll>`). MultiSpec is a global
+plugin: it works with any mod, or none; don't put it in a mod's `d2rloader\plugins` folder.
 Local builds and other commands: [CLAUDE.md](CLAUDE.md#commands). Built on the plugin template of d2rAI-toolkit (MIT).

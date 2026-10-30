@@ -7,6 +7,7 @@
 //   specswap   every engine call: reading the character, reconciling the file, swapping. Needs
 //              the entry bytes of every function it calls (d2r.cpp)
 //   speccmd    the "spec" console command (spec, spec N)
+//   uiprobe    spike 4 diagnosis: the msprobe command logs UI messages (ui_probe.h); idle until switched on
 // The status command "multispec" is always registered.
 //
 // Threads: the console callback only queues work. The work runs on D2R's game thread (ThreadService::runOnGameThread),
@@ -22,6 +23,7 @@
 #include "spec_model.h"
 #include "spec_store.h"
 #include "swap.h"
+#include "ui_probe.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -61,7 +63,7 @@ constexpr D2RL::PluginInfo Info {
 	.version     = MULTISPEC_VERSION,
 	.author      = "Synpoo",
 	.description = "Saved skill allocations (specs) per character, swapped with the spec command in town.",
-	.flags       = D2RL::PluginFlags::Shared,
+	.flags       = D2RL::PluginFlags::Shared,  // global: <game>\d2rloader\plugins, works with any mod or none
 	.reserved    = {},
 };
 
@@ -109,6 +111,7 @@ Part g_parts[] = {
 	{"specstore", InstallStore, ""},
 	{"specswap", InstallSwap, ""},
 	{"speccmd", InstallCommand, ""},
+	{"uiprobe", ms::InstallUiProbe, ""},
 };
 
 // --- One request at a time: console -> game thread -> UI thread -------------------------------------------------

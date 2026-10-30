@@ -5,7 +5,7 @@ set -e
 root=$(cd "$(dirname "$0")/.." && pwd)
 out="${TMPDIR:-/tmp}/multispec_tests"
 cxx="${CXX:-g++}"
-src="$root/tests/test_spec.cpp $root/src/spec_model.cpp $root/src/swap.cpp"
+src="$root/tests/test_spec.cpp $root/src/spec_model.cpp $root/src/swap.cpp $root/src/strip_art.cpp"
 flags="-std=c++20 -O1 -Wall -Wextra -Werror"
 # shellcheck disable=SC2086
 if "$cxx" $flags -fsanitize=address,undefined $src -o "$out" 2>/dev/null; then

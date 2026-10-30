@@ -1,6 +1,6 @@
 // Log helper: one prefix, printf-style formatting, and a "1st / 100th / 10,000th" filter for repeated events.
 //
-// D2RLoader writes these lines to the plugin's own log (<game>\mods\<Mod>\d2rloader\logs\, context->pluginLogPath).
+// D2RLoader writes these lines to the plugin's own log (context->pluginLogPath; for this global plugin expected under <game>\d2rloader\logs\).
 // A player's log is often all you get after a crash, so log at load: version, D2R version, image stamp, mod, this
 // DLL's path, one line per part, the off-switch words, the other plugins. Before a risky action, say what is about to
 // happen; a log that ends there tells you what was running.
