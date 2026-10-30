@@ -1,0 +1,28 @@
+name: release
+# Push a plugin-scoped tag, e.g. better-auras/v0.2.0
+on:
+  push:
+    tags: ['*/v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build and publish
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $plugin, $version = $env:TAG -split '/', 2
+          if (-not (Test-Path "plugins/$plugin")) { throw "Unknown plugin in tag: $env:TAG" }
+          ./tools/build.ps1 -Plugin $plugin
+          $zip = "$plugin-$version.zip"
+          Compress-Archive -Path "dist/$plugin/*" -DestinationPath $zip
+          gh release create $env:TAG $zip --title "$plugin $version" --generate-notes
