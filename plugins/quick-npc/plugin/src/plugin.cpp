@@ -46,10 +46,10 @@ constexpr D2RL::PluginInfo Info {
 	.infoSize    = D2RL::PluginInfoSize,
 	.abiVersion  = D2RL_PLUGIN_ABI_VERSION,
 	.id          = MODKIT_PLUGIN_NAME,
-	.name        = MODKIT_PLUGIN_NAME,
+	.name        = "Quick NPC",
 	.version     = MODKIT_PLUGIN_VERSION,
-	.author      = "quick-npc",
-	.description = "Hold Left Ctrl (configurable) and left-click a vendor to go straight to trading.",
+	.author      = "Synpoo",
+	.description = "Hold a hotkey and left-click an NPC to skip its dialog: trade, identify, resurrect or travel.",
 	.flags       = D2RL::PluginFlags::Client | D2RL::PluginFlags::NativeHooks,
 };
 

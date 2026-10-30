@@ -20,6 +20,8 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 
 ## Working
 
+- Every plugin's `PluginInfo` (`plugin.cpp`) has `.author = "Synpoo"` and a readable `.name` ("Quick NPC", not the
+  id `quick-npc`); `.description` says what the plugin does in one sentence.
 - Change only the plugin you were asked about; keep fixes minimal and mechanical unless asked for more. Match the
   surrounding code's style, naming and comment density.
 - Build and test with `tools\build.ps1 -Plugin <name> -Test`; build the others too after touching shared files.

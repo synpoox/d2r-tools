@@ -60,7 +60,7 @@ constexpr D2RL::PluginInfo Info {
 	.id          = MODKIT_PLUGIN_NAME,
 	.name        = MODKIT_PLUGIN_NAME,
 	.version     = MODKIT_PLUGIN_VERSION,
-	.author      = "d2r-modkit",
+	.author      = "Synpoo",
 	.description = "Engine changes for this mod (skill functions, hooks, guards).",
 	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::ModScopedOnly | D2RL::PluginFlags::NativeHooks,
 };

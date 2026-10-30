@@ -49,7 +49,7 @@ constexpr D2RL::PluginInfo Info {
 	.id          = BXB_PLUGIN_NAME,
 	.name        = "Better XP Bar",
 	.version     = BXB_PLUGIN_VERSION,
-	.author      = "better-xp-bar contributors",
+	.author      = "Synpoo",
 	.description = "XP display: level progress, session XP, XP/hour and time to next level.",
 	.flags       = D2RL::PluginFlags::Client,
 };

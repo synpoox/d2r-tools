@@ -61,7 +61,7 @@ constexpr D2RL::PluginInfo Info {
 	.id          = "multispec",
 	.name        = "MultiSpec",
 	.version     = MULTISPEC_VERSION,
-	.author      = "multispec",
+	.author      = "Synpoo",
 	.description = "Saved skill allocations (specs) per character, swapped with the spec command in town.",
 	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::ModScopedOnly,
 	.reserved    = {},

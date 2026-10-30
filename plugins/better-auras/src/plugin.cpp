@@ -66,7 +66,7 @@ constexpr D2RL::PluginInfo Info {
 	.id          = MODKIT_PLUGIN_NAME,
 	.name        = MODKIT_PLUGIN_NAME,
 	.version     = MODKIT_PLUGIN_VERSION,
-	.author      = "d2r-modkit",
+	.author      = "Synpoo",
 	.description = "Toggled auras with mana/life drain and reservation, independent of the skill bar.",
 	.flags       = D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
 };
