@@ -22,7 +22,7 @@ endif()
 
 set(BXB_PLUGIN_NAME "better-xp-bar" CACHE STRING "Plugin id, DLL name, console command and <name>-off.txt prefix")
 set(BXB_PLUGIN_VERSION "0.1.0" CACHE STRING "PluginInfo::version")
-set(BXB_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
+set(BXB_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
 add_subdirectory(core)
 
