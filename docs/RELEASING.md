@@ -1,6 +1,6 @@
 # Releasing
 
-1. In `plugins/<name>/`, move `CHANGELOG.md` entries from `Unreleased` to a new `X.Y.Z` heading.
+1. In `plugins/<name>/`, move `CHANGELOG.md` entries from `Unreleased` to a new `
 2. Bump `MODKIT_PLUGIN_VERSION` in `plugins/<name>/CMakeLists.txt` (shared plugins must match in multiplayer).
 3. Commit to `main`, then tag and push:
 

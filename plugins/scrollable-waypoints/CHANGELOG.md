@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0
+## 1.0.0 - 2026-10-29
 
 First public release, for Diablo II: Resurrected 3.3 under D2RLoader 1.3.1.
 

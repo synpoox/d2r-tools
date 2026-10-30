@@ -1,43 +1,65 @@
 # d2r-tools
 
-Monorepo for my D2RLoader plugins for Diablo II: Resurrected.
+Quality-of-life plugins for Diablo II: Resurrected, built on [D2RLoader](https://github.com/D2RLoader) and its
+[PluginSDK](https://github.com/D2RLoader/PluginSDK). Each plugin lives in `plugins/<name>/` and builds on its own.
 
 ## Plugins
 
-| Plugin | Notes |
-|---|---|
-| [better-auras](plugins/better-auras) | [CHANGELOG](plugins/better-auras/CHANGELOG.md) |
-| [multispec](plugins/multispec) | [CHANGELOG](plugins/multispec/CHANGELOG.md) |
-| [monster-count](plugins/monster-count) | [CHANGELOG](plugins/monster-count/CHANGELOG.md) |
-| [better-automap](plugins/better-automap) | [CHANGELOG](plugins/better-automap/CHANGELOG.md) |
-| [better-xp-bar](plugins/better-xp-bar) | [CHANGELOG](plugins/better-xp-bar/CHANGELOG.md) |
-| [quick-npc](plugins/quick-npc) | [CHANGELOG](plugins/quick-npc/CHANGELOG.md) |
-| [scrollable-waypoints](plugins/scrollable-waypoints) | [CHANGELOG](plugins/scrollable-waypoints/CHANGELOG.md) |
+| Plugin | Version | Description |
+|---|---|---|
+| [better-auras](plugins/better-auras) | 0.1.0 | Toggled, Path of Exile-style auras with mana/life drain and reservation. |
+| [better-automap](plugins/better-automap) | 0.1.0 | Pick the mini map's side, open the full map over it with one key, zoom it with the mouse wheel. |
+| [better-xp-bar](plugins/better-xp-bar) | 0.1.0 | HUD panel with level, XP, session gain and XP per hour. |
+| [monster-count](plugins/monster-count) | 0.1.0 (research) | Monster counter; reverse-engineering spike only, nothing hooked in game yet. |
+| [multispec](plugins/multispec) | 0.1.0 | Two (or more) saved skill allocations per character, swapped in town without a respec token. |
+| [quick-npc](plugins/quick-npc) | 1.0.0 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
+| [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.0 | Mouse wheel switches the waypoint panel's Act tabs. |
 
-## Layout
+Each plugin's README has its features, config and supported game build; its `CHANGELOG.md` lists releases.
 
-```
-plugins/<name>/     one plugin each: CMakeLists.txt, src/, tests/, README.md, CHANGELOG.md
-third_party/PluginSDK/   D2RLoader PluginSDK submodule, pinned once for every plugin
-tools/build.ps1     build one or all plugins
-docs/               RELEASING.md
-.github/workflows/  ci (build matrix), release (tag-driven)
-```
+## Installation
 
-## Build
+Requires Diablo II: Resurrected with D2RLoader 1.3.1 (offline or TCP/IP; never Battle.net online play).
+
+1. Download the plugin's `<plugin>-vX.Y.Z.zip` from [Releases](../../releases) (or a `ci` run's artifact for an
+   unreleased build) and extract the DLL.
+2. Close the game. Copy the DLL to `<game>\d2rloader\plugins\` (works with every mod), or to
+   `<game>\mods\<Mod>\d2rloader\plugins\` for one mod only. Use one location per plugin, never both.
+3. Start the game through D2RLoader. On first start the plugin writes its default config to
+   `<game>\d2rloader\config\<plugin>.toml`; edit it and restart to change settings.
+
+To update, replace the DLL. Plugins that change shared game state must be the same version on every player in a
+multiplayer game; the plugin README says which. Native addresses belong to one D2R build; on any other build a
+plugin should log that and stay off, but check its README before updating the game.
+
+## Bug Reports
+
+Open an issue on [GitHub Issues](../../issues). Please include:
+
+- the plugin and its version (see the log's `<plugin>: x.y.z loaded` line),
+- the game version and build, D2RLoader version, and the mod and mod version, if any,
+- offline, TCP/IP host or TCP/IP client,
+- steps to reproduce, what you expected and what happened,
+- the plugin log from `<game>\d2rloader\logs\` (or `mods\<Mod>\d2rloader\logs\`), with personal paths and account
+  names removed. Do not attach saves, game files or credentials.
+
+## Building
 
 Windows x64, Visual Studio 2022 (C++ workload), CMake 3.29+.
 
 ```powershell
 git clone --recurse-submodules https://github.com/synpoox/d2r-tools
 cd d2r-tools
-powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin better-auras   # or omit -Plugin for all
+powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin better-auras   # omit -Plugin for all; add -Test for tests
 ```
 
-DLLs land in `dist\<plugin>\`. Each plugin also builds standalone from its own directory (`plugins\<name>\build.ps1`).
+DLLs land in `dist\<plugin>\`. Layout, tests and release steps: [CONTRIBUTING.md](CONTRIBUTING.md),
+[docs/RELEASING.md](docs/RELEASING.md). Notes for coding agents: [AGENTS.md](AGENTS.md).
 
-## Releases
-
-Tags are plugin-scoped (`better-auras/v0.2.0`); see [docs/RELEASING.md](docs/RELEASING.md).
-
-Native offsets and signatures are specific to a D2R build; check before reuse.
+```
+plugins/<name>/          one plugin each: sources, tests, README.md, CHANGELOG.md
+third_party/PluginSDK/   D2RLoader PluginSDK submodule, pinned once for every plugin
+tools/build.ps1          build (and test) one or all plugins
+docs/                    RELEASING.md
+.github/workflows/       ci (build matrix), release (tag-driven)
+```
