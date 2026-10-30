@@ -1,20 +1,20 @@
 // Quick NPC engine part (quick_npc.h). D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (image 0x6ab3782c) only.
 //
-// D2R's own path when the player left-clicks an NPC (client side, docs/reverse-engineering.md):
+// D2R's own path when the player left-clicks an NPC (client side, checked by tools/verify_dump.py):
 //   0xfe3b0 player action (left press: flags 1|4) -> 0x102490 (D2Client Unit/Player.cpp) -> 0x101910 interact(cmd, 1, id):
 //       in range: CCMD_GET_QUEST_DIALOG (0x2f); out of range: walk, and send it on arrival (player path +0x1c8..+0x1d4)
 //   server answers SCMD_INTERACTION_ENABLE (0x28) -> 0x12b030 -> 0x10e6e0 -> 0x1141d0 opens the NPC menu
 //       (also reached from 0x10da20 after an NPC speech)
-//   the player clicks "Trade" -> the row's handler 0x112f30: closes the menu, sends CCMD_SUBSCRIBE_TO_VENDOR (0x38) mode 1
+//   the player clicks an option -> the menu (0x2bb5e1) calls the row's handler(dataFlag), e.g. Trade 0x112f30: closes the
+//       menu, sends CCMD_SUBSCRIBE_TO_VENDOR (0x38) mode 1
 //
-// This part changes none of that. It watches two points and, for one interaction the player asked for, presses
-// "Trade" for them:
-//   1. hook 0x101910 (pass-through): a left press on a monster-type unit while the hotkey (quick-npc.toml, default
-//      Left Ctrl) is held, and the unit's class
-//      offers Trade in D2R's live NPC menu table -> remember that unit. Any other interaction click forgets it.
+// This part changes none of that. It watches two points and, for one interaction the player asked for, presses one
+// menu option for them:
+//   1. hook 0x101910 (pass-through): a left press on a monster-type unit with an NPC menu row while the hotkey
+//      (quick-npc.toml, default Left Ctrl) is held -> remember that unit. Any other interaction click forgets it.
 //   2. hook 0x1141d0 (pass-through, after the original): the remembered NPC's menu is open -> queue a UI-thread
-//      callback (ThreadService), which checks the menu again and calls the Trade handler, as a click on "Trade" does.
-//   Deckard Cain (his row has the Identify handler 0x114000): the same, pressing "Identify" instead (cain_identify).
+//      callback (ThreadService), which reads the options the menu shows and calls the first enabled one, in the order
+//      Trade, Identify (Deckard Cain), Resurrect (dead mercenary), Travel, the way the menu calls it on a click.
 // Movement, range, quest and server-side vendor checks stay D2R's: nothing here sends a packet or opens a panel.
 // The decisions live in quick_npc_logic.cpp (host-tested); this file reads game memory and talks to D2RLoader.
 #include "quick_npc.h"
@@ -50,11 +50,18 @@ constexpr uint8_t OpenNpcMenuEntry[] = {0x40, 0x55, 0x57, 0x41, 0x55, 0x41, 0x57
 
 static_assert(sizeof(InteractEntry) >= 14 && sizeof(OpenNpcMenuEntry) >= 14, "inline hooks need 14 bytes of whole instructions");
 
-// The menu's "Trade" option: () -> bool. Uses the menu globals below, closes the menu, sends CCMD 0x38 mode 1.
-constexpr uint64_t RvaTradeHandler = 0x112f30;
-// Deckard Cain's "Identify" option: () -> bool. Closes the menu, works out his price (free after his quest), sends
-// CCMD_IDENTIFY_TRANSACTION (0x34) for the NPC in the menu globals; the server checks the gold.
-constexpr uint64_t RvaIdentifyHandler = 0x114000;
+// Menu options: bool(u8 dataFlag), called by the menu at 0x2bb5e1 for the NPC in the menu globals below.
+constexpr uint64_t RvaTradeHandler = 0x112f30;      // "Trade" / "Trade/Repair": CCMD_SUBSCRIBE_TO_VENDOR (0x38) mode 1
+constexpr uint64_t RvaIdentifyHandler = 0x114000;   // Cain's "Identify": CCMD_IDENTIFY_TRANSACTION (0x34), his price
+constexpr uint64_t RvaResurrectHandler = 0x113130;  // "Resurrect" (dead mercenary): CCMD_REZZ_MERCENARY_TRANSACTION (0x52)
+constexpr uint64_t RvaTravelHandler = 0x1162f0;     // "Go East/West", "Sail East/West": CCMD_TRAVEL (0x37)
+
+// The data-table selector the menu passes (0x2bb058..0x2bb088): of the local player, or of the client game when none.
+constexpr uint64_t RvaLocalPlayerId = 0x8b2d0;   // () -> u32
+constexpr uint64_t RvaClientUnit = 0x9a480;      // (u32 player id) -> unit or null
+constexpr uint64_t RvaUnitDataFlag = 0x34a0e0;   // (unit) -> u8
+constexpr uint64_t RvaClientGame = 0x76010;      // () -> client game; u8 dataFlag at +0x9cf
+constexpr int ClientGameDataFlag = 0x9cf;
 
 // NPC menu globals (.data).
 constexpr uint64_t RvaMenuRows = 0x2a48830;      // MenuRow* (vector data); u64 row count at +8
@@ -77,7 +84,11 @@ constexpr int UnitId = 0x08;
 
 using InteractFn = uint64_t (*)(void* command, int32_t unitType, uint32_t unitId) noexcept;
 using OpenNpcMenuFn = uint64_t (*)(void* npc, int32_t flag) noexcept;
-using MenuOptionFn = bool (*)() noexcept;
+using MenuOptionFn = bool (*)(uint8_t dataFlag) noexcept;
+using LocalPlayerIdFn = uint32_t (*)() noexcept;
+using ClientUnitFn = void* (*)(uint32_t id) noexcept;
+using UnitDataFlagFn = uint8_t (*)(void* unit) noexcept;
+using ClientGameFn = uint8_t* (*)() noexcept;
 
 // --- State ----------------------------------------------------------------------------------------------------------
 const D2RL::PluginContext* g_context = nullptr;
@@ -116,9 +127,41 @@ auto TradeHandler() noexcept -> uint64_t {
 	return g_base + RvaTradeHandler;
 }
 
-// The options this plugin may press; Identify only while quick-npc.toml has cain_identify = true. Caller holds g_lock.
+// The options this plugin may press, as switched in quick-npc.toml. Caller holds g_lock.
 auto HandlersLocked() noexcept -> quick_npc::Handlers {
-	return quick_npc::Handlers(TradeHandler(), g_config.cainIdentify ? g_base + RvaIdentifyHandler : 0);
+	using quick_npc::Action;
+	quick_npc::Handlers h;
+	h[Action::Trade] = g_config.trade ? TradeHandler() : 0;
+	h[Action::Identify] = g_config.cainIdentify ? g_base + RvaIdentifyHandler : 0;
+	h[Action::Resurrect] = g_config.mercenary ? g_base + RvaResurrectHandler : 0;
+	h[Action::Travel] = g_config.travel ? g_base + RvaTravelHandler : 0;
+	return h;
+}
+
+auto HandlerRva(quick_npc::Action a) noexcept -> uint64_t {
+	switch (a) {
+	case quick_npc::Action::Trade: return RvaTradeHandler;
+	case quick_npc::Action::Identify: return RvaIdentifyHandler;
+	case quick_npc::Action::Resurrect: return RvaResurrectHandler;
+	case quick_npc::Action::Travel: return RvaTravelHandler;
+	case quick_npc::Action::None: break;
+	}
+	return 0;
+}
+
+auto ActionName(quick_npc::Action a) noexcept -> const char* {
+	static const char* const names[quick_npc::ActionCount] = {"none", "trade", "identify", "resurrect", "travel"};
+	return names[static_cast<int>(a)];
+}
+
+// The u8 the menu passes to every option (0x2bb058..0x2bb088).
+auto DataFlag() noexcept -> uint8_t {
+	const uint32_t id = reinterpret_cast<LocalPlayerIdFn>(g_base + RvaLocalPlayerId)();
+	if (void* player = reinterpret_cast<ClientUnitFn>(g_base + RvaClientUnit)(id)) {
+		return reinterpret_cast<UnitDataFlagFn>(g_base + RvaUnitDataFlag)(player);
+	}
+	const uint8_t* game = reinterpret_cast<ClientGameFn>(g_base + RvaClientGame)();
+	return game != nullptr ? game[ClientGameDataFlag] : 0;
 }
 
 auto MenuRows(size_t* count) noexcept -> const quick_npc::MenuRow* {
@@ -132,19 +175,17 @@ auto MenuRows(size_t* count) noexcept -> const quick_npc::MenuRow* {
 	return rows;
 }
 
-auto ReadMenu(bool withTrade) noexcept -> quick_npc::MenuState {
+auto ReadMenu(bool withOffers, const quick_npc::Handlers& handlers) noexcept -> quick_npc::MenuState {
 	quick_npc::MenuState menu;
 	menu.npcId = At<uint32_t>(g_base + RvaMenuNpcId);
 	menu.shown = At<uint32_t>(g_base + RvaMenuHasNpc) != 0 && At<uint32_t>(g_base + RvaNpcUiState) == UiStateMenu &&
 	             At<uint64_t>(g_base + RvaMenuWidget) != 0;
-	if (withTrade && menu.shown) {
+	if (withOffers && menu.shown) {
 		size_t count = 0;
 		const quick_npc::MenuRow* rows = MenuRows(&count);
 		const int row = quick_npc::FindMenuRow(rows, count, At<uint16_t>(g_base + RvaMenuNpcClass));
 		if (row >= 0) {
-			// the live row after the menu was built: its count says which options are on screen
-			menu.offersTrade = quick_npc::RowOffersTrade(rows[row], TradeHandler());
-			menu.offersIdentify = quick_npc::RowOffersTrade(rows[row], g_base + RvaIdentifyHandler);
+			quick_npc::ReadOffers(rows[row], handlers, &menu);  // the live row after the menu was built
 		}
 	}
 	return menu;
@@ -179,7 +220,7 @@ auto InteractHook(void* command, int32_t unitType, uint32_t unitId) noexcept -> 
 		size_t rows = 0;
 		const quick_npc::MenuRow* table = MenuRows(&rows);
 		Lock lock;
-		g_controller.OnInteract(click, hotkey, table, rows, HandlersLocked(), GetTickCount64());
+		g_controller.OnInteract(click, hotkey, table, rows, GetTickCount64());
 	}
 	const InteractFn original = g_interactOriginal.load(std::memory_order_acquire);
 	return original != nullptr ? original(command, unitType, unitId) : 0;
@@ -189,22 +230,26 @@ auto InteractHook(void* command, int32_t unitType, uint32_t unitId) noexcept -> 
 void __cdecl PressTrade(const D2RL::PluginContext* context, void* userData) noexcept {
 	(void)context;
 	(void)userData;
-	const quick_npc::MenuState menu = ReadMenu(true);
+	quick_npc::Handlers handlers;
+	{
+		Lock lock;
+		handlers = HandlersLocked();
+	}
+	const quick_npc::MenuState menu = ReadMenu(true, handlers);
 	quick_npc::Action action = quick_npc::Action::None;
 	uint32_t count = 0;
 	{
 		Lock lock;
-		action = g_controller.OnQueuedCallback(menu);
-		count = action == quick_npc::Action::Trade ? g_controller.counters().traded : g_controller.counters().identified;
+		action = g_controller.OnQueuedCallback(menu, handlers);
+		count = g_controller.counters().pressed[static_cast<int>(action)];
 	}
 	if (action == quick_npc::Action::None) {
 		return;
 	}
-	const bool trade = action == quick_npc::Action::Trade;
-	const auto option = reinterpret_cast<MenuOptionFn>(g_base + (trade ? RvaTradeHandler : RvaIdentifyHandler));
-	option();  // what D2R's menu runs when the player clicks "Trade" / "Identify"
+	const auto option = reinterpret_cast<MenuOptionFn>(g_base + HandlerRva(action));
+	option(DataFlag());  // what D2R's menu runs when the player clicks that option
 	if (count == 1) {
-		plog::Info("quicknpc: first %s (npc %u)", trade ? "trade opened" : "identify with Cain", menu.npcId);
+		plog::Info("quicknpc: first %s (npc %u)", ActionName(action), menu.npcId);
 	}
 }
 
@@ -215,7 +260,7 @@ auto OpenNpcMenuHook(void* npc, int32_t flag) noexcept -> uint64_t {
 	}
 	const uint64_t result = original(npc, flag);
 	if (g_enabled.load()) {
-		const quick_npc::MenuState menu = ReadMenu(false);
+		const quick_npc::MenuState menu = ReadMenu(false, quick_npc::Handlers{});
 		bool queue = false;
 		{
 			Lock lock;
@@ -352,8 +397,9 @@ void ApplyConfig(const quick_npc::Config& config, bool setEnabled) noexcept {
 	if (setEnabled) {
 		g_enabled = config.enabled;
 	}
-	plog::Info("config: hotkey %s (vk 0x%02x), timeout %u s, cain identify %s, %s", config.hotkeyName, config.hotkeyVk,
-	           config.timeoutMs / 1000, config.cainIdentify ? "on" : "off", config.enabled ? "enabled" : "disabled");
+	plog::Info("config: hotkey %s (vk 0x%02x), timeout %u s, trade %d, cain_identify %d, mercenary %d, travel %d, %s",
+	           config.hotkeyName, config.hotkeyVk, config.timeoutMs / 1000, config.trade, config.cainIdentify, config.mercenary,
+	           config.travel, config.enabled ? "enabled" : "disabled");
 	if (const char* note = quick_npc::HotkeyNote(config.hotkeyVk)) {
 		if (quick_npc::HotkeyBlocksInteraction(config.hotkeyVk)) {
 			plog::Warn("config: %s", note);
@@ -403,11 +449,13 @@ void QuickNpcStatus(char* out, size_t size) noexcept {
 		enabled = g_controller.enabled();
 	}
 	std::snprintf(out, size,
-	              "%s, hotkey %s (vk 0x%02x), timeout %u s, cain identify %s | hotkey clicks on NPCs %u (not vendors %u, vendors %u, "
-	              "Cain %u) | queued %u, traded %u, identified %u, dropped %u, queue failed %u",
+	              "%s, hotkey %s (vk 0x%02x), timeout %u s, trade %s, cain identify %s, mercenary %s, travel %s | hotkey clicks on "
+	              "NPCs %u (no menu %u) | queued %u: traded %u, identified %u, resurrected %u, travelled %u, left open %u, "
+	              "queue failed %u",
 	              enabled ? "enabled" : "disabled (quick-npc on)", config.hotkeyName, config.hotkeyVk, config.timeoutMs / 1000,
-	              config.cainIdentify ? "on" : "off", c.npcClicks, c.notVendor, c.armed, c.armedCain, c.queued, c.traded,
-	              c.identified, c.dropped, c.queueFailed);
+	              config.trade ? "on" : "off", config.cainIdentify ? "on" : "off", config.mercenary ? "on" : "off",
+	              config.travel ? "on" : "off", c.npcClicks, c.noMenu, c.queued, c.pressed[1], c.pressed[2], c.pressed[3],
+	              c.pressed[4], c.dropped, c.queueFailed);
 }
 
 auto ReloadQuickNpcConfig() noexcept -> bool {

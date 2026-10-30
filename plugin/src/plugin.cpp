@@ -30,7 +30,7 @@
 #define MODKIT_PLUGIN_NAME "quick-npc"
 #endif
 #ifndef MODKIT_PLUGIN_VERSION
-#define MODKIT_PLUGIN_VERSION "0.3.0"
+#define MODKIT_PLUGIN_VERSION "1.0.0"
 #endif
 
 namespace {

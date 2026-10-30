@@ -346,11 +346,15 @@ auto ParseConfig(const char* toml, size_t length, Config* out, ConfigIssue* issu
 				out->hotkeyVk = vk;
 				std::snprintf(out->hotkeyName, sizeof(out->hotkeyName), "%s", v.s);
 			}
-		} else if (std::strcmp(key, "cain_identify") == 0) {
+		} else if (bool* flag = std::strcmp(key, "trade") == 0           ? &out->trade
+		                        : std::strcmp(key, "cain_identify") == 0 ? &out->cainIdentify
+		                        : std::strcmp(key, "mercenary") == 0     ? &out->mercenary
+		                        : std::strcmp(key, "travel") == 0        ? &out->travel
+		                                                                 : nullptr) {
 			if (v.kind != ValueKind::Bool) {
-				found.Add(line, "cain_identify must be true or false");
+				found.Add(line, "%s must be true or false", key);
 			} else {
-				out->cainIdentify = v.b;
+				*flag = v.b;
 			}
 		} else if (std::strcmp(key, "timeout_seconds") == 0) {
 			if (v.kind != ValueKind::Integer || v.i < MinTimeoutSeconds || v.i > MaxTimeoutSeconds) {

@@ -5,7 +5,10 @@
 //   enabled = true             # false: start switched off ("quick-npc on" in the console switches it on)
 //   hotkey = "LeftCtrl"        # hold this, then left-click a vendor
 //   timeout_seconds = 60       # how long a click waits for the vendor's dialog (walking, NPC speech)
-//   cain_identify = true       # hotkey + left-click on Deckard Cain identifies your items
+//   trade = true               # vendors: open the trade screen
+//   cain_identify = true       # Deckard Cain: identify your items
+//   mercenary = true           # hireling NPCs: resurrect a dead mercenary
+//   travel = true              # Warriv, Meshif: travel to the next act
 //
 // The parser reads the subset of TOML these settings need: [table] headers, key = value, booleans, integers, "basic"
 // and 'literal' strings, # comments. Anything it can't use is reported and leaves the default in place.
@@ -23,7 +26,10 @@ struct Config {
 	uint32_t hotkeyVk = 0xA2;  // VK_LCONTROL
 	char hotkeyName[64] = "LeftCtrl";
 	uint32_t timeoutMs = 60000;
+	bool trade = true;
 	bool cainIdentify = true;
+	bool mercenary = true;
+	bool travel = true;
 };
 
 inline constexpr uint32_t MinTimeoutSeconds = 5;

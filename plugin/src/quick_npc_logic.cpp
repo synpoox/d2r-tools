@@ -18,82 +18,61 @@ auto FindMenuRow(const MenuRow* rows, size_t rowCount, uint32_t classId) noexcep
 	return -1;
 }
 
-auto RowOffersTrade(const MenuRow& row, uint64_t tradeHandler) noexcept -> bool {
-	if (tradeHandler == 0 || row.count < 2) {
+auto RowShows(const MenuRow& row, uint64_t handler) noexcept -> bool {
+	if (handler == 0 || row.count < 2) {
 		return false;
 	}
 	const uint32_t shown = row.count - 1 < MenuMaxHandlers ? row.count - 1 : MenuMaxHandlers;
 	for (uint32_t i = 0; i < shown; ++i) {
-		if (row.handlers[i] == tradeHandler) {
+		if (row.handlers[i] == handler) {
 			return true;
 		}
 	}
 	return false;
 }
 
-auto IsVendorClass(const MenuRow* rows, size_t rowCount, uint32_t classId, uint64_t tradeHandler) noexcept -> bool {
-	const int index = FindMenuRow(rows, rowCount, classId);
-	return index >= 0 && RowOffersTrade(rows[index], tradeHandler);
+void ReadOffers(const MenuRow& row, const Handlers& handlers, MenuState* state) noexcept {
+	for (int a = 1; a < ActionCount; ++a) {
+		state->offers[a] = RowShows(row, handlers.of[a]);
+	}
 }
 
-auto RowHasHandler(const MenuRow& row, uint64_t handler) noexcept -> bool {
-	if (handler == 0) {
-		return false;
-	}
-	for (const uint64_t h : row.handlers) {
-		if (h == handler) {
-			return true;
+auto ChooseAction(const MenuState& menu, const Handlers& handlers) noexcept -> Action {
+	for (int a = 1; a < ActionCount; ++a) {
+		if (handlers.of[a] != 0 && menu.offers[a]) {
+			return static_cast<Action>(a);
 		}
 	}
-	return false;
-}
-
-auto ServiceForClass(const MenuRow* rows, size_t rowCount, uint32_t classId, const Handlers& handlers) noexcept -> Action {
-	const int index = FindMenuRow(rows, rowCount, classId);
-	if (index < 0) {
-		return Action::None;
-	}
-	if (RowOffersTrade(rows[index], handlers.trade)) {
-		return Action::Trade;
-	}
-	return RowHasHandler(rows[index], handlers.identify) ? Action::Identify : Action::None;
+	return Action::None;
 }
 
 auto IsLeftPress(uint32_t flags) noexcept -> bool {
 	return (flags & cmd::Left) != 0 && (flags & cmd::Press) != 0 && (flags & (cmd::Held | cmd::Release)) == 0;
 }
 
-auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount,
-                   const Handlers& handlers) noexcept -> Click {
+auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount) noexcept -> Click {
 	if (click.unitType != UnitTypeMonster || !IsLeftPress(click.flags) || !click.hasTarget ||
 	    click.targetType != UnitTypeMonster || click.targetId != click.unitId || !hotkeyHeld) {
 		return Click::Vanilla;
 	}
-	switch (ServiceForClass(rows, rowCount, click.targetClass, handlers)) {
-	case Action::Trade: return Click::Trade;
-	case Action::Identify: return Click::Identify;
-	case Action::None: break;
-	}
-	return Click::NotVendor;
+	return FindMenuRow(rows, rowCount, click.targetClass) >= 0 ? Click::Npc : Click::NoMenu;
 }
 
-void Interaction::Arm(uint32_t unitId, Action action, uint64_t nowMs) noexcept {
+void Interaction::Arm(uint32_t unitId, uint64_t nowMs) noexcept {
 	m_state = State::Armed;
-	m_action = action;
 	m_unit = unitId;
 	m_armedAt = nowMs;
 }
 
 void Interaction::Clear() noexcept {
 	m_state = State::Idle;
-	m_action = Action::None;
 	m_unit = 0;
 	m_armedAt = 0;
 }
 
 auto Interaction::MenuOpened(uint32_t unitId, uint64_t nowMs) noexcept -> bool {
 	if (m_state != State::Armed) {
-		return false;  // idle, or Trade is already queued for this interaction
+		return false;  // idle, or the callback is already queued for this interaction
 	}
 	if (unitId != m_unit || nowMs < m_armedAt || nowMs - m_armedAt > m_timeoutMs) {
 		Clear();  // another NPC's dialog, or a stale click: this interaction is over
@@ -103,8 +82,8 @@ auto Interaction::MenuOpened(uint32_t unitId, uint64_t nowMs) noexcept -> bool {
 	return true;
 }
 
-auto Interaction::TakeQueued(uint32_t currentNpc) noexcept -> Action {
-	const Action go = m_state == State::Queued && currentNpc == m_unit ? m_action : Action::None;
+auto Interaction::TakeQueued(uint32_t currentNpc) noexcept -> bool {
+	const bool go = m_state == State::Queued && currentNpc == m_unit;
 	if (m_state == State::Queued) {
 		Clear();
 	}
@@ -117,24 +96,17 @@ void Controller::SetEnabled(bool enabled) noexcept {
 }
 
 void Controller::OnInteract(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount,
-                            const Handlers& handlers, uint64_t nowMs) noexcept {
+                            uint64_t nowMs) noexcept {
 	if (!m_enabled) {
 		return;
 	}
-	switch (ClassifyClick(click, hotkeyHeld, rows, rowCount, handlers)) {
-	case Click::Trade:
+	switch (ClassifyClick(click, hotkeyHeld, rows, rowCount)) {
+	case Click::Npc:
 		++m_counters.npcClicks;
-		++m_counters.armed;
-		m_interaction.Arm(click.unitId, Action::Trade, nowMs);
+		m_interaction.Arm(click.unitId, nowMs);
 		break;
-	case Click::Identify:
-		++m_counters.npcClicks;
-		++m_counters.armedCain;
-		m_interaction.Arm(click.unitId, Action::Identify, nowMs);
-		break;
-	case Click::NotVendor:
-		++m_counters.npcClicks;
-		++m_counters.notVendor;
+	case Click::NoMenu:
+		++m_counters.noMenu;
 		m_interaction.Clear();
 		break;
 	case Click::Vanilla:
@@ -156,17 +128,16 @@ void Controller::OnQueueFailed() noexcept {
 	m_interaction.Clear();
 }
 
-auto Controller::OnQueuedCallback(const MenuState& menu) noexcept -> Action {
-	const Action action = m_interaction.TakeQueued(menu.npcId);
-	if (action == Action::None) {
+auto Controller::OnQueuedCallback(const MenuState& menu, const Handlers& handlers) noexcept -> Action {
+	if (!m_interaction.TakeQueued(menu.npcId)) {
 		return Action::None;  // switched off, another click, or already done
 	}
-	const bool offered = action == Action::Trade ? menu.offersTrade : menu.offersIdentify;
-	if (!m_enabled || !menu.shown || !offered) {
-		++m_counters.dropped;  // the menu changed, or Cain has nothing to identify: leave D2R's menu open
+	const Action action = m_enabled && menu.shown ? ChooseAction(menu, handlers) : Action::None;
+	if (action == Action::None) {
+		++m_counters.dropped;  // a quest NPC, nothing to identify, an option switched off: D2R's menu stays
 		return Action::None;
 	}
-	++(action == Action::Trade ? m_counters.traded : m_counters.identified);
+	++m_counters.pressed[static_cast<int>(action)];
 	return action;
 }
 

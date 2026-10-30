@@ -1,140 +1,65 @@
 # Quick NPC
 
-A D2RLoader plugin for Diablo II: Resurrected. **Hold Left Ctrl and left-click a vendor** to go straight to its trade
-screen, skipping the Talk / Trade / Cancel menu. **Hold Left Ctrl and left-click Deckard Cain** to have him identify
-your items. The key is configurable in a TOML file.
+A D2RLoader plugin for Diablo II: Resurrected that skips the NPC dialog menu. Hold **Left Ctrl** and left-click an
+NPC: you go to them, and the option you came for is chosen for you: trade, identify, resurrect your mercenary, or
+travel. The game's own menu option is pressed, so prices, range, quest and server checks work exactly as if you had
+clicked it yourself. MIT licensed.
 
-The game still does all the real work. It walks (or, with Ctrl, runs) you to the NPC, checks range, and opens the
-dialog. The plugin then presses the menu's own "Trade" option for you, which is the same function a mouse click on
-"Trade" runs. Without the key, or on an NPC that doesn't trade, nothing changes.
+## Features
 
-- Built from [d2rAI-toolkit](https://github.com/Nugwa628/d2rAI-toolkit)'s `plugin-template` (build guard, off-switch
-  file, environment guard, log, status command).
-- A **global** plugin: install it once and it works with every mod and with the unmodded game.
-- Plugin only: no data tables, strings or other mod files change.
-- **Targets one game image: D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (PE stamp `0x6ab3782c`).** The Steam 3.3
-  build 94995 runs the same image. On any other image the plugin loads, logs why, and changes nothing.
+- **Vendors**: opens the trade screen (every Trade and Trade/Repair NPC).
+- **Deckard Cain**: identifies your items at his usual price. If nothing needs identifying, his normal menu opens.
+- **Mercenary NPCs** (Kashya, Greiz, Asheara, Qual-Kehk): resurrect your dead mercenary. While it's alive their normal
+  menu opens (hiring stays manual). Asheara is also a vendor, so she trades unless `trade = false`.
+- **Travel NPCs** (Warriv, Meshif): travels to the next act, once the game offers the option.
+- NPCs are recognised from the game's own NPC menu data, not from a list of names. If the menu shows none of the
+  enabled options (quest NPCs, gamble-only menus), it simply stays open.
+- Without the hotkey, and on monsters, objects, players and the user interface, nothing changes.
+- Ctrl is also D2R's default Run key, so you run to the NPC instead of walking.
+- A global plugin: works with every mod and with the unmodded game.
+- Console command `quick-npc` shows the status; `quick-npc on`, `quick-npc off` and `quick-npc reload` switch the
+  plugin or re-read its settings.
 
-## Status
+## Requirements
 
-| What | State |
-|---|---|
-| Reverse engineering on the 93847 dump | done: [docs/reverse-engineering.md](docs/reverse-engineering.md); `tools/verify_dump.py` passes |
-| Decision logic and settings parser | 308 host checks pass (`tests/`) |
-| Plugin build | MinGW-w64 cross build and the MSVC build (`plugin/build.ps1`) pass in CI |
-| In-game tests | 0.2.0 confirmed working in game by the user. 0.3.0 (Cain identify) not tested in game yet: see [TESTING.md](TESTING.md) |
+- Diablo II: Resurrected 3.3 (Battle.net build 93847 or Steam build 94995: the same game image)
+- D2RLoader 1.3.1
 
-## Use
+On any other game or D2RLoader version the plugin loads, writes "not the expected game image" to its log, and changes
+nothing.
 
-1. Install (below), start the game through D2RLoader, and load a character.
-2. In town, hold **Left Ctrl** and left-click a vendor. You run there and the trade screen opens.
-3. Hold **Left Ctrl** and left-click **Deckard Cain**. You run there and he identifies your items, exactly as if you
-   had picked "Identify" in his menu: same price (free once his quest is done), and the server checks your gold. If
-   nothing needs identifying, his menu has no Identify option and it opens as usual.
+## Installation
 
-Ctrl is also D2R's default **Run** key, so the game makes you run to the vendor instead of walking. That's the only
-difference from a normal click.
+1. Close the game.
+2. Copy `quick-npc.dll` to `<game>\d2rloader\plugins\`.
+3. If an older `quick-npc.dll` is in a mod's `mods\<Mod>\d2rloader\plugins\` folder, delete it.
+4. Start the game through D2RLoader.
 
-Console command (type it in the D2R console):
+The first start writes the settings file `<game>\d2rloader\config\quick-npc.toml`.
 
-| Command | Does |
-|---|---|
-| `quick-npc` | Version, image check, hotkey, config and log paths, live counters, other plugins |
-| `quick-npc off` / `quick-npc on` | Switch the feature off or on (until the game restarts or `reload`) |
-| `quick-npc reload` | Re-read `quick-npc.toml` |
+## Configuration
 
-To leave the feature out at start-up, put the word `quicknpc` in `quick-npc-off.txt` next to the DLL. That's the
-toolkit's diagnosis switch; delete the file for normal play.
-
-## Settings: `quick-npc.toml`
-
-D2RLoader writes the default file to `<game>\d2rloader\config\quick-npc.toml` the first time the plugin loads. It
-never overwrites your copy after that. Edit it, then restart the game or type `quick-npc reload`.
+Edit `<game>\d2rloader\config\quick-npc.toml`, then restart the game or type `quick-npc reload` in the console.
+D2RLoader never overwrites your copy. A missing setting uses its default, and a bad value is reported in the
+plugin's log and its default kept.
 
 ```toml
 [quick-npc]
-enabled = true            # false: start switched off
-hotkey = "LeftCtrl"       # hold this, then left-click a vendor
-timeout_seconds = 60      # how long a click waits for the vendor's dialog (5 to 600)
-cain_identify = true      # hotkey + left-click on Deckard Cain identifies your items
+enabled = true          # false: start switched off ("quick-npc on" switches it on)
+hotkey = "LeftCtrl"     # hold this, then left-click an NPC
+timeout_seconds = 60    # how long a click waits for the NPC's dialog (5 to 600)
+
+trade = true            # vendors: open the trade screen
+cain_identify = true    # Deckard Cain: identify your items
+mercenary = true        # mercenary NPCs: resurrect a dead mercenary
+travel = true           # Warriv, Meshif: travel to the next act
 ```
 
-A `quick-npc.toml` written by 0.2.0 has no `cain_identify` line; the default (`true`) applies. Add
-`cain_identify = false` to leave Cain alone.
+`hotkey` accepts:
+- **Modifier keys:** `LeftCtrl`, `RightCtrl`, `Ctrl`, `LeftAlt`, `RightAlt`, `Alt`.
+- **Keyboard keys:** `A`–`Z`, `0`–`9`, `F1`–`F24`, `Numpad0`–`Numpad9`, `Space`, `Tab`, `CapsLock`, `Backquote`.
+- **Mouse buttons:** `Mouse3` (middle), `Mouse4` and `Mouse5` (side).
+- **A virtual-key code**, such as `"0xA2"`.
 
-`hotkey` names: `LeftCtrl`, `RightCtrl`, `Ctrl` (either), `LeftAlt`, `RightAlt`, `Alt`, `A`-`Z`, `0`-`9`, `F1`-`F24`,
-`Numpad0`-`Numpad9`, `Space`, `Tab`, `CapsLock`, `Backquote`, `Mouse3` (middle button), `Mouse4`, `Mouse5` (side
-buttons), or a Windows virtual-key code such as `"0xA2"`. Case, spaces, `-` and `_` don't matter.
-
-- **Shift doesn't work** with D2R's default controls. Shift is Stand Still, and Stand Still stops NPC interaction.
-  The plugin logs a warning if you choose it.
-- **Alt** is D2R's Show Items key, so a click on an item label picks the item up instead of reaching the NPC.
-- A letter or digit still does whatever D2R binds to it. Pick one that is unbound in Options > Controls.
-
-A bad value is reported in the log with its line number, and the default is kept.
-
-## What counts as a vendor
-
-An NPC whose dialog offers **Trade** in D2R's own NPC menu table, read live from the game. That covers every
-Trade and Trade/Repair NPC. Quest and story NPCs (Talk only), mercenary, travel and gamble-only menus, monsters,
-objects and players are left alone: the click works as it always does.
-
-**Deckard Cain** is the one special case: the NPC whose menu row holds D2R's Identify option (`0x114000`). That's Cain
-in every town, monstats rows 265 (Act 1), 244, 245, 246 and 520 (Act 5). The caged Cain in Tristram (146) has only
-Talk and is left alone.
-
-## Build
-
-The toolkit's process, on Windows with Visual Studio (C++ workload) and CMake 3.29 or newer:
-
-```powershell
-git clone --recursive <this repo>
-powershell -ExecutionPolicy Bypass -File plugin\build.ps1
-# -> plugin\build\Release\quick-npc.dll  (the default quick-npc.toml is embedded in it)
-```
-
-`-Name` renames the DLL, plugin id, console command and config file.
-
-Host tests (any OS, any C++20 compiler):
-
-```bash
-cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure
-```
-
-Check a dump of a game image (after a game or loader update):
-
-```bash
-python tools/verify_dump.py <dump.exe> --table
-```
-
-`--table` needs `pip install unicorn`.
-
-## Install
-
-Close the game, then copy `quick-npc.dll` to D2RLoader's game-wide plugin folder:
-
-```text
-<game>\d2rloader\plugins\
-```
-
-It loads with every mod and with the unmodded game. If you installed 0.1.0 into a mod's
-`mods\<Mod>\d2rloader\plugins\` folder, delete that copy: two copies would both hook the game, and the second one's
-hooks are refused (its status says why). It is a `Client` plugin, so it isn't recorded in the character's plugin
-history and isn't part of the multiplayer version match. Restart the game after replacing the DLL.
-
-The log has a load line (version, D2R version, image stamp), the settings in use, and one line per part, for example
-`quicknpc on: hooks 0x101910 + 0x1141d0, 48 NPC menu rows, hotkey LeftCtrl`. The `quick-npc` console command prints
-where D2RLoader keeps the log and the config.
-
-## Limitations
-
-- Build 93847 / image `0x6ab3782c` only. Another game or D2RLoader version needs the addresses re-found
-  (`docs/reverse-engineering.md`, then `tools/verify_dump.py`).
-- The Cain identify feature (0.3.0) hasn't been tested in game yet.
-- Gamble-only NPCs aren't treated as vendors, and Gamble isn't pressed for NPCs that have both Trade and Gamble.
-  customnpcs.txt NPCs get only Talk in D2R's menu table, so they are not covered.
-- If an NPC first plays a greeting or quest speech, the trade screen opens after the speech, when the menu appears.
-  A click that doesn't reach its NPC within `timeout_seconds` expires.
-- Controller "interact" input is not covered (it doesn't use the left-click path).
-- The hotkey is read from the keyboard state when you click (`GetAsyncKeyState`), not through D2R's Controls menu, so
-  it doesn't appear there and D2R doesn't warn about clashes.
+Shift doesn't work: it is D2R's Stand Still key, which stops NPC interaction. Alt is D2R's Show Items key, so a click
+on an item label picks the item up instead.

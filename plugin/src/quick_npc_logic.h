@@ -1,8 +1,8 @@
 // Quick NPC decision logic: no Windows, no SDK, no game memory. The engine part (quick_npc.cpp) reads the game's state
 // and asks these functions what to do; the host tests (tests/logic_tests.cpp) run them on any platform.
 //
-// Layouts and constants are for D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (image 0x6ab3782c). See
-// docs/reverse-engineering.md for where each one comes from.
+// Layouts and constants are for D2R 3.3.0 build 93847 under D2RLoader 1.3.1 (image 0x6ab3782c); tools/verify_dump.py
+// checks each of them against a dump of the game.
 #pragma once
 
 #include <cstddef>
@@ -12,15 +12,16 @@ namespace quick_npc {
 
 // --- D2R's NPC menu table (D2Client UI/npcmenu.cpp) -----------------------------------------------------------------
 // One row per NPC class: the dialog's options and the function each option runs. The client builds 48 rows at start-up
-// (static initializer 0x360d0), adds rows for customnpcs.txt (0x10b6e0) and adds quest options when a dialog opens.
-// The game looks a class up with the FIRST row whose 16-bit class matches (0x113990).
+// (static initializer 0x360d0), adds rows for customnpcs.txt (0x10b6e0), and changes rows while a dialog opens: quest
+// options (Warriv's and Meshif's travel), the mercenary's Resurrect (0x116480), Cain's Identify only
+// when something needs identifying. The game looks a class up with the FIRST row whose 16-bit class matches (0x113990).
 inline constexpr int MenuMaxHandlers = 5;
 
 struct MenuRow {
 	uint32_t classId;                     // +0x00 monstats row (compared as 16 bits)
 	uint32_t count;                       // +0x04 options shown, including the final Cancel
 	uint16_t strings[8];                  // +0x08 string id per option
-	uint64_t handlers[MenuMaxHandlers];   // +0x18 bool() per option, absolute addresses
+	uint64_t handlers[MenuMaxHandlers];   // +0x18 bool(u8 dataFlag) per option, absolute addresses
 	uint8_t flag;                         // +0x40
 	uint8_t pad[7];
 };
@@ -30,31 +31,34 @@ static_assert(offsetof(MenuRow, handlers) == 0x18, "handler slots start at +0x18
 // Index of the row D2R uses for `classId`, or -1.
 auto FindMenuRow(const MenuRow* rows, size_t rowCount, uint32_t classId) noexcept -> int;
 
-// True when the row's visible options include the Trade handler. Options 0 .. count-2 are shown (0x1147a0); the
-// last one is Cancel.
-auto RowOffersTrade(const MenuRow& row, uint64_t tradeHandler) noexcept -> bool;
+// True when `handler` is one of the row's options on screen: options 0 .. count-2 (0x1147a0); the last is Cancel.
+auto RowShows(const MenuRow& row, uint64_t handler) noexcept -> bool;
 
-// The vendor test: the class's row exists and offers Trade.
-auto IsVendorClass(const MenuRow* rows, size_t rowCount, uint32_t classId, uint64_t tradeHandler) noexcept -> bool;
+// --- The menu options the plugin presses ----------------------------------------------------------------------------
+// In priority order: the first one the open menu shows is pressed. Hire is never pressed: hireling NPCs only get
+// Resurrect (shown while the mercenary is dead).
+enum class Action { None, Trade, Identify, Resurrect, Travel };
+inline constexpr int ActionCount = 5;
 
-// True when any of the row's handler slots holds `handler`, shown or not. Deckard Cain's Identify option is hidden by
-// the menu builder while the player has nothing to identify (it sets the row's count to 2 at 0x114bca, 3 at 0x114b09),
-// so the click-time test for Identify can't rely on the count.
-auto RowHasHandler(const MenuRow& row, uint64_t handler) noexcept -> bool;
-
-// The menu options the plugin can press for the player, as absolute addresses in the running game.
+// Absolute handler addresses in the running game; 0 = switched off in quick-npc.toml.
 struct Handlers {
-	uint64_t trade = 0;     // 0x112f30 "Trade" / "Trade/Repair"
-	uint64_t identify = 0;  // 0x114000 Deckard Cain's "Identify"; 0 = never identify
-	Handlers() noexcept = default;
-	Handlers(uint64_t tradeHandler, uint64_t identifyHandler = 0) noexcept : trade(tradeHandler), identify(identifyHandler) {}
+	uint64_t of[ActionCount] = {};  // indexed by Action
+	auto operator[](Action a) const noexcept -> uint64_t { return of[static_cast<int>(a)]; }
+	auto operator[](Action a) noexcept -> uint64_t& { return of[static_cast<int>(a)]; }
 };
 
-// What a hotkey click on this NPC class should do.
-enum class Action { None, Trade, Identify };
+// What the open menu shows, by Action, as read from the live row after D2R built the menu.
+struct MenuState {
+	bool shown = false;               // NPC set, UI state "menu", menu object present
+	uint32_t npcId = 0;               // its unit id
+	bool offers[ActionCount] = {};    // only read in OnQueuedCallback
+};
 
-// Trade when the class's first row shows Trade; otherwise Identify when the row has Cain's Identify handler.
-auto ServiceForClass(const MenuRow* rows, size_t rowCount, uint32_t classId, const Handlers& handlers) noexcept -> Action;
+// Which of `handlers` the row shows, into `state.offers`.
+void ReadOffers(const MenuRow& row, const Handlers& handlers, MenuState* state) noexcept;
+
+// The option to press: the first enabled one (in Action order) the menu shows, or None.
+auto ChooseAction(const MenuState& menu, const Handlers& handlers) noexcept -> Action;
 
 // --- Clicks ---------------------------------------------------------------------------------------------------------
 // Flags of the client's player command (0xfe3b0 builds them, 0x102490 reads them). Left/right press = 5/6,
@@ -86,21 +90,21 @@ struct ClickInfo {
 };
 
 enum class Click {
-	Vanilla,    // not a hotkey left press on an NPC: leave it to D2R
-	NotVendor,  // hotkey left press on an NPC with no Trade and no Identify: leave it to D2R
-	Trade,      // hotkey left press on a vendor: trade when its dialog opens
-	Identify,   // hotkey left press on Deckard Cain: identify when his dialog opens
+	Vanilla,  // not a hotkey left press on an NPC: leave it to D2R
+	NoMenu,   // hotkey left press on a monster with no NPC menu: leave it to D2R
+	Npc,      // hotkey left press on an NPC with a menu: press an option when its dialog opens
 };
 
-auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount,
-                   const Handlers& handlers) noexcept -> Click;
+// Options are decided when the menu is open, not here: several (quest travel, Resurrect, Cain's Identify) are
+// only added to the row while the dialog opens.
+auto ClassifyClick(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount) noexcept -> Click;
 
 // --- One interaction ------------------------------------------------------------------------------------------------
-// Tracks the one NPC the player asked to trade with (or, for Deckard Cain, to identify with):
-//   hotkey + left click on vendor/Cain X -> Arm(X, Trade/Identify)
+// Tracks the one NPC the player hotkey-clicked:
+//   hotkey + left click on NPC X         -> Arm(X)
 //   any other interaction click          -> Clear()   (vanilla interaction, nothing pressed)
-//   X's dialog opens within the timeout  -> MenuOpened(X) true: queue the option once
-//   queued callback runs                 -> TakeQueued(X): the option to press (once), or None
+//   X's dialog opens within the timeout  -> MenuOpened(X) true: queue the callback once
+//   queued callback runs                 -> TakeQueued(X) true: choose and press an option once
 class Interaction {
 public:
 	static constexpr uint64_t DefaultTimeoutMs = 60000;  // walking across town plus an NPC greeting; stale clicks expire
@@ -110,22 +114,20 @@ public:
 	void SetTimeout(uint64_t ms) noexcept { m_timeoutMs = ms; }
 	auto timeout() const noexcept -> uint64_t { return m_timeoutMs; }
 
-	void Arm(uint32_t unitId, Action action, uint64_t nowMs) noexcept;
+	void Arm(uint32_t unitId, uint64_t nowMs) noexcept;
 	void Clear() noexcept;
 
-	// The dialog of `unitId` opened. True exactly once per armed interaction: the caller queues Trade.
+	// The dialog of `unitId` opened. True exactly once per armed interaction: the caller queues the callback.
 	auto MenuOpened(uint32_t unitId, uint64_t nowMs) noexcept -> bool;
 
-	// The queued callback runs; `currentNpc` is the NPC whose dialog is open now. The option to press (once), or None.
-	auto TakeQueued(uint32_t currentNpc) noexcept -> Action;
+	// The queued callback runs; `currentNpc` is the NPC whose dialog is open now. True: press an option (once).
+	auto TakeQueued(uint32_t currentNpc) noexcept -> bool;
 
 	auto state() const noexcept -> State { return m_state; }
 	auto unitId() const noexcept -> uint32_t { return m_unit; }
-	auto action() const noexcept -> Action { return m_action; }
 
 private:
 	State m_state = State::Idle;
-	Action m_action = Action::None;
 	uint32_t m_unit = 0;
 	uint64_t m_armedAt = 0;
 	uint64_t m_timeoutMs = DefaultTimeoutMs;
@@ -134,23 +136,12 @@ private:
 // --- The feature's state machine ------------------------------------------------------------------------------------
 // Everything the hooks decide, in one place. Not thread safe: the engine part holds a lock around every call.
 struct Counters {
-	uint32_t npcClicks = 0;    // hotkey left presses on NPCs
-	uint32_t notVendor = 0;    // ...whose menu has neither Trade nor Identify
-	uint32_t armed = 0;        // ...vendors
-	uint32_t armedCain = 0;    // ...Deckard Cain (Identify)
-	uint32_t queued = 0;       // their dialog opened: the option queued
-	uint32_t traded = 0;       // Trade pressed
-	uint32_t identified = 0;   // Cain's Identify pressed
-	uint32_t dropped = 0;      // queued, but the menu had changed when the callback ran
-	uint32_t queueFailed = 0;  // the callback could not be queued
-};
-
-// The open NPC menu as the engine part reads it from the menu globals.
-struct MenuState {
-	bool shown = false;         // NPC set, UI state "menu", menu object present
-	uint32_t npcId = 0;         // its unit id
-	bool offersTrade = false;     // its class's row shows Trade (only read in OnQueuedCallback)
-	bool offersIdentify = false;  // its class's row shows Cain's Identify (hidden when nothing needs identifying)
+	uint32_t npcClicks = 0;            // hotkey left presses on NPCs with a menu
+	uint32_t noMenu = 0;               // hotkey left presses on monsters without one
+	uint32_t queued = 0;               // their dialog opened: callback queued
+	uint32_t pressed[ActionCount] = {};// options pressed, by Action
+	uint32_t dropped = 0;              // menu showed none of the enabled options (or changed): left as it was
+	uint32_t queueFailed = 0;          // the callback could not be queued
 };
 
 class Controller {
@@ -160,16 +151,14 @@ public:
 	void SetTimeout(uint64_t ms) noexcept { m_interaction.SetTimeout(ms); }
 
 	// Hook 1, before D2R's interact function runs (which always runs).
-	void OnInteract(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount,
-	                const Handlers& handlers, uint64_t nowMs) noexcept;
+	void OnInteract(const ClickInfo& click, bool hotkeyHeld, const MenuRow* rows, size_t rowCount, uint64_t nowMs) noexcept;
 
-	// Hook 2, after D2R opened an NPC menu. True: queue the Trade callback.
+	// Hook 2, after D2R opened an NPC menu. True: queue the callback.
 	auto OnMenuOpened(const MenuState& menu, uint64_t nowMs) noexcept -> bool;
 	void OnQueueFailed() noexcept;
 
-	// The queued callback: the option to press now (at most once per interaction), or None. Identify is pressed only
-	// when the open menu shows it, so with nothing to identify Cain's normal menu stays.
-	auto OnQueuedCallback(const MenuState& menu) noexcept -> Action;
+	// The queued callback: the option to press now (at most once per interaction), or None to leave the menu open.
+	auto OnQueuedCallback(const MenuState& menu, const Handlers& handlers) noexcept -> Action;
 
 	auto counters() const noexcept -> const Counters& { return m_counters; }
 	auto interaction() const noexcept -> const Interaction& { return m_interaction; }

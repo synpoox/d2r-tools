@@ -1,4 +1,4 @@
-// Host tests for plugin/src/quick_npc_logic.cpp: no game, no Windows, no SDK.
+// Host tests for plugin/src/quick_npc_logic.cpp and quick_npc_config.cpp: no game, no Windows, no SDK.
 //   cmake -S tests -B build-tests && cmake --build build-tests && ctest --test-dir build-tests --output-on-failure
 //
 // The menu rows below are synthetic: they use D2R's row layout (0x48 bytes, handlers at +0x18) with made-up class ids
@@ -26,22 +26,24 @@ void Check(bool ok, const char* what, int line) {
 }
 #define CHECK(x) Check((x), #x, __LINE__)
 
-constexpr uint64_t Trade = 0x140112f30;
 constexpr uint64_t Talk = 0x140112eb0;
+constexpr uint64_t Trade = 0x140112f30;
 constexpr uint64_t Gamble = 0x140112c80;
-constexpr uint64_t Hire = 0x140112620;
 constexpr uint64_t Identify = 0x140114000;
+constexpr uint64_t Resurrect = 0x140113130;
+constexpr uint64_t Hire = 0x140112620;
+constexpr uint64_t Travel = 0x1401162f0;
 
-constexpr uint32_t VendorClass = 148;      // Talk, Trade, Cancel
-constexpr uint32_t TalkOnlyClass = 146;    // Talk, Cancel (a quest/story NPC)
-constexpr uint32_t GambleOnlyClass = 514;  // Talk, Gamble, Cancel
-constexpr uint32_t HireClass = 150;        // Talk, Hire, Cancel
-constexpr uint32_t TradeLastClass = 199;   // Talk, Trade, Gamble, Cancel
-constexpr uint32_t DupClass = 257;         // first row: Trade, Cancel; second row: Talk, Cancel
-constexpr uint32_t HiddenTradeClass = 300; // Trade sits in a slot past count-1: not shown, so not a vendor
-constexpr uint32_t WideClass = 0x10000 + 148;  // compared as 16 bits, like D2R's lookup
+constexpr uint32_t VendorClass = 148;      // Talk, Trade
+constexpr uint32_t TalkOnlyClass = 146;    // Talk (a quest/story NPC)
+constexpr uint32_t GambleOnlyClass = 514;  // Talk, Gamble
+constexpr uint32_t HirelingClass = 198;    // Talk, Hire (Resurrect is added while the mercenary is dead)
+constexpr uint32_t HireVendorClass = 252;  // Talk, Hire, Trade (Asheara)
+constexpr uint32_t CainClass = 244;        // Talk, Identify
+constexpr uint32_t TravelClass = 175;      // Talk, Travel
+constexpr uint32_t DupClass = 257;         // first row: Trade; second row: Talk
+constexpr uint32_t WideClass = 0x10000 + 148;
 constexpr uint32_t UnknownClass = 999;     // no row: ordinary monster
-constexpr uint32_t CainClass = 244;        // Talk, Identify, Cancel (Deckard Cain in town)
 
 auto Row(uint32_t classId, std::initializer_list<uint64_t> options) -> MenuRow {
 	MenuRow row {};
@@ -55,19 +57,20 @@ auto Row(uint32_t classId, std::initializer_list<uint64_t> options) -> MenuRow {
 }
 
 auto Table() -> std::vector<MenuRow> {
-	std::vector<MenuRow> rows;
-	rows.push_back(Row(VendorClass, {Talk, Trade}));
-	rows.push_back(Row(TalkOnlyClass, {Talk}));
-	rows.push_back(Row(GambleOnlyClass, {Talk, Gamble}));
-	rows.push_back(Row(HireClass, {Talk, Hire}));
-	rows.push_back(Row(TradeLastClass, {Talk, Gamble, Trade}));
-	rows.push_back(Row(DupClass, {Trade}));
-	rows.push_back(Row(DupClass, {Talk}));
-	MenuRow hidden = Row(HiddenTradeClass, {Talk});
-	hidden.handlers[1] = Trade;  // present in memory, but count says only Talk + Cancel are shown
-	rows.push_back(hidden);
-	rows.push_back(Row(CainClass, {Talk, Identify}));
-	return rows;
+	return {Row(VendorClass, {Talk, Trade}),        Row(TalkOnlyClass, {Talk}),
+	        Row(GambleOnlyClass, {Talk, Gamble}),   Row(HirelingClass, {Talk, Hire}),
+	        Row(HireVendorClass, {Talk, Hire, Trade}), Row(CainClass, {Talk, Identify}),
+	        Row(TravelClass, {Talk, Travel}),       Row(DupClass, {Trade}),
+	        Row(DupClass, {Talk})};
+}
+
+auto All() -> Handlers {
+	Handlers h;
+	h[Action::Trade] = Trade;
+	h[Action::Identify] = Identify;
+	h[Action::Resurrect] = Resurrect;
+	h[Action::Travel] = Travel;
+	return h;
 }
 
 auto Press(uint32_t id, uint32_t classId, uint32_t flags = cmd::Left | cmd::Press) -> ClickInfo {
@@ -82,291 +85,252 @@ auto Press(uint32_t id, uint32_t classId, uint32_t flags = cmd::Left | cmd::Pres
 	return c;
 }
 
-auto Shown(uint32_t npc, bool trade = true) -> MenuState {
+// The open menu of `npc`, built from `row` the way the engine part reads it.
+auto Open(uint32_t npc, const MenuRow& row, const Handlers& h = All()) -> MenuState {
 	MenuState m;
 	m.shown = true;
 	m.npcId = npc;
-	m.offersTrade = trade;
+	ReadOffers(row, h, &m);
 	return m;
 }
 
-// --- Vendor classification ------------------------------------------------------------------------------------------
-void TestVendorClassification() {
+// --- Menu rows and option choice ------------------------------------------------------------------------------------
+void TestRowsAndChoice() {
 	const auto rows = Table();
 	const MenuRow* t = rows.data();
 	const size_t n = rows.size();
-	CHECK(IsVendorClass(t, n, VendorClass, Trade));
-	CHECK(IsVendorClass(t, n, TradeLastClass, Trade));
-	CHECK(!IsVendorClass(t, n, TalkOnlyClass, Trade));    // quest/story NPC
-	CHECK(!IsVendorClass(t, n, GambleOnlyClass, Trade));  // gamble is not the vendor screen
-	CHECK(!IsVendorClass(t, n, HireClass, Trade));        // mercenary NPC
-	CHECK(!IsVendorClass(t, n, UnknownClass, Trade));     // monster / no menu row
-	CHECK(!IsVendorClass(t, n, HiddenTradeClass, Trade)); // only shown options count
-	CHECK(IsVendorClass(t, n, DupClass, Trade));          // first matching row wins, as in D2R
-	CHECK(FindMenuRow(t, n, DupClass) == 5);
-	CHECK(IsVendorClass(t, n, WideClass, Trade));         // 16-bit compare
-	CHECK(!IsVendorClass(t, n, VendorClass, 0));          // no handler address: never a vendor
-	CHECK(!IsVendorClass(nullptr, 0, VendorClass, Trade));
-	CHECK(FindMenuRow(t, n, UnknownClass) == -1);
+	const Handlers h = All();
 
+	CHECK(FindMenuRow(t, n, DupClass) == 7);  // first matching row, as D2R's lookup
+	CHECK(FindMenuRow(t, n, WideClass) == 0); // 16-bit compare
+	CHECK(FindMenuRow(t, n, UnknownClass) == -1);
+	CHECK(FindMenuRow(nullptr, 0, VendorClass) == -1);
+
+	CHECK(RowShows(rows[0], Trade) && !RowShows(rows[0], Hire));
+	CHECK(!RowShows(rows[0], 0));
+	MenuRow hidden = Row(CainClass, {Talk, Identify});
+	hidden.count = 2;  // D2R hides Identify when nothing needs identifying
+	CHECK(!RowShows(hidden, Identify));
 	MenuRow broken = Row(VendorClass, {Talk, Trade});
-	broken.count = 0;  // corrupt / unread row: nothing shown
-	CHECK(!RowOffersTrade(broken, Trade));
-	broken.count = 200;  // larger than the slots: only the 5 slots are read
-	CHECK(RowOffersTrade(broken, Trade));
+	broken.count = 0;
+	CHECK(!RowShows(broken, Trade));
+	broken.count = 200;  // only the 5 slots are read
+	CHECK(RowShows(broken, Trade));
+
+	CHECK(ChooseAction(Open(1, rows[0]), h) == Action::Trade);
+	CHECK(ChooseAction(Open(1, rows[1]), h) == Action::None);      // quest/story NPC
+	CHECK(ChooseAction(Open(1, rows[2]), h) == Action::None);      // gamble only: not pressed
+	CHECK(ChooseAction(Open(1, rows[3]), h) == Action::None);      // living mercenary: Hire stays manual
+	CHECK(ChooseAction(Open(1, rows[4]), h) == Action::Trade);     // Asheara: Trade before Hire
+	CHECK(ChooseAction(Open(1, rows[5]), h) == Action::Identify);
+	CHECK(ChooseAction(Open(1, hidden), h) == Action::None);       // Cain with nothing to identify
+	CHECK(ChooseAction(Open(1, rows[6]), h) == Action::Travel);
+
+	MenuRow dead = Row(HirelingClass, {Talk, Resurrect, Hire});   // mercenary dead: Resurrect added at run time
+	CHECK(ChooseAction(Open(1, dead), h) == Action::Resurrect);
+
+	Handlers noTrade = h;
+	noTrade[Action::Trade] = 0;
+	CHECK(ChooseAction(Open(1, rows[4], noTrade), noTrade) == Action::None);  // trade = false: Hire is never pressed
+	CHECK(ChooseAction(Open(1, rows[0], noTrade), noTrade) == Action::None);
+	Handlers noMerc = h;
+	noMerc[Action::Resurrect] = 0;
+	CHECK(ChooseAction(Open(1, dead, noMerc), noMerc) == Action::None);
+	Handlers noTravel = h;
+	noTravel[Action::Travel] = 0;
+	CHECK(ChooseAction(Open(1, rows[6], noTravel), noTravel) == Action::None);
+	Handlers noCain = h;
+	noCain[Action::Identify] = 0;
+	CHECK(ChooseAction(Open(1, rows[5], noCain), noCain) == Action::None);
+	// An offer read with another handler set never counts for a switched-off option.
+	CHECK(ChooseAction(Open(1, rows[5], h), noCain) == Action::None);
+	MenuState notShown = Open(1, rows[0]);
+	notShown.shown = false;
+	CHECK(ChooseAction(notShown, h) == Action::Trade);  // ChooseAction looks at offers only; Controller checks shown
 }
 
-// --- Click and hotkey -----------------------------------------------------------------------------------------------
-void TestClickAndHotkey() {
+// --- Clicks ---------------------------------------------------------------------------------------------------------
+void TestClicks() {
 	CHECK(IsLeftPress(cmd::Left | cmd::Press));
-	CHECK(IsLeftPress(cmd::Left | cmd::Press | 0x80));  // extra D2R bits (0x80 skill-usable) don't matter
-	CHECK(!IsLeftPress(cmd::Left | cmd::Held));       // held repeat
-	CHECK(!IsLeftPress(cmd::Left | cmd::Release));    // release
-	CHECK(!IsLeftPress(cmd::Left | cmd::Press | cmd::Held));     // never a press if D2R also marks it held
+	CHECK(IsLeftPress(cmd::Left | cmd::Press | 0x80));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Held));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Release));
+	CHECK(!IsLeftPress(cmd::Left | cmd::Press | cmd::Held));
 	CHECK(!IsLeftPress(cmd::Left | cmd::Press | cmd::Release));
-	CHECK(!IsLeftPress(cmd::Right | cmd::Press));     // right click
-	CHECK(!IsLeftPress(cmd::Left));                   // no press bit
+	CHECK(!IsLeftPress(cmd::Right | cmd::Press));
+	CHECK(!IsLeftPress(cmd::Left));
 
 	const auto rows = Table();
 	const MenuRow* t = rows.data();
 	const size_t n = rows.size();
-	CHECK(ClassifyClick(Press(7, VendorClass), true, t, n, Trade) == Click::Trade);
-	CHECK(ClassifyClick(Press(7, VendorClass), false, t, n, Trade) == Click::Vanilla);  // hotkey not held
-	CHECK(ClassifyClick(Press(7, TalkOnlyClass), true, t, n, Trade) == Click::NotVendor);
-	CHECK(ClassifyClick(Press(7, UnknownClass), true, t, n, Trade) == Click::NotVendor);  // a monster
-	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Left | cmd::Held), true, t, n, Trade) == Click::Vanilla);
-	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Right | cmd::Press), true, t, n, Trade) == Click::Vanilla);
-
+	CHECK(ClassifyClick(Press(7, VendorClass), true, t, n) == Click::Npc);
+	CHECK(ClassifyClick(Press(7, TalkOnlyClass), true, t, n) == Click::Npc);  // decided when the menu is open
+	CHECK(ClassifyClick(Press(7, UnknownClass), true, t, n) == Click::NoMenu);
+	CHECK(ClassifyClick(Press(7, VendorClass), false, t, n) == Click::Vanilla);
+	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Left | cmd::Held), true, t, n) == Click::Vanilla);
+	CHECK(ClassifyClick(Press(7, VendorClass, cmd::Right | cmd::Press), true, t, n) == Click::Vanilla);
 	ClickInfo object = Press(7, VendorClass);
-	object.unitType = UnitTypeObject;
-	object.targetType = UnitTypeObject;
-	CHECK(ClassifyClick(object, true, t, n, Trade) == Click::Vanilla);  // world object
-
+	object.unitType = object.targetType = UnitTypeObject;
+	CHECK(ClassifyClick(object, true, t, n) == Click::Vanilla);
 	ClickInfo player = Press(7, VendorClass);
-	player.unitType = UnitTypePlayer;
-	player.targetType = UnitTypePlayer;
-	CHECK(ClassifyClick(player, true, t, n, Trade) == Click::Vanilla);  // another player
-
+	player.unitType = player.targetType = UnitTypePlayer;
+	CHECK(ClassifyClick(player, true, t, n) == Click::Vanilla);
 	ClickInfo noTarget = Press(7, VendorClass);
 	noTarget.hasTarget = false;
-	CHECK(ClassifyClick(noTarget, true, t, n, Trade) == Click::Vanilla);
-
+	CHECK(ClassifyClick(noTarget, true, t, n) == Click::Vanilla);
 	ClickInfo mismatch = Press(7, VendorClass);
-	mismatch.targetId = 8;  // the command's target is not the unit being interacted with
-	CHECK(ClassifyClick(mismatch, true, t, n, Trade) == Click::Vanilla);
+	mismatch.targetId = 8;
+	CHECK(ClassifyClick(mismatch, true, t, n) == Click::Vanilla);
 }
 
-// --- One interaction, repeats and timeouts --------------------------------------------------------------------------
+// --- One interaction, repeats, timeouts -----------------------------------------------------------------------------
 void TestInteraction() {
 	const auto rows = Table();
 	const MenuRow* t = rows.data();
 	const size_t n = rows.size();
-
+	const Handlers h = All();
 	Controller c;
 	c.SetEnabled(true);
 
-	// Normal: hotkey click, walk, dialog opens, Trade once.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 1000);
+	c.OnInteract(Press(7, VendorClass), true, t, n, 1000);
 	CHECK(c.interaction().state() == Interaction::State::Armed);
-	CHECK(c.OnMenuOpened(Shown(7), 4000));
-	CHECK(!c.OnMenuOpened(Shown(7), 4001));  // the menu opens again (e.g. after a speech): no second queue
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::Trade);
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::None);    // a second callback does nothing
-	CHECK(c.counters().traded == 1);
-	CHECK(c.counters().queued == 1);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 4000));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 4001));  // opens again: no second queue
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 1 && c.counters().queued == 1);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 5000));  // the next dialog is vanilla
 
-	// After the trade, the next dialog of the same NPC is vanilla.
-	CHECK(!c.OnMenuOpened(Shown(7), 5000));
+	// Without the hotkey: vanilla, and it cancels an earlier hotkey click.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 6000);
+	c.OnInteract(Press(7, VendorClass), false, t, n, 6100);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 6200));
 
-	// Clicking the vendor without the hotkey: vanilla, and it cancels an earlier hotkey click.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 6000);
-	c.OnInteract(Press(7, VendorClass), false, t, n, Trade, 6100);
-	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(!c.OnMenuOpened(Shown(7), 6200));
-
-	// Hotkey click on a non-vendor: nothing armed.
-	c.OnInteract(Press(9, TalkOnlyClass), true, t, n, Trade, 7000);
-	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(!c.OnMenuOpened(Shown(9), 7100));
-	CHECK(c.counters().notVendor == 1);
-
-	// Another NPC's dialog opens first: the interaction ends, no trade with anyone.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 8000);
-	CHECK(!c.OnMenuOpened(Shown(11), 8100));
-	CHECK(!c.OnMenuOpened(Shown(7), 8200));
-
-	// A clicked vendor that is reached too late: expired.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 10000);
-	CHECK(!c.OnMenuOpened(Shown(7), 10000 + Interaction::DefaultTimeoutMs + 1));
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 20000);
-	CHECK(c.OnMenuOpened(Shown(7), 20000 + Interaction::DefaultTimeoutMs));  // exactly at the limit is still fine
-
-	// The callback finds the menu changed: drop it, call nothing.
-	CHECK(c.OnQueuedCallback(Shown(7, false)) == Action::None);  // its row has no Trade any more
+	// A quest NPC: armed, but its menu shows nothing to press, so it stays open.
+	c.OnInteract(Press(9, TalkOnlyClass), true, t, n, 7000);
+	CHECK(c.OnMenuOpened(Open(9, rows[1]), 7100));
+	CHECK(c.OnQueuedCallback(Open(9, rows[1]), h) == Action::None);
 	CHECK(c.counters().dropped == 1);
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 30000);
-	CHECK(c.OnMenuOpened(Shown(7), 30100));
+
+	// A monster: not armed.
+	c.OnInteract(Press(9, UnknownClass), true, t, n, 7500);
+	CHECK(c.interaction().state() == Interaction::State::Idle && c.counters().noMenu == 1);
+
+	// Kashya before her quest: Talk only at click time, options added when the dialog opens. The live menu decides.
+	MenuRow kashya = Row(150, {Talk});
+	std::vector<MenuRow> withKashya = rows;
+	withKashya.push_back(kashya);
+	c.OnInteract(Press(4, 150), true, withKashya.data(), withKashya.size(), 7600);
+	CHECK(c.OnMenuOpened(Open(4, kashya), 7700));
+	MenuRow kashyaDeadMerc = Row(150, {Talk, Resurrect, Hire});
+	CHECK(c.OnQueuedCallback(Open(4, kashyaDeadMerc), h) == Action::Resurrect);
+
+	// Another NPC's dialog first: over, nothing pressed.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 8000);
+	CHECK(!c.OnMenuOpened(Open(11, rows[0]), 8100));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 8200));
+
+	// Timeout.
+	c.OnInteract(Press(7, VendorClass), true, t, n, 10000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 10000 + Interaction::DefaultTimeoutMs + 1));
+	c.OnInteract(Press(7, VendorClass), true, t, n, 20000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 20000 + Interaction::DefaultTimeoutMs));
+	CHECK(c.OnQueuedCallback(Open(12, rows[0]), h) == Action::None);  // another NPC's menu is open now
+	c.OnInteract(Press(7, VendorClass), true, t, n, 30000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 30100));
 	MenuState closed;
 	closed.npcId = 7;
-	CHECK(c.OnQueuedCallback(closed) == Action::None);  // the player closed the menu meanwhile
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 31000);
-	CHECK(c.OnMenuOpened(Shown(7), 31100));
-	CHECK(c.OnQueuedCallback(Shown(12)) == Action::None);  // another NPC's menu is open now
-	CHECK(c.counters().traded == 1);
+	CHECK(c.OnQueuedCallback(closed, h) == Action::None);  // closed meanwhile
 
 	// A menu that is not shown does not consume the interaction.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 40000);
-	MenuState hidden;
-	hidden.npcId = 7;
-	CHECK(!c.OnMenuOpened(hidden, 40100));
+	c.OnInteract(Press(7, VendorClass), true, t, n, 40000);
+	CHECK(!c.OnMenuOpened(closed, 40100));
 	CHECK(c.interaction().state() == Interaction::State::Armed);
-
-	// Queuing failed: forget the interaction.
-	CHECK(c.OnMenuOpened(Shown(7), 40200));
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 40200));
 	c.OnQueueFailed();
-	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::None);
-	CHECK(c.counters().queueFailed == 1);
+	CHECK(c.interaction().state() == Interaction::State::Idle && c.counters().queueFailed == 1);
+	c.OnInteract(Press(7, VendorClass), true, t, n, 50000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 49000));  // clock going backwards
 
-	// The clock going backwards (should not happen with GetTickCount64) never arms a stale click.
-	c.OnInteract(Press(7, VendorClass), true, t, n, Trade, 50000);
-	CHECK(!c.OnMenuOpened(Shown(7), 49000));
+	// Configured timeout.
+	c.SetTimeout(5000);
+	c.OnInteract(Press(7, VendorClass), true, t, n, 60000);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 65001));
+	c.OnInteract(Press(7, VendorClass), true, t, n, 70000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 75000));
+}
+
+void TestEachService() {
+	const auto rows = Table();
+	const Handlers h = All();
+	struct Case {
+		uint32_t cls;
+		MenuRow menu;
+		Action want;
+	};
+	const Case cases[] = {
+		{VendorClass, rows[0], Action::Trade},
+		{CainClass, rows[5], Action::Identify},
+		{HirelingClass, Row(HirelingClass, {Talk, Resurrect, Hire}), Action::Resurrect},
+		{HirelingClass, rows[3], Action::None},  // mercenary alive: normal menu
+		{TravelClass, rows[6], Action::Travel},
+		{GambleOnlyClass, rows[2], Action::None},
+	};
+	for (const Case& k : cases) {
+		Controller c;
+		c.SetEnabled(true);
+		c.OnInteract(Press(3, k.cls), true, rows.data(), rows.size(), 1);
+		CHECK(c.OnMenuOpened(Open(3, k.menu), 2));
+		CHECK(c.OnQueuedCallback(Open(3, k.menu), h) == k.want);
+		if (k.want != Action::None) {
+			CHECK(c.counters().pressed[static_cast<int>(k.want)] == 1);
+		}
+	}
 }
 
 void TestRepeatedInput() {
 	const auto rows = Table();
+	const Handlers h = All();
 	Controller c;
 	c.SetEnabled(true);
-	// The button held over the vendor: D2R reports held repeats (flags 1|8), never a new press. They are vanilla and
-	// must not re-arm after the trade.
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 1000);
-	CHECK(c.OnMenuOpened(Shown(7), 1500));
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::Trade);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 1500));
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
 	for (int i = 0; i < 100; ++i) {
-		c.OnInteract(Press(7, VendorClass, cmd::Left | cmd::Held), true, rows.data(), rows.size(), Trade, 1600 + i);
-		CHECK(!c.OnMenuOpened(Shown(7), 1600 + i));
+		c.OnInteract(Press(7, VendorClass, cmd::Left | cmd::Held), true, rows.data(), rows.size(), 1600 + i);
+		CHECK(!c.OnMenuOpened(Open(7, rows[0]), 1600 + i));
 	}
-	CHECK(c.counters().traded == 1);
-	CHECK(c.counters().armed == 1);
-	// Two quick presses before arrival: still one trade.
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 5000);
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 5100);
-	CHECK(c.OnMenuOpened(Shown(7), 6000));
-	CHECK(!c.OnMenuOpened(Shown(7), 6001));
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::Trade);
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::None);
-	CHECK(c.counters().traded == 2);
-}
-
-void TestConfiguredTimeout() {
-	const auto rows = Table();
-	Controller c;
-	c.SetEnabled(true);
-	c.SetTimeout(5000);  // timeout_seconds = 5
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 1000);
-	CHECK(!c.OnMenuOpened(Shown(7), 6001));
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 10000);
-	CHECK(c.OnMenuOpened(Shown(7), 15000));
-	c.SetTimeout(600000);  // reload with a longer timeout keeps working
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 20000);
-	CHECK(c.OnMenuOpened(Shown(7), 20000 + 599000));
-}
-
-// --- Deckard Cain: Identify ---------------------------------------------------------------------------------------
-auto ShownCain(uint32_t npc, bool identify) -> MenuState {
-	MenuState m;
-	m.shown = true;
-	m.npcId = npc;
-	m.offersIdentify = identify;
-	return m;
-}
-
-void TestCainIdentify() {
-	auto rows = Table();
-	const MenuRow* t = rows.data();
-	const size_t n = rows.size();
-	const Handlers both(Trade, Identify);
-	const Handlers tradeOnly(Trade);  // cain_identify = false
-
-	CHECK(ServiceForClass(t, n, CainClass, both) == Action::Identify);
-	CHECK(ServiceForClass(t, n, CainClass, tradeOnly) == Action::None);
-	CHECK(ServiceForClass(t, n, VendorClass, both) == Action::Trade);
-	CHECK(ServiceForClass(t, n, TalkOnlyClass, both) == Action::None);  // caged Cain / quest NPCs: Talk only
-	CHECK(ServiceForClass(t, n, UnknownClass, both) == Action::None);
-	CHECK(!IsVendorClass(t, n, CainClass, Trade));  // Cain is not a vendor
-
-	// D2R hides Identify while nothing needs identifying (row count 2): the click still arms Identify...
-	rows.back().count = 2;
-	CHECK(!RowOffersTrade(rows.back(), Identify));
-	CHECK(RowHasHandler(rows.back(), Identify));
-	CHECK(ServiceForClass(t, n, CainClass, both) == Action::Identify);
-	CHECK(!RowHasHandler(rows.back(), 0));
-	CHECK(ClassifyClick(Press(5, CainClass), true, t, n, both) == Click::Identify);
-	CHECK(ClassifyClick(Press(5, CainClass), false, t, n, both) == Click::Vanilla);
-	CHECK(ClassifyClick(Press(5, CainClass), true, t, n, tradeOnly) == Click::NotVendor);
-
-	Controller c;
-	c.SetEnabled(true);
-	// Normal: hotkey click on Cain, his menu shows Identify, the callback presses Identify once.
-	c.OnInteract(Press(5, CainClass), true, t, n, both, 1000);
-	CHECK(c.interaction().action() == Action::Identify);
-	CHECK(c.OnMenuOpened(ShownCain(5, true), 2000));
-	CHECK(c.OnQueuedCallback(ShownCain(5, true)) == Action::Identify);
-	CHECK(c.OnQueuedCallback(ShownCain(5, true)) == Action::None);
-	CHECK(c.counters().identified == 1 && c.counters().traded == 0 && c.counters().armedCain == 1);
-
-	// ...but with nothing to identify his menu has no Identify: nothing is pressed, the normal menu stays.
-	c.OnInteract(Press(5, CainClass), true, t, n, both, 3000);
-	CHECK(c.OnMenuOpened(ShownCain(5, false), 3100));
-	CHECK(c.OnQueuedCallback(ShownCain(5, false)) == Action::None);
-	CHECK(c.counters().identified == 1 && c.counters().dropped == 1);
-
-	// An Identify interaction never presses Trade, even if the menu shows it.
-	c.OnInteract(Press(5, CainClass), true, t, n, both, 4000);
-	CHECK(c.OnMenuOpened(ShownCain(5, false), 4100));
-	MenuState tradeShown = ShownCain(5, false);
-	tradeShown.offersTrade = true;
-	CHECK(c.OnQueuedCallback(tradeShown) == Action::None);
-
-	// A Trade interaction never presses Identify.
-	c.OnInteract(Press(7, VendorClass), true, t, n, both, 5000);
-	CHECK(c.OnMenuOpened(Shown(7, false), 5100));
-	MenuState identifyShown = Shown(7, false);
-	identifyShown.offersIdentify = true;
-	CHECK(c.OnQueuedCallback(identifyShown) == Action::None);
-
-	// cain_identify = false: Cain clicks are vanilla.
-	c.OnInteract(Press(5, CainClass), true, t, n, tradeOnly, 6000);
-	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(!c.OnMenuOpened(ShownCain(5, true), 6100));
-	CHECK(c.counters().identified == 1);
-
-	// Cain without the hotkey: vanilla.
-	c.OnInteract(Press(5, CainClass), false, t, n, both, 7000);
-	CHECK(!c.OnMenuOpened(ShownCain(5, true), 7100));
+	CHECK(c.counters().npcClicks == 1);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 5000);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 5100);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 6000));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 6001));
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::Trade);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 2);
 }
 
 // --- Feature off ----------------------------------------------------------------------------------------------------
 void TestDisabled() {
 	const auto rows = Table();
-	Controller c;  // starts disabled (nothing installed yet)
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 1000);
+	const Handlers h = All();
+	Controller c;  // starts disabled
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1000);
 	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(!c.OnMenuOpened(Shown(7), 1100));
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 1100));
 	CHECK(c.counters().npcClicks == 0);
 
 	c.SetEnabled(true);
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 2000);
-	c.SetEnabled(false);  // "quick-npc off" while walking to the vendor
-	CHECK(c.interaction().state() == Interaction::State::Idle);
-	CHECK(!c.OnMenuOpened(Shown(7), 2100));
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 2000);
+	c.SetEnabled(false);
+	CHECK(!c.OnMenuOpened(Open(7, rows[0]), 2100));
 
 	c.SetEnabled(true);
-	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 3000);
-	CHECK(c.OnMenuOpened(Shown(7), 3100));
-	c.SetEnabled(false);  // switched off after the callback was queued
-	CHECK(c.OnQueuedCallback(Shown(7)) == Action::None);
-	CHECK(c.counters().traded == 0);
+	c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 3000);
+	CHECK(c.OnMenuOpened(Open(7, rows[0]), 3100));
+	c.SetEnabled(false);
+	CHECK(c.OnQueuedCallback(Open(7, rows[0]), h) == Action::None);
+	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 0);
 }
 
 // --- Install: unsupported build, failed hooks -----------------------------------------------------------------------
@@ -447,9 +411,9 @@ void TestInstall() {
 		// A controller that was never enabled (any failed install) acts on nothing.
 		const auto rows = Table();
 		Controller c;
-		c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), Trade, 1);
-		CHECK(!c.OnMenuOpened(Shown(7), 2));
-		CHECK(c.OnQueuedCallback(Shown(7)) == Action::None);
+		c.OnInteract(Press(7, VendorClass), true, rows.data(), rows.size(), 1);
+		CHECK(!c.OnMenuOpened(Open(7, rows[0]), 2));
+		CHECK(c.OnQueuedCallback(Open(7, rows[0]), All()) == Action::None);
 	}
 }
 
@@ -535,8 +499,15 @@ void TestConfig() {
 			ConfigIssue issues[4];
 			CHECK(ParseConfig(text, len, &c, issues, 4) == 0);
 			CHECK(c.enabled && c.hotkeyVk == 0xA2 && std::strcmp(c.hotkeyName, "LeftCtrl") == 0 && c.timeoutMs == 60000);
-			CHECK(c.cainIdentify);
+			CHECK(c.cainIdentify && c.trade && c.mercenary && c.travel);
 		}
+	}
+	{
+		Config c;
+		CHECK(Parse("[quick-npc]\ntrade = false\nmercenary = false\ntravel = false\n", &c, &n) == 0);
+		CHECK(!c.trade && !c.mercenary && !c.travel && c.cainIdentify);
+		CHECK(Parse("[quick-npc]\ntravel = 0\n", &c, &n) == 1);
+		CHECK(!c.travel);
 	}
 	{
 		Config c;
@@ -605,16 +576,15 @@ void TestConfig() {
 }  // namespace
 
 int main() {
-	TestVendorClassification();
-	TestClickAndHotkey();
+	TestRowsAndChoice();
+	TestClicks();
 	TestInteraction();
+	TestEachService();
 	TestRepeatedInput();
-	TestConfiguredTimeout();
-	TestCainIdentify();
 	TestDisabled();
+	TestInstall();
 	TestKeyNames();
 	TestConfig();
-	TestInstall();
 	std::printf("%d checks, %d failed\n", g_checks, g_failures);
 	return g_failures == 0 ? 0 : 1;
 }

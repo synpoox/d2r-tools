@@ -2,7 +2,7 @@
 // its trade screen.
 //
 // D2R 3.3.0 build 93847 under D2RLoader 1.3.1 only (image 0x6ab3782c); plugin.cpp installs this part only on that image.
-// How it works and where every address comes from: quick_npc.cpp and docs/reverse-engineering.md.
+// How it works: quick_npc.cpp; every address is checked by tools/verify_dump.py.
 #pragma once
 
 #include <D2RLPlugin/api.h>

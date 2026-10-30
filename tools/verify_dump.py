@@ -3,7 +3,7 @@
 
 The dump is the running game image written in memory layout (section file offsets = RVAs), as d2rAI-toolkit's
 tools/dump_image.py writes it. Run this after any D2R or D2RLoader update before changing the plugin's expected image:
-every line must say "ok". A failure names the address to re-find (docs/reverse-engineering.md says how each was found).
+every line must say "ok". A failure names the address to re-find.
 
     python tools/verify_dump.py <dump.exe>            pattern checks only (standard library)
     python tools/verify_dump.py <dump.exe> --table    also emulate D2R's NPC menu initializer and list the vendor
@@ -42,6 +42,16 @@ CODE = [
     ("menu builder: Identify option is string 0xfb4", 0x114A3C, "b9 b4 0f 00 00"),
     ("menu builder: Identify shown (row count 3)", 0x114B09, "c7 44 c8 04 03 00 00 00"),
     ("menu builder: Identify hidden, nothing to identify (row count 2)", 0x114BCA, "c7 44 c8 04 02 00 00 00"),
+    ("menu calls an option as handler(dataFlag)", 0x2BB5DD, "41 0f b6 cc ff d0"),
+    ("menu's dataFlag: local player id", 0x2BB058, "e8 73 02 dd ff"),
+    ("menu's dataFlag: unit data flag", 0x2BB078, "e8 63 f0 08 00"),
+    ("menu's dataFlag: client game +0x9cf", 0x2BB088, "44 0f b6 a0 cf 09 00 00"),
+    ("Resurrect handler entry", 0x113130, "40 53 48 83 ec 30"),
+    ("Resurrect: mov cl, 0x52 (CCMD_REZZ_MERCENARY_TRANSACTION)", 0x113158, "b1 52"),
+    ("Resurrect handler added to hireling rows at run time", 0x1164D0, "4c 8d 2d 59 cc ff ff"),
+    ("Travel handler entry", 0x1162F0, "48 89 5c 24 10 48 89 7c 24 18"),
+    ("Travel handler: movzx ebx, cl", 0x11631C, "0f b6 d9"),
+    ("Travel: mov cl, 0x37 (CCMD_TRAVEL)", 0x116388, "b1 37"),
     # Ctrl (the default hotkey) is D2R's default Run key; Run only adds the run flag, Stand Still blocks interaction.
     ("Run state read from key binding 0x22 (Run)", 0x83EEF, "8d 4b 22"),
     ("Run held adds command flag 0x40", 0xFE603, "83 ca 40"),
@@ -70,6 +80,7 @@ GLOBALS = [
 
 TRADE_RVA = 0x112F30
 IDENTIFY_RVA = 0x114000
+TRAVEL_RVA = 0x1162F0
 INIT_RVA, INIT_COPY_RVA = 0x360D0, 0x37210  # NPC menu table initializer; stop before it copies the stack array out
 ROW_SIZE, ROWS = 0x48, 0x30
 BASE = 0x140000000
@@ -168,6 +179,10 @@ def main(argv: list[str]) -> int:
             identify = BASE + IDENTIFY_RVA
             cain = sorted({c for c, _, h in rows if identify in h and not first_vendor_rule(rows, c, trade)})
             report(len(cain) > 0, f"Deckard Cain rows with Identify (0x{IDENTIFY_RVA:x}): {', '.join(str(c) for c in cain)}")
+            for what, rva in (("Travel", TRAVEL_RVA),):
+                classes = sorted({c for c, _, h in rows if BASE + rva in h})
+                print(f"     {what} (0x{rva:x}) in the start-up table: {', '.join(str(c) for c in classes)} "
+                      "(more are added by quest options at run time)")
 
     print("all checks passed" if failed == 0 else f"{failed} check(s) failed: re-find these before using this image")
     return 0 if failed == 0 else 1
