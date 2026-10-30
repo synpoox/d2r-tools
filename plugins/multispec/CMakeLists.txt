@@ -12,7 +12,7 @@ project(multispec LANGUAGES CXX RC)
 
 set(MULTISPEC_VERSION "0.1.0" CACHE STRING "PluginInfo::version (shared plugins must match in multiplayer)")
 set(MULTISPEC_MOD_NAME "" CACHE STRING "Mod folder the plugin ships in (mods/<name>); the environment guard warns when another runs")
-set(MULTISPEC_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../d2rAI-toolkit/third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
+set(MULTISPEC_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 option(MULTISPEC_TESTS "Build the unit tests of the portable core" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
