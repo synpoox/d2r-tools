@@ -11,7 +11,8 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - `third_party/PluginSDK` is a submodule pinned once for every plugin. Never vendor or edit it here. Moving the pin
   needs every plugin rebuilt first (`docs/RELEASING.md`).
 - Native addresses, offsets, signatures and byte guards are specific to one D2R build. Keep them in the owning plugin,
-  keep what is proven to work, and record every change with its build, evidence and guard (see CONTRIBUTING.md).
+  keep what is proven to work, and record every change with its build, evidence and guard in
+  `docs/reverse-engineering/` (registry and workflow there; read it before searching for an address).
   Where a guard does not match, the plugin must fail open: log it and leave that part off.
 - Never commit game binaries or extracted game assets, dumps, saves, personal config, logs, build output (`build/`,
   `dist/`) or credentials. Tests that need a game slot use a test save, never the owner's own install or characters.

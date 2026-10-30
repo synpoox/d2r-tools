@@ -160,7 +160,7 @@ void Bind(uint64_t exeBase) noexcept;
 auto Bound() noexcept -> bool;
 
 // --- Monster count: RE spike (build 93847) ------------------------------------------------------------------------
-// Static analysis of the D2RLoader_6ab3782c dump (Capstone + .pdata, no Ghidra project); see docs/re-spike.md.
+// Static analysis of the D2RLoader_6ab3782c dump (Capstone + .pdata, no Ghidra project); see docs/reverse-engineering/monster-count.md.
 // "Hookable" = whole instructions >= 14 bytes, no RIP-relative operand, no branch, no FF 25 (D2RLoader hook) at the
 // entry in the dumped image. Nothing here has been hooked in game yet.
 //

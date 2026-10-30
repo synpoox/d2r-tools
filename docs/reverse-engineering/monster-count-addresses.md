@@ -2,7 +2,7 @@
 
 **Build 93847 only**: D2R 3.3.0 under D2RLoader 1.3.1, image PE timestamp **`0x6ab3782c`**. All values are RVAs
 (image base + RVA) or byte offsets. Before using any of them on another build, verify in Ghidra
-([engine-re.md](engine-re.md)). Signatures are Windows x64; "dataFlag" is the game's data-table selector byte
+(engine-re.md (d2rAI-toolkit `knowledge/engine-re.md`)). Signatures are Windows x64; "dataFlag" is the game's data-table selector byte
 (`game + 0x106`, or `0x34a0e0(unit)`). Sources: a working D2RLoader plugin (hooked or called in game) and its
 Ghidra notes. "Hooked" = installed with the entry bytes shown and ran in game.
 

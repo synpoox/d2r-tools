@@ -3,8 +3,8 @@
 WoW-style dual spec for D2R 3.3 (build 93847, D2RLoader 1.3.1): a character keeps N saved skill allocations ("specs")
 and switches between them with a command, without paying for a respec.
 
-Status: **approved by the owner** (town only, empty new specs). Engine facts come from [recon.md](recon.md) and
-[knowledge/d2r-93847-skills-respec.md](../knowledge/d2r-93847-skills-respec.md); all of them are static so far, and
+Status: **approved by the owner** (town only, empty new specs). Engine facts come from [multispec-recon.md](../../../docs/reverse-engineering/multispec-recon.md) and
+[multispec.md](../../../docs/reverse-engineering/multispec.md); all of them are static so far, and
 three need a check in a game slot before the MVP can be trusted (section 9).
 
 ## 1. The behaviour you asked for, confirmed or challenged

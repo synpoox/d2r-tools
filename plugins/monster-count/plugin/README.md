@@ -188,7 +188,7 @@ Plan it with [knowledge/new-game-systems.md](../knowledge/new-game-systems.md) b
   stats or the save, not in plugin memory.
 - **Read the data, don't copy it.** Take tiers, modifiers and limits from the mod's tables (item stats, levels.txt
   columns) so the data lane can tune them without a new DLL.
-- **Hooks from the registry first.** The [93847 registry](../knowledge/d2r-93847-addresses.md) already lists, for
+- **Hooks from the registry first.** The [93847 registry](../../../docs/reverse-engineering/monster-count-addresses.md) already lists, for
   example, the portal maker, the cube's portal output, the spawn-monster function and room to level. Confirm each
   one in Ghidra (signature, callers, entry bytes) before you hook it, and add what you find.
 - **Count and report.** Every part shows its counters in the status command (`mapmods: 412 monsters changed`). That

@@ -1,6 +1,6 @@
 # RE helper scripts (pefile + capstone)
 
-Ghidra could not be downloaded in the analysis sandbox (see docs/re/dump-inventory.md), so the reverse engineering
+Ghidra could not be downloaded in the analysis sandbox (see docs/reverse-engineering/better-xp-bar-dump-inventory.md), so the reverse engineering
 uses these small scripts. They read a **memory-layout** image dump (file offset = RVA, as written by the toolkit's
 `tools/dump_image.py`) from a path you pass; the dump stays outside this repository. They print addresses, bytes and
 disassembly lines to the terminal; do not commit their bulk output.

@@ -61,5 +61,5 @@ you can also list features to leave out (`minimap`, `overlay`, `zoom`) in `bette
 - Controller mode is not supported (the wheel does not apply there).
 - Works only on the build listed above; any other build leaves the plugin inactive until it is updated.
 
-For developers: `docs/hook-sites.md` lists every game address with its evidence, `docs/TESTING.md` the in-game test
+For developers: [docs/reverse-engineering/better-automap.md](../../docs/reverse-engineering/better-automap.md) lists every game address with its evidence, `docs/TESTING.md` the in-game test
 checklist. Builds run on GitHub Actions (the monorepo's `.github/workflows/ci.yml`, CMake, `windows-latest`, x64 Release).

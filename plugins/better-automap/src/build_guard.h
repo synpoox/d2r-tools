@@ -5,7 +5,7 @@
 // The test is the image itself, not a version label: the PE header TimeDateStamp of the running image
 // (context->exeBase). Steam and Battle.net ship the same 3.3 program under different build numbers (94995 / 93847,
 // both stamp 0x6ab3782c under D2RLoader 1.3.1). The entry bytes every hook and patch checks are the second line of
-// defence. After a game update: re-dump, re-find every address (docs/hook-sites.md), then change ExpectedImage.
+// defence. After a game update: re-dump, re-find every address (docs/reverse-engineering/better-automap.md), then change ExpectedImage.
 #pragma once
 
 #define NOMINMAX

@@ -1,5 +1,5 @@
 // Reads the local player's level, experience and class, and the experience table, from the running game.
-// Uses only plugin/src/d2r.h (evidence: docs/re/findings.md). Call on D2R's UI thread only.
+// Uses only plugin/src/d2r.h (evidence: docs/reverse-engineering/better-xp-bar.md). Call on D2R's UI thread only.
 //
 // NOT RUN IN GAME YET: every function here "needs live check" (TESTING.md).
 #pragma once

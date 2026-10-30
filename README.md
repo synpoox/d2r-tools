@@ -59,6 +59,6 @@ DLLs land in `dist\<plugin>\`. Layout, tests and release steps: [CONTRIBUTING.md
 plugins/<name>/          one plugin each: sources, tests, README.md, CHANGELOG.md
 third_party/PluginSDK/   D2RLoader PluginSDK submodule, pinned once for every plugin
 tools/build.ps1          build (and test) one or all plugins
-docs/                    RELEASING.md
+docs/                    RELEASING.md, reverse-engineering/ (native addresses and evidence)
 .github/workflows/       ci (build matrix), release (suite release, run by hand)
 ```

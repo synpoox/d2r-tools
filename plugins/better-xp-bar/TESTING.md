@@ -104,7 +104,7 @@ log. `xp` turns off all game reads.
 
 ## Live-check items this covers
 
-| Item (docs/re/findings.md) | Step |
+| Item (docs/reverse-engineering/better-xp-bar.md) | Step |
 |---|---|
 | XP/level reads equal the character screen | 1 |
 | Experience table values / level % equals the stock bar | 1, 3 |

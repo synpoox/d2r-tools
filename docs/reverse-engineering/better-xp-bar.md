@@ -1,6 +1,6 @@
 # RE findings (Phase 2): D2R 3.3 build 93847, image 0x6ab3782c
 
-Source: the static image dump (memory layout, file offset = RVA; see [dump-inventory.md](dump-inventory.md)) and the
+Source: the static image dump (memory layout, file offset = RVA; see [better-xp-bar-dump-inventory.md](better-xp-bar-dump-inventory.md)) and the
 d2rAI-toolkit registry (`knowledge/d2r-93847-addresses.md`). Tool: `tools/re/d2rre.py` (pefile/numpy/capstone;
 Ghidra was not available). Every claim below cites the instruction it comes from. Disassembly is quoted only as far as
 it is evidence; no bulk decompiled output.
