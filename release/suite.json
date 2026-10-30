@@ -4,6 +4,18 @@
     "d2rloader": "1.3.1"
   },
   "plugins": {
+    "better-xp-bar": {
+      "version": "1.0.0",
+      "validation": [
+        "Clean x64 Release build with MSVC; unit tests pass.",
+        "Tested in game on Diablo II: Resurrected 3.3.0 build 93847 with D2RLoader 1.3.1 (Reimagined, 3440x1440): the text shows and updates, does not block clicks, stays open with other panels, hovering the stock XP bar shows the display, clicking it toggles the display, and position, scale, background and line formats were checked."
+      ],
+      "limits": [
+        "Reads XP and draws through native game code at fixed addresses, each with a byte check; on other game builds the affected part turns itself off.",
+        "Only tested at 3440x1440 in Reimagined; other resolutions and the vanilla game were not checked.",
+        "Position, size and colour are read at load: restart the game after changing them."
+      ]
+    },
     "scrollable-waypoints": {
       "version": "1.0.0",
       "validation": [

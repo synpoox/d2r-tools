@@ -1,4 +1,4 @@
-#include "bxb/format.h"
+﻿#include "bxb/format.h"
 #include "check.h"
 
 using namespace bxb;
@@ -29,8 +29,8 @@ TEST(format_clock_and_eta) {
 	CHECK_EQ(FormatClock(-5), std::string("00:00:00"));
 	CHECK_EQ(FormatEta(std::nullopt), std::string("--"));
 	CHECK_EQ(FormatEta(-1.0), std::string("--"));
-	CHECK_EQ(FormatEta(44.2), std::string("45s"));
-	CHECK_EQ(FormatEta(723.0), std::string("12m 03s"));
+	CHECK_EQ(FormatEta(44.2), std::string("<1m"));
+	CHECK_EQ(FormatEta(723.0), std::string("13m"));
 	CHECK_EQ(FormatEta(3 * 3600 + 7 * 60), std::string("3h 07m"));
 	CHECK_EQ(FormatEta(2 * 86400 + 4 * 3600 + 5), std::string("2d 04h"));
 }
@@ -46,25 +46,32 @@ TEST(format_lines) {
 	s.sessionXp = -100;
 	s.sessionLevels = -0.001;
 	s.activeSeconds = 3725;
+	s.levelXp = 1350000;
+	s.levelSpan = 1500000;
+	s.remaining = 150000;
 	CHECK_EQ(FormatLine(s, LineId::Level), std::string("Level 80"));
-	CHECK_EQ(FormatLine(s, LineId::Xp), std::string("XP 1,234,567  50.00%"));
+	CHECK_EQ(FormatLine(s, LineId::Xp), std::string("XP 1.35M/1.50M  50.00%"));
+	CHECK_EQ(FormatXp(s, "{current_full} of {needed_full}, {remaining} left, total {total} {bogus}"),
+	         std::string("1,350,000 of 1,500,000, 150.0K left, total 1,234,567 {bogus}"));
+	CHECK_EQ(FormatXp(s, "plain {unclosed"), std::string("plain {unclosed"));
 	CHECK_EQ(FormatLine(s, LineId::Session), std::string("Session -100  -0.10%"));
-	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h --  (avg --)"));
+	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h --"));
 	CHECK_EQ(FormatLine(s, LineId::Time), std::string("Time 01:02:05"));
 	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level --"));
 	s.live = Rate{1.5e6, 0.123};
 	s.session = Rate{1.2e6, 0.1};
 	s.etaSeconds = 600;
-	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h 1.50M  12.30%  (avg 1.20M)"));
-	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level 10m 00s"));
+	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h 1.50M"));
+	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level 10m"));
 	s.live = Rate{-45000.0, -0.0123};          // a death outweighed the gains in the window
 	s.etaSeconds.reset();
-	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h -45.0K  -1.23%  (avg 1.20M)"));
+	CHECK_EQ(FormatLine(s, LineId::Rate), std::string("XP/h -45.0K"));
 	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level --"));
 	s.live = Rate{1.5e6, 0.123};
 	s.atMaxLevel = true;
 	s.level = 99;
 	CHECK_EQ(FormatLine(s, LineId::Level), std::string("Level 99 (max)"));
-	CHECK_EQ(FormatLine(s, LineId::Xp), std::string("XP 1,234,567  --"));
+	CHECK_EQ(FormatLine(s, LineId::Xp), std::string("XP --/--  --"));
+	CHECK_EQ(FormatXp(s, "{total}"), std::string("1,234,567"));
 	CHECK_EQ(FormatLine(s, LineId::Eta), std::string("Next level --"));
 }

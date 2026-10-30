@@ -14,6 +14,9 @@ namespace display {
 void InstallTracking(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 // Part "overlay": the frame callback that draws the lines.
 void InstallOverlay(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
+// Part "hud": the lines as native text boxes in a plugin panel (hud_text.h). Needs parts xp and overlay. The panel's
+// position and style come from the config at load ("reload" does not move it: restart the game).
+void InstallHud(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 // Part "hotkeys": "Toggle XP display" and "Reset XP session" in D2R's Controls menu (category "Better XP Bar").
 void InstallHotkeys(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 

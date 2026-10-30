@@ -12,6 +12,7 @@ add_library(bxb_plugin SHARED
 	src/env_guard.cpp
 	src/xp_reader.cpp
 	src/display.cpp
+	src/hud_text.cpp
 	better-xp-bar.rc
 )
 target_link_libraries(bxb_plugin PRIVATE D2RLPlugin::D2RLPlugin bxb_core)

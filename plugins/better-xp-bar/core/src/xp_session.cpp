@@ -164,6 +164,10 @@ auto XpSession::Get(double now) const -> Snapshot {
 	s.atMaxLevel = s.level >= s.maxLevel;
 	s.levelProgress = table_.Progress(lastXp_, s.level);
 	s.remaining = table_.Remaining(lastXp_, s.level);
+	if (!s.atMaxLevel) {
+		s.levelSpan = table_.LevelStart(s.level + 1) - table_.LevelStart(s.level);
+		s.levelXp = s.levelSpan - std::min(s.remaining, s.levelSpan);
+	}
 	s.sessionXp = static_cast<int64_t>(lastXp_ - startXp_);
 	s.sessionLevels = table_.Position(lastXp_) - table_.Position(startXp_);
 
