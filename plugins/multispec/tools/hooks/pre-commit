@@ -1,0 +1,16 @@
+#!/bin/sh
+# Pre-commit: the toolkit's privacy scan (d2rAI-toolkit/tools/check_public.py) over the staged files of this repo.
+# Toolkit: $D2RAI_TOOLKIT, else ../d2rAI-toolkit. Private terms: ~/.d2r-modkit/private_terms.txt (outside the repo).
+root=$(git rev-parse --show-toplevel) || exit 1
+kit="${D2RAI_TOOLKIT:-$root/../d2rAI-toolkit}"
+if [ ! -f "$kit/tools/check_public.py" ]; then
+	echo "pre-commit: no toolkit at $kit (set D2RAI_TOOLKIT); cannot run the privacy scan" >&2
+	exit 1
+fi
+for py in python3 python "py -3"; do
+	if $py -c "import sys; sys.exit(sys.version_info < (3, 9))" >/dev/null 2>&1; then
+		exec $py "$kit/tools/check_public.py" --root "$root" --staged --quiet
+	fi
+done
+echo "pre-commit: no Python 3 found" >&2
+exit 1

@@ -1,0 +1,65 @@
+# Builds multispec.dll with MSVC (x64, Release) and runs the unit tests. The DLL is uploaded as the "multispec"
+# artifact of each run (Actions tab -> the run -> Artifacts).
+#
+# PluginSDK is pinned to the commit the toolkit uses (d2rAI-toolkit/third_party/PluginSDK). Change PLUGIN_SDK_REF
+# only together with the toolkit's submodule.
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PLUGIN_SDK_REPO: D2RLoader/PluginSDK
+  PLUGIN_SDK_REF: 717f727a0ec52912d1558764345f8fa3453a2bd6  # SDK 0.3.0, as pinned by d2rAI-toolkit
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PluginSDK
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PLUGIN_SDK_REPO }}
+          ref: ${{ env.PLUGIN_SDK_REF }}
+          path: third_party/PluginSDK
+
+      - name: Configure
+        run: cmake -S . -B build -A x64 -DMULTISPEC_TESTS=ON "-DMULTISPEC_SDK_DIR=${{ github.workspace }}/third_party/PluginSDK"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Unit tests
+        run: build/Release/multispec_tests.exe
+
+      - name: Check the DLL
+        shell: pwsh
+        run: |
+          $dll = "build/Release/multispec.dll"
+          if (-not (Test-Path $dll)) { throw "multispec.dll was not built" }
+          $hash = (Get-FileHash $dll -Algorithm SHA256).Hash.ToLower()
+          "$hash  multispec.dll" | Set-Content build/Release/multispec.dll.sha256
+          Write-Output "multispec.dll sha256 $hash ($((Get-Item $dll).Length) bytes)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: multispec
+          path: |
+            build/Release/multispec.dll
+            build/Release/multispec.dll.sha256
+            multispec.toml
+          if-no-files-found: error
+
+  unit-tests-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests (sanitizers)
+        run: tests/run_tests.sh

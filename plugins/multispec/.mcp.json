@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rea": {
+      "command": "rea",
+      "args": ["mcp"],
+      "env": { "GHIDRA_INSTALL_DIR": "/opt/ghidra" }
+    }
+  }
+}
