@@ -122,7 +122,7 @@ waiting for the first command. The file is simply created or brought up to date 
 | No file | Create it: spec 1 = live, others empty |
 | Name or class differ from the file (a new character with an old name) | Start fresh; the old file stays as `.bak` |
 | Live == specs[active] | Nothing |
-| Live == specs[k], k != active, k within `spec_count`, live has points | The game was not saved after a swap (crash, Alt-F4): active = k, logged |
+| Live == specs[k], k != active, live has points | The game was not saved after a swap (crash, Alt-F4): active = k, logged |
 | `pending a>b` and live == specs[a] or specs[b] | Same rule: whichever matches becomes active; pending cleared |
 | `pending a>b` and live matches no spec | Recovery (a swap failed both ways): no spec is changed; the player is told to load one with `spec N` |
 | Live matches no spec by these rules | The player spent points or respecced in the active spec: specs[active] = live |

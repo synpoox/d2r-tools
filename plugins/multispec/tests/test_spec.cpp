@@ -268,13 +268,14 @@ void TestReconcile() {
 	rep = ms::Reconcile(&s, true, Live(e), 3);
 	CHECK(rep.result == ms::Reconciled::Recovery && s.active == 1 && ms::SumLevels(s.specs[0].levels, N) == 5);
 
-	// a match above spec_count is not taken; the active spec adopts the live skills
+	// swap 3 -> 1 with spec_count 2 never saved, no pending left: live is spec 3, and spec 1 is not overwritten
 	ms::Reconcile(&s, false, Live(e), 3);
+	SetLevels(s.specs[0].levels, {1, 2, 0, 1, 1, 0});
 	SetLevels(s.specs[2].levels, {0, 1, 1, 0, 0, 1});
 	SetLevels(e.level, {0, 1, 1, 0, 0, 1});
 	e.unspent = 6;
 	rep = ms::Reconcile(&s, true, Live(e), 2);
-	CHECK(rep.result == ms::Reconciled::AdoptedLive && s.active == 1 && s.specCount == 3);
+	CHECK(rep.result == ms::Reconciled::ActiveFromMatch && s.active == 3 && ms::SumLevels(s.specs[0].levels, N) == 5);
 }
 
 void TestSwap() {
