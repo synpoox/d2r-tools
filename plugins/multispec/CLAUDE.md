@@ -1,7 +1,7 @@
 # MultiSpec: instructions for Claude
 
 MultiSpec is a global D2RLoader plugin (never mod-scoped) for D2R 3.3 (offline): WoW-style dual spec. A character keeps N saved skill
-allocations ("specs", 2 by default) and loads one with the `spec N` console command, in town only.
+allocations ("specs", 3 by default) and loads one with the `spec N` console command, in town only.
 Design: [docs/design.md](docs/design.md). Recon: [docs/reverse-engineering/multispec-recon.md](../../docs/reverse-engineering/multispec-recon.md).
 
 ## The toolkit

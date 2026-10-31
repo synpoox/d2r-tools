@@ -24,8 +24,7 @@ auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t {
 		  "fields": { "rect": { "x": 0, "y": 0 }, "filename": "PANEL\\Modals\\Modal_No_Title_BG" } },
 		{ "type": "TextBoxWidget", "name": "Heading",
 		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "Spec",
-		              "style": { "fontFace": "Formal", "pointSize": "$XMediumLargeFontSize", "fontColor": "$FontColorGold",
-		                         "dropShadow": "$DefaultDropShadow", "alignment": { "h": "center", "v": "center" } } } },
+		              "style": "$StyleTitleBlock" } },
 		{ "type": "ImageWidget", "name": "Slot",
 		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "PANEL\\HUD_02\\belt_popped_row" } },
 		{ "type": "ButtonWidget", "name": "Up",
@@ -35,9 +34,13 @@ auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t {
 		{ "type": "ButtonWidget", "name": "Down",
 		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_DownButton",
 		              "pressedFrame": 1, "disabledFrame": 2, "hoveredFrame": 3,
-		              "onClickMessage": "PanelManager:OpenPanel:multispec/SpecDown" } })json",
+		              "onClickMessage": "PanelManager:OpenPanel:multispec/SpecDown" } },
+		{ "type": "ImageWidget", "name": "UpOff",
+		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_UpButton", "frame": 2, "visible": false } },
+		{ "type": "ImageWidget", "name": "DownOff",
+		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_DownButton", "frame": 2, "visible": false } })json",
 	                      TreeLeft - VisibleWidth, TreeTop + TabRow, WingTotalWidth, WingHeight, VisibleWidth, WingHeight, SlotX,
-	                      HeadingTop, VisibleWidth - SlotX, HeadingHeight, SlotX, SlotY, ArrowX, UpY, ArrowX, DownY);
+	                      HeadingTop, VisibleWidth - SlotX, HeadingHeight, SlotX, SlotY, ArrowX, UpY, ArrowX, DownY, ArrowX, UpY, ArrowX, DownY);
 	for (int32_t i = 1; i <= specCount && n > 0 && static_cast<size_t>(n) < size; ++i) {
 		n += std::snprintf(out + n, size - static_cast<size_t>(n), R"json(,
 		{ "type": "TextBoxWidget", "name": "Number%d",

@@ -20,6 +20,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
+#include <utility>
 
 namespace ms {
 
@@ -207,9 +209,11 @@ void UpdateSpecPanel(const D2RL::PluginContext* context, int32_t active, bool in
 			(void)g_widgets->setWidgetVisible(context, widget, i == active);
 		}
 	}
-	for (const char* arrow : {"Up", "Down"}) {
-		if (g_widgets->findWidget(context, root, arrow, &widget) == D2RL::Widgets::Result::Success) {
-			(void)g_widgets->setWidgetEnabled(context, widget, inTown && g_specCount > 1);
+	// setWidgetEnabled does not change how a button looks, so a greyed-out copy of each arrow takes its place.
+	const bool usable = inTown && g_specCount > 1;
+	for (const auto& [name, show] : {std::pair<const char*, bool> {"Up", usable}, {"Down", usable}, {"UpOff", !usable}, {"DownOff", !usable}}) {
+		if (g_widgets->findWidget(context, root, name, &widget) == D2RL::Widgets::Result::Success) {
+			(void)g_widgets->setWidgetVisible(context, widget, show);
 		}
 	}
 }

@@ -138,14 +138,14 @@ tall as its 3 slots, starting at the tree's tab row; numbered sockets centred in
 
 ## Spec panel
 
-Run in a toolkit slot with the test harness. The arrows are at x 988, y 202 and 283 at 1600 x 900. Post `WM_MOUSEWHEEL` to the game window for the wheel.
+Run in a toolkit slot with the test harness. The arrows are at x 988, y 221 and 298 at 1600 x 900. Post `WM_MOUSEWHEEL` to the game window for the wheel.
 
 | # | What | How | Expected |
 |---|---|---|---|
-| S1 | Loaded | Log | `specui on: multispec/SpecPanel, 2 specs` |
+| S1 | Loaded | Log | `specui on: multispec/SpecPanel, 3 specs` |
 | S2 | Opens with the tree | `T` | Wing beside the tree, the slot shows the active spec |
 | S3 | Arrows | Click up, then down | Log `spec 1 -> 2 done`, then `2 -> 1`; the number follows |
 | S4 | Wheel | One notch up, one down, then one with the tree closed | Two swaps, none with the tree closed |
 | S5 | Closes with the tree | Escape, then `T` twice | Panel gone each time the tree closes |
 | S6 | Real points | Spend points in each spec, swap back and forth | Each spec's levels return exactly |
-| S7 | Outside town | Take a waypoint out of town, open the tree | Arrows disabled; a wheel notch is refused. The automap names the area: fences don't mark the town edge |
+| S7 | Outside town | Take a waypoint out of town, open the tree | Arrows greyed out; a wheel notch is refused. The automap names the area: fences don't mark the town edge |

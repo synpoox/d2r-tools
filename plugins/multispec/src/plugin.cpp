@@ -46,7 +46,7 @@
 namespace {
 
 constexpr const char* PluginName = "multispec";
-constexpr int32_t DefaultSpecCount = 2;
+constexpr int32_t DefaultSpecCount = 3;
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;

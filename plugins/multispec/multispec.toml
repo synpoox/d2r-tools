@@ -3,7 +3,7 @@
 
 [multispec]
 # Number of specs per character, 1-8. Lowering it keeps the extra specs in each character's file.
-spec_count = 2
+spec_count = 3
 
 # Host and clients must agree on these in TCP/IP games.
 [d2rl]

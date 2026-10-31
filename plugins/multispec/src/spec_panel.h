@@ -14,7 +14,7 @@ namespace ms {
 // Registers the panel and the UI message listener. Writes one "on: ..." / "off: ..." line to report.
 void InstallSpecPanel(const D2RL::PluginContext* context, int32_t specCount, char* report, size_t size) noexcept;
 
-// UI thread, after any spec command: shows the active spec (0 = unknown) and enables the arrows in town only.
+// UI thread, after any spec command: shows the active spec (0 = unknown), and live arrows in town only.
 void UpdateSpecPanel(const D2RL::PluginContext* context, int32_t active, bool inTown) noexcept;
 
 // At unload: gives the game window its own message handler back.
