@@ -133,6 +133,8 @@ struct Request {
 	int32_t swapTo = 0;  // 0 = status only
 	int lineCount = 0;
 	char lines[MaxLines][320] = {};
+	bool quiet = false;   // from the spec panel: the console only hears about a failed swap
+	bool alert = false;   // this answer must reach the console even when quiet
 	int32_t active = 0;   // for the spec panel: 0 = not known
 	bool inTown = false;
 };
@@ -150,7 +152,7 @@ void Say(const char* fmt, ...) noexcept {
 }
 
 void __cdecl PrintAnswer(const D2RL::PluginContext* context, void*) noexcept {
-	for (int i = 0; i < g_req.lineCount; ++i) {
+	for (int i = 0; i < g_req.lineCount && (!g_req.quiet || g_req.alert); ++i) {
 		context->WriteConsoleMessage(g_req.lines[i]);
 	}
 	ms::UpdateSpecPanel(context, g_req.active, g_req.inTown);
@@ -261,12 +263,14 @@ void __cdecl GameWork(const D2RL::PluginContext* context, void*) noexcept {
 					break;
 				case ms::SwapResult::RolledBack:
 					++g_rolledBack;
+				g_req.alert = true;
 					Say("MultiSpec: spec %d could not be loaded (%s); spec %d is back", sw.to, sw.detail, sw.from);
 					plog::Warn("%s: spec %d -> %d rolled back: %s", player.name, sw.from, sw.to, sw.detail);
 					std::snprintf(g_lastError, sizeof(g_lastError), "%s", sw.detail);
 					break;
 				case ms::SwapResult::LeftReset:
 					++g_failed;
+				g_req.alert = true;
 					Say("MultiSpec: swap FAILED, all your points are unspent (none lost); your specs are kept. See the log");
 					plog::Error("%s: spec %d -> %d failed, character left reset: %s", player.name, sw.from, sw.to, sw.detail);
 					std::snprintf(g_lastError, sizeof(g_lastError), "%s", sw.detail);
@@ -319,7 +323,8 @@ auto ParseSpecArgs(const char* args, int32_t* to) noexcept -> bool {
 	return true;
 }
 
-auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* command, void*) noexcept
+// "spec", and the spec panel's hidden "spec-panel" (quiet: userData is set).
+auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* command, void* quiet) noexcept
 	-> D2RL::ConsoleCommandResult {
 	if (command == nullptr || command->plugin == nullptr) {
 		return D2RL::ConsoleCommandResult::Failed;
@@ -338,7 +343,9 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 	if (!g_req.busy.compare_exchange_strong(expected, true)) {
 		// A queued game callback is dropped when the game session ends; don't stay busy for ever.
 		if (GetTickCount64() - g_req.started < 10000) {
-			ctx->WriteConsoleMessage("MultiSpec: busy, try again");
+			if (quiet == nullptr) {
+				ctx->WriteConsoleMessage("MultiSpec: busy, try again");
+			}
 			return D2RL::ConsoleCommandResult::Failed;
 		}
 		plog::Warn("previous request never finished (game left?); starting a new one");
@@ -347,6 +354,8 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 	g_req.client = client;
 	g_req.swapTo = to;
 	g_req.lineCount = 0;
+	g_req.quiet = quiet != nullptr;
+	g_req.alert = false;
 	g_req.active = 0;
 	if (g_threads->runOnGameThread(ctx, GameWork, nullptr) != D2RL::Threads::Result::Success) {
 		g_req.busy.store(false);
@@ -370,6 +379,14 @@ void InstallCommand(const D2RL::PluginContext* context, char* report, size_t siz
 	if (!context->RegisterConsoleCommand(reg)) {
 		std::snprintf(report, size, "off: the spec command could not be registered (name taken?)");
 		return;
+	}
+	static int s_quiet = 1;
+	D2RL::ConsoleCommandRegistration panel = D2RL::MakeConsoleCommand("spec-panel", SpecCommand, "MultiSpec: the spec panel's quiet spec command.");
+	panel.flags = D2RL::ConsoleCommandHidden | D2RL::ConsoleCommandSuppressEcho;
+	panel.userData = &s_quiet;
+	panel.scope = D2RL::ConsoleCommandScope::LocalOnly;
+	if (!context->RegisterConsoleCommand(panel)) {
+		plog::Warn("the spec-panel command could not be registered");
 	}
 	std::snprintf(report, size, "on: spec, spec N (%d specs)", g_specCount);
 }

@@ -213,10 +213,9 @@ These are the first Phase 2 slot runs, before the swap is wired to the command.
 Checks read the plugin log and the `multispec` status output (harness console route), plus screenshots of the skill
 tree.
 
-## 11. Spec panel UI (Phase 4, `specui`) — draft
+## 11. Spec panel UI (Phase 4, `specui`)
 
-Goal: swap specs from the skill tree without the D2RLoader console. WoW-style: numbered spec buttons beside the
-talent frame, active one highlighted, click to activate.
+Goal: swap specs from the skill tree without the D2RLoader console.
 
 Constraint (owner): MultiSpec is a **global plugin, never mod-scoped**, and needs nothing from the active mod. Spike 1
 (`multispec.md`, "Skill tree layout") found the plugin can't add widgets to the stock skill tree: in PluginSDK 0.3.0
@@ -224,74 +223,32 @@ Constraint (owner): MultiSpec is a **global plugin, never mod-scoped**, and need
 `skillstreepanelhd.json`. So the UI is **a plugin panel docked to the skill tree's left edge**, opened with it.
 
 ```
-                 screen                                  right edge
-  ... | spec |  skill tree (stock, 1162 x 1507)  |
-      | [▲]  |                                   |
-      | [1]  |                                   |
-      | [2*] |   tabs, tree, SkillCounter        |
-      | [3]  |                                   |
-      | [▼]  |                                   |
-      | town |                                   |
+  +------+----------------------------------+
+  | Spec |  skill tree (stock)              |
+  | [^]  |                                  |
+  | [ 2] |                                  |
+  | [v]  |                                  |
+  +------+                                  |
+         +----------------------------------+
 ```
+
+One slot shows the active spec, with an arrow above and below, so any number of specs fits (owner's decision).
 
 | Piece | Design |
 |---|---|
-| Panel | `PanelService::registerPanel`, local id `SpecPanel`, logical name `multispec/SpecPanel`, flags `None`: not `CloseOnEscape` (spike 5: it takes Escape from the tree, which then stays open; without it Escape closes the tree and the dock closes the strip), not `GameplayLeftSlot` (pairs with the inventory). Layout `data/global/ui/layouts/multispec/SpecPanelhd.json`, root type `Panel`, `priority` 8500. A full-size `ClickCatcherWidget` first: no click reaches the world (spike 5) |
-| Placement | Root `anchor` `$RightPanelAnchor` (as the skill tree) and `rect` x = -1394 - W, same y -651, so the strip sits flush against the tree's left edge and moves with it at every resolution. W = 170, height 1507; nothing is drawn behind the widgets, so they sit at the strip's right edge (x ≈ 100 for the ~62 px stock button) to read as part of the tree (spike 5). It covers only the gap between the left and right panels, which is about 1000 HD px at 16:9; with a left panel open as well (character sheet) they don't overlap at 16:9 (spike 6 checks narrower ratios) |
-| Generated layout | The plugin writes the JSON at load from `spec_count` and `spec_bar_slots` and gives it with `ResourceService` at its own path (allowed: `ui/layouts/<plugin-id>/`). Strict JSON. Static numerals per slot; strings as `@multispec:Key` from the plugin's `strings.json` |
-| Slots | Vertical stack of `spec_bar_slots` (default 5) `ButtonWidget`s, ~110 x 110, frame art from stock sprites (no new art in the MVP). `spec_count` <= slots: no arrows. Otherwise ▲ ▼ change the page: every slot exists in the JSON and the page shows / hides them with `setWidgetVisible` |
-| Click | `onClickMessage` = `PanelManager:OpenPanel:multispec/Swap<n>`; the `UiMessageListener` matches target `PanelManager` and a text starting `multispec/`, returns `Consume` (no such panel exists), and queues the existing game-thread swap (section 4). Arrows send `multispec/PagePrev` / `multispec/PageNext` the same way. Spike 5: a button's own target (`MultiSpec:...`) is never delivered to the listener; `PanelManager` messages are |
-| Active mark | An `ImageWidget` overlay per slot (stock highlight frame), visible only on the active spec; refreshed on panel open and after each swap result |
-| Town only | Slots `setWidgetEnabled(false)` outside town and while a swap is queued; a fixed hint `TextBoxWidget` ("Specs can be changed in town") |
-| Opens with the tree | The UI listener matches `PanelManager` `OpenPanel` / `ClosePanel` with text `SkillsTreePanel` (spike 4: sent for every route, key, HUD button, X, a panel replacing it, Escape) and calls `openPanel` / `closePanel`. `findPanel` can't tell open from closed. Optional rebindable `InputService` action "Toggle spec panel": dispatches `PanelManager:TogglePanel:SkillsTreePanel` (spike 4: it toggles the tree but sends no `OpenPanel` / `ClosePanel`) and opens or closes the spec panel itself, tracking the tree's state from the listener |
-| Labels | Static numerals in the JSON; the widget API cannot set text. Live counts stay in the console `spec` output unless spike 3 finds a text route |
-| Off-switch | `specui` off: the panel is never registered and the listener and action are not added; `/spec` keeps working |
-| Not in scope | Controller UI (a controller route is global and only one may exist), TCP/IP clients (host only, as the command), spec renaming, copy-spec |
+| Panel | `PanelService::registerPanel`, local id `SpecPanel`, logical name `multispec/SpecPanel`, flags `None`. Not `CloseOnEscape`: that takes Escape from the tree, which then stays open (spike 5). Not `GameplayLeftSlot`: that pairs it with the inventory. A `ClickCatcherWidget` over the visible part keeps clicks from reaching the world (spike 5) |
+| Generated layout | The plugin writes the JSON at load (`spec_panel_layout.*`) and gives it with `ResourceService` at `data/global/ui/layouts/multispec/SpecPanelhd.json` |
+| Placement | Root `anchor` `$RightPanelAnchor` (as the skill tree), `priority` -5, so the tree draws over it (spike 8). It moves with the tree at every resolution (spike 6) |
+| Art | Stock sprites only, referenced by path, so the player's install supplies them and no game art is in the repository. The SDK can't read game files, so sprites can't be cropped at load; the tree covers what isn't wanted. Wing: `PANEL\Modals\Modal_No_Title_BG` (1245 x 453), left 160 px visible. Slot: `PANEL\HUD_02\belt_popped_row`, whose other three slots lie under the tree. Arrows: `FrontEnd\HD\Final\FrontEnd_UpButton` and `_DownButton` |
+| Title | "Spec", the skill tree's `$StyleTitleBlock` at 85% size (`$MediumLargeFontSize`) |
+| Number | The widget API cannot set text, so the layout holds one number per spec and `setWidgetVisible` shows the active one |
+| Opens with the tree | The UI listener matches `PanelManager` `OpenPanel` / `ClosePanel` with text `SkillsTreePanel` (spike 4: sent for every route) and queues `openPanel` / `closePanel`. Opening asks for the active spec and whether the player is in town |
+| Arrows | `onClickMessage` = `PanelManager:OpenPanel:multispec/SpecUp` or `SpecDown`. The listener consumes it (no such panel exists). A button's own target is never delivered (spike 5). Up is the next spec, and both directions wrap |
+| Wheel | The SDK has no mouse input, so the plugin subclasses the game window (class `OsWindow`), as scrollable-waypoints does. A notch counts anywhere while the panel is open: the panels' screen position depends on the aspect ratio, and the tree has no use for the wheel |
+| Swap | A step runs the hidden `spec-panel N` command through D2RCore's `ExecuteConsoleCommand` from the UI thread, so it takes the same path and checks as a typed `spec N`. One swap at a time: extra steps are dropped until the answer arrives, or for 5 s |
+| Console | The panel prints nothing, except a swap that failed or rolled back. Everything is in the plugin log. Typed `spec` prints as before |
+| Town only | The swap's own check refuses outside town. `setWidgetEnabled` has no visible effect, so greyed-out copies of the arrows (frame 2) replace them. The arrows update when the panel opens: walking out of town with the tree open leaves them lit until it reopens, and a swap is still refused |
+| Off-switch | `specui` in `multispec-off.txt`: the panel and listener are not registered, and `spec` keeps working |
 
-### Strip art
-
-Owner (spike 6): the strip floats; it needs a background that matches the stock panels. The look to aim for: the tree
-panel grows a side wing on its left, in the same stone and frame, with the slots set into it.
-
-```
-  ╔══════╗╔═══════════════ Skill Tree ════════╗
-  ║ Specs║║  tabs                             ║
-  ║ [1]  ║║                                   ║
-  ║ [2*] ║║  tree                             ║
-  ║ [3]  ║║                                   ║
-  ║  ▲▼  ║║                                   ║
-  ║      ║║  SkillCounter                     ║
-  ╚══════╝╚═══════════════════════════════════╝
-   strip    stock tree, unchanged
-```
-
-| Option | How | For | Against |
-|---|---|---|---|
-| **A. Stock panel art under the tree (recommended first)** | An `ImageWidget` `PANEL\\PANEL_BG` (the tree's own background, 1162 x 1507) at strip x 0, so it runs on under the tree; the strip's `priority` set below the tree's so the tree draws over it and only its left 170 px show: the stock left border and stone. Slots and heading drawn on top in the strip | No new art, nothing from the game in the repo (the player's install supplies the sprite), matches the panels exactly, scales and moves with the tree | Two left borders side by side (the wing's and the tree's), which may read as two panels; always the full panel height; depends on the draw order following `priority` (spike 8) |
-| B. Own sprites, 3-slice | `StripTop` (frame top + corners + heading), `StripSlot` (stone with a recessed socket, one per visible slot), `StripArrows`, `StripBottom`; 170 wide, the height follows `spec_bar_slots`. PNG -> `.sprite` + `.lowend.sprite` with the toolkit's `png2sprite`; shipped with `registerResource` at `data/hd/global/ui/d2rloader/multispec/...` (spike 8 checks a plugin sprite path resolves) | A real wing, shorter than the tree, slot sockets | The art must be drawn new: cropping D2R's sprites would put game art in the repo (toolkit rule 1). Needs someone to draw it |
-
-Plan: try A in spike 8. If it looks right, ship it. If the double border or the full height looks wrong, B, with new
-art; A's screenshot is the reference for colours and border width.
-
-Config adds `spec_bar_slots = 5` (1-8). It is UI only, so it stays out of `[d2rl] match`.
-
-Spikes before building (each is a small slot test, results recorded in `multispec.md` / TESTING.md):
-
-1. Done (static): the stock skill tree layout and its widgets; result above. The mod-scope check is dropped.
-2. Done with 5: a button's own target is not delivered; `PanelManager:OpenPanel:multispec/<name>` is, and can be
-   consumed. Queuing the swap from the listener is checked when the panel is built (7).
-3. Whether any native UI message or `dispatchUiAction` can set text on a widget (decides live counts / names).
-4. Done: `PanelManager:OpenPanel` / `ClosePanel` with text `SkillsTreePanel` (`multispec.md`, spike 4). A dispatched
-   `TogglePanel` toggles the tree but sends neither message.
-5. Done (`multispec.md`, spike 5, runs 1-3): the docked test panel opens and closes with the tree, sits flush, takes
-   Escape correctly without `CloseOnEscape`, blocks clicks, and its buttons reach the plugin through `PanelManager`.
-6. Done (`multispec.md`, spike 6): fits at 4:3 beside a left panel; at 21:9 D2R pulls the panels in and the strip
-   follows. Not yet seen: legacy graphics (G), large font mode.
-7. Panel open / swap / close cycle: the active mark and enabled state refresh correctly, including after a failed swap.
-8. Strip art option A: `PANEL\\PANEL_BG` in the strip with a `priority` below the tree's draws under the tree (only
-   the left 170 px show), buttons still take clicks; and whether a plugin sprite under `d2rloader/multispec/` resolves
-   (for option B).
-
-### Built (owner's decision, 2026-10-30)
-
-Stock art only, referenced by path, so the player's install supplies it and no game art is in the repository. One slot shows the active spec, with an arrow above and below, so any number of specs fits; this replaces the slot column, paging, `spec_bar_slots` and the town hint in the table above. The wing is `PANEL\Modals\Modal_No_Title_BG` (1245 x 453) at priority -5, so the tree covers all but its left 160 px. The slot is `PANEL\HUD_02\belt_popped_row`, whose other three slots lie under the tree. The arrows are `FrontEnd\HD\Final\FrontEnd_UpButton` and `_DownButton`. Up is the next spec, and both wrap. The wheel steps while the panel is open, anywhere on screen, because the panels' position depends on the aspect ratio. A step runs `spec N` through D2RCore's `ExecuteConsoleCommand`, so it takes the same path and checks as a typed swap. Widget text cannot change, so the layout has one number per spec and shows the active one.
+Spike results are in `docs/reverse-engineering/multispec.md`; test rows are in `TESTING.md`. Not seen in game: legacy
+graphics and large font mode.

@@ -1,7 +1,7 @@
 // Spec panel (part "specui"): a slot showing the active spec with an arrow above and below, docked to the skill tree's left
 // edge and opened and closed with it (design section 11). An arrow or the mouse wheel steps through the specs by running
-// the "spec N" console command, so a panel swap takes the same path and the same checks as a typed one; the panel only
-// shows the result. Layout: spec_panel_layout.h.
+// the hidden "spec-panel N" command, so a panel swap takes the same path and the same checks as a typed "spec N" but prints
+// nothing unless it fails; the panel only shows the result. Layout: spec_panel_layout.h.
 #pragma once
 
 #include <D2RLPlugin/api.h>

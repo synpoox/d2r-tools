@@ -67,8 +67,8 @@ void __cdecl Step(const D2RL::PluginContext*, void* step) noexcept {
 		return;
 	}
 	g_swapStarted.store(now);
-	char command[16];
-	std::snprintf(command, sizeof(command), "spec %d", to);
+	char command[24];
+	std::snprintf(command, sizeof(command), "spec-panel %d", to);
 	RunCommand(command);
 }
 
@@ -119,7 +119,7 @@ void __cdecl OpenPanel(const D2RL::PluginContext* context, void*) noexcept {
 	}
 	g_open.store(true);
 	WatchWheel();
-	RunCommand("spec");  // the answer shows the active spec and enables the arrows
+	RunCommand("spec-panel");  // the answer shows the active spec and sets the arrows
 }
 
 void __cdecl ClosePanel(const D2RL::PluginContext* context, void*) noexcept {

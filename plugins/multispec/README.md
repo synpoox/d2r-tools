@@ -1,13 +1,16 @@
 # MultiSpec
 
-Dual spec for Diablo II: Resurrected (offline, with D2RLoader; tested on D2R 3.3 and D2RLoader 1.3.1). Each character keeps 2 saved skill allocations
+Dual spec for Diablo II: Resurrected (offline, with D2RLoader; tested on D2R 3.3 and D2RLoader 1.3.1). Each character keeps 3 saved skill allocations
 (up to 99 with `spec_count`) and switches between them in town, without a respec token.
 
-**Status: Phase 2 (MVP), not yet tested in game.**
+**Status: unreleased. Tested in game on D2R 3.3 and D2RLoader 1.3.1.**
 
 ## Use
 
-Open D2RLoader's console in game and type:
+Open the skill tree: a panel beside it shows your active spec. In town, click its arrows or scroll the mouse wheel to go
+through your specs. Outside town the arrows are greyed out.
+
+Or use D2RLoader's console:
 
 | Command | Does |
 |---|---|
