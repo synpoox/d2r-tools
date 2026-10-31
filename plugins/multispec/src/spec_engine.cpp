@@ -37,6 +37,14 @@ auto ReadName(const void* p, char* out) noexcept -> bool {
 	return ValidName(out);
 }
 
+auto SlotOf(const uint8_t* skill) noexcept -> SkillSlot {
+	if (skill == nullptr) {
+		return {};
+	}
+	const uint8_t* record = d2r::At<const uint8_t*>(skill, d2r::SkillRecordPtr);
+	return {record != nullptr ? d2r::At<int16_t>(record, 0) : 0, d2r::At<int32_t>(skill, d2r::SkillOwnerItem)};
+}
+
 }  // namespace
 
 auto ResolvePlayer(d2r::Client* client, Player* out, char* why, size_t size) noexcept -> bool {
@@ -140,6 +148,11 @@ auto D2REngine::Read(LiveChar* out) noexcept -> bool {
 		out->levels[i] = static_cast<uint8_t>(level < 0 ? 0 : (level > 255 ? 255 : level));
 	}
 	out->unspent = d2r::api.statBase(m_p.unit, d2r::StatNewSkills, 0);
+	const uint8_t* list = d2r::At<const uint8_t*>(m_p.unit, d2r::UnitSkillList);
+	if (list != nullptr) {
+		out->left = SlotOf(d2r::At<const uint8_t*>(list, d2r::SkillListLeft));
+		out->right = SlotOf(d2r::At<const uint8_t*>(list, d2r::SkillListRight));
+	}
 	return true;
 }
 
@@ -165,6 +178,16 @@ auto D2REngine::CanSpend(int32_t index) noexcept -> bool {
 
 auto D2REngine::Spend(int32_t index) noexcept -> bool {
 	return d2r::api.spendSkillPoint(m_p.dataFlag, m_p.unit, SkillId(index)) != 0;
+}
+
+// What D2R's select-skill packet handler (0x4b4250) and its own re-select (0x474aa0) do.
+void D2REngine::Select(bool left, const SkillSlot& slot) noexcept {
+	d2r::Skill* skill = d2r::api.getSkill(m_p.unit, slot.skillId, slot.itemId);
+	if (skill == nullptr || d2r::api.skillUsable(m_p.unit, skill) == 0) {
+		return;
+	}
+	d2r::api.selectSkill(m_p.unit, left ? 1 : 0, slot.skillId, slot.itemId);
+	(left ? d2r::api.rememberLeftSkill : d2r::api.rememberRightSkill)(m_p.unit);
 }
 
 }  // namespace ms

@@ -69,8 +69,8 @@ char Lyra
 class 1
 skills 30 36 37 38 ...                (skill ids)
 active 1
-spec 1 1 0 20 0 1 ...                 (n levels)
-spec 2 0 0 0 0 0 ...
+spec 1 ok 0 20 0 1 ... sel 36 -1 40 -1  (state, n levels; left and right mouse skill: id, item id)
+spec 2 ok 0 0 0 0 ... sel 0 0 0 0
 pending none                          (or "1>2" during a swap)
 crc 9f3a01c2                          (CRC-32 of the lines above)
 ```
@@ -91,7 +91,7 @@ All of a swap runs **in one game-thread callback** on the server (single player,
       in town; 1 <= N <= spec_count; N != active; no swap running;
       every class skill's skpoints is -1 or 1 (section 8); spec N not invalid; cost/cooldown (Phase 4)
  2  snapshot  L_old = live hard levels (0x33dcd0 + skill+0x40); U_old = newskills; T = sum(L_old) + U_old
- 3  file: specs[active] = L_old, pending = active>N           (atomic write; abort if it fails)
+ 3  file: specs[active] = L_old + mouse skills (not in recovery), pending = active>N   (atomic write; abort if it fails)
  4  reset     0x4360f0(game, player)                          D2R's skills-only respec (as Akara / Token)
       check   every class skill 0, newskills == T             else go to 7
  5  replay    L_new = specs[N]; repeat passes over the class skills in D2R order:
@@ -99,9 +99,10 @@ All of a swap runs **in one game-thread callback** on the server (single player,
                 level < maxlvl, then 0x438670 (spend one point; sends the level to the client)
               until no pass makes progress (prerequisites resolve themselves across passes)
  6  verify    live levels == L_new and newskills == T - sum(L_new)
-              ok: file active = N, pending none; log "spec 1 -> 2: 54 points in 11 skills, 3 unspent"
+              ok: spec N's mouse skills back (0x438a70), file active = N, pending none;
+              log "spec 1 -> 2: 54 points in 11 skills, 3 unspent"
  7  on failure: reset again and replay L_old the same way (rollback)
-              ok: file active unchanged, pending none; tell the player why the swap failed
+              ok: old mouse skills back, file active unchanged, pending none; tell the player why the swap failed
               rollback fails too: leave the character reset (every point unspent, nothing lost) and keep `pending`
               in the file: "recovery". No spec is overwritten while in recovery; `spec N` loads any spec (the
               active one too) and clears it. Log an error with both reasons

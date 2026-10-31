@@ -33,7 +33,14 @@ public:
 	int32_t refuseSpendIndex = -1;  // Spend() fails for this skill
 	bool breakReset = false;        // Reset() loses a point
 	int resets = 0;
+	ms::SkillSlot left {0, -1};
+	ms::SkillSlot right {0, -1};
 
+	void Select(bool isLeft, const ms::SkillSlot& slot) noexcept override {
+		if (slot.skillId >= 36 && slot.skillId < 36 + N && level[slot.skillId - 36] > 0) {
+			(isLeft ? left : right) = slot;
+		}
+	}
 	auto Read(ms::LiveChar* out) noexcept -> bool override {
 		*out = {};
 		std::snprintf(out->name, sizeof(out->name), "Tester");
@@ -44,10 +51,13 @@ public:
 			out->levels[i] = level[i];
 		}
 		out->unspent = unspent;
+		out->left = left;
+		out->right = right;
 		return true;
 	}
 	void Reset() noexcept override {
 		++resets;
+		left = right = {0, -1};  // D2R goes back to Attack
 		for (int i = 0; i < N; ++i) {
 			unspent += level[i];
 			level[i] = 0;
@@ -174,6 +184,19 @@ void TestCrcAndRoundTrip() {
 	s.pendingTo = 2;
 	const size_t len2 = ms::Serialize(s, text, sizeof(text));
 	CHECK(ms::Parse(text, len2, &back, err, sizeof(err)) && back.pendingFrom == 1 && back.pendingTo == 2);
+
+	// the mouse skills round-trip, and a version 1 file (no "sel") still loads with none remembered
+	s.specs[0].left = {37, -1};
+	s.specs[0].right = {41, 1234};
+	const size_t len3 = ms::Serialize(s, text, sizeof(text));
+	CHECK(ms::Parse(text, len3, &back, err, sizeof(err)) && back.specs[0].left.skillId == 37 &&
+	      back.specs[0].left.itemId == -1 && back.specs[0].right.skillId == 41 && back.specs[0].right.itemId == 1234);
+	const char* v1Body = "multispec 1\nchar Tester\nclass 1\nskills 2 36 37\nactive 1\nspec 1 ok 1 2\npending none\n";
+	char v1[256];
+	const int v1Len = std::snprintf(v1, sizeof(v1), "%scrc %08x\n", v1Body,
+	                                static_cast<unsigned>(ms::Crc32(v1Body, std::strlen(v1Body))));
+	CHECK(ms::Parse(v1, static_cast<size_t>(v1Len), &back, err, sizeof(err)) && back.specs[0].levels[1] == 2 &&
+	      back.specs[0].left.skillId == 0 && back.specs[0].right.skillId == 0);
 }
 
 void TestConfigAndModinfo() {
@@ -358,8 +381,26 @@ void TestSwap() {
 	// ...and spec N loads any spec from there, the active one too
 	e.breakReset = false;
 	e.unspent = 10;  // the fake's broken respecs lost points; restore T = 9 + 1 earned
+	s.specs[0].left = {37, -1};  // the reset character's Attack must not replace it
 	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
+	CHECK(s.specs[0].left.skillId == 37 && e.left.skillId == 37);
+
+	// each spec gets its mouse skills back; a spec that never had any stays on Attack
+	e.left = {36, -1};
+	e.right = {39, -1};
+	CHECK(ms::Swap(e, st, &s, Live(e), 2, 2, &r) == ms::SwapResult::Done);
+	CHECK(s.specs[0].left.skillId == 36 && s.specs[0].right.skillId == 39 && st.last.specs[0].right.skillId == 39);
+	CHECK(e.left.skillId == 0 && e.right.skillId == 0);
+	e.right = {37, -1};
+	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
+	CHECK(e.left.skillId == 36 && e.right.skillId == 39 && s.specs[1].right.skillId == 37);
+
+	// a failed swap puts them back too
+	e.refuseSpendIndex = 2;
+	CHECK(ms::Swap(e, st, &s, Live(e), 2, 2, &r) == ms::SwapResult::RolledBack);
+	CHECK(e.left.skillId == 36 && e.right.skillId == 39);
+	e.refuseSpendIndex = -1;
 
 	// spec_count lowered below the active spec: the swap back into range works and keeps every spec.
 	(void)ms::Reconcile(&s, true, Live(e), 3);

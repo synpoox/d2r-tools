@@ -189,7 +189,8 @@ auto Serialize(const CharSpecs& s, char* out, size_t size) noexcept -> size_t {
 		for (int32_t i = 0; i < s.skillCount; ++i) {
 			o.Add(" %u", static_cast<unsigned>(s.specs[k].levels[i]));
 		}
-		o.Add("\n");
+		o.Add(" sel %d %d %d %d\n", s.specs[k].left.skillId, s.specs[k].left.itemId, s.specs[k].right.skillId,
+		      s.specs[k].right.itemId);
 	}
 	if (s.pendingFrom > 0) {
 		o.Add("pending %d %d\n", s.pendingFrom, s.pendingTo);
@@ -268,7 +269,7 @@ auto Parse(const char* text, size_t size, CharSpecs* out, char* error, size_t er
 		Fail(error, errorSize, "not a multispec file");
 		return false;
 	}
-	if (v != FileVersion) {
+	if (v != 1 && v != FileVersion) {
 		Fail(error, errorSize, "unknown file version");
 		return false;
 	}
@@ -343,6 +344,17 @@ auto Parse(const char* text, size_t size, CharSpecs* out, char* error, size_t er
 				return false;
 			}
 			spec.levels[i] = static_cast<uint8_t>(v);
+		}
+		if (Word(&c, "sel")) {
+			int64_t sel[4] = {};
+			for (int64_t& value : sel) {
+				if (!Int(&c, &value) || value < INT32_MIN || value > INT32_MAX) {
+					Fail(error, errorSize, "bad spec sel");
+					return false;
+				}
+			}
+			spec.left = {static_cast<int32_t>(sel[0]), static_cast<int32_t>(sel[1])};
+			spec.right = {static_cast<int32_t>(sel[2]), static_cast<int32_t>(sel[3])};
 		}
 		if (!AtEnd(c)) {
 			Fail(error, errorSize, "extra spec levels");

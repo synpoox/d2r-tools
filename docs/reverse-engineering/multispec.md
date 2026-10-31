@@ -63,6 +63,10 @@ this. Same pair as the registry.
 | `0x33cb30` | (dataFlag, class 0-7) -> count | number of class skills (data tables +0x11d0 per-class lists) | `0x4360f0` loop bound |
 | `0x33dde0` | (dataFlag, class, index) -> skillId | the class's index-th skill: **the order of the save's "if" bytes** | `0x4360f0` loop |
 | `0x97790` | (dataFlag, skillId) -> SkillsTxt* | record getter (registry); 0x2ec bytes | |
+| SkillList +0x08 / +0x10 | Skill* | left / right mouse skill | setters `0x33ec70` / `0x33ef10`; right getter `0x34b400` via `0x33db60` (static) |
+| `0x33a660` | (unit, skill) -> nonzero | usable: hard level plus bonuses above 0 | decompiled; `0x474aa0` and the select handler test it first |
+| `0x438a70` | (unit, isLeft, skillId, itemId) | **server skill select**, also starts or ends a right-hand aura and tells the client; skill 5 is ignored. Details in [better-auras.md](better-auras.md) | select packet handler `0x4b4250`; `0x474aa0` restores with it (static) |
+| `0x34d180` / `0x34d220` | (player) | store the left / right skill in player data (+0xc8 id, +0xd0 item for left), which `0x474d60` re-selects after item changes | called after `0x438a70` in `0x4b4250`; readers `0x34cec0` / `0x34cf60` (static) |
 
 Skills record offsets found here (add to the registry's list): **+0x2c i8 charclass** (`0x436bd0`), +0x184 i16 maxlvl
 (0 -> 20) (`0x4b3ee0`), +0x210 i32 skpoints formula (-1 = cost 1) (`0x438670`), +0x216 / +0x218 i16 requirement fields
@@ -121,8 +125,14 @@ Whole instructions, at least 14 bytes. For a byte check before calling, not for 
 | `0x48ff00` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 20` |
 | `0x47f330` | `48 85 D2 0F 84 D6 00 00 00 53 55 56 57 48 83 EC 48` |
 | `0x33a010` | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18` |
+| `0x33a660` | `40 53 48 83 EC 20 48 8B D9 48 85 D2 74 18` |
+| `0x438a70` | `41 83 F8 05 0F 84 28 02 00 00` (10 bytes: Better Auras hooks `0x438a7a`) |
+| `0x34d180` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 19` |
+| `0x34d220` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 19` |
 
 ## Still to verify in game
+
+- Calling `0x438a70` after a swap leaves the buttons right on the client, and what the second weapon set shows.
 
 - The `D2R::Game::Client*` a D2RLoader console callback receives: is it the server client above (so
   `0x484c90(client, 0)` gives the player), and does the callback run on the game thread? Check: the round trip

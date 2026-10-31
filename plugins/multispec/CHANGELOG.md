@@ -8,3 +8,4 @@
 - Attempts to run on any game or D2RLoader version.
 - Crashes are written to the plugin's log.
 - Fixed a respec token switching you to a different spec.
+- Each spec remembers its left and right mouse skills.
