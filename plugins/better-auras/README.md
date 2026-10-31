@@ -3,7 +3,8 @@
 A D2RLoader plugin that gives a Diablo II: Resurrected mod Path of Exile-style auras, in offline and TCP/IP games
 (never Battle.net):
 
-- **Toggle**: choosing (or, optionally, using) a listed aura turns it on; doing it again turns it off. It stays on until
+- **Toggle**: casting a listed aura (right button with it on the button) turns it on; casting it again turns it off.
+  Choosing it for a button does nothing by itself, as in Path of Exile. It stays on until
   you turn it off, you die, or its drain/reservation can't be paid.
 - **Drain**: optional mana or life per second, taken smoothly every frame by the game's own regen (as negative
   regeneration). When less than a second of drain is left at its upkeep tick, the aura turns off. Life drain never kills (one point stays).
@@ -37,7 +38,6 @@ Only skills listed under `[skills.<name or id>]` are changed. Each one starts fr
 [defaults]
 enabled = true          # false: the skill stays vanilla
 toggle  = true          # false: vanilla "on while selected"; drain and reservation still apply
-trigger = "select"      # "select": choosing it for the right button toggles it; "cast": not working yet, see below
 
 [skills.Might]          # skills.txt name, or id: [skills.98]
 reserve = { resource = "mana", mode = "percent", value = 25 }
@@ -45,9 +45,6 @@ reserve = { resource = "mana", mode = "percent", value = 25 }
 [skills.Prayer]
 drain = { resource = "mana", perSecond = 1.5 }
 ```
-
-`trigger = "cast"` is unproven: in town, using an aura never reached the game's start-skill code, so the aura can't turn
-on. Keep `select` until it's confirmed outside town.
 
 Dotted keys (`drain.resource = "mana"`) and sub-tables (`[skills.Might.drain]`) work too. Names come from the mod's
 loose `skills.txt` when there is one, else from D2R's aura names. A listed skill that uses no aura function (the
@@ -61,7 +58,7 @@ loose `skills.txt` when there is one, else from D2R's aura names. A listed skill
 | Area change, waypoint, town portal | auras stay on |
 | In town | as vanilla: a skill without `InTown` does nothing in town (and drains nothing) but stays toggled |
 | Save and exit / load | auras start off, also the one on the right button; nothing is written to the save |
-| Weapon swap | auras stay as they are: only choosing a skill yourself toggles it |
+| Weapon swap | auras stay as they are: only casting toggles |
 | Several reservations | each is checked against the pool's max before any reservation; at least one point stays free; released newest first |
 | Level-up, gear changes | percent reservations follow the new max; flat ones stay. If the pool can't cover them all, the newest aura turns off |
 | Two listed auras with the same `aurastate` | the second one is refused |
@@ -77,11 +74,7 @@ per aura on/off/refusal with the reason.
 
 ## How it works
 
-<<<<<<< HEAD
 Addresses, guards and evidence: [docs/reverse-engineering/better-auras.md](../../docs/reverse-engineering/better-auras.md). In short: vanilla keeps the right-skill aura alive
-=======
-See [docs/reverse-engineering/better-auras.md](../../docs/reverse-engineering/better-auras.md). In short: vanilla keeps the right-skill aura alive
->>>>>>> 7ad78a7 (better-auras: drain through the game's regen, reservation as a cap on current life/mana)
 with unit timer event 8 keyed -1, and a skill switch removes that event and the aura's state list. The same event can
 be keyed with the skill id; those timers survive a switch. A toggled aura is started the vanilla way and moved to its
 own timer.
@@ -97,8 +90,8 @@ Hook sites (image `0x6ab3782c`; the registry above is authoritative):
 | aura upkeep tick (event 8) | `0x437460` | drain stop check, percent reservations follow the pool |
 | player regen tick (event 3, every frame) | `0x42e600` | reservation cap |
 | start right-skill aura | `0x43b680` | toggled skills don't start on select |
-| skill select (past its first branch) | `0x438a7a` | select trigger; rebuild a toggled aura's list after a switch |
-| start skill | `0x43b3e0` | cast trigger |
+| skill select (past its first branch) | `0x438a7a` | rebuild a toggled aura's list after a switch |
+| client player action | `0xfe3b0` | right button press: casting a toggled aura (sent to the host as a plugin message) |
 | unit death | `0x44db20` | release everything |
 
 ## Build

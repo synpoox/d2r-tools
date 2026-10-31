@@ -275,14 +275,6 @@ auto Apply(SkillConfig& c, const std::vector<std::string>& field, const Value& v
 	const std::string f1 = field.size() > 1 ? field[1] : "";
 	if (field.size() == 1 && f0 == "enabled") return want(Value::Bool, "true/false") && ((c.enabled = v.b), true);
 	if (field.size() == 1 && f0 == "toggle") return want(Value::Bool, "true/false") && ((c.toggle = v.b), true);
-	if (field.size() == 1 && f0 == "trigger") {
-		if (!want(Value::Str, "\"select\" or \"cast\"")) return false;
-		const std::string l = Lower(v.s);
-		if (l == "select") c.trigger = Trigger::Select;
-		else if (l == "cast") c.trigger = Trigger::Cast;
-		else return (error = "expects \"select\" or \"cast\""), false;
-		return true;
-	}
 	if (field.size() == 2 && f0 == "drain") {
 		if (f1 == "resource") return want(Value::Str, "\"mana\" or \"life\"") && (ParseResource(v.s, c.drainResource) || ((error = "expects \"mana\" or \"life\""), false));
 		if (f1 == "perSecond") return want(Value::Num, "a number") && (v.n >= 0 || ((error = "must be >= 0"), false)) && ((c.drainPerSecond = v.n), true);
@@ -388,7 +380,7 @@ auto Load(const D2RL::PluginContext* context, char* report, size_t reportSize) n
 	// a skill listed only as a table header with nothing under it gets no entry: say so
 	for (const SkillConfig& c : g_skills) {
 		plog::Info("config: %s (id %d) %s%s, drain %s %.2f/s, reserve %s %.2f%s", c.key, c.skill, c.enabled ? "on" : "OFF",
-		           c.toggle ? (c.trigger == Trigger::Cast ? " toggle-on-cast" : " toggle-on-select") : " vanilla-select",
+		           c.toggle ? " toggle-on-cast" : " vanilla-select",
 		           ResourceName(c.drainResource), c.drainPerSecond, ResourceName(c.reserveResource), c.reserveValue,
 		           c.reserveMode == ReserveMode::Percent ? "%" : " flat");
 	}

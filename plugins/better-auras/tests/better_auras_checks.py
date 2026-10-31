@@ -64,7 +64,7 @@ def ba_files(ctx):
     assert skills, "the config lists no [skills.<name>]"
     for name, s in skills.items():
         for k in s:
-            assert k in ("enabled", "toggle", "trigger", "drain", "reserve"), f"skills.{name}.{k}: unknown setting"
+            assert k in ("enabled", "toggle", "drain", "reserve"), f"skills.{name}.{k}: unknown setting"
     return f"{len(skills)} skill(s) configured"
 
 
@@ -116,7 +116,7 @@ def _scenario(ctx, pattern: str, what: str, forbid: str | None = None) -> str:
 
 @check("ba-toggle", tags=["ba-scenario"])
 def ba_toggle(ctx):
-    """A listed aura went on and later off by its trigger."""
+    """A listed aura went on and later off by casting it."""
     text = _last_session(_plugin_log(ctx))
     on = re.findall(r"aura (\d+) on \(level", text)
     off = re.findall(r"aura (\d+) off \(toggled off\)", text)

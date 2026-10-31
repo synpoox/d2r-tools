@@ -8,7 +8,6 @@
 
 #define NOMINMAX
 #include <windows.h>
-#include <intrin.h>
 
 #include <algorithm>
 #include <atomic>
@@ -33,7 +32,7 @@ char g_hookReport[256] = "";
 
 aura::AuraTickFn g_tickOriginal = nullptr;
 aura::SelectSkillFn g_selectOriginal = nullptr;
-aura::StartSkillFn g_startSkillOriginal = nullptr;
+aura::PlayerActionFn g_actionOriginal = nullptr;
 aura::UnitDeathFn g_deathOriginal = nullptr;
 aura::RegenTickFn g_regenOriginal = nullptr;
 
@@ -55,6 +54,21 @@ struct Active {
 std::vector<Active> g_active;
 uint32_t g_order = 0;
 std::atomic<int> g_reservations {0};  // entries with a reservation: the per-frame regen hook skips the lock when 0
+// Casting is seen on the client and toggled on the host: a plugin message, picked up by the sender's next regen frame.
+struct CastMessage {
+	int32_t unitId;
+	int32_t skill;
+};
+inline constexpr uint16_t MsgCast = 1;
+inline constexpr size_t MaxPendingCasts = 16;
+const D2RL::PluginContext* g_context = nullptr;
+const D2RL::NetworkService* g_network = nullptr;
+D2RL::Network::ChannelHandle g_channel = D2RL::Network::InvalidChannelHandle;
+std::atomic<int32_t> g_unsentSkill {0};  // client: a cast waiting for the channel to connect
+std::atomic<int32_t> g_castUnitId {0};
+std::vector<CastMessage> g_pendingCasts;
+std::atomic<int> g_pendingCount {0};
+
 // Hooks run on the game thread; the status command reads from the console. Recursive: a hooked function can run
 // inside another (a death inside an aura tick), and every hook looks its entry up again after calling the game.
 struct CriticalSection {
@@ -399,6 +413,22 @@ void AuraTick(Game* game, Unit* unit, int32_t key, int32_t a4, int32_t a5) noexc
 // Every frame, per player: vanilla regen, then the reservation cap.
 void RegenTick(Game* game, Unit* unit, int32_t a3, int32_t a4) noexcept {
 	g_regenOriginal(game, unit, a3, a4);
+	if (g_pendingCount.load(std::memory_order_relaxed) > 0 && game != nullptr && IsPlayer(unit)) {
+		Lock lock;
+		const int32_t id = At<int32_t>(unit, aura::UnitId);
+		for (size_t i = 0; i < g_pendingCasts.size();) {
+			const CastMessage cast = g_pendingCasts[i];
+			if (cast.unitId != id) {
+				++i;
+				continue;
+			}
+			g_pendingCasts.erase(g_pendingCasts.begin() + static_cast<std::ptrdiff_t>(i));
+			if (const config::SkillConfig* cfg = config::Find(cast.skill); cfg != nullptr && cfg->toggle && api.unitDead(unit) == 0) {
+				ToggleSkill(game, unit, cast.skill, *cfg);
+			}
+		}
+		g_pendingCount = static_cast<int>(g_pendingCasts.size());
+	}
 	if (g_reservations.load(std::memory_order_relaxed) > 0 && game != nullptr && IsPlayer(unit)) {
 		Lock lock;
 		ApplyCap(unit);
@@ -461,11 +491,8 @@ void SelectSkill(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept
 		}
 	}
 	g_selectOriginal(unit, isLeft, skill, a4);  // may remove the old right-skill aura and start a new one
-	if (game == nullptr) {
-		return;
-	}
-	Lock lock;
-	if (keep) {
+	if (game != nullptr && keep) {
+		Lock lock;
 		if (Active* a = FindEntry(game, unit, old); a != nullptr && api.hasState(unit, a->state) == 0) {
 			// the switch removed its list: build it again (its per-skill timer survived the switch)
 			if (StartManaged(game, unit, a->skill, a->level, a->state)) {
@@ -477,25 +504,50 @@ void SelectSkill(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept
 			}
 		}
 	}
-	// loading a character and swapping weapons reselect the skills too: only the player's own choice toggles
-	const bool chosen = reinterpret_cast<uintptr_t>(_ReturnAddress()) - reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)) == aura::RvaPlayerSelectReturn;
-	const config::SkillConfig* cfg = chosen ? config::Find(skill) : nullptr;
-	if (cfg != nullptr && cfg->toggle && cfg->trigger == config::Trigger::Select && g_on[Toggle]) {
-		ToggleSkill(game, unit, skill, *cfg);
+}
+
+// Client: the right button pressed with a toggled aura on it. A remote client's channel connects on its first cast.
+void SendCast(int32_t skill) {
+	D2RL::Network::ChannelInfo info {.structSize = D2RL::Network::ChannelInfoSize};
+	if (g_network->getChannelInfo(g_context, g_channel, &info) == D2RL::Network::Result::Success &&
+	    info.connectionState == D2RL::Network::ConnectionState::Connected) {
+		const CastMessage msg {g_castUnitId.load(), skill};
+		g_network->sendToHost(g_context, g_channel, MsgCast, &msg, sizeof(msg));
+	} else {
+		g_unsentSkill = skill;
+		g_network->connectToHost(g_context, g_channel);
 	}
 }
 
-// Using a skill: toggles listed skills whose trigger is "cast" [A: whether using an aura reaches the server].
-auto StartSkill(Game* game, Unit* unit, int32_t skill, int32_t level, int32_t force) noexcept -> int32_t {
-	if (g_on[Toggle] && game != nullptr && IsPlayer(unit)) {
-		const config::SkillConfig* cfg = config::Find(skill);
-		if (cfg != nullptr && cfg->toggle && cfg->trigger == config::Trigger::Cast) {
-			Lock lock;
-			ToggleSkill(game, unit, skill, *cfg);
-			return 1;
+auto PlayerAction(Unit* player, int32_t action, int32_t x, int32_t y, uint64_t a5, uint64_t a6) noexcept -> uint64_t {
+	if (action == aura::ActionRightPress && g_on[Toggle] && IsPlayer(player)) {
+		const int32_t skill = RightSkillId(player);
+		if (const config::SkillConfig* cfg = skill > 0 ? config::Find(skill) : nullptr; cfg != nullptr && cfg->toggle) {
+			g_castUnitId = At<int32_t>(player, aura::UnitId);
+			SendCast(skill);
 		}
 	}
-	return g_startSkillOriginal(game, unit, skill, level, force);
+	return g_actionOriginal(player, action, x, y, a5, a6);
+}
+
+// shortcut: the host takes the unit id from the message (PlayerHandle has no unit), so a modified client could toggle
+// another player's aura; TCP/IP here is games between friends. Use the peer if the SDK ever maps it to a unit.
+void __cdecl OnHostMessage(const D2RL::PluginContext*, D2RL::Network::ChannelHandle, D2RL::Network::PeerHandle, uint16_t id, const void* data, uint32_t size, void*) noexcept {
+	if (id == MsgCast && size == sizeof(CastMessage) && data != nullptr) {
+		Lock lock;
+		if (g_pendingCasts.size() < MaxPendingCasts) {
+			g_pendingCasts.push_back(*static_cast<const CastMessage*>(data));
+			g_pendingCount = static_cast<int>(g_pendingCasts.size());
+		}
+	}
+}
+
+void __cdecl OnConnection(const D2RL::PluginContext*, const D2RL::Network::ConnectionEvent* event, void*) noexcept {
+	if (D2RL::Network::HasConnectionEventField(event, D2RL::Network::ConnectionEventRequiredSize) && event->state == D2RL::Network::ConnectionState::Connected) {
+		if (const int32_t skill = g_unsentSkill.exchange(0); skill != 0) {
+			SendCast(skill);
+		}
+	}
 }
 
 // Death: every aura of the player goes off, newest first.
@@ -527,12 +579,25 @@ auto InstallHooks(const D2RL::PluginContext* context) -> bool {
 	}
 	g_hooksTried = true;
 	aura::Bind(context->exeBase);
+	g_context = context;
+	const D2RL::Network::ChannelRegistration channel {
+		.structSize = D2RL::Network::ChannelRegistrationSize,
+		.localChannelId = 1,
+		.compatibilityToken = 0x4241555241530001ULL,
+		.hostMessage = OnHostMessage,
+		.connectionState = OnConnection,
+	};
+	if (context->QueryService(&g_network) != D2RL::ServiceQueryResult::Success || !D2RL::HasNetworkServiceField(g_network, D2RL::NetworkServiceRequiredSize) ||
+	    g_network->registerChannel(context, &channel, &g_channel) != D2RL::Network::Result::Success) {
+		std::snprintf(g_hookReport, sizeof(g_hookReport), "no plugin network channel for casting");
+		return false;
+	}
 	struct H {
 		const char* name;
 		uint64_t rva;
 		bool ok;
 	} hooks[] = {{"tick", aura::RvaAuraTick, false}, {"start", aura::RvaStartRightAura, false},
-	             {"select", aura::RvaSelectSkillBody, false}, {"cast", aura::RvaStartSkill, false},
+	             {"select", aura::RvaSelectSkillBody, false}, {"action", aura::RvaPlayerAction, false},
 	             {"death", aura::RvaUnitDeath, false}, {"regen", aura::RvaRegenTick, false}};
 	for (H& h : hooks) {
 		if (AlreadyHooked(context->exeBase, h.rva)) {
@@ -543,7 +608,7 @@ auto InstallHooks(const D2RL::PluginContext* context) -> bool {
 	hooks[0].ok = context->InstallInlineHook(aura::RvaAuraTick, aura::AuraTickEntry, sizeof(aura::AuraTickEntry), AuraTick, &g_tickOriginal);
 	hooks[1].ok = context->InstallInlineHook(aura::RvaStartRightAura, aura::StartRightAuraEntry, sizeof(aura::StartRightAuraEntry), StartRightAura, &aura::startRightAuraOriginal);
 	hooks[2].ok = context->InstallInlineHook(aura::RvaSelectSkillBody, aura::SelectSkillBodyEntry, sizeof(aura::SelectSkillBodyEntry), SelectSkill, &g_selectOriginal);
-	hooks[3].ok = context->InstallInlineHook(aura::RvaStartSkill, aura::StartSkillEntry, sizeof(aura::StartSkillEntry), StartSkill, &g_startSkillOriginal);
+	hooks[3].ok = context->InstallInlineHook(aura::RvaPlayerAction, aura::PlayerActionEntry, sizeof(aura::PlayerActionEntry), PlayerAction, &g_actionOriginal);
 	hooks[4].ok = context->InstallInlineHook(aura::RvaUnitDeath, aura::UnitDeathEntry, sizeof(aura::UnitDeathEntry), UnitDeath, &g_deathOriginal);
 	hooks[5].ok = context->InstallInlineHook(aura::RvaRegenTick, aura::RegenTickEntry, sizeof(aura::RegenTickEntry), RegenTick, &g_regenOriginal);
 	g_hooksOk = true;
@@ -570,7 +635,7 @@ auto Enable(const D2RL::PluginContext* context, Feature f, char* report, size_t 
 		return false;
 	}
 	g_on[f] = true;
-	constexpr const char* what[] = {"cast/select toggles listed auras", "per-second mana/life drain",
+	constexpr const char* what[] = {"casting toggles listed auras", "per-second mana/life drain",
 	                                "mana/life reservation", "toggled auras survive a skill switch"};
 	std::snprintf(report, reportSize, "on: %s (%s)", what[f], g_hookReport);
 	return true;

@@ -6,10 +6,8 @@
 # ships as loose files, else D2R's aura names); ids always work: [skills.98].
 #
 #   enabled = true|false        false: the skill stays vanilla
-#   toggle  = true|false        true: the trigger turns the aura on/off and it stays on whatever skill is selected;
+#   toggle  = true|false        true: casting the skill turns the aura on/off and it stays on whatever skill is selected;
 #                               false: vanilla (on while it is the right skill); drain and reserve still apply
-#   trigger = "select"|"cast"   "select": choosing the skill for the right button toggles it (choose it again to turn
-#                               it off); "cast": using the skill toggles it (not working in town: use "select")
 #   drain   = { resource = "mana"|"life", perSecond = <number> }      stops the aura when the pool can't pay
 #   reserve = { resource = "mana"|"life", mode = "percent"|"flat", value = <number> }
 #                               caps current life/mana at max - reserved; refused when the pool can't cover it
@@ -17,7 +15,6 @@
 [defaults]
 enabled = true
 toggle = true
-trigger = "select"
 
 [skills.Might]
 reserve = { resource = "mana", mode = "percent", value = 25 }

@@ -36,14 +36,14 @@ inline constexpr uint64_t RvaSelectSkillBody = 0x438a7a;
 inline constexpr uint8_t SelectSkillBodyEntry[] = {0x44, 0x89, 0x4c, 0x24, 0x20, 0x55, 0x41,
                                                    0x56, 0x41, 0x57, 0x48, 0x83, 0xec, 0x40};
 
-// Return address of the 0x438a70 call in the player's skill-choice handler (0x4b4250), read in game: load returns to
-// 0x5313f6, weapon swap to 0x4bfe16. shortcut: a fixed RVA, move it to a signature with the hooks.
-inline constexpr uint64_t RvaPlayerSelectReturn = 0x4b451e;
-
-// Start a skill (server): (game, unit, skill, level, force) -> nonzero started. Already in the registry.
-inline constexpr uint64_t RvaStartSkill = 0x43b3e0;
-inline constexpr uint8_t StartSkillEntry[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x6c,
-                                              0x24, 0x18, 0x48, 0x89, 0x74, 0x24, 0x20};
+// Client player action (D2Client Player.cpp): (player, action, x, y, ...); the mouse input handlers call it. Action 3
+// = right button press, once per press, also with an aura on the button (which never reaches the server's start-skill
+// code). A click on a panel or the skill menu never gets here. Stack arguments past the fourth are passed through.
+inline constexpr uint64_t RvaPlayerAction = 0xfe3b0;
+// MOV [RSP+0x10],RBX / PUSH RBP / PUSH RSI / PUSH RDI / PUSH R12 / PUSH R13 / PUSH R14 / PUSH R15: 16 bytes
+inline constexpr uint8_t PlayerActionEntry[] = {0x48, 0x89, 0x5c, 0x24, 0x10, 0x55, 0x56, 0x57,
+                                                0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57};
+inline constexpr int ActionRightPress = 3;
 
 // Unit death: (game, victim, killer or null, flag). Already in the registry (24 bytes).
 inline constexpr uint64_t RvaUnitDeath = 0x44db20;
@@ -62,7 +62,7 @@ using AuraTickFn = void (*)(Game* game, Unit* unit, int32_t key, int32_t a4, int
 using RegenTickFn = void (*)(Game* game, Unit* unit, int32_t a3, int32_t a4) noexcept;
 using StartRightAuraFn = void (*)(Game* game, Unit* unit, int32_t skill) noexcept;
 using SelectSkillFn = void (*)(Unit* unit, int32_t isLeft, int32_t skill, int32_t a4) noexcept;
-using StartSkillFn = int32_t (*)(Game* game, Unit* unit, int32_t skill, int32_t level, int32_t force) noexcept;
+using PlayerActionFn = uint64_t (*)(Unit* player, int32_t action, int32_t x, int32_t y, uint64_t a5, uint64_t a6) noexcept;
 using UnitDeathFn = void (*)(Game* game, Unit* victim, Unit* killer, int32_t flag) noexcept;
 
 // --- Called functions ---------------------------------------------------------------------------------------------
@@ -109,6 +109,7 @@ extern StartRightAuraFn startRightAuraOriginal;  // set by the hook; StartAura c
 void Bind(uint64_t exeBase) noexcept;
 
 // --- Record / stat constants (build 93847) ------------------------------------------------------------------------
+inline constexpr int UnitId = 0x08;         // int32: the same number on client and server
 inline constexpr int SkFlags24 = 0x24;     // bit 0x20 aura (the bit 0x438a70 / 0x43b680 test), bit 0x40 periodic
 inline constexpr int SkFlags25 = 0x25;     // bit 0x01 InTown
 inline constexpr int SkSrvDoFunc = 0x4e;   // u16 srvdofunc

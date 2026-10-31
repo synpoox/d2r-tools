@@ -9,14 +9,15 @@ each step. After a session, `python testing/game_checks.py run ba-scenario --slo
 (rows 9 and 10, and any fight) are the owner's to run: agents don't walk out of town, take waypoints or portals, or
 fight.
 
-Status: rows with a result ran on 2026-10-31 in slot 2 (level 90 test Paladin, Rogue Encampment, Normal), no `FAULT`
+Casting below means the right button with the aura on it; choosing a skill alone must never toggle. Status: rows with a
+result ran on 2026-10-31 in slot 2 (level 90 test Paladin, Rogue Encampment, Normal), no `FAULT`
 line. Empty rows are unverified.
 
 | # | What | How | Expected | Log evidence (check) | Result |
 |---|---|---|---|---|---|
 | 1 | Load | start the mod | every part `on`, no `REFUSED`, no `MISMATCH` | part lines (`ba-loads`) | pass |
-| 2 | Toggle on/off | choose Might for the right button; choose it again | aura on (glow, damage up), then off | `aura 98 on`, `aura 98 off (toggled off)` (`ba-toggle`) | pass |
-| 3 | Survives skill switch | Might on, choose Attack / another skill, attack | Might stays on, damage bonus still in the character screen | `aura 98 kept through the skill switch` (`ba-survives-switch`) | pass |
+| 2 | Toggle on/off | choose Might for the right button, cast it, cast it again | nothing on choosing; aura on, then off | `aura 98 on`, `aura 98 off (toggled off)` (`ba-toggle`) | pass |
+| 3 | Survives skill switch | Might on, choose another skill, cast that | Might stays on, the new aura goes on only when cast | `aura 98 kept through the skill switch` (`ba-survives-switch`) | pass |
 | 4 | Several auras | Might and Prayer on, switch skills | both on, both effects | two `on` lines, status lists both | pass |
 | 5 | Drain stops at 0 | Prayer on with little mana, cast skills until mana runs out | Prayer turns off when mana can't pay 1.5/s | `aura 99 off (drain could not be paid)` (`ba-drain-stop`) | pass; Prayer's own vanilla mana cost comes on top of the drain |
 | 6 | Reservation caps / releases | full mana, Might on; drink a mana potion; Might off | max unchanged; orb 25% empty, text 75/100 style; the potion can't fill past the cap; after off the value stays where it was (not refilled) and regenerates | `reserve N mana` in the on line (`ba-reserve-apply`) | pass: 59/148 with Might + Concentration, max unchanged; mana potion not tried |
@@ -30,6 +31,6 @@ line. Empty rows are unverified.
 | 13 | Level-up | Might (25%) on, gain a level / equip +mana | reservation follows the new max | status `reserves` value changes | |
 | 14 | Mercenary / party | Might on with a mercenary / second player near | they get the aura as vanilla | — | |
 | 15 | TCP/IP second client | host + client both with the plugin; client toggles Might, switches skill | aura works and stays on the client; host log shows the lines | host log | |
-| 16 | Cast trigger | set `trigger = "cast"` for Might, use it | toggles on/off **[assumption: may not reach the server]** | `aura 98 on` | **fail in town**: two right clicks with Might on the button never reached `0x43b3e0`, and the aura could not turn on. Outside town: owner |
+| 16 | Cast on a target | aura on the right button, right click a monster outside town | toggles, as on the ground | `aura 98 on` | owner |
 | 17 | Off switches | `<game>\d2rloader\config\better-auras-off.txt` with `decouple` | Might drops on skill switch | part line `decouple off` | pass: `decouple` drops the aura on a switch; all four words give a plain vanilla aura (mana 113/148, above the cap) |
-| 18 | Weapon swap | aura on the right button, press W twice | aura stays on | `kept through the skill switch`, no `off` line | pass |
+| 18 | Weapon swap | aura on, press W twice | aura stays on | `kept through the skill switch`, no `off` line | pass |

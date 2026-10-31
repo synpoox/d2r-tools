@@ -21,7 +21,7 @@ HOOKS = [
     ("aura tick", 0x437460, "48 89 5c 24 08 48 89 6c 24 10 56 57 41 54 41 56 41 57"),
     ("start right aura", 0x43B680, "40 55 56 57 41 56 48 83 ec 48 48 8b fa 48 8b e9"),
     ("skill select body", 0x438A7A, "44 89 4c 24 20 55 41 56 41 57 48 83 ec 40"),
-    ("start skill", 0x43B3E0, "48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20"),
+    ("client player action", 0xFE3B0, "48 89 5c 24 10 55 56 57 41 54 41 55 41 56 41 57"),
     ("unit death", 0x44DB20, "48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 41 56 41 57 48 83 ec 50"),
     ("player regen tick", 0x42E600, "48 89 5c 24 20 55 48 83 ec 40 41 8b c1 c7 44 24 30 00 00 00 00"),
 ]
@@ -52,25 +52,12 @@ CALLED = [
     ("unitDead", 0x34C2C0, "48 83 ec 28 48 85 c9 75"),
 ]
 
-SELECT_RVA = 0x438A70
-# (what, return RVA of a CALL rel32 to skill select)
-SELECT_CALLERS = [
-    ("player's skill choice (RvaPlayerSelectReturn)", 0x4B451E),
-    ("character load", 0x5313F6),
-    ("weapon swap, left", 0x4BFDC7),
-    ("weapon swap, right", 0x4BFE16),
-]
-
 
 def stamp(data: bytes) -> int:
     pe = struct.unpack_from("<I", data, 0x3C)[0]
     if data[pe:pe + 4] != b"PE\0\0":
         raise ValueError("no PE header")
     return struct.unpack_from("<I", data, pe + 8)[0]
-
-
-def calls(data: bytes, ret: int, target: int) -> bool:
-    return data[ret - 5] == 0xE8 and ret + struct.unpack_from("<i", data, ret - 4)[0] == target
 
 
 def run(data: bytes) -> int:
@@ -84,8 +71,6 @@ def run(data: bytes) -> int:
     for what, rva, text in HOOKS + CALLED:
         want = bytes.fromhex(text.replace(" ", ""))
         line(data[rva:rva + len(want)] == want, what, rva)
-    for what, ret in SELECT_CALLERS:
-        line(calls(data, ret, SELECT_RVA), f"{what} calls skill select", ret)
     return failed
 
 

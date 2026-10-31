@@ -18,12 +18,11 @@ the game's own `skills.txt` (93847).
   reported that "some features work as intended" and that life drain did not work. Which rows that covers was not
   itemised, so no single contract below is marked validated in game.
 - 2026-10-31, slot 2, town only (`plugins/better-auras/TESTING.md`): hooks `0x437460`, `0x43b680`, `0x438a7a` and `0x42e600` ran as
-  described, including drain and the cap. `0x44db20` (death) did not run and `0x43b3e0` (cast trigger) was not reached; out-of-town tests are the owner's.
+  described, including drain and the cap. `0x44db20` (death) did not run; out-of-town tests are the owner's.
 
 ## 1. Hooks
 
-Every hook checks its entry bytes through `InstallInlineHook`; a mismatch refuses that hook. All five aura hooks and
-the regen hook are installed together; if any is refused, every feature stays off (the installed ones pass straight
+Every hook checks its entry bytes through `InstallInlineHook`; a mismatch refuses that hook. All six hooks are installed together; if any is refused, every feature stays off (the installed ones pass straight
 through) and the part lines in the plugin log say which one. None of these entries started with `FF 25` in the dump.
 
 | RVA | Guard (whole instructions) | Contract | Evidence |
@@ -31,7 +30,7 @@ through) and the part lines in the plugin log say which one. None of these entri
 | `0x437460` | `48 89 5C 24 08 48 89 6C 24 10 56 57 41 54 41 56 41 57` (18) | **Event 8 handler, aura upkeep tick** `void(game, unit, key, a4, a5)`. key -1: the current right skill (aura bit, unit alive) runs its srvdofunc through `0x43acb0` and is rescheduled. key > 0 (a skill id): runs only while the unit has the skill's aurastate and that list's stat 350 == key; in town without InTown it only reschedules; otherwise cleanup `0x432450`. `a5` must not be 0 or -1 (assert). Server game thread | Only referenced from the unit event handler tables `0x1d192b0` / `0x1d1a7a0` at index 8 (index 9 = `0x437230`, item auras) |
 | `0x43b680` | `40 55 56 57 41 56 48 83 EC 48 48 8B FA 48 8B E9` (16) | **Start the right-skill aura** `void(game, unit, skill)`: aurastate stat list with stat 350 = skill, 351 = level, 202 = `0x3e2b64c(game)`, state on, event 8 key -1 via `0x43b2b0`. With record +0x25 bit 0x80 it runs the do-function (`0x43acb0` with force) instead of building the list | Called by `0x438a70` when the new right skill has the aura bit; decompiled |
 | `0x438a7a` | `44 89 4C 24 20 55 41 56 41 57 48 83 EC 40` (14) | Body of **server skill select** `0x438a70 void(unit, isLeft, skill, a4)`. The entry is `CMP R8D,5 / JE rel32`, a relative branch, so the hook sits on the next instruction: arguments untouched, RSP = entry RSP; skill 5 never reaches it (vanilla returns). Right (isLeft 0): clears state 0x55, reads the old right skill (`0x34b400`), sets the new one (`0x33ef10`; left `0x33ec70`), sends the select packet (`0x47f080`); if the OLD right skill has the aura bit it removes its aurastate list (`0x2f5940` / `0x2f7920` / `0x2f4180`), clears the state and removes event 8 key -1; if the NEW one has it, `0x43b680` | Found from `0x34b400` (right skill getter) callers and the `0x43b680` caller; decompiled |
-| `0x43b3e0` | `48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20` (15) | Start a skill `int(game, unit, skill, level, force)` (already in d2rAI-toolkit's registry). Used for `trigger = "cast"` | In town (2026-10-31) two right clicks with an aura on the button never reached it. Outside town not tried |
+| `0xfe3b0` | `48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57` (16) | **Client player action** `(player, action, x, y, ...)`, called by the mouse input handlers (`0x839e0` and others), see [Quick NPC](quick-npc.md). Action 3 = right press, once per press; left press 0/1. Client thread | Action values read in game 2026-10-31: right click 3 (return `0x83ad1`), then 4 and 5; the skill menu sends none |
 | `0x44db20` | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 50` (24) | Unit death `void(game, victim, killer, flag)` (already in d2rAI-toolkit's registry) | |
 | `0x42e600` | `48 89 5C 24 20 55 48 83 EC 40 41 8B C1 C7 44 24 30 00 00 00 00` (21) | **Player regen tick** `void(game, unit, a3, a4)`, see [section 4](#4-player-regen) | `D2Game\src\Player\PlrModes.cpp`; event 3, reschedules itself every frame |
 
@@ -94,22 +93,29 @@ reservation cap runs after `0x42e600` and limits current life/mana to max - rese
 
 ## 5. Skill select callers
 
-`0x438a70` has about 15 callers and the same arguments from each (`a4` -1), so only the return address tells them apart.
-Read in game by logging it in the `0x438a7a` hook on 2026-10-31:
+`0x438a70` has about 15 callers and the same arguments from each (`a4` -1). Read in game on 2026-10-31 by logging the return
+address in the `0x438a7a` hook. Better Auras no longer toggles here, so nothing depends on these:
 
 | Return RVA | Caller | Trigger |
 |---|---|---|
-| `0x4b451e` | `0x4b4250` | The player chooses a skill. Better Auras toggles only on this one |
+| `0x4b451e` | `0x4b4250` | The player chooses a skill |
 | `0x5313f6` | `0x5311f0` | Character load: right skill, game frame 1 |
 | `0x4bfdc7` / `0x4bfe16` | `0x4bea50` | Weapon swap: left, then right, same frame |
 
-## 6. Client UI
+## 6. Casting an aura
+
+An aura on the right button never reaches `0x43b3e0`: two right clicks in town made no call. Better Auras reads the right
+press on the client (`0xfe3b0`, action 3) and sends a `{unit id, skill}` plugin message (`NetworkService`, channel 1, local
+games too); the host applies it in the sender's next regen frame, on the game thread. `PlayerHandle` holds no unit, so the
+host matches the unit id (unit `+8`, the same on client and server).
+
+## 7. Client UI
 
 | RVA | Notes |
 |---|---|
 | `0x8bd030` | HD UI setup that registers `SetShowLifeOrbText` / `SetShowManaOrbText`; too large for the decompiler's response buffer. The orb widget itself is not mapped |
 
-## 7. Ghidra notes
+## 8. Ghidra notes
 
 - Ghidra 12.2 + JDK 25 on Windows: every headless run aborted with Felix "The data file must be inside the data dir"
   (NPE in `Felix.handleJavaVersionChange`). Workaround: set
@@ -117,9 +123,9 @@ Read in game by logging it in the `0x438a7a` hook on 2026-10-31:
   93847 dump then took 9 minutes.
 - `dump_image.py` needs the same rights as the game: OpenProcess error 5 when D2RLoader runs as administrator.
 
-## 8. Open items
+## 9. Open items
 
-- In-game proof of the death hook; whether `0x43b3e0` sees aura use outside town. If not, drop `trigger = "cast"` and this hook.
+- In-game proof of the death hook; a cast on a monster target.
 - Whether auras started through the do-function branch of `0x43b680` (record +0x25 bit 0x80) build their list with
   stat 350; the plugin writes it itself when missing.
 - The HD orb widget, for a tinted reserved band.

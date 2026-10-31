@@ -5,9 +5,8 @@
 //
 //   [defaults]
 //   enabled = true          # false: the skill stays vanilla
-//   toggle  = true          # true: cast/select toggles it on and off; false: vanilla "on while selected" (drain and
+//   toggle  = true          # true: casting it toggles it on and off; false: vanilla "on while selected" (drain and
 //                           #   reservation still apply while it runs)
-//   trigger = "select"      # "select": choosing the skill on the right button toggles it; "cast": using it does
 //
 //   [skills.Might]          # a skills.txt name (skill column) or id: [skills.98]
 //   drain   = { resource = "mana", perSecond = 2.5 }            # or drain.resource = "mana" / [skills.Might.drain]
@@ -25,14 +24,12 @@ namespace config {
 
 enum class Resource : uint8_t { None, Mana, Life };
 enum class ReserveMode : uint8_t { Percent, Flat };
-enum class Trigger : uint8_t { Select, Cast };
 
 struct SkillConfig {
 	int32_t skill = -1;  // skills.txt id
 	char key[64] = "";   // as written in the file, for messages
 	bool enabled = true;
 	bool toggle = true;
-	Trigger trigger = Trigger::Select;
 	Resource drainResource = Resource::None;
 	double drainPerSecond = 0;
 	Resource reserveResource = Resource::None;
