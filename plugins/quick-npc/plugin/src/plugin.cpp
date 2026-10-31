@@ -7,7 +7,6 @@
 //    multiplayer version match) and NativeHooks (patches game code). It is a global plugin: installed in
 //    <game>/d2rloader/plugins/, it loads with every mod and with the unmodded game;
 //  - log.h: one log line for the plugin (version, D2R version, image stamp, mod, this DLL's path) and one per part;
-//  - build_guard.h: checks the game image (PE TimeDateStamp). On any other image the engine part stays off and says so;
 //  - off_switch.h: reads "<plugin>-off.txt" next to the DLL: words naming parts to leave out;
 //  - env_guard.h: warns when a second copy of this plugin is loaded and lists the other plugins (no mod check: global);
 //  - installs each part and logs one line per part;
@@ -15,7 +14,7 @@
 //    feature at runtime; "<plugin> reload" re-reads <game>/d2rloader/config/<plugin>.toml.
 #include <D2RLPlugin/api.h>
 
-#include "build_guard.h"
+#include "crash_guard.h"
 #include "env_guard.h"
 #include "log.h"
 #include "off_switch.h"
@@ -39,7 +38,6 @@ constexpr const char* PluginName = MODKIT_PLUGIN_NAME;
 constexpr const char* PluginVersion = MODKIT_PLUGIN_VERSION;
 
 const D2RL::PluginContext* g_context = nullptr;
-uint32_t g_stamp = 0;
 char g_selfPath[520] = "?";
 
 constexpr D2RL::PluginInfo Info {
@@ -58,7 +56,6 @@ using InstallFn = void (*)(const D2RL::PluginContext* context, char* report, siz
 
 struct Part {
 	const char* word;   // off-file word and status label
-	bool engine;        // uses game addresses: installed only on the expected image
 	InstallFn install;
 	char report[512];
 };
@@ -73,18 +70,15 @@ void InstallFeature(const D2RL::PluginContext* context, char* report, size_t siz
 }
 
 Part g_parts[] = {
-	{"envguard", false, InstallEnvironment, ""},
-	{"quicknpc", true, InstallFeature, ""},
+	{"envguard", InstallEnvironment, ""},
+	{"quicknpc", InstallFeature, ""},
 };
 
-void InstallParts(const D2RL::PluginContext* context, bool imageOk) noexcept {
+void InstallParts(const D2RL::PluginContext* context) noexcept {
 	for (Part& p : g_parts) {
-		switch (quick_npc::DecidePart(off_switch::Off(p.word), p.engine, imageOk)) {
+		switch (quick_npc::DecidePart(off_switch::Off(p.word))) {
 		case quick_npc::PartDecision::OffByFile:
 			std::snprintf(p.report, sizeof(p.report), "off: left out by %s-off.txt", PluginName);
-			break;
-		case quick_npc::PartDecision::OffImage:
-			std::snprintf(p.report, sizeof(p.report), "off: game image differs from the one this plugin was built for");
 			break;
 		case quick_npc::PartDecision::Install:
 			p.install(context, p.report, sizeof(p.report));
@@ -132,7 +126,7 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 	}
 	char line[1100];
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(g_context));
 	std::snprintf(line, sizeof(line), "%s %s | %s | mod %s | file %s", PluginName, PluginVersion, image,
 	              g_context->activeMod != nullptr && g_context->activeMod[0] != '\0' ? g_context->activeMod : "(none)", g_selfPath);
 	command->plugin->WriteConsoleMessage(line);
@@ -176,27 +170,24 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	g_context = context;
 	plog::Init(context, PluginName);
-	g_stamp = build_guard::ImageStamp(context->exeBase);
-	const bool imageOk = build_guard::Matches(g_stamp);
-	if (context->pluginPath != nullptr) {
-		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", context->pluginPath);
+	crash_guard::Install(PluginVersion, context->exeBase);
+	if (D2RL::GetPluginPath(context) != nullptr) {
+		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", D2RL::GetPluginPath(context));
 	}
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s, file %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "?", image, g_selfPath);
 	off_switch::Read();
 	if (off_switch::Words()[0] != '\0') {
 		plog::Info("%s-off.txt leaves out: %s", PluginName, off_switch::Words());
 	}
-	if (!imageOk) {
-		plog::Warn("not the expected game image: every engine part stays off");
-	}
-	InstallParts(context, imageOk);
+	InstallParts(context);
 	return context->RegisterConsoleCommand(PluginName, StatusCommand,
 	                                       "Quick NPC status; 'quick-npc off' / 'on' switches it, 'quick-npc reload' re-reads quick-npc.toml.");
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	crash_guard::Remove();
 	ShutdownQuickNpc();
 	g_context = nullptr;
 }

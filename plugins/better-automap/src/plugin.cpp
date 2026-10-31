@@ -4,15 +4,13 @@
 // automap is shown and controlled, nothing that has to match between players.
 //
 // What it does at load:
-//  - build_guard.h: checks the game image (PE TimeDateStamp). Every address belongs to one image; on any other image
-//    every part stays off and says so;
 //  - config.h: reads better-automap.toml (each part has its own `enabled` switch);
 //  - off_switch.h: reads "better-automap-off.txt" next to the DLL: words naming parts to leave out (bisecting);
 //  - installs each part on its own (a refused part never stops the others) and logs one line per part;
 //  - registers the console command "better-automap" that prints the state of every part.
 #include <D2RLPlugin/api.h>
 
-#include "build_guard.h"
+#include "crash_guard.h"
 #include "config.h"
 #include "d2r.h"
 #include "parts.h"
@@ -33,7 +31,6 @@ constexpr const char* PluginId = "better-automap";
 constexpr const char* PluginVersion = BETTER_AUTOMAP_VERSION;
 
 const D2RL::PluginContext* g_context = nullptr;
-uint32_t g_stamp = 0;
 char g_selfPath[520] = "?";
 
 constexpr D2RL::PluginInfo Info {
@@ -66,11 +63,9 @@ Part g_parts[] = {
 	{"zoom", [] { return config::Get().zoomEnabled; }, InstallOverlayZoom, StatusOverlayZoom, false, ""},
 };
 
-void InstallParts(const D2RL::PluginContext* context, bool imageOk) noexcept {
+void InstallParts(const D2RL::PluginContext* context) noexcept {
 	for (Part& p : g_parts) {
-		if (!imageOk) {
-			std::snprintf(p.report, sizeof(p.report), "off: game image differs from the one this plugin was built for");
-		} else if (!p.enabled()) {
+		if (!p.enabled()) {
 			std::snprintf(p.report, sizeof(p.report), "off: [%s] enabled = false", p.word);
 		} else if (off_switch::Off(p.word)) {
 			std::snprintf(p.report, sizeof(p.report), "off: left out by %s-off.txt", PluginId);
@@ -91,7 +86,7 @@ auto StatusCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext*
 	}
 	char line[1100];
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, g_context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(g_context));
 	std::snprintf(line, sizeof(line), "Better Automap %s | %s | file %s", PluginVersion, image, g_selfPath);
 	command->plugin->WriteConsoleMessage(line);
 	std::snprintf(line, sizeof(line), "config: %s%s%s", config::Source(), config::Problems()[0] != '\0' ? " | " : "",
@@ -125,13 +120,12 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	}
 	g_context = context;
 	plog::Init(context, PluginId);
-	g_stamp = build_guard::ImageStamp(context->exeBase);
-	const bool imageOk = build_guard::Matches(g_stamp);
-	if (context->pluginPath != nullptr) {
-		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", context->pluginPath);
+	crash_guard::Install(PluginVersion, context->exeBase);
+	if (D2RL::GetPluginPath(context) != nullptr) {
+		std::snprintf(g_selfPath, sizeof(g_selfPath), "%ls", D2RL::GetPluginPath(context));
 	}
 	char image[200];
-	build_guard::Describe(image, sizeof(image), g_stamp, context->buildVersion);
+	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (%s, file %s)", PluginVersion, image, g_selfPath);
 	config::Load(context);
 	plog::Info("config: %s", config::Source());
@@ -142,15 +136,12 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	if (off_switch::Words()[0] != '\0') {
 		plog::Info("%s-off.txt leaves out: %s", PluginId, off_switch::Words());
 	}
-	if (imageOk) {
-		d2r::Bind(context->exeBase);
-	} else {
-		plog::Warn("not the expected game image: every part stays off");
-	}
-	InstallParts(context, imageOk);
+	d2r::Bind(context->exeBase);
+	InstallParts(context);
 	return context->RegisterConsoleCommand(PluginId, StatusCommand, "Status of Better Automap and its parts.");
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	crash_guard::Remove();
 	g_context = nullptr;
 }

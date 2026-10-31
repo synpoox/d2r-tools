@@ -2,7 +2,7 @@
 
 ## d2rAI-toolkit plugin-template (MIT)
 
-`plugin/src/build_guard.h`, `log.*`, `off_switch.*`, `env_guard.*` and the structure of `plugin/src/plugin.cpp` and
+`log.*`, `off_switch.*`, `env_guard.*` and the structure of `plugin/src/plugin.cpp` and
 `plugin/CMakeLists.txt` are based on the plugin template of https://github.com/Nugwa628/d2rAI-toolkit.
 
 ```

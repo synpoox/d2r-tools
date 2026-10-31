@@ -21,7 +21,7 @@ A plugin that is `Unreleased` in the README table is not in any suite.
 
 1. Edit `release/suite.json`: set each included plugin's `version` to its tag, and write its `validation` (what was
    actually checked: build, tests, installed, live in game) and `limits`. State what was not tested. Update
-   `game.d2r` / `game.d2rloader` if the supported builds changed. Commit and push.
+   `game.d2r` / `game.d2rloader` if the tested versions changed. Commit and push.
 2. Preview locally (builds everything, publishes nothing):
 
    ```

@@ -2,7 +2,7 @@ THIRD-PARTY NOTICES
 
 d2rAI-toolkit
 -------------
-plugin/src/log.h, log.cpp, off_switch.h, off_switch.cpp, build_guard.h, env_guard.h and env_guard.cpp are copied
+plugin/src/log.h, log.cpp, off_switch.h, off_switch.cpp, env_guard.h and env_guard.cpp are copied
 unchanged from d2rAI-toolkit's plugin-template. plugin/src/plugin.cpp, plugin/CMakeLists.txt and plugin/build.ps1 are
 adapted from it.
 

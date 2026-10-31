@@ -1,7 +1,7 @@
 // D2R game image interface used by MultiSpec: RVAs, offsets and function types.
 //
 // EVERYTHING IN THIS FILE IS FOR ONE GAME IMAGE: D2R 3.3 build 93847 under D2RLoader 1.3.1 (PE TimeDateStamp
-// 0x6ab3782c, checked by build_guard.h before any of it is used). Each value and its evidence is in
+// 0x6ab3782c). Each value and its evidence is in
 // docs/reverse-engineering/multispec.md (and the toolkit's d2r-93847-addresses.md). MultiSpec installs no hooks: it
 // only calls these functions, after CheckEntries() has compared their entry bytes with the image.
 //

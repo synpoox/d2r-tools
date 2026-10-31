@@ -14,11 +14,11 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 | [quick-npc](plugins/quick-npc) | 1.0.0 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
 | [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.0 | Mouse wheel switches the waypoint panel's Act tabs. |
 
-Each plugin's README has its features, config and supported game build; its `CHANGELOG.md` lists releases.
+Each plugin's README has its features, config and tested game version; its `CHANGELOG.md` lists releases.
 
 ## Installation
 
-Requires Diablo II: Resurrected with D2RLoader 1.3.1 (offline or TCP/IP; never Battle.net online play).
+Requires Diablo II: Resurrected with D2RLoader, tested on D2R 3.3 and D2RLoader 1.3.1 (offline or TCP/IP; never Battle.net online play).
 
 1. Download a plugin's `<plugin>-X.Y.Z.zip` (or the bundle with every plugin) from the latest
    [release](../../releases/latest), and extract the DLL. Unreleased plugins are only available as a `ci` run's artifact.
@@ -28,8 +28,7 @@ Requires Diablo II: Resurrected with D2RLoader 1.3.1 (offline or TCP/IP; never B
    `<game>\d2rloader\config\<plugin>.toml`; edit it and restart to change settings.
 
 To update, replace the DLL. Plugins that change shared game state must be the same version on every player in a
-multiplayer game; the plugin README says which. Native addresses belong to one D2R build; on any other build a
-plugin should log that and stay off, but check its README before updating the game.
+multiplayer game; the plugin README says which. Plugins have no version gate: each attempts to load and run on any game or D2RLoader version. After a game update one can crash; the cause is written to that plugin's log.
 
 ## Bug Reports
 

@@ -22,11 +22,10 @@ clicked it yourself. MIT licensed.
 
 ## Requirements
 
-- Diablo II: Resurrected 3.3 (Battle.net build 93847 or Steam build 94995: the same game image)
-- D2RLoader 1.3.1
+- Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
+- D2RLoader (tested on 1.3.1)
 
-On any other game or D2RLoader version the plugin loads, writes "not the expected game image" to its log, and changes
-nothing.
+On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Installation
 

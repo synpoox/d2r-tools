@@ -1,6 +1,6 @@
 # MultiSpec design
 
-WoW-style dual spec for D2R 3.3 (build 93847, D2RLoader 1.3.1): a character keeps N saved skill allocations ("specs")
+WoW-style dual spec for D2R 3.3 (D2RLoader 1.3.1): a character keeps N saved skill allocations ("specs")
 and switches between them with a command, without paying for a respec.
 
 Status: **approved by the owner** (town only, empty new specs). Engine facts come from [multispec-recon.md](../../../docs/reverse-engineering/multispec-recon.md) and
@@ -138,7 +138,7 @@ waiting for the first command. The file is simply created or brought up to date 
 | File write fails (disk, permissions) | Step 3 aborts; nothing changed; message and log line |
 | Corrupt or unknown-version file | Kept as `.bad-<date>`; never overwritten in place; fresh file from the live character |
 | D2R refuses a point during replay (prerequisite, stat requirement, data changed) | Rollback (step 7); the message names the skill |
-| Game or loader update (image stamp differs) | Build guard: every engine part stays off; `/spec` answers "MultiSpec is off: this game version is not supported"; files untouched, so nothing is lost and the active spec just stays active |
+| Game or loader update | No version gate: MultiSpec attempts to run. `CheckEntries` leaves `specswap` off if a function's bytes differ; other faults are logged as `FAULT` lines |
 | Same stamp but a called function's bytes differ (another plugin patched it) | `specswap` stays off, the status names the function |
 | A failed swap whose rollback fails too | Character reset (all points unspent), file in recovery: specs untouched until `spec N` |
 | A game session ends while a request is queued | D2RLoader drops the queued callback; the command is free again after 10 s |

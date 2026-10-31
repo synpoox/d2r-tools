@@ -107,7 +107,7 @@ void InitStorePaths(const D2RL::PluginContext* context, char* report, size_t siz
 		}
 		CoTaskMemFree(saved);
 	}
-	const wchar_t* base = context->modSupportDirectory != nullptr ? context->modSupportDirectory : context->pluginDirectory;
+	const wchar_t* base = D2RL::GetModSupportDirectory(context) != nullptr ? D2RL::GetModSupportDirectory(context) : D2RL::GetPluginDirectory(context);
 	if (base != nullptr) {
 		std::swprintf(g_fallbackDir, 520, L"%ls\\multispec", base);
 	}

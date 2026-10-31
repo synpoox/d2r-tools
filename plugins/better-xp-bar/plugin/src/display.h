@@ -10,7 +10,7 @@
 
 namespace display {
 
-// Part "xp": lifecycle listeners + the UI-thread reads. Needs the expected image and xp_reader::Install first.
+// Part "xp": lifecycle listeners + the UI-thread reads. Needs xp_reader::Install first.
 void InstallTracking(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 // Part "overlay": the frame callback that draws the lines.
 void InstallOverlay(const D2RL::PluginContext* context, char* report, size_t size) noexcept;

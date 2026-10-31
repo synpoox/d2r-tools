@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- The plugin is global: `ModScopedOnly` is removed, so it loads with or without a mod. Spec files are still stored next
-  to the character's save, in the save folder named by the active mod's `modinfo.json` `savepath` (the mod D2RLoader
-  runs, e.g. `default_mod`), and fall back to the plugin's own folder when there is none. With no mod selected the
-  save folder is the retail one, `Saved Games\Diablo II Resurrected`.
+- No version gate: the plugin attempts to load, hook and run on any D2R or D2RLoader version. It declares PluginSDK ABI 4
+  and reads optional context through the SDK getters. On game code that has moved it can crash; hooks whose entry bytes
+  differ are still refused.
+- A fault while the plugin is loaded is written to the plugin's log as a `FAULT` line with its cause and whether the
+  plugin was involved. A later line says when the game was still running a few seconds after it, which is a hint, not proof.
+

@@ -3,7 +3,7 @@
 A D2RLoader plugin that improves Diablo II: Resurrected's automap: choose which side the mini map sits on, open
 the full-screen map over the mini map with one key, and zoom the full-screen map with the mouse wheel.
 
-By Synpoo. For D2R 3.3.0 (build 93847, Battle.net; 94995 on Steam) with D2RLoader 1.3.1.
+By Synpoo. Tested on D2R 3.3 with D2RLoader 1.3.1; other versions are attempted.
 
 ## Features
 
@@ -15,12 +15,12 @@ By Synpoo. For D2R 3.3.0 (build 93847, Battle.net; 94995 on Steam) with D2RLoade
   The wheel works as usual whenever another panel uses it (inventory, stash, chat, menus) or the full-screen map is
   closed.
 - Every feature can be turned off on its own. Turned off, it behaves exactly like the base game.
-- Safe on updates: on any other game build the plugin does nothing and says so in the log.
+- Version independent: On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Requirements
 
-- Diablo II: Resurrected 3.3.0, build 93847 (Battle.net) or 94995 (Steam).
-- D2RLoader 1.3.1, starting the game through `D2RLoader.exe`.
+- Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
+- D2RLoader (tested on 1.3.1), starting the game through `D2RLoader.exe`.
 - Windows 10 or 11, 64-bit.
 
 ## Installation
@@ -59,7 +59,7 @@ you can also list features to leave out (`minimap`, `overlay`, `zoom`) in `bette
 - The Tab change only applies while the mini map is shown; with the Full Screen size, Tab works as in the base game.
 - The zoom resets to 1.0 when the game restarts, and does not apply to the mini map.
 - Controller mode is not supported (the wheel does not apply there).
-- Works only on the build listed above; any other build leaves the plugin inactive until it is updated.
+- Tested only on the versions listed above; on others it can crash, and the cause goes to its log.
 
 For developers: [docs/reverse-engineering/better-automap.md](../../docs/reverse-engineering/better-automap.md) lists every game address with its evidence, `docs/TESTING.md` the in-game test
 checklist. Builds run on GitHub Actions (the monorepo's `.github/workflows/ci.yml`, CMake, `windows-latest`, x64 Release).

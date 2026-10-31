@@ -2,7 +2,7 @@
 
     python tools/check_entries.py <dump.exe>
 
-Use it after re-dumping a new game or D2RLoader build: every row must say "ok" before ExpectedImage changes. Prints the
+Use it after re-dumping a new game or D2RLoader build: re-find the address of any row that does not say "ok". Prints the
 dump's PE TimeDateStamp too. Standard library only; reads the dump, writes nothing.
 """
 import re

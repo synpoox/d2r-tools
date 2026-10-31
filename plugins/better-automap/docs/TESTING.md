@@ -10,7 +10,7 @@ Setup: copy `better-automap.dll` into `<copy>\d2rloader\plugins\`. Start once, t
 
 | # | Test | Steps | Expected |
 |---|---|---|---|
-| 1 | Load, right image | Start through D2RLoader, enter a game, run `better-automap` | Image `0x6ab3782c ... match`; `minimap on`, `overlay on`, `zoom on`; no warnings in the log |
+| 1 | Load, right image | Start through D2RLoader, enter a game, run `better-automap` | Load line shows the D2R version and image stamp; `minimap on`, `overlay on`, `zoom on`; no warnings in the log |
 | 2 | Default position (top right) | Defaults. Options > Gameplay > Automap Size: **Mini Map** (either side). Open the automap (Tab) | Mini map at the **top right** |
 | 3 | Option and key no longer move it | As 2, switch the option between the two mini map sizes, press the Toggle Minimap key | Mini map stays top right |
 | 4 | Right panel open | As 2, open the inventory | Mini map moves to the top left while the inventory is open (D2R's own behaviour), back to the right when closed |
@@ -31,7 +31,7 @@ Setup: copy `better-automap.dll` into `<copy>\d2rloader\plugins\`. Start once, t
 | 19 | Each switch off | One at a time: `[minimap] enabled = false`, `[overlay] enabled = false`, `[zoom] enabled = false` | That part's line says `off: [...] enabled = false`; that feature behaves as vanilla; the other two still work |
 | 20 | Off-file | `better-automap-off.txt` next to the DLL with `zoom` | `zoom off: left out by better-automap-off.txt`; others on |
 | 21 | Bad config | `position = "middle"`, `min = 0` | Log warns, defaults used, no crash |
-| 22 | Wrong build | Load with another D2R/D2RLoader build (or a test build with a different `ExpectedImage`) | Log: `not the expected game image`; all three parts `off: game image differs`; game plays as vanilla; console command still answers |
+| 22 | Other build | Load with another D2R/D2RLoader build | All parts attempted; a hook whose entry bytes differ is refused and logged; any crash leaves a `FAULT` line in the plugin log; console command still answers |
 | 23 | No crash | Play 15 minutes with all parts on: change areas, town portals, resize the window | No crash; counters keep counting |
 
 Report: for each row, pass / fail, plus the `better-automap` command output and the plugin log lines.

@@ -47,8 +47,10 @@ Every feature document records, per address or contract:
 | Contract | Signature, inputs, outputs, side effects, thread and lifetime rules |
 | Evidence | How it was found: disassembly, xrefs, strings, dump checks, with a reproducible command |
 | Validation | Unit tests, dump verification and in-game results, listed separately |
-| Failure mode | What the plugin does when the guard fails (it must fail open: log and stay off) |
+| Failure mode | What the plugin does when the guard fails (it must fail open: log and leave that part off) |
 | Coexistence | Other plugins or D2RLoader hooks on the same code |
+
+Plugins do not gate on this image: there is no version check, and addresses here are evidence from the tested build. New engine code should find them by byte signature, and each plugin's `crash_guard.h` logs faults.
 
 ## Known high-value entries (image `0x6ab3782c`)
 

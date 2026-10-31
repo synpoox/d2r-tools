@@ -12,8 +12,8 @@
 
 #include <cstddef>
 
-// `modSoundRows`: rows of the mod's sounds.txt (0 = the mod adds no sounds: no restart warning). Engine part: call
-// only on the expected image. Returns true when every hook went in.
+// `modSoundRows`: rows of the mod's sounds.txt (0 = the mod adds no sounds: no restart warning). Engine part.
+// Returns true when every hook went in.
 auto InstallSoundGuard(const D2RL::PluginContext* context, int modSoundRows, char* report, size_t reportSize) noexcept -> bool;
 
 // "sounds.txt N rows (mod M), K bad sound ids skipped (last id I in 0x... from +0x...)".

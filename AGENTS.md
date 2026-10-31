@@ -13,7 +13,11 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - Native addresses, offsets, signatures and byte guards are specific to one D2R build. Keep them in the owning plugin,
   keep what is proven to work, and record every change with its build, evidence and guard in
   `docs/reverse-engineering/` (registry and workflow there; read it before searching for an address).
-  Where a guard does not match, the plugin must fail open: log it and leave that part off.
+  Where a per-part byte guard does not match, log it and leave that part off.
+- No version gates: a plugin always attempts to load, hook and run, whatever the game build, D2RLoader version or PE stamp
+  (the stamp is the loader's). Declare `D2RL_PLUGIN_ABI_VERSION`, read optional context through the SDK getters, and keep
+  a `crash_guard.h` installed so any fault is logged to the plugin's log with its cause. New engine code should find addresses by byte
+  signature, as `plugins/scrollable-waypoints` does.
 - Never commit game binaries or extracted game assets, dumps, saves, personal config, logs, build output (`build/`,
   `dist/`) or credentials. Tests that need a game slot use a test save, never the owner's own install or characters.
 - `d2rAI-toolkit` is a separate repository (templates, game-slot testing). Do not copy it in; reference it.
@@ -41,7 +45,7 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - Say what was verified and how, and keep the levels apart: unit tests, a clean build, an install into a game, and
   live in-game testing. Do not call something tested in game unless it was.
 - Add player-visible and compatibility changes to the plugin's `CHANGELOG.md` under `Unreleased`. Update the plugin
-  README (and the table in the root `README.md`) when behavior, config or supported builds change.
+  README (and the table in the root `README.md`) when behavior, config or tested versions change.
 - Releases: tag each plugin `<name>/vX.Y.Z` (dated changelog heading, version bump), then publish players a suite release
   from `release/suite.json` (`docs/RELEASING.md`); never publish one unless the owner asks.
 - Commit messages and PR descriptions state the real scope; no claims the validation does not support.

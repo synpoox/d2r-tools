@@ -25,13 +25,11 @@ Definitions: [docs/metrics.md](docs/metrics.md). Tested in game on D2R 3.3 build
 
 | | |
 |---|---|
-| Game | D2R **3.3.0**, Battle.net build 93847 / Steam 94995 (same program) |
-| Loader | D2RLoader **1.3.1** (plugin ABI 4, PluginSDK 0.3.0) |
-| Image check | PE timestamp `0x6ab3782c` plus 9 byte checks of the code it uses |
+| Game | D2R **3.3** (Battle.net or Steam) |
+| Loader | Any; D2RLoader **1.3.1** tested; plugin ABI 4 (PluginSDK 0.3.0) |
+| Version check | None: it attempts any version. 9 byte checks of the code it uses still leave a part off if they fail, and crashes go to its log |
 
-On any other game or loader image the plugin loads, logs `not the expected game image`, and does nothing else. It
-installs no hooks and writes no game memory: it reads what the stock XP bar reads and draws with D2RLoader's overlay.
-Client-side only: it is a `Client` plugin (not recorded in character plugin history, no multiplayer match needed).
+On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Install
 
