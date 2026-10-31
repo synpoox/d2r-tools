@@ -41,10 +41,19 @@ inline constexpr uint64_t RvaCanSkillLevel = 0x339330;    // (player, skillId) -
 inline constexpr uint64_t RvaCanSkillStats = 0x339c00;    // (player, skillId) -> nonzero: stat requirements met
 inline constexpr uint64_t RvaSpendSkillPoint = 0x438670;  // (dataFlag, player, skillId) -> 1: one point spent, client told
 inline constexpr uint64_t RvaRespecSkills = 0x4360f0;     // (game, player): D2R's skills-only respec, client told
+inline constexpr uint64_t RvaSkillUsable = 0x33a660;      // (unit, skill) -> nonzero: level with bonuses above 0
+inline constexpr uint64_t RvaSelectSkill = 0x438a70;      // (unit, isLeft, skillId, itemId): sets a mouse skill, client told
+inline constexpr uint64_t RvaRememberLeft = 0x34d180;     // (player): keeps the left skill for after item changes
+inline constexpr uint64_t RvaRememberRight = 0x34d220;    // (player): same for the right skill
 
 // --- Offsets (build 93847) ----------------------------------------------------------------------------------------
 inline constexpr int GameDataFlag = 0x106;   // u8
 inline constexpr int UnitMode = 0x0c;        // u32; players: 0 death, 17 dead
+inline constexpr int UnitSkillList = 0x100;  // SkillList*
+inline constexpr int SkillListLeft = 0x08;   // Skill* on the left button
+inline constexpr int SkillListRight = 0x10;  // Skill* on the right button
+inline constexpr int SkillRecordPtr = 0x00;  // skills.txt record; record +0 i16 = skill id
+inline constexpr int SkillOwnerItem = 0x4c;  // i32 item id, -1 = the unit's own skill
 inline constexpr int PlayerDataName = 0x00;  // char[16]
 inline constexpr int ClientName = 0x2c;      // char[16]
 inline constexpr int ClientUnitType = 0x26c; // fields ClientGetControlUnit reads (checked readable first)
@@ -78,6 +87,9 @@ using SkillRecordFn = const uint8_t* (*)(uint32_t dataFlag, int32_t skillId) noe
 using SkillCheckFn = int32_t (*)(Unit* player, int32_t skillId) noexcept;
 using SpendSkillPointFn = int32_t (*)(uint32_t dataFlag, Unit* player, int32_t skillId) noexcept;
 using RespecSkillsFn = void (*)(Game* game, Unit* player) noexcept;
+using SkillUsableFn = int32_t (*)(Unit* unit, Skill* skill) noexcept;
+using SelectSkillFn = void (*)(Unit* unit, int32_t isLeft, int32_t skillId, int32_t itemId) noexcept;
+using RememberSkillFn = void (*)(Unit* player) noexcept;
 
 struct Api {
 	UnitTypeFn unitType;
@@ -99,13 +111,17 @@ struct Api {
 	SkillCheckFn canSkillStats;
 	SpendSkillPointFn spendSkillPoint;
 	RespecSkillsFn respecSkills;
+	SkillUsableFn skillUsable;
+	SelectSkillFn selectSkill;
+	RememberSkillFn rememberLeftSkill;
+	RememberSkillFn rememberRightSkill;
 };
 extern Api api;
 
 void Bind(uintptr_t exeBase) noexcept;
 
 // Compares every function's entry bytes with the image (for D2RLoader-hooked functions, the bytes after its jump).
-// Returns the number that differ; `report` names them ("ok: 19 functions" or "differs: 0x4360f0 ...").
+// Returns the number that differ; `report` names them ("ok: 23 functions" or "differs: 0x4360f0 ...").
 auto CheckEntries(const D2RL::PluginContext* context, char* report, size_t size) noexcept -> int;
 
 // --- Helpers ------------------------------------------------------------------------------------------------------

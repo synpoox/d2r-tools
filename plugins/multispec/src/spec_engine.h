@@ -38,6 +38,7 @@ public:
 	void Reset() noexcept override;
 	auto CanSpend(int32_t index) noexcept -> bool override;
 	auto Spend(int32_t index) noexcept -> bool override;
+	void Select(bool left, const SkillSlot& slot) noexcept override;
 
 private:
 	auto SkillId(int32_t index) noexcept -> int32_t;

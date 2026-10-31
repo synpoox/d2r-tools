@@ -11,14 +11,22 @@ namespace ms {
 inline constexpr int MaxSkills = 128;  // class skills; retail has 30, extended saves more
 inline constexpr int MaxSpecs = 99;  // a soft cap: the "spec N" command and the panel's slot take two digits
 inline constexpr int MaxName = 32;
-inline constexpr int FileVersion = 1;
+inline constexpr int FileVersion = 2;  // 2 added "sel" to spec lines; version 1 files still load
 inline constexpr size_t MaxFileBytes = 65536;  // fits MaxSpecs specs of MaxSkills three-digit levels
 
 enum class SpecState : uint8_t { Ok, Adjusted, Invalid };
 
+// A skill chosen on a mouse button. All zero = none remembered: D2R finds no such skill, so Select changes nothing.
+struct SkillSlot {
+	int32_t skillId;
+	int32_t itemId;  // -1 = the character's own skill, else the item giving it
+};
+
 struct Spec {
 	uint8_t levels[MaxSkills];
 	SpecState state;
+	SkillSlot left;
+	SkillSlot right;
 };
 
 // One character's specs: the content of <name>.multispec.
@@ -42,6 +50,8 @@ struct LiveChar {
 	int16_t skillIds[MaxSkills];
 	uint8_t levels[MaxSkills];    // hard levels
 	int32_t unspent;              // stat 5 newskills (base)
+	SkillSlot left;
+	SkillSlot right;
 };
 
 auto Crc32(const void* data, size_t size) noexcept -> uint32_t;

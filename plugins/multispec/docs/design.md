@@ -69,8 +69,8 @@ char Lyra
 class 1
 skills 30 36 37 38 ...                (skill ids)
 active 1
-spec 1 1 0 20 0 1 ...                 (n levels)
-spec 2 0 0 0 0 0 ...
+spec 1 ok 0 20 0 1 ... sel 36 -1 40 -1  (state, n levels; left and right mouse skill: id, item id)
+spec 2 ok 0 0 0 0 ... sel 0 0 0 0
 pending none                          (or "1>2" during a swap)
 crc 9f3a01c2                          (CRC-32 of the lines above)
 ```

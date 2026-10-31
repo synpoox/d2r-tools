@@ -116,8 +116,13 @@ auto Swap(Engine& engine, Store& store, CharSpecs* file, const LiveChar& live, i
 		return finish(SwapResult::Refused);
 	}
 
+	Spec& from = file->specs[file->active - 1];
+	if (!recovery) {  // in recovery the character was reset, so its buttons say nothing about the spec
+		from.left = live.left;
+		from.right = live.right;
+	}
 	uint8_t old[MaxSkills];  // the rollback target: the stored active spec (== live outside recovery)
-	std::memcpy(old, file->specs[file->active - 1].levels, static_cast<size_t>(n));
+	std::memcpy(old, from.levels, static_cast<size_t>(n));
 	file->pendingFrom = file->active;
 	file->pendingTo = to;
 	if (!store.Write(*file)) {
@@ -128,6 +133,8 @@ auto Swap(Engine& engine, Store& store, CharSpecs* file, const LiveChar& live, i
 
 	char why[200] = "";
 	if (ApplyLevels(engine, total, target.levels, n, why, sizeof(why))) {
+		engine.Select(true, target.left);
+		engine.Select(false, target.right);
 		file->active = to;
 		file->pendingFrom = file->pendingTo = 0;
 		(void)store.Write(*file);  // on failure the next reconciliation finds spec `to` by its levels
@@ -139,6 +146,8 @@ auto Swap(Engine& engine, Store& store, CharSpecs* file, const LiveChar& live, i
 	char back[200] = "";
 	const bool restored = ApplyLevels(engine, total, old, n, back, sizeof(back));
 	if (restored) {
+		engine.Select(true, from.left);
+		engine.Select(false, from.right);
 		file->pendingFrom = file->pendingTo = 0;
 		(void)store.Write(*file);
 		std::snprintf(rep.detail, sizeof(rep.detail), "%s", why);

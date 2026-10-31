@@ -24,6 +24,8 @@ public:
 	virtual auto CanSpend(int32_t index) noexcept -> bool = 0;
 	// Spend one point on class skill `index` the way D2R does. False when D2R refused.
 	virtual auto Spend(int32_t index) noexcept -> bool = 0;
+	// Puts `slot` on the left or right mouse button the way D2R does; nothing when the character cannot use that skill.
+	virtual void Select(bool left, const SkillSlot& slot) noexcept = 0;
 };
 
 class Store {
