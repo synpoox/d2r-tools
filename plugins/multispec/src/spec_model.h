@@ -9,10 +9,10 @@
 namespace ms {
 
 inline constexpr int MaxSkills = 128;  // class skills; retail has 30, extended saves more
-inline constexpr int MaxSpecs = 8;
+inline constexpr int MaxSpecs = 99;  // a soft cap: the "spec N" command and the panel's slot take two digits
 inline constexpr int MaxName = 32;
 inline constexpr int FileVersion = 1;
-inline constexpr size_t MaxFileBytes = 16384;
+inline constexpr size_t MaxFileBytes = 65536;  // fits MaxSpecs specs of MaxSkills three-digit levels
 
 enum class SpecState : uint8_t { Ok, Adjusted, Invalid };
 

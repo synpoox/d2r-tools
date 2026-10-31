@@ -1,7 +1,7 @@
 # MultiSpec
 
 Dual spec for Diablo II: Resurrected (offline, with D2RLoader; tested on D2R 3.3 and D2RLoader 1.3.1). Each character keeps 2 saved skill allocations
-(up to 8 with `spec_count`) and switches between them in town, without a respec token.
+(up to 99 with `spec_count`) and switches between them in town, without a respec token.
 
 **Status: Phase 2 (MVP), not yet tested in game.**
 

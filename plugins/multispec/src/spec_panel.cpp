@@ -37,7 +37,7 @@ const D2RL::PluginContext* g_context = nullptr;
 D2RL::Panels::RegistrationHandle g_panel = D2RL::Panels::InvalidHandle;
 D2RL::CoreExports::ExecuteConsoleCommandFn g_execute = nullptr;
 int32_t g_specCount = 1;
-char g_layout[8192];
+char g_layout[65536];  // one number per spec, up to MaxSpecs
 
 std::atomic<bool> g_open {false};
 std::atomic<int32_t> g_active {0};

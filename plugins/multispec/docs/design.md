@@ -13,7 +13,7 @@ three need a check in a game slot before the MVP can be trusted (section 9).
 |---|---|---|
 | Spec = hard skill levels + unspent points | **Changed: a spec stores hard levels only; unspent points are derived** | A character's total skill points T only grows (level-ups, Den of Evil, Radament, Izual, Book of Skill). If spec 2 stored its own unspent count, every point earned while in spec 1 would never reach spec 2. With T = (sum of live hard levels) + `newskills`, spec k's unspent points are T - sum(spec k). They are still shown per spec, and the "unspent points preserved" test still holds |
 | Swap anywhere | **Changed (owner's decision): town only, not configurable** | Your own Phase 3 list has "swap refused outside town". In the field a swap removes auras, passives and the skills that keep summons going, mid-fight, and could be used to cheat (cast with spec A's skills, swap). Town also bounds what can go wrong. WoW allows it anywhere out of combat; D2R has no "out of combat" flag to reuse |
-| 2 specs, N in config | **Confirmed** | `spec_count`, 2 by default, 1-8. The file format allows up to 255 |
+| 2 specs, N in config | **Confirmed** | `spec_count`, 3 by default, 1-99 |
 | Trigger `/spec N` first, UI later | **Confirmed, one open check** | A D2RLoader console command. Whether a line typed in the chat box reaches it is not verified yet (section 9). If not, Phase 2 adds a chat-message listener for `/spec` |
 | Per character, survives save/load, never corrupts `.d2s` | **Confirmed, with zero `.d2s` writes** | Section 3 |
 | Respect engine limits | **Confirmed** | Section 8; one new limit found (skpoints costs) |
@@ -170,7 +170,7 @@ Config (`multispec.toml`, embedded default; the gameplay keys listed in `[d2rl] 
 
 ```toml
 [multispec]
-spec_count = 2          # 1-8
+spec_count = 3          # 1-99
 ```
 
 Phase 4 adds `cost_gold` and `cooldown_seconds`.

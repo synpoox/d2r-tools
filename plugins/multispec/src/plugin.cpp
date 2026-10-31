@@ -123,7 +123,8 @@ Part g_parts[] = {
 };
 
 // --- One request at a time: console -> game thread -> UI thread -------------------------------------------------
-constexpr int MaxLines = 14;
+constexpr int MaxLines = 16;
+constexpr int32_t MaxListedSpecs = 10;
 
 struct Request {
 	std::atomic<bool> busy {false};
@@ -160,12 +161,23 @@ void Summarize(const ms::CharSpecs& file, const ms::LiveChar& live) noexcept {
 	const int32_t total = ms::TotalPoints(live);
 	Say("%s: spec %d of %d active, %d skill points in all", file.name, file.active, g_specCount, total);
 	const int32_t shown = file.specCount < g_specCount ? file.specCount : g_specCount;
+	int32_t listed = 0;
+	int32_t hidden = 0;
 	for (int32_t k = 0; k < shown; ++k) {
 		const ms::Spec& s = file.specs[k];
 		const int32_t used = ms::SumLevels(s.levels, file.skillCount);
+		// With many specs, empty ones are counted, and the list stops before it outgrows the answer.
+		if (shown > MaxListedSpecs && k + 1 != file.active && (used == 0 || listed >= MaxListedSpecs - 1)) {
+			++hidden;
+			continue;
+		}
+		++listed;
 		Say("  spec %d: %d points, %d unspent%s%s", k + 1, used, total - used,
 		    s.state == ms::SpecState::Ok ? "" : (s.state == ms::SpecState::Invalid ? " (INVALID: needs more points)" : " (adjusted to changed skills)"),
 		    k + 1 == file.active ? "  <- active" : "");
+	}
+	if (hidden > 0) {
+		Say("  (%d more specs not listed)", hidden);
 	}
 	if (file.specCount > g_specCount) {
 		Say("  (%d more spec(s) kept in the file; raise spec_count to use them)", file.specCount - g_specCount);

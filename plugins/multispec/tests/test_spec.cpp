@@ -128,6 +128,29 @@ void TestCrcAndRoundTrip() {
 	CHECK(ms::SameLevels(back.specs[0].levels, s.specs[0].levels, N));
 	CHECK(back.active == 1 && back.pendingFrom == 0);
 
+	// The largest file: every spec, every skill, three-digit levels.
+	{
+		static ms::CharSpecs big {};
+		std::snprintf(big.name, sizeof(big.name), "%s", "Largest");
+		big.charClass = 1;
+		big.skillCount = ms::MaxSkills;
+		big.specCount = ms::MaxSpecs;
+		big.active = ms::MaxSpecs;
+		for (int i = 0; i < ms::MaxSkills; ++i) {
+			big.skillIds[i] = static_cast<int16_t>(1000 + i);
+		}
+		for (int k = 0; k < ms::MaxSpecs; ++k) {
+			std::memset(big.specs[k].levels, 255, sizeof(big.specs[k].levels));
+		}
+		static char bigText[ms::MaxFileBytes];
+		const size_t bigLen = ms::Serialize(big, bigText, sizeof(bigText));
+		CHECK(bigLen > 0);
+		static ms::CharSpecs bigBack {};
+		CHECK(ms::Parse(bigText, bigLen, &bigBack, err, sizeof(err)));
+		CHECK(bigBack.specCount == ms::MaxSpecs && bigBack.active == ms::MaxSpecs);
+		CHECK(bigBack.specs[ms::MaxSpecs - 1].levels[ms::MaxSkills - 1] == 255);
+	}
+
 	// one flipped byte: refused
 	text[20] ^= 1;
 	CHECK(!ms::Parse(text, len, &back, err, sizeof(err)));
@@ -159,7 +182,9 @@ void TestConfigAndModinfo() {
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 3 # three\n", 2) == 3);
 	CHECK(ms::ConfigSpecCount("[other]\nspec_count = 5\n[multispec]\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 0\n", 2) == 2);
-	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 9\n", 2) == 2);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 9\n", 2) == 9);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 99\n", 2) == 99);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 100\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount(nullptr, 2) == 2);
 	char sp[64];
 	CHECK(ms::ModinfoSavePath("{\"name\": \"MyMod\", \"savepath\": \"MyMod-s2/\"}", sp, sizeof(sp)) &&
@@ -317,7 +342,7 @@ void TestSpecPanelLayout() {
 	CHECK(panel::DownY + panel::ArrowSize <= panel::WingHeight - panel::WingBorder);
 	CHECK(panel::SlotX >= panel::WingBorder && panel::SlotX + panel::SlotWidth == panel::VisibleWidth);
 	CHECK(panel::ArrowX >= panel::SlotX && panel::ArrowX + panel::ArrowSize <= panel::VisibleWidth);
-	static char json[8192];
+	static char json[65536];
 	for (int32_t specs = 1; specs <= ms::MaxSpecs; ++specs) {
 		const size_t n = panel::BuildLayout(specs, json, sizeof(json));
 		CHECK(n > 0 && n < sizeof(json) && json[n] == '\0');
