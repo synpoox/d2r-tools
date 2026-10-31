@@ -86,7 +86,7 @@ skills hook
 
 The template's parts and their words:
 
-| Word | Part | Needs the expected image |
+| Word | Part | Uses game addresses |
 | --- | --- | --- |
 | `envguard` | Environment guard | no |
 | `soundguard` | Sound-table guard | yes |

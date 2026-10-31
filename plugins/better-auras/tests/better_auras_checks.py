@@ -70,7 +70,7 @@ def ba_files(ctx):
 
 @check("ba-loads", tags=["ba-smoke", "game"])
 def ba_loads(ctx):
-    """The plugin loads on the expected image and every part reports on (no refused hook, no config error)."""
+    """The plugin loads and every part reports on (no refused hook, no config error)."""
     ctx.ensure_running()
 
     def loaded():

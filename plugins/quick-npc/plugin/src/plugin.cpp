@@ -56,7 +56,6 @@ using InstallFn = void (*)(const D2RL::PluginContext* context, char* report, siz
 
 struct Part {
 	const char* word;   // off-file word and status label
-	bool engine;        // uses game addresses
 	InstallFn install;
 	char report[512];
 };
@@ -71,8 +70,8 @@ void InstallFeature(const D2RL::PluginContext* context, char* report, size_t siz
 }
 
 Part g_parts[] = {
-	{"envguard", false, InstallEnvironment, ""},
-	{"quicknpc", true, InstallFeature, ""},
+	{"envguard", InstallEnvironment, ""},
+	{"quicknpc", InstallFeature, ""},
 };
 
 void InstallParts(const D2RL::PluginContext* context) noexcept {

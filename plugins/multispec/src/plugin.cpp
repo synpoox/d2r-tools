@@ -4,7 +4,7 @@
 // line per part. Parts (off-file words in multispec-off.txt next to the DLL):
 //   envguard   environment guard from the toolkit template (other mod running, stray copies, other plugins)
 //   specstore  where the spec files live (save folder from modinfo.json savepath, fallback folder)
-//   specswap   every engine call: reading the character, reconciling the file, swapping. Needs the expected image and
+//   specswap   every engine call: reading the character, reconciling the file, swapping. Needs
 //              the entry bytes of every function it calls (d2r.cpp)
 //   speccmd    the "spec" console command (spec, spec N)
 // The status command "multispec" is always registered.
@@ -48,7 +48,7 @@ constexpr int32_t DefaultSpecCount = 2;
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
-bool g_engineOk = false;  // specswap installed: image, binding and entry bytes all good
+bool g_engineOk = false;  // specswap installed: binding and entry bytes all good
 bool g_storeOk = false;
 int32_t g_specCount = DefaultSpecCount;
 char g_selfPath[520] = "?";
@@ -78,7 +78,6 @@ using InstallFn = void (*)(const D2RL::PluginContext* context, char* report, siz
 
 struct Part {
 	const char* word;
-	bool engine;
 	InstallFn install;
 	char report[600];
 };
@@ -106,10 +105,10 @@ void InstallSwap(const D2RL::PluginContext* context, char* report, size_t size) 
 void InstallCommand(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 
 Part g_parts[] = {
-	{"envguard", false, InstallEnvironment, ""},
-	{"specstore", false, InstallStore, ""},
-	{"specswap", true, InstallSwap, ""},
-	{"speccmd", false, InstallCommand, ""},
+	{"envguard", InstallEnvironment, ""},
+	{"specstore", InstallStore, ""},
+	{"specswap", InstallSwap, ""},
+	{"speccmd", InstallCommand, ""},
 };
 
 // --- One request at a time: console -> game thread -> UI thread -------------------------------------------------

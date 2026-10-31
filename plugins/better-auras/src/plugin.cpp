@@ -16,7 +16,7 @@
 //  - registers the console command "<plugin>" that prints the state of every part.
 //
 // Adding a part: write Install<Part>(context, report, size) in its own file, add a row to g_parts with a one-word name
-// (the word the off-file uses) and whether it needs the expected image. It shows up in the log and the status command.
+// (the word the off-file uses). It shows up in the log and the status command.
 #include <D2RLPlugin/api.h>
 
 #include "auras.h"
@@ -73,7 +73,6 @@ using InstallFn = void (*)(const D2RL::PluginContext* context, char* report, siz
 
 struct Part {
 	const char* word;   // off-file word and status label
-	bool engine;        // uses game addresses
 	InstallFn install;
 	char report[512];
 };
@@ -108,14 +107,14 @@ void InstallEnvironment(const D2RL::PluginContext* context, char* report, size_t
 }
 
 Part g_parts[] = {
-	{"envguard", false, InstallEnvironment, ""},
-	{"soundguard", true, InstallSounds, ""},
-	{"typeids", true, InstallTypeIds, ""},
-	{"config", false, InstallConfig, ""},
-	{"toggle", true, InstallFeature<auras::Toggle>, ""},
-	{"drain", true, InstallFeature<auras::Drain>, ""},
-	{"reserve", true, InstallFeature<auras::Reserve>, ""},
-	{"decouple", true, InstallFeature<auras::Decouple>, ""},
+	{"envguard", InstallEnvironment, ""},
+	{"soundguard", InstallSounds, ""},
+	{"typeids", InstallTypeIds, ""},
+	{"config", InstallConfig, ""},
+	{"toggle", InstallFeature<auras::Toggle>, ""},
+	{"drain", InstallFeature<auras::Drain>, ""},
+	{"reserve", InstallFeature<auras::Reserve>, ""},
+	{"decouple", InstallFeature<auras::Decouple>, ""},
 };
 
 void InstallParts(const D2RL::PluginContext* context) noexcept {

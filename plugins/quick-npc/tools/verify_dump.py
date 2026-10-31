@@ -2,7 +2,7 @@
 """verify_dump: check every game address, byte pattern and layout Quick NPC relies on against a D2R memory dump.
 
 The dump is the running game image written in memory layout (section file offsets = RVAs), as d2rAI-toolkit's
-tools/dump_image.py writes it. Run this after any D2R or D2RLoader update before changing the plugin's expected image:
+tools/dump_image.py writes it. Run this after any D2R or D2RLoader update:
 every line must say "ok". A failure names the address to re-find.
 
     python tools/verify_dump.py <dump.exe>            pattern checks only (standard library)

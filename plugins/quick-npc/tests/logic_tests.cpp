@@ -333,7 +333,7 @@ void TestDisabled() {
 	CHECK(c.counters().pressed[static_cast<int>(Action::Trade)] == 0);
 }
 
-// --- Install: unsupported build, failed hooks -----------------------------------------------------------------------
+// --- Install: failed hooks ------------------------------------------------------------------------------------------
 struct FakeEngine {
 	bool services = true;
 	bool hooked[2] = {false, false};  // [0] interact, [1] open-menu: FF 25 at the entry
@@ -367,11 +367,8 @@ auto Steps(FakeEngine& e) -> InstallSteps {
 }
 
 void TestInstall() {
-	// Unsupported build: the engine part is never installed; the environment guard still is.
-	CHECK(DecidePart(false) == PartDecision::Install);
 	CHECK(DecidePart(false) == PartDecision::Install);
 	CHECK(DecidePart(true) == PartDecision::OffByFile);  // "quicknpc" in quick-npc-off.txt
-	CHECK(DecidePart(true) == PartDecision::OffByFile);
 
 	char report[300];
 	{

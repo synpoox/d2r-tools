@@ -6,7 +6,7 @@
   and reads optional context through the SDK getters. On game code that has moved it can crash; hooks whose entry bytes
   differ are still refused.
 - A fault while the plugin is loaded is written to the plugin's log as a `FAULT` line with its cause and whether the
-  plugin was involved. A later line says when the game survived it, so the last unconfirmed `FAULT` is the crash.
+  plugin was involved. A later line says when the game was still running a few seconds after it, which is a hint, not proof.
 
 ## 1.0.0 - 2026-10-29
 

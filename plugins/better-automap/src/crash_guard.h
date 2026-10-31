@@ -1,11 +1,14 @@
 // Crash guard: if the game faults, say so and say why, in the plugin's own log. A vectored exception handler sees the
 // fault before D2R or D2RLoader handle it, so it cannot know yet whether the fault is fatal: it logs a FAULT line, and
-// if the game is still running a few seconds later a second line says so. The last FAULT with no such line is the crash.
+// if the game is still running a few seconds later a second line says so. That line is a hint, not proof: a crash
+// reporter can keep a dying game running that long. After a crash, start with the last FAULT line.
 //
 // The handler never handles the exception and never logs. The faulting thread may hold the loader's log lock or have
 // almost no stack left, so it only copies the facts, wakes a writer thread and waits a bounded time for it to finish.
-// Repeats of a fault already reported (same address, same target) are counted, not logged again, so harmless repeats
-// cannot crowd out the real crash. This header also holds the image line for the load log and status command.
+// Repeats of a fault reported in the last few seconds (same address, same target) are counted, not logged again, so
+// harmless repeats cannot crowd out the real crash. After that second line the same fault logs a new FAULT line, so a
+// fault the game survived earlier still shows up if it later ends the game. This header also holds the image line for
+// the load log and status command.
 #pragma once
 
 #ifndef NOMINMAX
@@ -24,7 +27,7 @@ namespace crash_guard {
 
 inline constexpr int SeenSlots = 32;
 inline constexpr DWORD WriterWaitMs = 500;     // how long a faulting thread waits for its line
-inline constexpr DWORD SurvivedAfterMs = 3000;  // still running this long after a fault: it did not end the game
+inline constexpr DWORD StillRunningAfterMs = 3000;  // quiet this long after a fault: say the game is still running
 
 struct Fault {
 	DWORD code;
@@ -113,7 +116,7 @@ inline auto WINAPI Writer(LPVOID) noexcept -> DWORD {
 	const HANDLE events[2] = {g_stop, g_wake};
 	int unconfirmed = 0;
 	for (;;) {
-		const DWORD r = WaitForMultipleObjects(2, events, FALSE, unconfirmed > 0 ? SurvivedAfterMs : INFINITE);
+		const DWORD r = WaitForMultipleObjects(2, events, FALSE, unconfirmed > 0 ? StillRunningAfterMs : INFINITE);
 		if (r == WAIT_OBJECT_0 + 1) {
 			const Fault fault = g_fault;
 			Report(fault);
@@ -121,7 +124,14 @@ inline auto WINAPI Writer(LPVOID) noexcept -> DWORD {
 			SetEvent(g_done);
 			g_busy.clear();
 		} else if (r == WAIT_TIMEOUT) {
-			plog::Info("the %d FAULT line(s) above did not end the game: it handled them (%u repeats not logged)", unconfirmed,
+			if (g_busy.test_and_set()) {
+				continue;  // a fault is being copied: take it first
+			}
+			for (uint64_t& seen : g_seen) {
+				seen = 0;  // from here a repeat logs again: it may be the one that ends the game
+			}
+			g_busy.clear();
+			plog::Info("game still running %lu s after the %d FAULT line(s) above (%u repeats not logged)", StillRunningAfterMs / 1000, unconfirmed,
 			           g_repeats.exchange(0));
 			unconfirmed = 0;
 		} else {

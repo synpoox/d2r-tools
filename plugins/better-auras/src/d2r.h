@@ -1,7 +1,7 @@
 // D2R game image interface: RVAs, record offsets, structures and the game functions a plugin calls.
 //
 // EVERYTHING IN THIS FILE IS FOR ONE GAME IMAGE: D2R 3.3.0 build 93847 running under D2RLoader 1.3.1 (PE header
-// TimeDateStamp 0x6ab3782c, checked by plugin.cpp before any of it is used). The values come from the Ghidra
+// TimeDateStamp 0x6ab3782c). The values come from the Ghidra
 // analysis of the dumped image (tools/dump_image.py, tools/ghidra_analyze.ps1) and were used in game by a
 // large overhaul port. A different D2R patch or D2RLoader release moves them: re-find each one before
 // updating the plugin.
