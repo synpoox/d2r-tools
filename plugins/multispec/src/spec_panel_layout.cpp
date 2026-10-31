@@ -6,8 +6,8 @@
 
 namespace ms::panel {
 
-auto BuildLayout(int32_t slots, char* out, size_t size) noexcept -> size_t {
-	if (out == nullptr || slots < 1 || slots > MaxSlots) {
+auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t {
+	if (out == nullptr || specCount < 1) {
 		return 0;
 	}
 	int n = std::snprintf(out, size, R"json({
@@ -23,26 +23,28 @@ auto BuildLayout(int32_t slots, char* out, size_t size) noexcept -> size_t {
 		{ "type": "ImageWidget", "name": "Wing",
 		  "fields": { "rect": { "x": 0, "y": 0 }, "filename": "PANEL\\Modals\\Modal_No_Title_BG" } },
 		{ "type": "TextBoxWidget", "name": "Heading",
-		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "Specs",
-		              "style": { "pointSize": "$MediumPanelFontSize", "fontColor": "$FontColorGold",
-		                         "alignment": { "h": "center", "v": "center" } } } })json",
-	                      TreeLeft - VisibleWidth, TreeTop + TabRow, WingTotalWidth, WingHeight, VisibleWidth, WingHeight, SocketX,
-	                      WingBorder, VisibleWidth - SocketX, HeadingHeight);
-	for (int32_t i = 0; i < slots && n > 0 && static_cast<size_t>(n) < size; ++i) {
-		const int32_t y = SlotY(slots, i);
-		// The gold frame over a slot marks the active spec; it starts hidden and the panel shows the right one.
-		n += std::snprintf(out + n, size - static_cast<size_t>(n), R"json(,
-		{ "type": "ButtonWidget", "name": "Slot%d",
-		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "PANEL\\DropdownButton_Large_Left",
+		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "Spec",
+		              "style": { "fontFace": "Formal", "pointSize": "$XMediumLargeFontSize", "fontColor": "$FontColorGold",
+		                         "dropShadow": "$DefaultDropShadow", "alignment": { "h": "center", "v": "center" } } } },
+		{ "type": "ImageWidget", "name": "Slot",
+		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "PANEL\\HUD_02\\belt_popped_row" } },
+		{ "type": "ButtonWidget", "name": "Up",
+		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_UpButton",
 		              "pressedFrame": 1, "disabledFrame": 2, "hoveredFrame": 3,
-		              "onClickMessage": "PanelManager:OpenPanel:multispec/Swap%d" } },
-		{ "type": "ImageWidget", "name": "Active%d",
-		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "PANEL\\DropdownButton_Large_Left", "frame": 3, "visible": false } },
+		              "onClickMessage": "PanelManager:OpenPanel:multispec/SpecUp" } },
+		{ "type": "ButtonWidget", "name": "Down",
+		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_DownButton",
+		              "pressedFrame": 1, "disabledFrame": 2, "hoveredFrame": 3,
+		              "onClickMessage": "PanelManager:OpenPanel:multispec/SpecDown" } })json",
+	                      TreeLeft - VisibleWidth, TreeTop + TabRow, WingTotalWidth, WingHeight, VisibleWidth, WingHeight, SlotX,
+	                      HeadingTop, VisibleWidth - SlotX, HeadingHeight, SlotX, SlotY, ArrowX, UpY, ArrowX, DownY);
+	for (int32_t i = 1; i <= specCount && n > 0 && static_cast<size_t>(n) < size; ++i) {
+		n += std::snprintf(out + n, size - static_cast<size_t>(n), R"json(,
 		{ "type": "TextBoxWidget", "name": "Number%d",
-		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "%d",
-		              "style": { "pointSize": "$XMediumPanelFontSize", "fontColor": "$FontColorLightGold",
+		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "%d", "visible": false,
+		              "style": { "pointSize": "$XMediumPanelFontSize", "fontColor": "$FontColorGold",
 		                         "alignment": { "h": "center", "v": "center" } } } })json",
-		                   i + 1, SocketX, y, i + 1, i + 1, SocketX, y, i + 1, SocketX, y, VisibleWidth - SocketX, SocketHeight, i + 1);
+		                   i, SlotX, SlotY, SlotWidth, SlotHeight, i);
 	}
 	if (n > 0 && static_cast<size_t>(n) < size) {
 		n += std::snprintf(out + n, size - static_cast<size_t>(n), "\n\t]\n}");
@@ -50,17 +52,22 @@ auto BuildLayout(int32_t slots, char* out, size_t size) noexcept -> size_t {
 	return n > 0 && static_cast<size_t>(n) < size ? static_cast<size_t>(n) : 0;
 }
 
-auto ParseSwap(const char* text) noexcept -> int32_t {
-	constexpr const char* Prefix = "multispec/Swap";
-	constexpr size_t PrefixLength = 14;
-	if (text == nullptr || std::strncmp(text, Prefix, PrefixLength) != 0) {
+auto ParseStep(const char* text) noexcept -> int32_t {
+	if (text == nullptr) {
 		return 0;
 	}
-	const char* p = text + PrefixLength;
-	if (*p < '1' || *p > '9' || p[1] != '\0') {
+	if (std::strcmp(text, "multispec/SpecUp") == 0) {
+		return 1;
+	}
+	return std::strcmp(text, "multispec/SpecDown") == 0 ? -1 : 0;
+}
+
+auto NextSpec(int32_t active, int32_t specCount, int32_t step) noexcept -> int32_t {
+	if (specCount < 2 || active < 1 || active > specCount || (step != 1 && step != -1)) {
 		return 0;
 	}
-	return *p - '0';
+	const int32_t next = active + step;
+	return next < 1 ? specCount : (next > specCount ? 1 : next);
 }
 
 }  // namespace ms::panel

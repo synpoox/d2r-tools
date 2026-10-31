@@ -311,22 +311,20 @@ void TestSwap() {
 
 void TestSpecPanelLayout() {
 	namespace panel = ms::panel;
-	CHECK(panel::VisibleSlots(0) == 1 && panel::VisibleSlots(2) == 2 && panel::VisibleSlots(3) == 3 && panel::VisibleSlots(9) == 3);
-	// Geometry: sockets inside the wing's frame, and their open right side under the skill tree.
-	CHECK(panel::SocketX >= panel::WingBorder);
-	CHECK(panel::SocketX + panel::SocketWidth > panel::VisibleWidth);
-	for (int32_t slots = 1; slots <= panel::MaxSlots; ++slots) {
-		CHECK(panel::SlotY(slots, 0) >= panel::WingBorder + panel::HeadingHeight);
-		CHECK(panel::SlotY(slots, slots - 1) + panel::SocketHeight <= panel::WingHeight - panel::WingBorder);
-	}
-	static char json[4096];
-	for (int32_t slots = 1; slots <= panel::MaxSlots; ++slots) {
-		const size_t n = panel::BuildLayout(slots, json, sizeof(json));
+	// Geometry: the column fits the wing below the heading, one belt slot ends where the tree starts.
+	CHECK(panel::UpY >= panel::HeadingTop + panel::HeadingHeight);
+	CHECK(panel::SlotY == panel::UpY + panel::ArrowSize && panel::DownY == panel::SlotY + panel::SlotHeight);  // touching
+	CHECK(panel::DownY + panel::ArrowSize <= panel::WingHeight - panel::WingBorder);
+	CHECK(panel::SlotX >= panel::WingBorder && panel::SlotX + panel::SlotWidth == panel::VisibleWidth);
+	CHECK(panel::ArrowX >= panel::SlotX && panel::ArrowX + panel::ArrowSize <= panel::VisibleWidth);
+	static char json[8192];
+	for (int32_t specs = 1; specs <= ms::MaxSpecs; ++specs) {
+		const size_t n = panel::BuildLayout(specs, json, sizeof(json));
 		CHECK(n > 0 && n < sizeof(json) && json[n] == '\0');
 		char want[40];
-		std::snprintf(want, sizeof(want), "multispec/Swap%d", slots);
+		std::snprintf(want, sizeof(want), "\"Number%d\"", specs);
 		CHECK(std::strstr(json, want) != nullptr);
-		std::snprintf(want, sizeof(want), "multispec/Swap%d", slots + 1);
+		std::snprintf(want, sizeof(want), "\"Number%d\"", specs + 1);
 		CHECK(std::strstr(json, want) == nullptr);
 		// Balanced braces and brackets: the game refuses a broken layout.
 		int braces = 0;
@@ -337,18 +335,25 @@ void TestSpecPanelLayout() {
 		}
 		CHECK(braces == 0 && brackets == 0);
 	}
+	CHECK(std::strstr(json, "multispec/SpecUp") != nullptr && std::strstr(json, "multispec/SpecDown") != nullptr);
 	// Only the game's own sprites: nothing of ours to ship.
 	CHECK(std::strstr(json, "d2rloader\\\\multispec") == nullptr);
 	CHECK(panel::BuildLayout(0, json, sizeof(json)) == 0);
-	CHECK(panel::BuildLayout(panel::MaxSlots + 1, json, sizeof(json)) == 0);
 	CHECK(panel::BuildLayout(2, json, 64) == 0);  // refuses a short buffer
-	CHECK(panel::ParseSwap("multispec/Swap1") == 1);
-	CHECK(panel::ParseSwap("multispec/Swap3") == 3);
-	CHECK(panel::ParseSwap("multispec/Swap0") == 0);
-	CHECK(panel::ParseSwap("multispec/Swap") == 0);
-	CHECK(panel::ParseSwap("multispec/Swap12") == 0);
-	CHECK(panel::ParseSwap("SkillsTreePanel") == 0);
-	CHECK(panel::ParseSwap(nullptr) == 0);
+	CHECK(panel::ParseStep("multispec/SpecUp") == 1);
+	CHECK(panel::ParseStep("multispec/SpecDown") == -1);
+	CHECK(panel::ParseStep("multispec/SpecUp2") == 0);
+	CHECK(panel::ParseStep("SkillsTreePanel") == 0);
+	CHECK(panel::ParseStep(nullptr) == 0);
+	CHECK(panel::NextSpec(1, 3, 1) == 2);
+	CHECK(panel::NextSpec(2, 3, -1) == 1);
+	CHECK(panel::NextSpec(3, 3, 1) == 1);   // wraps at the top
+	CHECK(panel::NextSpec(1, 3, -1) == 3);  // and at the bottom
+	CHECK(panel::NextSpec(1, 2, 1) == 2 && panel::NextSpec(1, 2, -1) == 2);
+	CHECK(panel::NextSpec(1, 1, 1) == 0);   // one spec: nowhere to go
+	CHECK(panel::NextSpec(0, 3, 1) == 0);   // active spec not known yet
+	CHECK(panel::NextSpec(4, 3, 1) == 0);
+	CHECK(panel::NextSpec(1, 3, 0) == 0);
 }
 
 }  // namespace

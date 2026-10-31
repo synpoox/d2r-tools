@@ -35,8 +35,8 @@ work; don't copy it here, link to it.
 | `src/d2r.*` | `specswap` | RVAs, types, entry-byte checks (build 93847) |
 | `src/env_guard.*`, `off_switch.*`, `log.*` | `envguard` | From the toolkit's `plugin-template` |
 | (command) | `speccmd` | The `spec` console command |
-| `src/spec_panel_layout.*` | | Portable: the spec panel's JSON layout, built from stock sprite paths; geometry; slot click parsing (tested in `tests/`) |
-| `src/spec_panel.*` | `specui` | The panel docked to the skill tree: opens and closes with it; a click runs `spec N`; marks the active spec |
+| `src/spec_panel_layout.*` | | Portable: the spec panel's JSON layout, built from stock sprite paths; geometry; arrow parsing and stepping (tested in `tests/`) |
+| `src/spec_panel.*` | `specui` | The panel docked to the skill tree: opens and closes with it; arrows and the wheel run `spec N`; shows the active spec |
 
 Off-switch: `multispec-off.txt` next to the DLL, words separated by spaces: `envguard specstore specswap speccmd specui`.
 Status: the `multispec` console command (version, image check, every part, counters, last error).
