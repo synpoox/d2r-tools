@@ -1,5 +1,5 @@
-// D2RLoader plugin manifest (required by plugin ABI 3: the DLL declares the ABI it was built for).
+// D2RLoader plugin manifest (the DLL declares the ABI it was built for).
 #include <D2RLPlugin/resource.h>
 #include <D2RLPlugin/version.h>
 
-D2RL_PLUGIN_MANIFEST_RESOURCE_ID RCDATA { D2RL_PLUGIN_RESOURCE_DWORD(D2RL_PLUGIN_ROLES_ABI_VERSION) }
+D2RL_PLUGIN_MANIFEST_RESOURCE_ID RCDATA { D2RL_PLUGIN_RESOURCE_DWORD(D2RL_PLUGIN_ABI_VERSION) }

@@ -5,10 +5,9 @@
 //
 // The handler never handles the exception and never logs. The faulting thread may hold the loader's log lock or have
 // almost no stack left, so it only copies the facts, wakes a writer thread and waits a bounded time for it to finish.
-// Repeats of a fault reported in the last few seconds (same address, same target) are counted, not logged again, so
-// harmless repeats cannot crowd out the real crash. After that second line the same fault logs a new FAULT line, so a
-// fault the game survived earlier still shows up if it later ends the game. This header also holds the image line for
-// the load log and status command.
+// Repeats of a fault (same address, same target) are counted and logged again at most once a minute, so harmless repeats
+// cannot flood the log or crowd out the real crash, and a fault the game survived earlier can still show up if it later
+// ends the game. This header also holds the image line for the load log and status command.
 #pragma once
 
 #ifndef NOMINMAX
@@ -28,6 +27,7 @@ namespace crash_guard {
 inline constexpr int SeenSlots = 32;
 inline constexpr DWORD WriterWaitMs = 500;     // how long a faulting thread waits for its line
 inline constexpr DWORD StillRunningAfterMs = 3000;  // quiet this long after a fault: say the game is still running
+inline constexpr ULONGLONG RepeatLogMs = 60000;  // the same fault logs again after this long
 
 struct Fault {
 	DWORD code;
@@ -52,6 +52,7 @@ inline std::atomic<DWORD> g_writerId{0};
 inline std::atomic_flag g_busy = ATOMIC_FLAG_INIT;  // owns g_fault and g_seen; the writer clears it after its line
 inline Fault g_fault{};
 inline uint64_t g_seen[SeenSlots] = {};
+inline ULONGLONG g_seenAt[SeenSlots] = {};  // when each g_seen fault last logged
 inline int g_seenNext = 0;
 inline std::atomic<uint32_t> g_repeats{0};
 
@@ -124,13 +125,6 @@ inline auto WINAPI Writer(LPVOID) noexcept -> DWORD {
 			SetEvent(g_done);
 			g_busy.clear();
 		} else if (r == WAIT_TIMEOUT) {
-			if (g_busy.test_and_set()) {
-				continue;  // a fault is being copied: take it first
-			}
-			for (uint64_t& seen : g_seen) {
-				seen = 0;  // from here a repeat logs again: it may be the one that ends the game
-			}
-			g_busy.clear();
 			plog::Info("game still running %lu s after the %d FAULT line(s) above (%u repeats not logged)", StillRunningAfterMs / 1000, unconfirmed,
 			           g_repeats.exchange(0));
 			unconfirmed = 0;
@@ -150,15 +144,24 @@ inline auto CALLBACK Handler(EXCEPTION_POINTERS* info) noexcept -> LONG {
 	const ULONG_PTR kind = e->NumberParameters > 0 ? e->ExceptionInformation[0] : 0;
 	const ULONG_PTR at = e->NumberParameters > 1 ? e->ExceptionInformation[1] : 0;
 	const uint64_t key = (static_cast<uint64_t>(rip) * 0x9E3779B97F4A7C15ULL ^ static_cast<uint64_t>(at)) | 1;
-	for (const uint64_t seen : g_seen) {
-		if (seen == key) {
-			g_repeats.fetch_add(1);
-			g_busy.clear();
-			return EXCEPTION_CONTINUE_SEARCH;
+	const ULONGLONG now = GetTickCount64();
+	int slot = -1;
+	for (int i = 0; i < SeenSlots && slot < 0; ++i) {
+		if (g_seen[i] == key) {
+			slot = i;
 		}
 	}
-	g_seen[g_seenNext] = key;
-	g_seenNext = (g_seenNext + 1) % SeenSlots;
+	if (slot >= 0 && now - g_seenAt[slot] < RepeatLogMs) {
+		g_repeats.fetch_add(1);
+		g_busy.clear();
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+	if (slot < 0) {
+		slot = g_seenNext;
+		g_seen[slot] = key;
+		g_seenNext = (g_seenNext + 1) % SeenSlots;
+	}
+	g_seenAt[slot] = now;
 	g_fault = Fault{e->ExceptionCode, GetCurrentThreadId(), rip, InSelf(rip) ? rip : SelfOnStack(static_cast<uintptr_t>(info->ContextRecord->Rsp)), kind, at};
 	ResetEvent(g_done);
 	SetEvent(g_wake);
