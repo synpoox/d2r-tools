@@ -13,7 +13,7 @@ A D2RLoader plugin that gives a Diablo II: Resurrected mod Path of Exile-style a
   run at once.
 
 Tested on: D2R 3.3 (Battle.net or Steam; engine addresses from image `0x6ab3782c`), D2RLoader 1.3.1,
-PluginSDK 0.3.0. On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
+PluginSDK 0.3.0.
 
 ## Install
 
@@ -24,8 +24,6 @@ Better Auras is a game-wide plugin: it runs with every mod D2RLoader starts.
 2. Start the game through D2RLoader once: D2RLoader writes the default config to
    `<game>\d2rloader\config\better-auras.toml` (the repo's `better-auras.toml`, built into the DLL).
 3. Close the game, edit that file (below), start again.
-4. In game, the console command `better-auras` prints every part's state, the config path, the counters and the active
-   auras.
 
 The plugin is `Shared`: in TCP/IP every player needs the same version. All aura state lives on the host.
 

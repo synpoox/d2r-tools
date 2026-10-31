@@ -26,10 +26,7 @@ Definitions: [docs/metrics.md](docs/metrics.md). Tested in game on D2R 3.3 build
 | | |
 |---|---|
 | Game | D2R **3.3** (Battle.net or Steam) |
-| Loader | Any; D2RLoader **1.3.1** tested; plugin ABI 4 (PluginSDK 0.3.0) |
-| Version check | None: it attempts any version. 9 byte checks of the code it uses still leave a part off if they fail, and crashes go to its log |
-
-On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
+| Loader | Any; D2RLoader **1.3.1** tested |
 
 ## Install
 
@@ -39,7 +36,7 @@ On any other game or D2RLoader version the plugin still attempts to load and run
 
 Uninstall: delete the DLL (and `better-xp-bar.toml` from the config folder if you like).
 
-## Hotkeys and commands
+## Hotkeys
 
 | Action | Default | Rebind |
 |---|---|---|
@@ -48,9 +45,6 @@ Uninstall: delete the DLL (and `better-xp-bar.toml` from the config folder if yo
 
 D2RLoader stores a key the first time an action is registered (`<game>\d2rloader\config\input-bindings.toml`);
 rebind in the Controls menu.
-
-Console (D2RLoader's console): `better-xp-bar` (status), `better-xp-bar show`, `better-xp-bar reset`,
-`better-xp-bar toggle`, `better-xp-bar reload` (re-read the config).
 
 ## Session rules
 

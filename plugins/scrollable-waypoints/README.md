@@ -8,8 +8,7 @@ waypoint Act tabs with your mouse wheel. Scroll down for the next Act, up for th
 - [D2RLoader](https://github.com/D2RLoader)
 - Diablo II: Resurrected (Battle.net or Steam) with D2RLoader. Tested on D2R 3.3 with D2RLoader 1.3.1; other versions are attempted.
 
-Works with or without mods. On other game or D2RLoader versions the plugin still loads and looks for the game code it
-needs. If that code has changed, scrolling does nothing and the wheel works as normal.
+Works with or without mods.
 
 ## Install
 

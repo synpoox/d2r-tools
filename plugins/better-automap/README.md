@@ -14,8 +14,6 @@ By Synpoo. Tested on D2R 3.3 with D2RLoader 1.3.1; other versions are attempted.
 - **Mouse wheel zoom**: on the full-screen map, wheel up zooms in and wheel down zooms out, within limits you set.
   The wheel works as usual whenever another panel uses it (inventory, stash, chat, menus) or the full-screen map is
   closed.
-- Every feature can be turned off on its own. Turned off, it behaves exactly like the base game.
-- Version independent: On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Requirements
 
@@ -31,7 +29,6 @@ By Synpoo. Tested on D2R 3.3 with D2RLoader 1.3.1; other versions are attempted.
 3. Copy `better-automap.dll` into `<D2R folder>\d2rloader\plugins\` (create the folder if it is missing). It then
    works with every mod.
 4. Start the game through D2RLoader. The first start creates `<D2R folder>\d2rloader\config\better-automap.toml`.
-5. In game, open the console and type `better-automap` to see that all three features are `on`.
 
 To remove it, delete the DLL (and the `.toml` if you like).
 
@@ -50,7 +47,7 @@ wins). Restart the game after a change.
 | `[zoom] max` | `2.5` | Largest zoom (1.0 to 8.0) |
 | `[zoom] step` | `0.25` | Zoom change per wheel notch |
 
-A wrong value keeps its default and is reported in the log and by the `better-automap` command. For crash hunting
+A wrong value keeps its default and is reported in the log. For crash hunting
 you can also list features to leave out (`minimap`, `overlay`, `zoom`) in `better-automap-off.txt` next to the DLL.
 
 ### Known limits
@@ -59,7 +56,6 @@ you can also list features to leave out (`minimap`, `overlay`, `zoom`) in `bette
 - The Tab change only applies while the mini map is shown; with the Full Screen size, Tab works as in the base game.
 - The zoom resets to 1.0 when the game restarts, and does not apply to the mini map.
 - Controller mode is not supported (the wheel does not apply there).
-- Tested only on the versions listed above; on others it can crash, and the cause goes to its log.
 
 For developers: [docs/reverse-engineering/better-automap.md](../../docs/reverse-engineering/better-automap.md) lists every game address with its evidence, `docs/TESTING.md` the in-game test
 checklist. Builds run on GitHub Actions (the monorepo's `.github/workflows/ci.yml`, CMake, `windows-latest`, x64 Release).
