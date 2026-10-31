@@ -25,6 +25,8 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 
 ## Working
 
+- Read the relevant parts of `d2rAI-toolkit` (`knowledge/`, `plugin-template/`, `third_party/PluginSDK`) before beginning
+  any plugin work. Build against this repo's own `third_party/PluginSDK`; the toolkit's copy can be newer.
 - New plugins are global by default: `PluginInfo.flags` never includes `ModScopedOnly`, and a plugin does not depend on
   the active mod shipping layouts or other files (UI goes in plugin panels and plugin resources). The one allowed read
   is what the game itself takes from the active mod, such as `savepath` in its `modinfo.json` to find the saves
