@@ -7,25 +7,14 @@ clicked it yourself. MIT licensed.
 
 ## Features
 
-- **Vendors**: opens the trade screen (every Trade and Trade/Repair NPC).
-- **Deckard Cain**: identifies your items at his usual price. If nothing needs identifying, his normal menu opens.
-- **Mercenary NPCs** (Kashya, Greiz, Asheara, Qual-Kehk): resurrect your dead mercenary. While it's alive their normal
-  menu opens (hiring stays manual). Asheara is also a vendor, so she trades unless `trade = false`.
-- **Travel NPCs** (Warriv, Meshif): travels to the next act, once the game offers the option.
-- NPCs are recognised from the game's own NPC menu data, not from a list of names. If the menu shows none of the
-  enabled options (quest NPCs, gamble-only menus), it simply stays open.
-- Without the hotkey, and on monsters, objects, players and the user interface, nothing changes.
-- Ctrl is also D2R's default Run key, so you run to the NPC instead of walking.
-- A global plugin: works with every mod and with the unmodded game.
-- Console command `quick-npc` shows the status; `quick-npc on`, `quick-npc off` and `quick-npc reload` switch the
-  plugin or re-read its settings.
+- **Vendors**: opens the trade screen.
+- **Deckard Cain**: identifies your items at his usual price.
+- **Mercenary and travel NPCs**: resurrects your dead mercenary, or travels to the next act.
 
 ## Requirements
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
 - D2RLoader (tested on 1.3.1)
-
-On any other game or D2RLoader version the plugin still attempts to load and run. It may crash there; hooks whose entry bytes differ are refused, and any crash is written to the plugin's log with its cause.
 
 ## Installation
 
@@ -38,13 +27,13 @@ The first start writes the settings file `<game>\d2rloader\config\quick-npc.toml
 
 ## Configuration
 
-Edit `<game>\d2rloader\config\quick-npc.toml`, then restart the game or type `quick-npc reload` in the console.
+Edit `<game>\d2rloader\config\quick-npc.toml`, then restart the game.
 D2RLoader never overwrites your copy. A missing setting uses its default, and a bad value is reported in the
 plugin's log and its default kept.
 
 ```toml
 [quick-npc]
-enabled = true          # false: start switched off ("quick-npc on" switches it on)
+enabled = true          # false: switched off
 hotkey = "LeftCtrl"     # hold this, then left-click an NPC
 timeout_seconds = 60    # how long a click waits for the NPC's dialog (5 to 600)
 
