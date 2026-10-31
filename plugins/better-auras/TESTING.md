@@ -30,6 +30,6 @@ line. Empty rows are unverified.
 | 13 | Level-up | Might (25%) on, gain a level / equip +mana | reservation follows the new max | status `reserves` value changes | |
 | 14 | Mercenary / party | Might on with a mercenary / second player near | they get the aura as vanilla | — | |
 | 15 | TCP/IP second client | host + client both with the plugin; client toggles Might, switches skill | aura works and stays on the client; host log shows the lines | host log | |
-| 16 | Cast trigger | set `trigger = "cast"` for Might, use it | toggles on/off **[assumption: may not reach the server]** | `aura 98 on` | |
-| 17 | Off switches | `<game>\d2rloader\config\better-auras-off.txt` with `decouple` | Might drops on skill switch | part line `decouple off` | |
+| 16 | Cast trigger | set `trigger = "cast"` for Might, use it | toggles on/off **[assumption: may not reach the server]** | `aura 98 on` | **fail in town**: two right clicks with Might on the button never reached `0x43b3e0`, and the aura could not turn on. Outside town: owner |
+| 17 | Off switches | `<game>\d2rloader\config\better-auras-off.txt` with `decouple` | Might drops on skill switch | part line `decouple off` | pass: `decouple` drops the aura on a switch; all four words give a plain vanilla aura (mana 113/148, above the cap) |
 | 18 | Weapon swap | aura on the right button, press W twice | aura stays on | `kept through the skill switch`, no `off` line | pass |

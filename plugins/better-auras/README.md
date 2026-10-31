@@ -37,7 +37,7 @@ Only skills listed under `[skills.<name or id>]` are changed. Each one starts fr
 [defaults]
 enabled = true          # false: the skill stays vanilla
 toggle  = true          # false: vanilla "on while selected"; drain and reservation still apply
-trigger = "select"      # "select": choosing it for the right button toggles it; "cast": using it toggles it
+trigger = "select"      # "select": choosing it for the right button toggles it; "cast": not working yet, see below
 
 [skills.Might]          # skills.txt name, or id: [skills.98]
 reserve = { resource = "mana", mode = "percent", value = 25 }
@@ -45,6 +45,9 @@ reserve = { resource = "mana", mode = "percent", value = 25 }
 [skills.Prayer]
 drain = { resource = "mana", perSecond = 1.5 }
 ```
+
+`trigger = "cast"` is unproven: in town, using an aura never reached the game's start-skill code, so the aura can't turn
+on. Keep `select` until it's confirmed outside town.
 
 Dotted keys (`drain.resource = "mana"`) and sub-tables (`[skills.Might.drain]`) work too. Names come from the mod's
 loose `skills.txt` when there is one, else from D2R's aura names. A listed skill that uses no aura function (the
