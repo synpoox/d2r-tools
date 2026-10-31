@@ -2,14 +2,14 @@
 
 Plugins are versioned and tagged on their own (`<plugin>/vX.Y.Z`). Players get **suite releases** (`release-YYYY.MM.DD.N`):
 one GitHub Release with a zip per plugin, a bundle of all of them, `SHA256SUMS.txt` and notes written for players.
-A plugin that is `Unreleased` in the README table is not in any suite.
+The root `README.md` table lists released plugins only. An unreleased plugin has no row there and is not in any suite.
 
 ## 1. Release a plugin version
 
 1. In `plugins/<name>/`, move `CHANGELOG.md` entries from `Unreleased` to a new `## X.Y.Z - YYYY-MM-DD` heading (the
    release date). The release notes take the player-facing text from this section, so write it for players.
 2. Bump `MODKIT_PLUGIN_VERSION` (or the plugin's version constant) to `X.Y.Z` and update the plugin's version in the
-   root `README.md` table (`Unreleased` becomes the number).
+   root `README.md` table (add a row at a plugin's first release).
 3. Commit to `main`, wait for `ci` to go green, then tag and push:
 
    ```

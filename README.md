@@ -6,11 +6,7 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 
 | Plugin | Version | Description |
 |---|---|---|
-| [better-auras](plugins/better-auras) | Unreleased | Toggled, Path of Exile-style auras with mana/life drain and reservation. |
-| [better-automap](plugins/better-automap) | Unreleased | Pick the mini map's side, open the full map over it with one key, zoom it with the mouse wheel. |
 | [better-xp-bar](plugins/better-xp-bar) | 1.0.0 | HUD panel with level, XP, session gain and XP per hour. |
-| [monster-count](plugins/monster-count) | Unreleased | Monster counter; reverse-engineering spike only, nothing hooked in game yet. |
-| [multispec](plugins/multispec) | Unreleased | Two (or more) saved skill allocations per character, swapped in town without a respec token. |
 | [quick-npc](plugins/quick-npc) | 1.0.0 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
 | [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.0 | Mouse wheel switches the waypoint panel's Act tabs. |
 
@@ -21,7 +17,7 @@ Each plugin's README has its features, config and tested game version; its `CHAN
 Requires Diablo II: Resurrected with D2RLoader, tested on D2R 3.3 and D2RLoader 1.3.1 (offline or TCP/IP; never Battle.net online play).
 
 1. Download a plugin's `<plugin>-X.Y.Z.zip` (or the bundle with every plugin) from the latest
-   [release](../../releases/latest), and extract the DLL. Unreleased plugins are only available as a `ci` run's artifact.
+   [release](../../releases/latest), and extract the DLL.
 2. Close the game. Copy the DLL to `<game>\d2rloader\plugins\` (works with every mod), or to
    `<game>\mods\<Mod>\d2rloader\plugins\` for one mod only. Use one location per plugin, never both.
 3. Start the game through D2RLoader. On first start the plugin writes its default config to

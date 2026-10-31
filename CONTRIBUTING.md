@@ -50,7 +50,7 @@ fails (fail open), and what has not been validated, as its recording format and
 
 Add player-visible or compatibility changes to the plugin's `CHANGELOG.md` under `## Unreleased`. At release, move them
 under `## X.Y.Z - YYYY-MM-DD` (release date), as in [docs/RELEASING.md](docs/RELEASING.md). The release notes quote that
-section, so write it for players. Update the root `README.md` plugin table (version, description) when either changes.
+section, so write it for players. Update the root `README.md` plugin table (version, description) when either changes; it lists released plugins only.
 
 ## Review
 

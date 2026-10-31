@@ -45,7 +45,8 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - Say what was verified and how, and keep the levels apart: unit tests, a clean build, an install into a game, and
   live in-game testing. Do not call something tested in game unless it was.
 - Add player-visible and compatibility changes to the plugin's `CHANGELOG.md` under `Unreleased`. Update the plugin
-  README (and the table in the root `README.md`) when behavior, config or tested versions change.
+  README (and the table in the root `README.md`) when behavior, config or tested versions change. The root `README.md`
+  lists released plugins only; never add an unreleased one.
 - Releases: tag each plugin `<name>/vX.Y.Z` (dated changelog heading, version bump), then publish players a suite release
   from `release/suite.json` (`docs/RELEASING.md`); never publish one unless the owner asks.
 - Commit messages and PR descriptions state the real scope; no claims the validation does not support.
