@@ -381,8 +381,10 @@ void TestSwap() {
 	// ...and spec N loads any spec from there, the active one too
 	e.breakReset = false;
 	e.unspent = 10;  // the fake's broken respecs lost points; restore T = 9 + 1 earned
+	s.specs[0].left = {37, -1};  // the reset character's Attack must not replace it
 	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
+	CHECK(s.specs[0].left.skillId == 37 && e.left.skillId == 37);
 
 	// each spec gets its mouse skills back; a spec that never had any stays on Attack
 	e.left = {36, -1};
