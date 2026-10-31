@@ -1,7 +1,8 @@
-// Unit tests for the portable core (spec_model, swap). No game needed:
+// Unit tests for the portable core (spec_model, swap, spec_panel_layout). No game needed:
 //   tests/run_tests.sh            (g++ or clang++ on any system)
 //   cmake -DMULTISPEC_TESTS=ON    (builds multispec_tests next to the plugin)
 #include "../src/spec_model.h"
+#include "../src/spec_panel_layout.h"
 #include "../src/swap.h"
 
 #include <cstdio>
@@ -127,6 +128,29 @@ void TestCrcAndRoundTrip() {
 	CHECK(ms::SameLevels(back.specs[0].levels, s.specs[0].levels, N));
 	CHECK(back.active == 1 && back.pendingFrom == 0);
 
+	// The largest file: every spec, every skill, three-digit levels.
+	{
+		static ms::CharSpecs big {};
+		std::snprintf(big.name, sizeof(big.name), "%s", "Largest");
+		big.charClass = 1;
+		big.skillCount = ms::MaxSkills;
+		big.specCount = ms::MaxSpecs;
+		big.active = ms::MaxSpecs;
+		for (int i = 0; i < ms::MaxSkills; ++i) {
+			big.skillIds[i] = static_cast<int16_t>(1000 + i);
+		}
+		for (int k = 0; k < ms::MaxSpecs; ++k) {
+			std::memset(big.specs[k].levels, 255, sizeof(big.specs[k].levels));
+		}
+		static char bigText[ms::MaxFileBytes];
+		const size_t bigLen = ms::Serialize(big, bigText, sizeof(bigText));
+		CHECK(bigLen > 0);
+		static ms::CharSpecs bigBack {};
+		CHECK(ms::Parse(bigText, bigLen, &bigBack, err, sizeof(err)));
+		CHECK(bigBack.specCount == ms::MaxSpecs && bigBack.active == ms::MaxSpecs);
+		CHECK(bigBack.specs[ms::MaxSpecs - 1].levels[ms::MaxSkills - 1] == 255);
+	}
+
 	// one flipped byte: refused
 	text[20] ^= 1;
 	CHECK(!ms::Parse(text, len, &back, err, sizeof(err)));
@@ -158,7 +182,9 @@ void TestConfigAndModinfo() {
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 3 # three\n", 2) == 3);
 	CHECK(ms::ConfigSpecCount("[other]\nspec_count = 5\n[multispec]\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 0\n", 2) == 2);
-	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 9\n", 2) == 2);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 9\n", 2) == 9);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 99\n", 2) == 99);
+	CHECK(ms::ConfigSpecCount("[multispec]\nspec_count = 100\n", 2) == 2);
 	CHECK(ms::ConfigSpecCount(nullptr, 2) == 2);
 	char sp[64];
 	CHECK(ms::ModinfoSavePath("{\"name\": \"MyMod\", \"savepath\": \"MyMod-s2/\"}", sp, sizeof(sp)) &&
@@ -306,6 +332,64 @@ void TestSwap() {
 	e.unspent = 10;  // the fake's broken respecs lost points; restore T = 9 + 1 earned
 	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
+
+	// spec_count lowered below the active spec: the swap back into range works and keeps every spec.
+	(void)ms::Reconcile(&s, true, Live(e), 3);
+	CHECK(s.specCount == 3);
+	CHECK(ms::Swap(e, st, &s, Live(e), 3, 3, &r) == ms::SwapResult::Done && s.active == 3);
+	const ms::ReconcileReport low = ms::Reconcile(&s, true, Live(e), 2);
+	CHECK(low.result != ms::Reconciled::Recovery && s.active == 3 && s.specCount == 3);
+	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
+	CHECK(ms::SameLevels(e.level, want1, N) && s.active == 1 && s.specCount == 3);
+}
+
+void TestSpecPanelLayout() {
+	namespace panel = ms::panel;
+	// Geometry: the column fits the wing below the heading, one belt slot ends where the tree starts.
+	CHECK(panel::UpY >= panel::HeadingTop + panel::HeadingHeight);
+	CHECK(panel::SlotY == panel::UpY + panel::ArrowSize && panel::DownY == panel::SlotY + panel::SlotHeight);  // touching
+	CHECK(panel::DownY + panel::ArrowSize <= panel::WingHeight - panel::WingBorder);
+	CHECK(panel::SlotX >= panel::WingBorder && panel::SlotX + panel::SlotWidth == panel::VisibleWidth);
+	CHECK(panel::ArrowX >= panel::SlotX && panel::ArrowX + panel::ArrowSize <= panel::VisibleWidth);
+	static char json[65536];
+	for (int32_t specs = 1; specs <= ms::MaxSpecs; ++specs) {
+		const size_t n = panel::BuildLayout(specs, json, sizeof(json));
+		CHECK(n > 0 && n < sizeof(json) && json[n] == '\0');
+		char want[40];
+		std::snprintf(want, sizeof(want), "\"Number%d\"", specs);
+		CHECK(std::strstr(json, want) != nullptr);
+		std::snprintf(want, sizeof(want), "\"Number%d\"", specs + 1);
+		CHECK(std::strstr(json, want) == nullptr);
+		// Balanced braces and brackets: the game refuses a broken layout.
+		int braces = 0;
+		int brackets = 0;
+		for (size_t i = 0; i < n; ++i) {
+			braces += json[i] == '{' ? 1 : (json[i] == '}' ? -1 : 0);
+			brackets += json[i] == '[' ? 1 : (json[i] == ']' ? -1 : 0);
+		}
+		CHECK(braces == 0 && brackets == 0);
+	}
+	CHECK(std::strstr(json, "multispec/SpecUp") != nullptr && std::strstr(json, "multispec/SpecDown") != nullptr);
+	// Only the game's own sprites: nothing of ours to ship.
+	CHECK(std::strstr(json, "d2rloader\\\\multispec") == nullptr);
+	CHECK(panel::BuildLayout(0, json, sizeof(json)) == 0);
+	CHECK(panel::BuildLayout(2, json, 64) == 0);  // refuses a short buffer
+	CHECK(panel::ParseStep("multispec/SpecUp") == 1);
+	CHECK(panel::ParseStep("multispec/SpecDown") == -1);
+	CHECK(panel::ParseStep("multispec/SpecUp2") == 0);
+	CHECK(panel::ParseStep("SkillsTreePanel") == 0);
+	CHECK(panel::ParseStep(nullptr) == 0);
+	CHECK(panel::NextSpec(1, 3, 1) == 2);
+	CHECK(panel::NextSpec(2, 3, -1) == 1);
+	CHECK(panel::NextSpec(3, 3, 1) == 1);   // wraps at the top
+	CHECK(panel::NextSpec(1, 3, -1) == 3);  // and at the bottom
+	CHECK(panel::NextSpec(1, 2, 1) == 2 && panel::NextSpec(1, 2, -1) == 2);
+	CHECK(panel::NextSpec(1, 1, 1) == 0);   // one spec: nowhere to go
+	CHECK(panel::NextSpec(0, 3, 1) == 0);   // active spec not known yet
+	CHECK(panel::NextSpec(80, 3, 1) == 1);  // spec_count lowered below the active spec: back into range
+	CHECK(panel::NextSpec(80, 3, -1) == 3);
+	CHECK(panel::NextSpec(80, 1, 1) == 1 && panel::NextSpec(80, 1, -1) == 1);
+	CHECK(panel::NextSpec(1, 3, 0) == 0);
 }
 
 }  // namespace
@@ -315,6 +399,7 @@ int main() {
 	TestConfigAndModinfo();
 	TestReconcile();
 	TestSwap();
+	TestSpecPanelLayout();
 	std::printf("%d checks, %d failed\n", g_checks, g_failed);
 	return g_failed == 0 ? 0 : 1;
 }

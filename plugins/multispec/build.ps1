@@ -1,6 +1,6 @@
 # Configures and builds MultiSpec (Visual Studio generator, x64, Release) and runs the unit tests.
 #   powershell -ExecutionPolicy Bypass -File build.ps1 [-Mod <mod folder>] [-Sdk <PluginSDK dir>] [-Build <dir>] [-NoTests]
-# Output: <Build>\Release\multispec.dll. Copy it to <game>\mods\<Mod>\d2rloader\plugins\ (or use install.ps1).
+# Output: <Build>\Release\multispec.dll. Copy it to <game>\d2rloader\plugins\ (global plugin; or use install.ps1).
 param(
     [string]$Mod = "",       # MULTISPEC_MOD_NAME: mods\<Mod> the plugin ships in ("" = no mod check)
     [string]$Sdk = "",       # PluginSDK directory (default ..\d2rAI-toolkit\third_party\PluginSDK)

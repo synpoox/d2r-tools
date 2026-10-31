@@ -7,6 +7,7 @@
 //   specswap   every engine call: reading the character, reconciling the file, swapping. Needs
 //              the entry bytes of every function it calls (d2r.cpp)
 //   speccmd    the "spec" console command (spec, spec N)
+//   specui     the spec panel beside the skill tree (spec_panel.h); a click runs the spec command
 // The status command "multispec" is always registered.
 //
 // Threads: the console callback only queues work. The work runs on D2R's game thread (ThreadService::runOnGameThread),
@@ -22,6 +23,7 @@
 #include "spec_model.h"
 #include "spec_store.h"
 #include "swap.h"
+#include "spec_panel.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -44,7 +46,7 @@
 namespace {
 
 constexpr const char* PluginName = "multispec";
-constexpr int32_t DefaultSpecCount = 2;
+constexpr int32_t DefaultSpecCount = 3;
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
@@ -60,8 +62,8 @@ constexpr D2RL::PluginInfo Info {
 	.name        = "MultiSpec",
 	.version     = MULTISPEC_VERSION,
 	.author      = "Synpoo",
-	.description = "Saved skill allocations (specs) per character, swapped with the spec command in town.",
-	.flags       = D2RL::PluginFlags::Shared,
+	.description = "Multiple skill allocations (specs) per character.",
+	.flags       = D2RL::PluginFlags::Shared,  // global: <game>\d2rloader\plugins, works with any mod or none
 	.reserved    = {},
 };
 
@@ -104,15 +106,25 @@ void InstallSwap(const D2RL::PluginContext* context, char* report, size_t size) 
 
 void InstallCommand(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 
+void InstallPanel(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
+	if (!g_engineOk || !g_storeOk) {
+		std::snprintf(report, size, "off: needs specswap and specstore");
+		return;
+	}
+	ms::InstallSpecPanel(context, g_specCount, report, size);
+}
+
 Part g_parts[] = {
 	{"envguard", InstallEnvironment, ""},
 	{"specstore", InstallStore, ""},
 	{"specswap", InstallSwap, ""},
 	{"speccmd", InstallCommand, ""},
+	{"specui", InstallPanel, ""},
 };
 
 // --- One request at a time: console -> game thread -> UI thread -------------------------------------------------
-constexpr int MaxLines = 14;
+constexpr int MaxLines = 16;
+constexpr int32_t MaxListedSpecs = 10;
 
 struct Request {
 	std::atomic<bool> busy {false};
@@ -121,6 +133,10 @@ struct Request {
 	int32_t swapTo = 0;  // 0 = status only
 	int lineCount = 0;
 	char lines[MaxLines][320] = {};
+	bool quiet = false;   // from the spec panel: the console only hears about a failed swap
+	bool alert = false;   // this answer must reach the console even when quiet
+	int32_t active = 0;   // for the spec panel: 0 = not known
+	bool inTown = false;
 };
 Request g_req;
 
@@ -136,9 +152,10 @@ void Say(const char* fmt, ...) noexcept {
 }
 
 void __cdecl PrintAnswer(const D2RL::PluginContext* context, void*) noexcept {
-	for (int i = 0; i < g_req.lineCount; ++i) {
+	for (int i = 0; i < g_req.lineCount && (!g_req.quiet || g_req.alert); ++i) {
 		context->WriteConsoleMessage(g_req.lines[i]);
 	}
+	ms::UpdateSpecPanel(context, g_req.active, g_req.inTown);
 	g_req.busy.store(false);
 }
 
@@ -146,12 +163,27 @@ void Summarize(const ms::CharSpecs& file, const ms::LiveChar& live) noexcept {
 	const int32_t total = ms::TotalPoints(live);
 	Say("%s: spec %d of %d active, %d skill points in all", file.name, file.active, g_specCount, total);
 	const int32_t shown = file.specCount < g_specCount ? file.specCount : g_specCount;
+	int32_t listed = 0;
+	int32_t hidden = 0;
 	for (int32_t k = 0; k < shown; ++k) {
 		const ms::Spec& s = file.specs[k];
 		const int32_t used = ms::SumLevels(s.levels, file.skillCount);
+		// With many specs, empty ones are counted, and the list stops before it outgrows the answer.
+		if (shown > MaxListedSpecs && k + 1 != file.active && (used == 0 || listed >= MaxListedSpecs - 1)) {
+			++hidden;
+			continue;
+		}
+		++listed;
 		Say("  spec %d: %d points, %d unspent%s%s", k + 1, used, total - used,
 		    s.state == ms::SpecState::Ok ? "" : (s.state == ms::SpecState::Invalid ? " (INVALID: needs more points)" : " (adjusted to changed skills)"),
 		    k + 1 == file.active ? "  <- active" : "");
+	}
+	if (hidden > 0) {
+		Say("  (%d more specs not listed)", hidden);
+	}
+	if (file.active > shown) {  // spec_count was lowered below the active spec
+		const int32_t used = ms::SumLevels(file.specs[file.active - 1].levels, file.skillCount);
+		Say("  spec %d: %d points, %d unspent  <- active", file.active, used, total - used);
 	}
 	if (file.specCount > g_specCount) {
 		Say("  (%d more spec(s) kept in the file; raise spec_count to use them)", file.specCount - g_specCount);
@@ -235,12 +267,14 @@ void __cdecl GameWork(const D2RL::PluginContext* context, void*) noexcept {
 					break;
 				case ms::SwapResult::RolledBack:
 					++g_rolledBack;
+				g_req.alert = true;
 					Say("MultiSpec: spec %d could not be loaded (%s); spec %d is back", sw.to, sw.detail, sw.from);
 					plog::Warn("%s: spec %d -> %d rolled back: %s", player.name, sw.from, sw.to, sw.detail);
 					std::snprintf(g_lastError, sizeof(g_lastError), "%s", sw.detail);
 					break;
 				case ms::SwapResult::LeftReset:
 					++g_failed;
+				g_req.alert = true;
 					Say("MultiSpec: swap FAILED, all your points are unspent (none lost); your specs are kept. See the log");
 					plog::Error("%s: spec %d -> %d failed, character left reset: %s", player.name, sw.from, sw.to, sw.detail);
 					std::snprintf(g_lastError, sizeof(g_lastError), "%s", sw.detail);
@@ -252,6 +286,8 @@ void __cdecl GameWork(const D2RL::PluginContext* context, void*) noexcept {
 			}
 			if (ok) {
 				Summarize(file, live);
+				g_req.active = file.active;
+				g_req.inTown = ms::InTown(player);
 			}
 		}
 	}
@@ -291,7 +327,8 @@ auto ParseSpecArgs(const char* args, int32_t* to) noexcept -> bool {
 	return true;
 }
 
-auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* command, void*) noexcept
+// "spec", and the spec panel's hidden "spec-panel" (quiet: userData is set).
+auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* command, void* quiet) noexcept
 	-> D2RL::ConsoleCommandResult {
 	if (command == nullptr || command->plugin == nullptr) {
 		return D2RL::ConsoleCommandResult::Failed;
@@ -310,7 +347,9 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 	if (!g_req.busy.compare_exchange_strong(expected, true)) {
 		// A queued game callback is dropped when the game session ends; don't stay busy for ever.
 		if (GetTickCount64() - g_req.started < 10000) {
-			ctx->WriteConsoleMessage("MultiSpec: busy, try again");
+			if (quiet == nullptr) {
+				ctx->WriteConsoleMessage("MultiSpec: busy, try again");
+			}
 			return D2RL::ConsoleCommandResult::Failed;
 		}
 		plog::Warn("previous request never finished (game left?); starting a new one");
@@ -319,6 +358,9 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 	g_req.client = client;
 	g_req.swapTo = to;
 	g_req.lineCount = 0;
+	g_req.quiet = quiet != nullptr;
+	g_req.alert = false;
+	g_req.active = 0;
 	if (g_threads->runOnGameThread(ctx, GameWork, nullptr) != D2RL::Threads::Result::Success) {
 		g_req.busy.store(false);
 		ctx->WriteConsoleMessage("MultiSpec: only the game host can change specs (or no game is running)");
@@ -341,6 +383,14 @@ void InstallCommand(const D2RL::PluginContext* context, char* report, size_t siz
 	if (!context->RegisterConsoleCommand(reg)) {
 		std::snprintf(report, size, "off: the spec command could not be registered (name taken?)");
 		return;
+	}
+	static int s_quiet = 1;
+	D2RL::ConsoleCommandRegistration panel = D2RL::MakeConsoleCommand("spec-panel", SpecCommand, "MultiSpec: the spec panel's quiet spec command.");
+	panel.flags = D2RL::ConsoleCommandHidden | D2RL::ConsoleCommandSuppressEcho;
+	panel.userData = &s_quiet;
+	panel.scope = D2RL::ConsoleCommandScope::LocalOnly;
+	if (!context->RegisterConsoleCommand(panel)) {
+		plog::Warn("the spec-panel command could not be registered");
 	}
 	std::snprintf(report, size, "on: spec, spec N (%d specs)", g_specCount);
 }
@@ -435,6 +485,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	ms::RemoveSpecPanel();
 	crash_guard::Remove();
 	g_context = nullptr;
 }

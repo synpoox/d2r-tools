@@ -13,7 +13,7 @@ three need a check in a game slot before the MVP can be trusted (section 9).
 |---|---|---|
 | Spec = hard skill levels + unspent points | **Changed: a spec stores hard levels only; unspent points are derived** | A character's total skill points T only grows (level-ups, Den of Evil, Radament, Izual, Book of Skill). If spec 2 stored its own unspent count, every point earned while in spec 1 would never reach spec 2. With T = (sum of live hard levels) + `newskills`, spec k's unspent points are T - sum(spec k). They are still shown per spec, and the "unspent points preserved" test still holds |
 | Swap anywhere | **Changed (owner's decision): town only, not configurable** | Your own Phase 3 list has "swap refused outside town". In the field a swap removes auras, passives and the skills that keep summons going, mid-fight, and could be used to cheat (cast with spec A's skills, swap). Town also bounds what can go wrong. WoW allows it anywhere out of combat; D2R has no "out of combat" flag to reuse |
-| 2 specs, N in config | **Confirmed** | `spec_count`, 2 by default, 1-8. The file format allows up to 255 |
+| 2 specs, N in config | **Confirmed** | `spec_count`, 3 by default, 1-99 |
 | Trigger `/spec N` first, UI later | **Confirmed, one open check** | A D2RLoader console command. Whether a line typed in the chat box reaches it is not verified yet (section 9). If not, Phase 2 adds a chat-message listener for `/spec` |
 | Per character, survives save/load, never corrupts `.d2s` | **Confirmed, with zero `.d2s` writes** | Section 3 |
 | Respect engine limits | **Confirmed** | Section 8; one new limit found (skpoints costs) |
@@ -170,7 +170,7 @@ Config (`multispec.toml`, embedded default; the gameplay keys listed in `[d2rl] 
 
 ```toml
 [multispec]
-spec_count = 2          # 1-8
+spec_count = 3          # 1-99
 ```
 
 Phase 4 adds `cost_gold` and `cooldown_seconds`.
@@ -212,3 +212,43 @@ These are the first Phase 2 slot runs, before the swap is wired to the command.
 
 Checks read the plugin log and the `multispec` status output (harness console route), plus screenshots of the skill
 tree.
+
+## 11. Spec panel UI (Phase 4, `specui`)
+
+Goal: swap specs from the skill tree without the D2RLoader console.
+
+Constraint (owner): MultiSpec is a **global plugin, never mod-scoped**, and needs nothing from the active mod. Spike 1
+(`multispec.md`, "Skill tree layout") found the plugin can't add widgets to the stock skill tree: in PluginSDK 0.3.0
+`registerChildLayout` takes only `StockPanel::PlayerInventory`, and a plugin's files can't replace
+`skillstreepanelhd.json`. So the UI is **a plugin panel docked to the skill tree's left edge**, opened with it.
+
+```
+  +------+----------------------------------+
+  | Spec |  skill tree (stock)              |
+  | [^]  |                                  |
+  | [ 2] |                                  |
+  | [v]  |                                  |
+  +------+                                  |
+         +----------------------------------+
+```
+
+One slot shows the active spec, with an arrow above and below, so any number of specs fits (owner's decision).
+
+| Piece | Design |
+|---|---|
+| Panel | `PanelService::registerPanel`, local id `SpecPanel`, logical name `multispec/SpecPanel`, flags `None`. Not `CloseOnEscape`: that takes Escape from the tree, which then stays open (spike 5). Not `GameplayLeftSlot`: that pairs it with the inventory. A `ClickCatcherWidget` over the visible part keeps clicks from reaching the world (spike 5) |
+| Generated layout | The plugin writes the JSON at load (`spec_panel_layout.*`) and gives it with `ResourceService` at `data/global/ui/layouts/multispec/SpecPanelhd.json` |
+| Placement | Root `anchor` `$RightPanelAnchor` (as the skill tree), `priority` -5, so the tree draws over it (spike 8). It moves with the tree at every resolution (spike 6) |
+| Art | Stock sprites only, referenced by path, so the player's install supplies them and no game art is in the repository. The SDK can't read game files, so sprites can't be cropped at load; the tree covers what isn't wanted. Wing: `PANEL\Modals\Modal_No_Title_BG` (1245 x 453), left 160 px visible. Slot: `PANEL\HUD_02\belt_popped_row`, whose other three slots lie under the tree. Arrows: `FrontEnd\HD\Final\FrontEnd_UpButton` and `_DownButton` |
+| Title | "Spec", the skill tree's `$StyleTitleBlock` at 85% size (`$MediumLargeFontSize`) |
+| Number | The widget API cannot set text, so the layout holds a number for every possible spec and `setWidgetVisible` shows the active one. That includes specs above a lowered `spec_count`: the character keeps that spec, up steps to 1 and down to `spec_count` |
+| Opens with the tree | The UI listener matches `PanelManager` `OpenPanel` / `ClosePanel` with text `SkillsTreePanel` (spike 4: sent for every route) and queues `openPanel` / `closePanel`. Opening asks for the active spec and whether the player is in town |
+| Arrows | `onClickMessage` = `PanelManager:OpenPanel:multispec/SpecUp` or `SpecDown`. The listener consumes it (no such panel exists). A button's own target is never delivered (spike 5). Up is the next spec, and both directions wrap |
+| Wheel | The SDK has no mouse input, so the plugin subclasses the game window (class `OsWindow`), as scrollable-waypoints does. A notch counts anywhere while the panel is open: the panels' screen position depends on the aspect ratio, and the tree has no use for the wheel |
+| Swap | A step runs the hidden `spec-panel N` command through D2RCore's `ExecuteConsoleCommand` from the UI thread, so it takes the same path and checks as a typed `spec N`. One swap at a time: extra steps are dropped until the answer arrives, or for 5 s |
+| Console | The panel prints nothing, except a swap that failed or rolled back. Everything is in the plugin log. Typed `spec` prints as before |
+| Town only | The swap's own check refuses outside town. `setWidgetEnabled` has no visible effect, so greyed-out copies of the arrows (frame 2) replace them. The arrows update when the panel opens: walking out of town with the tree open leaves them lit until it reopens, and a swap is still refused |
+| Off-switch | `specui` in `multispec-off.txt`: the panel and listener are not registered, and `spec` keeps working |
+
+Spike results are in `docs/reverse-engineering/multispec.md`; test rows are in `TESTING.md`. Not seen in game: legacy
+graphics and large font mode.
