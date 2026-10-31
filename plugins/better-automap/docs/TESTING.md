@@ -31,7 +31,7 @@ Setup: copy `better-automap.dll` into `<copy>\d2rloader\plugins\`. Start once, t
 | 19 | Each switch off | One at a time: `[minimap] enabled = false`, `[overlay] enabled = false`, `[zoom] enabled = false` | That part's line says `off: [...] enabled = false`; that feature behaves as vanilla; the other two still work |
 | 20 | Off-file | `better-automap-off.txt` next to the DLL with `zoom` | `zoom off: left out by better-automap-off.txt`; others on |
 | 21 | Bad config | `position = "middle"`, `min = 0` | Log warns, defaults used, no crash |
-| 22 | Other build | Load with another D2R/D2RLoader build | All parts attempted; a hook whose entry bytes differ is refused and logged; any crash leaves a `CRASH` line in the plugin log; console command still answers |
+| 22 | Other build | Load with another D2R/D2RLoader build | All parts attempted; a hook whose entry bytes differ is refused and logged; any crash leaves a `FAULT` line in the plugin log; console command still answers |
 | 23 | No crash | Play 15 minutes with all parts on: change areas, town portals, resize the window | No crash; counters keep counting |
 
 Report: for each row, pass / fail, plus the `better-automap` command output and the plugin log lines.

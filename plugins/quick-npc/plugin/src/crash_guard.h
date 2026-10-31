@@ -1,6 +1,11 @@
 // Crash guard: if the game faults, say so and say why, in the plugin's own log. A vectored exception handler sees the
-// fault before D2R or D2RLoader handle it. It only logs and never handles the exception, so the game's own crash
-// handling runs as usual. It also holds the image line for the load log and status command.
+// fault before D2R or D2RLoader handle it, so it cannot know yet whether the fault is fatal: it logs a FAULT line, and
+// if the game is still running a few seconds later a second line says so. The last FAULT with no such line is the crash.
+//
+// The handler never handles the exception and never logs. The faulting thread may hold the loader's log lock or have
+// almost no stack left, so it only copies the facts, wakes a writer thread and waits a bounded time for it to finish.
+// Repeats of a fault already reported (same address, same target) are counted, not logged again, so harmless repeats
+// cannot crowd out the real crash. This header also holds the image line for the load log and status command.
 #pragma once
 
 #ifndef NOMINMAX
@@ -17,15 +22,35 @@
 
 namespace crash_guard {
 
-inline constexpr int MaxReports = 8;
+inline constexpr int SeenSlots = 32;
+inline constexpr DWORD WriterWaitMs = 500;     // how long a faulting thread waits for its line
+inline constexpr DWORD SurvivedAfterMs = 3000;  // still running this long after a fault: it did not end the game
+
+struct Fault {
+	DWORD code;
+	DWORD thread;
+	uintptr_t rip;
+	uintptr_t self;  // address inside this plugin: rip, or the first one on the stack; 0 when there is none
+	ULONG_PTR kind;  // access violation: 0 read, 1 write, 8 execute
+	ULONG_PTR at;
+};
+
 inline char g_version[32] = "?";
 inline uintptr_t g_exeBase = 0;
 inline uint32_t g_stamp = 0;
 inline uintptr_t g_selfBase = 0;
 inline uintptr_t g_selfEnd = 0;
 inline void* g_handler = nullptr;
-inline std::atomic<int> g_reports{0};
-inline std::atomic_flag g_busy = ATOMIC_FLAG_INIT;  // a fault inside the logger must not re-enter it
+inline HANDLE g_thread = nullptr;
+inline HANDLE g_wake = nullptr;
+inline HANDLE g_done = nullptr;
+inline HANDLE g_stop = nullptr;
+inline std::atomic<DWORD> g_writerId{0};
+inline std::atomic_flag g_busy = ATOMIC_FLAG_INIT;  // owns g_fault and g_seen; the writer clears it after its line
+inline Fault g_fault{};
+inline uint64_t g_seen[SeenSlots] = {};
+inline int g_seenNext = 0;
+inline std::atomic<uint32_t> g_repeats{0};
 
 inline auto Fatal(DWORD code) noexcept -> bool {
 	return code == EXCEPTION_ACCESS_VIOLATION || code == EXCEPTION_ILLEGAL_INSTRUCTION || code == EXCEPTION_PRIV_INSTRUCTION ||
@@ -54,54 +79,80 @@ inline auto SelfOnStack(uintptr_t rsp) noexcept -> uintptr_t {
 	return 0;
 }
 
-inline auto Why(const EXCEPTION_RECORD* e, char* out, size_t size) noexcept -> const char* {
-	if (e->ExceptionCode == EXCEPTION_ACCESS_VIOLATION || e->ExceptionCode == EXCEPTION_IN_PAGE_ERROR) {
-		const ULONG_PTR kind = e->NumberParameters > 0 ? e->ExceptionInformation[0] : 0;
-		const ULONG_PTR at = e->NumberParameters > 1 ? e->ExceptionInformation[1] : 0;
-		if (kind == 8) {
-			std::snprintf(out, size, "tried to execute non-code memory at 0x%llx (a bad function address)", static_cast<unsigned long long>(at));
+inline auto Why(const Fault& f, char* out, size_t size) noexcept -> const char* {
+	if (f.code == EXCEPTION_ACCESS_VIOLATION || f.code == EXCEPTION_IN_PAGE_ERROR) {
+		if (f.kind == 8) {
+			std::snprintf(out, size, "tried to execute non-code memory at 0x%llx (a bad function address)", static_cast<unsigned long long>(f.at));
 		} else {
-			std::snprintf(out, size, "%s of bad memory at 0x%llx%s", kind == 1 ? "write" : "read", static_cast<unsigned long long>(at),
-			              at < 0x10000 ? " (a null pointer plus a field offset)" : " (a wrong pointer or field offset)");
+			std::snprintf(out, size, "%s of bad memory at 0x%llx%s", f.kind == 1 ? "write" : "read", static_cast<unsigned long long>(f.at),
+			              f.at < 0x10000 ? " (a null pointer plus a field offset)" : " (a wrong pointer or field offset)");
 		}
-	} else if (e->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION || e->ExceptionCode == EXCEPTION_PRIV_INSTRUCTION) {
+	} else if (f.code == EXCEPTION_ILLEGAL_INSTRUCTION || f.code == EXCEPTION_PRIV_INSTRUCTION) {
 		std::snprintf(out, size, "bad instruction (execution jumped into the middle of code or data)");
-	} else if (e->ExceptionCode == EXCEPTION_STACK_OVERFLOW) {
+	} else if (f.code == EXCEPTION_STACK_OVERFLOW) {
 		std::snprintf(out, size, "stack overflow (runaway recursion)");
-	} else if (e->ExceptionCode == EXCEPTION_INT_DIVIDE_BY_ZERO) {
-		std::snprintf(out, size, "integer division by zero");
 	} else {
-		std::snprintf(out, size, "memory page could not be read");
+		std::snprintf(out, size, "integer division by zero");
 	}
 	return out;
 }
 
-inline void Report(const EXCEPTION_POINTERS* info) noexcept {
-	const EXCEPTION_RECORD* e = info->ExceptionRecord;
-	const auto rip = static_cast<uintptr_t>(info->ContextRecord->Rip);
-	const uintptr_t self = InSelf(rip) ? rip : SelfOnStack(static_cast<uintptr_t>(info->ContextRecord->Rsp));
-	const char* blame = InSelf(rip)  ? "this plugin's own code faulted"
-	                    : self != 0  ? "this plugin is on the stack: likely involved"
-	                                 : "this plugin is not on the stack: probably not the cause";
+inline void Report(const Fault& f) noexcept {
+	const char* blame = InSelf(f.rip)  ? "this plugin's own code faulted"
+	                    : f.self != 0  ? "this plugin is on the stack: likely involved"
+	                                   : "this plugin is not on the stack: probably not the cause";
 	char why[160];
-	plog::Error("CRASH %s: fault 0x%08lx at 0x%llx (image +0x%llx, plugin +0x%llx), thread %lu, may still be handled by the game | why: %s | blame: %s | "
-	            "image stamp 0x%08x; fixed addresses come from the tested image, so a moved game build can cause this",
-	            g_version, static_cast<unsigned long>(e->ExceptionCode), static_cast<unsigned long long>(rip),
-	            static_cast<unsigned long long>(rip - g_exeBase), static_cast<unsigned long long>(self != 0 ? self - g_selfBase : 0),
-	            GetCurrentThreadId(), Why(e, why, sizeof(why)), blame, g_stamp);
+	plog::Error("FAULT %s: 0x%08lx at 0x%llx (image +0x%llx, plugin +0x%llx), thread %lu | why: %s | blame: %s | image stamp 0x%08x",
+	            g_version, static_cast<unsigned long>(f.code), static_cast<unsigned long long>(f.rip),
+	            static_cast<unsigned long long>(f.rip - g_exeBase), static_cast<unsigned long long>(f.self != 0 ? f.self - g_selfBase : 0),
+	            static_cast<unsigned long>(f.thread), Why(f, why, sizeof(why)), blame, g_stamp);
+}
+
+inline auto WINAPI Writer(LPVOID) noexcept -> DWORD {
+	g_writerId.store(GetCurrentThreadId());
+	const HANDLE events[2] = {g_stop, g_wake};
+	int unconfirmed = 0;
+	for (;;) {
+		const DWORD r = WaitForMultipleObjects(2, events, FALSE, unconfirmed > 0 ? SurvivedAfterMs : INFINITE);
+		if (r == WAIT_OBJECT_0 + 1) {
+			const Fault fault = g_fault;
+			Report(fault);
+			++unconfirmed;
+			SetEvent(g_done);
+			g_busy.clear();
+		} else if (r == WAIT_TIMEOUT) {
+			plog::Info("the %d FAULT line(s) above did not end the game: it handled them (%u repeats not logged)", unconfirmed,
+			           g_repeats.exchange(0));
+			unconfirmed = 0;
+		} else {
+			return 0;
+		}
+	}
 }
 
 inline auto CALLBACK Handler(EXCEPTION_POINTERS* info) noexcept -> LONG {
-	if (info == nullptr || info->ExceptionRecord == nullptr || info->ContextRecord == nullptr || !Fatal(info->ExceptionRecord->ExceptionCode)) {
+	if (info == nullptr || info->ExceptionRecord == nullptr || info->ContextRecord == nullptr || !Fatal(info->ExceptionRecord->ExceptionCode) ||
+	    GetCurrentThreadId() == g_writerId.load() || g_busy.test_and_set()) {
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
-	if (g_busy.test_and_set()) {
-		return EXCEPTION_CONTINUE_SEARCH;
+	const EXCEPTION_RECORD* e = info->ExceptionRecord;
+	const auto rip = static_cast<uintptr_t>(info->ContextRecord->Rip);
+	const ULONG_PTR kind = e->NumberParameters > 0 ? e->ExceptionInformation[0] : 0;
+	const ULONG_PTR at = e->NumberParameters > 1 ? e->ExceptionInformation[1] : 0;
+	const uint64_t key = (static_cast<uint64_t>(rip) * 0x9E3779B97F4A7C15ULL ^ static_cast<uint64_t>(at)) | 1;
+	for (const uint64_t seen : g_seen) {
+		if (seen == key) {
+			g_repeats.fetch_add(1);
+			g_busy.clear();
+			return EXCEPTION_CONTINUE_SEARCH;
+		}
 	}
-	if (g_reports.fetch_add(1) < MaxReports) {
-		Report(info);
-	}
-	g_busy.clear();
+	g_seen[g_seenNext] = key;
+	g_seenNext = (g_seenNext + 1) % SeenSlots;
+	g_fault = Fault{e->ExceptionCode, GetCurrentThreadId(), rip, InSelf(rip) ? rip : SelfOnStack(static_cast<uintptr_t>(info->ContextRecord->Rsp)), kind, at};
+	ResetEvent(g_done);
+	SetEvent(g_wake);
+	WaitForSingleObject(g_done, WriterWaitMs);
 	return EXCEPTION_CONTINUE_SEARCH;
 }
 
@@ -123,6 +174,25 @@ inline void Describe(char* out, size_t size, const char* buildVersion) noexcept 
 	std::snprintf(out, size, "D2R %s, image 0x%08x", buildVersion != nullptr ? buildVersion : "?", g_stamp);
 }
 
+inline void Remove() noexcept {
+	if (g_handler != nullptr) {
+		RemoveVectoredExceptionHandler(g_handler);
+		g_handler = nullptr;
+	}
+	if (g_thread != nullptr) {
+		SetEvent(g_stop);
+		WaitForSingleObject(g_thread, 1000);
+		CloseHandle(g_thread);
+		g_thread = nullptr;
+	}
+	for (HANDLE* h : {&g_wake, &g_done, &g_stop}) {
+		if (*h != nullptr) {
+			CloseHandle(*h);
+			*h = nullptr;
+		}
+	}
+}
+
 inline void Install(const char* version, uintptr_t exeBase) noexcept {
 	if (g_handler != nullptr) {
 		return;
@@ -138,14 +208,18 @@ inline void Install(const char* version, uintptr_t exeBase) noexcept {
 		g_selfBase = reinterpret_cast<uintptr_t>(self);
 		g_selfEnd = g_selfBase + nt->OptionalHeader.SizeOfImage;
 	}
-	g_handler = AddVectoredExceptionHandler(1, Handler);
-}
-
-inline void Remove() noexcept {
-	if (g_handler != nullptr) {
-		RemoveVectoredExceptionHandler(g_handler);
-		g_handler = nullptr;
+	g_wake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+	g_done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+	g_stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+	if (g_wake != nullptr && g_done != nullptr && g_stop != nullptr) {
+		g_thread = CreateThread(nullptr, 64 * 1024, Writer, nullptr, 0, nullptr);
 	}
+	if (g_thread == nullptr) {
+		plog::Warn("crash guard off: could not start its writer thread");
+		Remove();
+		return;
+	}
+	g_handler = AddVectoredExceptionHandler(1, Handler);
 }
 
 }  // namespace crash_guard

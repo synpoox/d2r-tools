@@ -138,7 +138,7 @@ waiting for the first command. The file is simply created or brought up to date 
 | File write fails (disk, permissions) | Step 3 aborts; nothing changed; message and log line |
 | Corrupt or unknown-version file | Kept as `.bad-<date>`; never overwritten in place; fresh file from the live character |
 | D2R refuses a point during replay (prerequisite, stat requirement, data changed) | Rollback (step 7); the message names the skill |
-| Game or loader update | No version gate: MultiSpec attempts to run. `CheckEntries` leaves `specswap` off if a function's bytes differ; other faults are logged as `CRASH` lines |
+| Game or loader update | No version gate: MultiSpec attempts to run. `CheckEntries` leaves `specswap` off if a function's bytes differ; other faults are logged as `FAULT` lines |
 | Same stamp but a called function's bytes differ (another plugin patched it) | `specswap` stays off, the status names the function |
 | A failed swap whose rollback fails too | Character reset (all points unspent), file in recovery: specs untouched until `spec N` |
 | A game session ends while a request is queued | D2RLoader drops the queued callback; the command is free again after 10 s |
