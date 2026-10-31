@@ -291,3 +291,7 @@ Spikes before building (each is a small slot test, results recorded in `multispe
 8. Strip art option A: `PANEL\\PANEL_BG` in the strip with a `priority` below the tree's draws under the tree (only
    the left 170 px show), buttons still take clicks; and whether a plugin sprite under `d2rloader/multispec/` resolves
    (for option B).
+
+### Built (owner's decision, 2026-10-30)
+
+Stock art only, referenced by path, so the player's install supplies it and no game art is in the repository. This replaces the art drawn in code. The wing is `PANEL\Modals\Modal_No_Title_BG` (1245 x 453) at priority -5, so the tree covers all but its left 160 px. The sockets are `PANEL\DropdownButton_Large_Left`, whose open right side runs under the tree. A click runs `spec N` through D2RCore's `ExecuteConsoleCommand`, so a panel swap takes the same path and checks as a typed one. Panel size limits the slots to 3 (`spec N` reaches the rest), so `spec_bar_slots`, paging arrows and the town hint in the table above are not built. Plugins can't read game files (PluginSDK 0.3.0), so cropping `PANEL_BG` at load is not possible.

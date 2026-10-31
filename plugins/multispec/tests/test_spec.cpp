@@ -1,8 +1,8 @@
-// Unit tests for the portable core (spec_model, swap, strip_art). No game needed:
+// Unit tests for the portable core (spec_model, swap, spec_panel_layout). No game needed:
 //   tests/run_tests.sh            (g++ or clang++ on any system)
 //   cmake -DMULTISPEC_TESTS=ON    (builds multispec_tests next to the plugin)
 #include "../src/spec_model.h"
-#include "../src/strip_art.h"
+#include "../src/spec_panel_layout.h"
 #include "../src/swap.h"
 
 #include <cstdio>
@@ -309,42 +309,46 @@ void TestSwap() {
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
 }
 
-void TestStripArt() {
-	namespace art = ms::art;
-	// Geometry: sockets centred in the visible wing, inside the frame, and the wing ends below the last one.
-	CHECK(art::SocketX >= art::WingFrame);
-	CHECK(art::SocketX + art::SocketSize <= art::VisibleWidth);
-	CHECK(art::SocketX - art::WingFrame == art::VisibleWidth - (art::SocketX + art::SocketSize) ||
-	      art::SocketX - art::WingFrame + 1 == art::VisibleWidth - (art::SocketX + art::SocketSize));
-	for (int32_t slots = 1; slots <= 8; ++slots) {
-		CHECK(art::WingHeight(slots) >= art::SlotY(slots - 1) + art::SocketSize + art::WingFrame);
-		CHECK(art::WingHeight(slots) < 1507);  // never taller than the tree
+void TestSpecPanelLayout() {
+	namespace panel = ms::panel;
+	CHECK(panel::VisibleSlots(0) == 1 && panel::VisibleSlots(2) == 2 && panel::VisibleSlots(3) == 3 && panel::VisibleSlots(9) == 3);
+	// Geometry: sockets inside the wing's frame, and their open right side under the skill tree.
+	CHECK(panel::SocketX >= panel::WingBorder);
+	CHECK(panel::SocketX + panel::SocketWidth > panel::VisibleWidth);
+	for (int32_t slots = 1; slots <= panel::MaxSlots; ++slots) {
+		CHECK(panel::SlotY(slots, 0) >= panel::WingBorder + panel::HeadingHeight);
+		CHECK(panel::SlotY(slots, slots - 1) + panel::SocketHeight <= panel::WingHeight - panel::WingBorder);
 	}
-	static uint8_t wing[art::SpriteBytes(art::WingWidth, art::WingHeight(3))];
-	const size_t n = art::DrawWing(3, 1, wing, sizeof(wing));
-	CHECK(n == sizeof(wing));
-	CHECK(std::memcmp(wing, "SpA1", 4) == 0 && wing[4] == 31 && wing[5] == 0);
-	uint32_t w = 0;
-	uint32_t h = 0;
-	uint32_t data = 0;
-	std::memcpy(&w, wing + 8, 4);
-	std::memcpy(&h, wing + 12, 4);
-	std::memcpy(&data, wing + 32, 4);
-	CHECK(w == static_cast<uint32_t>(art::WingWidth) && h == static_cast<uint32_t>(art::WingHeight(3)));
-	CHECK(data == w * h * 4);
-	CHECK(wing[art::SpriteHeaderSize + 3] == 255);  // opaque
-	CHECK(art::DrawWing(3, 1, wing, sizeof(wing) - 1) == 0);  // refuses a short buffer
-	CHECK(art::DrawWing(0, 1, wing, sizeof(wing)) == 0);
-	static uint8_t socket[art::SpriteBytes(art::SocketSize * 2, art::SocketSize)];
-	CHECK(art::DrawSocket(1, socket, sizeof(socket)) == sizeof(socket));
-	uint32_t frames = 0;
-	std::memcpy(&frames, socket + 20, 4);
-	CHECK(frames == 2 && socket[6] == art::SocketSize);
-	static uint8_t low[art::SpriteBytes(art::SocketSize, art::SocketSize / 2)];
-	CHECK(art::DrawSocket(2, low, sizeof(low)) == sizeof(low));
-	// Same art every time (no randomness).
-	static uint8_t again[sizeof(wing)];
-	CHECK(art::DrawWing(3, 1, again, sizeof(again)) == n && std::memcmp(wing, again, n) == 0);
+	static char json[4096];
+	for (int32_t slots = 1; slots <= panel::MaxSlots; ++slots) {
+		const size_t n = panel::BuildLayout(slots, json, sizeof(json));
+		CHECK(n > 0 && n < sizeof(json) && json[n] == '\0');
+		char want[40];
+		std::snprintf(want, sizeof(want), "multispec/Swap%d", slots);
+		CHECK(std::strstr(json, want) != nullptr);
+		std::snprintf(want, sizeof(want), "multispec/Swap%d", slots + 1);
+		CHECK(std::strstr(json, want) == nullptr);
+		// Balanced braces and brackets: the game refuses a broken layout.
+		int braces = 0;
+		int brackets = 0;
+		for (size_t i = 0; i < n; ++i) {
+			braces += json[i] == '{' ? 1 : (json[i] == '}' ? -1 : 0);
+			brackets += json[i] == '[' ? 1 : (json[i] == ']' ? -1 : 0);
+		}
+		CHECK(braces == 0 && brackets == 0);
+	}
+	// Only the game's own sprites: nothing of ours to ship.
+	CHECK(std::strstr(json, "d2rloader\\\\multispec") == nullptr);
+	CHECK(panel::BuildLayout(0, json, sizeof(json)) == 0);
+	CHECK(panel::BuildLayout(panel::MaxSlots + 1, json, sizeof(json)) == 0);
+	CHECK(panel::BuildLayout(2, json, 64) == 0);  // refuses a short buffer
+	CHECK(panel::ParseSwap("multispec/Swap1") == 1);
+	CHECK(panel::ParseSwap("multispec/Swap3") == 3);
+	CHECK(panel::ParseSwap("multispec/Swap0") == 0);
+	CHECK(panel::ParseSwap("multispec/Swap") == 0);
+	CHECK(panel::ParseSwap("multispec/Swap12") == 0);
+	CHECK(panel::ParseSwap("SkillsTreePanel") == 0);
+	CHECK(panel::ParseSwap(nullptr) == 0);
 }
 
 }  // namespace
@@ -354,7 +358,7 @@ int main() {
 	TestConfigAndModinfo();
 	TestReconcile();
 	TestSwap();
-	TestStripArt();
+	TestSpecPanelLayout();
 	std::printf("%d checks, %d failed\n", g_checks, g_failed);
 	return g_failed == 0 ? 0 : 1;
 }

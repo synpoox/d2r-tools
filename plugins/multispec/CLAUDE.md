@@ -35,10 +35,10 @@ work; don't copy it here, link to it.
 | `src/d2r.*` | `specswap` | RVAs, types, entry-byte checks (build 93847) |
 | `src/env_guard.*`, `off_switch.*`, `log.*` | `envguard` | From the toolkit's `plugin-template` |
 | (command) | `speccmd` | The `spec` console command |
-| `src/strip_art.*` | | Portable: the spec strip's sprites (wing, sockets) drawn in code; geometry constants (tested in `tests/`) |
-| `src/ui_probe.*` | `uiprobe` | Spike 4 diagnosis: `msprobe` logs UI messages, dispatches the tree toggle, finds the tree panel |
+| `src/spec_panel_layout.*` | | Portable: the spec panel's JSON layout, built from stock sprite paths; geometry; slot click parsing (tested in `tests/`) |
+| `src/spec_panel.*` | `specui` | The panel docked to the skill tree: opens and closes with it; a click runs `spec N`; marks the active spec |
 
-Off-switch: `multispec-off.txt` next to the DLL, words separated by spaces: `envguard specstore specswap speccmd`.
+Off-switch: `multispec-off.txt` next to the DLL, words separated by spaces: `envguard specstore specswap speccmd specui`.
 Status: the `multispec` console command (version, image check, every part, counters, last error).
 
 ## Rules for this repo

@@ -135,3 +135,16 @@ tall as its 3 slots, starting at the tree's tab row; numbered sockets centred in
 | J3 | Hover | Move over each socket | The rim brightens |
 | J4 | Clicks | Click 1, 2, 3 | `uiprobe: slot click 'multispec/ProbeSwap1' ...` (2, 3) |
 | J5 | Low texture quality | Options > Video, texture quality low (if present) | The lowend art shows, same look, no missing image |
+
+## Spec panel
+
+Run in a toolkit slot with the test harness. Slot centres at 1600 x 900: x 998, y 228 and 276 for 2 specs.
+
+| # | What | How | Expected |
+|---|---|---|---|
+| S1 | Loaded | Log | `specui on: multispec/SpecPanel, 2 slots` |
+| S2 | Opens with the tree | `T` | Wing beside the tree, gold rim on the active spec |
+| S3 | Swap | Click slot 2, then slot 1 | Log `spec 1 -> 2 done`, then `2 -> 1`; the rim moves |
+| S4 | Closes with the tree | Escape, then `T` twice | Panel gone each time the tree closes |
+| S5 | Outside town | Leave town, open the tree | Slots dimmed, clicks do nothing |
+| S6 | Real points | Spend points, swap and swap back | Each spec's levels return exactly |

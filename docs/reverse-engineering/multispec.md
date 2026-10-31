@@ -252,3 +252,13 @@ Run 1, 2026-10-30, option A (`PANEL\PANEL_BG` in the strip, `priority` -5) plus 
 - Owner's verdict on the look: no. The X icons must be numbered slots, the strip must be only as tall as its slots,
   the heading gold, the slots centred (or the strip narrower). Run 2 draws own art in code (`strip_art.*`) sized to
   the slots.
+
+## Stock sprites for the spec panel (in game): build 93847
+
+Agent run in a game slot, 2026-10-30, D2RLoader 1.3.1. Sizes read from the sprite headers.
+
+- `PANEL\Modals\Modal_No_Title_BG`: 1245 x 453, 1 frame. Same stone and corner ornaments as `PANEL\PANEL_BG`.
+- `PANEL\DropdownButton_Large_Left`: 116 x 111, 4 frames; pressed 1, disabled 2, hovered 3 (`chroniclebaselistpanelhd.json`). Left cap of a wider button: no right edge.
+- `NineTileImageWidget` needs a 9-frame sprite, so it can't use `PANEL_BG`. Only `TooltipBorder` and `AdvancedCharacterSheet_Cell` are used with it.
+- An `ImageWidget` with `"visible": false` starts hidden, and `setWidgetVisible` shows it after `findPanel` / `findWidget` on `multispec/SpecPanel`.
+- `ExecuteConsoleCommand` (D2RCore ordinal 14) ran `spec` and `spec N` from a UI-thread callback, and a plugin `ConsoleCommandHandler` ran with a usable client.

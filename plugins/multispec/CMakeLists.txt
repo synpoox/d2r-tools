@@ -32,8 +32,8 @@ add_library(multispec SHARED
 	src/log.cpp
 	src/off_switch.cpp
 	src/env_guard.cpp
-	src/ui_probe.cpp
-	src/strip_art.cpp
+	src/spec_panel.cpp
+	src/spec_panel_layout.cpp
 	src/multispec.rc
 )
 target_link_libraries(multispec PRIVATE D2RLPlugin::D2RLPlugin shell32 ole32)
@@ -49,7 +49,7 @@ if(MSVC)
 endif()
 
 if(MULTISPEC_TESTS)
-	add_executable(multispec_tests tests/test_spec.cpp src/spec_model.cpp src/swap.cpp src/strip_art.cpp)
+	add_executable(multispec_tests tests/test_spec.cpp src/spec_model.cpp src/swap.cpp src/spec_panel_layout.cpp)
 	if(MSVC)
 		set_property(TARGET multispec_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
 	endif()

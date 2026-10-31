@@ -7,7 +7,7 @@
 //   specswap   every engine call: reading the character, reconciling the file, swapping. Needs
 //              the entry bytes of every function it calls (d2r.cpp)
 //   speccmd    the "spec" console command (spec, spec N)
-//   uiprobe    spike 4 diagnosis: the msprobe command logs UI messages (ui_probe.h); idle until switched on
+//   specui     the spec panel beside the skill tree (spec_panel.h); a click runs the spec command
 // The status command "multispec" is always registered.
 //
 // Threads: the console callback only queues work. The work runs on D2R's game thread (ThreadService::runOnGameThread),
@@ -23,7 +23,7 @@
 #include "spec_model.h"
 #include "spec_store.h"
 #include "swap.h"
-#include "ui_probe.h"
+#include "spec_panel.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -106,12 +106,20 @@ void InstallSwap(const D2RL::PluginContext* context, char* report, size_t size) 
 
 void InstallCommand(const D2RL::PluginContext* context, char* report, size_t size) noexcept;
 
+void InstallPanel(const D2RL::PluginContext* context, char* report, size_t size) noexcept {
+	if (!g_engineOk || !g_storeOk) {
+		std::snprintf(report, size, "off: needs specswap and specstore");
+		return;
+	}
+	ms::InstallSpecPanel(context, g_specCount, report, size);
+}
+
 Part g_parts[] = {
 	{"envguard", InstallEnvironment, ""},
 	{"specstore", InstallStore, ""},
 	{"specswap", InstallSwap, ""},
 	{"speccmd", InstallCommand, ""},
-	{"uiprobe", ms::InstallUiProbe, ""},
+	{"specui", InstallPanel, ""},
 };
 
 // --- One request at a time: console -> game thread -> UI thread -------------------------------------------------
@@ -124,6 +132,8 @@ struct Request {
 	int32_t swapTo = 0;  // 0 = status only
 	int lineCount = 0;
 	char lines[MaxLines][320] = {};
+	int32_t active = 0;   // for the spec panel: 0 = not known
+	bool inTown = false;
 };
 Request g_req;
 
@@ -142,6 +152,7 @@ void __cdecl PrintAnswer(const D2RL::PluginContext* context, void*) noexcept {
 	for (int i = 0; i < g_req.lineCount; ++i) {
 		context->WriteConsoleMessage(g_req.lines[i]);
 	}
+	ms::UpdateSpecPanel(context, g_req.active, g_req.inTown);
 	g_req.busy.store(false);
 }
 
@@ -255,6 +266,8 @@ void __cdecl GameWork(const D2RL::PluginContext* context, void*) noexcept {
 			}
 			if (ok) {
 				Summarize(file, live);
+				g_req.active = file.active;
+				g_req.inTown = ms::InTown(player);
 			}
 		}
 	}
@@ -322,6 +335,7 @@ auto SpecCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* c
 	g_req.client = client;
 	g_req.swapTo = to;
 	g_req.lineCount = 0;
+	g_req.active = 0;
 	if (g_threads->runOnGameThread(ctx, GameWork, nullptr) != D2RL::Threads::Result::Success) {
 		g_req.busy.store(false);
 		ctx->WriteConsoleMessage("MultiSpec: only the game host can change specs (or no game is running)");
