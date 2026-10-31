@@ -558,7 +558,9 @@ auto Reconcile(CharSpecs* file, bool haveFile, const LiveChar& live, int32_t con
 		rep.changed = true;
 	}
 
-	// Which stored spec is the live character? The active one first, then the swap's two ends, then any.
+	// Which stored spec is the live character? The active one first, then the swap's two ends, then any. "Any" reaches
+	// above spec_count, so an unsaved swap back into range overwrites no spec. A character with no points never matches
+	// "any": it was respecced, and an empty spec is not where it came from.
 	int32_t match = 0;
 	if (SameLevels(file->specs[file->active - 1].levels, live.levels, n)) {
 		match = file->active;
@@ -570,7 +572,8 @@ auto Reconcile(CharSpecs* file, bool haveFile, const LiveChar& live, int32_t con
 			match = file->pendingTo;
 		}
 	}
-	for (int32_t k = 1; match == 0 && k <= file->specCount; ++k) {
+	const bool anyPoints = SumLevels(live.levels, n) != 0;
+	for (int32_t k = 1; match == 0 && anyPoints && k <= file->specCount; ++k) {
 		if (SameLevels(file->specs[k - 1].levels, live.levels, n)) {
 			match = k;
 		}
