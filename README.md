@@ -6,9 +6,10 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 
 | Plugin | Version | Description |
 |---|---|---|
-| [better-xp-bar](plugins/better-xp-bar) | 1.0.0 | HUD panel with level, XP, session gain and XP per hour. |
-| [quick-npc](plugins/quick-npc) | 1.0.0 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
-| [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.0 | Mouse wheel switches the waypoint panel's Act tabs. |
+| [better-xp-bar](plugins/better-xp-bar) | 1.0.1 | HUD panel with level, XP, session gain and XP per hour. |
+| [multispec](plugins/multispec) | 1.0.0 | Keeps several skill setups per character and switches between them in town, without a respec token. |
+| [quick-npc](plugins/quick-npc) | 1.0.1 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
+| [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.1 | Mouse wheel switches the waypoint panel's Act tabs. |
 
 Each plugin's README has its features, config and tested game version; its `CHANGELOG.md` lists releases.
 
