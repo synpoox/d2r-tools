@@ -7,3 +7,4 @@
 - Now a global plugin: install it in `<game>\d2rloader\plugins\`.
 - Attempts to run on any game or D2RLoader version.
 - Crashes are written to the plugin's log.
+- Fixed a respec token switching you to a different spec.

@@ -248,6 +248,33 @@ void TestReconcile() {
 	SetLevels(s.specs[1].levels, {20, 20, 0, 0, 0, 0});
 	rep = ms::Reconcile(&s, true, Live(e), 2);
 	CHECK(rep.newlyInvalid == 1 && s.specs[1].state == ms::SpecState::Invalid);
+
+	// a respec token in spec 1 stays in spec 1: an empty spec in or above range does not claim the reset character
+	SetLevels(e.level, {1, 2, 0, 1, 1, 0});
+	e.unspent = 4;
+	ms::Reconcile(&s, false, Live(e), 2);
+	(void)ms::Reconcile(&s, true, Live(e), 3);
+	SetLevels(e.level, {0, 0, 0, 0, 0, 0});
+	e.unspent = 9;
+	rep = ms::Reconcile(&s, true, Live(e), 2);
+	CHECK(rep.result == ms::Reconciled::AdoptedLive && s.active == 1 && ms::SumLevels(s.specs[0].levels, N) == 0);
+
+	// a reset character after an unfinished swap is still recovery, even with an empty spec stored
+	ms::Reconcile(&s, false, Live(e), 3);
+	SetLevels(s.specs[0].levels, {1, 2, 0, 1, 1, 0});
+	SetLevels(s.specs[1].levels, {0, 1, 1, 0, 0, 1});
+	s.pendingFrom = 1;
+	s.pendingTo = 2;
+	rep = ms::Reconcile(&s, true, Live(e), 3);
+	CHECK(rep.result == ms::Reconciled::Recovery && s.active == 1 && ms::SumLevels(s.specs[0].levels, N) == 5);
+
+	// a match above spec_count is not taken; the active spec adopts the live skills
+	ms::Reconcile(&s, false, Live(e), 3);
+	SetLevels(s.specs[2].levels, {0, 1, 1, 0, 0, 1});
+	SetLevels(e.level, {0, 1, 1, 0, 0, 1});
+	e.unspent = 6;
+	rep = ms::Reconcile(&s, true, Live(e), 2);
+	CHECK(rep.result == ms::Reconciled::AdoptedLive && s.active == 1 && s.specCount == 3);
 }
 
 void TestSwap() {
