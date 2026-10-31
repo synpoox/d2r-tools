@@ -12,6 +12,7 @@
 #include <D2RLPlugin/core_exports.h>
 
 #include "log.h"
+#include "spec_model.h"
 #include "spec_panel_layout.h"
 
 #include <windows.h>
@@ -163,7 +164,7 @@ auto RegisterPanel(const D2RL::PluginContext* context, char* why, size_t size) n
 		.flags      = 0,
 		.path       = "data/global/ui/layouts/multispec/SpecPanelhd.json",
 		.bytes      = g_layout,
-		.byteCount  = panel::BuildLayout(g_specCount, g_layout, sizeof(g_layout)),
+		.byteCount  = panel::BuildLayout(MaxSpecs, g_layout, sizeof(g_layout)),  // the active spec can be above spec_count
 	};
 	if (resource.byteCount == 0) {
 		std::snprintf(why, size, "the layout did not fit its buffer");
@@ -202,7 +203,7 @@ void UpdateSpecPanel(const D2RL::PluginContext* context, int32_t active, bool in
 		return;  // not built yet: the next open asks again
 	}
 	D2RL::Widgets::WidgetHandle widget = D2RL::Widgets::InvalidHandle;
-	for (int32_t i = 1; i <= g_specCount; ++i) {
+	for (int32_t i = 1; i <= MaxSpecs; ++i) {
 		char name[16];
 		std::snprintf(name, sizeof(name), "Number%d", i);
 		if (g_widgets->findWidget(context, root, name, &widget) == D2RL::Widgets::Result::Success) {
@@ -210,7 +211,7 @@ void UpdateSpecPanel(const D2RL::PluginContext* context, int32_t active, bool in
 		}
 	}
 	// setWidgetEnabled does not change how a button looks, so a greyed-out copy of each arrow takes its place.
-	const bool usable = inTown && g_specCount > 1;
+	const bool usable = inTown && (g_specCount > 1 || active > g_specCount);
 	for (const auto& [name, show] : {std::pair<const char*, bool> {"Up", usable}, {"Down", usable}, {"UpOff", !usable}, {"DownOff", !usable}}) {
 		if (g_widgets->findWidget(context, root, name, &widget) == D2RL::Widgets::Result::Success) {
 			(void)g_widgets->setWidgetVisible(context, widget, show);

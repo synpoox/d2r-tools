@@ -39,13 +39,14 @@ constexpr int32_t UpY = ColumnTop + (WingHeight - WingBorder - ColumnTop - Colum
 constexpr int32_t SlotY = UpY + ArrowSize;
 constexpr int32_t DownY = SlotY + SlotHeight;
 
-// Writes the panel's JSON to out. Returns its length, 0 when it does not fit.
-auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t;
+// Writes the panel's JSON to out, with widgets for the numbers 1 to `numbers`. Returns its length, 0 when it does not fit.
+auto BuildLayout(int32_t numbers, char* out, size_t size) noexcept -> size_t;
 
 // The step in an arrow's click message: +1 "multispec/SpecUp", -1 "multispec/SpecDown", 0 for any other text.
 auto ParseStep(const char* text) noexcept -> int32_t;
 
-// The spec one step away, wrapping at both ends. 0 when there is nowhere to go (one spec, or the active spec is unknown).
+// The spec one step away, wrapping at both ends. An active spec above specCount (spec_count was lowered) steps back into
+// range: up to 1, down to specCount. 0 when there is nowhere to go (one spec, or the active spec is unknown).
 auto NextSpec(int32_t active, int32_t specCount, int32_t step) noexcept -> int32_t;
 
 }  // namespace ms::panel

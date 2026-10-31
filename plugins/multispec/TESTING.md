@@ -149,3 +149,4 @@ Run in a toolkit slot with the test harness. The arrows are at x 988, y 221 and 
 | S5 | Closes with the tree | Escape, then `T` twice | Panel gone each time the tree closes |
 | S6 | Real points | Spend points in each spec, swap back and forth | Each spec's levels return exactly |
 | S7 | Outside town | Take a waypoint out of town, open the tree | Arrows greyed out; a wheel notch is refused. The automap names the area: fences don't mark the town edge |
+| S8 | `spec_count` lowered | `spec_count = 99`, `spec 80`, exit, set `spec_count = 3`, open the tree, click down | The slot shows 80, then 3 after the click; the file keeps all 99 specs |

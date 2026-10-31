@@ -6,8 +6,8 @@
 
 namespace ms::panel {
 
-auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t {
-	if (out == nullptr || specCount < 1) {
+auto BuildLayout(int32_t numbers, char* out, size_t size) noexcept -> size_t {
+	if (out == nullptr || numbers < 1) {
 		return 0;
 	}
 	int n = std::snprintf(out, size, R"json({
@@ -42,7 +42,7 @@ auto BuildLayout(int32_t specCount, char* out, size_t size) noexcept -> size_t {
 		  "fields": { "rect": { "x": %d, "y": %d }, "filename": "FrontEnd\\HD\\Final\\FrontEnd_DownButton", "frame": 2, "visible": false } })json",
 	                      TreeLeft - VisibleWidth, TreeTop + TabRow, WingTotalWidth, WingHeight, VisibleWidth, WingHeight, SlotX,
 	                      HeadingTop, VisibleWidth - SlotX, HeadingHeight, SlotX, SlotY, ArrowX, UpY, ArrowX, DownY, ArrowX, UpY, ArrowX, DownY);
-	for (int32_t i = 1; i <= specCount && n > 0 && static_cast<size_t>(n) < size; ++i) {
+	for (int32_t i = 1; i <= numbers && n > 0 && static_cast<size_t>(n) < size; ++i) {
 		n += std::snprintf(out + n, size - static_cast<size_t>(n), R"json(,
 		{ "type": "TextBoxWidget", "name": "Number%d",
 		  "fields": { "rect": { "x": %d, "y": %d, "width": %d, "height": %d }, "text": "%d", "visible": false,
@@ -67,7 +67,13 @@ auto ParseStep(const char* text) noexcept -> int32_t {
 }
 
 auto NextSpec(int32_t active, int32_t specCount, int32_t step) noexcept -> int32_t {
-	if (specCount < 2 || active < 1 || active > specCount || (step != 1 && step != -1)) {
+	if (active < 1 || specCount < 1 || (step != 1 && step != -1)) {
+		return 0;
+	}
+	if (active > specCount) {  // spec_count was lowered below the active spec: step back into range
+		return step > 0 ? 1 : specCount;
+	}
+	if (specCount < 2) {
 		return 0;
 	}
 	const int32_t next = active + step;

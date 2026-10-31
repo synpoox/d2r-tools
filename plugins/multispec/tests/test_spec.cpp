@@ -332,6 +332,15 @@ void TestSwap() {
 	e.unspent = 10;  // the fake's broken respecs lost points; restore T = 9 + 1 earned
 	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
 	CHECK(ms::SameLevels(e.level, want1, N) && s.pendingFrom == 0 && s.active == 1);
+
+	// spec_count lowered below the active spec: the swap back into range works and keeps every spec.
+	(void)ms::Reconcile(&s, true, Live(e), 3);
+	CHECK(s.specCount == 3);
+	CHECK(ms::Swap(e, st, &s, Live(e), 3, 3, &r) == ms::SwapResult::Done && s.active == 3);
+	const ms::ReconcileReport low = ms::Reconcile(&s, true, Live(e), 2);
+	CHECK(low.result != ms::Reconciled::Recovery && s.active == 3 && s.specCount == 3);
+	CHECK(ms::Swap(e, st, &s, Live(e), 1, 2, &r) == ms::SwapResult::Done);
+	CHECK(ms::SameLevels(e.level, want1, N) && s.active == 1 && s.specCount == 3);
 }
 
 void TestSpecPanelLayout() {
@@ -377,7 +386,9 @@ void TestSpecPanelLayout() {
 	CHECK(panel::NextSpec(1, 2, 1) == 2 && panel::NextSpec(1, 2, -1) == 2);
 	CHECK(panel::NextSpec(1, 1, 1) == 0);   // one spec: nowhere to go
 	CHECK(panel::NextSpec(0, 3, 1) == 0);   // active spec not known yet
-	CHECK(panel::NextSpec(4, 3, 1) == 0);
+	CHECK(panel::NextSpec(80, 3, 1) == 1);  // spec_count lowered below the active spec: back into range
+	CHECK(panel::NextSpec(80, 3, -1) == 3);
+	CHECK(panel::NextSpec(80, 1, 1) == 1 && panel::NextSpec(80, 1, -1) == 1);
 	CHECK(panel::NextSpec(1, 3, 0) == 0);
 }
 

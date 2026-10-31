@@ -181,6 +181,10 @@ void Summarize(const ms::CharSpecs& file, const ms::LiveChar& live) noexcept {
 	if (hidden > 0) {
 		Say("  (%d more specs not listed)", hidden);
 	}
+	if (file.active > shown) {  // spec_count was lowered below the active spec
+		const int32_t used = ms::SumLevels(file.specs[file.active - 1].levels, file.skillCount);
+		Say("  spec %d: %d points, %d unspent  <- active", file.active, used, total - used);
+	}
 	if (file.specCount > g_specCount) {
 		Say("  (%d more spec(s) kept in the file; raise spec_count to use them)", file.specCount - g_specCount);
 	}
