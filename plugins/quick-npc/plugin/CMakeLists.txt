@@ -13,7 +13,7 @@ cmake_minimum_required(VERSION 3.29)
 project(quick_npc_plugin LANGUAGES CXX RC)
 
 set(MODKIT_PLUGIN_NAME "quick-npc" CACHE STRING "Plugin id, DLL name, console command and <name>-off.txt prefix")
-set(MODKIT_PLUGIN_VERSION "1.0.0" CACHE STRING "PluginInfo::version")
+set(MODKIT_PLUGIN_VERSION "1.0.1" CACHE STRING "PluginInfo::version")
 set(MODKIT_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 
 set(D2RLPLUGIN_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)

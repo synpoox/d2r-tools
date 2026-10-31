@@ -22,7 +22,7 @@
 namespace {
 
 constexpr const char* PluginName = "scrollable-waypoints";
-constexpr const char* PluginVersion = "1.0.0";  // PluginInfo::version too; CHANGELOG.md
+constexpr const char* PluginVersion = "1.0.1";  // PluginInfo::version too; CHANGELOG.md
 
 const D2RL::PluginContext* g_context = nullptr;
 
