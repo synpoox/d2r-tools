@@ -43,11 +43,17 @@ The black globes, the statues and the frame behind the belt and skill buttons ar
 (`ImageWidget`, `PANEL/HUD_02/front_panel`, 2822 x 415). `ResourceService` only takes plugin-namespaced paths, so the
 sprite cannot be replaced. Instead:
 
-- `AbstractImageWidget::DrawFrame` `0x858c50` passes the widget's `+0xac` rect (x, y, width, height, screen pixels) to
+- `AbstractImageWidget::DrawFrame` `0x858c50` (load found at `0x858d1a` by signature, which also yields the offset)
+  passes the widget's `+0xac` rect (x, y, width, height, screen pixels) to
   the sprite draw as a clip. `ProgressBarWidget` sets the same field in `0x85a190`. Writing it on the stock widget keeps
   the draw order behind the buttons. The plugin shows sprite x 608..2238, the frame without the globes.
-- The screen position comes from `0x8562f0(widget, out)`. Layout scale = (screen width / 2 - x) / 1420, the image's
-  stock distance left of centre. Written every UI tick while the bars show. Confirmed at 1600x900 and 1720x720.
+- The plugin touches the art and the catcher only when `Overlay` has a stock x: 34 for `front_panel`, or -121 for the
+  controller HUD's `Controller/HUD/HUDBase` (3164 x 413, shown x 612..2574, image left edge 1594 units left of centre).
+  The controller layout inherits `BGClickCatcher`'s rect. Other layouts are left alone.
+- D2R imports only `XInputGetState` and `XInputSetState` from `XINPUT9_1_0.dll`. A stand-in DLL in a game slot that
+  reports one pad and pulses a button switches the running game to the controller HUD, so it can be tested without a pad.
+- The screen position comes from `0x8562f0(widget, out)`. Layout scale = (screen width / 2 - x) / the image's
+  stock distance left of centre. Written every 30 UI ticks while the bars show. Confirmed at 1600x900 and 1720x720.
 
 ## Clicks beside the frame
 

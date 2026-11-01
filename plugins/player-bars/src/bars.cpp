@@ -46,13 +46,24 @@ constexpr const char* SetTextSig = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B
 constexpr const char* WidgetScreenPosSig = "48 8B C4 48 89 70 20 57 48 81 EC A0 00 00 00 0F 29 70 E8 48 8B F2 0F 29 78 D8 0F 57 FF 48 8B F9";
 
 // The HUD image front_panel holds the globes, the statues and the frame behind the buttons. Image widgets draw through
-// a clip rectangle (x, y, width, height in screen pixels) at +0xac, so the widget stays in place, showing only the frame.
-constexpr int ImageClipRect = 0xac;
+// a clip rectangle (x, y, width, height in screen pixels), so the widget stays in place, showing only the frame.
+// AbstractImageWidget::DrawFrame 0x858c50 loads that rectangle here, which gives its offset (+0xac).
+constexpr const char* ImageClipSig = "0F 10 83 ?? ?? ?? ?? 0F 29 45 ?? 84 C0 74 ?? 0F 10 8B ?? ?? ?? ??";
+constexpr size_t ImageClipDisplacement = 3;
 constexpr int WidgetRect = 0x70;  // x, y, width, height in layout units
-// BGClickCatcher (hudpanelhd.json) and the part of it behind the frame.
-constexpr int32_t CatcherStockX = 70, CatcherStockWidth = 2774, CatcherFrameX = 642, CatcherFrameWidth = 1630;
-constexpr float ArtLeftOfCentre = 1420.0f;  // layout units: the image starts here (hudpanelhd.json)
-constexpr float ArtFrameLeft = 608.0f, ArtFrameRight = 2238.0f, ArtHeight = 415.0f;  // in the sprite's 1:1 layout units
+// BGClickCatcher in hudpanelhd.json; the controller layout inherits it.
+constexpr int32_t CatcherStockX = 70, CatcherStockWidth = 2774;
+
+// The stock HUD images, told apart by Overlay's x. Any other layout is left alone.
+struct HudArt {
+	int32_t x;           // Overlay's x in its layout
+	float leftOfCentre;  // layout units from the screen centre to the image's left edge
+	int32_t frameLeft, frameRight, height;  // in the image, whose pixels are layout units
+};
+constexpr HudArt HudArts[] = {
+	{34, 1420.0f, 608, 2238, 415},    // PANEL/HUD_02/front_panel
+	{-121, 1594.0f, 612, 2574, 413},  // Controller/HUD/HUDBase
+};
 
 constexpr int32_t StatLife = 6, StatMaxLife = 7, StatMana = 8, StatMaxMana = 9;
 constexpr int StatShift = 8;  // these four are stored as value << 8
@@ -77,6 +88,7 @@ NativeFindPanelFn g_nativeFindPanel = nullptr;
 NativeFindChildFn g_nativeFindChild = nullptr;
 NativeSetTextFn g_nativeSetText = nullptr;
 WidgetScreenPosFn g_widgetScreenPos = nullptr;
+int32_t g_imageClipRect = 0;
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::OverlayService* g_overlay = nullptr;
@@ -134,7 +146,7 @@ auto GuardedRead() noexcept -> bool {
 	}
 }
 
-// The orbs and the art around them. The HUD panel is rebuilt with the game, so this runs now and then.
+// The HUD panel is rebuilt with the game, so this runs now and then.
 void HideOrbs() noexcept {
 	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
 	auto result = g_widgets->findPanel(g_context, "HUDPanel", &hud);
@@ -163,22 +175,37 @@ void ClipArtRaw(float screenWidth) noexcept {
 	if (art == nullptr) {
 		return;
 	}
+	const int32_t artX = *reinterpret_cast<const int32_t*>(static_cast<const uint8_t*>(art) + WidgetRect);
+	const HudArt* stock = nullptr;
+	for (const HudArt& candidate : HudArts) {
+		if (candidate.x == artX) {
+			stock = &candidate;
+		}
+	}
+	if (stock == nullptr) {
+		static bool s_logged = false;
+		if (!s_logged) {
+			s_logged = true;
+			plog::Info("art: this HUD layout is not a stock one; its art and clicks are left alone");
+		}
+		return;
+	}
 	// Hiding the catcher leaves it taking clicks, so it is narrowed to the frame. A layout that changed it is left alone.
 	if (void* const catcher = g_nativeFindChild(hud, "BGClickCatcher")) {
 		auto* const rect = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(catcher) + WidgetRect);
 		if (rect[0] == CatcherStockX && rect[2] == CatcherStockWidth) {
-			rect[0] = CatcherFrameX;
-			rect[2] = CatcherFrameWidth;
+			rect[0] = stock->x + stock->frameLeft;
+			rect[2] = stock->frameRight - stock->frameLeft;
 		}
 	}
 	int32_t pos[2] {};
 	g_widgetScreenPos(art, pos);
-	const float scale = (screenWidth / 2.0f - static_cast<float>(pos[0])) / ArtLeftOfCentre;
-	auto* const clip = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(art) + ImageClipRect);
-	clip[0] = pos[0] + static_cast<int32_t>(ArtFrameLeft * scale);
+	const float scale = (screenWidth / 2.0f - static_cast<float>(pos[0])) / stock->leftOfCentre;
+	auto* const clip = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(art) + g_imageClipRect);
+	clip[0] = pos[0] + static_cast<int32_t>(static_cast<float>(stock->frameLeft) * scale);
 	clip[1] = pos[1];
-	clip[2] = static_cast<int32_t>((ArtFrameRight - ArtFrameLeft) * scale);
-	clip[3] = static_cast<int32_t>(ArtHeight * scale);
+	clip[2] = static_cast<int32_t>(static_cast<float>(stock->frameRight - stock->frameLeft) * scale);
+	clip[3] = static_cast<int32_t>(static_cast<float>(stock->height) * scale);
 }
 
 auto GuardedClipArt(float screenWidth) noexcept -> bool {
@@ -338,7 +365,21 @@ void SetOpenPanel(int index) noexcept {
 	}
 }
 
+// Something other than this plugin may close the panel; the next call then opens it again.
+void NoticeClosedPanel() noexcept {
+	if (g_openPanel < 0) {
+		return;
+	}
+	D2RL::Panels::PanelInfo info {};
+	info.structSize = D2RL::Panels::PanelInfoSize;
+	if (g_panelService->getPanelInfo(g_context, g_panels[g_openPanel].handle, &info) == D2RL::Panels::Result::Success &&
+	    info.presentationState != D2RL::Panels::PresentationState::Open) {
+		g_openPanel = -1;
+	}
+}
+
 void UpdateBars() noexcept {
+	NoticeClosedPanel();
 	SetOpenPanel(g_show ? pb::PanelForShift(g_shift) : -1);
 	if (g_openPanel < 0) {
 		return;
@@ -363,10 +404,8 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 		plog::Error("memory fault while reading the player; the bars are now off");
 	}
 	UpdateBars();
-	if (g_settings.hideOrbs && g_show) {
-		if (++g_tick % 30 == 1) {
-			HideOrbs();
-		}
+	if (g_settings.hideOrbs && g_show && ++g_tick % 30 == 1) {
+		HideOrbs();
 		if (g_widgetScreenPos != nullptr && !GuardedClipArt(g_screenWidth)) {
 			g_widgetScreenPos = nullptr;
 			plog::Error("memory fault while clipping the HUD art; it is left as it is");
@@ -434,19 +473,23 @@ auto Resolve(uintptr_t exeBase, char* report, size_t size) noexcept -> bool {
 	if (const uint8_t* const shift = FindSig(exeBase, ScreenShiftSig, "screen shift", missing, sizeof(missing))) {
 		g_screenShift = reinterpret_cast<const int32_t*>(Rel32Target(shift + ScreenShiftWrite, 2));
 	} else {
-		plog::Warn("%s: bars stay centred when a side panel is open", missing);  // the only optional piece
+		plog::Warn("%s: bars stay centred when a side panel is open", missing);
 	}
 	const uint8_t* const findPanel = FindSig(exeBase, FindPanelSig, "FindPanel", missing, sizeof(missing));
 	const uint8_t* const findChild = FindSig(exeBase, FindChildSig, "FindChild", missing, sizeof(missing));
 	const uint8_t* const setText = FindSig(exeBase, SetTextSig, "SetText", missing, sizeof(missing));
 	const uint8_t* const screenPos = FindSig(exeBase, WidgetScreenPosSig, "widget position", missing, sizeof(missing));
+	const uint8_t* const imageClip = FindSig(exeBase, ImageClipSig, "image clip", missing, sizeof(missing));
 	if (findPanel != nullptr && findChild != nullptr) {
 		g_nativeFindPanel = reinterpret_cast<NativeFindPanelFn>(findPanel);
 		g_nativeFindChild = reinterpret_cast<NativeFindChildFn>(findChild);
 		g_nativeSetText = g_settings.showText ? reinterpret_cast<NativeSetTextFn>(setText) : nullptr;
-		g_widgetScreenPos = reinterpret_cast<WidgetScreenPosFn>(screenPos);
+		if (screenPos != nullptr && imageClip != nullptr) {
+			g_widgetScreenPos = reinterpret_cast<WidgetScreenPosFn>(screenPos);
+			std::memcpy(&g_imageClipRect, imageClip + ImageClipDisplacement, sizeof(g_imageClipRect));
+		}
 	}
-	if (g_nativeFindPanel == nullptr || setText == nullptr || screenPos == nullptr) {
+	if (g_nativeFindPanel == nullptr || setText == nullptr || g_widgetScreenPos == nullptr) {
 		plog::Warn("%s: no numbers on the bars, or the HUD art stays whole", missing);
 	}
 	return true;
@@ -533,10 +576,10 @@ auto InstallBars(const D2RL::PluginContext* context, char* report, size_t size) 
 		std::snprintf(report, size, "off: overlay callback refused (result %u)", static_cast<uint32_t>(result));
 		return false;
 	}
-	std::snprintf(report, size, "on: slot rva 0x%llx, stat rva 0x%llx, shift %s",
+	std::snprintf(report, size, "on: slot rva 0x%llx, stat rva 0x%llx, shift %s, image clip +0x%x",
 	              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_localSlot) - context->exeBase),
 	              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_totalStat) - context->exeBase),
-	              g_screenShift != nullptr ? "found" : "missing");
+	              g_screenShift != nullptr ? "found" : "missing", static_cast<unsigned>(g_imageClipRect));
 	return true;
 }
 
