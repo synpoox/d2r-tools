@@ -106,7 +106,7 @@ Whole instructions, at least 14 bytes. For a byte check before calling, not for 
 | `0x2f0750` | `48 83 EC 28 48 85 C9 75 07 33 C0 48 83 C4 28` |
 | `0x34b440` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 13` |
 | `0x34a0e0` | `48 83 EC 28 48 85 C9 75 1A 88 4C 24 30 48 8D 4C 24 30` |
-| `0x349860` | `48 83 EC 28 48 85 C9 75 1D 88 4C 24 30 48 8D 4C 24 30` |
+| `0x349860` | `48 83 EC 28 48 85 C9 75 1D 88 4C 24 30 48 8D 4C 24 30` (no longer checked or called: MultiSpec reads unit `+0x04`, because other plugins hook this getter; a player's report showed only this entry differing on the matching image stamp) |
 | `0x34b9d0` | `48 83 EC 28 48 85 C9 75 1D 88 4C 24 30 48 8D 4C 24 30` |
 | `0x34b240` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 13` |
 | `0x34b6e0` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 20` |

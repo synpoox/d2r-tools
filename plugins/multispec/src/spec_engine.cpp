@@ -80,7 +80,8 @@ auto ResolvePlayer(d2r::Client* client, Player* out, char* why, size_t size) noe
 		std::snprintf(why, size, "could not read the character name (player data '%s', client '%s')", fromData, fromClient);
 		return false;
 	}
-	const int32_t cls = d2r::api.unitClass(unit, __FILE__, __LINE__);
+	// Read directly: other plugins hook the class getter (0x349860), and a changed getter must not turn specs off.
+	const int32_t cls = d2r::At<int32_t>(unit, d2r::UnitClass);
 	if (cls < 0 || cls > 7) {
 		std::snprintf(why, size, "unknown character class %d", cls);
 		return false;
