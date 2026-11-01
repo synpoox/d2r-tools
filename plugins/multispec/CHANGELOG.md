@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 - 2026-11-01
 
 - Fixed the spec panel and spec swaps turning off when another plugin changes how the game reads a character's class.
 
