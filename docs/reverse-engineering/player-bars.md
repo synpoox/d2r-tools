@@ -11,6 +11,7 @@ missing, the part logs why and stays off; the screen shift, text and HUD art fun
 | `0x8b2d0` | from `0x14cc8c0` | `() -> u32` local slot | same |
 | `0x9a480` | from `0x14cc8c0` | `(slot) -> Unit*` or null | same |
 | `0x2f5020` | from `0x14cc8c0` | `(unit, stat, layer) -> i32` total; D2RCore thunk, call only | same |
+| `0x3351b0` | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ...` (32 bytes) | `(unit, state) -> nonzero` has state | `0x14caf10` |
 | `0xb9c20` | `48 83 EC 38 44 8B 0D ?? ?? ?? ?? 41 8B C1 99 89 0D ...` | screen shift setter; `mov [rip+x], ecx` at +0xf gives `0x2a26bb0` | decompile |
 | `0x846170` | `48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 C9 0F 85 ...` | `FindPanel(name)`; numbers and HUD art | better-xp-bar.md |
 | `0x856220` | `48 89 5C 24 10 ... 48 8B 59 58 48 8B F2 48 8B` (24 bytes) | `FindChild(parent, name)`; numbers and HUD art | better-xp-bar.md |
@@ -31,7 +32,8 @@ for the local player.
 
 Retested 2026-11-01 under D2RLoader 1.3.1: the frame callback runs and draw calls return success, but nothing appears,
 as in [better-xp-bar.md](better-xp-bar.md). No `d2rloader.toml` setting changes this. The plugin uses the callback only
-as a clock and draws with plugin panels: one `RectangleWidget` per fill, its width written at `+0x78` each tick.
+as a clock and draws with plugin panels: one `RectangleWidget` per fill, its width written at `+0x78` each tick. Each
+write first checks the widget's height at `+0x7c`; about two seconds of failures turn the bars off and show the orbs again.
 Those panels pass clicks through to the game (seen by walking in town) and do not dim the screen.
 
 ## Smoothing and the potion preview
@@ -39,7 +41,6 @@ Those panels pass clicks through to the game (seen by walking in town) and do no
 `AttributeBallWidget` (type `0x14ca4d0`, update `0x14caf10`, draw `0x14c9ca0`) reads table `0x1fd89f0`, 0x28 per row:
 life 6/7, state 100, rate stat 74; mana 8/9, state 106, rate stat 26. Fields: `potionPreviewTransparency` `+0x560`,
 `maxSmoothingSeconds` `+0x564`, `jumpSmoothingSeconds` `+0x568`, `smoothDecrease` `+0x56c`. Its smoother is `0x15144f0`.
-State test: `0x3351b0` `(unit, state)`, found by signature.
 
 Measured in slot 2, 2026-11-01, one potion from 60 life, logging stat 6 and stat 74:
 

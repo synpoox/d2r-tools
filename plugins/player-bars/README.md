@@ -1,37 +1,50 @@
 # Player Bars
 
-A [D2RLoader](https://github.com/D2RLoader) plugin for Diablo II: Resurrected that shows health and mana bars above
-your character, MMO style, at all times in a game. The orbs and the statues beside them are hidden, the frame behind the buttons stays, and you can click to walk where the art was.
+A D2RLoader plugin for Diablo II: Resurrected that shows health and mana bars above your character, MMO style, the
+whole time you're in a game. The orbs and statues are hidden and the frame behind the buttons stays. MIT licensed.
+
+## Features
+
+- **Bars above your character**: they follow you when side panels open, or sit below you if you prefer.
+- **Smooth fill**: a lighter section shows what a healing or mana potion is still restoring.
+- **Cleaner HUD**: no orbs or statues, and you can click to walk where they were. Works on the controller HUD too.
 
 ## Requirements
 
-- [D2RLoader](https://github.com/D2RLoader)
-- Diablo II: Resurrected (Battle.net or Steam) with D2RLoader. Tested on D2R 3.3 with D2RLoader 1.3.1; other versions are attempted.
+- Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
+- D2RLoader (tested on 1.3.1)
 
-Works with or without mods, with mouse and keyboard or a controller. A mod that moves the HUD art keeps it. New art in
-the stock position is clipped like the stock art; set `hide_orbs = false` to keep it whole.
+Works with or without mods. A mod that moves the HUD art keeps it. New art in the stock position is clipped like the
+stock art; set `hide_orbs = false` to keep it whole.
 
-## Install
+## Installation
 
 1. Close the game.
-2. Copy `player-bars.dll` into `<game folder>\d2rloader\plugins\`. Create the `plugins` folder if it doesn't exist.
+2. Copy `player-bars.dll` to `<game>\d2rloader\plugins\`.
 3. Start the game through D2RLoader.
 
-To uninstall, delete the DLL.
+The first start writes the settings file `<game>\d2rloader\config\player-bars.toml`.
 
-## Settings
+## Configuration
 
-Edit `<game folder>\d2rloader\config\player-bars.toml`, then restart the game. D2RLoader creates it on first run.
+Edit `<game>\d2rloader\config\player-bars.toml`, then restart the game. D2RLoader never overwrites your copy. A missing
+setting uses its default.
 
-| Setting | Default | What it does |
-|---|---|---|
-| `hide_orbs` | `true` | Hide the orbs and statues, and let the ground there take clicks |
-| `position` | `"top"` | `"top"` above the character, `"bottom"` below it |
-| `show_text` | `false` | Show numbers on the bars |
-| `bar_width`, `health_height`, `mana_height` | `90`, `9`, `7` | Bar size in pixels at 1080p |
-| `offset_y` | `150` | With `"top"`: height above the middle of the screen |
-| `offset_below` | `15` | With `"bottom"`: distance below the middle of the screen |
-| `health_color`, `mana_color`, `back_color`, `border_color` | | Colors as `RRGGBB` |
+```toml
+[player-bars]
+hide_orbs = true          # false: keep the orbs and statues
+show_text = false         # true: numbers on the bars
+bar_width = 90            # bar size in pixels at 1080p
+health_height = 9
+mana_height = 7
+position = "top"          # "top" above the character, "bottom" below it
+offset_y = 150            # with "top": height above the middle of the screen
+offset_below = 15         # with "bottom": distance below the middle of the screen
+health_color = "962325"   # colors are RRGGBB
+mana_color = "2020A8"
+back_color = "0F0A0A"
+border_color = "000000"
+```
 
 ## License
 

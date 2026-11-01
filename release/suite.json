@@ -31,6 +31,21 @@
         "A mod whose class skills have a skpoints formula cannot swap specs: the swap is refused."
       ]
     },
+    "player-bars": {
+      "version": "1.0.0",
+      "validation": [
+        "Clean x64 Release build with MSVC on GitHub Actions; the host tests of its logic pass locally.",
+        "Tested in game on Diablo II: Resurrected 3.3.0 build 93847 with D2RLoader 1.3.1, in a test slot in the starting town: bars at 1600x900 and 1720x720, side panels, a healing potion's smooth fill and preview, clicks beside the HUD frame, and the controller HUD from a stand-in XInput DLL.",
+        "The owner played it in their own game, including potions and a rejuvenation potion on a build before 1.0.0."
+      ],
+      "limits": [
+        "Finds game code by byte signature and writes widget fields at fixed offsets, with checks; if the bars cannot be set they turn off and the orbs come back. Tested on D2R 3.3; on other game builds it may still crash, and any crash is logged to the plugin's log.",
+        "The potion preview's size is an estimate from one measured potion. Mana potions and larger potions were not measured.",
+        "A real controller, side panels on the controller HUD, 3440x1440 with the final build and Steam were not checked.",
+        "New HUD art in the stock position is clipped like the stock art.",
+        "Size, position and colour are read at load: restart the game after changing them."
+      ]
+    },
     "quick-npc": {
       "version": "1.0.1",
       "validation": [

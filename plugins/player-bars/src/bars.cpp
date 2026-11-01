@@ -117,6 +117,8 @@ struct BarsPanel {
 };
 BarsPanel g_panels[pb::PanelCount] = {{"BarsCenter", 0}, {"BarsLeft", -pb::ViewShiftUnits}, {"BarsRight", pb::ViewShiftUnits}};
 int g_openPanel = -1;
+int g_barFailures = 0;
+constexpr int MaxBarFailures = 120;  // UI ticks, about two seconds
 uint32_t g_tick = 0;
 bool g_show = false;
 int32_t g_life = 0, g_maxLife = 0, g_mana = 0, g_maxMana = 0, g_shift = 0;
@@ -159,7 +161,7 @@ auto GuardedRead() noexcept -> bool {
 }
 
 // The HUD panel is rebuilt with the game, so this runs now and then.
-void HideOrbs() noexcept {
+void SetOrbsVisible(bool visible) noexcept {
 	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
 	auto result = g_widgets->findPanel(g_context, "HUDPanel", &hud);
 	if (result == D2RL::Widgets::Result::Success) {
@@ -167,7 +169,7 @@ void HideOrbs() noexcept {
 			D2RL::Widgets::WidgetHandle ball = D2RL::Widgets::InvalidHandle;
 			result = g_widgets->findWidget(g_context, hud, name, &ball);
 			if (result == D2RL::Widgets::Result::Success) {
-				result = g_widgets->setWidgetVisible(g_context, ball, false);
+				result = g_widgets->setWidgetVisible(g_context, ball, visible);
 			}
 			if (result != D2RL::Widgets::Result::Success) {
 				break;
@@ -282,34 +284,44 @@ auto BuildLayout(const BarsPanel& panel, const pb::Settings& s) -> std::string {
 }
 
 // The widget's width in layout units. The height check keeps this to the widgets BuildLayout made.
-void SetWidthRaw(void* panel, const char* name, int height, float fraction) noexcept {
-	if (void* const widget = g_nativeFindChild(panel, name)) {
-		auto* const rect = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(widget) + WidgetRect);
-		if (rect[3] == height) {
-			rect[2] = static_cast<int32_t>(static_cast<float>(g_barWidth) * fraction + 0.5f);
-		}
+auto SetWidthRaw(void* panel, const char* name, int height, float fraction) noexcept -> bool {
+	void* const widget = g_nativeFindChild(panel, name);
+	if (widget == nullptr) {
+		return false;
 	}
+	auto* const rect = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(widget) + WidgetRect);
+	if (rect[3] != height) {
+		return false;
+	}
+	rect[2] = static_cast<int32_t>(static_cast<float>(g_barWidth) * fraction + 0.5f);
+	return true;
 }
 
-void SetBarsRaw(const BarsPanel& panel, float life, float lifePreview, float mana, float manaPreview) noexcept {
+auto SetBarsRaw(const BarsPanel& panel, float life, float lifePreview, float mana, float manaPreview) noexcept -> bool {
 	char full[64];
 	std::snprintf(full, sizeof(full), "%s/%s", PluginId, panel.localId);
 	void* const native = g_nativeFindPanel(full);
-	if (native != nullptr) {  // the native panel may need a frame to appear
-		SetWidthRaw(native, "HealthPreview", g_healthHeight, lifePreview);
-		SetWidthRaw(native, "HealthFill", g_healthHeight, life);
-		SetWidthRaw(native, "ManaPreview", g_manaHeight, manaPreview);
-		SetWidthRaw(native, "ManaFill", g_manaHeight, mana);
-	}
+	return native != nullptr && SetWidthRaw(native, "HealthPreview", g_healthHeight, lifePreview) &&
+	       SetWidthRaw(native, "HealthFill", g_healthHeight, life) && SetWidthRaw(native, "ManaPreview", g_manaHeight, manaPreview) &&
+	       SetWidthRaw(native, "ManaFill", g_manaHeight, mana);
 }
 
 auto GuardedSetBars(const BarsPanel& panel, float life, float lifePreview, float mana, float manaPreview) noexcept -> bool {
 	__try {
-		SetBarsRaw(panel, life, lifePreview, mana, manaPreview);
-		return true;
+		return SetBarsRaw(panel, life, lifePreview, mana, manaPreview);
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		return false;
 	}
+}
+
+// Empty bars with the orbs hidden would leave the player with no health display, so the orbs come back.
+void StopBars(const char* why) noexcept {
+	g_readsOn = false;
+	g_show = false;
+	if (g_settings.hideOrbs) {
+		SetOrbsVisible(true);
+	}
+	plog::Error("%s; the bars are now off", why);
 }
 
 void SetTextRaw(BarsPanel& panel, const char* childName, int32_t value, int32_t max) noexcept {
@@ -402,10 +414,10 @@ void UpdateBars() noexcept {
 	const float mana = pb::Fraction(static_cast<int32_t>(g_shownMana.shown + 0.5f), g_maxMana);
 	const float lifePreview = pb::PreviewFraction(g_life, g_lifePotion.Remaining(g_lifeRate, g_life), g_maxLife);
 	const float manaPreview = pb::PreviewFraction(g_mana, g_manaPotion.Remaining(g_manaRate, g_mana), g_maxMana);
-	if (!GuardedSetBars(panel, life, lifePreview, mana, manaPreview)) {
-		g_readsOn = false;
-		g_show = false;
-		plog::Error("memory fault while setting the bars; they are now off");
+	// A panel that has just opened may need a moment to appear, so only a lasting failure counts.
+	g_barFailures = GuardedSetBars(panel, life, lifePreview, mana, manaPreview) ? 0 : g_barFailures + 1;
+	if (g_barFailures >= MaxBarFailures) {
+		StopBars("could not set the bars' widths");
 		return;
 	}
 	UpdateText(panel);
@@ -414,13 +426,11 @@ void UpdateBars() noexcept {
 void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 	g_taskQueued = false;
 	if (g_readsOn && !GuardedRead()) {
-		g_readsOn = false;
-		g_show = false;
-		plog::Error("memory fault while reading the player; the bars are now off");
+		StopBars("memory fault while reading the player");
 	}
 	UpdateBars();
 	if (g_settings.hideOrbs && g_show && ++g_tick % 30 == 1) {
-		HideOrbs();
+		SetOrbsVisible(false);
 		if (g_widgetScreenPos != nullptr && !GuardedClipArt(g_screenWidth)) {
 			g_widgetScreenPos = nullptr;
 			plog::Error("memory fault while clipping the HUD art; it is left as it is");
