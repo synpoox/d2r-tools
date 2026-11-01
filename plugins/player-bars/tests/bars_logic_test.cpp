@@ -25,10 +25,31 @@ int main() {
 	assert(Fraction(-1, 100) == 0.0f);
 	assert(Fraction(10, 0) == 0.0f);
 
-	assert(FilledSegments(100, 100) == Segments);
-	assert(FilledSegments(50, 100) == Segments / 2);
-	assert(FilledSegments(1, 100000) == 1);
-	assert(FilledSegments(0, 100) == 0);
+	Smoother smooth;
+	smooth.Step(100.0f, 1000.0f, false, 0.1f);
+	assert(smooth.shown == 100.0f);  // first value shows at once
+	smooth.Step(150.0f, 1000.0f, false, 0.5f);
+	assert(smooth.shown == 125.0f);  // half way after half of SmoothingSeconds
+	smooth.Step(150.0f, 1000.0f, false, 5.0f);
+	assert(smooth.shown == 150.0f);  // never past the target
+	smooth.Step(40.0f, 1000.0f, false, 0.1f);
+	assert(smooth.shown == 40.0f);  // a loss shows at once
+	smooth.Step(400.0f, 1000.0f, false, 0.1f);
+	assert(smooth.shown == 400.0f);  // a rejuvenation potion shows at once
+	smooth.Step(600.0f, 1000.0f, true, 0.5f);
+	assert(smooth.shown == 500.0f);  // while a potion runs, the same gain glides
+
+	assert(PreviewFraction(50, 0, 100) == 0.0f);  // no potion: nothing to preview
+	assert(PreviewFraction(50, 25, 100) == 0.75f);
+	assert(PreviewFraction(90, 25, 100) == 1.0f);
+
+	PotionPreview potion;
+	assert(potion.Remaining(0, 60) == 0);
+	assert(potion.Remaining(35, 60) == 44);
+	assert(potion.Remaining(35, 80) == 24);
+	assert(potion.Remaining(35, 200) == 0);  // healed more than the estimate
+	assert(potion.Remaining(51, 200) == 64);  // a new potion starts over
+	assert(potion.Remaining(0, 210) == 0);
 
 	assert(PanelForShift(0) == 0 && PanelForShift(1) == 1 && PanelForShift(2) == 2 && PanelForShift(3) == 0);
 

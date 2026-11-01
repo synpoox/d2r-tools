@@ -14,13 +14,14 @@ Run in a toolkit game slot. `player-bars` in the console prints the live state.
 | 7a | Click ground beside the frame | Character walks | passed, slot 2 |
 | 7b | Click the frame | Character does not walk | passed, slot 2 |
 | 7c | Character button at 1600x900 | Opens the panel | passed, slot 2 |
+| 7e | Drink a health potion at low life | Fill glides up, lighter section ahead of it | passed, slot 2 |
 | 7d | Controller HUD at 1600x900, from a stand-in `xinput9_1_0.dll` in the slot | Bars show, globes and statues gone, frame kept | passed, slot 2 |
 
 ## Owner: in the field
 
 | # | What | Expected |
 |---|---|---|
-| 8 | Take damage, cast, drink a potion | Fill follows life and mana |
+| 8 | Take damage, cast, drink health and mana potions | Fill follows life and mana; damage shows at once; the lighter section roughly matches the heal; a rejuvenation potion fills at once with no lighter section |
 | 9 | Die and respawn | Health bar empties, then refills; orbs stay hidden |
 | 10 | Leave and rejoin a game, change area | Bars come back; no faults in `player-bars.log` |
 | 11 | A real controller | Same as 7d, also with side panels open and when switching back to the mouse |
