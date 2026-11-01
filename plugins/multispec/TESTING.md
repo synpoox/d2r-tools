@@ -7,7 +7,7 @@ Back up the test character first (`.d2s`, `.d2rl`, `.multispec`). Phase 3 turns 
 
 | # | What | How | Expected |
 |---|---|---|---|
-| 1 | Loads | Start the slot, read `d2rloader\logs\multispec.log` (global plugin; the first line gives the DLL path) | `image 0x6ab3782c`, `specswap on: entry bytes ok: 23 functions`, `speccmd on` |
+| 1 | Loads | Start the slot, read `d2rloader\logs\multispec.log` (global plugin; the first line gives the DLL path) | `image 0x6ab3782c`, `specswap on: entry bytes ok: 22 functions`, `speccmd on` |
 | 2 | Console route | In game, D2RLoader console: `spec` | Spec list for the character. Then type `/spec` in the **chat box** and note whether it is handled (design section 9, check 1) |
 | 3 | Client pointer | Same `spec` | No "cannot find your character" line. If it appears, copy the log line: the console's client is not the server client (check 2) |
 | 4 | File | After 3 | `<save folder>\<name>.multispec` exists; the log says "next to the save" (not FALLBACK) |

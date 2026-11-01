@@ -23,7 +23,6 @@ struct Room;
 
 // --- Functions (RVAs, build 93847) --------------------------------------------------------------------------------
 inline constexpr uint64_t RvaUnitType = 0x34b9d0;         // (unit) -> 0 player, 1 monster, ...
-inline constexpr uint64_t RvaUnitClass = 0x349860;        // (unit, file, line) -> class id (players: 0-7)
 inline constexpr uint64_t RvaPlayerData = 0x34b240;       // (player) -> player data (+0 name)
 inline constexpr uint64_t RvaUnitClient = 0x48fde0;       // (player) -> its server client
 inline constexpr uint64_t RvaUnitGame = 0x48ff00;         // (unit) -> game (unit +0xd8)
@@ -48,6 +47,7 @@ inline constexpr uint64_t RvaRememberRight = 0x34d220;    // (player): same for 
 
 // --- Offsets (build 93847) ----------------------------------------------------------------------------------------
 inline constexpr int GameDataFlag = 0x106;   // u8
+inline constexpr int UnitClass = 0x04;       // u32; players: 0-7
 inline constexpr int UnitMode = 0x0c;        // u32; players: 0 death, 17 dead
 inline constexpr int UnitSkillList = 0x100;  // SkillList*
 inline constexpr int SkillListLeft = 0x08;   // Skill* on the left button
@@ -71,7 +71,6 @@ inline constexpr int DefaultMaxLevel = 20;
 
 // --- Function types -----------------------------------------------------------------------------------------------
 using UnitTypeFn = int32_t (*)(Unit* unit) noexcept;
-using UnitClassFn = int32_t (*)(Unit* unit, const char* file, int32_t line) noexcept;
 using PlayerDataFn = uint8_t* (*)(Unit* player) noexcept;
 using UnitClientFn = Client* (*)(Unit* player) noexcept;
 using UnitGameFn = Game* (*)(Unit* unit) noexcept;
@@ -93,7 +92,6 @@ using RememberSkillFn = void (*)(Unit* player) noexcept;
 
 struct Api {
 	UnitTypeFn unitType;
-	UnitClassFn unitClass;
 	PlayerDataFn playerData;
 	UnitClientFn unitClient;
 	UnitGameFn unitGame;
@@ -121,7 +119,7 @@ extern Api api;
 void Bind(uintptr_t exeBase) noexcept;
 
 // Compares every function's entry bytes with the image (for D2RLoader-hooked functions, the bytes after its jump).
-// Returns the number that differ; `report` names them ("ok: 23 functions" or "differs: 0x4360f0 ...").
+// Returns the number that differ; `report` names them ("ok: 22 functions" or "differs: 0x4360f0 ...").
 auto CheckEntries(const D2RL::PluginContext* context, char* report, size_t size) noexcept -> int;
 
 // --- Helpers ------------------------------------------------------------------------------------------------------

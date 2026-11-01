@@ -10,7 +10,7 @@
 cmake_minimum_required(VERSION 3.29)
 project(multispec LANGUAGES CXX RC)
 
-set(MULTISPEC_VERSION "1.0.0" CACHE STRING "PluginInfo::version (shared plugins must match in multiplayer)")
+set(MULTISPEC_VERSION "1.0.1" CACHE STRING "PluginInfo::version (shared plugins must match in multiplayer)")
 set(MULTISPEC_MOD_NAME "" CACHE STRING "Mod folder the plugin ships in (mods/<name>); the environment guard warns when another runs")
 set(MULTISPEC_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "D2RLoader PluginSDK directory")
 option(MULTISPEC_TESTS "Build the unit tests of the portable core" OFF)

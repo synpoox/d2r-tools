@@ -10,7 +10,7 @@ mkdir -p "$out"
 cxx=x86_64-w64-mingw32-g++
 x86_64-w64-mingw32-windres -I "$sdk/include" "$root/src/multispec.rc" -O coff -o "$out/multispec_rc.o"
 $cxx -std=c++20 -O1 -Wall -Wextra -Werror -Wno-cast-function-type -isystem "$sdk/include" -shared -static \
-	-DMULTISPEC_VERSION='"1.0.0"' -DMULTISPEC_MOD_NAME='""' \
+	-DMULTISPEC_VERSION='"1.0.1"' -DMULTISPEC_MOD_NAME='""' \
 	"$root"/src/plugin.cpp "$root"/src/d2r.cpp "$root"/src/spec_model.cpp "$root"/src/swap.cpp \
 	"$root"/src/spec_engine.cpp "$root"/src/spec_store.cpp "$root"/src/log.cpp "$root"/src/off_switch.cpp \
 	"$root"/src/env_guard.cpp "$out/multispec_rc.o" -lshell32 -lole32 -luuid -o "$out/multispec.dll"
