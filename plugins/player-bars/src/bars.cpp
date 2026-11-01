@@ -396,12 +396,12 @@ void UpdateBars() noexcept {
 	const auto now = std::chrono::steady_clock::now();
 	const float seconds = std::chrono::duration<float>(now - g_lastUpdate).count();
 	g_lastUpdate = now;
-	g_shownLife.Step(static_cast<float>(g_life), seconds);
-	g_shownMana.Step(static_cast<float>(g_mana), seconds);
+	g_shownLife.Step(static_cast<float>(g_life), static_cast<float>(g_maxLife), g_lifeRate > 0, seconds);
+	g_shownMana.Step(static_cast<float>(g_mana), static_cast<float>(g_maxMana), g_manaRate > 0, seconds);
 	const float life = pb::Fraction(static_cast<int32_t>(g_shownLife.shown + 0.5f), g_maxLife);
 	const float mana = pb::Fraction(static_cast<int32_t>(g_shownMana.shown + 0.5f), g_maxMana);
-	const float lifePreview = pb::Fraction(g_life + g_lifePotion.Remaining(g_lifeRate, g_life), g_maxLife);
-	const float manaPreview = pb::Fraction(g_mana + g_manaPotion.Remaining(g_manaRate, g_mana), g_maxMana);
+	const float lifePreview = pb::PreviewFraction(g_life, g_lifePotion.Remaining(g_lifeRate, g_life), g_maxLife);
+	const float manaPreview = pb::PreviewFraction(g_mana, g_manaPotion.Remaining(g_manaRate, g_mana), g_maxMana);
 	if (!GuardedSetBars(panel, life, lifePreview, mana, manaPreview)) {
 		g_readsOn = false;
 		g_show = false;

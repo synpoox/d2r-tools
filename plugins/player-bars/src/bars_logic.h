@@ -22,8 +22,8 @@ struct Settings {
 	float manaHeight = 7.0f;
 	float offsetY = 150.0f;
 	float offsetBelow = 15.0f;
-	Rgb healthColor {0.478f, 0.102f, 0.110f};  // sampled from the stock orbs
-	Rgb manaColor {0.086f, 0.086f, 0.541f};
+	Rgb healthColor {0.588f, 0.137f, 0.145f};  // sampled from the stock orbs
+	Rgb manaColor {0.125f, 0.125f, 0.659f};
 	Rgb backColor {0.059f, 0.039f, 0.039f};
 	Rgb borderColor {0.0f, 0.0f, 0.0f};
 };
@@ -130,14 +130,15 @@ constexpr int PanelCount = 3;  // centre, left, right
 // The game sends life and mana about every 0.8 s, so the bar glides to each new value as the orbs do (maxSmoothingSeconds
 // in hudpanelhd.json). A loss shows at once (smoothDecrease false there).
 constexpr float SmoothingSeconds = 1.0f;
+constexpr float InstantGain = 0.1f;  // of the maximum: with no potion running, a gain this big is a rejuvenation potion
 
 struct Smoother {
 	float shown = -1.0f;
 	float target = 0.0f;
 	float speed = 0.0f;
 
-	void Step(float value, float seconds) noexcept {
-		if (shown < 0.0f || value < shown) {
+	void Step(float value, float max, bool potionRunning, float seconds) noexcept {
+		if (shown < 0.0f || value < shown || (!potionRunning && value - shown >= max * InstantGain)) {
 			shown = value;
 			target = value;
 			speed = 0.0f;
@@ -181,6 +182,11 @@ struct PotionPreview {
 constexpr int ViewShiftUnits = 720;
 
 // shift: 0 none, 1 right panel, 2 left panel, 3 both. Returns 0 centre, 1 left, 2 right.
+// The fill the preview reaches, 0 with no heal to come: it must not show while the bar only glides.
+inline auto PreviewFraction(int32_t value, int32_t remaining, int32_t max) noexcept -> float {
+	return remaining > 0 ? Fraction(value + remaining, max) : 0.0f;
+}
+
 inline auto PanelForShift(int32_t shift) noexcept -> int {
 	return shift == 1 ? 1 : shift == 2 ? 2 : 0;
 }

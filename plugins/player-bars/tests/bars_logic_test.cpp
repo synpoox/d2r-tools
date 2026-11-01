@@ -26,14 +26,22 @@ int main() {
 	assert(Fraction(10, 0) == 0.0f);
 
 	Smoother smooth;
-	smooth.Step(100.0f, 0.1f);
+	smooth.Step(100.0f, 1000.0f, false, 0.1f);
 	assert(smooth.shown == 100.0f);  // first value shows at once
-	smooth.Step(150.0f, 0.5f);
+	smooth.Step(150.0f, 1000.0f, false, 0.5f);
 	assert(smooth.shown == 125.0f);  // half way after half of SmoothingSeconds
-	smooth.Step(150.0f, 5.0f);
+	smooth.Step(150.0f, 1000.0f, false, 5.0f);
 	assert(smooth.shown == 150.0f);  // never past the target
-	smooth.Step(40.0f, 0.1f);
+	smooth.Step(40.0f, 1000.0f, false, 0.1f);
 	assert(smooth.shown == 40.0f);  // a loss shows at once
+	smooth.Step(400.0f, 1000.0f, false, 0.1f);
+	assert(smooth.shown == 400.0f);  // a rejuvenation potion shows at once
+	smooth.Step(600.0f, 1000.0f, true, 0.5f);
+	assert(smooth.shown == 500.0f);  // while a potion runs, the same gain glides
+
+	assert(PreviewFraction(50, 0, 100) == 0.0f);  // no potion: nothing to preview
+	assert(PreviewFraction(50, 25, 100) == 0.75f);
+	assert(PreviewFraction(90, 25, 100) == 1.0f);
 
 	PotionPreview potion;
 	assert(potion.Remaining(0, 60) == 0);

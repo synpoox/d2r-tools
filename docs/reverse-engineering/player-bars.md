@@ -47,6 +47,8 @@ Measured in slot 2, 2026-11-01, one potion from 60 life, logging stat 6 and stat
 - Stat 74 read 35 for about 8 s and life rose 44 (11264 in 1/256 units), so the plugin's estimate is rate x 322 / 256.
 - Other potions read 51 and 66, and their heal speed did not scale with that factor, one overlapping another. The
   stock draw's preview maths runs through a D2RCore thunk and was not read. Treat the preview's size as an estimate.
+- `misc.txt` gives rejuvenation potions instant `hitpoints` and `mana` with no state, so they have no preview. With no
+  potion running, a gain of 10% of the maximum or more shows at once.
 - No mana potion was measured; the mana preview uses the same factor.
 
 ## Orbs

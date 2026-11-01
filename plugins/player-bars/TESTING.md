@@ -21,7 +21,7 @@ Run in a toolkit game slot. `player-bars` in the console prints the live state.
 
 | # | What | Expected |
 |---|---|---|
-| 8 | Take damage, cast, drink health and mana potions | Fill follows life and mana; damage shows at once; the lighter section roughly matches the heal |
+| 8 | Take damage, cast, drink health and mana potions | Fill follows life and mana; damage shows at once; the lighter section roughly matches the heal; a rejuvenation potion fills at once with no lighter section |
 | 9 | Die and respawn | Health bar empties, then refills; orbs stay hidden |
 | 10 | Leave and rejoin a game, change area | Bars come back; no faults in `player-bars.log` |
 | 11 | A real controller | Same as 7d, also with side panels open and when switching back to the mouse |
