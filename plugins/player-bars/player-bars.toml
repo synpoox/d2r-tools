@@ -1,0 +1,18 @@
+# Player Bars settings. Sizes are in pixels at 1080p and scale with screen height.
+[player-bars]
+hide_orbs = true
+show_text = false
+bar_width = 90
+health_height = 9
+mana_height = 7
+# "top" above the character, "bottom" below it.
+position = "top"
+# Distance from the middle of the screen up to the bottom of the bars.
+offset_y = 150
+# With position = "bottom": distance from the middle of the screen down to the top of the bars.
+offset_below = 15
+# Colors are RRGGBB.
+health_color = "C81E1E"
+mana_color = "2850D2"
+back_color = "141414"
+border_color = "000000"
