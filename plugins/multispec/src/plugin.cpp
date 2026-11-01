@@ -37,7 +37,7 @@
 #include <cstring>
 
 #ifndef MULTISPEC_VERSION
-#define MULTISPEC_VERSION "1.0.0"
+#define MULTISPEC_VERSION "1.0.1"
 #endif
 #ifndef MULTISPEC_MOD_NAME
 #define MULTISPEC_MOD_NAME ""  // the mod folder this plugin ships in (mods\<name>); "" skips the mod checks
