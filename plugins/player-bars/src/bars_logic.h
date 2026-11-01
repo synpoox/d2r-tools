@@ -22,9 +22,9 @@ struct Settings {
 	float manaHeight = 7.0f;
 	float offsetY = 150.0f;
 	float offsetBelow = 15.0f;
-	Rgb healthColor {0.784f, 0.118f, 0.118f};
-	Rgb manaColor {0.157f, 0.314f, 0.824f};
-	Rgb backColor {0.078f, 0.078f, 0.078f};
+	Rgb healthColor {0.478f, 0.102f, 0.110f};  // sampled from the stock orbs
+	Rgb manaColor {0.086f, 0.086f, 0.541f};
+	Rgb backColor {0.059f, 0.039f, 0.039f};
 	Rgb borderColor {0.0f, 0.0f, 0.0f};
 };
 
@@ -125,13 +125,56 @@ inline auto Fraction(int32_t value, int32_t max) noexcept -> float {
 	return value >= max ? 1.0f : static_cast<float>(value) / static_cast<float>(max);
 }
 
-constexpr int Segments = 50;   // pieces per bar
 constexpr int PanelCount = 3;  // centre, left, right
 
-inline auto FilledSegments(int32_t value, int32_t max) noexcept -> int {
-	const int n = static_cast<int>(Fraction(value, max) * static_cast<float>(Segments) + 0.5f);
-	return value > 0 && n == 0 ? 1 : n;  // never look empty while alive
-}
+// The game sends life and mana about every 0.8 s, so the bar glides to each new value as the orbs do (maxSmoothingSeconds
+// in hudpanelhd.json). A loss shows at once (smoothDecrease false there).
+constexpr float SmoothingSeconds = 1.0f;
+
+struct Smoother {
+	float shown = -1.0f;
+	float target = 0.0f;
+	float speed = 0.0f;
+
+	void Step(float value, float seconds) noexcept {
+		if (shown < 0.0f || value < shown) {
+			shown = value;
+			target = value;
+			speed = 0.0f;
+			return;
+		}
+		if (value != target) {
+			target = value;
+			speed = (value - shown) / SmoothingSeconds;
+		}
+		shown += speed * seconds;
+		if (shown > target) {
+			shown = target;
+		}
+	}
+};
+
+// shortcut: one measured Minor Healing Potion restored 44 life at stat 74 = 35 (11264 / 35 = 322 in the game's 1/256 units).
+// The game keeps no total, so this is an estimate; measure more potions and mana potions if the preview looks wrong.
+constexpr float PotionHealPerRate = 322.0f / 256.0f;
+
+// The life or mana still to come from the potion running now. rate: the potion's stat, 0 when none runs.
+struct PotionPreview {
+	int32_t rate = 0;
+	int32_t startValue = 0;
+
+	auto Remaining(int32_t newRate, int32_t value) noexcept -> int32_t {
+		if (newRate != rate) {
+			rate = newRate;
+			startValue = value;
+		}
+		if (rate <= 0) {
+			return 0;
+		}
+		const int32_t left = static_cast<int32_t>(static_cast<float>(rate) * PotionHealPerRate) - (value - startValue);
+		return left > 0 ? left : 0;
+	}
+};
 
 // D2R keeps the player centred and moves the view a quarter of its logical width away from an open side panel. That
 // width is 4:3 of the height (0xb9c20), a third of the height in all: 720 layout units.

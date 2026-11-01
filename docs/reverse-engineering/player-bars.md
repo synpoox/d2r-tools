@@ -31,8 +31,23 @@ for the local player.
 
 Retested 2026-11-01 under D2RLoader 1.3.1: the frame callback runs and draw calls return success, but nothing appears,
 as in [better-xp-bar.md](better-xp-bar.md). No `d2rloader.toml` setting changes this. The plugin uses the callback only
-as a clock and draws with plugin panels (`RectangleWidget` rows, one per fill step, shown with `setWidgetVisible`).
+as a clock and draws with plugin panels: one `RectangleWidget` per fill, its width written at `+0x78` each tick.
 Those panels pass clicks through to the game (seen by walking in town) and do not dim the screen.
+
+## Smoothing and the potion preview
+
+`AttributeBallWidget` (type `0x14ca4d0`, update `0x14caf10`, draw `0x14c9ca0`) reads table `0x1fd89f0`, 0x28 per row:
+life 6/7, state 100, rate stat 74; mana 8/9, state 106, rate stat 26. Fields: `potionPreviewTransparency` `+0x560`,
+`maxSmoothingSeconds` `+0x564`, `jumpSmoothingSeconds` `+0x568`, `smoothDecrease` `+0x56c`. Its smoother is `0x15144f0`.
+State test: `0x3351b0` `(unit, state)`, found by signature.
+
+Measured in slot 2, 2026-11-01, one potion from 60 life, logging stat 6 and stat 74:
+
+- The client's life changes about every 0.8 s, 5 to 9 HP at a time. That was the chop.
+- Stat 74 read 35 for about 8 s and life rose 44 (11264 in 1/256 units), so the plugin's estimate is rate x 322 / 256.
+- Other potions read 51 and 66, and their heal speed did not scale with that factor, one overlapping another. The
+  stock draw's preview maths runs through a D2RCore thunk and was not read. Treat the preview's size as an estimate.
+- No mana potion was measured; the mana preview uses the same factor.
 
 ## Orbs
 

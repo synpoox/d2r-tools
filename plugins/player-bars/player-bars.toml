@@ -12,7 +12,7 @@ offset_y = 150
 # With position = "bottom": distance from the middle of the screen down to the top of the bars.
 offset_below = 15
 # Colors are RRGGBB.
-health_color = "C81E1E"
-mana_color = "2850D2"
-back_color = "141414"
+health_color = "7A1A1C"
+mana_color = "16168A"
+back_color = "0F0A0A"
 border_color = "000000"

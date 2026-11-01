@@ -25,10 +25,23 @@ int main() {
 	assert(Fraction(-1, 100) == 0.0f);
 	assert(Fraction(10, 0) == 0.0f);
 
-	assert(FilledSegments(100, 100) == Segments);
-	assert(FilledSegments(50, 100) == Segments / 2);
-	assert(FilledSegments(1, 100000) == 1);
-	assert(FilledSegments(0, 100) == 0);
+	Smoother smooth;
+	smooth.Step(100.0f, 0.1f);
+	assert(smooth.shown == 100.0f);  // first value shows at once
+	smooth.Step(150.0f, 0.5f);
+	assert(smooth.shown == 125.0f);  // half way after half of SmoothingSeconds
+	smooth.Step(150.0f, 5.0f);
+	assert(smooth.shown == 150.0f);  // never past the target
+	smooth.Step(40.0f, 0.1f);
+	assert(smooth.shown == 40.0f);  // a loss shows at once
+
+	PotionPreview potion;
+	assert(potion.Remaining(0, 60) == 0);
+	assert(potion.Remaining(35, 60) == 44);
+	assert(potion.Remaining(35, 80) == 24);
+	assert(potion.Remaining(35, 200) == 0);  // healed more than the estimate
+	assert(potion.Remaining(51, 200) == 64);  // a new potion starts over
+	assert(potion.Remaining(0, 210) == 0);
 
 	assert(PanelForShift(0) == 0 && PanelForShift(1) == 1 && PanelForShift(2) == 2 && PanelForShift(3) == 0);
 
