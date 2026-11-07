@@ -19,6 +19,7 @@ record them here first, then copy them there.
 - [Better Auras](better-auras.md): aura upkeep timers, right-skill select, player life/mana regen, proposed aura
   and regen interception points.
 - [Player Bars](player-bars.md): life and mana reads, screen shift, orb widgets, native bars.
+- [DPS Counter](dps-counter.md): the server damage apply `0x44a9b0` (hooked) and the missile owner.
 
 The pre-registry documents above (all except Quick NPC) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
