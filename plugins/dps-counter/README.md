@@ -1,0 +1,45 @@
+# DPS Counter
+
+A D2RLoader plugin for Diablo II: Resurrected that shows the damage per second you deal to monsters, as text at the
+top of the screen. MIT licensed.
+
+## Features
+
+- **Real damage**: counts the life your hits take from monsters, after their resistances.
+- **Every attack**: melee, missiles, spells and auras that hit.
+- **Out of the way**: it shows only while you fight, and fades out a few seconds after the last hit.
+
+## Requirements
+
+- Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
+- D2RLoader (tested on 1.3.1)
+
+Works with or without mods. Your minions' and your hireling's damage is not counted.
+
+## Installation
+
+1. Close the game.
+2. Copy `dps-counter.dll` to `<game>\d2rloader\plugins\`.
+3. Start the game through D2RLoader.
+
+The first start writes the settings file `<game>\d2rloader\config\dps-counter.toml`.
+
+## Configuration
+
+Edit `<game>\d2rloader\config\dps-counter.toml`, then restart the game. D2RLoader never overwrites your copy. A missing
+setting uses its default.
+
+```toml
+[dps-counter]
+window_seconds = 5   # damage over this many seconds, divided by them (1 to 60)
+offset_x = 0         # position from the top centre of the screen, in pixels at 1080p
+offset_y = 60
+text_size = 22
+```
+
+## License
+
+[MIT](LICENSE) © Synpoo.
+
+Diablo® II: Resurrected is a trademark of Blizzard Entertainment, Inc. This project is not affiliated with or
+endorsed by Blizzard Entertainment.

@@ -1,0 +1,8 @@
+# DPS Counter settings. Sizes are in pixels at 1080p and scale with screen height.
+[dps-counter]
+# Damage over this many seconds, divided by them (1 to 60).
+window_seconds = 5
+# Position from the top centre of the screen.
+offset_x = 0
+offset_y = 60
+text_size = 22
