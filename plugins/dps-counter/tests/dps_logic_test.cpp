@@ -30,6 +30,14 @@ int main() {
 	w.Add(200.0, -5);
 	assert(w.PerSecond(200.0) == 500.0);  // healing never counts
 
+	uint8_t record[0x150] {};
+	assert(DamageTaken(record) == 0);
+	const int32_t hit = 1234 << 8, heal = -256;
+	std::memcpy(record + 0x134, &hit, sizeof(hit));
+	assert(DamageTaken(record) == 1234 << 8);
+	std::memcpy(record + 0x134, &heal, sizeof(heal));
+	assert(DamageTaken(record) == 0);
+
 	char text[32];
 	FormatDps(0.4, text, sizeof(text));
 	assert(text[0] == '\0');

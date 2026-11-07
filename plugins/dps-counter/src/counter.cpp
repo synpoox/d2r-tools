@@ -31,24 +31,15 @@ constexpr uint32_t DealDamageEntrySize = 25;  // PUSH RBX/RBP/RDI/R14, SUB RSP,0
 // (game, missile) -> owner 0x490300
 constexpr const char* MissileOwnerSig =
 	"48 89 74 24 18 57 48 83 EC 20 48 8B FA 48 8B F1 48 85 D2 75 20 48 8D 4C 24 38 88 54 24 38 E8 ?? ?? ?? ?? 84 C0 74 1F CC";
-// ExpBarWidget update 0x14cc8c0; its call at +0x8a is the total stat function 0x2f5020 (as player-bars finds it).
-constexpr const char* ExpBarSig =
-	"40 53 48 83 EC 50 80 B9 68 01 00 00 00 48 8B D9 0F 85 ?? ?? ?? ?? 48 89 7C 24 70 E8 ?? ?? ?? ?? 8B C8 E8 ?? ?? ?? ?? "
-	"48 8B F8 48 85 C0 0F 84 ?? ?? ?? ?? 48 89 6C 24 60 48 8D 15 ?? ?? ?? ?? 48 89 74 24 68 41 B8 23 00 00 00 4C 89 64 24 "
-	"48 48 8B C8 4C 89 6C 24 40 4C 89 74 24 38 4C 89 7C 24 30 0F 29 74 24 20 E8 ?? ?? ?? ?? 45 33 C0 48 8B CF 44 8B F8 41 "
-	"8D 50 0C E8 ?? ?? ?? ?? 45 33 C0 48 8B CF 44 8B E8 41 8D 50 0D E8 ?? ?? ?? ??";
-constexpr size_t ExpBarStatCall = 0x8a;
 // For the text: FindPanel 0x846170, FindChild 0x856220, TextBoxWidget::SetText 0x86dd50 (as player-bars finds them).
 constexpr const char* FindPanelSig = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 C9 0F 85 ?? ?? ?? ?? 33 C0 C3";
 constexpr const char* FindChildSig = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
 constexpr const char* SetTextSig = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
 constexpr uint32_t UnitPlayer = 0, UnitMonster = 1, UnitMissile = 3;  // u32 unit type at +0
-constexpr int32_t StatLife = 6;  // stored as value << 8
 
 using DealDamageFn = void (*)(void* game, void* attacker, void* victim, void* damage) noexcept;
 using MissileOwnerFn = void* (*)(void* game, void* missile) noexcept;
-using TotalStatFn = int32_t (*)(void* unit, int32_t stat, int32_t layer) noexcept;
 struct StringView {
 	const char* text;
 	uint64_t size;
@@ -59,7 +50,6 @@ using NativeSetTextFn = void (*)(void* textBox, const StringView* text) noexcept
 
 DealDamageFn g_dealDamage = nullptr;
 MissileOwnerFn g_missileOwner = nullptr;
-TotalStatFn g_totalStat = nullptr;
 NativeFindPanelFn g_nativeFindPanel = nullptr;
 NativeFindChildFn g_nativeFindChild = nullptr;
 NativeSetTextFn g_nativeSetText = nullptr;
@@ -104,46 +94,29 @@ auto CountedRaw(void* game, void* attacker, void* victim) noexcept -> bool {
 	return attacker != nullptr && Type(attacker) == UnitPlayer;
 }
 
-auto GuardedCounted(void* game, void* attacker, void* victim, int32_t* life) noexcept -> bool {
+auto GuardedDamage(void* game, void* attacker, void* victim, const void* damage, int64_t* taken) noexcept -> bool {
 	__try {
-		if (!CountedRaw(game, attacker, victim)) {
+		if (damage == nullptr || !CountedRaw(game, attacker, victim)) {
 			return false;
 		}
-		*life = g_totalStat(victim, StatLife, 0);
+		*taken = dps::DamageTaken(static_cast<const uint8_t*>(damage));
 		return true;
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		return false;
-	}
-}
-
-auto GuardedLife(void* victim, int32_t* life) noexcept -> bool {
-	__try {
-		*life = g_totalStat(victim, StatLife, 0);
-		return true;
-	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		return false;
-	}
-}
-
-// The damage is the life the call took: after resistances, absorbs and the killing blow's overkill.
-void DealDamage(void* game, void* attacker, void* victim, void* damage) noexcept {
-	int32_t before = 0;
-	const bool counted = g_feedOn && GuardedCounted(game, attacker, victim, &before);
-	g_dealDamage(game, attacker, victim, damage);
-	if (!counted) {
-		return;
-	}
-	int32_t after = 0;
-	if (!GuardedLife(victim, &after)) {
 		if (plog::Sample(g_faults)) {
-			plog::Warn("memory fault reading a monster's life after a hit");
+			plog::Warn("memory fault reading a hit");
 		}
-		return;
+		return false;
 	}
-	if (before > after) {
-		g_pending += before - after;
+}
+
+// 0x44a9b0 runs after the hit: its callers take the life first (0x44ce80), so the damage is read from the record.
+void DealDamage(void* game, void* attacker, void* victim, void* damage) noexcept {
+	int64_t taken = 0;
+	if (g_feedOn && GuardedDamage(game, attacker, victim, damage, &taken)) {
+		g_pending += taken;
+		++g_hits;
 	}
-	++g_hits;
+	g_dealDamage(game, attacker, victim, damage);
 }
 
 void AppendLayout(std::string* json, const dps::Settings& s) {
@@ -206,7 +179,9 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 	g_taskQueued = false;
 	++g_tick;
 	const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-	g_window->Add(now, g_pending.exchange(0) / 256);
+	const int64_t whole = g_pending.load() / 256;  // keep the fraction for the next frame
+	g_pending -= whole * 256;
+	g_window->Add(now, whole);
 	const double perSecond = g_window->PerSecond(now);
 	g_lastDps = static_cast<int64_t>(perSecond);
 	KeepPanelOpen();
@@ -262,12 +237,6 @@ auto FindSig(uintptr_t exeBase, const char* sig, const char* name, char* report,
 		return nullptr;
 	}
 	return match;
-}
-
-auto Rel32Target(const uint8_t* instruction, size_t operandOffset) noexcept -> const uint8_t* {
-	int32_t rel = 0;
-	std::memcpy(&rel, instruction + operandOffset, sizeof(rel));
-	return instruction + operandOffset + 4 + rel;
 }
 
 auto RegisterPanel(const D2RL::ResourceService* resources, char* report, size_t size) noexcept -> bool {
@@ -333,16 +302,14 @@ auto InstallCounter(const D2RL::PluginContext* context, char* report, size_t siz
 	const uintptr_t base = context->exeBase;
 	const uint8_t* const dealDamage = FindSig(base, DealDamageSig, "damage apply", report, size);
 	const uint8_t* const missileOwner = FindSig(base, MissileOwnerSig, "missile owner", report, size);
-	const uint8_t* const expBar = FindSig(base, ExpBarSig, "ExpBarWidget update", report, size);
 	const uint8_t* const findPanel = FindSig(base, FindPanelSig, "FindPanel", report, size);
 	const uint8_t* const findChild = FindSig(base, FindChildSig, "FindChild", report, size);
 	const uint8_t* const setText = FindSig(base, SetTextSig, "SetText", report, size);
-	if (dealDamage == nullptr || missileOwner == nullptr || expBar == nullptr || findPanel == nullptr ||
+	if (dealDamage == nullptr || missileOwner == nullptr || findPanel == nullptr ||
 	    findChild == nullptr || setText == nullptr) {
 		return false;
 	}
 	g_missileOwner = reinterpret_cast<MissileOwnerFn>(missileOwner);
-	g_totalStat = reinterpret_cast<TotalStatFn>(Rel32Target(expBar + ExpBarStatCall, 1));
 	g_nativeFindPanel = reinterpret_cast<NativeFindPanelFn>(findPanel);
 	g_nativeFindChild = reinterpret_cast<NativeFindChildFn>(findChild);
 	g_nativeSetText = reinterpret_cast<NativeSetTextFn>(setText);
@@ -366,9 +333,8 @@ auto InstallCounter(const D2RL::PluginContext* context, char* report, size_t siz
 		std::snprintf(report, size, "off: overlay callback refused (result %u)", static_cast<uint32_t>(result));
 		return false;
 	}
-	std::snprintf(report, size, "on: damage apply rva 0x%llx, stat rva 0x%llx, window %.0f s",
-	              static_cast<unsigned long long>(rva),
-	              static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(g_totalStat) - base), g_settings.windowSeconds);
+	std::snprintf(report, size, "on: damage apply rva 0x%llx (total at +0x%zx), window %.0f s",
+	              static_cast<unsigned long long>(rva), dps::DamageTotalOffset, g_settings.windowSeconds);
 	return true;
 }
 

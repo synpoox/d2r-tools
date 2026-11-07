@@ -130,6 +130,15 @@ private:
 	int64_t sums_[MaxBuckets] {};
 };
 
+// The hit's total damage in the damage record D2Game's 0x44a9b0 gets, in 1/256 life (0x451fb0 reads it so); 0 if none.
+constexpr size_t DamageTotalOffset = 0x134;
+
+inline auto DamageTaken(const uint8_t* damage) noexcept -> int64_t {
+	int32_t total = 0;
+	std::memcpy(&total, damage + DamageTotalOffset, sizeof(total));
+	return total > 0 ? total : 0;
+}
+
 // "12,345"; "" for zero.
 inline void FormatDps(double perSecond, char* out, size_t size) noexcept {
 	const auto value = static_cast<int64_t>(perSecond + 0.5);
