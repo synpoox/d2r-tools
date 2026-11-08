@@ -121,7 +121,7 @@ void DealDamage(void* game, void* attacker, void* victim, void* damage) noexcept
 
 void AppendLayout(std::string* json, const dps::Settings& s) {
 	const int unit = 2;  // layout units are twice the 1080p pixels the settings use
-	const int height = static_cast<int>(s.textSize) * unit, width = 600 * unit;
+	const int height = static_cast<int>(s.textSize) * unit, width = 240 * unit;  // narrow: clear of the bars beside the globe
 	char buf[700];
 	std::snprintf(buf, sizeof(buf),
 	              "{\n\"type\": \"Panel\", \"name\": \"%s/DpsPanel\",\n\"fields\": { \"rect\": { \"x\": %d, \"y\": %d, \"width\": %d, "
@@ -273,6 +273,10 @@ auto InstallCounter(const D2RL::PluginContext* context, char* report, size_t siz
 		g_settings = dps::ParseSettings(toml);
 	} else {
 		plog::Warn("config not readable; using defaults");
+	}
+	if (!g_settings.enabled) {
+		std::snprintf(report, size, "off: enabled = false in dps-counter.toml");
+		return false;
 	}
 	static dps::Window window(g_settings.windowSeconds);
 	g_window = &window;

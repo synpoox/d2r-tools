@@ -9,10 +9,12 @@ int main() {
 	using namespace dps;
 
 	const Settings defaults = ParseSettings(nullptr);
-	assert(defaults.windowSeconds == 5.0f && defaults.offsetY == 60.0f);
+	assert(defaults.enabled && defaults.windowSeconds == 5.0f && defaults.offsetY == 830.0f);
+	assert(!ParseSettings("enabled = false\n").enabled);
+	assert(ParseSettings("enabled = maybe\n").enabled);  // a bad value keeps the default
 	const Settings s = ParseSettings("# c\r\n[dps-counter]\r\nwindow_seconds = 10\noffset_x=-40\noffset_y = nope\ntext_size = 500\n");
 	assert(s.windowSeconds == 10.0f && s.offsetX == -40.0f);
-	assert(s.offsetY == 60.0f && s.textSize == 22.0f);  // bad values keep the defaults
+	assert(s.offsetY == 830.0f && s.textSize == 22.0f);  // bad values keep the defaults
 
 	Window w(5.0f);
 	assert(w.PerSecond(0.0) == 0.0);

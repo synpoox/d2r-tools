@@ -10,11 +10,21 @@
 namespace dps {
 
 struct Settings {
+	bool enabled = true;
 	float windowSeconds = 5.0f;  // damage over this many seconds, divided by them
-	float offsetX = 0.0f;        // from the top centre of the screen, in pixels at 1080p
-	float offsetY = 60.0f;
+	float offsetX = -495.0f;     // the label's centre from the screen's centre, in pixels at 1080p: over the life globe
+	float offsetY = 830.0f;      // the label's top from the top of the screen, just above the "Life:" line
 	float textSize = 22.0f;
 };
+
+// "true" / "false" (also 1 / 0); anything else keeps the default.
+inline void ParseBool(const char* value, bool* out) noexcept {
+	if (std::strncmp(value, "true", 4) == 0 || value[0] == '1') {
+		*out = true;
+	} else if (std::strncmp(value, "false", 5) == 0 || value[0] == '0') {
+		*out = false;
+	}
+}
 
 // A value outside [min, max] keeps the default.
 inline void ParseNumber(const char* value, float* out, float min, float max) noexcept {
@@ -55,7 +65,8 @@ inline auto ParseSettings(const char* toml) noexcept -> Settings {
 			const size_t n = static_cast<size_t>(end - p) < sizeof(value) - 1 ? static_cast<size_t>(end - p) : sizeof(value) - 1;
 			std::memcpy(value, p, n);
 			const auto is = [&](const char* name) { return keySize == std::strlen(name) && std::memcmp(key, name, keySize) == 0; };
-			if (is("window_seconds")) ParseNumber(value, &s.windowSeconds, 1.0f, 60.0f);
+			if (is("enabled")) ParseBool(value, &s.enabled);
+			else if (is("window_seconds")) ParseNumber(value, &s.windowSeconds, 1.0f, 60.0f);
 			else if (is("offset_x")) ParseNumber(value, &s.offsetX, -2000.0f, 2000.0f);
 			else if (is("offset_y")) ParseNumber(value, &s.offsetY, 0.0f, 1000.0f);
 			else if (is("text_size")) ParseNumber(value, &s.textSize, 8.0f, 100.0f);

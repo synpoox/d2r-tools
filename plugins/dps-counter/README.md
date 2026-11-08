@@ -1,7 +1,7 @@
 # DPS Counter
 
-A D2RLoader plugin for Diablo II: Resurrected that shows the damage per second you deal to monsters, as text at the
-top of the screen. MIT licensed.
+A D2RLoader plugin for Diablo II: Resurrected that shows the damage per second you deal to monsters, as text just
+above the life globe. MIT licensed.
 
 ## Features
 
@@ -32,8 +32,9 @@ setting uses its default.
 ```toml
 [dps-counter]
 window_seconds = 5   # damage over this many seconds, divided by them (1 to 60)
-offset_x = 0         # position from the top centre of the screen, in pixels at 1080p
-offset_y = 60
+enabled = true       # false turns the counter off: no label, no hook
+offset_x = -495      # the label's centre from the screen's centre, in pixels at 1080p
+offset_y = 830       # the label's top from the top of the screen (the default sits just above the life globe)
 text_size = 22
 ```
 
