@@ -144,7 +144,16 @@ private:
 // The hit's total damage in the damage record D2Game's 0x44a9b0 gets, in 1/256 life (0x451fb0 reads it so); 0 if none.
 constexpr size_t DamageTotalOffset = 0x134;
 
+// Only a hit that landed: the game reads the total only when result flag bit 0 at +4 is set (0x451fb0), and the
+// melee caller also passes a miss's record.
+constexpr size_t DamageResultOffset = 0x4;
+
 inline auto DamageTaken(const uint8_t* damage) noexcept -> int64_t {
+	uint16_t result = 0;
+	std::memcpy(&result, damage + DamageResultOffset, sizeof(result));
+	if ((result & 1) == 0) {
+		return 0;
+	}
 	int32_t total = 0;
 	std::memcpy(&total, damage + DamageTotalOffset, sizeof(total));
 	return total > 0 ? total : 0;

@@ -36,6 +36,8 @@ int main() {
 	assert(DamageTaken(record) == 0);
 	const int32_t hit = 1234 << 8, heal = -256;
 	std::memcpy(record + 0x134, &hit, sizeof(hit));
+	assert(DamageTaken(record) == 0);  // a miss: result bit 0 clear
+	record[4] = 3;
 	assert(DamageTaken(record) == 1234 << 8);
 	std::memcpy(record + 0x134, &heal, sizeof(heal));
 	assert(DamageTaken(record) == 0);

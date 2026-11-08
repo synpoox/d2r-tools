@@ -5,9 +5,9 @@ above the life globe. MIT licensed.
 
 ## Features
 
-- **Real damage**: counts the life your hits take from monsters, after their resistances.
+- **Real damage**: counts the damage your hits deal to monsters, after their resistances (a killing blow counts in full).
 - **Every attack**: melee, missiles, spells and auras that hit.
-- **Out of the way**: it shows only while you fight, and fades out a few seconds after the last hit.
+- **Out of the way**: it shows only while you fight, and disappears a few seconds after the last hit.
 
 ## Requirements
 
@@ -15,6 +15,10 @@ above the life globe. MIT licensed.
 - D2RLoader (tested on 1.3.1)
 
 Works with or without mods. Your minions' and your hireling's damage is not counted.
+
+Limits: it counts only in games you host (single player, or a TCP/IP game you created); in a game you join it reads 0.
+In a hosted game with other players it counts the whole party's damage. Poison and other damage over time are not
+counted.
 
 ## Installation
 

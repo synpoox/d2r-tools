@@ -1,4 +1,4 @@
-# dps-counter: the damage per second you deal to monsters, as text at the top of the screen (D2RLoader plugin).
+# dps-counter: the damage per second you deal to monsters, as text just above the life globe (D2RLoader plugin).
 #
 # Build:  tools\build.ps1 -Plugin dps-counter -Test (from the repo root)
 # Output: build/dps-counter/Release/dps-counter.dll -> copy it to <game>/d2rloader/plugins/
