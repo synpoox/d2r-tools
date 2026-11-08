@@ -7,6 +7,7 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 | Plugin | Version | Description |
 |---|---|---|
 | [better-xp-bar](plugins/better-xp-bar) | 1.0.1 | HUD panel with level, XP, session gain and XP per hour. |
+| [dps-counter](plugins/dps-counter) | 1.0.0 | Damage per second you deal to monsters, just above the life globe. |
 | [multispec](plugins/multispec) | 1.0.1 | Keeps several skill setups per character and switches between them in town, without a respec token. |
 | [player-bars](plugins/player-bars) | 1.0.0 | Health and mana bars above your character, replacing the orbs. |
 | [quick-npc](plugins/quick-npc) | 1.0.1 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
