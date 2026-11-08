@@ -1,0 +1,11 @@
+# DPS Counter settings. Sizes are in pixels at 1080p and scale with screen height.
+[dps-counter]
+# false turns the counter off (no label, no hook).
+enabled = true
+# Damage over this many seconds, divided by them (1 to 60).
+window_seconds = 5
+# The label's centre from the screen's centre (offset_x) and its top from the top of the screen (offset_y).
+# The default sits just above the life globe.
+offset_x = -495
+offset_y = 830
+text_size = 22
