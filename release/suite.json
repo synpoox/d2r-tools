@@ -17,6 +17,20 @@
         "Position, size and colour are read at load: restart the game after changing them."
       ]
     },
+    "dps-counter": {
+      "version": "1.0.0",
+      "validation": [
+        "Clean x64 Release build with MSVC on GitHub Actions; the host tests of its logic pass.",
+        "Tested in game on Diablo II: Resurrected 3.3.0 build 93847 with D2RLoader 1.3.1, in a test slot in Hell with level 95 characters: melee and spell damage shown above the life globe, the text disappears after the window, an immune monster counts nothing, the counter survives leaving and rejoining a game, and enabled = false shows nothing and installs no hook. Version 1.0.0 differs from the tested build only in its version number."
+      ],
+      "limits": [
+        "Hooks the game's damage function, found by byte signature; if the signature is not found the counter turns itself off. Tested on D2R 3.3; on other game builds it may still crash, and any crash is logged to the plugin's log.",
+        "Counts only in games you host; in a joined TCP/IP game it reads 0. In a hosted game with other players it counts the whole party's damage.",
+        "Poison and other damage over time are not counted; a killing blow counts in full. Minions and hirelings are not counted.",
+        "Misses with low attack rating were not tested in game; only landed hits are meant to count.",
+        "Only tested at 1920x1080; other resolutions, the controller HUD and Steam were not checked."
+      ]
+    },
     "multispec": {
       "version": "1.0.1",
       "validation": [
