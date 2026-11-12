@@ -86,7 +86,13 @@ bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the
 std::atomic<bool> g_live{false};     // every part is on and the hooks are in
 std::atomic<bool> g_enabled{false};  // OutdoorBuild = 1
 std::atomic<bool> g_probe{false};
-std::atomic<int> g_slotLevel{-1};
+std::atomic<int> g_slotLevel{-1};  // the slot level of the open map (Jungle's until a map is opened); -1 with no outdoor slot
+// The two outdoor slots: index 0 is Outdoor (Jungle, LevelType 21), index 1 is OutdoorSnow (Snow, LevelType 31).
+constexpr int SlotCount = 2;
+std::atomic<int> g_slotLevels[SlotCount] = {-1, -1};
+auto SlotIndexFor(std::string_view tileset) noexcept -> int {
+	return EqualsNoCase(tileset, "Snow") ? 1 : 0;
+}
 
 struct Job {
 	uint64_t id = 0;
@@ -100,8 +106,8 @@ struct SlotGeometry {
 };
 std::mutex g_lock;
 std::shared_ptr<const Job> g_job;
-SlotGeometry g_geometry;
-std::string g_slotRefusal;  // OutdoorSlotRefusal of the Outdoor slot row; empty when the slot may be built
+SlotGeometry g_geometry[SlotCount];
+std::string g_slotRefusal[SlotCount];  // OutdoorSlotRefusal of each slot row; empty when the slot may be built
 uint64_t g_nextJobId = 1;
 co::PlanCache g_cache(4);
 // What the last slot build left for the events and the probe (tiles, absolute). Guarded by g_lock; cleared when the game is left.
@@ -159,8 +165,16 @@ auto Call(OutdoorPartId id) noexcept -> Fn {
 }
 
 auto IsSlotLevel(const void* level) noexcept -> bool {
-	const int slot = g_slotLevel.load();
-	return slot > 0 && level != nullptr && Readable(level, 0x200) && Read<int32_t>(level, LvlId) == slot;
+	if (level == nullptr || !Readable(level, 0x200)) {
+		return false;
+	}
+	const int id = Read<int32_t>(level, LvlId);
+	for (const std::atomic<int>& slot : g_slotLevels) {
+		if (slot.load() > 0 && slot.load() == id) {
+			return true;
+		}
+	}
+	return false;
 }
 
 // --- The grids, read as the game's grid reader (0x3fa790) does: data[rows[y] + x] ---------------------------------------------
@@ -262,6 +276,11 @@ void ProbeRooms(const void* level, int originX, int originY) noexcept {
 
 auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan>;
 
+// The slot row name of an outdoor tileset, for messages.
+auto SlotNameOf(const std::string& tileset) -> const char* {
+	return SlotIndexFor(tileset) == 1 ? SnowSlot : OutdoorSlot;
+}
+
 // The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
 auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	std::shared_ptr<const Job> job;
@@ -270,11 +289,17 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		job = g_job;
-		geometry = g_geometry;
-		refusal = g_slotRefusal;
+		if (job != nullptr) {
+			geometry = g_geometry[SlotIndexFor(job->tileset)];
+			refusal = g_slotRefusal[SlotIndexFor(job->tileset)];
+		}
 	}
 	if (job == nullptr) {
 		*why = "no outdoor map was opened in this game";
+		return nullptr;
+	}
+	if (Read<int32_t>(level, LvlId) != g_slotLevels[SlotIndexFor(job->tileset)].load()) {
+		*why = "this is not the slot level of a " + job->tileset + " map (the other outdoor slot's level)";
 		return nullptr;
 	}
 	if (!refusal.empty()) {
@@ -282,13 +307,13 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		return nullptr;
 	}
 	if (!geometry.known) {
-		*why = "levels.txt could not be read for the Outdoor slot level's OffsetX, OffsetY, SizeX and SizeY";
+		*why = std::string("levels.txt could not be read for the ") + SlotNameOf(job->tileset) + " slot level's OffsetX, OffsetY, SizeX and SizeY";
 		return nullptr;
 	}
 	const int want = OutdoorLevelType(job->tileset);
 	const int have = Read<int32_t>(level, LvlTileType);
 	if (want < 0 || have != want) {
-		*why = "the Outdoor slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
+		*why = "the " + std::string(SlotNameOf(job->tileset)) + " slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
 		return nullptr;
 	}
 	return PlanForJob(*job, geometry, level, why);
@@ -445,7 +470,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	bool asPlanned = false;
 	try {
 		if (!ctx.fired) {
-			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the Outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
+			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
 		}
 		ProbeLevel(level, "after the slot build");
 		co::GridSample grid;
@@ -560,8 +585,10 @@ auto OutdoorPlanProblem() -> std::string {
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			job = g_job;
-			geometry = g_geometry;
-			refusal = g_slotRefusal;
+			if (job != nullptr) {
+				geometry = g_geometry[SlotIndexFor(job->tileset)];
+				refusal = g_slotRefusal[SlotIndexFor(job->tileset)];
+			}
 		}
 		if (job == nullptr) {
 			return "Cartographer: no outdoor map is open.";
@@ -570,7 +597,7 @@ auto OutdoorPlanProblem() -> std::string {
 			return "Cartographer: " + refusal + ", so " + job->name + " cannot be built.";
 		}
 		if (!geometry.known) {
-			return "Cartographer: levels.txt could not be read for the Outdoor slot level's size, so " + job->name + " cannot be built.";
+			return std::string("Cartographer: levels.txt could not be read for the ") + SlotNameOf(job->tileset) + " slot level's size, so " + job->name + " cannot be built.";
 		}
 		std::string why;
 		if (PlanForJob(*job, geometry, nullptr, &why) == nullptr) {
@@ -655,25 +682,30 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 }
 
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
-	const Slot* slot = nullptr;
+	const Slot* found[SlotCount] = {nullptr, nullptr};
 	if (tables != nullptr) {
 		for (const Slot& s : tables->slots) {
 			if (EqualsNoCase(s.name, OutdoorSlot)) {
-				slot = &s;
-				break;
+				found[0] = &s;
+			} else if (EqualsNoCase(s.name, SnowSlot)) {
+				found[1] = &s;
 			}
 		}
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_geometry = {};
-		g_slotRefusal = slot != nullptr ? OutdoorSlotRefusal(*slot) : std::string();
-		if (slot != nullptr && slot->haveGeometry) {
-			g_geometry = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY};
+		for (int i = 0; i < SlotCount; ++i) {
+			const Slot* slot = found[i];
+			g_geometry[i] = {};
+			g_slotRefusal[i] = slot != nullptr ? OutdoorSlotRefusal(*slot) : std::string();
+			if (slot != nullptr && slot->haveGeometry) {
+				g_geometry[i] = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY};
+			}
+			g_slotLevels[i] = slot != nullptr ? slot->level : -1;
 		}
 	}
 	g_cache.clear();
-	g_slotLevel = slot != nullptr ? slot->level : -1;
+	g_slotLevel = found[0] != nullptr ? found[0]->level : (found[1] != nullptr ? found[1]->level : -1);
 	g_enabled = tables != nullptr && tables->settings.outdoorBuild != 0;
 	g_probe = tables != nullptr && tables->settings.outdoorProbe != 0;
 }
@@ -686,11 +718,19 @@ void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt
 	job->size = map.size;
 	job->shapes = tables.shapes;
 	std::lock_guard<std::mutex> lock(g_lock);
+	if (g_slotLevels[SlotIndexFor(job->tileset)].load() > 0) {
+		g_slotLevel = g_slotLevels[SlotIndexFor(job->tileset)].load();  // the open map's slot level, for the events and the arrival probe
+	}
 	job->id = g_nextJobId++;
 	job->seed = fixedSeed != 0 ? fixedSeed : cartographer::maze::mixSeed(seedSalt, job->id);
 	g_job = job;
 	plog::Info("outdoor map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
+}
+
+auto OutdoorPendingTileset() -> std::string {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->tileset : std::string();
 }
 
 void OutdoorMapCancelled() {

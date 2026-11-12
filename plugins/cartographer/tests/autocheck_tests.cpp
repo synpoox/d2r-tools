@@ -86,6 +86,11 @@ TEST_CASE("autocheck: the stand point is inside the boss room, in subtiles") {
 	CHECK(tiny.y == 21 * SubtilesPerTile);
 }
 
+TEST_CASE("autocheck: the no-boss-room reason names the outdoor plan for an outdoor map") {
+	CHECK(noBossRoomReason(true).find("outdoor plan") != std::string::npos);
+	CHECK(noBossRoomReason(false).find("Cave and Crypt") != std::string::npos);
+}
+
 TEST_CASE("autocheck: a stage times out only after the limit and never when the clock steps back") {
 	CHECK_FALSE(timedOut(1000, 1500, 500));
 	CHECK(timedOut(1000, 1501, 500));

@@ -4,6 +4,7 @@
 #include "core/part_signatures.h"
 #include "engine/game_memory.h"
 #include "engine/maze_hooks.h"
+#include "engine/outdoor_hooks.h"
 #include "engine/stat_apply.h"
 #include "log.h"
 
@@ -319,7 +320,8 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 	}
 	case Phase::ArrivalRead: {
 		if (!MapIsMaze(g_run.map)) {
-			SettleNotApplicable(ac::Item::Arrival, "a " + g_run.map.tileset + " map has no maze entrance cell to compare; the player is in the portal level");
+			SettleNotApplicable(ac::Item::Arrival, MapIsOutdoor(g_run.map) ? "an outdoor map's arrival is only logged ('[outdoor probe] arrival'), not read back here; the player is in the portal level"
+			                                                       : "a " + g_run.map.tileset + " map has no maze entrance cell to compare; the player is in the portal level");
 			Enter(Phase::MoveToBoss);
 			return;
 		}
@@ -345,13 +347,13 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 			Enter(Phase::Stats);
 			return;
 		}
-		const MazeEventRect room = Outside(lock, [&] { return MazeBossRoom(); });
+		const MazeEventRect room = Outside(lock, [&] { return (MapIsOutdoor(g_run.map) ? OutdoorBossRoom() : MazeBossRoom()); });
 		if (g_gen != gen) {
 			return;
 		}
 		const int level = g_run.opened.level;
 		if (!room.known || room.levelId != level) {
-			Settle(ac::Item::Boss, false, "no boss room to go to: the plan has none I can read (only Cave and Crypt maps with BossRoom on have one)");
+			Settle(ac::Item::Boss, false, ac::noBossRoomReason(MapIsOutdoor(g_run.map)));
 			Enter(Phase::Stats);
 			return;
 		}

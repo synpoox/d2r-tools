@@ -236,7 +236,7 @@ auto OutdoorProblem(const MapDef& map, const Tables& tables) -> std::string {
 		return "Cartographer: the outdoor build is not running, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
 	}
 	for (const Slot& slot : tables.slots) {
-		if (EqualsNoCase(slot.name, OutdoorSlot)) {
+		if (EqualsNoCase(slot.name, MapSlotName(map))) {
 			if (const std::string refusal = OutdoorSlotRefusal(slot); !refusal.empty()) {
 				return "Cartographer: " + refusal + ", so " + map.tileset + " maps cannot be built. Run tools\\install.ps1 and restart the game.";
 			}
@@ -256,9 +256,9 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 			return problem;
 		}
 		if (OutdoorSlotBuilt()) {
-			return "Cartographer: the Outdoor level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+			return "Cartographer: an outdoor level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
 		}
-		return {};
+		return OutdoorOpenConflict(map, OutdoorPendingTileset());
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
