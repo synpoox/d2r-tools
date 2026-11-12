@@ -90,14 +90,6 @@ struct LevelRect {
 };
 LevelRect levelRectOf(const StampPlan &plan);
 
-// The seed the engine's own level build leaves in the level record: int32(drlg seed base) + level id, and the second word the
-// reseed stores (0x29a). Kept here so the unit tests pin the arithmetic.
-struct LevelSeed {
-	int32_t first = 0;
-	int32_t second = 0x29a;
-};
-LevelSeed levelSeedFor(uint32_t drlgSeedBase, int32_t levelId);
-
 // What the grid probe counts in the built level's flag grid: cells with a piece, covered cells (0x200) and void cells (0x100).
 struct GridCounts {
 	int cells = 0;

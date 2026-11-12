@@ -912,14 +912,6 @@ TEST_CASE("the plan cache keys by seed and options, shares plans, drops the olde
 	CHECK(PlanCache(0).size() == 0);  // a capacity of 0 is raised to 1, not a crash
 }
 
-TEST_CASE("the level seed is the drlg seed base plus the level id, wrapping like the engine's int32")
-{
-	CHECK(levelSeedFor(1000, 139).first == 1139);
-	CHECK(levelSeedFor(1000, 139).second == 0x29a);
-	CHECK(levelSeedFor(0xffffffffu, 2).first == 1);
-	CHECK(levelSeedFor(0x7fffffffu, 1).first == INT32_MIN);
-}
-
 TEST_CASE("compareGrid agrees with a replayed plan and names every way a grid can differ")
 {
 	// An L-shaped layout has void cells in its empty macro-cell; a line does not.

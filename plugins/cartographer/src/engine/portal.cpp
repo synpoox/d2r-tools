@@ -205,7 +205,8 @@ void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tabl
 // The map is open: tells the clients that have said hello which map it is (map_sync.cpp). Never lets a failure reach the game.
 void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game, int level, bool maze) noexcept {
 	try {
-		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : 0);
+		const bool outdoor = MapIsOutdoor(map);
+		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor);
 	} catch (...) {
 		plog::Error("telling the clients about '%s' failed", map.name.c_str());
 	}

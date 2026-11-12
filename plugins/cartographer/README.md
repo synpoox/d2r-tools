@@ -231,7 +231,7 @@ A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through th
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
 is Small, Medium or Large. Snow is the least tested tileset.
 
-Not verified in game. Outdoor maps are not yet sent to other players in multiplayer, so use them in single player.
+Not verified in game. In multiplayer (TCP/IP, experimental) the host sends the outdoor layout to clients; that has not been run in a game either.
 
 ## Status
 

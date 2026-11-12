@@ -165,12 +165,6 @@ LevelRect levelRectOf(const StampPlan &plan) {
 	return {plan.originX, plan.originY, plan.tilesW, plan.tilesH};
 }
 
-LevelSeed levelSeedFor(uint32_t drlgSeedBase, int32_t levelId) {
-	LevelSeed seed;
-	seed.first = static_cast<int32_t>(drlgSeedBase + static_cast<uint32_t>(levelId));
-	return seed;
-}
-
 std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &grid, GridCounts *counts) {
 	std::vector<std::string> problems;
 	const size_t n = static_cast<size_t>(plan.cellsW) * static_cast<size_t>(plan.cellsH);
