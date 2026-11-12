@@ -56,6 +56,11 @@ PARTS = [
     # Event Spawn names from the game's tables (cartographer.md section 11)
     ("DataTablesBase", 0x300A90, 16, "72", 0),
     ("NameToRow", 0xA121F0, 13, "48 8B 05", 0),
+    # Client sync of player stats (cartographer.md section 7)
+    ("FindStateList", 0x2F5940, 18, "75", 0),
+    ("SetListState", 0x2F72F0, 3, "74", 0),
+    ("SetStateBit", 0x3354C0, 30, "78", 0),
+    ("StateOn", 0x3351B0, 20, "E8", 0),
     # Shrine and Boss Drop (cartographer.md section 13). DeathDrop is hooked (15 bytes); its first relative operand (jne) is at +33.
     ("DeathDrop", 0x447B80, 33, None, 15),
     ("DropRoller", 0x441300, 20, "48 8B 05", 0),

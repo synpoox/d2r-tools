@@ -254,11 +254,11 @@ bool idMatches(const char *field, size_t fieldSize, std::string_view name) {
 }
 
 int findMonsterRow(const uint8_t *rows, uint64_t rowCount, uint32_t rowSize, std::string_view name) {
-	if (rows == nullptr || name.empty() || rowSize < kMonStatsIdSize) {
+	if (rows == nullptr || name.empty() || rowSize < kMonStatsIdOffset + kMonStatsIdSize) {
 		return -1;
 	}
 	for (uint64_t i = 0; i < rowCount && i <= static_cast<uint64_t>(INT32_MAX); ++i) {
-		if (idMatches(reinterpret_cast<const char *>(rows + i * rowSize), kMonStatsIdSize, name)) {
+		if (idMatches(reinterpret_cast<const char *>(rows + i * rowSize + kMonStatsIdOffset), kMonStatsIdSize, name)) {
 			return static_cast<int>(i);
 		}
 	}

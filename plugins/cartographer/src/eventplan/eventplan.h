@@ -39,10 +39,12 @@ Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn);
 
 // --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer.md section 11) ---------------------
 
-// The compiled monstats row is 0x1fc bytes with the `Id` inline at +0 (48 bytes, NUL-terminated); a superuniques row is 0x3c.
+// The compiled monstats row is 0x1fc bytes with the `Id` inline at +2 (47 bytes, NUL-terminated; the u16 at +0 is the row's own
+// index, seen in game); a superuniques row is 0x3c.
 constexpr uint32_t kMonStatsRowSize = 0x1fc;
 constexpr uint32_t kSuperRowSize = 0x3c;
-constexpr size_t kMonStatsIdSize = 48;
+constexpr size_t kMonStatsIdOffset = 2;
+constexpr size_t kMonStatsIdSize = 47;
 
 // `name` against the NUL-terminated text in the first `fieldSize` bytes of `field`, ASCII case-insensitive. An empty name or
 // empty field never matches; a field with no NUL within `fieldSize` is not text and never matches.
