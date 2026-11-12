@@ -13,7 +13,7 @@ leads to a level built from your `maps.txt`. MIT licensed.
 **Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, and the hooks were run in game for Cave and Crypt maps (see Tested).** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
-(`cartographer check` says which part is missing). Generated layouts come in later phases.
+(`cartographer check` says which part is missing).
 
 ## Features
 
@@ -33,8 +33,8 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), and the character screen showed them inside the map and back to normal on leaving (single player, one run, test character; `cartographer check` prints the state it would use or, if none, why the closest rows were refused). Not checked: joining clients and multiplayer, more than 16 player stats, death and curses, and a save with the stats attached where the save writer is confirmed to run. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
-  once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
-  (`Level`, `Density`, ...) and the panel are not applied yet. `ItemStats=1` (the item's own stats, unit tested, not run in a game) is read at use time. The plugin log gets `statprobe:` lines
+  once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. The area columns
+  (`Level`, `Density`, `Uniques`, `Monsters`) are written at map open (written and unit tested, not verified in game; see section 15 of the reverse-engineering notes for the game check); `Champions` and the panel are not applied yet. `ItemStats=1` (the item's own stats, unit tested, not run in a game) is read at use time. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
 - **Map events** (Boss and Horde spawns and the game-table names checked in game, with the event distance lowered to 12 in a scratch build for the small test map, the scaled distance itself not yet run in game; the on-screen banner text was not seen; see Tested): when a map opens, `EventChance` and `mapevents.txt` decide whether it has an event
   (the row is drawn by `Weight`). On arrival in the map level a banner shows the map's `Name` and, for an event that will
@@ -71,12 +71,12 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
-   ("Cartographer Preset", a copy of Colossal Summit that keeps its name string, so a map portal's tooltip reads
-   "Colossal Summit" instead of "Missing String" (checked in game)) and its level preset to the mod's `levels.txt` and
-   `lvlprest.txt` (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no
-   items. Running it again changes nothing once the tables are up to date; over an older install it repairs the slot level's
-   name string. In game the automap title reads "Colossal Summit" and the entry banner "Entering The Colossal Summit". D2RLoader compiles the
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the Maze level needs: one level
+   ("Cartographer Maze", copied from a plain game Cave level (level 9), or a Crypt level (18) with `-Tileset Crypt`, so it keeps a name string; `Quest` 0, `LevelGroup` `Null` and no `LevelEntry` or `LevelWarp`, so it is in no vanilla level group)
+   and its maze row to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` row to
+   `slots.txt` (other rows are kept). It adds no items. Running it again changes nothing once the tables are up to date.
+   Rows of an older install ("Cartographer Preset", its `lvlprest.txt` row, the `Preset` slot row) are left alone and
+   can be deleted. A "Cartographer Maze" row from an earlier install (copied from the Den of Evil) has its quest flag, level group, entry and warp text, `Vis0` to `Vis7` and name string (tooltip) repaired on re-run. Written and run on a copy of the vanilla 3.3.0 tables only; not run against a game install. D2RLoader compiles the
    mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
@@ -87,24 +87,25 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 ## Configuration
 
 `maps.txt` has one row per map, with a header row. Only `Name`, `Tileset`, `Shape` and `Item` are needed; a blank cell means the
-default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore case; names from the game's tables
+default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names from the game's tables
 (monster ids, boss names) must match exactly; item codes ignore case.
 
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset`, `Cave` or `Crypt` (maze, needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet). Not used by `Preset`. | required |
+| Tileset | `Cave` or `Crypt` (needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (applied). | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
-| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (checked in game for monsters), the rest are kept for later phases | cartographer.txt |
+| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` and `EventChance` are used when a map opens (`Properties` checked in game for monsters); `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level (experimental, not verified in game); `Champions` is checked only | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (0, see below) and
-`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
-`Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
+`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but every
+map opens through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`. The `Preset` tileset is gone: a `Preset` row is refused with "Preset maps are gone: use Cave or Crypt."
+A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, is a `Maze` slot on a level not named `Cartographer Maze`, or repeats another slot's level or name; unit tested, not run in game.
 
 `MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default and not verified in game. A second map opened in the same game shows its name on the first map's portal too.
 
@@ -118,22 +119,23 @@ instead of the game's random maze. **One Maze slot is one tileset**: its level h
 or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
 try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
 refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
-`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1`
-does not add the Maze level; add it by hand:
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds the Maze level
+(`-Tileset Crypt` for a Crypt; Cave is the default):
 
-- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer creates
+- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer writes
   it). It is tab separated with the header `Slot` and `Level`, one row per slot, the level being the `Id` in `levels.txt`:
 
   ```
   Slot	Level
-  Preset	138
-  Maze	139
+  Maze	138
   ```
 
-  Add the `Maze` row yourself with your new level's id, and keep a `LevelName` that has a string (for example the copied level's) so a map portal's tooltip does not read "Missing String". Running `tools\install.ps1` again keeps it: the installer only adds or
-  updates the `Preset` row and leaves every other row alone.
-- `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
-  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row. Cartographer
+  Running `tools\install.ps1` again keeps it: the installer only adds or updates the `Maze` row and leaves every other row alone.
+- `levels.txt`: the installer's new level is in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` 360 in
+  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` 6000, every `Warp` -1 (0 crashed the game), `Quest` 0, `LevelGroup` `Null`, empty `LevelEntry` and `LevelWarp`, a `LevelName` copied from a
+  game level so it has a string, and a matching `lvlmaze.txt` row. The row also keeps the copied level's Act 1 monster list and
+  `MonLvl*` values; check in game that the map's own `Monsters` and `Level` settings override them. At load, a `Maze` slot is kept only if
+  its `levels.txt` row is named `Cartographer Maze`. Cartographer
   reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave and Crypt maps are refused.
 - Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
   plan cannot be built or the engine refuses a step, the game's own walk finishes that maze (with the slot's own size and
@@ -176,7 +178,13 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
   - entering the slot with no map opened builds the game's own maze;
   - (second run, 2026-11-12) 3 Crypt maps (`Branching`, `Corridor`, `Loop`) built as planned with no crash, and a Cave map on a Crypt slot is refused; in 5 games with an arrival line the player did not arrive in the planned entrance cell; every game logged WARN lines that monster map stats were skipped (no `itemstatcost.txt` in the test mod) (tracked in an issue, not fixed);
   - (arrival check, 2026-11-12, build 93847, D2RLoader 1.3.1-beta) in a Cave Corridor, a Cave Loop and a Crypt Branching game the player arrived in the planned entrance cell, and no chest or shrine was seen in that room (details in `docs/reverse-engineering/cartographer.md` section 5); Nightmare, Hell and clients were not run;
-  - not checked: Nightmare and Hell, a second map in the same game on the Crypt slot.
+  - (Hell check, 2026-11-12, origin/main da9deab, D2R build 93847, D2RLoader 1.3.1-beta, one slot, test mod and two test saves, single player, live in game; for Refs #152) a Cave Corridor map with the plain monstats Boss `zombie1` and a second with the superunique `Bishibosh`, no `Difficulty` column, `MazeProbe=1`:
+    - (a) opening in Hell passed: using the map item in Harrogath in Hell showed "Cartographer: HellCave is open." and a red portal (log `opening 'HellCave' (Cave) through level 139`, `maze slot level 139: built as planned (16 rooms, entrance placed)`);
+    - (b) arrival passed: the player arrived in the entrance cell (`maze arrival: room 139 of 144 (at 6008,8) marked as the level entry, in plan cell (0,0); 0 other room(s) lost the mark`, probe `ARRIVAL IS IN THE ENTRANCE CELL`); the same held for a second map;
+    - (c) the map Boss passed: `map Boss 'zombie1': spawned in the boss room (30480,720) 40 x 40 (as a plain monster)` appeared once, when the player went near the far room; one monster, no minions (the code spawns none); the monsters around it were killed with a console command, and which corpse was the boss was not confirmed on screen;
+    - superunique `Bishibosh` as the map Boss: in the first game the spawn was refused by the game (`superunique row 0 ... returned 0000000000000000`, `map Boss 'Bishibosh': refused by the game ... (as a plain monster)`, nothing appeared); in a second, fresh game it spawned (`returned 000000097EFBBC20`, `spawned in the boss room (30000,960) 40 x 40 (as a superunique)`) with the game's own Bishibosh minions around it, and it was killed. The cause of the first refusal was not found (open, one of two games);
+    - (d) the Normal refusal passed: the same item on a Normal character logged "Cartographer: HellCave can only be opened in Hell." and showed "I can't use this yet.";
+    - not checked: Nightmare, a second map in the same game, TCP/IP, and a natural (non-console) walk to the boss room.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).

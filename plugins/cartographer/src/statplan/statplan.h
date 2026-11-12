@@ -108,6 +108,23 @@ enum class PlayerAction { None, Apply, Remove };
 // the reason (left the level, map closed, plan replaced).
 PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool settingOn);
 
+// What to do with a list the plugin put on a player when it has to come off.
+enum class RemoveAction { Forget, StateOffDetachFree, DetachFree };
+
+// onChain: the list is still on the unit's list chain. foundByState: the game's finder returns this very list for the state
+// the plugin gave it (and the state and the state-bit call are usable). ownedByPlugin: the list's own fields say it is ours
+// (ownsList; only read once the list is known to be on the chain, so its memory is live). A list the unit does not hold, or
+// one on the chain whose fields are not ours (the game freed ours and reused the address), is only forgotten: never
+// detached, freed or written. Only an owned list on the chain comes off, so the map's player stats never follow the player
+// into a vanilla level; the state bit is cleared only when the finder also confirms the list.
+RemoveAction decideRemoval(bool onChain, bool foundByState, bool ownedByPlugin);
+
+// Whether a list on the chain is the plugin's: its flags (list +0x1c) and state (list +0x20) equal the values read right after
+// the plugin attached it and gave it the state (the attach is engine code that may set bits in the flags, so they are
+// compared with what was read then, not with 0). A game list that reused the address has other values. expectedState is the
+// state the plugin gave the list; 0 or less never matches.
+bool ownsList(uint32_t listFlags, uint32_t listState, uint32_t storedFlags, uint32_t storedState, int expectedState);
+
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);
 
@@ -119,8 +136,11 @@ public:
 	uintptr_t find(uint32_t unit) const;
 	// The state the plugin gave the list of `unit` (never read back from the list), or 0.
 	int stateOf(uint32_t unit) const;
+	// The list's +0x1c and +0x20 as read right after the state was set (0 when unknown).
+	uint32_t flagsOf(uint32_t unit) const;
+	uint32_t rawStateOf(uint32_t unit) const;
 	// False when the table is full or `list` is 0 (the caller then does not apply).
-	bool add(uint32_t unit, uintptr_t list, int state = 0);
+	bool add(uint32_t unit, uintptr_t list, int state = 0, uint32_t flags = 0, uint32_t rawState = 0);
 	void remove(uint32_t unit);
 	void clear();
 	size_t size() const;
@@ -131,6 +151,8 @@ private:
 		uint32_t unit = 0;
 		uintptr_t list = 0;
 		int state = 0;
+		uint32_t flags = 0;
+		uint32_t rawState = 0;
 	};
 	Slot slots_[kMax];
 };

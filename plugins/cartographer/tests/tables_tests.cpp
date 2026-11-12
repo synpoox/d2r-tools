@@ -26,7 +26,12 @@ const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonst
 auto Names() -> GameNames {
 	GameNames n;
 	n.haveMonsters = n.haveSuperUniques = n.haveItems = true;
-	n.monsters = {"zombie1", "skeleton1", "Diablo"};
+	n.monsters = {"zombie1", "skeleton1", "Diablo", "andariel"};
+	n.haveBossFlags = n.haveMods = true;
+	n.bossMonsters = {"andariel"};
+	for (int i = 0; i <= 44; ++i) {
+		n.monsterMods.push_back(i);
+	}
 	n.superUniques = {"Bonebreak", "The Countess"};
 	n.itemCodes = {"tsc", "shm1", "t20", "t21", "t22", "t23", "t24"};
 	return n;
@@ -47,7 +52,7 @@ auto Joined(const Report& report) -> std::string {
 auto TestMap() -> MapDef {
 	MapDef map;
 	map.name = "Test";
-	map.tileset = "Preset";
+	map.tileset = "Cave";
 	map.shape = "Corridor";
 	map.item = "t20";
 	return map;
@@ -57,7 +62,7 @@ auto TestMap() -> MapDef {
 
 TEST_CASE("a four-cell map loads with every default") {
 	Report report;
-	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\nFirst\tPreset\tCorridor\tt20\n", Names(), report);
+	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\nFirst\tCave\tCorridor\tt20\n", Names(), report);
 	REQUIRE(maps.size() == 1);
 	CHECK(report.problems.empty());
 	CHECK(maps[0].name == "First");
@@ -70,13 +75,13 @@ TEST_CASE("a four-cell map loads with every default") {
 
 TEST_CASE("our own words ignore case, the game's names do not") {
 	Report report;
-	const auto maps = Load("a\tPRESET\tcorridor\tsmall\t\tt20\t\t\n", report);
+	const auto maps = Load("a\tCAVE\tcorridor\tsmall\t\tt20\t\t\n", report);
 	REQUIRE(maps.size() == 1);
-	CHECK(maps[0].tileset == "Preset");
+	CHECK(maps[0].tileset == "Cave");
 	CHECK(maps[0].shape == "Corridor");
 	CHECK(maps[0].size == "Small");
 	Report exact;
-	const auto bad = Load("b\tPreset\tCorridor\t\t\tt21\t\tZombie1\n", exact);
+	const auto bad = Load("b\tCave\tCorridor\t\t\tt21\t\tZombie1\n", exact);
 	CHECK(bad.empty());
 	CHECK(Joined(exact).find("monster 'Zombie1' is not in monstats.txt") != std::string::npos);
 	CHECK(Joined(exact).find("Did you mean 'zombie1'?") != std::string::npos);
@@ -84,7 +89,7 @@ TEST_CASE("our own words ignore case, the game's names do not") {
 
 TEST_CASE("a typo gets a plain-English message with a suggestion and the row number") {
 	Report report;
-	const auto maps = Load("Good\tPreset\tCorridor\t\t\tt20\nBad\tJungel\tCorridor\t\t\tt21\n", report);
+	const auto maps = Load("Good\tCave\tCorridor\t\t\tt20\nBad\tJungel\tCorridor\t\t\tt21\n", report);
 	CHECK(maps.size() == 1);  // the bad row is skipped, the good one loads
 	const std::string text = Joined(report);
 	CHECK(text.find("maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?") != std::string::npos);
@@ -115,14 +120,14 @@ TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazePro
 TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row") {
 	Report report;
 	const auto maps = Load(
-		"Ok\tPreset\tLoop\t\t\tt20\n"
-		"BadShape\tPreset\tZigzag\t\t\tt21\n"
-		"BadLevel\tPreset\tLoop\t\t999\tt22\n"
-		"BadBoss\tPreset\tLoop\t\t\tt23\tNobody\n"
-		"BadItem\tPreset\tLoop\t\t\tzzzz\n"
-		"ok\tPreset\tLoop\t\t\tt24\n",
+		"Ok\tCave\tLoop\t\t\tt20\n"
+		"BadShape\tCave\tZigzag\t\t\tt21\n"
+		"BadLevel\tCave\tLoop\t\t999\tt22\n"
+		"BadBoss\tCave\tLoop\t\t\tt23\tNobody\n"
+		"BadItem\tCave\tLoop\t\t\tzzzz\n"
+		"ok\tCave\tLoop\t\t\tt24\n",
 		report);
-	CHECK(maps.size() == 1);
+	CHECK(maps.size() == 2);  // the Nobody boss is refused, the map still loads
 	CHECK(report.Errors() == 5);
 	const std::string text = Joined(report);
 	CHECK(text.find("shape 'Zigzag'") != std::string::npos);
@@ -132,19 +137,132 @@ TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row
 	CHECK(text.find("already on row 2") != std::string::npos);
 }
 
-TEST_CASE("a boss may be a monstats Id or a superunique name") {
+namespace {
+
+auto Bosses() -> std::vector<BossDef> {
 	Report report;
-	const auto maps = Load("A\tPreset\tLoop\t\t\tt20\tBonebreak\nB\tPreset\tLoop\t\t\tt21\tDiablo\n", report);
-	CHECK(maps.size() == 2);
+	const auto bosses = LoadBosses("Name\tBase\tMods\tMinions\nThe Drowned King\tzombie1\t5,9\t3\nGrave Warden\tskeleton1\n", Names(), report);
+	REQUIRE(report.problems.empty());
+	return bosses;
+}
+
+}  // namespace
+
+TEST_CASE("bosses.txt rows load with their mods and minions") {
+	const auto bosses = Bosses();
+	REQUIRE(bosses.size() == 2);
+	CHECK(bosses[0].name == "The Drowned King");
+	CHECK(bosses[0].base == "zombie1");
+	CHECK(bosses[0].mods == std::vector<int>{5, 9});
+	CHECK(bosses[0].minions == 3);
+	CHECK(bosses[1].mods.empty());
+	CHECK(bosses[1].minions == 0);
+}
+
+TEST_CASE("a bosses.txt entry named like a vanilla boss or monster, or with a bad cell, is skipped") {
+	Report report;
+	const auto bosses = LoadBosses(
+		"Name\tBase\tMods\tMinions\n"
+		"Bonebreak\tzombie1\n"
+		"diablo\tzombie1\n"
+		"NoBase\tnobody\n"
+		"BadMods\tzombie1\t1,2,3,4\n"
+		"BadMinions\tzombie1\t\t11\n"
+		"Fine\tzombie1\n"
+		"fine\tskeleton1\n",
+		Names(), report);
+	REQUIRE(bosses.size() == 1);
+	CHECK(bosses[0].name == "Fine");
+	CHECK(report.Errors() == 6);
+	CHECK(Joined(report).find("vanilla boss or monster") != std::string::npos);
+}
+
+TEST_CASE("a bosses.txt Base that is a vanilla boss, a Mods id outside monumod.txt, or a 17th entry is skipped") {
+	Report report;
+	std::string body = "Name\tBase\tMods\nA\tandariel\nB\tzombie1\t200\nC\tzombie1\t44\n";
+	CHECK(LoadBosses(body, Names(), report).size() == 1);
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Base 'andariel' is a vanilla boss") != std::string::npos);
+	CHECK(text.find("not an id in monumod.txt") != std::string::npos);
+	Report many;
+	body = "Name\tBase\n";
+	for (size_t i = 0; i < MaxBosses + 1; ++i) {
+		body += "Boss" + std::to_string(i) + "\tzombie1\n";
+	}
+	CHECK(LoadBosses(body, Names(), many).size() == MaxBosses);
+	CHECK(many.Errors() == 1);
+}
+
+TEST_CASE("a Boss that names a cartoboss: key gets its own refusal") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\tcartoboss:The Drowned King\n", Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss.empty());
+	const std::string text = Joined(report);
+	CHECK(text.find("superuniques.txt key the installer writes") != std::string::npos);
+	CHECK(text.find("vanilla") == std::string::npos);
+}
+
+TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
+	CHECK(BossKey("The Drowned King") == "cartoboss:The Drowned King");
+	for (const std::string& vanilla : Names().superUniques) {
+		CHECK(BossKey(vanilla) != vanilla);
+	}
+}
+
+TEST_CASE("a map's Boss resolves to a bosses.txt entry only") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\tthe drowned king\n", Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss == "The Drowned King");
 	CHECK(report.problems.empty());
+}
+
+TEST_CASE("a vanilla or unknown Boss is refused with a message and the map opens without it") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) +
+		"A\tCave\tLoop\t\t\tt20\tBonebreak\n"
+		"B\tCave\tLoop\t\t\tt21\tDiablo\n"
+		"C\tCave\tLoop\t\t\tt22\tNobody\n"
+		"D\tCave\tLoop\t\t\tt23\n",
+		Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 4);
+	for (const MapDef& map : maps) {
+		CHECK(map.boss.empty());
+	}
+	CHECK(report.Errors() == 3);
+	const std::string text = Joined(report);
+	CHECK(text.find("Boss 'Bonebreak' is a vanilla boss") != std::string::npos);
+	CHECK(text.find("Boss 'Diablo' is a vanilla monster") != std::string::npos);
+	CHECK(text.find("Boss 'Nobody' is not an entry in bosses.txt") != std::string::npos);
+	CHECK(text.find("The map opens without a Boss.") != std::string::npos);
+}
+
+TEST_CASE("without bosses.txt every Boss is refused") {
+	Report report;
+	const auto maps = Load("A\tCave\tLoop\t\t\tt20\tAnything\n", report);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss.empty());
+	CHECK(Joined(report).find("(there are none)") != std::string::npos);
+}
+
+TEST_CASE("the boss spawn path: its own row, else the base monster plain, else none") {
+	CHECK(PickBossPath(true, true) == BossPath::Superunique);
+	CHECK(PickBossPath(true, false) == BossPath::Superunique);
+	CHECK(PickBossPath(false, true) == BossPath::PlainMonster);
+	CHECK(PickBossPath(false, false) == BossPath::None);
 }
 
 TEST_CASE("a missing required column is a whole-file error and loads nothing") {
 	Report report;
-	CHECK(LoadMaps("Name\tTileset\nA\tPreset\n", Names(), report).empty());
+	CHECK(LoadMaps("Name\tTileset\nA\tCave\n", Names(), report).empty());
 	CHECK(Joined(report).find("no 'Shape' column") != std::string::npos);
 	Report noItem;
-	CHECK(LoadMaps("Name\tTileset\tShape\nA\tPreset\tLoop\n", Names(), noItem).empty());
+	CHECK(LoadMaps("Name\tTileset\tShape\nA\tCave\tLoop\n", Names(), noItem).empty());
 	CHECK(Joined(noItem).find("no 'Item' column") != std::string::npos);
 	Report empty;
 	CHECK(LoadMaps("", Names(), empty).empty());
@@ -153,7 +271,7 @@ TEST_CASE("a missing required column is a whole-file error and loads nothing") {
 
 TEST_CASE("unknown columns are a note, not an error") {
 	Report report;
-	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tLvl\nA\tPreset\tLoop\tt20\t5\n", Names(), report);
+	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tLvl\nA\tCave\tLoop\tt20\t5\n", Names(), report);
 	CHECK(maps.size() == 1);
 	CHECK(report.Errors() == 0);
 	CHECK(Joined(report).find("note: maps.txt row 1: the column 'Lvl'") != std::string::npos);
@@ -162,13 +280,13 @@ TEST_CASE("unknown columns are a note, not an error") {
 TEST_CASE("names that cannot be checked are accepted when the game tables were unreadable") {
 	Report report;
 	const GameNames none;
-	const auto maps = LoadMaps("Name\tTileset\tShape\tBoss\tItem\nA\tPreset\tLoop\tAnything\tabcd\n", none, report);
+	const auto maps = LoadMaps("Name\tTileset\tShape\tBoss\tItem\nA\tCave\tLoop\tAnything\tabcd\n", none, report);
 	CHECK(maps.size() == 1);
 }
 
 TEST_CASE("windows line endings and a byte order mark are fine") {
 	Report report;
-	const auto maps = LoadMaps("\xEF\xBB\xBFName\tTileset\tShape\tItem\r\nA\tPreset\tLoop\tt20\r\n", Names(), report);
+	const auto maps = LoadMaps("\xEF\xBB\xBFName\tTileset\tShape\tItem\r\nA\tCave\tLoop\tt20\r\n", Names(), report);
 	CHECK(maps.size() == 1);
 	CHECK(report.problems.empty());
 }
@@ -208,23 +326,154 @@ TEST_CASE("settings: PlayerStats is off by default and takes 0 or 1")
 
 TEST_CASE("slots load and are found ignoring case") {
 	Report report;
-	const auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nbroken\tx\n", report);
+	const auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nbroken\tx\n", report);
 	REQUIRE(slots.size() == 1);
-	CHECK(SlotLevel(slots, "preset") == 138);
+	CHECK(SlotLevel(slots, "maze") == 138);
 	CHECK(SlotLevel(slots, "Other") == -1);
 	CHECK(report.Errors() == 1);
 }
 
 TEST_CASE("slot level types are read from levels.txt") {
 	Report report;
-	auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nMaze\t139\nGone\t500\n", report);
-	ReadSlotLevelTypes(slots, "Name\tId\tLevelType\nA\t138\t2\nB\t139\t3\n");
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nOther\t139\nGone\t500\n", report);
+	ReadSlotLevelTypes(slots, "Name\tId\tLevelType\nA\t138\t3\nB\t139\t4\n");
 	REQUIRE(slots.size() == 3);
-	CHECK(slots[0].levelType == 2);
-	CHECK(slots[1].levelType == 3);
+	CHECK(slots[0].levelType == 3);
+	CHECK(slots[1].levelType == 4);
 	CHECK(slots[2].levelType == -1);
 	ReadSlotLevelTypes(slots, "Name\tId\n");  // no LevelType column: nothing changes
-	CHECK(slots[1].levelType == 3);
+	CHECK(slots[1].levelType == 4);
+}
+
+TEST_CASE("the Preset tileset is refused: every map is generated") {
+	Report report;
+	CHECK(Load("Old\tPreset\tLoop\t\t\tt20\n", report).empty());
+	const std::string text = Joined(report);
+	CHECK(text.find("Preset maps are gone: use Cave or Crypt.") != std::string::npos);
+	CHECK(text.find("is not known") == std::string::npos);
+}
+
+namespace {
+const char* const SlotLevels =
+    "Name\tId\tLevelType\nTown\t109\t1\nCave\t45\t3\nCartographer Maze\t138\t3\nCartographer Maze\t139\t4\n";
+}
+
+TEST_CASE("a Maze slot on a level the installer did not write is dropped") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t140\n", report);
+	ValidateSlots(slots, "Name\tId\tLevelType\nCartographer Maze\t138\t3\nSomeone's Level\t140\t3\n", report);
+	CHECK(slots.empty());
+	CHECK(SlotLevel(slots, MazeSlot) == -1);
+	CHECK(Joined(report).find("not the level the installer wrote") != std::string::npos);
+	CHECK(report.Errors() == 1);
+	Report nameless;
+	auto noName = LoadSlots("Slot\tLevel\nMaze\t138\n", nameless);
+	ValidateSlots(noName, "Id\tLevelType\n138\t3\n", nameless);  // no Name column: it cannot be told, so the slot stays off
+	CHECK(noName.empty());
+}
+
+TEST_CASE("a slot on a good installed level is kept") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\n", report);
+	ValidateSlots(slots, SlotLevels, report);
+	REQUIRE(slots.size() == 1);
+	CHECK(SlotLevel(slots, MazeSlot) == 138);
+	CHECK(report.Errors() == 0);
+}
+
+TEST_CASE("a slot naming a vanilla level or a town is dropped and reported") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t45\nTown\t109\nLow\t1\nEdge\t137\n", report);
+	ValidateSlots(slots, SlotLevels, report);
+	CHECK(slots.empty());
+	CHECK(SlotLevel(slots, MazeSlot) == -1);
+	const std::string text = Joined(report);
+	CHECK(text.find("slot 'Maze' names level 45, a level of the original game") != std::string::npos);
+	CHECK(text.find("slot 'Town' names level 109, a town") != std::string::npos);
+	CHECK(report.Errors() == 4);
+}
+
+TEST_CASE("a slot whose level has no levels.txt row is dropped") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t500\n", report);
+	ValidateSlots(slots, SlotLevels, report);
+	CHECK(slots.empty());
+	CHECK(Joined(report).find("no row in levels.txt") != std::string::npos);
+	Report unreadable;
+	auto again = LoadSlots("Slot\tLevel\nMaze\t138\n", unreadable);
+	ValidateSlots(again, "", unreadable);  // levels.txt could not be read: nothing can be checked, so the slot stays off
+	CHECK(again.empty());
+	CHECK(unreadable.Errors() == 1);
+}
+
+TEST_CASE("an old Preset slot row is dropped with a note") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nPreset\t139\nMaze\t138\n", report);
+	ValidateSlots(slots, SlotLevels, report);
+	REQUIRE(slots.size() == 1);
+	CHECK(SlotLevel(slots, "Preset") == -1);
+	CHECK(report.Errors() == 0);
+	CHECK(Joined(report).find("can be deleted") != std::string::npos);
+}
+
+TEST_CASE("a second slot on the same level or with the same name is dropped") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nOther\t138\nmaze\t139\nThird\t139\n", report);
+	ValidateSlots(slots, SlotLevels, report);
+	REQUIRE(slots.size() == 2);
+	CHECK(SlotLevel(slots, "Maze") == 138);
+	CHECK(SlotLevel(slots, "Third") == 139);
+	CHECK(report.Errors() == 2);
+}
+
+TEST_CASE("the Outdoor slot is refused unless it is a new level that levels.txt puts in Act 5") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t140\nTown\t109\nLow\t137\n", report);
+	ReadSlotLevelTypes(slots, "Id\tAct\n140\t4\n109\t4\n137\t4\n");
+	CHECK(slots[0].act == 4);
+	CHECK(OutdoorSlotRefusal(slots[0]).empty());
+	CHECK(OutdoorSlotRefusal(slots[1]).find("vanilla") != std::string::npos);  // a town is a vanilla level
+	CHECK(OutdoorSlotRefusal(slots[2]).find("vanilla") != std::string::npos);  // 137 is the last vanilla id
+
+	ReadSlotLevelTypes(slots, "Id\tAct\n140\t2\n");  // another act: the game's own builder for that act would run on the slot
+	CHECK(slots[0].act == 2);
+	CHECK(OutdoorSlotRefusal(slots[0]).find("not read as Act 5") != std::string::npos);
+
+	auto unread = LoadSlots("Slot\tLevel\nOutdoor\t140\n", report);
+	CHECK(unread[0].act == -1);
+	CHECK(OutdoorSlotRefusal(unread[0]).find("unknown") != std::string::npos);  // no Act column: refused, not guessed
+	ReadSlotLevelTypes(unread, "Id\tDrlgType\n140\t3\n");
+	CHECK(!OutdoorSlotRefusal(unread[0]).empty());
+}
+
+TEST_CASE("the outdoor settings default to off and take 0 or 1") {
+	Report report;
+	CHECK(LoadSettings("", report).outdoorBuild == 0);
+	CHECK(LoadSettings("", report).outdoorProbe == 0);
+	const Settings on = LoadSettings("Setting\tValue\nOutdoorBuild\t1\nOutdoorProbe\t1\n", report);
+	CHECK(on.outdoorBuild == 1);
+	CHECK(on.outdoorProbe == 1);
+	CHECK(report.Errors() == 0);
+	CHECK(LoadSettings("Setting\tValue\noutdoorbuild\t2\n", report).outdoorBuild == 0);  // out of range: the default is kept, with an error
+	CHECK(report.Errors() == 1);
+}
+
+TEST_CASE("slot geometry (origin and declared size) is read from levels.txt only when all four columns parse") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t140\nMaze\t139\n", report);
+	ReadSlotLevelTypes(slots, "Id\tSizeX\tSizeY\tOffsetX\tOffsetY\tDrlgType\n140\t384\t320\t6000\t3000\t3\n139\t360\t360\t\t3000\t1\n");
+	CHECK(slots[0].haveGeometry);
+	CHECK(slots[0].sizeX == 384);
+	CHECK(slots[0].sizeY == 320);
+	CHECK(slots[0].offsetX == 6000);
+	CHECK(slots[0].offsetY == 3000);
+	CHECK(slots[0].drlgType == 3);
+	CHECK(!slots[1].haveGeometry);  // a blank OffsetX: unknown, not 0
+	CHECK(slots[1].drlgType == 1);
+	auto noGeometry = LoadSlots("Slot\tLevel\nOutdoor\t140\n", report);
+	ReadSlotLevelTypes(noGeometry, "Id\tSizeX\tSizeY\tDrlgType\n140\t384\t320\t3\n");  // no Offset columns
+	CHECK(!noGeometry[0].haveGeometry);
+	CHECK(noGeometry[0].drlgType == 3);
 }
 
 TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is checked against the tileset") {
@@ -267,7 +516,7 @@ TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is ch
 
 TEST_CASE("every map needs an Item: a blank cell is refused") {
 	Report report;
-	const auto maps = Load("Has\tPreset\tLoop\t\t\tt20\nNone\tPreset\tLoop\n", report);
+	const auto maps = Load("Has\tCave\tLoop\t\t\tt20\nNone\tCave\tLoop\n", report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].name == "Has");
 	CHECK(report.Errors() == 1);
@@ -277,7 +526,7 @@ TEST_CASE("every map needs an Item: a blank cell is refused") {
 
 TEST_CASE("two maps may not share an item: the second is refused and names the first") {
 	Report report;
-	const auto maps = Load("A\tPreset\tLoop\t\t\tt20\nB\tPreset\tLoop\t\t\tt20\nC\tPreset\tLoop\t\t\tt21\n", report);
+	const auto maps = Load("A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt20\nC\tCave\tLoop\t\t\tt21\n", report);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "A");
 	CHECK(maps[1].name == "C");
@@ -290,7 +539,7 @@ TEST_CASE("a map's item needs item spell 16 when misc.txt could be read") {
 	names.haveItemSpells = true;
 	names.itemSpells = {{"t20", MapItemSpell}, {"t21", 0}, {"t22", 29}};
 	Report report;
-	const auto maps = LoadMaps(std::string(Header) + "Ok\tPreset\tLoop\t\t\tt20\nBlank\tPreset\tLoop\t\t\tt21\nOther\tPreset\tLoop\t\t\tt22\nWeapon\tPreset\tLoop\t\t\tshm1\n", names, report);
+	const auto maps = LoadMaps(std::string(Header) + "Ok\tCave\tLoop\t\t\tt20\nBlank\tCave\tLoop\t\t\tt21\nOther\tCave\tLoop\t\t\tt22\nWeapon\tCave\tLoop\t\t\tshm1\n", names, report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].name == "Ok");
 	const std::string text = Joined(report);
@@ -307,7 +556,7 @@ TEST_CASE("item codes are matched ignoring case in the item tables and the spell
 	names.itemCodes.push_back("t20");
 	names.itemCodes.push_back("t21");
 	Report report;
-	const auto maps = LoadMaps(std::string(Header) + "Up\tPreset\tLoop\t\t\tT20\nBlank\tPreset\tLoop\t\t\tT21\n", names, report);
+	const auto maps = LoadMaps(std::string(Header) + "Up\tCave\tLoop\t\t\tT20\nBlank\tCave\tLoop\t\t\tT21\n", names, report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].name == "Up");
 	CHECK(report.Errors() == 1);  // only T21's spell
@@ -315,7 +564,7 @@ TEST_CASE("item codes are matched ignoring case in the item tables and the spell
 
 TEST_CASE("an item opens exactly the map that names it, and any other item opens none") {
 	Report report;
-	const auto maps = Load("Hat\tPreset\tLoop\t\t\tshm1\nShore\tPreset\tLoop\t\t\tt20\n", report);
+	const auto maps = Load("Hat\tCave\tLoop\t\t\tshm1\nShore\tCave\tLoop\t\t\tt20\n", report);
 	REQUIRE(maps.size() == 2);
 	CHECK(FindMapByItem(maps, "shm1")->name == "Hat");
 	CHECK(FindMapByItem(maps, "t20")->name == "Shore");
@@ -362,7 +611,7 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 
 TEST_CASE("an old Difficulty column is ignored with a note, not an error") {
 	Report report;
-	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tDifficulty\nOld\tPreset\tCorridor\tt20\tNormal\nBad\tPreset\tLoop\tt21\tSoon\n", Names(), report);
+	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tDifficulty\nOld\tCave\tCorridor\tt20\tNormal\nBad\tCave\tLoop\tt21\tSoon\n", Names(), report);
 	CHECK(maps.size() == 2);
 	CHECK(report.Errors() == 0);
 	REQUIRE(report.problems.size() == 1);
@@ -526,9 +775,12 @@ auto ExampleNames() -> GameNames {
 
 TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problems") {
 	Report report;
-	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report);
+	const auto bosses = LoadBosses(ExampleFile("bosses.txt"), ExampleNames(), report);
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, nullptr, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
+	REQUIRE(bosses.size() == 1);
 	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
 	CHECK(maps[0].size == "Large");
@@ -553,7 +805,8 @@ TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats a
 	const cartographer::layout::ShapeTable shapes = LoadShapes(ExampleFile("shapes.txt"), report);
 	const auto pool = LoadMapStats(ExampleFile("mapstats.txt"), report);
 	const auto events = LoadMapEvents(ExampleFile("mapevents.txt"), report);
-	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes);
+	const auto bosses = LoadBosses(ExampleFile("bosses.txt"), ExampleNames(), report);
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
 	REQUIRE(shapes.shapes.size() == 1);
 	CHECK(shapes.shapes[0].name == "Snake");
@@ -590,9 +843,9 @@ TEST_CASE("maps.txt Shape may name a shapes.txt row, ignoring case; an unknown n
 	const auto shapes = LoadShapes("Name\tBase\nSnake\tWinding\n", report);
 	REQUIRE(report.problems.empty());
 	const std::string text = std::string(Header) +
-	                         "Eel\tPreset\tsnake\t\t\tt20\n"
-	                         "Worm\tPreset\tSerpent\t\t\tt21\n"
-	                         "Plain\tPreset\tLoop\t\t\tt22\n";
+	                         "Eel\tCave\tsnake\t\t\tt20\n"
+	                         "Worm\tCave\tSerpent\t\t\tt21\n"
+	                         "Plain\tCave\tLoop\t\t\tt22\n";
 	Report maps;
 	const auto loaded = LoadMaps(text, Names(), maps, &shapes);
 	REQUIRE(loaded.size() == 2);
@@ -806,7 +1059,7 @@ TEST_CASE("a Stat named like Weight does not get the Weight suffix on a Max-belo
 TEST_CASE("a repeated unknown column is reported once") {
 	const GameNames names;
 	Report report;
-	LoadMaps("Name\tTileset\tShape\tItem\tColour\tcolour\nA\tPreset\tCorridor\tt20\t\t\n", names, report, nullptr);
+	LoadMaps("Name\tTileset\tShape\tItem\tColour\tcolour\nA\tCave\tCorridor\tt20\t\t\n", names, report, nullptr);
 	int unused = 0;
 	for (const Problem& p : report.problems) {
 		unused += p.text.find("is not used") != std::string::npos ? 1 : 0;

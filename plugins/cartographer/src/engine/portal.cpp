@@ -2,6 +2,7 @@
 
 #include "map_sync.h"
 #include "maze_hooks.h"
+#include "outdoor_hooks.h"
 #include "scan.h"
 
 #include "core/part_signatures.h"
@@ -12,7 +13,9 @@
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
+#include "engine/level_row.h"
 #include "log.h"
+#include "hookguard.h"
 #include "steer.h"
 
 #include <windows.h>
@@ -207,21 +210,19 @@ void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game
 	}
 }
 
-// A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
-// Preset slot.
+// Every map (Cave or Crypt) opens through the Maze slot and is built by the maze steering hooks.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
 	return MapIsMaze(map);
 }
 
-auto SlotNameFor(const MapDef& map) noexcept -> const char* {
-	return IsMazeMap(map) ? MazeSlot : PresetSlot;
+auto SlotNameFor(const MapDef&) noexcept -> const char* {
+	return MazeSlot;
 }
 
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).
 auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::string {
 	if (level <= 0) {
-		return IsMazeMap(map) ? "Cartographer: the Maze slot is not installed. Add it to slots.txt and levels.txt (see the Cartographer README), then restart the game."
-		                      : "Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.";
+		return "Cartographer: the Maze slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
@@ -245,9 +246,15 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
+	// The map's monster columns go into the same row and the level's region record, for the same reason. The slot level is looked up
+	// again from the slots table, so the writer checks it against the level it was given.
+	const bool shaped = LevelRowBeforeOpen(map, level, SlotLevel(tables.slots, SlotNameFor(map)), game, At<uint8_t>(game, GameDataFlagOffset));
 	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
 	if (named && opened == 0) {
 		MapNamesOpenFailed(level);
+	}
+	if (shaped && opened == 0) {
+		LevelRowOpenFailed(level);
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
@@ -509,6 +516,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		StatApplyGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
+		LevelRowRestore();
 		MapSyncGameLeft();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
@@ -520,6 +528,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 	}
 	if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		MazeGameLeft();
+		OutdoorGameLeft();
 	}
 }
 
@@ -561,14 +570,8 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 	const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PlayerTickHook), reinterpret_cast<void**>(&g_tickOriginal));
-	const bool ok = hooked && g_tickOriginal != nullptr;
-	part.status.on = ok;
-	part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
+	const bool ok = HookOutcome(part, hooked, g_tickOriginal != nullptr);
 	g_consoleLive = ok;
-	if (hooked && !ok) {
-		// The hook cannot be taken out again and the plugin cannot call the game's mana step without an original.
-		plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's player mana step is skipped for every player until the game is restarted; restart it after removing what conflicts", part.name);
-	}
 	if (!ok) {
 		if (lifecycle->unregisterGameplayEventListener != nullptr) {
 			(void)lifecycle->unregisterGameplayEventListener(context, readyHandle);  // GameLeft stays
@@ -627,6 +630,7 @@ void SetFirstGameStartNotify(void (*notify)() noexcept) {
 
 void SetTables(std::shared_ptr<const Tables> tables) {
 	SetMazeTables(tables);
+	SetOutdoorTables(tables);
 	MapNamesSetTables(tables);
 	MapSyncSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -677,6 +681,9 @@ auto PartStatuses() -> std::vector<PartStatus> {
 	for (PartStatus& status : MazePartStatuses()) {
 		out.push_back(std::move(status));
 	}
+	for (PartStatus& status : OutdoorPartStatuses()) {
+		out.push_back(std::move(status));
+	}
 	return out;
 }
 
@@ -697,15 +704,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		}
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
-		const bool ok = hooked && *original != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
-		if (hooked && !ok) {
-			// The hook cannot be taken out again, so the portal can never go live in this session and every item-spell use (or
-			// check) the hook sees is dropped, not only the map items; restart the game.
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the portal stays off for this session and every item-spell use is dropped (not only map items) until the game is restarted; restart it after removing what conflicts", part.name);
-		}
-		return ok;
+		return HookOutcome(part, hooked, *original != nullptr);
 	};
 	g_hooksIn = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal));
 	if (g_hooksIn) {
@@ -720,6 +719,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
+	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}
@@ -730,6 +730,9 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
 	}
 	for (const PartStatus& status : MazePartStatuses()) {
+		plog::Info("part %s: %s", status.name.c_str(), status.detail.c_str());
+	}
+	for (const PartStatus& status : OutdoorPartStatuses()) {
 		plog::Info("part %s: %s", status.name.c_str(), status.detail.c_str());
 	}
 	g_installed = true;

@@ -5,6 +5,7 @@
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
+#include "hookguard.h"
 
 #include <windows.h>
 
@@ -43,7 +44,8 @@ constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte st
 constexpr uint32_t DataFlagLimit = 4;       // the base accessor takes a data flag below 4 (anything else is a trap in the engine)
 constexpr int DtMonRowsOffset = 0xf58;      // monstats row vector pointer; the 64-bit count is at +0xf60
 constexpr int DtMonCountOffset = 0xf60;
-constexpr int DtMonMapOffset = 0xf70;       // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
+constexpr int MonStatsWeightOffset = 0x64;  // uint8 in a monstats row: what the region builder (0x509c2c) takes as the group's weight
+constexpr int DtMonMapOffset = 0xf70;      // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
 constexpr int DtSuperRowsOffset = 0x1078;   // superuniques row vector pointer; the 64-bit count is at +0x1080
 constexpr int DtSuperCountOffset = 0x1080;
 constexpr int DtSuperMapOffset = 0x1090;    // superuniques name -> row map pointer (re-read on every use)
@@ -600,8 +602,9 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	bool asSuper = false;
 	void* unit = nullptr;
 	const bool made = SpawnOne(game, room, plan.spawns.front(), &asSuper, &unit);
+	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
-	           asSuper ? "as a superunique" : "as a plain monster");
+	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -642,7 +645,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
-					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (a third of the level's larger side and at most %d tiles from the first populated one, capped at the farthest room of the level)", ep::kMinEventDistance);
+					plog::Warn("the maze plan's event room is not known; the event room is chosen from the level's room list (a third of the level's larger side and at most %d tiles from the first populated one, capped at the farthest room of the level)", ep::kMinEventDistance);
 				}
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
@@ -660,7 +663,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a layout with BossRoom off has none)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {
@@ -765,14 +768,39 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		plog::Warn("map Boss '%s' will not be spawned: the spawn parts are off", map.boss.c_str());
 		return;
 	}
-	state.bossSpawn = ResolveName(map.boss, tables.spawnNames, player);
+	// The Boss is a bosses.txt entry (checked at load). Its own superuniques row is tried first; without that row (the installer was not run) its
+	// base monster is spawned plain. A vanilla superunique is never looked up here.
+	const BossDef* entry = nullptr;
+	for (const BossDef& def : tables.bosses) {
+		if (def.name == map.boss) {
+			entry = &def;
+		}
+	}
+	if (entry == nullptr) {
+		plog::Warn("map Boss '%s' will not be spawned: it is not an entry in bosses.txt", map.boss.c_str());
+		return;
+	}
+	const std::string key = BossKey(entry->name);
+	state.bossSpawn = ResolveName(key, tables.spawnNames, player);
+	const bool rowFound = state.bossSpawn.kind == ev::NameKind::Unique;
+	if (!rowFound) {
+		state.bossSpawn = ResolveName(entry->base, tables.spawnNames, player);
+	}
+	const BossPath path = PickBossPath(rowFound, state.bossSpawn.kind == ev::NameKind::Monster);
+	if (path == BossPath::None) {
+		plog::Warn("map Boss '%s' will not be spawned: no superuniques row '%s' and its base monster '%s' is not in monstats", map.boss.c_str(), key.c_str(), entry->base.c_str());
+		return;
+	}
+	if (path == BossPath::PlainMonster) {
+		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
+	}
 	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24}, state.seed);  // a stand-in room
 	if (!check.problem.empty()) {
 		plog::Warn("map Boss '%s' will not be spawned: %s", map.boss.c_str(), check.problem.c_str());
 		return;
 	}
 	state.bossArmed = true;
-	plog::Info("map Boss for '%s': %s", map.name.c_str(), state.bossSpawn.kind == ev::NameKind::Unique ? "a superunique" : "a monster");
+	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }
 
 auto SummaryNow() -> std::string {
@@ -782,6 +810,48 @@ auto SummaryNow() -> std::string {
 }
 
 }  // namespace
+
+auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::vector<int>* weights, std::string* why) noexcept -> bool {
+	try {
+		rows->clear();
+		weights->clear();
+		if (g_dataTables == nullptr) {
+			*why = "no DataTable service";
+			return false;
+		}
+		const ep::RouteVerdict route = RouteFor(dataFlag);
+		if (!route.monsters) {
+			*why = route.why.empty() ? "the game's monstats table did not pass its check" : route.why;
+			return false;
+		}
+		std::string tablesWhy;
+		const uint8_t* dt = TablesBase(dataFlag, &tablesWhy);
+		ep::TableFacts mon;
+		bool busy = false;
+		if (dt == nullptr || !TableFactsOf(static_cast<D2RL::DataTables::Bank>(route.bank), D2RL::DataTables::TableId::MonStats, dt, DtMonRowsOffset, DtMonCountOffset, &mon, &busy) ||
+		    !ep::checkTable(mon, ep::kMonStatsRowSize).empty()) {
+			*why = "the game's monstats table could not be read now";
+			return false;
+		}
+		for (const std::string& id : ids) {
+			const int row = GameMonsterRow(route, dataFlag, id);
+			if (row < 0 || static_cast<uint32_t>(row) >= mon.viewCount) {
+				*why = "'" + id + "' is not in the game's monstats table";
+				rows->clear();
+				weights->clear();
+				return false;
+			}
+			rows->push_back(row);
+			weights->push_back(At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsWeightOffset));
+		}
+		return true;
+	} catch (...) {
+		rows->clear();
+		weights->clear();
+		*why = "the lookup failed";
+		return false;
+	}
+}
 
 auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	g_context = context;
@@ -795,12 +865,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		Part& part = g_parts[PopulateRoom];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PopulateHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = hooked && g_original != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every room's own population is skipped until the game is restarted";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own room population is skipped for EVERY room until the game is restarted; restart it after removing what conflicts", part.name);
-		}
+		const bool ok = HookOutcome(part, hooked, g_original != nullptr);
 		g_spawnOn = ok;
 	} else if (On(PopulateRoom)) {
 		g_parts[PopulateRoom].status.on = false;

@@ -1,17 +1,26 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's map slot level to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze level to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
-      lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
-    It also adds or updates the Preset row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
-    any other row (such as a hand-added Maze row) is kept.
+      levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
+                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
+                    so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
+                    the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
+      lvlmaze.txt   its maze row (a maze level needs one with its own level id)
+    It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
+    any other row is kept.
+      superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
+                    keyed 'cartoboss:<Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
+    One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
     Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
-    Rows are only added when missing, so running it again changes nothing once the tables are up to date (an older install's LevelName is repaired). The new level keeps Colossal Summit's LevelName string key, so a map portal's tooltip should read "Colossal Summit" instead of "Missing String" (not yet checked in game). Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
+    Rows are only added when missing, so running it again changes nothing once the tables are up to date.
+    Rows from an older install ("Cartographer Preset" in levels.txt and lvlprest.txt, the Preset row of slots.txt) are left alone:
+    nothing uses them any more and they can be deleted. Restart the game afterwards (a mod that ships .bin tables must have
+    them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
     The mod's folder, for example <game>\mods\MyMod. The tables are read from <ModDirectory>\<Mod>.mpq\data.
@@ -19,18 +28,26 @@
 .PARAMETER ExcelDir
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
+.PARAMETER Tileset
+    Cave (the default) or Crypt: the kind of maze the Maze level builds.
+
 .EXAMPLE
     plugins\cartographer\tools\install.ps1 -ModDirectory "C:\Games\Diablo II Resurrected\mods\MyMod"
 #>
 [CmdletBinding()]
 param(
     [string]$ModDirectory,
-    [string]$ExcelDir
+    [string]$ExcelDir,
+    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave'
 )
 
 $ErrorActionPreference = 'Stop'
-$LevelName = 'Cartographer Preset'
-$TemplateLevelId = '137'  # Act 5 - Colossal Summit: a preset level, so a copy opens with only the preset's rooms
+$LevelName = 'Cartographer Maze'
+$OldLevelName = 'Cartographer Preset'
+$LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelType: 3 Cave, 4 Crypt
+$MazeSize = '360'  # SizeX and SizeY in every difficulty: the largest plan is 360 tiles on a side
+$ActFive = '4'     # levels.txt Act is zero-based
+$NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -98,34 +115,70 @@ function Set-Cell($t, $cells, [string]$column, [string]$value) {
     $cells[(Column $t $column)] = $value
 }
 
-foreach ($name in 'levels.txt', 'lvlprest.txt') {
+# Sets a column only when the table has it (a column some builds of the table do not carry).
+function Set-CellIf($t, $cells, [string]$column, [string]$value) {
+    $i = [array]::IndexOf($t.Header, $column)
+    if ($i -ge 0) { $cells[$i] = $value }
+}
+
+foreach ($name in 'levels.txt', 'lvlmaze.txt') {
     if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
 
 # --- levels.txt -------------------------------------------------------------------------------------------------------
 $levels = Read-Table (Join-Path $ExcelDir 'levels.txt')
-$existing = Find-Row $levels 'Name' $LevelName
 $idCol = Column $levels 'Id'
+$typeCol = Column $levels 'LevelType'
+$existing = Find-Row $levels 'Name' $LevelName
 if ($existing -ge 0) {
     $levelId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
+    $haveType = (Cells $levels $levels.Lines[$existing])[$typeCol]
     Write-Host "levels.txt: '$LevelName' is already there (level $levelId)."
-    # An older install set LevelName to a key with no string, so the portal tooltip read "Missing String": restore the copied key.
-    if ($levels.Header -contains 'LevelName') {
-        $nameCol = Column $levels 'LevelName'
-        $cells = Cells $levels $levels.Lines[$existing]
-        $templateRow = Find-Row $levels 'Id' $TemplateLevelId
-        if ($cells[$nameCol] -eq $LevelName -and $templateRow -lt 0) {
-            Write-Host "levels.txt: level $TemplateLevelId (Colossal Summit) is gone from this mod, so the old LevelName of level $levelId was left as it is (its portal tooltip may read 'Missing String')."
-        } elseif ($cells[$nameCol] -eq $LevelName) {
-            $cells[$nameCol] = (Cells $levels $levels.Lines[$templateRow])[$nameCol]
-            $levels.Lines[$existing] = $cells -join "`t"
-            Save-Table $levels
-            Write-Host "levels.txt: gave level $levelId the string key '$($cells[$nameCol])' (its old LevelName had no string)."
+    if ($haveType -ne $LevelType) {
+        Write-Host "levels.txt: note: level $levelId has LevelType $haveType, not $LevelType ($Tileset). One Maze level serves one tileset; change its LevelType by hand to switch."
+    }
+    # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
+    $cells = Cells $levels $levels.Lines[$existing]
+    $before = $cells -join "`t"
+    Set-CellIf $levels $cells 'Quest' '0'
+    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+    Set-CellIf $levels $cells 'LevelEntry' ''
+    Set-CellIf $levels $cells 'LevelWarp' ''
+    for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+    # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
+    $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
+    if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {
+        $drlgCol = Column $levels 'DrlgType'
+        $questCol = [array]::IndexOf($levels.Header, 'Quest')
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $t = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($t.Count -gt [Math]::Max([Math]::Max($drlgCol, $typeCol), [Math]::Max($idCol, [Math]::Max($questCol, $nameCol))) -and
+                $t[$drlgCol] -eq '1' -and $t[$typeCol] -eq $LevelType -and ($questCol -lt 0 -or $t[$questCol] -in '', '0') -and
+                [int]::TryParse($t[$idCol], [ref]$parsed) -and $parsed -le 137) { $cells[$nameCol] = $t[$nameCol]; break }
         }
     }
+    if (($cells -join "`t") -ne $before) {
+        $levels.Lines[$existing] = $cells -join "`t"
+        Save-Table $levels
+        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0, plain name string), so it counts toward none of the game's levels."
+    }
 } else {
-    $templateRow = Find-Row $levels 'Id' $TemplateLevelId
-    if ($templateRow -lt 0) { throw "levels.txt has no level $TemplateLevelId (Act 5 - Colossal Summit) to copy." }
+    # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),
+    # and not a quest level (the Den of Evil is the only one).
+    $drlgCol = Column $levels 'DrlgType'
+    $questCol = [array]::IndexOf($levels.Header, 'Quest')
+    $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, [Math]::Max($idCol, $questCol)))
+    $templateRow = -1
+    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+        $cells = $levels.Lines[$i] -split "`t"
+        $parsed = 0
+        if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $LevelType -and
+            ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
+            [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
+    }
+    if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $LevelType ($Tileset) to copy." }
+    $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
     $maxId = 0
     for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
         $cells = $levels.Lines[$i] -split "`t"
@@ -136,38 +189,203 @@ if ($existing -ge 0) {
     $cells = Cells $levels $levels.Lines[$templateRow]
     Set-Cell $levels $cells 'Name' $LevelName
     Set-Cell $levels $cells 'Id' "$levelId"
+    Set-Cell $levels $cells 'Act' $ActFive
+    Set-Cell $levels $cells 'DrlgType' '1'
+    Set-Cell $levels $cells 'LevelType' $LevelType
+    Set-Cell $levels $cells 'Depend' '0'
+    Set-Cell $levels $cells 'OffsetX' '6000'
+    Set-Cell $levels $cells 'OffsetY' '0'
+    Set-CellIf $levels $cells 'Position' '0'
     for ($n = 0; $n -lt 8; $n++) {
         Set-Cell $levels $cells "Vis$n" '0'
-        Set-Cell $levels $cells "Warp$n" '-1'
+        Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
     }
+    $sized = 0
+    foreach ($h in $levels.Header) {
+        if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $MazeSize; $sized++ }
+    }
+    if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
     Set-Cell $levels $cells 'Waypoint' '255'
+    # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
+    Set-CellIf $levels $cells 'Quest' '0'
+    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+    Set-CellIf $levels $cells 'LevelEntry' ''
+    Set-CellIf $levels $cells 'LevelWarp' ''
     # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
     $levels.Lines.Add($cells -join "`t")
     Save-Table $levels
-    Write-Host "levels.txt: added '$LevelName' as level $levelId."
+    Write-Host "levels.txt: added '$LevelName' as level $levelId ($Tileset, copied from level $templateId)."
+}
+if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
+    Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
 }
 
-# --- lvlprest.txt -----------------------------------------------------------------------------------------------------
-$presets = Read-Table (Join-Path $ExcelDir 'lvlprest.txt')
-if ((Find-Row $presets 'LevelId' "$levelId") -ge 0) {
-    Write-Host "lvlprest.txt: level $levelId already has its preset row."
+# --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
+$mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
+if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
+    Write-Host "lvlmaze.txt: level $levelId already has its maze row."
 } else {
-    $templateRow = Find-Row $presets 'LevelId' $TemplateLevelId
-    if ($templateRow -lt 0) { throw "lvlprest.txt has no preset for level $TemplateLevelId to copy." }
-    $defCol = Column $presets 'Def'
-    $maxDef = 0
-    for ($i = 1; $i -lt $presets.Lines.Count; $i++) {
-        $cells = $presets.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $defCol -and [int]::TryParse($cells[$defCol], [ref]$parsed) -and $parsed -gt $maxDef) { $maxDef = $parsed }
+    if ($mazes.Lines.Count -lt 2) { throw 'lvlmaze.txt has no row to copy.' }
+    $cells = Cells $mazes $mazes.Lines[1]
+    Set-Cell $mazes $cells 'Name' $LevelName
+    Set-Cell $mazes $cells 'Level' "$levelId"
+    foreach ($h in $mazes.Header) {
+        if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
+        elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h '24' }
+        elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
     }
-    $cells = Cells $presets $presets.Lines[$templateRow]
-    Set-Cell $presets $cells 'Name' $LevelName
-    Set-Cell $presets $cells 'Def' "$($maxDef + 1)"
-    Set-Cell $presets $cells 'LevelId' "$levelId"
-    $presets.Lines.Add($cells -join "`t")
-    Save-Table $presets
-    Write-Host "lvlprest.txt: added the preset row for level $levelId (Def $($maxDef + 1))."
+    $mazes.Lines.Add($cells -join "`t")
+    Save-Table $mazes
+    Write-Host "lvlmaze.txt: added the maze row for level $levelId."
+}
+
+# --- superuniques.txt: one row per bosses.txt entry -------------------------------------------------------------------
+# A map's Boss names a bosses.txt entry (d2rloader\cartographer\bosses.txt: Name, Base, Mods, Minions). Each entry gets its own
+# superuniques.txt row, keyed 'cartoboss:<Name>' so it can never be a vanilla row. Vanilla rows are copied from, never edited.
+# The 'cartoboss:' rows are rebuilt from bosses.txt each run (so a renamed or removed entry loses its old row), and running this
+# again changes nothing once they are right. An entry that does not check out is reported and not written.
+# At most $MaxBosses entries: the game keeps a once-per-game "already spawned" bit per superuniques row in a bit list of unknown
+# length (docs/reverse-engineering/cartographer.md), so the number of added rows stays small.
+$BossKeyPrefix = 'cartoboss:'
+$MaxBosses = 16
+$bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
+# A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
+$bossLines = @()
+if (Test-Path $bossPath) {
+    $bossText = $bytes.GetString([System.IO.File]::ReadAllBytes($bossPath))
+    $bossLines = @($bossText -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
+}
+if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
+    $bossHeader = @(if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" })
+    $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
+    $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
+    $superPath = Join-Path $ExcelDir 'superuniques.txt'
+    $monstatsPath = Join-Path $ExcelDir 'monstats.txt'
+    $supers = $null
+    $needed = 'Superunique', 'hcIdx', 'Name', 'Class', 'Mod1', 'Mod2', 'Mod3', 'MinGrp', 'MaxGrp'
+    $noEntries = $bossLines.Count -lt 2
+    if (-not $noEntries -and ($nameAt -lt 0 -or $baseAt -lt 0)) {
+        Write-Host "bosses.txt: needs 'Name' and 'Base' columns; superuniques.txt was not touched."
+    } elseif (-not $noEntries -and -not (Test-Path $monstatsPath)) {
+        Write-Host 'bosses.txt: this mod has no monstats.txt to check the Base monsters against; superuniques.txt was not touched.'
+    } else {
+        $supers = Read-Table $superPath
+        $missing = @($needed | Where-Object { $supers.Header -notcontains $_ })
+        if ($missing.Count -gt 0) {
+            Write-Host "bosses.txt: superuniques.txt has no '$($missing -join "', '")' column, so no boss rows were written (the bosses will be spawned as plain monsters of their Base)."
+            $supers = $null
+        }
+    }
+    if ($supers) {
+        # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name-versus-monster check ignores case, like ContainsNoCase.
+        $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $bossIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
+        $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
+        $mBossCol = if ($monstats) { [array]::IndexOf($monstats.Header, 'boss') } else { -1 }
+        for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {
+            $c = $monstats.Lines[$i] -split "`t"
+            if ($c.Count -gt $mIdCol -and $c[$mIdCol] -ne '') {
+                [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add($c[$mIdCol])
+                if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { [void]$bossIds.Add($c[$mIdCol]) }
+            }
+        }
+        $modIds = $null
+        $modsPath = Join-Path $ExcelDir 'monumod.txt'
+        if (Test-Path $modsPath) {
+            $monumod = Read-Table $modsPath
+            if ($monumod.Header -contains 'id') {
+                $modIds = @{}
+                $modCol = Column $monumod 'id'
+                for ($i = 1; $i -lt $monumod.Lines.Count; $i++) {
+                    $c = $monumod.Lines[$i] -split "`t"
+                    $v = 0
+                    if ($c.Count -gt $modCol -and [int]::TryParse($c[$modCol], [ref]$v)) { $modIds[$v] = $true }
+                }
+            }
+        }
+        $superCol = Column $supers 'Superunique'
+        $hcCol = Column $supers 'hcIdx'
+        $vanillaSupers = @{}
+        $kept = [System.Collections.Generic.List[string]]::new()
+        $oldRows = [System.Collections.Generic.List[string]]::new()
+        $kept.Add($supers.Lines[0])
+        $maxHc = 0
+        for ($i = 1; $i -lt $supers.Lines.Count; $i++) {
+            $c = $supers.Lines[$i] -split "`t"
+            $key = if ($c.Count -gt $superCol) { $c[$superCol] } else { '' }
+            if ($key.StartsWith($BossKeyPrefix)) { $oldRows.Add($supers.Lines[$i]); continue }
+            $kept.Add($supers.Lines[$i])
+            if ($key -ne '') { $vanillaSupers[$key.ToLowerInvariant()] = $true }
+            $parsed = 0
+            if ($c.Count -gt $hcCol -and [int]::TryParse($c[$hcCol], [ref]$parsed) -and $parsed -gt $maxHc) { $maxHc = $parsed }
+        }
+        $template = Find-Row $supers 'Superunique' 'Bishibosh'
+        if ($template -lt 0) { $template = 1 }
+        $templateLine = $supers.Lines[$template]
+        $rows = [System.Collections.Generic.List[string]]::new()
+        $seen = @{}
+        for ($b = 1; $b -lt $bossLines.Count; $b++) {
+            $bc = $bossLines[$b] -split "`t"
+            $bossName = if ($bc.Count -gt $nameAt) { $bc[$nameAt].Trim() } else { '' }
+            $bossBase = if ($bc.Count -gt $baseAt) { $bc[$baseAt].Trim() } else { '' }
+            $skip = {
+                param([string]$why)
+                Write-Host "superuniques.txt: skipped bosses.txt row $b ('$bossName'): $why"
+            }
+            if ($bossName -eq '') { & $skip 'the Name cell is empty.'; continue }
+            if ($seen.ContainsKey($bossName.ToLowerInvariant())) { & $skip 'a boss with that name is already listed.'; continue }
+            if ($vanillaSupers.ContainsKey($bossName.ToLowerInvariant()) -or $monsterIdsNoCase.Contains($bossName)) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
+            if ($bossBase -eq '') { & $skip 'the Base cell is empty.'; continue }
+            if (-not $monsterIds.Contains($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
+            if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
+            $mods = @()
+            $bad = ''
+            if ($modsAt -ge 0 -and $bc.Count -gt $modsAt -and $bc[$modsAt].Trim() -ne '') {
+                foreach ($m in ($bc[$modsAt] -split ',')) {
+                    $v = 0
+                    if (-not [int]::TryParse($m.Trim(), [ref]$v) -or $v -lt 1 -or $v -gt 255) { $bad = "Mods entry '$($m.Trim())' is not a whole number from 1 to 255."; break }
+                    if ($null -ne $modIds -and -not $modIds.ContainsKey($v)) { $bad = "Mods entry '$v' is not an id in monumod.txt."; break }
+                    $mods += $v
+                }
+                if ($bad -eq '' -and $mods.Count -gt 3) { $bad = "Mods has $($mods.Count) entries; the limit is 3." }
+            }
+            if ($bad -ne '') { & $skip $bad; continue }
+            $minions = 0
+            if ($minionsAt -ge 0 -and $bc.Count -gt $minionsAt -and $bc[$minionsAt].Trim() -ne '') {
+                $v = 0
+                if ([int]::TryParse($bc[$minionsAt].Trim(), [ref]$v) -and $v -ge 0 -and $v -le 10) { $minions = $v }
+                else { & $skip "Minions '$($bc[$minionsAt].Trim())' is not a whole number from 0 to 10."; continue }
+            }
+            if ($rows.Count -ge $MaxBosses) { & $skip "bosses.txt may have at most $MaxBosses entries."; continue }
+            $seen[$bossName.ToLowerInvariant()] = $true
+            $key = $BossKeyPrefix + $bossName
+            # A copy of a vanilla row (read only); every cell that matters is set below.
+            $cells = Cells $supers $templateLine
+            Set-Cell $supers $cells 'hcIdx' "$($maxHc + $rows.Count + 1)"
+            Set-Cell $supers $cells 'Superunique' $key
+            Set-Cell $supers $cells 'Name' $bossName
+            Set-Cell $supers $cells 'Class' $bossBase
+            for ($n = 0; $n -lt 3; $n++) { Set-Cell $supers $cells "Mod$($n + 1)" $(if ($n -lt $mods.Count) { "$($mods[$n])" } else { '0' }) }
+            Set-Cell $supers $cells 'MinGrp' "$minions"
+            Set-Cell $supers $cells 'MaxGrp' "$minions"
+            foreach ($pair in @(@('TC', 'Act 5 Super C'), @('TC(N)', 'Act 5 (N) Super C'), @('TC(H)', 'Act 5 (H) Super C'), @('TC Desecrated', ''), @('TC(N) Desecrated', ''), @('TC(H) Desecrated', 'Act 5 (H) Super C Desecrated'))) {
+                if ($supers.Header -contains $pair[0]) { Set-Cell $supers $cells $pair[0] $pair[1] }
+            }
+            $rows.Add($cells -join "`t")
+        }
+        if (($oldRows -join "`n") -ne ($rows -join "`n")) {
+            foreach ($line in $rows) { $kept.Add($line) }
+            $supers.Lines = $kept
+            Save-Table $supers
+            Write-Host "superuniques.txt: wrote $($rows.Count) boss row(s) (replacing $($oldRows.Count) from an earlier run)."
+        } else {
+            Write-Host 'superuniques.txt: boss rows already up to date.'
+        }
+    }
+} elseif ($bossLines.Count -ge 2) {
+    Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------
@@ -177,25 +395,28 @@ Write-Pending
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
-# Existing rows are kept (a hand-added Maze row, for one): only the Preset row is added or updated.
+# Existing rows are kept (an older install's Preset row, for one): only the Maze row is added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
 if (Test-Path $slotPath) {
     foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
 }
 $slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
 if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
-    $presetAt = -1
-    for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq 'Preset') { $presetAt = $i; break } }
-    if ($presetAt -lt 0) { $slotLines.Add("Preset`t$levelId") }
-    else { $slotLines[$presetAt] = "Preset`t$levelId" }
+    $mazeAt = -1
+    for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq 'Maze') { $mazeAt = $i; break } }
+    if ($mazeAt -lt 0) { $slotLines.Add("Maze`t$levelId") }
+    else { $slotLines[$mazeAt] = "Maze`t$levelId" }
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
-    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Preset`t$levelId")
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId")
+}
+if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0) {
+    Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
 }
 $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host "slots.txt: Preset is level $levelId (other rows kept)."
+    Write-Host "slots.txt: Maze is level $levelId (other rows kept)."
 } else {
     Write-Host 'slots.txt: already up to date.'
 }

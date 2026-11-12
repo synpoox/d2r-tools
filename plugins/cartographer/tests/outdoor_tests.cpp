@@ -5,6 +5,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -12,6 +13,7 @@
 
 #include "layout.h"
 #include "outdoor.h"
+#include "outdoor_plan.h"
 #include "rng.h"
 #include "stamp.h"
 
@@ -691,4 +693,274 @@ TEST_CASE("stamp plans are stable: same inputs give the same plan, and the golde
 		}
 	if (std::getenv("CARTOGRAPHER_GOLDEN")) std::printf("GOLDEN_STAMP_HASHES %s\n", hashes.c_str());
 	CHECK(hashes == GOLDEN_STAMP_HASHES);
+}
+
+// --- The build plan (outdoor_plan.h): what the engine hook replays ---------------------------------------------------
+
+namespace {
+
+MapRequest jungleRequest(uint64_t seed)
+{
+	MapRequest r;
+	r.tileset = "Jungle";
+	r.shape = "Winding";
+	r.size = "Medium";
+	r.seed = seed;
+	r.options.originX = 6000;
+	r.options.originY = 3000;
+	r.options.maxTilesX = 384;
+	r.options.maxTilesY = 384;
+	return r;
+}
+
+// What the engine's grids would hold after the plan is replayed: each stamp's origin cell carries a piece, every cell it covers is
+// flagged 0x200, each listed void cell is 0x100 with no piece.
+GridSample gridOf(const StampPlan &plan)
+{
+	GridSample g;
+	const size_t n = static_cast<size_t>(plan.cellsW) * plan.cellsH;
+	g.piece.assign(n, 0);
+	g.flags.assign(n, 0);
+	const int span = plan.cellsW / plan.macroW;
+	for (const Stamp &s : plan.stamps) {
+		for (int dy = 0; dy < span; ++dy)
+			for (int dx = 0; dx < span; ++dx) g.flags[static_cast<size_t>(s.cy + dy) * plan.cellsW + s.cx + dx] = 0x200;
+		g.piece[static_cast<size_t>(s.cy) * plan.cellsW + s.cx] = static_cast<uint64_t>(s.lvlPrest);
+	}
+	for (const layout::Point &p : plan.voidCells) g.flags[static_cast<size_t>(p.y) * plan.cellsW + p.x] = 0x100;
+	return g;
+}
+
+} // namespace
+
+TEST_CASE("the built-in Jungle catalogue is the fixture's rows, column for column")
+{
+	const LoadResult fixture = loadJungle();
+	REQUIRE(fixture.ok());
+	const Catalogue &builtin = builtinJungleCatalogue();
+	REQUIRE(builtin.pieces.size() == fixture.catalogue.pieces.size());
+	for (size_t i = 0; i < builtin.pieces.size(); ++i) {
+		const Piece &a = builtin.pieces[i], &b = fixture.catalogue.pieces[i];
+		CAPTURE(i);
+		CHECK(a.tileset == b.tileset);
+		CHECK(a.builder == b.builder);
+		CHECK(a.levelType == b.levelType);
+		CHECK(a.lvlPrest == b.lvlPrest);
+		CHECK(a.name == b.name);
+		CHECK(a.w == b.w);
+		CHECK(a.h == b.h);
+		for (int e = 0; e < 4; ++e) CHECK(a.edge[e] == b.edge[e]);
+		CHECK(a.role == b.role);
+		CHECK(a.weight == b.weight);
+		CHECK(a.tags == b.tags);
+		CHECK(a.check == b.check);
+		CHECK(a.ds1 == b.ds1);
+		CHECK(a.openMask == b.openMask);
+	}
+	// The picker gives the same answer on both, so nothing the picker reads was lost in the copy.
+	const Layout l = layout::generate(layout::Shape::Branching, layout::Size::Large, 77);
+	CHECK(picksHash(pickPieces(l, builtin, "Jungle", 77)) == picksHash(pickPieces(l, fixture.catalogue, "Jungle", 77)));
+}
+
+TEST_CASE("a Jungle map plans: layout, picks and stamps agree, the rect is the slot's origin plus the plan's size")
+{
+	const MapPlan plan = planOutdoorMap(jungleRequest(4242), builtinJungleCatalogue());
+	REQUIRE(plan.ok);
+	CHECK(plan.reason.empty());
+	CHECK(plan.stamps.ok());
+	CHECK(!plan.stamps.stamps.empty());
+	CHECK(plan.hash != 0);
+	const LevelRect rect = levelRectOf(plan.stamps);
+	CHECK(rect.x == 6000);
+	CHECK(rect.y == 3000);
+	CHECK(rect.w == plan.stamps.macroW * 32);
+	CHECK(rect.h == plan.stamps.macroH * 32);
+	CHECK(rect.w <= 384);
+	CHECK(rect.h <= 384);
+	CHECK(plan.stamps.entrance.known);
+	CHECK(plan.stamps.entrance.x >= 6000);
+	// The same request plans the same level.
+	const MapPlan again = planOutdoorMap(jungleRequest(4242), builtinJungleCatalogue());
+	REQUIRE(again.ok);
+	CHECK(again.hash == plan.hash);
+	CHECK(again.cacheKey == plan.cacheKey);
+	CHECK(planOutdoorMap(jungleRequest(4243), builtinJungleCatalogue()).hash != plan.hash);
+	// Every stamp is a jungle mask piece (530..544) or a clearing (575..604); never 529 (Act 3 town) or the Docks and Travincal transitions.
+	for (const Stamp &s : plan.stamps.stamps) {
+		CHECK(s.lvlPrest >= 530);
+		CHECK(s.lvlPrest <= 604);
+		CHECK(s.lvlPrest != 573);
+		CHECK(s.lvlPrest != 574);
+	}
+}
+
+TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	MapRequest snow = jungleRequest(1);
+	snow.tileset = "Snow";
+	const MapPlan s = planOutdoorMap(snow, cat);
+	CHECK(!s.ok);
+	CHECK(s.reason.find("Snow") != std::string::npos);
+	CHECK(s.stamps.stamps.empty());
+
+	MapRequest size = jungleRequest(1);
+	size.size = "Huge";
+	CHECK(planOutdoorMap(size, cat).reason.find("Huge") != std::string::npos);
+
+	MapRequest shape = jungleRequest(1);
+	shape.shape = "Zigzag";
+	const MapPlan z = planOutdoorMap(shape, cat);
+	CHECK(!z.ok);
+	CHECK(z.reason.find("Zigzag") != std::string::npos);
+
+	MapRequest tight = jungleRequest(1);
+	tight.options.maxTilesX = 32;
+	tight.options.maxTilesY = 32;
+	const MapPlan t = planOutdoorMap(tight, cat);
+	CHECK(!t.ok);
+	CHECK(!t.reason.empty());
+	CHECK(t.stamps.stamps.empty());
+	CHECK(t.stamps.voidCells.empty());
+
+	// A blank shape and size mean Winding and Medium; a blank tileset is not Jungle.
+	MapRequest blank = jungleRequest(9);
+	blank.shape.clear();
+	blank.size.clear();
+	CHECK(planOutdoorMap(blank, cat).ok);
+	blank.tileset.clear();
+	CHECK(!planOutdoorMap(blank, cat).ok);
+
+	// An empty catalogue picks nothing: a plain refusal, not a crash.
+	const Catalogue empty;
+	const MapPlan e = planOutdoorMap(jungleRequest(1), empty);
+	CHECK(!e.ok);
+	CHECK(e.reason.find("pieces") != std::string::npos);
+}
+
+TEST_CASE("every shape and size preset on Jungle plans for a range of seeds, or says why not")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	int planned = 0;
+	for (int s = 0; s < layout::kShapeCount; ++s)
+		for (int z = 0; z < layout::kSizeCount; ++z)
+			for (uint64_t seed = 1; seed <= 40; ++seed) {
+				MapRequest r = jungleRequest(seed);
+				r.shape = layout::shapeName(static_cast<layout::Shape>(s));
+				r.size = layout::sizeName(static_cast<layout::Size>(z));
+				r.options.maxMacroCells = 64;
+				r.options.maxTilesX = 0;
+				r.options.maxTilesY = 0;
+				const MapPlan p = planOutdoorMap(r, cat);
+				CAPTURE(r.shape);
+				CAPTURE(r.size);
+				CAPTURE(seed);
+				CAPTURE(p.reason);
+				REQUIRE(p.ok);
+				++planned;
+			}
+	CHECK(planned == layout::kShapeCount * layout::kSizeCount * 40);
+}
+
+TEST_CASE("the plan cache keys by seed and options, shares plans, drops the oldest and remembers failures")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	PlanCache cache(2);
+	bool built = false;
+	const auto a = cache.get(jungleRequest(1), cat, &built);
+	CHECK(built);
+	CHECK(a->ok);
+	const auto a2 = cache.get(jungleRequest(1), cat, &built);
+	CHECK(!built);
+	CHECK(a2 == a);  // the same plan object: the server's build and the client's build share it
+	CHECK(cache.size() == 1);
+
+	MapRequest moved = jungleRequest(1);
+	moved.options.originX = 7000;
+	const auto m = cache.get(moved, cat, &built);
+	CHECK(built);
+	CHECK(m != a);
+	CHECK(m->stamps.originX == 7000);
+	CHECK(cache.size() == 2);
+
+	cache.get(jungleRequest(2), cat, &built);  // third entry: the oldest (seed 1, origin 6000) is dropped
+	CHECK(built);
+	CHECK(cache.size() == 2);
+	cache.get(jungleRequest(1), cat, &built);
+	CHECK(built);
+
+	MapRequest bad = jungleRequest(3);
+	bad.tileset = "Snow";
+	const auto f = cache.get(bad, cat, &built);
+	CHECK(built);
+	CHECK(!f->ok);
+	const auto f2 = cache.get(bad, cat, &built);
+	CHECK(!built);  // the same seed fails the same way
+	CHECK(f2 == f);
+
+	// Case and the shape's spelling do not make a second plan.
+	PlanCache wide(8);
+	MapRequest upper = jungleRequest(5);
+	upper.tileset = "JUNGLE";
+	upper.shape = "winding";
+	wide.get(jungleRequest(5), cat);
+	wide.get(upper, cat, &built);
+	CHECK(!built);
+	CHECK(wide.size() == 1);
+	wide.clear();
+	CHECK(wide.size() == 0);
+	CHECK(PlanCache(0).size() == 0);  // a capacity of 0 is raised to 1, not a crash
+}
+
+TEST_CASE("the level seed is the drlg seed base plus the level id, wrapping like the engine's int32")
+{
+	CHECK(levelSeedFor(1000, 139).first == 1139);
+	CHECK(levelSeedFor(1000, 139).second == 0x29a);
+	CHECK(levelSeedFor(0xffffffffu, 2).first == 1);
+	CHECK(levelSeedFor(0x7fffffffu, 1).first == INT32_MIN);
+}
+
+TEST_CASE("compareGrid agrees with a replayed plan and names every way a grid can differ")
+{
+	// An L-shaped layout has void cells in its empty macro-cell; a line does not.
+	Layout l;
+	l.width = 2;
+	l.height = 2;
+	l.cells.resize(4);
+	l.cells[0] = {static_cast<uint8_t>(layout::kEast | layout::kSouth), Role::Entrance};
+	l.cells[1] = {layout::kWest, Role::Boss};
+	l.cells[2] = {layout::kNorth, Role::Path};
+	const LoadResult cat = loadJungle();
+	const PickResult picks = pickPieces(l, cat.catalogue, "Jungle", 3);
+	REQUIRE(picks.ok());
+	const StampPlan plan = planStamps(l, picks, StampOptions{});
+	REQUIRE(plan.ok());
+	REQUIRE(!plan.voidCells.empty());
+
+	GridSample g = gridOf(plan);
+	GridCounts counts;
+	CHECK(compareGrid(plan, g, &counts).empty());
+	CHECK(counts.cells == plan.cellsW * plan.cellsH);
+	CHECK(counts.pieces == static_cast<int>(plan.stamps.size()));
+	CHECK(counts.voided == static_cast<int>(plan.voidCells.size()));
+	CHECK(counts.other == 0);
+	CHECK(counts.covered == counts.pieces * (plan.cellsW / plan.macroW) * (plan.cellsW / plan.macroW));
+
+	GridSample noPiece = g;
+	noPiece.piece[static_cast<size_t>(plan.stamps[0].cy) * plan.cellsW + plan.stamps[0].cx] = 0;
+	CHECK(compareGrid(plan, noPiece)[0].find("left no piece") != std::string::npos);
+
+	GridSample notVoid = g;
+	const layout::Point v = plan.voidCells[0];
+	notVoid.flags[static_cast<size_t>(v.y) * plan.cellsW + v.x] = 0;
+	CHECK(compareGrid(plan, notVoid)[0].find("should be void") != std::string::npos);
+
+	GridSample voidInside = g;
+	voidInside.flags[static_cast<size_t>(plan.stamps[0].cy) * plan.cellsW + plan.stamps[0].cx + 1] |= 0x100;
+	CHECK(compareGrid(plan, voidInside)[0].find("void inside") != std::string::npos);
+
+	GridSample shortGrid = g;
+	shortGrid.piece.pop_back();
+	CHECK(compareGrid(plan, shortGrid)[0].find("expects") != std::string::npos);
+	CHECK(!compareGrid(StampPlan{}, GridSample{}).empty());
 }

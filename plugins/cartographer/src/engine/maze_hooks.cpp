@@ -3,6 +3,8 @@
 #include "core/part_signatures.h"
 #include "core/text.h"
 #include "log.h"
+#include "hookguard.h"
+#include "outdoor_hooks.h"
 #include "steer.h"
 
 #ifndef NOMINMAX
@@ -54,7 +56,6 @@ constexpr int32_t MazeType = 1;
 constexpr int MaxRooms = 4096;        // a sanity bound for the walks of the room list (the probe's and the event room's)
 constexpr int MaxLevels = 400;        // the same for the level list
 
-using LevelBuildFn = uint64_t (*)(uint8_t dataFlag, void* level) noexcept;
 using WalkFn = void (*)(void* level) noexcept;
 using SpecialFn = void (*)(void* level, int32_t* entry, uint32_t* rot) noexcept;
 using RingFn = void (*)(void* level, int32_t n) noexcept;
@@ -82,6 +83,7 @@ Part g_parts[MazePartCount] = {
 };
 
 LevelBuildFn g_levelOriginal = nullptr;
+std::atomic<bool> g_levelBuildTried{false};  // InstallMazeHooks reached the level build hook (it may still have been refused)
 WalkFn g_walkOriginal = nullptr;
 SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
@@ -663,6 +665,13 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		return 0;  // the loader gave no way back (logged at install): every level build is skipped until a restart
 	}
 	g_dataFlag = dataFlag;  // read by the map sync's client apply (MazeLevelDataFlag); the game's behaviour is unchanged
+	{
+		// The outdoor build shares this hook (the level build is hooked once): it builds the Outdoor slot level, if it is on, and no other level.
+		uint64_t outdoorResult = 0;
+		if (OutdoorLevelBuild(dataFlag, level, g_levelOriginal, &outdoorResult)) {
+			return outdoorResult;
+		}
+	}
 	if (!g_live.load() || !IsSlotLevel(level)) {
 		return g_levelOriginal(dataFlag, level);  // every other level runs the game's own build, untouched
 	}
@@ -749,6 +758,10 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 }
 
 }  // namespace
+
+auto MazeLevelBuildHookTried() -> bool {
+	return g_levelBuildTried.load();
+}
 
 auto MazeSteeringLive() -> bool {
 	return g_live.load();
@@ -962,16 +975,12 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	}
 	const auto install = [&](MazePartId id, void* target, void** original) {
 		Part& part = g_parts[id];
+		if (id == LevelBuild) {
+			g_levelBuildTried = true;
+		}
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
-		const bool ok = hooked && *original != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; %s until the game is restarted; restart it after removing what conflicts", part.name,
-			            id == LevelBuild ? "EVERY level build is skipped (not only the maze), so no level will load" : "the game's maze code is skipped");
-		}
-		return ok;
+		return HookOutcome(part, hooked, *original != nullptr);
 	};
 	// Inner hooks first; the level build, which switches the others on, last.
 	bool ok = install(MazeRingGrower, reinterpret_cast<void*>(&RingHook), reinterpret_cast<void**>(&g_ringOriginal));

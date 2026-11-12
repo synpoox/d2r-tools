@@ -70,7 +70,10 @@ add_library(cartographer SHARED
 	src/engine/map_sync.cpp
 	src/engine/scan.cpp
 	src/engine/maze_hooks.cpp
+	src/engine/outdoor_hooks.cpp
 	src/engine/map_names.cpp
+	src/engine/level_row.cpp
+	src/engine/game_memory.cpp
 	src/log.cpp
 	src/cartographer.rc
 )

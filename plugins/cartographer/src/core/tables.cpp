@@ -18,11 +18,10 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Preset, Cave and Crypt are buildable (Cave and Crypt through the maze steering hooks, which need the
-// Maze slot); the others are accepted names that the loader refuses with a
-// message that says so, until their builders ship.
+// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the others
+// are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Preset", true},  {"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
+	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", false},    {"Snow", false},
 };
@@ -166,7 +165,7 @@ void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
 
 }  // namespace
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -236,6 +235,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const std::string tileset = table.Cell(row, cTileset);
 		if (tileset.empty()) {
 			fail("the Tileset cell is empty. Use " + OneOf(ReadyTilesetNames()) + ".");
+		} else if (EqualsNoCase(tileset, "Preset")) {
+			fail("Preset maps are gone: use Cave or Crypt.");
 		} else {
 			const std::vector<std::string> all = TilesetNames();
 			const std::string* known = Canonical(all, tileset);
@@ -307,12 +308,15 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
-		map.boss = table.Cell(row, cBoss);
-		if (!map.boss.empty() && names.haveMonsters && names.haveSuperUniques && !Contains(names.monsters, map.boss) &&
-		    !Contains(names.superUniques, map.boss)) {
-			std::vector<std::string> both = names.monsters;
-			both.insert(both.end(), names.superUniques.begin(), names.superUniques.end());
-			fail(NotInTable("Boss", map.boss, "monstats.txt (Id) or superuniques.txt (Superunique)", both));
+		// A Boss names a bosses.txt entry. Anything else is refused with a message, and the map still opens without a Boss.
+		if (const std::string boss = table.Cell(row, cBoss); !boss.empty()) {
+			static const std::vector<BossDef> none;
+			std::string problem;
+			if (const BossDef* entry = ResolveBoss(bosses != nullptr ? *bosses : none, boss, names, &problem)) {
+				map.boss = entry->name;
+			} else {
+				report.Error(MapsFile, row.line, problem + " The map opens without a Boss.");
+			}
 		}
 
 		const std::string monsters = table.Cell(row, cMonsters);
@@ -336,6 +340,39 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 	}
 	return maps;
+}
+
+auto BossKey(std::string_view name) -> std::string {
+	return std::string(BossKeyPrefix) + std::string(name);
+}
+
+auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {
+	return rowFound ? BossPath::Superunique : (baseFound ? BossPath::PlainMonster : BossPath::None);
+}
+
+auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef* {
+	for (const BossDef& def : bosses) {
+		if (EqualsNoCase(def.name, value)) {
+			return &def;
+		}
+	}
+	const std::string word(value);
+	if (word.size() >= std::string_view(BossKeyPrefix).size() && EqualsNoCase(word.substr(0, std::string_view(BossKeyPrefix).size()), BossKeyPrefix)) {
+		*problem = "Boss '" + word + "' is a superuniques.txt key the installer writes, not a name. Put the Name of the bosses.txt entry here.";
+		return nullptr;
+	}
+	const bool vanillaBoss = ContainsNoCase(names.superUniques, word);
+	if (vanillaBoss || ContainsNoCase(names.monsters, word)) {
+		*problem = "Boss '" + word + "' is a vanilla " + (vanillaBoss ? "boss (superuniques.txt)" : "monster (monstats.txt)") +
+		           ". A map's Boss must be an entry of its own in bosses.txt; vanilla bosses are never used.";
+	} else {
+		std::vector<std::string> own;
+		for (const BossDef& def : bosses) {
+			own.push_back(def.name);
+		}
+		*problem = "Boss '" + word + "' is not an entry in bosses.txt" + (bosses.empty() ? " (there are none)." : "." + DidYouMean(word, own));
+	}
+	return nullptr;
 }
 
 namespace {
@@ -487,6 +524,76 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 	return kept;
 }
 
+auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -> std::vector<BossDef> {
+	std::vector<BossDef> out;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(BossesFile, table, report) || !RequireColumns(BossesFile, table, {"Name", "Base"}, report)) {
+		return out;
+	}
+	ReportRepeatedColumns(BossesFile, table, report);
+	NoteUnusedColumns(BossesFile, table, {"Name", "Base", "Mods", "Minions"}, report);
+	const int cName = table.Column("Name"), cBase = table.Column("Base"), cMods = table.Column("Mods"), cMinions = table.Column("Minions");
+	for (const TsvRow& r : table.rows) {
+		BossDef def;
+		def.line = r.line;
+		bool ok = true;
+		const auto fail = [&](const std::string& message) {
+			report.Error(BossesFile, r.line, message + " This row is skipped.");
+			ok = false;
+		};
+		def.name = table.Cell(r, cName);
+		def.base = table.Cell(r, cBase);
+		if (def.name.empty()) {
+			fail("the Name cell is empty.");
+		} else if (ContainsNoCase(names.superUniques, def.name) || ContainsNoCase(names.monsters, def.name)) {
+			fail("'" + def.name + "' is the name of a vanilla boss or monster. A boss entry needs a name of its own.");
+		} else {
+			for (const BossDef& other : out) {
+				if (EqualsNoCase(other.name, def.name)) {
+					fail("a boss called '" + def.name + "' is already on row " + std::to_string(other.line) + ".");
+					break;
+				}
+			}
+		}
+		if (def.base.empty()) {
+			fail("the Base cell is empty. Put a monstats.txt Id here.");
+		} else if (names.haveMonsters && !Contains(names.monsters, def.base)) {
+			fail(NotInTable("Base monster", def.base, "monstats.txt", names.monsters));
+		} else if (names.haveBossFlags && Contains(names.bossMonsters, def.base)) {
+			fail("Base '" + def.base + "' is a vanilla boss (its monstats.txt boss column is 1). A boss entry needs an ordinary monster as its Base.");
+		}
+		const std::string mods = table.Cell(r, cMods);
+		if (!mods.empty()) {
+			for (const std::string& part : Split(mods, ',')) {
+				int v = 0;
+				if (!ParseInt(part, 1, 255, &v)) {
+					fail("Mods entry '" + part + "' is not a whole number " + Range(1, 255) + ".");
+					break;
+				}
+				if (names.haveMods && std::find(names.monsterMods.begin(), names.monsterMods.end(), v) == names.monsterMods.end()) {
+					fail("Mods entry '" + part + "' is not an id in monumod.txt.");
+					break;
+				}
+				def.mods.push_back(v);
+			}
+			if (ok && def.mods.size() > 3) {
+				fail("Mods has " + std::to_string(def.mods.size()) + " entries; the limit is 3.");
+			}
+		}
+		const std::string minions = table.Cell(r, cMinions);
+		if (!minions.empty() && !ParseInt(minions, 0, 10, &def.minions)) {
+			fail("Minions '" + minions + "' is not a whole number " + Range(0, 10) + ".");
+		}
+		if (ok && out.size() >= MaxBosses) {
+			fail("bosses.txt may have at most " + std::to_string(MaxBosses) + " entries (the game's once-per-game spawn bit list has an unknown length).");
+		}
+		if (ok) {
+			out.push_back(std::move(def));
+		}
+	}
+	return out;
+}
+
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row> {
 	using cartographer::events::Row;
 	std::vector<Row> rows;
@@ -584,7 +691,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe"};
+	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorBuild", "OutdoorProbe"};
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
 		const std::string* name = Canonical(known, key);
@@ -621,6 +728,12 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "MazeProbe") {
 			hi = 1;
 			target = &settings.mazeProbe;
+		} else if (*name == "OutdoorBuild") {
+			hi = 1;
+			target = &settings.outdoorBuild;
+		} else if (*name == "OutdoorProbe") {
+			hi = 1;
+			target = &settings.outdoorProbe;
 		}
 		if (!ParseInt(value, lo, hi, target)) {
 			fail(*name + " '" + value + "' is not a whole number " + Range(lo, hi) + ".");
@@ -640,6 +753,7 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 	for (const TsvRow& row : table.rows) {
 		Slot slot;
 		slot.name = table.Cell(row, cSlot);
+		slot.line = row.line;
 		if (slot.name.empty() || !ParseInt(table.Cell(row, cLevel), 1, 65535, &slot.level)) {
 			report.Error(SlotsFile, row.line, "the slot needs a name and a level number. Run the installer again (tools\\install.ps1). This slot is skipped.");
 			continue;
@@ -649,10 +763,55 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 	return slots;
 }
 
+void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report& report) {
+	constexpr int Towns[] = {1, 40, 75, 103, 109};
+	const Tsv levels = ParseTsv(levelsText);
+	const int cId = levels.Column("Id"), cName = levels.Column("Name");
+	std::vector<int> ids;
+	std::vector<std::string> names;  // the levels.txt Name of each id above
+	if (cId >= 0) {
+		for (const TsvRow& row : levels.rows) {
+			int id = 0;
+			if (ParseInt(levels.Cell(row, cId), 0, 65535, &id)) {
+				ids.push_back(id);
+				names.push_back(cName >= 0 ? std::string(levels.Cell(row, cName)) : std::string());
+			}
+		}
+	}
+	std::vector<Slot> kept;
+	for (Slot& slot : slots) {
+		const std::string who = "slot '" + slot.name + "' names level " + std::to_string(slot.level);
+		const auto drop = [&](const std::string& why) {
+			report.Error(SlotsFile, slot.line, who + ", " + why + ". The slot is not used, so no map opens through it.");
+		};
+		if (EqualsNoCase(slot.name, "Preset")) {
+			report.Note(SlotsFile, slot.line, "the Preset slot is not used any more (every map is generated). The row, and its level in levels.txt and lvlprest.txt, can be deleted.");
+		} else if (std::find(std::begin(Towns), std::end(Towns), slot.level) != std::end(Towns)) {
+			drop("a town");
+		} else if (slot.level <= LastOriginalLevel) {
+			drop("a level of the original game. Run the installer again (tools\\install.ps1)");
+		} else if (std::find(ids.begin(), ids.end(), slot.level) == ids.end()) {
+			drop(cId < 0 ? "but levels.txt could not be read" : "which has no row in levels.txt. Run the installer again (tools\\install.ps1)");
+		} else if (EqualsNoCase(slot.name, MazeSlot) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
+			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
+		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return k.level == slot.level; })) {
+			drop("which another slot already uses");
+		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return EqualsNoCase(k.name, slot.name); })) {
+			drop("but a slot of that name is already above");
+		} else {
+			kept.push_back(std::move(slot));
+		}
+	}
+	slots = std::move(kept);
+}
+
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 	const Tsv table = ParseTsv(levelsText);
-	const int cId = table.Column("Id"), cType = table.Column("LevelType"), cDrlg = table.Column("DrlgType");
-	if (cId < 0 || (cType < 0 && cDrlg < 0)) {
+	const int cId = table.Column("Id"), cType = table.Column("LevelType"), cDrlg = table.Column("DrlgType"), cAct = table.Column("Act");
+	const int cOffX = table.Column("OffsetX"), cOffY = table.Column("OffsetY"), cSizeX = table.Column("SizeX"), cSizeY = table.Column("SizeY");
+	const bool geometryColumns = cOffX >= 0 && cOffY >= 0 && cSizeX >= 0 && cSizeY >= 0;
+	if (cId < 0 || (cType < 0 && cDrlg < 0 && cAct < 0 && !geometryColumns)) {
 		return;
 	}
 	for (const TsvRow& row : table.rows) {
@@ -662,17 +821,45 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 		}
 		const bool haveType = cType >= 0 && ParseInt(table.Cell(row, cType), 0, 255, &type);
 		const bool haveDrlg = cDrlg >= 0 && ParseInt(table.Cell(row, cDrlg), 0, 255, &drlg);
+		int act = 0;
+		const bool haveAct = cAct >= 0 && ParseInt(table.Cell(row, cAct), 0, 255, &act);
+		int offX = 0, offY = 0, sizeX = 0, sizeY = 0;
+		const bool haveGeometry = geometryColumns && ParseInt(table.Cell(row, cOffX), -1000000, 1000000, &offX) &&
+		                          ParseInt(table.Cell(row, cOffY), -1000000, 1000000, &offY) && ParseInt(table.Cell(row, cSizeX), 0, 1000000, &sizeX) &&
+		                          ParseInt(table.Cell(row, cSizeY), 0, 1000000, &sizeY);
 		for (Slot& slot : slots) {
 			if (slot.level == id) {
+				if (haveGeometry) {
+					slot.haveGeometry = true;
+					slot.offsetX = offX;
+					slot.offsetY = offY;
+					slot.sizeX = sizeX;
+					slot.sizeY = sizeY;
+				}
 				if (haveType) {
 					slot.levelType = type;
 				}
 				if (haveDrlg) {
 					slot.drlgType = drlg;
 				}
+				if (haveAct) {
+					slot.act = act;
+				}
 			}
 		}
 	}
+}
+
+auto OutdoorSlotRefusal(const Slot& slot) -> std::string {
+	const std::string id = std::to_string(slot.level);
+	if (slot.level <= LastOriginalLevel) {
+		return "the Outdoor slot level " + id + " is a vanilla level (the slot must be a level the installer added, above " + std::to_string(LastOriginalLevel) + ")";
+	}
+	if (slot.act != 4) {
+		return "the Outdoor slot level " + id + " is not read as Act 5 in levels.txt (Act is " + (slot.act < 0 ? std::string("unknown") : std::to_string(slot.act)) +
+		       ", Act 5 is 4)";
+	}
+	return {};
 }
 
 auto OutdoorLevelType(std::string_view tileset) -> int {

@@ -24,6 +24,9 @@ inline constexpr const char* SlotsFile = "slots.txt";
 inline constexpr const char* ShapesFile = "shapes.txt";
 inline constexpr const char* MapStatsFile = "mapstats.txt";
 inline constexpr const char* MapEventsFile = "mapevents.txt";
+inline constexpr const char* BossesFile = "bosses.txt";
+// The superuniques.txt key (Superunique column) of a boss entry. The prefix is on every key, so it can never equal a vanilla row; tools/install.ps1 writes the same.
+inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
 inline constexpr int DefaultProperties = 6;
@@ -33,10 +36,10 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
 inline constexpr int MapItemSpell = 16;
-// The slot (in slots.txt) of the map level every map opens through. Later phases add slots for built layouts.
-inline constexpr const char* PresetSlot = "Preset";
-// The slot of the maze level a Cave or Crypt map opens through (levels.txt DrlgType 1, plan section 3.6).
+// The slot (in slots.txt) of the maze level every map opens through (levels.txt DrlgType 1, plan section 3.6).
 inline constexpr const char* MazeSlot = "Maze";
+// The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
+inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). Recognised
 // and checked here; no map opens through it yet, because the outdoor builder is not wired in (those tilesets are still refused).
 inline constexpr const char* OutdoorSlot = "Outdoor";
@@ -49,9 +52,29 @@ struct GameNames {
 	std::vector<std::string> monsters;      // monstats.txt Id
 	std::vector<std::string> superUniques;  // superuniques.txt Superunique
 	std::vector<std::string> itemCodes;     // misc.txt, weapons.txt and armor.txt code
+	bool haveBossFlags = false;
+	std::vector<std::string> bossMonsters;  // monstats.txt Id whose boss column is 1 (act bosses and the like)
+	bool haveMods = false;
+	std::vector<int> monsterMods;           // monumod.txt id
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
 };
+
+// One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
+struct BossDef {
+	int line = 0;  // row in bosses.txt
+	std::string name;           // shown in game; maps.txt Boss names it
+	std::string base;           // monstats.txt Id the boss is made from
+	std::vector<int> mods;      // up to 3 monster mods (monumod.txt ids)
+	int minions = 0;            // 0 to 10; the game's own group size for the superunique row
+};
+
+// The most entries bosses.txt may have. The game keeps a once-per-game "already spawned" bit per superuniques row in a bitmap of
+// unknown length (docs/reverse-engineering/cartographer.md), so the number of added rows is kept small.
+inline constexpr size_t MaxBosses = 16;
+
+// The superuniques.txt key of the entry called `name`.
+auto BossKey(std::string_view name) -> std::string;
 
 struct MapDef {
 	int line = 0;  // row in maps.txt
@@ -71,23 +94,46 @@ struct Settings {
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
 	int mapNames = 0;   // MapNames: 1 shows a map's own Name on the portal tooltip, the automap title and the entry banner (written, not verified in game)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
+	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
+	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
 	std::string town = "Harrogath";
 };
 
 struct Slot {
+	int line = 0;       // row in slots.txt
 	std::string name;
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 	int drlgType = -1;  // levels.txt DrlgType of that level (1 maze, 2 preset, 3 outdoor); -1 when unknown
+	int act = -1;       // levels.txt Act of that level (0 based: 4 is Act 5); -1 when unknown
+	// levels.txt OffsetX, OffsetY, SizeX and SizeY of that level, in tiles. haveGeometry is true only when all four columns exist and parse; the
+	// outdoor build needs them because the level record's rectangle is still zero when the level build starts.
+	bool haveGeometry = false;
+	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 
-// Tilesets, shapes, sizes and difficulties as the author writes them.
+// The last level of the original game (3.3, Colossal Summit); a slot must be a level above it.
+inline constexpr int LastOriginalLevel = 137;
+
+// Tilesets, shapes and sizes as the author writes them.
 auto TilesetNames() -> std::vector<std::string>;
 auto ReadyTilesetNames() -> std::vector<std::string>;
 
+// bosses.txt (optional): a bad row is left out and described in `report`. A Name that is a vanilla superunique or monstats Id is refused.
+auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -> std::vector<BossDef>;
+
+// The entry a maps.txt Boss value names (ignoring case), or nullptr with `problem` saying why: vanilla boss, or not an entry.
+auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef*;
+
+// Which way the map Boss is spawned. `rowFound`: the game has the entry's superuniques row (the installer ran). `baseFound`: its base monster resolves.
+// A superunique row is used when there is one; the game returning no unit falls back to a plain monster of the base id (the engine does that at spawn).
+enum class BossPath { Superunique, PlainMonster, None };
+auto PickBossPath(bool rowFound, bool baseFound) -> BossPath;
+
 // maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
+// `bosses` (from LoadBosses) is what a Boss cell may name; null means none. A Boss that is not an entry is refused with a message but the map loads without it.
 // `shapes` (from LoadShapes) lets the Shape cell name a shapes.txt row as well as a built-in shape; null means built-ins only.
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr) -> std::vector<MapDef>;
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr, const std::vector<BossDef>* bosses = nullptr) -> std::vector<MapDef>;
 
 // shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;
@@ -105,9 +151,19 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// Fills in each slot's levelType and drlgType from the mod's levels.txt (columns Id, LevelType and DrlgType; each is read when its column
+// Drops every slot that could aim a hook at a level that is not the installer's own: a level of the original game
+// (id 137 or below, 3.3), a town, a level with no levels.txt row (or no readable levels.txt), a repeated level or name.
+// An old "Preset" row is dropped with a note. Each drop is described in `report`; a dropped slot stays closed.
+void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report& report);
+
+// Fills in each slot's levelType, drlgType and act from the mod's levels.txt (columns Id, LevelType, DrlgType and Act; each is read when its column
 // exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
+
+// Empty, or why the Outdoor slot level must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
+// say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level
+// and calls the game, so it runs only for a level it has seen to be in Act 5.
+auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
 // The levels.txt LevelType an outdoor tileset's slot level must have (Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
 auto OutdoorLevelType(std::string_view tileset) -> int;

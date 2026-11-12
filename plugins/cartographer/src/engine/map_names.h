@@ -20,6 +20,10 @@ namespace carto {
 // Fails open: with a part or service missing the map keeps the slot level's own name. `parts` gets the part added by this call.
 auto InstallMapNames(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
+// The slot level's row in the game's levels table for `dataFlag`, or null when the LevelsRow part is off or the level is not
+// found. Also used by the map monster columns (src/engine/level_row.cpp). Game thread.
+auto LevelsRowOf(uint32_t dataFlag, int level) noexcept -> uint8_t*;
+
 // The part and what the setting does now, for 'cartographer check'.
 auto MapNamesPartStatuses() -> std::vector<PartStatus>;
 auto MapNamesSummary() -> std::string;
