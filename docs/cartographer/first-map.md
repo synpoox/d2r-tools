@@ -36,22 +36,25 @@ and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into
 
 ## 2. Make an item that opens the map
 
-Each map has an item of its own. In your mod's `misc.txt`, copy an ordinary item to a new row (the Scroll of Identify, `isc`,
-is a good base: not a potion, which carries stats and belt settings) and change these:
+Each map has an item of its own. In your mod's `misc.txt`, copy the row of an ordinary item (the Scroll of Identify, `isc`,
+is a good base: not a potion, which carries stats and belt settings) to a new row and change these columns:
 
 - `code`: 3 characters that no row of `misc.txt`, `weapons.txt` or `armor.txt` uses (the vanilla charms `cm1` to `cm3`
-  and runes `r01` and up are taken). This guide uses `t20`. Three characters: the toolkit notes say the HD picture lookup does not find a 4-character code (unverified).
+  and runes `r01` and up are taken). This guide uses `t20`. Use 3 characters: a 4-character code gets no picture (not yet
+  confirmed in game).
+- `name`: any text, for example `Shorelines Map`.
 - `pSpell`: `16`.
-- `namestr`: the key of the item's name in your `item-names.json` strings (add the record there), and `spawnable` `0`
-  with the vendor columns blank unless NPCs should sell it.
+- `namestr`: the key of the item's name in your `item-names.json` strings (add the record there).
+- `rarity`, `spawnable`, `PermStoreItem` and `multibuy`: `0`, and clear every vendor `Min` and `Max` column (`CharsiMin`,
+  `GheedMagicMax` and so on), so no NPC sells it and it never drops by chance. Set them differently if the item should be sold.
 
 The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "scroll/identify_scroll" } }`),
 or the item has no icon.
 
-A ready-made copy of the three example rows is [`examples/first-map/misc.txt`](../../plugins/cartographer/examples/first-map/misc.txt):
-append its rows (not its header) to your `misc.txt`. The example pack's `maps.txt` has three maps, using items `t20`, `t21`
-and a Jungle map that uses `t22`. The Jungle map also needs `OutdoorBuild = 1` in `cartographer.txt`; until then it is
-refused when you use its item.
+The example pack's `maps.txt` has three maps, using items `t20`, `t21` and a Jungle map that uses `t22`; make a row for
+each. [`examples/first-map/map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists the values
+for those three (the columns above, by name). The Jungle map also needs `OutdoorBuild = 1` in `cartographer.txt`; until
+then it is refused when you use its item.
 
 Cartographer adds no items of its own, so decide how players get it (a drop, a shop or a cube recipe in your mod). To test
 only, spawn it with the console: `debug_mode`, then `cheat spawn t20,inv 0`. In a Cartographer test slot,
