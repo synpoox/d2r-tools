@@ -181,6 +181,15 @@ TEST_CASE("a bosses.txt Name is trimmed of space, tab, CR and LF only (tools/ins
 	CHECK(bosses[1].name == "\xA0Lead");
 }
 
+TEST_CASE("a bosses.txt Name is compared folding only A-Z (tools/install.ps1 does the same)") {
+	Report report;
+	const auto bosses = LoadBosses("Name\tBase\nRen\xC9\tzombie1\nREN\xE9\tzombie1\nrene\tzombie1\nRENE\tzombie1\n", Names(), report);
+	REQUIRE(bosses.size() == 3);  // 0xC9 and 0xE9 are two names, rene and RENE are one
+	CHECK(bosses[0].name == "Ren\xC9");
+	CHECK(bosses[1].name == "REN\xE9");
+	CHECK(bosses[2].name == "rene");
+}
+
 TEST_CASE("a bosses.txt entry named like a vanilla boss or monster, or with a bad cell, is skipped") {
 	Report report;
 	const auto bosses = LoadBosses(
