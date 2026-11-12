@@ -55,7 +55,7 @@
 .PARAMETER MapItems
     Adds the example map items (examples\first-map\map-items.txt: t20, t21, t22) to the test mod so a map can be opened from its
     item. A map item needs three things in the test mod, and this switch stages all three (test staging only; players get
-    no such files): the misc.txt rows (the base row, the Scroll of Resistance, a quest item (a scroll or tome base is named by its spell, not by namestr), copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
+    no such files): the misc.txt rows (the base row, the Scroll of Identify, with its type changed to herb: an item of type scro or book is named by its spell, not by namestr), copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
     code in data\hd\items\items.json (the picture; without it the item has no icon), and a name per code in
     data\local\lng\strings\item-names.json and strings-legacy (the tooltip). The mod's own copy of items.json and
     item-names.json replaces the game's whole file, so each is seeded from -VanillaData when the slot lacks it. Then

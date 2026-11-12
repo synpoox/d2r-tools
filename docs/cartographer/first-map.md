@@ -36,23 +36,20 @@ and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into
 
 ## 2. Make an item that opens the map
 
-Each map has an item of its own. In your mod's `misc.txt`, copy the row of the Scroll of Resistance (`tr2`, a quest
-item) to a new row and change these columns. Do not copy a Scroll of Identify (`isc`) or Town Portal (`tsc`) or a tome:
-the game names an item of type `scro` or `book` after its item spell, so with spell 16 the tooltip reads "Scroll of Town
-Portal" whatever `namestr` says. A potion is a poor base too: it carries stats and belt settings. The Scroll of Resistance
-is type `ques`, so `namestr` is used (seen in game).
-
+Each map has an item of its own, a plain new row in your mod's `misc.txt`: right-click it in the inventory, it is used up and opens that map's portal (only that map).
+Copy the Scroll of Identify row (`isc`: it keeps the scroll picture and has no stats) to a new row and change these columns. Set its `type` to `herb`, any type except `scro`, `book` or a quest type: the game names an item of type `scro` or `book` after its item spell, so with spell 16 the tooltip would read "Scroll of Town Portal" whatever `namestr` says. A potion is a poor base: it carries stats and belt settings.
 
 - `code`: 3 characters that no row of `misc.txt`, `weapons.txt` or `armor.txt` uses (the vanilla charms `cm1` to `cm3`
   and runes `r01` and up are taken). This guide uses `t20`. Use 3 characters: a 4-character code gets no picture (not yet
   confirmed in game).
+- `type`: `herb` (see above).
 - `name`: any text, for example `Shorelines Map`.
 - `pSpell`: `16`.
 - `namestr`: the key of the item's name in your `item-names.json` strings (add the record there).
 - `rarity`, `spawnable`, `PermStoreItem` and `multibuy`: `0`, and clear every vendor `Min` and `Max` column (`CharsiMin`,
   `GheedMagicMax` and so on), so no NPC sells it and it never drops by chance. Set them differently if the item should be sold.
 
-The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "quest/bark_scroll" } }`, the picture the base item uses),
+The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "scroll/identify_scroll" } }`, the picture the base item uses),
 or the item has no icon.
 
 The example pack's `maps.txt` has three maps, using items `t20`, `t21` and a Jungle map that uses `t22`; make a row for

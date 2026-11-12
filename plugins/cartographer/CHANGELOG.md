@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- A map item copied from a town portal or identify scroll shows that scroll's name; the guide now says to copy the Scroll of Resistance (`tr2`) so the tooltip shows the map's name.
+- Map items now show their own name: the guide sets the new row's type to `herb`, not a scroll.
 
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.

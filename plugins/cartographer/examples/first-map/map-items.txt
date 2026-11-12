@@ -1,4 +1,4 @@
-code	name	base	pSpell	rarity	spawnable	PermStoreItem	multibuy	namestr
-t20	Shorelines Map	tr2	16	0	0	0	0	t20
-t21	Tunneling Depths Map	tr2	16	0	0	0	0	t21
-t22	Overgrown Reach Map	tr2	16	0	0	0	0	t22
+code	name	base	type	pSpell	rarity	spawnable	PermStoreItem	multibuy	namestr
+t20	Shorelines Map	isc	herb	16	0	0	0	0	t20
+t21	Tunneling Depths Map	isc	herb	16	0	0	0	0	t21
+t22	Overgrown Reach Map	isc	herb	16	0	0	0	0	t22
