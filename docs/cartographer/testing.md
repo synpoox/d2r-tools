@@ -99,7 +99,6 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
-| Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (checked in game for monsters), the rest are kept for later phases | cartographer.txt |
 
@@ -156,7 +155,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
     `LocalPlayerReady.playerId` (1 and 1);
   - the map's item opens its own map's red portal in Harrogath; stepping through loads the map level and the portal back works;
   - a second open in the same game is refused with "a map has already been opened in this game";
-  - the Hell gate refuses with "can only be opened in Hell" (a map whose `Difficulty` is Hell, used on Normal);
+  - the Hell gate refuses with "can only be opened in Hell" (a map used on Normal; when this was run, a map row could still name another difficulty);
   - `cartographer open <Name>` opens the portal with no item in town, and refuses outside town ("only be opened in town");
   - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
     (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);

@@ -64,7 +64,6 @@ in [`examples/first-map/`](examples/first-map/).
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
 | Boss, Monsters | A monster id or superunique name; up to 10 monster ids | none |
-| Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
 | Density, Champions, Uniques | Read and checked; not applied yet | cartographer.txt |
@@ -81,10 +80,85 @@ in [`examples/first-map/`](examples/first-map/).
 | ItemStats | Read; not applied yet | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
 
-Optional files beside `maps.txt`: `mapstats.txt` (the property list), `mapevents.txt` (the events), `shapes.txt` (your
-own shapes; checked only, not applied yet), `slots.txt` (which level each slot uses; the installer creates it) and
-`signatures.txt` (engine signatures for a new game build, see
-[the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md)).
+### Optional files
+
+These files sit beside `maps.txt`, are tab separated with a header row, and can be left out. A bad row is skipped and
+named in `cartographer-report.txt`. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
+
+#### mapstats.txt
+
+The pool of random properties. Each map draws `Properties` of them. Without the file a small built-in pool is used.
+
+| Column | Meaning | Default |
+|---|---|---|
+| Target | `Monsters` or `Players`; `Players` rows apply only when `PlayerStats` is `1` (experimental) | required |
+| Stat | A stat name from the game's `itemstatcost.txt`, spelled exactly | required |
+| Min, Max | Lowest and highest rolled value; if `Max` is below `Min`, `Min` is used | required |
+| Weight | How often the row is drawn compared with the others; `0` switches it off | 1 |
+
+Example row: `Monsters	item_maxhp_percent	10	20	3`
+
+#### mapevents.txt
+
+The events a map can have. A map has `EventChance` percent chance of one event, picked by `Weight`. Without the file there
+are no events.
+
+| Column | Meaning | Default |
+|---|---|---|
+| Name | Shown to the player when the event starts | required |
+| Kind | `Boss`, `Ambush`, `Horde`, `Treasure` or `Shrine` (Shrine and Treasure chest placement are experimental) | required |
+| Spawn | A monster id, a unique monster name or an object name | required |
+| Count | Minions (Boss), wave size (Ambush) or horde size (Horde), 1 to 200 | 1 |
+| Waves | Number of waves, 1 to 50; Ambush only | 3 |
+| Drop | A treasure class name: the drop of a Treasure, or extra loot for a Boss | none |
+| Message | Extra text shown when the event starts | none |
+| Weight | How often the row is drawn compared with the others; `0` switches it off | 1 |
+
+Example row: `The Drowned King	Boss	Bishibosh	6			The water churns...	2`
+
+#### shapes.txt
+
+Your own maze shapes, for Cave and Crypt maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
+names cannot be reused. Every column except `Name` is optional, and a blank one keeps the value of the `Base` shape. A row
+that cannot be built is skipped.
+
+| Column | Meaning | Default |
+|---|---|---|
+| Name | The name to use in `maps.txt` | required |
+| Base | A built-in shape, or an earlier row, to start from | Winding |
+| MinPath, MaxPath | Rooms on the main path (at least 4) | the base shape's |
+| Straight | Percent chance to keep going straight at each step, 0 to 100 | the base shape's |
+| MinTurns, MaxTurns | Direction changes along the main path | the base shape's |
+| MinBranches, MaxBranches | Dead-end side rooms | the base shape's |
+| MinBranchLen, MaxBranchLen | Rooms in one side room | the base shape's |
+| Loop | `1` for a ring back to the entrance, `0` for a path | the base shape's |
+| MinLoops, MaxLoops | Extra loops that rejoin the layout | the base shape's |
+| Width, Height | Grid size in rooms, 2 to 32 | from `Size` |
+| BossRoom | `1` to place a boss room, `0` for none | the base shape's |
+
+Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	MaxPath	Straight	MinBranches	MaxBranches	Loop`.
+
+#### slots.txt
+
+Which level each slot opens. `tools\install.ps1` writes the `Preset` row; you add the `Maze` row yourself (see
+[Maze slot](#maze-slot-cave-and-crypt)).
+
+| Column | Meaning | Default |
+|---|---|---|
+| Slot | `Preset` or `Maze` | required |
+| Level | The level id in the mod's `levels.txt`, 1 to 65535 | required |
+
+#### signatures.txt
+
+For a game build the plugin does not know: replaces how Cartographer finds one of the game's functions, without a
+rebuild. You will not normally need it. See [the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md).
+
+| Column | Meaning | Default |
+|---|---|---|
+| Part | The name of the engine part, as the plugin log lists it | required |
+| Signature | The byte pattern, hex bytes separated by spaces, `??` for any byte | required |
+
+A part found this way is checked before it is used; if the check fails the part stays off and the log says why.
 
 ## Maze slot (Cave and Crypt)
 
@@ -115,6 +189,6 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
   seen on its portal, automap and banner in single player).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
   banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, arriving in the planned maze entrance
-  room, Nightmare and Hell difficulty for mazes, and a second Crypt map in one game.
+  room, opening a map in Hell (only the Normal refusal was seen), and a second Crypt map in one game.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

@@ -10,7 +10,7 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
 | `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player only when `PlayerStats` is 1 (written and unit tested; **not yet verified in game**). `shapes.txt` and `mapevents.txt`: no, they are read and checked, but nothing rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
@@ -28,7 +28,8 @@ General rules for every table:
 - Each cell is trimmed of spaces at both ends.
 - An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
 - A column named twice in the header of `maps.txt`, `mapstats.txt`, `mapevents.txt` or `shapes.txt` is an error, but the file still loads and only the first one is used. (`cartographer.txt` is not checked for this.)
-- Words that are Cartographer's own (tileset, shape, size, difficulty, target, kind) ignore case.
+- Words that are Cartographer's own (tileset, shape, size, target, kind) ignore case.
+- The old `maps.txt` column `Difficulty` is no longer used. A table that still has it loads, and `cartographer check` notes that the column is ignored.
 - Names from the game's own tables (monster `Id`, superunique name, stat names) must match exactly, capital letters included. Item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
 - In `mapstats.txt` and `mapevents.txt`, a message about a `Weight`, `Count` or `Waves` past 2,147,483,647 (or below -2,147,483,648) adds "(you typed N)".
@@ -48,7 +49,6 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
 | `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; checked only, not applied yet) | the tileset's own monsters | `quillrat1,zombie1` |
-| `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
 | `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
@@ -62,14 +62,14 @@ A row is refused with a message, and skipped, when:
 
 - `Name` is empty or already used;
 - `Tileset` is empty, unknown or not built yet;
-- `Shape`, `Size` or `Difficulty` is not one of the words above;
+- `Shape` or `Size` is not one of the words above;
 - a number is not a whole number in its range;
 - `Item` is empty, longer than 4 characters, not an item in `misc.txt`, `weapons.txt` or `armor.txt`, an item without item spell 16, or an item another map already uses;
 - `Boss` or a `Monsters` entry is not in the game's tables, or `Monsters` has more than 10 entries.
 
 Each name check is skipped only when the game table it needs cannot be read, and the report says so: `Boss` needs both `monstats` and `superuniques`, `Monsters` needs `monstats`, and `Item` needs the item tables. The spell-16 check needs `misc.txt` with a `pSpell` column; without it the check is skipped, and an item without spell 16 simply never opens its map.
 
-A map opens only in the `Difficulty` it names (Hell unless you say otherwise), in Harrogath, for a character of at least `MinCharLevel`, once per game. This is what acts in game today. A refused map stays in the inventory and a sentence says why. Planned, not built yet: a maze map has an entrance and no exit, the player arrives through the portal, and the boss and the event room are at the far end of the path.
+A map opens only in Hell, in Harrogath, for a character of at least `MinCharLevel`, once per game. This is what acts in game today. A refused map stays in the inventory and a sentence says why. Planned, not built yet: a maze map has an entrance and no exit, the player arrives through the portal, and the boss and the event room are at the far end of the path.
 
 ## mapstats.txt (optional)
 
@@ -143,6 +143,8 @@ Global settings. `Properties` and `PlayerStats` are used when a map opens (not y
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player. **Use `1` only on a test slot** until the in-game save check has passed (see below); `0` or `1` | 0 | 0 |
+| `MapNames` | `1` shows a map's own name on its portal tooltip, the automap title and the entry banner (experimental); `0` or `1` | 0 | 1 |
+| `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 
 ## tilesets.txt (optional, advanced)
