@@ -8,6 +8,18 @@ else()
 endif()
 add_test(NAME layout_tests COMMAND layout_tests)
 
+# Host tests for the map stats draw core (phase 5a).
+add_executable(stats_tests stats_tests.cpp)
+target_link_libraries(stats_tests PRIVATE cartographer_stats)
+target_include_directories(stats_tests PRIVATE ../third_party/doctest)
+if(MSVC)
+	target_compile_options(stats_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+	set_property(TARGET stats_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # match the static library
+else()
+	target_compile_options(stats_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME stats_tests COMMAND stats_tests)
+
 # Catalogue tool tests (Python). Kept separate so it survives PR #42's CMake restructure.
 # CARTOGRAPHER_NO_DATA=1: CI has no game data.
 find_package(Python3 COMPONENTS Interpreter)

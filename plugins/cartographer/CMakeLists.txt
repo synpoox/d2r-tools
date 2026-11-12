@@ -52,6 +52,10 @@ if(MSVC)
 	set_property(TARGET cartographer PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # static CRT: no VC++ runtime dependency
 endif()
 
+# The map stats draw core (phase 5a): pure C++, no engine headers. It includes ../layout/rng.h.
+cartographer_library(cartographer_stats src/stats/mapstats.cpp src/stats/mapstats.h)
+target_include_directories(cartographer_stats PUBLIC src/stats)
+
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
