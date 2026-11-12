@@ -75,6 +75,10 @@ auto OutdoorSlotLevelId() -> int;
 auto OutdoorEventRoom() -> MazeEventRect;
 auto OutdoorBossRoom() -> MazeEventRect;
 
+// What the arrival probe found for the local player in this game: 0 not yet, 1 in the planned entrance cell, 2 not in it, 3 could not be told.
+// Cleared when the game is left. The probe runs when OutdoorProbe or AutoCheck is 1. Read by AutoCheck. Any thread.
+auto OutdoorArrivalResult() -> int;
+
 // OutdoorProbe: where the local player first stands in the Outdoor slot level, compared with the entrance cell (as MazeProbeArrival). Game thread.
 auto OutdoorArrivalPending() -> bool;
 void OutdoorProbeArrival(void* room, int32_t levelId);
