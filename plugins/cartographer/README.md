@@ -92,10 +92,11 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
   - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
 - Not exercised in game: a Hell-difficulty open that succeeds, the character level gate, the "no free spot" gate, an ordinary
   spell-16 item that no map names compared with vanilla, and the spell-16 use with no matching check (below).
-- Seen in game, not a Cartographer fault: a town portal scroll used on the map level itself did nothing (not compared with
-  a game without Cartographer, which has no red portal to reach that level).
+- Seen in game, cause not known: a town portal scroll used on the map level itself did nothing. No comparison without
+  Cartographer was made (vanilla has no red portal to reach that level), so it is not known whether Cartographer is involved.
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other.
-- The spell-16 use with no matching check, whose code names a map, is dropped (it opens nothing and is not passed to the game).
+- Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
+  dropped (it opens nothing and is not passed to the game).
 - Not yet in game for `cartographer open <Name>`: leaving the game with the portal still open; repeating with
   Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.

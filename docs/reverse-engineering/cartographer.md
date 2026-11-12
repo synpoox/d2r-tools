@@ -100,8 +100,10 @@ written from this page alone for the rows without a signature (AGENTS.md); the 1
 (D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save, Normal difficulty): all thirteen parts
 found by signature at load, the three hooks installed, the item opened its own map's portal, the map loaded and returned,
 a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
-`LocalPlayerReady.playerId`. Not validated in game: a Hell-difficulty open, the level and free-spot gates, and the
-spell-16 use with no matching check.
+`LocalPlayerReady.playerId`. Not validated in game: a Hell-difficulty open, the level and free-spot gates, an ordinary
+spell-16 item that no map names compared with vanilla (the pass-through of the two item hooks), the spell-16 use with no
+matching check, leaving the game with the portal open, and the TCP/IP client refusal. Open, cause unknown: a town portal
+scroll used on the map level itself did nothing; no comparison without Cartographer was made.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
 sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
