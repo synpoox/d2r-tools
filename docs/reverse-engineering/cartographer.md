@@ -1011,6 +1011,23 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 7. **Leaving the game.** After `GameLeft` and a new game there is no banner and no event from the old map, and no spawn in a level that was not opened.
 8. **Row index of the `.txt` fallback.** When the game's tables are not used, the `monstats.txt` / `superuniques.txt` row index is the parsed row count; check it against the game's row for a mod whose file has a blank line (the `spawn '..': monstats row N from the game's table` line gives the game's own row to compare with).
 
+### Game checks of 2026-11-12 (issue #92)
+
+Live, slot 11 (test mod D2RToolsTest, save `cartos`), build 93847, D2RLoader 1.3.1-beta; one operator run on the Barbarian in `cheat god` after one death. The map was the slot level 138 (a copy of Colossal Summit, 20 x 28 tiles), opened with `cartographer open`. The event chance was 100 percent, so the rate (item 6) was not checked. Not checked on Steam build 94995. Item numbers are those of "Needs game" above.
+
+| Item | Result |
+|---|---|
+| Decision | Logged with the seed: `event for 'EvMapA' (seed 17327224837595650, chance 100%): Boss 'Game Boss' (Bishibosh) minions 4 at (0,0)`. |
+| 1. Server rect units | Every room logs `5 server unit(s) per DRLG tile: the server rect is a whole multiple`; the event room was DRLG (5000,2024) 8 x 4 tiles, server (25000,10120) 40 x 20. The monsters stood in it (screenshot after `cheat goto 138,25020,10130`: about 10 Fallen next to the portal). |
+| 2. Event room | Preset: **never fires at the committed distance 24** in this 20 x 28 tile map (no room is 24 tiles from the entry room by Chebyshev distance), so no event spawned in the first run. With the distance lowered to 12 for the check (scratch build, not committed) room #4 was chosen (`event room by distance: THIS IS THE EVENT ROOM`) in every run. The shipped maps are larger, but a small preset map gets no event; filed as a design finding. The maze event room from the plan was not run. A rebuilt level was not checked. |
+| 3. Spawns | Boss: `spawned 5 of 5 in the event room (25000,10120) 40 x 20 (1 as a superunique, 0 refused by the game)`, then `superunique row 0 at (25020,10130): returned 000000016EA9D830, once-per-game bit now set`. Horde of 3: `spawned 3 of 3 ... (0 as a superunique, 0 refused)`. The class (monstats row 58, `fallenshaman1`) matches the table. The map's stats reached them (statprobe: `maxhp 1280 -> 2560`, `list on chain: yes`). The bitmap mask `1 << (row & 7)` was checked for row 0 only. A second map in one game (`already spawned this game`) was not run. |
+| 4. Position validity | Radius `0xa` kept; monsters did not stack on walls or each other in the screenshots (one view, not a stress run). |
+| 5. Entry message | The overlay banner logs `entry message shown on the overlay (3 line(s))` with the map name, the event name and the message, and the draw calls return `Success` for every line. The banner text did **not** show in the harness screenshots (`PrintWindow` does not capture the overlay), so what it looks like on screen, and the fade, were not seen. Re-entry and other levels were not checked. |
+| 7. Leaving the game | After Save and Exit and a new game, `cheat goto 138` shows no monsters, no banner and no `eventprobe` lines (the level had no event because no map was opened). |
+| 8. txt fallback | Not exercised: with the mod's `superuniques.txt` removed for one game the route stayed on (`superuniques row 0 from the game's table`) and the Horde spawned as before, which shows the game's route does not need the mod's file. The txt route itself (route off) was not forced. |
+
+Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the monstats `Id` is at row `+2`, not `+0`).
+
 ## 10. Red portal tooltip and area name (issue #90)
 
 Static answers for issue #90: show each map's own `Name` on the red portal tooltip and as the area name inside the map, instead of the slot
@@ -1201,6 +1218,20 @@ Everything below follows the recommendation of Q4; the items under "Needs game" 
 8. The log lines to read for items 1 to 7: `spawn names: data flag N, table revision R: monstats from the game's table on/OFF (SDK bank ..), superuniques by the game's name map on/OFF; <why>`; `spawn '..': monstats row N from the game's table` and `superuniques row N from the game's table, class monstats row M`. A round trip that fails logs `N of M monstats Ids did not map back` and the superuniques route stays off (a mod with an odd `Id` row, for example, would do that).
 9. Is the `TableView.revision` non-zero and stable between two map opens (log shows the same `table revision R`, and the self-check line appears once), and does it change after a table load? A revision of 0 only means the check repeats at every map open.
 10. A mod with a repeated monstats `Id`: which row does the map give (first or last)? Does the superuniques `Class` agree with the txt for a stock superunique (no `which the mod's superuniques.txt does not agree with` warning)?
+
+### Game checks of 2026-11-12 (issue #106)
+
+Live on slot 11, build 93847, same setup as section 9's checks. Item numbers are those of "Needs game" above.
+
+- **Q1 correction (a bug that blocked the run).** The compiled monstats `Id` is at row `+2`, 47 bytes; the `u16` at row `+0` is the row's own index (dumped in game for rows 0 to 5). The first version read the `Id` at `+0` (an invisible first character), so the round trip failed: `722 of 722 monstats Ids did not map back to their own row (first: row 1 gave -1)` and the superuniques route stayed off. Fixed (`kMonStatsIdOffset`, `findMonsterRow`, the round trip and the Class check); the tests put the `Id` at `+2` and the longest `Id` is 46 characters.
+- **1. Self-check.** `*(dt+0xf70)` resolves every stock `Id` to its row (`spawn names: data flag 3, table revision 1: monstats from the game's table on (SDK bank Rotw), superuniques by the game's name map on`) and the superuniques name `Bishibosh` gives row 0.
+- **2. Miss value.** The failed round trip above reported `-1` for the misses, and a miss printed nothing from the game.
+- **3. Class width.** `Bishibosh` (row 0) has class row 58, which is `fallenshaman1` in the table and in the txt: `spawn 'Bishibosh': superuniques row 0 from the game's table, class monstats row 58`. The `u16` at superuniques row `+0` (item 4) was not read.
+- **5. `getTable` on the event thread.** Not `Busy`: the self-check line appears at the first map open and the route is on.
+- **6. Pairing.** SDK bank `Rotw` (data flag 3).
+- **7. Case.** Only the case-insensitive round trip passed (the txt's `Id` case and the game's lower-case keys agree); an upper-case query alone was not run.
+- **9. Revision.** `table revision 1` at every map open of every game; the self-check line appeared once per game.
+- **8 (row index of the txt route) and 10 (repeated monstats `Id`).** Not run (no blank-line or repeated-`Id` mod file was arranged). With the mod's `superuniques.txt` removed the route stayed on (section 9's checks); the txt route itself was not forced off.
 
 ## 12. Multiplayer map sync engine checks (issue #98)
 

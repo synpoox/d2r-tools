@@ -251,13 +251,13 @@ TEST_CASE("eventSeed is stable and differs from the map seed") {
 
 namespace {
 
-// A fake compiled monstats table: rows of kMonStatsRowSize bytes with the Id inline at +0.
+// A fake compiled monstats table: rows of kMonStatsRowSize bytes with the Id inline at +2 (a row index u16 at +0).
 std::vector<uint8_t> fakeMonstats(const std::vector<std::string> &ids) {
 	std::vector<uint8_t> rows(ids.size() * kMonStatsRowSize, 0xCC);  // junk after the Id, as a real row has
 	for (size_t i = 0; i < ids.size(); ++i) {
 		uint8_t *row = rows.data() + i * kMonStatsRowSize;
-		std::fill(row, row + kMonStatsIdSize, uint8_t{0});
-		std::copy(ids[i].begin(), ids[i].end(), row);
+		std::fill(row, row + kMonStatsIdOffset + kMonStatsIdSize, uint8_t{0});
+		std::copy(ids[i].begin(), ids[i].end(), row + kMonStatsIdOffset);
 	}
 	return rows;
 }
@@ -293,8 +293,8 @@ TEST_CASE("idMatches: a field with no NUL is not text") {
 	CHECK_FALSE(idMatches(full, kMonStatsIdSize, std::string(kMonStatsIdSize, 'a')));
 	CHECK_FALSE(idText(full, kMonStatsIdSize).has_value());
 	char forty[kMonStatsIdSize] = {};
-	std::fill(forty, forty + 47, 'b');
-	CHECK(idMatches(forty, kMonStatsIdSize, std::string(47, 'B')));  // the longest Id: 47 characters and the terminator
+	std::fill(forty, forty + 46, 'b');
+	CHECK(idMatches(forty, kMonStatsIdSize, std::string(46, 'B')));  // the longest Id: 46 characters and the terminator
 	CHECK_FALSE(idMatches(nullptr, kMonStatsIdSize, "b"));
 }
 

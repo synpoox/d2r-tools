@@ -257,7 +257,7 @@ auto RoundTripMonsters(const uint8_t* dt, const ep::TableFacts& mon) noexcept ->
 	std::unordered_map<std::string, std::vector<int>> byId;
 	std::vector<std::pair<int, std::string>> order;  // each distinct Id once, at its first row
 	for (uint32_t i = 0; i < mon.viewCount; ++i) {
-		const char* field = reinterpret_cast<const char*>(rows + static_cast<size_t>(i) * mon.viewRowSize);
+		const char* field = reinterpret_cast<const char*>(rows + static_cast<size_t>(i) * mon.viewRowSize + ep::kMonStatsIdOffset);
 		const std::optional<std::string_view> id = ep::idText(field, ep::kMonStatsIdSize);
 		if (id && id->empty()) {
 			continue;
@@ -435,7 +435,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 		plog::Warn("spawn '%s': the superuniques lookup gave row %d whose Class %u is not a monstats row; the mod's .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls));
 		return false;
 	}
-	const char* idChars = reinterpret_cast<const char*>(static_cast<const uint8_t*>(mon.viewRows) + static_cast<size_t>(cls) * mon.viewRowSize);
+	const char* idChars = reinterpret_cast<const char*>(static_cast<const uint8_t*>(mon.viewRows) + static_cast<size_t>(cls) * mon.viewRowSize + ep::kMonStatsIdOffset);
 	const std::string_view gameId(idChars, strnlen(idChars, ep::kMonStatsIdSize));
 	if (ep::checkSuperClass(txt, spawn, gameId) == ep::ClassCheck::Differs) {
 		plog::Warn("spawn '%s': the superuniques lookup gave row %d with class monstats row %u, (Id '%.*s'), which the mod's superuniques.txt does not agree with; the .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls), static_cast<int>(gameId.size()), gameId.data());

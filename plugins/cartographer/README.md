@@ -29,13 +29,13 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
   (`Level`, `Density`, ...), `ItemStats` and the panel are not applied yet. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
-- **Map events** (not yet verified in game): when a map opens, `EventChance` and `mapevents.txt` decide whether it has an event
+- **Map events** (Boss and Horde spawns and the game-table names checked in game; the on-screen banner text was not seen; see Tested): when a map opens, `EventChance` and `mapevents.txt` decide whether it has an event
   (the row is drawn by `Weight`). On arrival in the map level a banner shows the map's `Name` and, for an event that will
   spawn, the event's `Name` and `Message` (on screen through D2RLoader's overlay, else in the console). A `Boss` event
   spawns its `Spawn` (a `monstats.txt` `Id` or a `superuniques.txt` name) at the centre of the event room with `Count`
   minions of its class; a `Horde` spawns `Count` of it. In a Cave or Crypt map the event room is the layout's reserved
-  event cell; in other maps it is the first room the game fills that is at least 24 tiles from the first one. A superunique
-  can only exist once per game, so a second one spawns as its plain class. The `Spawn` name is looked up in the game's own loaded tables when the map opens (written and unit tested; not yet checked in game); if that route fails its self-check, the plugin log says why and the mod's `monstats.txt` and `superuniques.txt` in its excel folder are used instead. With that fallback, a missing `monstats.txt` means no Boss or Horde events and a missing `superuniques.txt` means no superunique names (plain monsters still spawn); `cartographer check` and the report say so. `Drop` is not applied yet, and `Ambush`,
+  event cell; in other maps it is the first room the game fills that is at least 24 tiles from the first one (a small map, such as the 20 x 28 tile test map, has no such room and gets no event). A superunique
+  can only exist once per game, so a second one spawns as its plain class. The `Spawn` name is looked up in the game's own loaded tables when the map opens (checked in game); if that route fails its self-check, the plugin log says why and the mod's `monstats.txt` and `superuniques.txt` in its excel folder are used instead. With that fallback, a missing `monstats.txt` means no Boss or Horde events and a missing `superuniques.txt` means no superunique names (plain monsters still spawn); `cartographer check` and the report say so. `Drop` is not applied yet, and `Ambush`,
   `Treasure` and `Shrine` events are decided but not applied (no spawn, no message). The room populator and the two spawn
   functions are found by byte signature at load; a part that is not found once turns the spawns off (`cartographer check`
   says which) while the map and its entry message still work. The log gets `eventprobe:` lines for the checks in
@@ -157,7 +157,8 @@ Run in game for Cave maps (see Tested): the plan, the steered build, the tileset
   - (Hell game) an item with spell 16 that no map names does nothing and is kept, as with Cartographer unloaded;
   - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
   - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
-  - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+  - (Hell game) Better Auras loaded alongside: both load, the map still opens;
+  - map events (2026-11-12, one operator run, Normal, 100 percent chance, the minimum event distance lowered to 12 for the test map): a Boss spawned 5 of 5 in the event room (one superunique, once-per-game bit set), a Horde of 3 spawned, their names come from the game's own tables, and the map's stats reach them; the banner is logged as drawn but its text was not seen on screen; nothing carries over to a new game. Not run: the txt fallback, a repeated `Id`, a second superunique in one game, the maze event room.
 - In game, the maze slot (Cave level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
   - 46 games in a row, each with a new game and a Cave map (`Corridor`, `Winding` and `Loop` in turn): the slot built the planned shape (built room grid equal to the plan), no crash, no error line;
   - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;
