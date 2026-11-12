@@ -327,6 +327,7 @@ if ($Tables -and -not (Test-Path -PathType Container $Tables)) { throw "No table
 if ($CoreUiAutomap) {
     if (-not (Test-Path -PathType Leaf $CoreUiAutomap)) { throw "No file at $CoreUiAutomap (-CoreUiAutomap)." }
     if (Test-Under (Get-Real $CoreUiAutomap) $p.installDir) { throw "-CoreUiAutomap ($CoreUiAutomap) is inside the owner's own install. Refused." }
+    if (@(Get-Content -LiteralPath $CoreUiAutomap | Where-Object { $_.Trim() }).Count -lt 2) { throw "-CoreUiAutomap ($CoreUiAutomap) has no data row (header only); core-ui crashes the game at startup without one. Refused." }
 }
 if ($Saves) {
     if (-not (Test-Path -PathType Container $Saves)) { throw "No saves folder at $Saves." }
@@ -376,7 +377,8 @@ $rowsWritten = New-Object System.Collections.Generic.List[object]
 $jsonAdded = New-Object System.Collections.Generic.List[object]
 # The slot's d2rloader.toml default_mod before this script set it to the test mod (file and original value).
 $defaultMod = $null
-if (-not $WhatIf -and (Test-Path -PathType Leaf $manifestPath)) {
+# Read-only, so -WhatIf loads it too and plans the same replace a real run would make.
+if (Test-Path -PathType Leaf $manifestPath) {
     try {
         $old = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
         if ("$($old.owner)" -eq $Owner -and [int]$old.slot -eq $Slot) {
@@ -472,6 +474,7 @@ try {
             Clear-ReadOnly $coreAutomap; $placed[$coreAutomap] = ''
         }
     } elseif ($haveAutomap -and $noRows) { Write-Warning "d2rloader\core-ui\automap.txt in the slot has no data row and was not placed by this script: the game may crash at startup. Pass -CoreUiAutomap <file> or remove it." }
+    elseif ($haveAutomap -and $CoreUiAutomap) { Write-Warning "d2rloader\core-ui\automap.txt in the slot already has rows and was not placed by this script: -CoreUiAutomap was ignored. Remove that file to use it." }
 
     # 4. The DLL, the tables, the saves: only what changed.
     Say 'DLL:'
