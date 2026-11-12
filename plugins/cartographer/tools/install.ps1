@@ -364,8 +364,10 @@ if (Test-Path $bossPath) {
 }
 if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
     $bossHeader = @(if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" })
-    $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
-    $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
+    # The plugin matches these headers ignoring case (core/tsv.h), so the installer does too (A-Z only, like the plugin).
+    $bossHeaderLower = @($bossHeader | ForEach-Object { Get-AsciiLower $_ })
+    $nameAt = [array]::IndexOf($bossHeaderLower, 'name'); $baseAt = [array]::IndexOf($bossHeaderLower, 'base')
+    $modsAt = [array]::IndexOf($bossHeaderLower, 'mods'); $minionsAt = [array]::IndexOf($bossHeaderLower, 'minions')
     $superPath = Join-Path $ExcelDir 'superuniques.txt'
     $monstatsPath = Join-Path $ExcelDir 'monstats.txt'
     $supers = $null
@@ -484,7 +486,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             }
             $rows.Add($cells -join "`t")
         }
-        if (($oldRows -join "`n") -ne ($rows -join "`n")) {
+        if (($oldRows -join "`n") -cne ($rows -join "`n")) {
             foreach ($line in $rows) { $kept.Add($line) }
             $supers.Lines = $kept
             Save-Table $supers
