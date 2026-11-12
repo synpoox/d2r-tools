@@ -667,6 +667,29 @@ TEST_CASE("the suffix names only the label the message is about; a Name is kept 
 	CHECK_MESSAGE(b.problems[0].text.find("you typed") == std::string::npos, b.problems[0].text);
 }
 
+TEST_CASE("a Kind that holds \"' has Count\" does not get the Count suffix") {
+	Report report;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nx\tBogus' has Count x\tzombie1\t3000000000\n", report);
+	REQUIRE(report.Errors() == 1);
+	CHECK_MESSAGE(report.problems[0].text.find("'x' has Kind 'Bogus' has Count x'") != std::string::npos, report.problems[0].text);
+	CHECK_MESSAGE(report.problems[0].text.find("you typed") == std::string::npos, report.problems[0].text);
+}
+
+TEST_CASE("a Stat named like Weight does not get the Weight suffix on a Max-below-Min note") {
+	Report report;
+	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tWeight x\t5\t3\t99999999999\n", report);
+	bool above = false;
+	for (const Problem& p : report.problems) {
+		if (p.text.find("is above") != std::string::npos) {
+			above = true;
+			CHECK_MESSAGE(p.text.find("(you typed 99999999999)") != std::string::npos, p.text);
+		} else {
+			CHECK_MESSAGE(p.text.find("you typed") == std::string::npos, p.text);
+		}
+	}
+	CHECK(above);
+}
+
 TEST_CASE("a repeated unknown column is reported once") {
 	const GameNames names;
 	Report report;
