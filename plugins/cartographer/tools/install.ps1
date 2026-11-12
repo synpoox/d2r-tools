@@ -157,8 +157,6 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelGroup' $NoGroup
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
-    Set-CellIf $levels $cells 'SubType' '-1'
-    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
     # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
     $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
