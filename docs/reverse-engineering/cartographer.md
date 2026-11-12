@@ -431,19 +431,20 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 
 ### Status after issue #78
 
-The maze steering hooks now depend on these answers; game-validated on 2026-11-12 (next subsection) (the code logs the reason and falls back to
+The maze steering hooks now depend on these answers; checked in game on 2026-11-12 on a Cave slot at Normal difficulty (next subsection) (the code logs the reason and falls back to
 the game's own maze when a step fails): the size written at `+0x2c/+0x30` in the `0x3271c0` hook before the original (Q4), the
 slot row's declared rect as the lookup rect (Q2), the suppressed second `0x3eb850` call and the rotation counter kept in 0..3
-(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Checked in game on 2026-11-12 (next subsection): whether `0x3271c0` runs
-before the plan exists, whether the add-room checks (`0x360c80`) reject adjacent but unlinked plan cells, whether the piece
-struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for every room. `MazeProbe=1` logs the data to check.
+(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Checked in game on 2026-11-12 (Cave slot, Normal; next subsection): whether `0x3271c0` runs
+before the plan exists and whether the piece struct is per room (fixed-flag writes). Shown only indirectly: that the add-room
+checks (`0x360c80`) reject adjacent but unlinked plan cells (the built grids equal the planned ones, but a rejection is not logged)
+and `clearFixed=1` in `0x3eb960` for every room (no room has the Fixed flag afterwards; the argument was not observed). `MazeProbe=1` logs the data to check.
 
 ### Game checks of 2026-11-12 (issues #78 and #62)
 
 Run in a test slot (D2R build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty,
-Barbarian; the character was often killed on arrival by Dark Rangers, which does not matter for the build).The mod's tables were brought to a clean Cartographer state first: vanilla `levels.txt`, `lvlprest.txt`, `lvlmaze.txt`
+Barbarian; the character was often killed on arrival by Dark Rangers, which does not matter for the build). The mod's tables were brought to a clean Cartographer state first: vanilla `levels.txt`, `lvlprest.txt`, `lvlmaze.txt`
 and `misc.txt` (five map item rows), then `tools\install.ps1`, then one Cave level added by hand (level 139, DrlgType 1, LevelType 3,
-Act 5, 360 x 360 in all three columns, Depend 0, Position 0, OffsetX 6000, OffsetY 0, `lvlmaze.txt` row `Cartographer Maze 139 4 4 4 24 24 500`),`slots.txt` `Maze 139`, `MazeProbe 1`. `maps.txt` had `CaveCorridor` (Small), `CaveWinding` (Medium), `CaveLoop`
+Act 5, 360 x 360 in all three columns, Depend 0, Position 0, OffsetX 6000, OffsetY 0, `lvlmaze.txt` row `Cartographer Maze 139 4 4 4 24 24 500`), `slots.txt` `Maze 139`, `MazeProbe 1`. `maps.txt` had `CaveCorridor` (Small), `CaveWinding` (Medium), `CaveLoop`
 (Large) and `CryptBranching` (Medium, the wrong tileset on purpose). Levels: **live** = seen in the running game through the
 `[maze probe]` log lines; **static** = read only; **not done**.
 
@@ -453,7 +454,7 @@ engine's room sizes, and how many piece structs the rooms have.
 
 | # | Check | Level | Result |
 |---|---|---|---|
-| 1 | Probe: slot rect and levels, room count and box, `rot` after each `0x3eb850` call, map in the planned shape | live | Slot rect `139:(6000,0)+(360,360)` clear of the other seven levels of the act. Built room grid equals the planned grid for `CaveCorridor` (5 x 5 box, 9 cells), `CaveWinding` (9 x 7, 26 cells) and `CaveLoop` (10 x 6, 28 cells): 81, 234 and 252 rooms, all 8 x 8, none outside the grid. `rot` after every call stayed in 0..3 (`3 -> 3`, `3 -> 0`; `2 -> 3`, `3 -> 0`; `3 -> 1`, `1 -> 2`). The character stood on the map level and walked (a Cave map). **Not usable: arrival versus entrance room.** The arrival probe reads a room at (0,0) of size 0 x 0 (the player's room is a client room, not a DRLG room), and the entrance is counted once per sub-room (9 entrance rooms for one entrance cell), so the "entrance known" test (exactly one) never holds. Probe limits, not engine findings |
+| 1 | Probe: slot rect and levels, room count and box, `rot` after each `0x3eb850` call, map in the planned shape | live | Slot rect `139:(6000,0)+(360,360)` clear of the other seven levels of the act. Built room grid equals the planned grid for `CaveCorridor` (5 x 5 box, 9 cells), `CaveWinding` (9 x 7, 26 cells) and `CaveLoop` (10 x 6, 28 cells): 81, 234 and 252 rooms, all 8 x 8, none outside the grid. `rot` after every call stayed in 0..3 (`3 -> 3`, `3 -> 0`; `2 -> 3`, `3 -> 0`; `3 -> 1`, `1 -> 2`). The character stood on the map level and walked (a Cave map). **Not usable: arrival versus entrance room.** The arrival probe read a room at (0,0) of size 0 x 0 (`UnitRoom` gives the server room, not the DRLG room), and the entrance was counted once per sub-room (9 entrance rooms for one entrance cell), so the "entrance known" test (exactly one) never held. Probe limits, not engine findings. Fixed in the probe after the run (see "Arrival room"; built, not yet checked in game) |
 | 2 | Does `0x3271c0` run for the slot before a map job exists, is the slot left usable | live | Not on its own: with a map opened the first call for the slot comes at the open (rooms 0 before it), and again on entering after the teardown with the same plan and seed. With no map opened (`cheat goto 139,...` straight from town) the hook ran for the slot, logged "building the game's own maze: no maze map was opened in this game", and the character stood in a normal Cave level. So a lazy build without a job is possible and is handled |
 | 3 | Add-room checks (`0x360c80`) reject adjacent but unlinked cells | live, partly | Every built grid equals the planned grid cell for cell, no room was added or moved (252 = 28 x 9 for the Loop, 234 = 26 x 9, 81 = 9 x 9), for shapes whose planned cells touch without a link (the Loop and the Winding). The probe does not print piece masks, so a rejected candidate is not logged on its own; this is the evidence that no unlinked neighbour was added |
 | 4 | Piece struct per room; `clearFixed` | live | Per room: 81 of 81, 234 of 234 and 252 of 252 rooms have their own piece struct (no two rooms share one). After the build no room has the Fixed flag set (0 of 252). `clearFixed=1` was not observed as a call argument; the 0 Fixed rooms are the evidence it holds |
@@ -468,9 +469,22 @@ Not covered by these runs: a Crypt slot (the slot was Cave; the Crypt refusal wa
 Nightmare difficulty, a TCP/IP client, the slot with an engine-side Fixed flag (none was set), and the arrival room (see 1).
 Frames per second and load time were not measured.
 
+### Arrival room (issue #99 item 1): built, not yet checked in game
+
+The arrival probe (`MazeProbeArrival`, `MazeProbe=1`) now reads the player's DRLG room through the server room, and the entrance is counted once per plan cell. Static reading of the dump (build 93847, `dump_dis.py ... dis <rva>`):
+
+| Step | Offset | Evidence |
+|---|---|---|
+| unit to path | unit `+0x38` | `0x34b440` (`UnitRoom`): `mov rcx, [rbx+0x38]` at `0x34b472`, for unit types other than 2, 4 and 5 (those read `[[unit+0x38]]` at `0x34b48d`/`0x34b491`) |
+| path to server room | path `+0x20` | `0x34b480` jumps to `0x341c30`: `mov rax, [rcx+0x20]` / `ret`. This is what `UnitRoom` returns, and what the probe received before |
+| server room to DRLG room | server room `+0x18` | `0x2efc10` (`RoomLevelId`): `mov rcx, [rcx+0x18]` at `0x2efc18`, then `jmp 0x360fc0`. Also recorded in sections 6 and 9. In the #97 run `RoomLevelId(room) == slot` held for the player's room (that check let the arrival line print), and the allocator `0x361140` writes the level at `+0x90` (at `0x361190`) |
+| DRLG room to level | DRLG room `+0x90`, level `+0x1f8` | `0x360fc0`: `mov rax, [rcx+0x90]` / `mov eax, [rax+0x1f8]`. So the pointer at server `+0x18` is the DRLG room, and the DRLG room has the `+0x60/+0x64/+0x68/+0x6c` rect of the level's room list (section 5 header) |
+
+So the old read took `+0x60..` of the server room, which is not a tile rect (hence 0,0 and 0 x 0). The probe reads `+0x18` of the room `UnitRoom` returned, then `+0x60..+0x6c` of that, every pointer through `Read`/`Readable` (a wrong layout logs zeros, not a fault), and only while `MazeProbe=1`. The arrival is placed in a plan cell as `(pos - box min) / roomTiles`, the box and cell size being those of the post-build room walk; the entrance is the one cell holding Prev-piece rooms (all nine of its sub-rooms carry it). The log line says `ARRIVAL IS IN THE ENTRANCE CELL` or `arrival is NOT in the entrance cell`, and only when exactly one entrance cell was found. **Needs game:** one maze game with `MazeProbe=1`: `entrance: 1 cell(s) (9 engine rooms ...)` after the build, an arrival line with a non-zero size 8 x 8 and the entrance verdict.
+
 ### Left for the game
 
-See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Items 1 to 3 were settled in game on 2026-11-12 (above); the arrival room of item 3 is not (probe limit, check 1).
+See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Items 1 to 3 were settled in game on 2026-11-12 (above); the arrival room of item 3 was not (probe limit, check 1; probe rewritten, see "Arrival room").
 
 1. The whole game accepting a 360 x 360 maze level (Q1, size and lopsided checks).
 2. The origin being clear of every other level's rect, including outdoor levels (Q2 log).

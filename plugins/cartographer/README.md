@@ -134,7 +134,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Run in game for Cave maps (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. Not run in game: a Crypt slot, Nightmare and Hell, and the arrival room check.
+Run in game for Cave maps (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. Not run in game: a Crypt slot, Nightmare and Hell, and the arrival room check (the probe is rewritten, not yet run).
 
 ## Tested
 
