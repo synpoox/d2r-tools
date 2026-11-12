@@ -10,7 +10,7 @@
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
     Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
-    Rows are only added when missing, so running it again changes nothing. Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
+    Rows are only added when missing, so running it again changes nothing. The new level keeps Colossal Summit's LevelName string key, so a map portal's tooltip reads "Colossal Summit" instead of "Missing String". Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
     The mod's folder, for example <game>\mods\MyMod. The tables are read from <ModDirectory>\<Mod>.mpq\data.
@@ -108,6 +108,18 @@ $idCol = Column $levels 'Id'
 if ($existing -ge 0) {
     $levelId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
     Write-Host "levels.txt: '$LevelName' is already there (level $levelId)."
+    # An older install set LevelName to a key with no string, so the portal tooltip read "Missing String": restore the copied key.
+    if ($levels.Header -contains 'LevelName') {
+        $nameCol = Column $levels 'LevelName'
+        $cells = Cells $levels $levels.Lines[$existing]
+        $templateRow = Find-Row $levels 'Id' $TemplateLevelId
+        if ($cells[$nameCol] -eq $LevelName -and $templateRow -ge 0) {
+            $cells[$nameCol] = (Cells $levels $levels.Lines[$templateRow])[$nameCol]
+            $levels.Lines[$existing] = $cells -join "`t"
+            Save-Table $levels
+            Write-Host "levels.txt: gave level $levelId the string key '$($cells[$nameCol])' (its old LevelName had no string)."
+        }
+    }
 } else {
     $templateRow = Find-Row $levels 'Id' $TemplateLevelId
     if ($templateRow -lt 0) { throw "levels.txt has no level $TemplateLevelId (Act 5 - Colossal Summit) to copy." }
@@ -126,7 +138,7 @@ if ($existing -ge 0) {
         Set-Cell $levels $cells "Warp$n" '-1'
     }
     Set-Cell $levels $cells 'Waypoint' '255'
-    if ($levels.Header -contains 'LevelName') { Set-Cell $levels $cells 'LevelName' $LevelName }
+    # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
     $levels.Lines.Add($cells -join "`t")
     Save-Table $levels
     Write-Host "levels.txt: added '$LevelName' as level $levelId."

@@ -42,7 +42,7 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
-   ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `levels.txt` and `lvlprest.txt`
+   ("Cartographer Preset", a copy of Colossal Summit, keeping its name string so a map portal's tooltip reads "Colossal Summit") and its level preset to the mod's `levels.txt` and `lvlprest.txt`
    (backing each up once as `.bak`), and writes `slots.txt`. It adds no items. Running
    it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the

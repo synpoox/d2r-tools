@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The map portal tooltip no longer reads "Missing String": the map level keeps Colossal Summit's name, and running `install.ps1` again repairs an older install.
+
 - `cartographer check` and the report now say when `core-maps` is loaded too; use one or the other.
 - Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt` and reports problems in them, and lets a map's `Shape` name a `shapes.txt` row (checked only; not applied in game yet).
 - New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
