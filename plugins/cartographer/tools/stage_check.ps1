@@ -10,7 +10,9 @@
 
     First run for a slot: takes the slot lock (d2rAI-toolkit game_slots.py lock, never --force), creates the slot's test
     mod (a modinfo.json with the slot's own savepath, and an excel folder seeded with copies of the vanilla tables
-    install.ps1 needs: levels, lvlmaze, superuniques, monstats, monumod; only files the slot lacks), copies the DLL, the
+    install.ps1 needs: levels, lvlmaze, superuniques, monstats, monumod, and itemstatcost for the map stats; plus a
+    header-only d2rloader\core-ui\automap.txt, which the game needs at startup; only files the slot lacks), points
+    default_mod in the slot's d2rloader\config\d2rloader.toml at the test mod (-Restore sets the old value back), copies the DLL, the
     Cartographer tables and the test saves, runs install.ps1 on the test mod's excel folder, and optionally writes
     AutoCheck=1 / AutoCheckMap=<name> into the slot's cartographer.txt.
     Later runs: the same steps, but a file is copied only when its SHA-256 differs from the one already in the slot,
@@ -28,7 +30,8 @@
     -Restore first checks that -Owner holds the slot's lock and refuses otherwise, before it touches anything; with no
     manifest it refuses too. It then runs the toolkit's release_install.py restore when the slot holds a release install,
     removes only the files whose SHA-256 still matches the manifest and only the rows it wrote, deletes the manifest and
-    unlocks the slot. A file changed since staging stays and is named. install.ps1 changes inside tables that already
+    unlocks the slot. A file changed since staging stays and is named. Entries -MapItems added to an items.json or
+    item-names.json the slot already had are taken out again (the manifest records their exact text). install.ps1 changes inside tables that already
     existed in the slot (not placed by this script) stay.
 
     -WhatIf prints every action and changes nothing: no lock, no copy, no installer run.
@@ -58,6 +61,9 @@
     in the game: debug_mode, then cheat spawn t20,inv 0 (see docs/cartographer/testing.md, "Map items in a test slot").
 .PARAMETER MapItemRows
     Overrides file: a header with code, name, base and the columns to change, one line per item (default: examples\first-map\map-items.txt in the plugin folder).
+.PARAMETER CoreUiAutomap
+    Optional file to seed d2rloader\core-ui\automap.txt from instead of the header-only default (copy only). Never point it
+    at slot 1 or the owner's own install.
 .PARAMETER VanillaData
     Extracted vanilla data folder holding hd\items\items.json and local\lng\strings\item-names.json (default:
     <toolkit>\d2r-data\93847\data). Copy only, never edited.
@@ -90,6 +96,7 @@ param(
     [switch]$MapItems,
     [string]$MapItemRows,
     [string]$VanillaData,
+    [string]$CoreUiAutomap,
     [string]$VanillaExcel,
     [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
     [string]$Project = $env:MODKIT_PROJECT,
@@ -107,7 +114,12 @@ $latin1 = [System.Text.Encoding]::GetEncoding(28591)
 # Slots the owner approved for Cartographer checks. The config says D2RToolsTest owns Slot11; 5, 6 and 7 are approved too.
 $AllowedSlots = @(5, 6, 7, 11)
 # Tables install.ps1 needs in the test mod's excel folder (the first two are required, the rest only matter for bosses).
-$SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt')
+# itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
+$SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
+# core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
+# game asserts at startup without the file. Cartographer adds no such level type, so a header-only file is seeded (no rows).
+$defaultModRx = '(?m)^([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
+$CoreUiAutomapHeader ="LevelType`tTileType`tStyle`tStartSequence`tEndSequence`tCelCount`tCel1`tCel2`tCel3`tCel4"
 
 function Say([string]$text) { Write-Host $text }
 function Plan([string]$text) { if ($WhatIf) { Write-Host "[WhatIf] $text" } else { Write-Host $text } }
@@ -234,6 +246,8 @@ if ($Restore) {
         Plan "python release_install.py status --slot $Slot, then restore when the slot holds a release install"
         foreach ($f in @($man.files)) { Plan "remove $($f.path) when its SHA-256 is still $($f.sha256)" }
         foreach ($r in @($man.rows)) { Plan "remove the row '$($r.row)' from $($r.file)" }
+        if ($man.defaultMod) { Plan "set default_mod in $($man.defaultMod.file) back to `"$($man.defaultMod.original)`"" }
+        foreach ($e in @($man.entries)) { Plan "remove the JSON entry $((($e.text -split '\r?\n' | ForEach-Object { $_.Trim() }) -join ' ')) from $($e.file)" }
         Plan "delete $manifestPath"
         Plan "python game_slots.py unlock $Slot $Owner"
         return
@@ -266,6 +280,34 @@ if ($Restore) {
             Say "  removed $($lines.Count - $left.Count) row(s) from $file"
         }
     }
+    # JSON entries added to a file the slot already had: remove each exact text and the comma that joined it, last one first.
+    $enc8r = New-Object System.Text.UTF8Encoding($false)
+    foreach ($file in @($man.entries | ForEach-Object { $_.file } | Select-Object -Unique)) {
+        if (-not (Test-Path -PathType Leaf $file)) { continue }
+        $txt = $enc8r.GetString([System.IO.File]::ReadAllBytes($file)); $gone = 0
+        $mine = @($man.entries | Where-Object { $_.file -eq $file }); [array]::Reverse($mine)
+        foreach ($e in $mine) {
+            foreach ($lead in @((',' + $e.nl + $e.text), ($e.nl + $e.text))) {
+                $at = $txt.LastIndexOf($lead, [System.StringComparison]::Ordinal)
+                if ($at -ge 0) { $txt = $txt.Remove($at, $lead.Length); $gone++; break }
+            }
+        }
+        if ($gone -gt 0) {
+            Set-ItemProperty -LiteralPath $file -Name IsReadOnly -Value $false
+            [System.IO.File]::WriteAllBytes($file, $enc8r.GetBytes($txt))
+            Say "  removed $gone JSON entr$(if ($gone -eq 1) { 'y' } else { 'ies' }) from $file"
+        }
+    }
+    if ($man.defaultMod -and (Test-Path -PathType Leaf $man.defaultMod.file)) {
+        $tt = [System.Text.UTF8Encoding]::new($false).GetString([System.IO.File]::ReadAllBytes($man.defaultMod.file))
+        $tm = [regex]::Match($tt, $defaultModRx)
+        if ($tm.Success -and $tm.Groups[2].Value -ne "$($man.defaultMod.original)") {
+            Set-ItemProperty -LiteralPath $man.defaultMod.file -Name IsReadOnly -Value $false
+            $out = $tt.Substring(0, $tm.Groups[2].Index) + $man.defaultMod.original + $tt.Substring($tm.Groups[2].Index + $tm.Groups[2].Length)
+            [System.IO.File]::WriteAllBytes($man.defaultMod.file, [System.Text.UTF8Encoding]::new($false).GetBytes($out))
+            Say "  default_mod in $($man.defaultMod.file) set back to `"$($man.defaultMod.original)`""
+        }
+    }
     Remove-Item -LiteralPath $manifestPath -Force
     $rc = Invoke-Toolkit 'game_slots.py' @('unlock', "$Slot", $Owner)
     if ($rc -ne 0) { throw "Could not unlock slot $Slot (exit $rc). It is not forced; check 'game_slots.py status'." }
@@ -278,6 +320,10 @@ if (-not $Dll) { throw 'Pass -Dll <path to cartographer.dll>.' }
 if (-not (Test-Path -PathType Leaf $Dll)) { throw "No DLL at $Dll." }
 if (-not (Test-Path -PathType Leaf $installer)) { throw "No install.ps1 at $installer." }
 if ($Tables -and -not (Test-Path -PathType Container $Tables)) { throw "No tables folder at $Tables." }
+if ($CoreUiAutomap) {
+    if (-not (Test-Path -PathType Leaf $CoreUiAutomap)) { throw "No file at $CoreUiAutomap (-CoreUiAutomap)." }
+    if (Test-Under (Get-Real $CoreUiAutomap) $p.installDir) { throw "-CoreUiAutomap ($CoreUiAutomap) is inside the owner's own install. Refused." }
+}
 if ($Saves) {
     if (-not (Test-Path -PathType Container $Saves)) { throw "No saves folder at $Saves." }
     $realSaves = Get-Real $Saves
@@ -322,12 +368,18 @@ if ($WhatIf) {
 # The manifest: what this script placed (path, SHA-256) and the cartographer.txt rows it wrote. Hashes are taken when it is saved.
 $placed = [ordered]@{}
 $rowsWritten = New-Object System.Collections.Generic.List[object]
+# JSON entries -MapItems added to an items.json / item-names.json the slot already had (a file this script created is removed whole).
+$jsonAdded = New-Object System.Collections.Generic.List[object]
+# The slot's d2rloader.toml default_mod before this script set it to the test mod (file and original value).
+$defaultMod = $null
 if (-not $WhatIf -and (Test-Path -PathType Leaf $manifestPath)) {
     try {
         $old = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
         if ("$($old.owner)" -eq $Owner -and [int]$old.slot -eq $Slot) {
             foreach ($f in @($old.files)) { $placed[$f.path] = $f.sha256 }
             foreach ($r in @($old.rows)) { $rowsWritten.Add(@{ file = $r.file; row = $r.row }) }
+            foreach ($e in @($old.entries)) { $jsonAdded.Add(@{ file = $e.file; nl = $e.nl; text = $e.text }) }
+            if ($old.defaultMod) { $defaultMod = @{ file = $old.defaultMod.file; original = $old.defaultMod.original } }
         }
     } catch { Write-Warning "Ignoring an unreadable manifest at ${manifestPath}: $($_.Exception.Message)" }
 }
@@ -336,7 +388,8 @@ function Save-Manifest {
     $files = @(foreach ($k in @($placed.Keys)) {
         if (Test-Path -PathType Leaf $k) { @{ path = $k; sha256 = (Get-Sha $k) } }
     })
-    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()) }
+    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()); entries = @($jsonAdded.ToArray()) }
+    if ($defaultMod) { $doc['defaultMod'] = $defaultMod }
     $null = New-Item -ItemType Directory -Force (Split-Path $manifestPath -Parent)
     [System.IO.File]::WriteAllText($manifestPath, ($doc | ConvertTo-Json -Depth 5))
 }
@@ -381,6 +434,35 @@ try {
         if (-not $WhatIf) { $null = New-Item -ItemType Directory -Force $excel; Copy-Item -LiteralPath $src -Destination $dest; Clear-ReadOnly $dest; $placed[$dest] = '' }
     }
 
+    # The slot's d2rloader.toml may launch another mod (default_mod = "PD2Resurrected"): point it at the test mod, remember the old value.
+    $tomlPath = Join-Path $slotDir 'd2rloader\config\d2rloader.toml'
+    if (Test-Path -PathType Leaf $tomlPath) {
+        $tt = [System.Text.UTF8Encoding]::new($false).GetString([System.IO.File]::ReadAllBytes($tomlPath))
+        $tm = [regex]::Match($tt, $defaultModRx)
+        if (-not $tm.Success) { Write-Warning "${tomlPath} has no default_mod line; the game may not load the test mod $modName." }
+        elseif ($tm.Groups[2].Value -ne $modName) {
+            Plan "d2rloader.toml: default_mod `"$($tm.Groups[2].Value)`" -> `"$modName`" (-Restore puts the old value back)"
+            if (-not $WhatIf) {
+                if (-not $defaultMod) { $defaultMod = @{ file = $tomlPath; original = $tm.Groups[2].Value } }
+                Clear-ReadOnly $tomlPath
+                $out = $tt.Substring(0, $tm.Groups[2].Index) + $modName + $tt.Substring($tm.Groups[2].Index + $tm.Groups[2].Length)
+                [System.IO.File]::WriteAllBytes($tomlPath, [System.Text.UTF8Encoding]::new($false).GetBytes($out))
+            }
+        }
+    } else { Write-Warning "No ${tomlPath}: the slot's default mod was not checked." }
+
+    # core-ui's automap table (see $CoreUiAutomapHeader); only when the mod lacks it. -Restore removes it again (manifest).
+    $coreAutomap = Join-Path $excel 'd2rloader\core-ui\automap.txt'
+    if (-not (Test-Path -PathType Leaf $coreAutomap)) {
+        $how = if ($CoreUiAutomap) { "copy of $CoreUiAutomap" } else { 'header only, no rows' }
+        Plan "Test mod: seed d2rloader\core-ui\automap.txt ($how)"
+        if (-not $WhatIf) {
+            $null = New-Item -ItemType Directory -Force (Split-Path $coreAutomap -Parent)
+            if ($CoreUiAutomap) { Copy-Item -LiteralPath $CoreUiAutomap -Destination $coreAutomap } else { [System.IO.File]::WriteAllBytes($coreAutomap, $latin1.GetBytes($CoreUiAutomapHeader + "`r`n")) }
+            Clear-ReadOnly $coreAutomap; $placed[$coreAutomap] = ''
+        }
+    }
+
     # 4. The DLL, the tables, the saves: only what changed.
     Say 'DLL:'
     Copy-IfChanged $Dll (Join-Path $p.plugins (Split-Path $Dll -Leaf)) $null
@@ -389,7 +471,7 @@ try {
         Say 'Tables:'
         foreach ($f in Get-ChildItem $Tables -File -Filter '*.txt') {
             if ($f.Name -ieq 'cartographer.txt' -and $AutoCheckMap) { continue }  # written with the settings below
-            if ($f.Name -ieq 'misc.txt') { continue }  # item rows belong in the mod's excel folder: -MapItems stages them there
+            if ($f.Name -ieq 'map-items.txt') { continue }  # the -MapItems overrides, not a game table: -MapItems reads it from the plugin folder
             Copy-IfChanged $f.FullName (Join-Path $cartoTables $f.Name) $null
         }
     }
@@ -469,24 +551,34 @@ try {
         $jnl = if ($jt.Contains("`r`n")) { "`r`n" } else { "`n" }
         $new = @($items | Where-Object { $jt -notmatch ('"' + [regex]::Escape($_.code) + '"\s*:') } | ForEach-Object { "  { `"$($_.code)`": { `"asset`": `"$asset`" } }" })
         if ($new.Count -gt 0) {
-            if (-not $newJson -and -not $placed.Contains($itemsJson) -and (Test-Path -PathType Leaf $itemsJson)) { Write-Warning "items.json in the slot was not placed by this script: the entries added to it stay after -Restore." }
+            if (-not $newJson -and -not $placed.Contains($itemsJson) -and (Test-Path -PathType Leaf $itemsJson)) {
+                Say "  items.json in the slot was not placed by this script: -Restore removes the entries added to it."
+                if (-not $WhatIf) { foreach ($e in $new) { $jsonAdded.Add(@{ file = $itemsJson; nl = $jnl; text = $e }) } }
+            }
             Plan "  items.json: add $($new.Count) picture entr$(if ($new.Count -eq 1) { 'y' } else { 'ies' }): $(($new | ForEach-Object { $_.Trim() }) -join ' ')"
             if (-not $WhatIf) { Clear-ReadOnly $itemsJson; [System.IO.File]::WriteAllBytes($itemsJson, $enc8.GetBytes((Add-JsonEntries $jt $new $jnl))) }
         }
-        # item-names.json (HD and legacy): a record per code. Ids start above the highest id below 65536 in any *.json of
-        # either string folder, in the mod and in the vanilla data (ids are shared across all string files).
+        # item-names.json (HD and legacy): a record per code. The game matches string ids by their low 16 bits and a table
+        # string reference is two bytes, so (toolkit knowledge/strings.md) ids count up from the toolkit's next valid id
+        # (next_string_id.txt, 28106 in 93847), skip every low-16 value any string file already uses (the mod's and the
+        # vanilla data's, across both string folders) and never pass 65535.
         $nameFiles = @(
             @{ rel = 'local\lng\strings\item-names.json'; langs = @('enUS', 'zhTW', 'deDE', 'esES', 'frFR', 'itIT', 'koKR', 'plPL', 'esMX', 'jaJP', 'ptBR', 'ruRU', 'zhCN') },
             @{ rel = 'local\lng\strings-legacy\item-names.json'; langs = @('enUS', 'zhTW', 'deDE', 'esES', 'frFR', 'itIT', 'koKR', 'plPL') })
-        $maxId = 28105
+        $startId = 28106
+        $nextIdFile = Join-Path $VanillaData 'local\lng\next_string_id.txt'
+        if (Test-Path -PathType Leaf $nextIdFile) {
+            $m0 = [regex]::Match([System.IO.File]::ReadAllText($nextIdFile), '\d+')
+            if ($m0.Success -and [long]$m0.Value -ge 1 -and [long]$m0.Value -le 65535) { $startId = [int]$m0.Value }
+        }
+        $usedIds = New-Object 'System.Collections.Generic.HashSet[int]'
         foreach ($dirRel in @('local\lng\strings', 'local\lng\strings-legacy')) {
             foreach ($root in @((Join-Path $modDir "$modName.mpq\data"), $VanillaData)) {
                 $dir = Join-Path $root $dirRel
                 if (-not (Test-Path -PathType Container $dir)) { continue }
                 foreach ($jf in Get-ChildItem -LiteralPath $dir -File -Filter '*.json') {
                     foreach ($m in [regex]::Matches($enc8.GetString([System.IO.File]::ReadAllBytes($jf.FullName)), '"id"\s*:\s*(\d+)')) {
-                        $n = ([long]$m.Groups[1].Value) -band 0xFFFF
-                        if ($n -gt $maxId) { $maxId = $n }
+                        $null = $usedIds.Add([int](([long]$m.Groups[1].Value) -band 0xFFFF))
                     }
                 }
             }
@@ -503,17 +595,23 @@ try {
             $nsrc = if (Test-Path -PathType Leaf $target) { $target } else { $vName }
             $st = $enc8.GetString([System.IO.File]::ReadAllBytes($nsrc))
             $snl = if ($st.Contains("`r`n")) { "`r`n" } else { "`n" }
-            $next = $maxId
+            $next = $startId - 1
+            $firstId = 0
             $recs = @(foreach ($it in $items) {
                 if ($st -match ('"Key"\s*:\s*"' + [regex]::Escape($it.key) + '"')) { continue }
-                $next++
+                do { $next++ } while ($usedIds.Contains($next) -and $next -le 65535)
+                if ($next -gt 65535) { throw "No free string id left below 65536 for '$($it.key)' (counted up from $startId, skipping the low-16 values already used)." }
+                if ($firstId -eq 0) { $firstId = $next }
                 $label = $it.name -replace '[\\"]', ''
                 $pairs = @($nf.langs | ForEach-Object { "    `"$_`": `"$label`"" }) -join (',' + $snl)
                 "  {$snl    `"id`": $next,$snl    `"Key`": `"$($it.key)`",$snl$pairs$snl  }"
             })
             if ($recs.Count -gt 0) {
-                if (-not $newFile -and -not $placed.Contains($target) -and (Test-Path -PathType Leaf $target)) { Write-Warning "$rel in the slot was not placed by this script: the names added to it stay after -Restore." }
-                Plan "  ${rel}: add $($recs.Count) name(s) (ids $($maxId + 1) to $next, $($nf.langs.Count) languages)"
+                if (-not $newFile -and -not $placed.Contains($target) -and (Test-Path -PathType Leaf $target)) {
+                    Say "  $rel in the slot was not placed by this script: -Restore removes the names added to it."
+                    if (-not $WhatIf) { foreach ($e in $recs) { $jsonAdded.Add(@{ file = $target; nl = $snl; text = $e }) } }
+                }
+                Plan "  ${rel}: add $($recs.Count) name(s) (ids $firstId to $next, $($nf.langs.Count) languages)"
                 if (-not $WhatIf) { Clear-ReadOnly $target; [System.IO.File]::WriteAllBytes($target, $enc8.GetBytes((Add-JsonEntries $st $recs $snl))) }
             }
         }
