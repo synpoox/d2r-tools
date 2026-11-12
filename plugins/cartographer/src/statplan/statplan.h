@@ -93,14 +93,16 @@ PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool se
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);
 
-// The lists the plugin has put on players: unit id -> list address. Fixed size, so a hook never allocates.
+// The lists the plugin has put on players: unit id -> list address and the state it was given. Fixed size, so a hook never allocates.
 class PlayerLists {
 public:
 	static constexpr size_t kMax = 16;
 	// The list for `unit`, or 0.
 	uintptr_t find(uint32_t unit) const;
+	// The state the plugin gave the list of `unit` (never read back from the list), or 0.
+	int stateOf(uint32_t unit) const;
 	// False when the table is full or `list` is 0 (the caller then does not apply).
-	bool add(uint32_t unit, uintptr_t list);
+	bool add(uint32_t unit, uintptr_t list, int state = 0);
 	void remove(uint32_t unit);
 	void clear();
 	size_t size() const;
@@ -110,6 +112,7 @@ private:
 	struct Slot {
 		uint32_t unit = 0;
 		uintptr_t list = 0;
+		int state = 0;
 	};
 	Slot slots_[kMax];
 };
@@ -129,18 +132,17 @@ constexpr uint32_t kSkillRowSize = 0x2ec;
 std::string checkTableView(const void *viewRows, uint32_t viewCount, uint32_t viewRowSize, const void *dtRows, uint64_t dtCount,
                            uint32_t wantRowSize);
 
-// States the game or the mod uses by a fixed id (a scan of D2R.exe call sites that pass a constant state; an under-count).
+// States the game or the mod uses by a fixed id (a scan of D2R.exe call sites that pass a constant state, plus 11 and 92; an under-count).
 bool isStaticState(int state);
 
 struct StatePick {
-	int state = -1;       // -1: none
-	bool strict = false;  // the whole flag field and the other columns were empty
+	int state = -1; // -1: none, and player stats stay off (there is no fallback to a row that has something set)
 };
 
-// The lowest state id that nothing uses: above 0 and below `count`; not nosend, not disguise (bit 17, which makes
-// SetStateBit toggle a unit flag); no overlay, no stat, no setfunc or remfunc (0 or -1), no group; not named by any skills
-// row; not in the static list. The strict form also needs every flag bit clear and skill, missile and canstack empty;
-// it is tried first. `skills` may be null only with skillCount 0 (then no skills row names a state). Rows are raw bytes.
+// The lowest state id that nothing uses: above 0 and below `count`; every column of the row empty (the whole flag field
+// zero, no overlay, stat, skill, missile, function, group, colour, light, sound, item, graphics or vfx entry; see
+// candidate() in statplan.cpp); not named by any skills row; not in the static list. `skills` may be null only with
+// skillCount 0 (then no skills row names a state). Rows are raw bytes.
 StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount);
 
 } // namespace cartographer::statplan

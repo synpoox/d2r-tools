@@ -38,7 +38,6 @@ constexpr int32_t StatLevel = 12;          // 0xc: the monster level stat
 constexpr int32_t StatMaxLife = 7;         // maxhp, in 1/256 life
 constexpr int MonsterProbes = 6;           // monsters logged in full per game
 constexpr int MaxEntries = 32;             // stats read back per probe
-constexpr int ListStateOffset = 0x20;      // int32 on a stat list: its state (SetListState writes it)
 constexpr int DtStatesRowsOffset = 0x290;  // on the data tables base: the compiled states rows pointer; the 64-bit count is at +0x298
 constexpr int DtStatesCountOffset = 0x298;
 constexpr uint32_t DataFlagLimit = 4;      // the base accessor takes a data flag below 4
@@ -303,11 +302,17 @@ auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {
 			}
 			const sp::StatePick pick = sp::pickPlayerState(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount);
 			if (pick.state < 0) {
-				*why = "no state of the " + std::to_string(states.rowCount) + " in the table is unused";
+				*why = "no state of the " + std::to_string(states.rowCount) + " in the table has every column empty and is unused; none is picked";
 				return -1;
 			}
-			plog::Info("statprobe: state %d (%s) carries the player's list: bank %u, %u states, %u skills", pick.state, pick.strict ? "all columns empty" : "flags set, no effect columns", bank,
-			           states.rowCount, skills.rowCount);
+			std::string rowHex;
+			for (uint32_t i = 0; i < sp::kStateRowSize; ++i) {
+				char b[4];
+				std::snprintf(b, sizeof(b), "%02x", static_cast<const uint8_t*>(states.rows)[static_cast<size_t>(pick.state) * sp::kStateRowSize + i]);
+				rowHex += b;
+			}
+			plog::Info("statprobe: state %d carries the player's list (every column of its row is empty): bank %u, %u states, %u skills; row bytes %s", pick.state, bank,
+			           states.rowCount, skills.rowCount, rowHex.c_str());
 			return pick.state;
 		}
 		*why = "the SDK's states table is not the game's (" + tried + ")";
@@ -317,23 +322,26 @@ auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {
 
 // Gives the player's attached list its state and turns the state on, which is what makes the game send it with the stats. The caller has
 // checked the refusal rule (state off, no list carries it). SetStateBit is last, after the list is attached. Afterwards the game's
-// finder must return our list; if not, the bit is turned off again and false returned (the caller takes the list off).
+// finder must return our list, checked before the bit is set; if not, the bit is never touched and false is returned (the caller takes
+// the list off).
 auto SetPlayerState(Unit* unit, void* list, int state, std::string* why) noexcept -> bool {
 	Call<SetListStateFn>(SetListState)(list, state);
-	Call<SetStateBitFn>(SetStateBit)(unit, state, 1);
+	// The finder reads only the list's state, never the bit: check it first, so a mismatch never toggles the bit.
 	if (Call<FindStateListFn>(FindStateList)(unit, state) != list) {
-		Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 		*why = "the game does not find the player's list by state " + std::to_string(state);
 		return false;
 	}
+	Call<SetStateBitFn>(SetStateBit)(unit, state, 1);
 	return true;
 }
 
 void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	uintptr_t list = 0;
+	int state = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		list = g_lists.find(id);
+		state = g_lists.stateOf(id);
 		g_lists.remove(id);
 		UpdateBusy();
 	}
@@ -347,11 +355,15 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 		plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
 		return;
 	}
-	// The order: state off first (the clients get the state-off packet), then off the chain, then freed. The list holds its state.
-	const int32_t state = At<int32_t>(reinterpret_cast<void*>(list), ListStateOffset);
-	if (state > 0 && On(SetStateBit)) {
-		Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
+	// The state is the one the plugin stored with the list, never read back from the list. If the game freed the list and the
+	// address was reused, the finder no longer returns it for that state: forget it and touch nothing.
+	if (state <= 0 || !On(SetStateBit) || !On(FindStateList) ||
+	    Call<FindStateListFn>(FindStateList)(unit, state) != reinterpret_cast<void*>(list)) {
+		plog::Warn("map stats: the game does not find the player's list by its state %d any more; it is forgotten, not freed, and nothing was touched", state);
+		return;
 	}
+	// The order: state off first (the clients get the state-off packet), then off the chain, then freed.
+	Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 	Call<DetachStatListFn>(DetachStatList)(unit, reinterpret_cast<void*>(list));
 	Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), reinterpret_cast<void*>(list));
 	bool still = false;
@@ -395,7 +407,7 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		stale = generation != g_generation;
-		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list));
+		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list), state);
 		UpdateBusy();
 	}
 	if (stale) {
