@@ -66,6 +66,7 @@ add_library(cartographer SHARED
 	src/engine/stat_apply.cpp
 	src/engine/event_apply.cpp
 	src/engine/event_6b.cpp
+	src/engine/map_sync.cpp
 	src/engine/scan.cpp
 	src/engine/maze_hooks.cpp
 	src/engine/map_names.cpp

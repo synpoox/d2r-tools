@@ -383,6 +383,9 @@ auto MapNamesSummary() -> std::string {
 		return "Map names: off (a game part or D2RLoader service was not found)";
 	}
 	if (g_plan.Next(RowsHeldLocked()) == mn::RegistrationPlan::Step::Deferred) {
+		if (g_saver.Stuck()) {
+			return "Map names: a change from the last reload waits until the game restarts (written, not verified in game)";
+		}
 		return "Map names: a change from the last reload waits until you leave this game (written, not verified in game)";
 	}
 	return g_plan.Registered() ? "Map names: on (written, not verified in game)" : "Map names: on, but the strings are not registered";

@@ -42,6 +42,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **Console open**: `cartographer open <Name>` opens the named map's portal itself, with no item, through the same gates. It needs
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
   refuses and says so. Opening in town was seen in a game; the TCP/IP refusal was not.
+- **Multiplayer map sync, part 1** (written and unit tested; not verified in game, needs a second game instance; #125): when the host opens a map, it tells every joined TCP/IP client which map it is (the `maps.txt` row, the slot level and, for a Cave or Crypt map, the layout seed) over D2RLoader's plugin network. A client connects to the host a few seconds after it enters a game, says hello, checks the row and the map name against its own `maps.txt` and keeps the answer (a host and client with different `maps.txt` files are noticed and logged). The client does nothing else with it yet: names, stats, the maze layout and the portal hold come later. It uses no engine address and no hook; if D2RLoader has no network service of the expected version the sync is off and the game runs as before. Single player and a host with no client send nothing, and a process that has the server never connects. A client needs the `PlayerTick` part for the game events it starts from, and the same Cartographer version as the host (the channel token carries the message version). `cartographer check` prints one `map sync` line. Not available on Battle.net.
 
 ## Your first map
 
@@ -184,4 +185,5 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
   dropped (it opens nothing and is not passed to the game). The game's only direct caller of the use handler runs it only
   after the check passed (static reading), so this case is defensive and no in-game test is planned.
+- Map sync part 1: unit tests of the message, its validation, the client's check, the client list and the connect schedule (`mapsync_tests`). No game run: the connection, the delivery, the late join and the thread each callback runs on are the checks in `docs/reverse-engineering/cartographer.md` section 12 ("Needs game").
 - Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
