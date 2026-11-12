@@ -748,6 +748,52 @@ TEST_CASE("the slot row's declared size clamps the tileset and a row below one r
 	}
 }
 
+TEST_CASE("planForMap: a shapes.txt shape plans within the size caps across many seeds, like a built-in one")
+{
+	const layout::ParseResult parsed = layout::parseShapesTxt(
+		"Name\tBase\tMinPath\tMaxPath\tMinBranches\tMaxBranches\n"
+		"Snake\tWinding\t12\t16\t0\t1\n"
+		"Fat Snake\tSnake\t\t\t2\t3\n");
+	REQUIRE(parsed.errors.empty());
+	// The slot's declared size is the cap: 360 is the most any slot gets, 200 is a smaller one.
+	for (const int slot : {360, 200}) {
+		for (const char *tileset : {"Cave", "Crypt"}) {
+			for (const char *name : {"Snake", "fat snake"}) {
+				for (const char *size : {"Small", "Medium", "Large"}) {
+					int steered = 0;
+					for (uint64_t seed = 1; seed <= 150; ++seed) {
+						const MapPlan p = planForMap(tileset, parsed.table, name, size, seed, slot, slot);
+						INFO(tileset << " " << name << " " << size << " slot " << slot << " seed " << seed << ": " << p.reason);
+						if (!p.steer) {
+							CHECK_FALSE(p.reason.empty());
+							continue;
+						}
+						++steered;
+						CHECK(p.seedPlan.plan.levelTilesX <= slot);
+						CHECK(p.seedPlan.plan.levelTilesY <= slot);
+						CHECK(p.hash == planForMap(tileset, parsed.table, name, size, seed, slot, slot).hash);
+					}
+					if (slot == 360) CHECK(steered >= 75);  // a small slot may fall back often; a full one rarely
+				}
+			}
+		}
+	}
+}
+
+TEST_CASE("planForMap: a shape whose shapes.txt row was bad falls back with a reason")
+{
+	const layout::ParseResult parsed = layout::parseShapesTxt(
+		"Name\tBase\tMinPath\tMaxPath\n"
+		"Snake\tWinding\t12\t16\n"
+		"Broken\tWinding\tmany\t16\n");
+	CHECK_FALSE(parsed.errors.empty());
+	CHECK(planForMap("Cave", parsed.table, "Snake", "Medium", 7, 360, 360).steer);
+	const MapPlan bad = planForMap("Cave", parsed.table, "Broken", "Medium", 7, 360, 360);
+	CHECK_FALSE(bad.steer);
+	CHECK(bad.reason.find("Broken") != std::string::npos);
+	CHECK(bad.reason.find("cannot be used") != std::string::npos);
+}
+
 TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot size bounds it; bad input gives a reason")
 {
 	const layout::ShapeTable none;

@@ -125,6 +125,7 @@ struct Entrance {
 };
 Entrance g_entrance;  // guarded by g_lock
 MazeEventRect g_eventRoom;  // guarded by g_lock
+MazeEventRect g_bossRoom;   // guarded by g_lock
 
 // One build of the slot level, on the thread that runs it. The walk, special-room and ring hooks read it; they only act
 // while it is set and the level is the one being built.
@@ -425,8 +426,19 @@ void RecordEventRoom(const void* level, const std::vector<void*>& rooms, const c
 	} else {
 		plog::Info("eventprobe: the maze plan has no event room I can read (plan room %d of %zu)", idx, rooms.size());
 	}
+	// The plan's boss room (the far end of the main path), read the same way; the map's own Boss (maps.txt) stands there.
+	MazeEventRect boss;
+	const int bossIdx = plan.bossRoom;
+	if (bossIdx >= 0 && static_cast<size_t>(bossIdx) < rooms.size() && rooms[static_cast<size_t>(bossIdx)] != nullptr && Readable(rooms[static_cast<size_t>(bossIdx)], 0x98)) {
+		const void* room = rooms[static_cast<size_t>(bossIdx)];
+		boss = {true, Read<int32_t>(level, LvlId), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)};
+		plog::Info("eventprobe: maze boss room (plan room %d) is DRLG room %p, level %d, rect (%d,%d) %d x %d", bossIdx, room, boss.levelId, boss.x, boss.y, boss.w, boss.h);
+	} else {
+		plog::Info("eventprobe: the maze plan has no boss room I can read (plan room %d of %zu)", bossIdx, rooms.size());
+	}
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_eventRoom = rect;
+	g_bossRoom = boss;
 }
 
 // --- The plan --------------------------------------------------------------------------------------------------------
@@ -781,6 +793,7 @@ auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	g_cache = {};
 	g_entrance = {};
 	g_eventRoom = {};
+	g_bossRoom = {};
 	g_arrivalLogged = false;
 	plog::Info("maze map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
@@ -829,6 +842,7 @@ void MazeGameLeft() {
 	g_slotState.clear();
 	g_entrance = {};
 	g_eventRoom = {};
+	g_bossRoom = {};
 	g_arrivalLogged = false;
 }
 
@@ -860,6 +874,11 @@ auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect
 auto MazeEventRoom() -> MazeEventRect {
 	std::lock_guard<std::mutex> lock(g_lock);
 	return g_eventRoom;
+}
+
+auto MazeBossRoom() -> MazeEventRect {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_bossRoom;
 }
 
 auto MazeSlotBuilt() -> bool {

@@ -35,8 +35,9 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 void EventsPlayerTick(void* game, void* unit, uint32_t localPlayer) noexcept;
 
 // The monstats row of every `ids` entry in the game's own table for `dataFlag` (same proven route as the event spawn names), in
-// order. False, `rows` empty and `why` set when the table cannot be read or an Id is not in it. Game thread, at map open.
-auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::string* why) noexcept -> bool;
+// order, and the weight of each (the byte at monstats + 0x64, which the game's region builder copies into its monster groups).
+// False, both empty and `why` set when the table cannot be read or an Id is not in it. Game thread, at map open.
+auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::vector<int>* weights, std::string* why) noexcept -> bool;
 
 // The game was left: forget the map and the event. Touches no game memory.
 void EventsGameLeft() noexcept;

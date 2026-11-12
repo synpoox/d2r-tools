@@ -11,10 +11,11 @@ Every column is explained in [tables.md](tables.md).
 ## What works today
 
 Today a map only **opens a portal**. These columns take effect in game: `Name` (the message "Cartographer: <Name> is open."
-and `cartographer open <Name>`), `Item`, `Difficulty` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
-to the log). `Level`, `Monsters`, `Density`, `Champions` and `Uniques` are written into the map's level when it opens (experimental, not
-verified in game). Everything else (`Size`, `Boss`, and the settings in `cartographer.txt`) is checked and reported but
-**not applied yet**: every map opens the same level, the one preset level the installer adds. Generated layouts, bosses and properties come in later phases.
+and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
+to the log). `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens (experimental, not
+verified in game). Everything else (`Size`, `Boss`, `Properties`, `EventChance`, `Champions`, and the settings in
+`cartographer.txt`) is checked and reported but **not applied yet**: every map opens the same
+level, the one preset level the installer adds. Generated layouts, bosses and properties come in later phases.
 
 ## Prerequisites
 
@@ -64,11 +65,11 @@ does not use it yet.
 Optional columns go to the right and a blank cell keeps the default. A fuller row:
 
 ```
-Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	Difficulty	MinCharLevel
-Shorelines	Preset	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	Hell	80
+Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel
+Shorelines	Preset	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	80
 ```
 
-In game today only `Item`, `Difficulty` and `MinCharLevel` change what happens here; `Size`, `Level`, `Boss` and
+In game today only `Item` and `MinCharLevel` change what happens here; `Size`, `Level`, `Boss` and
 `Monsters` are accepted and checked, then ignored, so this map opens the same level as the plain row above.
 
 Upper and lower case do not matter for Cartographer's own words (`Preset`, `Large`, `Hell`) or for item codes. Names
@@ -90,15 +91,15 @@ off, and `check` says which part.
 The quickest test is `cartographer open Shorelines` in the console: it opens the portal with no item, but only in a game you
 host (not on someone else's server), once the game is running, in Harrogath, with the map's gates met.
 
-To test the item: create a Hell character of level 80 or more (or leave `Difficulty` and `MinCharLevel` blank), get the
+To test the item: create a Hell character of level 80 or more (or leave `MinCharLevel` blank), get the
 `t20` item by whatever way you set up in step 2, go to Harrogath and use it. A red portal appears beside you; step in.
 
-Only one map can be opened per game. A refused map is meant to stay in your inventory with a message that says why (wrong difficulty,
+Only one map can be opened per game. A refused map is meant to stay in your inventory with a message that says why (not Hell,
 not in town, character level too low, a map already open this game, no free spot for the portal).
 
 ## Where to go next
 
-- Add more maps: one row and one item each. Each row's `Item`, `Difficulty` and `MinCharLevel` work now.
+- Add more maps: one row and one item each. Each row's `Item` and `MinCharLevel` work now.
 - Plan a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required) are checked now
   and will apply once layouts are generated (later phases).
 - Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same

@@ -54,6 +54,16 @@ inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 8
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
 inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
 
+// The outdoor slot parts (build 93847; cartographer.md sections 4 and 8), re-checked by tools/check_maze_signatures.py. Nothing uses them yet:
+// the outdoor builder (issue #19, phase 5) will hook OutdoorEntry (the spike hooked 19 bytes) and OutdoorAct5Builder (16 bytes) and only call
+// PieceStamp and VoidCell. The hook lengths are the spike's, from section 4; each must be re-derived when a hook is added. LevelBuild above is
+// the fifth part (the spike hooked 14 bytes of it).
+inline constexpr const char* OutdoorEntry = "48 89 54 24 10 53 55 56 57 41 54 41 56 41 57 48 83 EC 50 4C 8B 7A 18 33 C0 4C 8B F2 44 0F B6 E1 49 89 87 A8 00 00 00 49 8D 4F 08 8B 42 2C 99 83";
+inline constexpr const char* OutdoorAct5Builder = "40 55 53 56 57 41 54 41 56 41 57 48 8D 6C 24 D9 48 81 EC C0 00 00 00 83 BA F8 01 00 00 6E 48 8B F2 44 0F B6 F1";
+inline constexpr const char* PieceStamp = "48 89 5C 24 08 44 89 4C 24 20 44 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 4C 8B 62 18 48 8B FA 48 63 B4 24 90 00 00 00 45 8B E9 8B D6 4C 89 64 24";
+// (level, x, y): sets a grid cell void (piece id 0, flag 0x100). Its twin 0x3edda0 has the same bytes up to the last argument: this signature ends with `41 B9 00 01 00 00` (mov r9d, 0x100), where the twin has `45 33 C9` (xor r9d, r9d), so only 0x3ede00 matches.
+inline constexpr const char* VoidCell = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00";
+
 // Map events (cartographer.md section 9). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
 // room, from both activation paths, so the original is called first and the event spawns after the room is populated.
 // The 12-byte prefix alone matches 3 sites, so the signature runs on to 43 bytes; the hook cuts the first 12.
@@ -76,6 +86,11 @@ inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B D
 inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
+// The map item's own stats (ItemStats=1, cartographer.md section 14); both only called. ItemListFind (unit, state, flags) is the list
+// finder (with state 0 it matches a list on the unit's chain by flags). ItemListCopy (list, out, max) is D2RLoader's thunk (jmp [rip+x],
+// then the dead original body) into D2RLoader's replacement of up to `max` {stat << 16 | layer, value} pairs; call the thunk, never hook it.
+inline constexpr const char* ItemListFind = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??";
+inline constexpr const char* ItemListCopy = "FF 25 ?? ?? ?? ?? 90 90 90 90 57 48 83 EC 20 49 63 F8 48 8B DA 48 8B F1";
 // Phase 6b: the Shrine object and the Boss Drop (cartographer.md section 13). DeathDrop (game, victim, arg3, info) is hooked
 // (the hook cuts the first 15 bytes: whole instructions, no relative operand); the rest are only called. SpawnObject is the
 // handler of the debug command `SpawnObject`: it is only read, to find the free-spot search (0x402f50), which has no signature of

@@ -203,6 +203,11 @@ struct SpawnPlan {
 // `room` is the rect the spots are placed in (the server room's, which is what the spawn code takes), `scale` its units per tile.
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale = 1);
 
+// The map's own Boss: the one monster at the room centre (a superunique when the name is one; the engine part falls back to its Class when the
+// game has spawned it already). No minions, no Drop: those belong to the Boss event. A name that is neither a monstats Id nor a superunique, or a
+// superunique whose Class is not in monstats, gives a problem.
+SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, uint64_t seed, int scale = 1);
+
 // The game keeps one bit per superuniques row that says it was spawned in this game: bit (row & 7) of byte (row >> 3).
 constexpr int kMaxSuperRow = 0xFFFF;
 bool superSeen(const uint8_t *bitmap, int row);

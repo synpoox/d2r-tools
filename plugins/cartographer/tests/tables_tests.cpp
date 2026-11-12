@@ -21,7 +21,7 @@ using namespace carto;
 
 namespace {
 
-const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tDifficulty\tMinCharLevel\tProperties\tEventChance\n";
+const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tMinCharLevel\tProperties\tEventChance\n";
 
 auto Names() -> GameNames {
 	GameNames n;
@@ -64,14 +64,13 @@ TEST_CASE("a four-cell map loads with every default") {
 	CHECK(maps[0].item == "t20");
 	CHECK(maps[0].size == "Medium");
 	CHECK(maps[0].level == 85);
-	CHECK(maps[0].difficulty == Hell);
 	CHECK(maps[0].properties == -1);
 	CHECK(maps[0].eventChance == -1);
 }
 
 TEST_CASE("our own words ignore case, the game's names do not") {
 	Report report;
-	const auto maps = Load("a\tPRESET\tcorridor\tsmall\t\tt20\t\t\thell\n", report);
+	const auto maps = Load("a\tPRESET\tcorridor\tsmall\t\tt20\t\t\n", report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].tileset == "Preset");
 	CHECK(maps[0].shape == "Corridor");
@@ -228,6 +227,44 @@ TEST_CASE("slot level types are read from levels.txt") {
 	CHECK(slots[1].levelType == 3);
 }
 
+TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is checked against the tileset") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nOutdoor\t140\nMaze\t139\n", report);
+	CHECK(slots[1].name == OutdoorSlot);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\tLevelType\nA\t138\t2\t2\nB\t139\t1\t3\nC\t140\t3\t21\n");
+	CHECK(slots[0].drlgType == 2);
+	CHECK(slots[1].drlgType == 3);
+	CHECK(slots[1].levelType == 21);
+	CHECK(slots[2].drlgType == 1);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\nC\t140\t1\n");  // only the DrlgType column: LevelType stays
+	CHECK(slots[1].drlgType == 1);
+	CHECK(slots[1].levelType == 21);
+
+	CHECK(OutdoorLevelType("jungle") == 21);
+	CHECK(OutdoorLevelType("Snow") == 31);
+	CHECK(OutdoorLevelType("Cave") == -1);
+
+	MapDef jungle;
+	jungle.name = "Shorelines";
+	jungle.tileset = "Jungle";
+	CHECK(OutdoorSlotProblem(jungle, slots).find("DrlgType 1") != std::string::npos);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\tLevelType\nC\t140\t3\t21\n");
+	CHECK(OutdoorSlotProblem(jungle, slots).empty());
+	MapDef snow = jungle;
+	snow.tileset = "Snow";
+	const std::string wrong = OutdoorSlotProblem(snow, slots);
+	CHECK(wrong.find("LevelType 21") != std::string::npos);
+	CHECK(wrong.find("needs 31") != std::string::npos);
+	CHECK(wrong.find("Shorelines") != std::string::npos);
+
+	MapDef cave = jungle;
+	cave.tileset = "Cave";
+	CHECK(OutdoorSlotProblem(cave, slots).empty());       // not an outdoor map
+	CHECK(OutdoorSlotProblem(jungle, {}).empty());        // no Outdoor slot: the 'not installed' message says so
+	auto unread = LoadSlots("Slot\tLevel\nOutdoor\t140\n", report);
+	CHECK(OutdoorSlotProblem(jungle, unread).empty());    // levels.txt not read: never refuses on what it does not know
+}
+
 TEST_CASE("every map needs an Item: a blank cell is refused") {
 	Report report;
 	const auto maps = Load("Has\tPreset\tLoop\t\t\tt20\nNone\tPreset\tLoop\n", report);
@@ -301,6 +338,9 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	GateState s = ok;
 	s.difficulty = Nightmare;
 	CHECK(CheckGates(map, s) == Gate::Difficulty);
+	s.difficulty = Normal;
+	CHECK(CheckGates(map, s) == Gate::Difficulty);
+	CHECK(RefusalText(Gate::Difficulty, map, s) == "Cartographer: Test can only be opened in Hell.");
 	s = ok;
 	s.areaId = 40;
 	CHECK(CheckGates(map, s) == Gate::NotInTown);
@@ -318,6 +358,23 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	CHECK(CheckGates(high, s) == Gate::CharLevel);
 	CHECK(RefusalText(Gate::CharLevel, high, s).find("needs character level 80 (you are 70)") != std::string::npos);
 	CHECK(RefusalText(Gate::AlreadyOpen, map, s).find("already been opened in this game") != std::string::npos);
+}
+
+TEST_CASE("an old Difficulty column is ignored with a note, not an error") {
+	Report report;
+	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tDifficulty\nOld\tPreset\tCorridor\tt20\tNormal\nBad\tPreset\tLoop\tt21\tSoon\n", Names(), report);
+	CHECK(maps.size() == 2);
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].severity == Severity::Note);
+	CHECK(Joined(report).find("the column 'Difficulty' is ignored: maps can only be opened in Hell.") != std::string::npos);
+	GateState state;
+	state.difficulty = Normal;
+	state.charLevel = 90;
+	state.areaId = state.townId = 109;
+	CHECK(CheckGates(maps[0], state) == Gate::Difficulty);
+	state.difficulty = Hell;
+	CHECK(CheckGates(maps[0], state) == Gate::Open);
 }
 
 TEST_CASE("the second open is refused after the first counts") {
@@ -356,7 +413,8 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
-	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow};
+	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow,
+	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);
