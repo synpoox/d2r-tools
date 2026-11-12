@@ -103,7 +103,7 @@ A tileset that is not ready is refused when the game loads, with a message that 
 | `MinCharLevel` | The character level the player needs |
 | `Properties` | How many random properties this map gets |
 | `EventChance` | Percent chance of an event |
-| `Density`, `Champions`, `Uniques` | Percent more monsters, champion packs and unique packs |
+| `Density`, `Champions`, `Uniques` | Percent more monsters and unique packs than the level's own (experimental, not verified in game); `Champions` is read and checked but not applied |
 
 See [tables.md](tables.md) for every column of every file.
 

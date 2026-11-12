@@ -3,6 +3,7 @@
 #include "core/part_signatures.h"
 #include "engine/auto_check.h"
 #include "engine/event_6b.h"
+#include "engine/game_memory.h"
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
@@ -45,6 +46,8 @@ constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte st
 constexpr uint32_t DataFlagLimit = 4;       // the base accessor takes a data flag below 4 (anything else is a trap in the engine)
 constexpr int DtMonRowsOffset = 0xf58;      // monstats row vector pointer; the 64-bit count is at +0xf60
 constexpr int DtMonCountOffset = 0xf60;
+constexpr int DtLevelCountOffset = 0x1468;  // 64-bit count of the levels rows (the region builder 0x508750 loops to it)
+constexpr int MonStatsSpawnFlagOffset = 0x3c;  // byte in a monstats row: the group builder 0x509940 keeps a row only when bit 0 is set
 constexpr int MonStatsWeightOffset = 0x64;  // uint8 in a monstats row: what the region builder (0x509c2c) takes as the group's weight
 constexpr int DtMonMapOffset = 0xf70;      // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
 constexpr int DtSuperRowsOffset = 0x1078;   // superuniques row vector pointer; the 64-bit count is at +0x1080
@@ -846,14 +849,41 @@ auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std
 				weights->clear();
 				return false;
 			}
+			// The game's group builder (0x509940) drops a monster whose monstats +0x3c lacks bit 0 (the mask at 0x1d996d0 is 1).
+			if ((At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsSpawnFlagOffset) & 1) == 0) {
+				plog::Warn("map monsters: '%s' (monstats row %d) is left out: the game does not put it in a level's monster groups", id.c_str(), row);
+				continue;
+			}
 			rows->push_back(row);
 			weights->push_back(At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsWeightOffset));
+		}
+		if (rows->empty() && !ids.empty()) {
+			*why = "the game keeps none of the listed monsters in a level's monster groups";
+			return false;
 		}
 		return true;
 	} catch (...) {
 		rows->clear();
 		weights->clear();
 		*why = "the lookup failed";
+		return false;
+	}
+}
+
+auto GameLevelCount(uint32_t dataFlag, int64_t* count, std::string* why) noexcept -> bool {
+	try {
+		const uint8_t* dt = TablesBase(dataFlag, why);
+		if (dt == nullptr) {
+			return false;
+		}
+		if (!Readable(dt + DtLevelCountOffset, sizeof(int64_t))) {
+			*why = "the levels count cannot be read";
+			return false;
+		}
+		*count = At<int64_t>(dt, DtLevelCountOffset);
+		return true;
+	} catch (...) {
+		*why = "the levels count lookup failed";
 		return false;
 	}
 }
