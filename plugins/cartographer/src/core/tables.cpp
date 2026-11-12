@@ -18,11 +18,10 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Preset, Cave and Crypt are buildable (Cave and Crypt through the maze steering hooks, which need the
-// Maze slot); the others are accepted names that the loader refuses with a
-// message that says so, until their builders ship.
+// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the others
+// are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Preset", true},  {"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
+	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", false},    {"Snow", false},
 };
@@ -236,6 +235,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const std::string tileset = table.Cell(row, cTileset);
 		if (tileset.empty()) {
 			fail("the Tileset cell is empty. Use " + OneOf(ReadyTilesetNames()) + ".");
+		} else if (EqualsNoCase(tileset, "Preset")) {
+			fail("Preset maps are gone: use Cave or Crypt.");
 		} else {
 			const std::vector<std::string> all = TilesetNames();
 			const std::string* known = Canonical(all, tileset);
@@ -653,6 +654,7 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 	for (const TsvRow& row : table.rows) {
 		Slot slot;
 		slot.name = table.Cell(row, cSlot);
+		slot.line = row.line;
 		if (slot.name.empty() || !ParseInt(table.Cell(row, cLevel), 1, 65535, &slot.level)) {
 			report.Error(SlotsFile, row.line, "the slot needs a name and a level number. Run the installer again (tools\\install.ps1). This slot is skipped.");
 			continue;
@@ -660,6 +662,49 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 		slots.push_back(std::move(slot));
 	}
 	return slots;
+}
+
+void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report& report) {
+	constexpr int Towns[] = {1, 40, 75, 103, 109};
+	const Tsv levels = ParseTsv(levelsText);
+	const int cId = levels.Column("Id"), cName = levels.Column("Name");
+	std::vector<int> ids;
+	std::vector<std::string> names;  // the levels.txt Name of each id above
+	if (cId >= 0) {
+		for (const TsvRow& row : levels.rows) {
+			int id = 0;
+			if (ParseInt(levels.Cell(row, cId), 0, 65535, &id)) {
+				ids.push_back(id);
+				names.push_back(cName >= 0 ? std::string(levels.Cell(row, cName)) : std::string());
+			}
+		}
+	}
+	std::vector<Slot> kept;
+	for (Slot& slot : slots) {
+		const std::string who = "slot '" + slot.name + "' names level " + std::to_string(slot.level);
+		const auto drop = [&](const std::string& why) {
+			report.Error(SlotsFile, slot.line, who + ", " + why + ". The slot is not used, so no map opens through it.");
+		};
+		if (EqualsNoCase(slot.name, "Preset")) {
+			report.Note(SlotsFile, slot.line, "the Preset slot is not used any more (every map is generated). The row, and its level in levels.txt and lvlprest.txt, can be deleted.");
+		} else if (std::find(std::begin(Towns), std::end(Towns), slot.level) != std::end(Towns)) {
+			drop("a town");
+		} else if (slot.level <= LastOriginalLevel) {
+			drop("a level of the original game. Run the installer again (tools\\install.ps1)");
+		} else if (std::find(ids.begin(), ids.end(), slot.level) == ids.end()) {
+			drop(cId < 0 ? "but levels.txt could not be read" : "which has no row in levels.txt. Run the installer again (tools\\install.ps1)");
+		} else if (EqualsNoCase(slot.name, MazeSlot) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
+			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
+		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return k.level == slot.level; })) {
+			drop("which another slot already uses");
+		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return EqualsNoCase(k.name, slot.name); })) {
+			drop("but a slot of that name is already above");
+		} else {
+			kept.push_back(std::move(slot));
+		}
+	}
+	slots = std::move(kept);
 }
 
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
@@ -708,8 +753,8 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 
 auto OutdoorSlotRefusal(const Slot& slot) -> std::string {
 	const std::string id = std::to_string(slot.level);
-	if (slot.level <= 137) {
-		return "the Outdoor slot level " + id + " is a vanilla level (the slot must be a level the installer added, above 137)";
+	if (slot.level <= LastOriginalLevel) {
+		return "the Outdoor slot level " + id + " is a vanilla level (the slot must be a level the installer added, above " + std::to_string(LastOriginalLevel) + ")";
 	}
 	if (slot.act != 4) {
 		return "the Outdoor slot level " + id + " is not read as Act 5 in levels.txt (Act is " + (slot.act < 0 ? std::string("unknown") : std::to_string(slot.act)) +

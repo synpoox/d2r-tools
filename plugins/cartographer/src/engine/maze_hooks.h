@@ -2,7 +2,7 @@
 // (0x3eb850) and ring grower (0x3e9820), found by byte signature, and builds the maze a map's layout asks for instead of
 // the random one. Only the Maze slot level is touched; every other level runs the game's own code. All four hooks go in
 // at load and pass straight through until every part is on; a part that is missing or refused turns only the maze steering
-// off (the preset maps keep working). If the plan cannot be built or the engine refuses a step, that build falls back to
+// off (every other level keeps working). If the plan cannot be built or the engine refuses a step, that build falls back to
 // the game's own maze with the reason logged. Notes: docs/reverse-engineering/cartographer.md sections 1, 1a and 5.
 #pragma once
 
@@ -69,7 +69,7 @@ auto MazeSlotBuilt() -> bool;
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.
 auto MazeArrivalPending() -> bool;
 
-// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot, not the Preset slot.
+// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot.
 auto MapIsMaze(const MapDef& map) -> bool;
 
 // Empty, or why the Maze slot level cannot build `map` (a Cave level cannot build a Crypt map, and the other way round).

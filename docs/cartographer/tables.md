@@ -10,9 +10,9 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss`, `Properties` and `EventChance` act; every map opens the installed Maze level. `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level when it opens (experimental, not verified in game); `Champions` is checked, then ignored. |
 | `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
-| `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
+| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze` row); you do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player only when `PlayerStats` is 1 (written and unit tested; **not yet verified in game**). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: no, it is read and checked, but nothing rolls events from it yet (later phase). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
@@ -42,16 +42,16 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
-| `Size` | no | `Small`, `Medium` or `Large` (checked only; not applied yet) | Medium | Large |
+| `Tileset` | yes | A tileset name. Only `Cave` and `Crypt` are built today (the Maze level is one of them: see the installer's `-Tileset`). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Cave |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
+| `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental, not verified in game) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
-| `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
+| `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; placed in the maze's far room) | no boss | `Bishibosh` |
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; experimental, not verified in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
 | `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
-| `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
+| `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (scales the level's own density; experimental, not verified in game; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet, the game has no setting for it) | 0 | 50 |
 | `Uniques` | no | Percent more unique packs, 0 to 1000 (scales the level's own unique pack count; experimental, not verified in game; adds nothing on a level whose count is 0) | 0 | 25 |

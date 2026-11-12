@@ -33,10 +33,10 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
 inline constexpr int MapItemSpell = 16;
-// The slot (in slots.txt) of the map level every map opens through. Later phases add slots for built layouts.
-inline constexpr const char* PresetSlot = "Preset";
-// The slot of the maze level a Cave or Crypt map opens through (levels.txt DrlgType 1, plan section 3.6).
+// The slot (in slots.txt) of the maze level every map opens through (levels.txt DrlgType 1, plan section 3.6).
 inline constexpr const char* MazeSlot = "Maze";
+// The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
+inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). Recognised
 // and checked here; no map opens through it yet, because the outdoor builder is not wired in (those tilesets are still refused).
 inline constexpr const char* OutdoorSlot = "Outdoor";
@@ -79,6 +79,7 @@ struct Settings {
 };
 
 struct Slot {
+	int line = 0;       // row in slots.txt
 	std::string name;
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
@@ -90,7 +91,10 @@ struct Slot {
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 
-// Tilesets, shapes, sizes and difficulties as the author writes them.
+// The last level of the original game (3.3, Colossal Summit); a slot must be a level above it.
+inline constexpr int LastOriginalLevel = 137;
+
+// Tilesets, shapes and sizes as the author writes them.
 auto TilesetNames() -> std::vector<std::string>;
 auto ReadyTilesetNames() -> std::vector<std::string>;
 
@@ -113,6 +117,11 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
+
+// Drops every slot that could aim a hook at a level that is not the installer's own: a level of the original game
+// (id 137 or below, 3.3), a town, a level with no levels.txt row (or no readable levels.txt), a repeated level or name.
+// An old "Preset" row is dropped with a note. Each drop is described in `report`; a dropped slot stays closed.
+void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report& report);
 
 // Fills in each slot's levelType, drlgType and act from the mod's levels.txt (columns Id, LevelType, DrlgType and Act; each is read when its column
 // exists). A slot with no row keeps -1.
