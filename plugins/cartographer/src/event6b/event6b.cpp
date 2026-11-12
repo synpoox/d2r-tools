@@ -186,4 +186,175 @@ int64_t callTargetOffset(const uint8_t *code, size_t size, size_t site) {
 	return static_cast<int64_t>(site) + 5 + rel;
 }
 
+Route routeEvent(events::Kind kind, events::NameKind spawnKind) {
+	switch (kind) {
+	case events::Kind::Boss: return Route::Boss;
+	case events::Kind::Horde: return Route::Horde;
+	case events::Kind::Ambush: return Route::Ambush;
+	case events::Kind::Shrine: return Route::Shrine;
+	case events::Kind::Treasure:
+		return spawnKind == events::NameKind::Monster || spawnKind == events::NameKind::Unique ? Route::TreasureMonster : Route::TreasureChest;
+	case events::Kind::Invalid: break;
+	}
+	return Route::None;
+}
+
+const char *routeName(Route route) {
+	switch (route) {
+	case Route::None: return "none";
+	case Route::Boss: return "boss";
+	case Route::Horde: return "horde";
+	case Route::Ambush: return "ambush";
+	case Route::TreasureMonster: return "treasure monster";
+	case Route::TreasureChest: return "treasure chest";
+	case Route::Shrine: return "shrine";
+	}
+	return "";
+}
+
+const char *waveEndName(WaveEnd end) {
+	switch (end) {
+	case WaveEnd::None: return "none yet";
+	case WaveEnd::Cleared: return "cleared";
+	case WaveEnd::TimedOut: return "timed out";
+	case WaveEnd::Empty: return "the game made none of its units";
+	}
+	return "";
+}
+
+void WaveTracker::arm(int waves, uint64_t timeoutMs, uint64_t gapMs) {
+	reset();
+	waves_ = waves < 1 ? 1 : waves;
+	timeoutMs_ = timeoutMs;
+	gapMs_ = gapMs;
+	phase_ = Phase::Waiting;
+}
+
+void WaveTracker::reset() {
+	*this = WaveTracker{};
+}
+
+WaveTracker::Step WaveTracker::step(bool inRoom, uint64_t nowMs) {
+	switch (phase_) {
+	case Phase::Idle:
+	case Phase::Spawning:  // waveSpawned() has not come back yet
+		return Step::Wait;
+	case Phase::Done:
+		return Step::Finished;
+	case Phase::Waiting:
+		if (!inRoom) {
+			return Step::Wait;
+		}
+		phase_ = Phase::Spawning;
+		++started_;
+		return Step::SpawnWave;
+	case Phase::Fighting:
+		if (pending_.empty()) {
+			lastEnd_ = WaveEnd::Cleared;
+		} else if (nowMs >= deadline_) {
+			lastEnd_ = WaveEnd::TimedOut;
+			pending_.clear();  // a monster that never reports must not hold the next wave
+		} else {
+			return Step::Wait;
+		}
+		if (started_ >= waves_) {
+			phase_ = Phase::Done;
+			return Step::Finished;
+		}
+		phase_ = Phase::Gap;
+		gapUntil_ = nowMs + gapMs_;
+		return Step::Wait;
+	case Phase::Gap:
+		if (!inRoom || nowMs < gapUntil_) {
+			return Step::Wait;
+		}
+		phase_ = Phase::Spawning;
+		++started_;
+		return Step::SpawnWave;
+	}
+	return Step::Wait;
+}
+
+void WaveTracker::waveSpawned(const std::vector<uint32_t> &ids, uint64_t nowMs) {
+	if (phase_ != Phase::Spawning) {
+		return;
+	}
+	if (ids.empty()) {
+		lastEnd_ = WaveEnd::Empty;
+		phase_ = Phase::Done;
+		return;
+	}
+	pending_ = ids;
+	for (const uint32_t dead : early_) {
+		for (size_t i = 0; i < pending_.size(); ++i) {
+			if (pending_[i] == dead) {
+				pending_.erase(pending_.begin() + static_cast<std::ptrdiff_t>(i));
+				break;
+			}
+		}
+	}
+	early_.clear();
+	deadline_ = nowMs + timeoutMs_;
+	phase_ = Phase::Fighting;
+}
+
+bool WaveTracker::onDeath(uint32_t id) {
+	if (phase_ == Phase::Spawning) {
+		if (early_.size() < 256) {
+			early_.push_back(id);
+		}
+		return false;
+	}
+	if (phase_ != Phase::Fighting) {
+		return false;
+	}
+	for (size_t i = 0; i < pending_.size(); ++i) {
+		if (pending_[i] == id) {
+			pending_.erase(pending_.begin() + static_cast<std::ptrdiff_t>(i));
+			return true;
+		}
+	}
+	return false;
+}
+
+ChestReason decideChest(const ChestInput &in) {
+	if (!in.armed) {
+		return ChestReason::NotArmed;
+	}
+	if (!in.tracked) {
+		return ChestReason::NotTracked;
+	}
+	if (!in.object) {
+		return ChestReason::NotObject;
+	}
+	if (in.rolled) {
+		return ChestReason::AlreadyRolled;
+	}
+	if (in.modeBefore == in.modeAfter) {
+		return ChestReason::NotOpened;
+	}
+	return ChestReason::Rolled;
+}
+
+const char *chestReasonName(ChestReason reason) {
+	switch (reason) {
+	case ChestReason::Rolled: return "rolled";
+	case ChestReason::NotArmed: return "no armed chest Drop";
+	case ChestReason::NotTracked: return "not the event's chest";
+	case ChestReason::NotObject: return "not an object";
+	case ChestReason::AlreadyRolled: return "already rolled for this chest";
+	case ChestReason::NotOpened: return "the chest's mode did not change, so it was not opened by this call";
+	}
+	return "";
+}
+
+std::string describeFleeChecks(int blocked, int targetOk) {
+	std::string text = blocked < 0 ? "0x34c2c0 not run" : blocked != 0 ? "0x34c2c0 says the target is excluded (nonzero)" : "0x34c2c0 passes";
+	text += "; ";
+	text += targetOk < 0 ? "0x34c730 not run" : targetOk == 0 ? "0x34c730 says the target cannot be scared (zero)" : "0x34c730 passes";
+	const bool refused = (blocked > 0) || targetOk == 0;
+	text += refused ? ": 0x597030 will return without setting the flee" : blocked < 0 || targetOk < 0 ? ": not fully probed" : ": 0x597030 should set the flee";
+	return text;
+}
+
 } // namespace cartographer::event6b

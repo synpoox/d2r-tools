@@ -82,4 +82,15 @@ inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF
 // is the game's levels row getter, only called; its first 46 bytes are shared by three sibling getters, so the signature runs to 82.
 inline constexpr const char* LevelsRow = "48 89 5C 24 08 55 56 57 48 83 EC 30 48 63 DA 0F B6 F1 E8 ?? ?? ?? ?? 48 8B E8 85 DB 7E 34 40 0F B6 CE E8 ?? ?? ?? ?? 48 8B B8 68 14 00 00 4C 63 C7 4C 3B C7 75 04 85 FF 79 14 48 8D 4C 24 58 C6 44 24 58 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 3B DF 7C 18";
 
+// Phase 6b second half: Ambush and Treasure (cartographer.md section 13). OperateObject (game, activator, object) is hooked (the hook cuts
+// the first 16 bytes: four whole instructions, no relative operand; the signature runs to 23 so no sibling matches). The rest are only
+// called: FleeSetup is the engine's scare setup; FleeBlock and FleeTarget are the two checks it makes first (called only to log what they
+// say); TcLookup gives the compiled treasure class for an index and TcRoller rolls it.
+inline constexpr const char* OperateObject = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 50 48 8B F1";
+inline constexpr const char* FleeSetup = "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B F1";
+inline constexpr const char* FleeBlock = "48 83 EC 28 48 85 C9 75 1D 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 4D";
+inline constexpr const char* FleeTarget = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 0F B6 F1";
+inline constexpr const char* TcLookup = "48 89 5C 24 08 55 56 57 48 83 EC 30 41 8B D8";
+inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
+
 }  // namespace carto::sig

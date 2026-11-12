@@ -69,6 +69,14 @@ PARTS = [
     ("CreateObject", 0x490410, 19, "48 8B 05", 0),
     # The map's own Name on the tooltip, automap and banner (cartographer.md section 10): the levels row getter, only called.
     ("LevelsRow", 0x32C4A0, 18, "E8", 0),
+    # Ambush and Treasure (cartographer.md section 13). OperateObject is hooked (16 bytes: four whole instructions); its first relative
+    # operand is the call at +32. The others are only called (their max patch is where the signature ends or its first call).
+    ("OperateObject", 0x592C40, 32, None, 16),
+    ("FleeSetup", 0x597030, 30, None, 0),
+    ("FleeBlock", 0x34C2C0, 18, "E8", 0),
+    ("FleeTarget", 0x34C730, 28, None, 0),
+    ("TcLookup", 0x397290, 18, None, 0),
+    ("TcRoller", 0x4404F0, 12, None, 0),
 ]
 
 # The free-spot search (0x402f50) has no signature: it is the target of the call at SpawnObject + 0xff. The 17 bytes before that call
