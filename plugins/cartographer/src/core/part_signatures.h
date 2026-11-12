@@ -113,9 +113,6 @@ inline constexpr const char* ChestOperate = "48 89 4C 24 08 55 48 8B EC 48 81 EC
 // byte has the locked bit (0x80); ObjectFlagsSet (unit, byte) writes that byte. Each is a small wrapper that jumps on to the body; the jump target is masked.
 inline constexpr const char* ObjectFlagsGet = "40 53 48 83 EC 20 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 83 3B 02 74 ?? 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 43 10 E9 ?? ?? ?? ?? 90 90 90 5B C3";
 inline constexpr const char* ObjectFlagsSet = "48 89 5C 24 08 57 48 83 EC 20 0F B6 FA 48 8B D9 48 85 C9 75 ?? 88 4C 24 38 48 8D 4C 24 38 E8 ?? ?? ?? ?? 84 C0 74 01 CC 83 3B 02 74 ?? 48 8D 4C 24 38 C6 44 24 38 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 43 10 48 8B 5C 24 30 E9 ?? ?? ?? ?? 90 90 90 5F C3";
-inline constexpr const char* FleeSetup = "48 89 5C 24 10 48 89 74 24 18 57 48 81 EC 80 00 00 00 48 8B F1";
-inline constexpr const char* FleeBlock = "48 83 EC 28 48 85 C9 75 1D 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 4D";
-inline constexpr const char* FleeTarget = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 0F B6 F1";
 inline constexpr const char* TcLookup = "48 89 5C 24 08 55 56 57 48 83 EC 30 41 8B D8";
 inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 

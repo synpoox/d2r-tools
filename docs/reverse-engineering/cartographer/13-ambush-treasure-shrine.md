@@ -1,5 +1,7 @@
 ## 13. Ambush, Treasure and Shrine events: static checks (issue #102)
 
+**Update:** `0x597030` (flee setup) is not used: the setup ran but had no effect in game (`docs/cartographer/checks/2026-11-12-snow-check-2.md`), so the Treasure monster does not flee; see #269.
+
 Desk research for phase 6b (section 12 is the multiplayer research, PR #101). Build 93847, `D2RLoader.exe` stamp `0x6ab3782c`
 (`C:\ghidra-work\D2RLoader_6ab3782c_dump.exe`), read with `tools/dump_dis.py` and a private disassembly script. **Nothing here
 was run in a game.** Evidence levels: **dump** (read from the disassembly), **SDK** (read from the pinned headers),
@@ -28,11 +30,11 @@ RIP-relative displacement) and matches exactly once in the dump's executable sec
 | `0x490410` | object create used by `SpawnObject` (dump: arguments only) | `40 55 53 57 48 8d ac 24 70 fc ff ff` | call-only |
 | `0x38fc70` | `(dataFlag)` returns the objects row count `*(dt+0x1530)` (dump) | `48 83 ec 28 e8 ?? ?? ?? ?? 8b 80 30 15 00 00` | call-only |
 | `0x4a2690` | AI set-mode `(game, monster, [monData+0x30], mode)`; `r9` is the mode, range-checked `< 0x12`; returns early when stat `0x36` is set on the monster (dump) | `48 85 c9 0f 84 ?? ?? ?? ?? 55 53 56` | call-only |
-| `0x597030` | **flee setup**: sets state 56 through a record and calls `0x4a2690` with mode `0xb`; 3 callers (dump) | `48 89 5c 24 10 48 89 74 24 18 57 48 81 ec 80 00 00 00 48 8b f1` | call-only |
+| `0x597030` | **flee setup**: sets state 56 through a record and calls `0x4a2690` with mode `0xb`; 3 callers (dump) | `48 89 5c 24 10 48 89 74 24 18 57 48 81 ec 80 00 00 00 48 8b f1` | unused (no effect in game, #269) |
 | `0x596d40` | **not** the flee setup (an earlier draft said so): a spot and room search (`0x509cc0`, `0x38dfb0` twice, `0x491ca0`), ends at `0x59702e`; 4 callers (dump) | `48 89 5c 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 ec 40 4c 8b f9` | not used |
 | `0x5cd060` | AI step that returns a monster to mode 0 once state 56 is gone (dump) | `48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 54 41 56 41 57 48 83 ec 40 49 8b 68 10` | not used |
 | `0x48b890` / `0x48b720` | AI event 2 scheduling (dump) | `40 53 56 41 54 41 56 41 57 48 83 ec 20 45 8b f1` / `48 83 ec 48 8b 84 24 80 00 00 00` | not used |
-| `0x34c2c0` / `0x34c730` | the two target checks `0x597030` bails on: `0x34c2c0(unit)` nonzero, or `0x34c730(unit, 0, 1, 1, 1)` zero, five arguments (dump: shapes only) | `48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 ?? ?? ?? ?? 84 c0 74 4d` / `48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20 57 41 56 41 57 48 83 ec 20 45 0f b6 f1` | call-only |
+| `0x34c2c0` / `0x34c730` | the two target checks `0x597030` bails on: `0x34c2c0(unit)` nonzero, or `0x34c730(unit, 0, 1, 1, 1)` zero, five arguments (dump: shapes only) | `48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 ?? ?? ?? ?? 84 c0 74 4d` / `48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20 57 41 56 41 57 48 83 ec 20 45 0f b6 f1` | unused (see #269) |
 | `0x447b80` | monster death drop `(game, victim, arg3, info)`; reaches `0x441300` at `0x447e17`; 2 direct callers (dump) | `48 8b c4 44 89 40 18 53 55 56 57 41 54 41 56` (as section 6) | hookable by the rule (15 bytes) |
 | `0x441300` | drop roller for a monster unit (dump) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 84 24 88 00 00 00 4c 8b bc 24 18 01 00 00` (as section 6) | call-only here |
 | `0x4404f0` | generic TC roller, 2 callers (`0x44148c` in `0x441300`, `0x59333d`); contract in Q2 (dump) | `4c 8b dc 55 53 49 8d ab 08 f7 ff ff` | call |

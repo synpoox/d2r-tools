@@ -47,7 +47,7 @@ auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::v
 void Event6bArmBossDrop(const cartographer::events::Event& event, int level, void* player);
 
 // Phase 6b, second half: Treasure and Ambush.
-//   * Treasure: a Spawn that is a monster is spawned and made to flee (the game's flee setup, 0x597030); its death rolls Drop like a Boss's.
+//   * Treasure: a Spawn that is a monster is spawned; its death rolls Drop like a Boss's.
 //     Any other Spawn is an objects.txt chest, placed like a Shrine; when it is opened (a hook on the chest operate handler, 0x58e2f0)
 //     the Drop is rolled with the chest roller (0x4404f0).
 //   * Ambush: when the local player is in the event room, `Waves` waves of `Count` x `Spawn` are spawned one after another; a wave ends when
@@ -60,7 +60,7 @@ auto Event6bPlacesObject(const cartographer::events::Event& event, cartographer:
 // A Drop that cannot be used does not stop the chest. Game thread, at map open.
 auto Event6bPrepareChest(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool;
 
-// The first spawn of a Boss or Treasure event (`unit`, the spawn's return value): track it for the Drop; a Treasure monster also flees.
+// The first spawn of a Boss or Treasure event (`unit`, the spawn's return value): track it for the Drop.
 void Event6bFirstSpawned(void* game, cartographer::events::Kind kind, void* unit) noexcept;
 
 // An Ambush event room was populated: remember one wave's spawns (`spawns`, planned for the room) and the room's server rect, by which the

@@ -41,7 +41,6 @@ constexpr uint16_t ObjectCreateFlag = 1;     // [rsp+0x30] as SpawnObject passes
 constexpr size_t FreeSpotSite = 0xff;        // the call to 0x402f50 inside the SpawnObject handler (0x40239f - 0x4022a0)
 constexpr size_t FreeSpotReach = 0x200;      // how much of the handler is read to find it
 constexpr int UnitModeOffset = 0x0c;         // int32 on a unit: the mode (inference from the classic layout, not shown; the chest probe logs it)
-constexpr int32_t FleeDuration = 600;        // 0x597030's last argument. Its unit is not known (callers pass 0x14 and skill results); a guess, logged
 // 0x4404f0's stack arg 5 is a forced item quality: 0 rolls the quality (0x4421b0, from the tier below), a nonzero value is used as the quality as it is
 // (0x440f9f). 0x5930b0 passes its own second argument there: the chest handler passes 0, 7 or a variable (0x58e5a6, 0x58e709, 0x58e51f); only 0x592cf0 passes 4.
 constexpr int32_t ChestSelector = 0;         // no forced quality: the roller rolls it, as a normal chest does
@@ -76,13 +75,10 @@ struct OperateContext {
 using OperateFn = int32_t (*)(OperateContext*) noexcept;
 using ObjectFlagsGetFn = uint32_t (*)(Unit*) noexcept;      // the object data's flag word; the low byte has the locked bit 0x80
 using ObjectFlagsSetFn = void (*)(Unit*, uint8_t) noexcept;  // writes that low byte (and clears the high byte)
-using FleeSetupFn = void (*)(Game*, Unit* source, Unit* target, int32_t r9, int32_t arg5, int32_t arg6) noexcept;
-using FleeBlockFn = int32_t (*)(Unit*) noexcept;
-using FleeTargetFn = uint8_t (*)(Unit*, uint8_t, uint8_t, uint8_t, uint8_t) noexcept;
 using TcLookupFn = const void* (*)(uint32_t dataFlag, uint16_t tcIndex, int32_t level) noexcept;
 using TcRollerFn = uint64_t (*)(Game*, Unit* a, Unit* b, const void* tc, int32_t s20, int32_t s28, int32_t s30, void* out, int32_t* s40, int32_t s48) noexcept;
 
-enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, ObjectFlagsGet, ObjectFlagsSet, FleeSetup, FleeBlock, FleeTarget, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
+enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, ObjectFlagsGet, ObjectFlagsSet, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
 
 Part g_parts[PartCount] = {
 	{"DeathDrop", sig::DeathDrop, 15, false, nullptr, {}, {}},
@@ -94,9 +90,6 @@ Part g_parts[PartCount] = {
 	{"ChestOperate", sig::ChestOperate, 16, false, nullptr, {}, {}},
 	{"ObjectFlagsGet", sig::ObjectFlagsGet, 0, false, nullptr, {}, {}},
 	{"ObjectFlagsSet", sig::ObjectFlagsSet, 0, false, nullptr, {}, {}},
-	{"FleeSetup", sig::FleeSetup, 0, false, nullptr, {}, {}},
-	{"FleeBlock", sig::FleeBlock, 0, false, nullptr, {}, {}},
-	{"FleeTarget", sig::FleeTarget, 0, false, nullptr, {}, {}},
 	{"TcLookup", sig::TcLookup, 0, false, nullptr, {}, {}},
 	{"TcRoller", sig::TcRoller, 0, false, nullptr, {}, {}},
 	{"DataTablesBase", nullptr, 0, false, nullptr, {}, {}},  // shared with event_apply.cpp (copied in at load)
@@ -139,8 +132,6 @@ struct State {
 	uint32_t bossId = 0;
 	bool dropped = false;
 	// Treasure monster
-	void* fleeSource = nullptr;  // the player unit the monster flees from (checked again when used); null: none
-	uint32_t fleeSourceId = 0;
 	// Treasure chest (the object is placed by the Shrine code, tracked here)
 	bool objectIsChest = false;
 	bool chestArmed = false;
@@ -443,9 +434,8 @@ void ResolveFreeSpot(const CodeRange* ranges, int count) noexcept {
 auto SummaryNow(bool populatorOn) -> std::string {
 	// A Shrine is placed from the room populator hook, so it needs that too.
 	const bool shrine = populatorOn && On(FreeSpot) && On(CreateObject) && On(DataTables);
-	const bool flee = On(FleeSetup) && On(FleeBlock) && On(FleeTarget);
 	return std::string("Shrine events ") + (shrine ? "on" : "off") + ", Boss Drop " + (g_dropHook.load() ? "on" : "off") + ", Ambush " + (g_deathListener ? "on" : "one wave only (no death listener)") +
-	       ", Treasure flee " + (flee ? "on" : "off") + ", Treasure chest Drop " + (shrine && g_chestHook.load() ? "on" : "off") + " (written, not verified in game)";
+	       ", Treasure chest Drop " + (shrine && g_chestHook.load() ? "on" : "off") + " (written, not verified in game)";
 }
 
 }  // namespace
@@ -565,12 +555,6 @@ void Event6bMapOpened() noexcept {
 
 void Event6bArmBossDrop(const ev::Event& event, int level, void* player) {
 	Event6bMapOpened();
-	if (event.kind == ev::Kind::Treasure && player != nullptr) {
-		// A Treasure monster flees even without a Drop: remember the player it flees from.
-		std::lock_guard<std::mutex> lock(g_lock);
-		g_state.fleeSource = player;
-		g_state.fleeSourceId = At<uint32_t>(player, UnitIdOffset);
-	}
 	if ((event.kind != ev::Kind::Boss && event.kind != ev::Kind::Treasure) || event.drop.empty()) {
 		return;
 	}
@@ -641,39 +625,7 @@ void Event6bBossSpawned(void* unit) noexcept {
 	}
 }
 
-namespace {
-
-// Makes the Treasure monster flee from the player: calls the game's flee setup (0x597030) on it. The two checks the setup starts with are
-// run first so the log says why a refusal happened; the setup repeats them itself.
-void StartFlee(Game* game, void* unit) noexcept {
-	if (!On(FleeSetup)) {
-		plog::Warn("treasure monster does not flee: the FleeSetup part is off (see the parts above)");
-		return;
-	}
-	void* source = nullptr;
-	uint32_t sourceId = 0;
-	{
-		std::lock_guard<std::mutex> lock(g_lock);
-		source = g_state.fleeSource;
-		sourceId = g_state.fleeSourceId;
-	}
-	// The player the map was opened for, checked again by type and id; else the setup is given no source.
-	if (source != nullptr && (At<int32_t>(source, UnitTypeOffset) != 0 || At<uint32_t>(source, UnitIdOffset) != sourceId)) {
-		plog::Warn("treasure monster: the remembered player unit %p is not player id %u any more; the flee is set up with no source", source, sourceId);
-		source = nullptr;
-	}
-	auto* target = static_cast<Unit*>(unit);
-	const int blocked = On(FleeBlock) ? (Call<FleeBlockFn>(FleeBlock)(target) != 0 ? 1 : 0) : -1;
-	const int targetOk = On(FleeTarget) ? (Call<FleeTargetFn>(FleeTarget)(target, 0, 1, 1, 1) != 0 ? 1 : 0) : -1;
-	const int32_t modeBefore = At<int32_t>(unit, UnitModeOffset);
-	plog::Info("eventprobe: treasure monster flee: unit %p, source %p, duration argument %d: %s", unit, source, FleeDuration, e6::describeFleeChecks(blocked, targetOk).c_str());
-	Call<FleeSetupFn>(FleeSetup)(game, static_cast<Unit*>(source), target, 0, 0, FleeDuration);
-	plog::Info("eventprobe: treasure monster flee: the setup returned; the unit's mode %d -> %d", modeBefore, At<int32_t>(unit, UnitModeOffset));
-}
-
-}  // namespace
-
-void Event6bFirstSpawned(void* game, ev::Kind kind, void* unit) noexcept {
+void Event6bFirstSpawned(void* /*game*/, ev::Kind kind, void* unit) noexcept {
 	if (unit == nullptr) {
 		return;
 	}
@@ -681,11 +633,6 @@ void Event6bFirstSpawned(void* game, ev::Kind kind, void* unit) noexcept {
 		Event6bBossSpawned(unit);
 	} else if (kind == ev::Kind::Treasure) {
 		Event6bBossSpawned(unit);  // rolls the Drop on its death (the same death hook as a Boss)
-		try {
-			StartFlee(static_cast<Game*>(game), unit);
-		} catch (...) {
-			plog::Error("treasure monster: making it flee failed");
-		}
 	}
 }
 
