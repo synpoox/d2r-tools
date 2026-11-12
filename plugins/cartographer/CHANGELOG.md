@@ -4,7 +4,6 @@
 
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
-- Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
@@ -14,15 +13,15 @@
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
-- `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
-- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
+- `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
+- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
 - Opening a Treasure chest now rolls its `Drop`.
 - A map's Treasure chest is never locked.
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
 - A map's `Boss` shows its `bosses.txt` Name in game (run `tools\install.ps1` again).
-- Tables are UTF-8, and an ANSI (Latin-1) save of `bosses.txt` works too, so accented Boss names show correctly.
+- Tables are UTF-8, and an ANSI (Latin-1) save of `bosses.txt` is read too, so accented Boss names show correctly (checked in game).
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).

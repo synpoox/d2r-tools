@@ -10,6 +10,10 @@ _Avoid_: map plugin, map kit
 The game's per-game map state in Cartographer: which map is open, its seed, rolled properties and event. It lives for one game. A row of `maps.txt` is a *map row*, not a map record.
 _Avoid_: map definition, map entry
 
+**Map item**:
+An item of the `cmap` type, with item spell 16, whose code is a map's `Item` in `maps.txt`. Using it in Harrogath in Hell opens that map's red portal.
+_Avoid_: map scroll
+
 **Slot level**:
 One of Cartographer's own Act 5 levels with no links. A map is built in one, so a mod author never edits `levels.txt`.
 _Avoid_: map level, spare level
