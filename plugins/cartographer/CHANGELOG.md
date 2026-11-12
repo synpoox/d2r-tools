@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 ## Unreleased
 
@@ -34,7 +34,7 @@
 - The map Boss and events are placed in the right room of a maze map.
 - Outdoor map events and Boss minions get their full count, not just four.
 - Hosts and players need the same version of Cartographer to share a map; older versions no longer connect for map sync.
-- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (not checked in game).
+- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (checked with two games on one PC).
 - Outdoor maps: you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
 - Jungle maps open from their item through a new `Outdoor` level (run `tools\install.ps1` again).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
@@ -42,3 +42,4 @@
 - Snow maps: you arrive in a planned entrance area, and the map Boss and event use their planned areas.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
+
