@@ -13,6 +13,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 namespace carto {
 
@@ -32,6 +35,16 @@ constexpr int32_t SpawnMode = 1;            // what the superunique code passes 
 constexpr int32_t SpawnParam = 0xa;         // the same caller's seventh argument
 constexpr uint16_t SpawnFlags = 0;          // 0: the game's normal path, so the map's stats reach event monsters too
 constexpr int MaxPopulateProbes = 12;       // rooms of the map level logged in full
+// Spawn names from the game's tables (section 11). `dt` is the data tables base for the unit's data flag.
+constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte stat_apply.cpp reads)
+constexpr uint32_t DataFlagLimit = 4;       // the base accessor takes a data flag below 4 (anything else is a trap in the engine)
+constexpr int DtMonRowsOffset = 0xf58;      // monstats row vector pointer; the 64-bit count is at +0xf60
+constexpr int DtMonCountOffset = 0xf60;
+constexpr int DtMonMapOffset = 0xf70;       // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
+constexpr int DtSuperRowsOffset = 0x1078;   // superuniques row vector pointer; the 64-bit count is at +0x1080
+constexpr int DtSuperCountOffset = 0x1080;
+constexpr int DtSuperMapOffset = 0x1090;    // superuniques name -> row map pointer (re-read on every use)
+constexpr int SuperClassOffset = 8;         // the row's Class, a monstats row (read as 16 bits: its width is inferred)
 
 struct Game;
 struct Unit;
@@ -41,8 +54,10 @@ using SpawnMonsterFn = void* (*)(Game*, void* room, int32_t x, int32_t y, int32_
 using SpawnSuperFn = void* (*)(Game*, void* room, int32_t x, int32_t y, int32_t row, uint16_t flags) noexcept;
 using UnitRoomFn = void* (*)(Unit*) noexcept;
 using RoomLevelFn = int32_t (*)(void* room) noexcept;
+using DataTablesBaseFn = uint8_t* (*)(uint32_t dataFlag) noexcept;
+using NameToRowFn = int32_t (*)(void* map, const char* name, int32_t logOnMiss) noexcept;
 
-enum PartId { PopulateRoom, SpawnMonster, SpawnSuperUnique, EvUnitRoom, EvRoomLevelId, PartCount };
+enum PartId { PopulateRoom, SpawnMonster, SpawnSuperUnique, EvUnitRoom, EvRoomLevelId, DataTablesBase, NameToRow, PartCount };
 
 Part g_parts[PartCount] = {
 	{"PopulateRoom", sig::PopulateRoom, 12, false, nullptr, {}, {}},
@@ -50,6 +65,8 @@ Part g_parts[PartCount] = {
 	{"SpawnSuperUnique", sig::SpawnSuperUnique, 0, false, nullptr, {}, {}},
 	{"EventUnitRoom", sig::UnitRoom, 0, false, nullptr, {}, {}},
 	{"EventRoomLevelId", sig::RoomLevelId, 0, false, nullptr, {}, {}},
+	{"DataTablesBase", sig::DataTablesBase, 0, false, nullptr, {}, {}},
+	{"NameToRow", sig::NameToRow, 0, false, nullptr, {}, {}},
 };
 
 const D2RL::PluginContext* g_context = nullptr;
@@ -176,6 +193,242 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no overlay", lines.size());
 }
 
+// --- Spawn names from the game's loaded tables (cartographer.md section 11) -----------------------------------------------
+// Monstats `Id`: the SDK table, scanned. Superuniques: the game's own name map, called (never cached), only after a self-check
+// has shown that the SDK views are the game's tables for the unit's data flag and that the monstats map maps every Id back to its
+// row. A route that fails its check is off for that (table revision, data flag) and the mod's .txt files are used instead.
+
+const D2RL::DataTableService* g_dataTables = nullptr;
+std::atomic<uint64_t> g_tablesRevision{0};  // DataTablesLoaded; 0: no load seen (or no listener), so nothing is cached
+std::mutex g_routeLock;
+ep::RouteCache g_routeCache;
+
+void __cdecl OnTablesLoaded(const D2RL::PluginContext*, const D2RL::Lifecycle::DataTablesLoadedEvent* event, void*) noexcept {
+	if (D2RL::Lifecycle::HasDataTablesLoadedEventField(event, D2RL::Lifecycle::DataTablesLoadedEventRequiredSize)) {
+		g_tablesRevision = event->revision;
+	}
+}
+
+void ListenForTableLoads(const D2RL::PluginContext* context) noexcept {
+	const D2RL::LifecycleService* lifecycle = nullptr;
+	if (context->QueryService(&lifecycle) != D2RL::ServiceQueryResult::Success || lifecycle == nullptr ||
+	    !D2RL::HasLifecycleServiceField(lifecycle, D2RL::LifecycleServiceRequiredSize)) {
+		plog::Warn("spawn names: no Lifecycle service, so the table check is repeated at every map open");
+		return;
+	}
+	const D2RL::Lifecycle::DataTablesLoadedListener listener{D2RL::Lifecycle::DataTablesLoadedListenerSize, 0, OnTablesLoaded, nullptr};
+	D2RL::Lifecycle::ListenerHandle handle = D2RL::Lifecycle::InvalidHandle;
+	if (lifecycle->registerDataTablesLoadedListener(context, &listener, &handle) != D2RL::Lifecycle::Result::Success) {
+		g_tablesRevision = 0;
+		plog::Warn("spawn names: D2RLoader refused the table-load listener, so the table check is repeated at every map open");
+	}
+}
+
+// One table's SDK view beside the game's own vector for it. False when the SDK did not give a view (`busy`: not the game thread).
+auto TableFactsOf(D2RL::DataTables::Bank bank, D2RL::DataTables::TableId table, const uint8_t* dt, int rowsOffset, int countOffset, ep::TableFacts* out,
+                  bool* busy) noexcept -> bool {
+	D2RL::DataTables::TableView view{};
+	view.structSize = D2RL::DataTables::TableViewSize;
+	const D2RL::DataTables::Result result = g_dataTables->getTable(g_context, bank, table, &view);
+	if (result == D2RL::DataTables::Result::Busy) {
+		*busy = true;
+	}
+	if (result != D2RL::DataTables::Result::Success || !D2RL::DataTables::HasTableViewField(&view, D2RL::DataTables::TableViewRequiredSize)) {
+		return false;
+	}
+	out->viewRows = view.rows;
+	out->viewCount = view.rowCount;
+	out->viewRowSize = view.rowSize;
+	out->dtRows = At<const void*>(dt, rowsOffset);
+	out->dtCount = At<uint64_t>(dt, countOffset);
+	return true;
+}
+
+auto BankName(uint32_t bank) -> const char* {
+	return bank == 1 ? "Classic" : bank == 2 ? "Lod" : bank == 3 ? "Rotw" : "none";
+}
+
+// The data tables base for a data flag, or null (with `why`).
+auto TablesBase(uint32_t dataFlag, std::string* why) noexcept -> const uint8_t* {
+	if (g_dataTables == nullptr) {
+		*why = "D2RLoader has no DataTable service of the expected version";
+	} else if (!On(DataTablesBase)) {
+		*why = "the DataTablesBase part is off";
+	} else if (dataFlag >= DataFlagLimit) {
+		*why = "the unit's data flag " + std::to_string(dataFlag) + " is not below 4";
+	} else {
+		const uint8_t* dt = Call<DataTablesBaseFn>(DataTablesBase)(dataFlag);
+		if (dt != nullptr) {
+			return dt;
+		}
+		*why = "the data tables base is null";
+	}
+	return nullptr;
+}
+
+// Looks every distinct monstats Id up in the game's map: each must come back as its own row.
+auto RoundTripMonsters(const uint8_t* dt, const ep::TableFacts& mon) noexcept -> ep::RoundTrip {
+	ep::RoundTrip trip;
+	void* map = At<void*>(dt, DtMonMapOffset);
+	trip.mapNull = map == nullptr;
+	if (trip.mapNull || !On(NameToRow)) {
+		return trip;
+	}
+	const auto* rows = static_cast<const uint8_t*>(mon.viewRows);
+	std::unordered_map<std::string, int> seen;
+	for (uint32_t i = 0; i < mon.viewCount; ++i) {
+		const char* field = reinterpret_cast<const char*>(rows + static_cast<size_t>(i) * mon.viewRowSize);
+		const std::optional<std::string_view> id = ep::idText(field, ep::kMonStatsIdSize);
+		if (id && id->empty()) {
+			continue;
+		}
+		int got = -2;  // an Id with no NUL is not text
+		if (id) {
+			std::string key(*id);
+			for (char& c : key) {
+				c = c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c;
+			}
+			if (!seen.emplace(key, static_cast<int>(i)).second) {
+				continue;  // a repeated Id (any case) has no row of its own to compare
+			}
+			got = Call<NameToRowFn>(NameToRow)(map, std::string(*id).c_str(), 0);
+		}
+		++trip.checked;
+		if (got != static_cast<int>(i) && trip.wrong++ == 0) {
+			trip.firstWrongRow = static_cast<int>(i);
+			trip.firstWrongGot = got;
+		}
+	}
+	return trip;
+}
+
+// The self-check for one data flag. `transient`: the SDK was busy, so the verdict is not to be cached.
+auto EvaluateRoute(uint32_t dataFlag, bool* transient) noexcept -> ep::RouteVerdict {
+	ep::RouteVerdict verdict;
+	std::string why;
+	const uint8_t* dt = TablesBase(dataFlag, &why);
+	if (dt == nullptr) {
+		verdict.why = why;
+		return verdict;
+	}
+	// The Bank whose monstats view is the game's table for this data flag.
+	ep::TableFacts mon;
+	std::string tried;
+	for (uint32_t bank = 1; bank <= 3 && verdict.bank == 0; ++bank) {
+		ep::TableFacts facts;
+		bool busy = false;
+		if (!TableFactsOf(static_cast<D2RL::DataTables::Bank>(bank), D2RL::DataTables::TableId::MonStats, dt, DtMonRowsOffset, DtMonCountOffset, &facts, &busy)) {
+			if (busy) {
+				*transient = true;
+				verdict.why = "the SDK data tables are busy on this thread";
+				return verdict;
+			}
+			tried += std::string(tried.empty() ? "" : "; ") + BankName(bank) + ": no view";
+			continue;
+		}
+		const std::string problem = ep::checkTable(facts, ep::kMonStatsRowSize);
+		if (problem.empty()) {
+			verdict.bank = bank;
+			mon = facts;
+		} else {
+			tried += std::string(tried.empty() ? "" : "; ") + BankName(bank) + ": " + problem;
+		}
+	}
+	if (verdict.bank == 0) {
+		verdict.why = "no SDK bank matches the game's monstats table for data flag " + std::to_string(dataFlag) + " (" + tried + ")";
+		return verdict;
+	}
+	verdict.monsters = true;
+	// The superuniques route: its table, its map, and the round trip through the monstats map.
+	ep::TableFacts sup;
+	bool busy = false;
+	if (!On(NameToRow)) {
+		verdict.why = "superuniques by name: the NameToRow part is off";
+	} else if (!TableFactsOf(static_cast<D2RL::DataTables::Bank>(verdict.bank), D2RL::DataTables::TableId::SuperUniques, dt, DtSuperRowsOffset, DtSuperCountOffset, &sup, &busy)) {
+		*transient = busy;
+		verdict.why = "superuniques by name: no SDK view";
+	} else if (const std::string problem = ep::checkTable(sup, ep::kSuperRowSize); !problem.empty()) {
+		verdict.why = "superuniques by name: " + problem;
+	} else if (At<void*>(dt, DtSuperMapOffset) == nullptr) {
+		verdict.why = "superuniques by name: the superuniques name map is null";
+	} else if (const std::string problem = ep::checkRoundTrip(RoundTripMonsters(dt, mon)); !problem.empty()) {
+		verdict.why = "superuniques by name: " + problem;
+	} else {
+		verdict.supers = true;
+	}
+	return verdict;
+}
+
+// The verdict for this unit's data flag: cached per (DataTablesLoaded revision, data flag) once a revision is known.
+auto RouteFor(uint32_t dataFlag) noexcept -> ep::RouteVerdict {
+	const ep::RouteKey key{g_tablesRevision.load(), dataFlag};
+	if (key.revision != 0) {
+		std::lock_guard<std::mutex> lock(g_routeLock);
+		if (const ep::RouteVerdict* hit = g_routeCache.find(key)) {
+			return *hit;
+		}
+	}
+	bool transient = false;
+	ep::RouteVerdict verdict = EvaluateRoute(dataFlag, &transient);
+	const std::string bank = verdict.monsters ? std::string(" (SDK bank ") + BankName(verdict.bank) + ")" : std::string();
+	plog::Info("spawn names: data flag %u, table revision %llu: monstats from the game's table %s%s, superuniques by the game's name map %s%s%s", dataFlag,
+	           static_cast<unsigned long long>(key.revision), verdict.monsters ? "on" : "OFF", bank.c_str(), verdict.supers ? "on" : "OFF",
+	           verdict.why.empty() ? "" : "; ", verdict.why.c_str());
+	if (!transient && key.revision != 0) {
+		std::lock_guard<std::mutex> lock(g_routeLock);
+		g_routeCache.store(key, verdict);
+	}
+	return verdict;
+}
+
+// The game's own tables for `spawn`. Returns false when the route cannot decide (the mod's .txt files then do). `out` stays
+// Unresolved for a name the tables do not have. Game thread, at map open.
+auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, const std::string& spawn, ep::Resolved* out) noexcept -> bool {
+	std::string why;
+	const uint8_t* dt = TablesBase(dataFlag, &why);
+	ep::TableFacts mon;
+	bool busy = false;
+	// Checked against the live table on every call (cheap): a table load since the cached verdict turns the route off here too.
+	if (dt == nullptr || !TableFactsOf(static_cast<D2RL::DataTables::Bank>(route.bank), D2RL::DataTables::TableId::MonStats, dt, DtMonRowsOffset, DtMonCountOffset, &mon, &busy) ||
+	    !ep::checkTable(mon, ep::kMonStatsRowSize).empty()) {
+		plog::Warn("spawn names: the game's monstats table could not be read now%s%s; the mod's .txt files are used", why.empty() ? "" : ": ", why.c_str());
+		return false;
+	}
+	if (const int row = ep::findMonsterRow(static_cast<const uint8_t*>(mon.viewRows), mon.viewCount, mon.viewRowSize, spawn); row >= 0) {
+		out->kind = ev::NameKind::Monster;
+		out->row = out->classRow = row;
+		plog::Info("spawn '%s': monstats row %d from the game's table", spawn.c_str(), row);
+		return true;
+	}
+	if (!route.supers) {
+		return false;  // no superunique lookup: the .txt files get to look for a superunique of this name
+	}
+	if (spawn.empty()) {
+		return true;
+	}
+	ep::TableFacts sup;
+	void* map = At<void*>(dt, DtSuperMapOffset);  // re-read, never cached
+	if (map == nullptr || !On(NameToRow) || !TableFactsOf(static_cast<D2RL::DataTables::Bank>(route.bank), D2RL::DataTables::TableId::SuperUniques, dt, DtSuperRowsOffset, DtSuperCountOffset, &sup, &busy) ||
+	    !ep::checkTable(sup, ep::kSuperRowSize).empty()) {
+		plog::Warn("spawn names: the superuniques table or its name map is not available now; the mod's .txt files are used");
+		return false;
+	}
+	const int32_t found = Call<NameToRowFn>(NameToRow)(map, spawn.c_str(), 0);
+	const int row = ep::superRowFromLookup(found, sup.viewCount);
+	if (row < 0) {
+		if (found != -1) {
+			plog::Warn("spawn '%s': the superuniques lookup gave %d, which is neither a row nor the game's miss (-1); treated as not found", spawn.c_str(), found);
+		}
+		return true;
+	}
+	out->kind = ev::NameKind::Unique;
+	out->row = row;
+	const uint16_t cls = At<uint16_t>(sup.viewRows, row * static_cast<int>(sup.viewRowSize) + SuperClassOffset);
+	out->classRow = cls < mon.viewCount ? static_cast<int>(cls) : -1;
+	plog::Info("spawn '%s': superuniques row %d from the game's table, class monstats row %d", spawn.c_str(), row, out->classRow);
+	return true;
+}
+
 // --- Rooms and spawns -----------------------------------------------------------------------------------------------------
 
 struct RoomRects {
@@ -300,8 +553,8 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 	}
 	if (number <= MaxPopulateProbes) {
-		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile), %s%s", number, state->level,
-		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg),
+		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
+		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg), ep::scaleKindName(ep::scaleKind(rects.server, rects.drlg)),
 		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
 	if (fire) {
@@ -382,6 +635,13 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		g_overlay = nullptr;
 		plog::Warn("no overlay service; the entry message goes to the console");
 	}
+	// Spawn names from the game's tables: the SDK table service and a listener for table loads. Best effort; without them the .txt files are used.
+	if (context->QueryService(&g_dataTables) != D2RL::ServiceQueryResult::Success || !D2RL::HasDataTableServiceField(g_dataTables, D2RL::DataTableServiceRequiredSize)) {
+		g_dataTables = nullptr;
+		plog::Warn("spawn names: no DataTable service; Boss and Horde names come from the mod's monstats.txt and superuniques.txt");
+	} else {
+		ListenForTableLoads(context);
+	}
 	plog::Info("map events: %s", SummaryNow().c_str());
 	if (parts != nullptr) {
 		*parts = EventPartStatuses();
@@ -392,7 +652,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 	return g_spawnOn.load();
 }
 
-void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze) {
+void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player) {
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
@@ -408,7 +668,18 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		plog::Info("event for '%s' (seed %llu, chance %d%%): none", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance);
 	} else {
 		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
-		state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
+		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
+		bool decided = false;
+		if (player != nullptr && g_dataTables != nullptr) {
+			const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
+			const ep::RouteVerdict route = RouteFor(dataFlag);
+			if (route.monsters) {
+				decided = ResolveFromGameTables(route, dataFlag, event->spawn, &state->spawn);
+			}
+		}
+		if (!decided) {
+			state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
+		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
 		const ep::SpawnPlan check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
 		if (!check.problem.empty()) {

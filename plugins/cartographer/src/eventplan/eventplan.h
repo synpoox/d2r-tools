@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "events.h"
@@ -36,6 +37,74 @@ struct Resolved {
 // both tables is the monster. Not found: kind Unresolved.
 Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn);
 
+// --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer.md section 11) ---------------------
+
+// The compiled monstats row is 0x1fc bytes with the `Id` inline at +0 (48 bytes, NUL-terminated); a superuniques row is 0x3c.
+constexpr uint32_t kMonStatsRowSize = 0x1fc;
+constexpr uint32_t kSuperRowSize = 0x3c;
+constexpr size_t kMonStatsIdSize = 48;
+
+// `name` against the NUL-terminated text in the first `fieldSize` bytes of `field`, ASCII case-insensitive. An empty name or
+// empty field never matches; a field with no NUL within `fieldSize` is not text and never matches.
+bool idMatches(const char *field, size_t fieldSize, std::string_view name);
+
+// The text of an `Id` field (up to its NUL), or nullopt when it has no NUL within `fieldSize`.
+std::optional<std::string_view> idText(const char *field, size_t fieldSize);
+
+// The first row of `rowCount` rows of `rowSize` bytes whose inline `Id` matches `name`, or -1. Rows are read-only.
+int findMonsterRow(const uint8_t *rows, uint64_t rowCount, uint32_t rowSize, std::string_view name);
+
+// What the SDK table view says about one table beside what the game's own table base (`dt`) holds for it.
+struct TableFacts {
+	const void *viewRows = nullptr;
+	uint32_t viewCount = 0;
+	uint32_t viewRowSize = 0;
+	const void *dtRows = nullptr;  // *(dt + vector offset)
+	uint64_t dtCount = 0;          // the 64-bit count beside it
+};
+
+// Empty when the view is the game's own table for this data flag: the row size is the expected one, the pointers are equal
+// and not null, and the 64-bit count equals the SDK's 32-bit one. Else why not.
+std::string checkTable(const TableFacts &facts, uint32_t wantRowSize);
+
+// What looking every monstats `Id` up through the game's name map gave: each (distinct, non-empty) `Id` should map to its own row.
+struct RoundTrip {
+	bool mapNull = false;
+	int checked = 0;
+	int wrong = 0;
+	int firstWrongRow = -1;  // the first row whose `Id` came back as another index
+	int firstWrongGot = 0;
+};
+// Empty when the map can be trusted for name lookups. Else why not.
+std::string checkRoundTrip(const RoundTrip &trip);
+
+// The lookup result for superuniques: exactly -1 is the game's miss; any other negative number or a row past the table is
+// not a row either (`rowCount` is the table's). Returns the row, or -1.
+int superRowFromLookup(int32_t result, uint64_t rowCount);
+
+// What the self-check decided for one (table revision, data flag).
+struct RouteVerdict {
+	bool monsters = false;  // the SDK monstats table is the game's table for this data flag
+	bool supers = false;    // the superuniques name map may be called
+	uint32_t bank = 0;      // the SDK Bank whose views matched
+	std::string why;        // what is off, and why (empty when everything is on)
+};
+struct RouteKey {
+	uint64_t revision = 0;  // DataTablesLoaded
+	uint32_t dataFlag = 0;
+	bool operator==(const RouteKey &o) const { return revision == o.revision && dataFlag == o.dataFlag; }
+};
+// Verdicts by (revision, data flag). A newer revision drops the older ones: a table load invalidates everything.
+class RouteCache {
+public:
+	const RouteVerdict *find(const RouteKey &key) const;
+	void store(const RouteKey &key, RouteVerdict verdict);
+	size_t size() const { return entries_.size(); }
+
+private:
+	std::vector<std::pair<RouteKey, RouteVerdict>> entries_;
+};
+
 // --- Placement -----------------------------------------------------------------------------------------------------
 
 struct Rect {
@@ -56,6 +125,11 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale =
 // How many of the server room's units make one DRLG tile: server.w / drlg.w when the server rect is a whole multiple of the
 // DRLG rect in both directions (5 for subtiles), else 1.
 int spotScale(const Rect &server, const Rect &drlg);
+
+// Why spotScale gave what it gave, for the probe log: a scale of 1 alone is ambiguous.
+enum class ScaleKind { Same, Multiple, NotAMultiple };
+ScaleKind scaleKind(const Rect &server, const Rect &drlg);
+const char *scaleKindName(ScaleKind kind);
 
 // --- The event room ------------------------------------------------------------------------------------------------
 
