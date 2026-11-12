@@ -1,9 +1,11 @@
 // Host tests for the Cartographer maze steering core. No game, no SDK: the core is pure C++.
 //
-// The tileset fixtures hold only numbers derived from vanilla 93847 lvlmaze.txt / lvlprest.txt / levels.txt:
+// The tileset fixtures hold only numbers derived from vanilla 93847 lvlmaze.txt / lvlprest.txt:
 //   Cave:  LvlMaze room 24 x 24, "Act 1 - Cave W" is Def 53 (so base 52, 15 mask pieces 53..67), Prev W/E/S/N 83..86,
-//          Down W/E/S/N 91..94, levels 200 x 200 tiles.
-//   Crypt: room 8 x 8, "Act 1 - Crypt W" is Def 109 (base 108, 109..123), Prev 139..142, Next 143..146, levels 200 x 200.
+//          Down W/E/S/N 91..94.
+//   Crypt: room 8 x 8, "Act 1 - Crypt W" is Def 109 (base 108, 109..123), Prev 139..142, Next 143..146.
+// The level size is the plan's output (up to kMaxLevelTiles). "A 200-tile slot" is a fixture that caps it at vanilla
+// levels.txt's 200 x 200 to test the fallback path; it says nothing about what a Cave can hold.
 #define _CRT_SECURE_NO_WARNINGS
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
@@ -35,29 +37,31 @@ int seedCount()
 	return n > 0 ? n : kDefaultSeeds;
 }
 
-Tileset caveTileset()
+Tileset caveTileset(int maxLevelTiles = kMaxLevelTiles)
 {
 	Tileset t;
 	t.name = "Cave";
 	t.levelType = 3;
 	t.roomTiles = 24;
 	t.pieceBase = 52;
-	t.levelTilesX = t.levelTilesY = 200;
-	t.entrance = {true, {83, 84, 85, 86}}; // Prev W, E, S, N
-	t.exit = {true, {91, 92, 93, 94}};     // Down W, E, S, N
+	t.maxLevelTiles = maxLevelTiles;
+	t.prev = {true, {83, 84, 85, 86}}; // Prev W, E, S, N
+	t.down = {true, {91, 92, 93, 94}}; // Down W, E, S, N
+	t.exitFamily = SpecialFamily::Down;
 	return t;
 }
 
-Tileset cryptTileset()
+Tileset cryptTileset(int maxLevelTiles = kMaxLevelTiles)
 {
 	Tileset t;
 	t.name = "Crypt";
 	t.levelType = 4;
 	t.roomTiles = 8;
 	t.pieceBase = 108;
-	t.levelTilesX = t.levelTilesY = 200;
-	t.entrance = {true, {139, 140, 141, 142}}; // Prev W, E, S, N
-	t.exit = {true, {143, 144, 145, 146}};     // Next W, E, S, N
+	t.maxLevelTiles = maxLevelTiles;
+	t.prev = {true, {139, 140, 141, 142}}; // Prev W, E, S, N
+	t.next = {true, {143, 144, 145, 146}}; // Next W, E, S, N
+	t.exitFamily = SpecialFamily::Next;
 	return t;
 }
 
@@ -67,15 +71,23 @@ const layout::Cell &cellOf(const Layout &l, Point p) { return l.at(p.x, p.y); }
 
 // Everything below is checked by replaying the plan the way D2R's functions would apply it, without using any of the
 // plan's own derived fields (mask, piece) as input: masks come from the adds and links, positions from the add dirs.
-std::string verify(const Tileset &ts, const Layout &l, const Plan &p)
+// fixPlacedEarly replays the WRONG hook order (placed ends fixed right after the walk, before 0x3eb850 runs) and must fail.
+std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPlacedEarly = false)
 {
 	if (!p.steer) return "plan does not steer";
+	// The level size is the plan's output: the formula, the allowed maximum, and room to spare on every side.
+	for (int axis = 0; axis < 2; ++axis) {
+		const int got = axis == 0 ? p.levelTilesX : p.levelTilesY;
+		if (got > ts.maxLevelTiles || got < ts.roomTiles) return "level size outside the allowed range";
+		if (got != ts.maxLevelTiles && got % (2 * ts.roomTiles) != ts.roomTiles) return "level size is not (2 x k + 1) rooms";
+	}
+	const int levelX = p.levelTilesX, levelY = p.levelTilesY;
 	const size_t n = p.rooms.size();
 	if (static_cast<int>(n) != l.cellCount()) return "room count differs from the layout's cells";
 	if (n == 0 || p.rooms[0].dx != 0 || p.rooms[0].dy != 0) return "room 0 is not the first room";
 
 	// Tile positions: the first room is centred in the level.
-	const int offX = (ts.levelTilesX - ts.roomTiles) / 2, offY = (ts.levelTilesY - ts.roomTiles) / 2;
+	const int offX = (levelX - ts.roomTiles) / 2, offY = (levelY - ts.roomTiles) / 2;
 	std::vector<int> tx(n, 0), ty(n, 0);
 	std::vector<char> made(n, 0);
 	std::vector<uint8_t> mask(n, 0);
@@ -99,7 +111,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p)
 		if (!made[i]) return "a room is never made";
 	// Rooms must not overlap and must stay inside the level.
 	for (size_t i = 0; i < n; ++i) {
-		if (tx[i] < 0 || ty[i] < 0 || tx[i] + ts.roomTiles > ts.levelTilesX || ty[i] + ts.roomTiles > ts.levelTilesY) return "a room leaves the level";
+		if (tx[i] < 0 || ty[i] < 0 || tx[i] + ts.roomTiles > levelX || ty[i] + ts.roomTiles > levelY) return "a room leaves the level";
 		for (size_t j = i + 1; j < n; ++j)
 			if (tx[i] == tx[j] && ty[i] == ty[j]) return "two rooms overlap";
 	}
@@ -123,29 +135,36 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p)
 		if (r.role != cellOf(l, r.cell).role) return "role differs";
 		piece[i] = ts.pieceBase + mask[i];
 	}
-	// The entrance and exit placer: the engine scan is "newest free room whose piece is `from`".
+	// The entrance and exit placer: the engine scan is "newest free room whose piece is `from`", and it skips fixed rooms.
+	// Rooms the hook fixes after the walk are fixed before the calls; a placed end is fixed by 0x3eb850 itself, after its call.
 	std::vector<char> fixed(n, 0);
+	for (size_t i = 0; i < n; ++i)
+		if (p.rooms[i].fix == Room::Fix::AfterWalk || (fixPlacedEarly && p.rooms[i].fix == Room::Fix::ByPlacer)) fixed[i] = 1;
 	const Point entranceCell = l.mainPath.front();
 	const Point exitCell = l.bossIdx >= 0 ? l.mainPath[static_cast<size_t>(l.bossIdx)] : l.mainPath.back();
-	if (p.specials.size() != 2) return "expected two special calls";
-	for (int call = 0; call < 2; ++call) {
+	if (p.specials.size() != 2) return "expected two special rooms";
+	const SpecialFamily families[2] = {SpecialFamily::Prev, ts.exitFamily};
+	// The engine may make its calls in any order (Prev, Down, Next, ...): replay them in the order of the exit first, too.
+	for (int pass = 0; pass < 2; ++pass)
+	for (int k = 0; k < 2; ++k) {
+		const int call = pass == 0 ? k : 1 - k;
 		const SpecialCall &sc = p.specials[static_cast<size_t>(call)];
 		const Point want = call == 0 ? entranceCell : exitCell;
-		if (sc.room < 0 || static_cast<size_t>(sc.room) >= n || p.rooms[static_cast<size_t>(sc.room)].cell != want) return "special call targets the wrong cell";
-		if ((sc.kind == SpecialKind::Entrance) != (call == 0)) return "special call order";
-		const DeadEndFamily &fam = call == 0 ? ts.entrance : ts.exit;
+		if (sc.room < 0 || static_cast<size_t>(sc.room) >= n || p.rooms[static_cast<size_t>(sc.room)].cell != want) return "special room is the wrong cell";
+		if ((sc.kind == SpecialKind::Entrance) != (call == 0)) return "special room order";
+		if (sc.family != families[call]) return "special family wrong";
+		const DeadEndFamily &fam = ts.family(sc.family);
 		const bool deadEnd = popcount(cellOf(l, want).mask) == 1;
-		if (sc.place != (fam.present && deadEnd)) return "place decision wrong";
-		// Any group entry of the family reaches the hook; the hook is told which rotation to use.
+		if (sc.place != (ts.placeSpecialRooms && fam.present && deadEnd)) return "place decision wrong";
+		// Any group entry of the family reaches the hook; the hook is told which rotation to use. A repeat is suppressed.
 		for (int to : {fam.piece[0], fam.piece[1], fam.piece[2], fam.piece[3]}) {
-			const SpecialSteer st = steerSpecial(ts, p, call, to);
+			const SpecialSteer st = steerSpecial(ts, p, to, 0);
 			if ((st.action == SpecialSteer::Action::Redirect) != sc.place) return "steerSpecial disagrees with place";
+			if (steerSpecial(ts, p, to, 1).action != SpecialSteer::Action::Suppress) return "a repeated call must be suppressed";
 		}
-		if (!sc.place) {
-			if (steerSpecial(ts, p, call, 1).action != SpecialSteer::Action::Suppress) return "an unplaced call must be suppressed";
-			continue;
-		}
-		const int fromPiece = steerSpecial(ts, p, call, sc.toPiece).fromPiece;
+		if (!sc.place) continue;
+		if (pass == 1) continue; // the second pass only checks that steering does not depend on the order of the calls
+		const int fromPiece = steerSpecial(ts, p, sc.toPiece, 0).fromPiece;
 		int hit = -1;
 		for (int i = static_cast<int>(n) - 1; i >= 0; --i)
 			if (!fixed[static_cast<size_t>(i)] && piece[static_cast<size_t>(i)] == fromPiece) { hit = i; break; }
@@ -157,14 +176,15 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p)
 		piece[static_cast<size_t>(hit)] = sc.toPiece;
 		fixed[static_cast<size_t>(hit)] = 1;
 	}
-	// An unexpected third call is suppressed.
-	if (steerSpecial(ts, p, 2, ts.entrance.piece[0]).action != SpecialSteer::Action::Suppress) return "a third call must be suppressed";
+	// A piece of no family is never steered.
+	if (steerSpecial(ts, p, 1, 0).action != SpecialSteer::Action::Suppress) return "an unknown piece must be suppressed";
 	// Reserved rooms: entrance, exit, event and boss, and only those.
 	for (size_t i = 0; i < n; ++i) {
 		const Room &r = p.rooms[i];
 		const bool reserved = r.cell == entranceCell || r.cell == exitCell || (l.eventIdx >= 0 && r.cell == l.mainPath[static_cast<size_t>(l.eventIdx)]) ||
 		                      (l.bossIdx >= 0 && r.cell == l.mainPath[static_cast<size_t>(l.bossIdx)]);
-		if (r.fixed != reserved) return reserved ? "a reserved room is not fixed" : "a plain room is fixed";
+		if ((r.fix != Room::Fix::None) != reserved) return reserved ? "a reserved room is not fixed" : "a plain room is fixed";
+		if ((r.fix == Room::Fix::ByPlacer) != (r.special >= 0)) return "only a placed end is left to 0x3eb850 to fix";
 		if (piece[i] != r.piece) return "final piece differs from base + mask / special piece";
 	}
 	if (l.eventIdx >= 0 && p.rooms[static_cast<size_t>(p.eventRoom)].cell != l.mainPath[static_cast<size_t>(l.eventIdx)]) return "event room index";
@@ -174,29 +194,40 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p)
 	return std::string();
 }
 
-// Independent reason a layout cannot fit: its extent exceeds the level, or no usable first room exists.
+// Independent no-fit check: brute force every used cell as the first room in a level of the largest allowed size, with
+// the first room centred, and test every room's tile box against the level. It uses neither capacity() nor planMaze's
+// root rule. Only a one-exit end that gets a special room (made last, so never first) is excluded as a root.
 bool genuinelyDoesNotFit(const Tileset &ts, const Layout &l)
 {
-	const Capacity cap = capacity(ts);
-	int minX = l.width, maxX = -1, minY = l.height, maxY = -1;
-	for (int y = 0; y < l.height; ++y)
-		for (int x = 0; x < l.width; ++x)
-			if (l.at(x, y).role != Role::Empty) { minX = std::min(minX, x); maxX = std::max(maxX, x); minY = std::min(minY, y); maxY = std::max(maxY, y); }
-	if (maxX - minX + 1 > cap.across() || maxY - minY + 1 > cap.tall()) return true;
-	// Every cell that is not a special end must be unable to be the first room.
+	const int room = ts.roomTiles, level = ts.maxLevelTiles;
+	if (level < room) return true;
+	const int off = (level - room) / 2;
 	const Point ends[2] = {l.mainPath.front(), l.bossIdx >= 0 ? l.mainPath[static_cast<size_t>(l.bossIdx)] : l.mainPath.back()};
-	for (int y = minY; y <= maxY; ++y)
-		for (int x = minX; x <= maxX; ++x) {
-			if (l.at(x, y).role == Role::Empty) continue;
-			const Point p{x, y};
-			const bool special = (p == ends[0] && ts.entrance.present && popcount(l.at(x, y).mask) == 1) || (p == ends[1] && ts.exit.present && popcount(l.at(x, y).mask) == 1);
+	const DeadEndFamily *fams[2] = {&ts.prev, &ts.family(ts.exitFamily)};
+	for (int ry = 0; ry < l.height; ++ry)
+		for (int rx = 0; rx < l.width; ++rx) {
+			if (l.at(rx, ry).role == Role::Empty) continue;
+			bool special = false;
+			for (int e = 0; e < 2; ++e)
+				if (Point{rx, ry} == ends[e] && ts.placeSpecialRooms && fams[e]->present && popcount(l.at(rx, ry).mask) == 1) special = true;
 			if (special) continue;
-			if (x - minX <= cap.left && maxX - x <= cap.right && y - minY <= cap.up && maxY - y <= cap.down) return false;
+			bool all = true;
+			for (int y = 0; y < l.height && all; ++y)
+				for (int x = 0; x < l.width && all; ++x) {
+					if (l.at(x, y).role == Role::Empty) continue;
+					const int tx = off + (x - rx) * room, ty = off + (y - ry) * room;
+					if (tx < 0 || ty < 0 || tx + room > level || ty + room > level) all = false;
+				}
+			if (all) return false;
 		}
 	return true;
 }
 
 struct Totals {
+	// fallbacks = noFit (the layout cannot fit the largest level) + unmetRules (the generator could not meet the shape's
+	// rules, so there is no layout to judge) + badShape (rejected before any layout: the clamped grid is too small).
+	int maxLevelX = 0;
+	int noFit = 0, unmetRules = 0, badShape = 0;
 	int seeds = 0, steered = 0, fallbacks = 0, refitted = 0, maxRefits = 0, placedEntrance = 0, placedExit = 0, rooms = 0;
 };
 
@@ -214,6 +245,7 @@ Totals runSeeds(const Tileset &ts, layout::Shape shape, layout::Size size)
 		if (sp.plan.steer) {
 			++t.steered;
 			t.rooms += static_cast<int>(sp.plan.rooms.size());
+			if (sp.plan.levelTilesX > t.maxLevelX) t.maxLevelX = sp.plan.levelTilesX;
 			if (sp.plan.specials[0].place) ++t.placedEntrance;
 			if (sp.plan.specials[1].place) ++t.placedExit;
 			const std::string bad = verify(ts, sp.layout, sp.plan);
@@ -225,9 +257,16 @@ Totals runSeeds(const Tileset &ts, layout::Shape shape, layout::Size size)
 		} else {
 			++t.fallbacks;
 			if (sp.plan.reason.empty()) { FAIL_CHECK("a fallback has no reason"); break; }
-			// The fallback fires only when the last layout really cannot fit (or the shape cannot fit the tileset at all).
-			if (sp.layout.cells.empty()) continue; // rules rejected before any layout; reason names the rules
-			if (!genuinelyDoesNotFit(ts, sp.layout) && sp.layout.rulesMet) {
+			if (sp.layout.cells.empty()) { ++t.badShape; continue; } // rules rejected before any layout; reason names what to change
+			if (!sp.layout.rulesMet) {
+				// The generator's own fallback broke the shape's rules: not a size question, counted on its own.
+				++t.unmetRules;
+				if (!sp.generatorUnmet) { FAIL_CHECK("an unmet-rules fallback is not flagged"); break; }
+				continue;
+			}
+			// Every other fallback must be a layout that cannot fit even the largest level (brute-force checked).
+			++t.noFit;
+			if (!genuinelyDoesNotFit(ts, sp.layout)) {
 				FAIL_CHECK(ts.name << " " << layout::shapeName(shape) << " seed " << seed << ": fell back on a layout that fits: " << sp.plan.reason << "\n" << layout::toAscii(sp.layout));
 				break;
 			}
@@ -239,29 +278,54 @@ Totals runSeeds(const Tileset &ts, layout::Shape shape, layout::Size size)
 void printStats(const Tileset &ts, layout::Shape shape, layout::Size size, const Totals &t)
 {
 	if (!std::getenv("CARTOGRAPHER_STATS")) return;
-	std::printf("%-6s %-9s %-6s seeds %d  steered %d  fallback %d (%.2f%%)  refitted %d  max refits %d  entrance placed %d  exit placed %d  avg rooms %.1f\n",
-		ts.name.c_str(), layout::shapeName(shape), layout::sizeName(size), t.seeds, t.steered, t.fallbacks, 100.0 * t.fallbacks / t.seeds, t.refitted, t.maxRefits,
+	std::printf("%-6s %-9s %-6s seeds %d  steered %d  fallback %d (%.2f%%: no-fit %d, generator-unmet %d, bad-shape %d)  refitted %d  max refits %d  entrance placed %d  exit placed %d  avg rooms %.1f\n",
+		ts.name.c_str(), layout::shapeName(shape), layout::sizeName(size), t.seeds, t.steered, t.fallbacks, 100.0 * t.fallbacks / t.seeds, t.noFit, t.unmetRules, t.badShape, t.refitted, t.maxRefits,
 		t.placedEntrance, t.placedExit, t.steered ? static_cast<double>(t.rooms) / t.steered : 0.0);
 }
 
 } // namespace
 
-TEST_CASE("capacity: the first room is centred in the level")
+TEST_CASE("capacity: the first room is centred in a level of any size")
 {
-	const Capacity cave = capacity(caveTileset());
-	CHECK(cave.left == 3);
-	CHECK(cave.right == 3);
-	CHECK(cave.across() == 7);
-	CHECK(cave.tall() == 7);
-	const Capacity crypt = capacity(cryptTileset());
-	CHECK(crypt.left == 12);
-	CHECK(crypt.right == 12);
-	CHECK(crypt.across() == 25);
-	Tileset tiny = caveTileset();
-	tiny.levelTilesX = 24; // exactly one room wide
-	CHECK(capacity(tiny).across() == 1);
-	tiny.roomTiles = 0;
-	CHECK(capacity(tiny).across() == 1);
+	// A 200-tile slot (vanilla levels.txt size), not a statement about what a Cave can hold.
+	const Capacity slot = capacityAt(24, 200, 200);
+	CHECK(slot.left == 3);
+	CHECK(slot.right == 3);
+	CHECK(slot.across() == 7);
+	CHECK(slot.tall() == 7);
+	const Capacity roomy = capacityAt(8, 200, 200);
+	CHECK(roomy.left == 12);
+	CHECK(roomy.right == 12);
+	CHECK(roomy.across() == 25);
+	CHECK(capacityAt(24, 24, 24).across() == 1); // exactly one room wide
+	CHECK(capacityAt(0, 24, 24).across() == 1);
+	CHECK(maxCapacity(caveTileset(200)).across() == 7);
+	CHECK(maxCapacity(caveTileset()).across() == 15);
+}
+
+TEST_CASE("level size is an output: (2 x k + 1) x room, clamped to the allowed maximum")
+{
+	const Tileset cave = caveTileset(), crypt = cryptTileset();
+	CHECK(levelTilesFor(cave, 6) == 312);
+	CHECK(levelTilesFor(cave, 1) == 72);
+	CHECK(levelTilesFor(cave, 8) == kMaxLevelTiles);
+	CHECK(levelTilesFor(crypt, 12) == 200);
+	CHECK(levelTilesFor(caveTileset(200), 6) == 200);
+	CHECK(capacityAt(24, 312, 312).left == 6);
+	CHECK(capacityAt(24, 312, 312).right == 6);
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
+	for (uint64_t seed = 1; seed <= 200; ++seed) {
+		const SeedPlan sp = planForSeed(cave, r, seed);
+		REQUIRE(sp.plan.steer);
+		CHECK(sp.plan.levelTilesX >= levelTilesFor(cave, sp.plan.widthRooms / 2));
+		CHECK(sp.plan.levelTilesX <= kMaxLevelTiles);
+		CHECK(sp.plan.levelTilesY <= kMaxLevelTiles);
+		CHECK(verify(cave, sp.layout, sp.plan).empty());
+	}
+	// A smaller tileset asks for a smaller level.
+	const SeedPlan c = planForSeed(crypt, r, 11);
+	REQUIRE(c.plan.steer);
+	CHECK(c.plan.levelTilesX <= 200);
 }
 
 TEST_CASE("engine directions")
@@ -275,25 +339,36 @@ TEST_CASE("engine directions")
 	CHECK(maskBitOfEngineDir(7) == 0);
 }
 
-TEST_CASE("10k seeds per shape, Cave and Crypt, every size: pieces, ends, reserved rooms, fallback only when it cannot fit")
+TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallback only when it cannot fit")
 {
-	const Tileset tilesets[2] = {caveTileset(), cryptTileset()};
-	for (const Tileset &ts : tilesets)
+	// Cave and Crypt at the allowed maximum, and Cave in a 200-tile slot (the fallback path).
+	struct Config { Tileset ts; const char *label; bool slot200; };
+	const Config configs[3] = {{caveTileset(), "Cave", false}, {cryptTileset(), "Crypt", false}, {caveTileset(200), "Cave in a 200-tile slot", true}};
+	for (const Config &cfg : configs)
 		for (int s = 0; s < layout::kShapeCount; ++s)
 			for (int z = 0; z < layout::kSizeCount; ++z) {
+				const Tileset &ts = cfg.ts;
 				const layout::Shape shape = static_cast<layout::Shape>(s);
 				const layout::Size size = static_cast<layout::Size>(z);
 				const Totals t = runSeeds(ts, shape, size);
+				if (std::getenv("CARTOGRAPHER_STATS") && cfg.slot200) std::printf("[200-tile slot] ");
 				printStats(ts, shape, size, t);
-				INFO(ts.name << " " << layout::shapeName(shape) << " " << layout::sizeName(size));
+				INFO(cfg.label << " " << layout::shapeName(shape) << " " << layout::sizeName(size));
 				CHECK(t.steered + t.fallbacks == seedCount());
-				// Cave holds 7 x 7 rooms: these combinations cannot be built in it at all (every seed falls back, with a reason).
-				const bool impossible = ts.name == "Cave" &&
-					((shape == layout::Shape::Sprawl && size != layout::Size::Small) ||
-					 (shape == layout::Shape::Loop && size == layout::Size::Large));
-				CHECK((t.steered > 0) != impossible);
-				// Crypt rooms are tiny: its level holds every layout, so nothing may fall back.
-				if (ts.name == "Crypt") CHECK(t.fallbacks == 0);
+				CHECK(t.noFit + t.unmetRules + t.badShape == t.fallbacks);
+				CHECK(t.maxLevelX <= ts.maxLevelTiles);
+				if (!cfg.slot200) {
+					// With the level size chosen by the plan, no layout is ever too big: only the generator may give up.
+					CHECK(t.noFit == 0);
+					CHECK(t.badShape == 0);
+				} else {
+					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all.
+					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small) ||
+					                        (shape == layout::Shape::Loop && size == layout::Size::Large);
+					CHECK((t.steered > 0) != impossible);
+				}
+				// Crypt rooms are tiny: nothing may fall back, whatever the reason.
+				if (cfg.ts.name == "Crypt") CHECK(t.fallbacks == 0);
 				// A one-exit end gets its special piece in every shape except the rings.
 				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl) {
 					CHECK(t.placedEntrance == t.steered);
@@ -319,6 +394,8 @@ TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
 			// The entrance and the boss are dead ends and the last two rooms made: exit, then entrance.
 			CHECK(p.specials[0].place);
 			CHECK(p.specials[1].place);
+			CHECK(p.specials[0].family == SpecialFamily::Prev);
+			CHECK(p.specials[1].family == c.ts.exitFamily);
 			CHECK(p.specials[0].room == static_cast<int>(p.rooms.size()) - 1);
 			CHECK(p.specials[1].room == static_cast<int>(p.rooms.size()) - 2);
 			CHECK(p.rooms[static_cast<size_t>(p.specials[0].room)].cell == sp.layout.mainPath.front());
@@ -329,8 +406,9 @@ TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
 			CHECK(p.lvlMaze.merge == 0);
 			CHECK(p.eventRoom >= 0);
 			CHECK(p.bossRoom >= 0);
-			CHECK(p.rooms[static_cast<size_t>(p.eventRoom)].fixed);
-			CHECK(p.rooms[static_cast<size_t>(p.bossRoom)].fixed);
+			CHECK(p.rooms[static_cast<size_t>(p.eventRoom)].fix == Room::Fix::AfterWalk);
+			// The boss room is the placed exit: 0x3eb850 fixes it, the hook must not do it first.
+			CHECK(p.rooms[static_cast<size_t>(p.bossRoom)].fix == Room::Fix::ByPlacer);
 			CHECK(p.rooms[0].dx == 0);
 		}
 	}
@@ -350,6 +428,58 @@ TEST_CASE("same seed gives the same plan; the plan hash is stable")
 	// Golden values (FNV-1a over the plan): they pin the plan across compilers and platforms.
 	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) == 2575042952238616093ull);
 	CHECK(planHash(planForSeed(crypt, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), 1).plan) == 10926222372997424906ull);
+}
+
+TEST_CASE("fixed-flag timing: a placed end fixed before 0x3eb850 runs is missed by its scan")
+{
+	for (const Tileset &ts : {caveTileset(), cryptTileset()})
+		for (uint64_t seed = 1; seed <= 50; ++seed) {
+			const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), seed);
+			REQUIRE(sp.plan.steer);
+			CHECK(verify(ts, sp.layout, sp.plan).empty());
+			// The wrong order (fix the entrance and exit right after the walk) must be caught by the replay.
+			CHECK(verify(ts, sp.layout, sp.plan, true) == "0x3eb850's newest-free-room scan would pick another room");
+			for (const Room &r : sp.plan.rooms) CHECK((r.fix == Room::Fix::ByPlacer) == (r.special >= 0));
+		}
+}
+
+TEST_CASE("special calls are matched by family, whatever the order or number of the slot's calls")
+{
+	Tileset ts = caveTileset();
+	ts.next = {true, {95, 96, 97, 98}}; // a slot whose case also calls Next (unused by Cave's exit, which is Down)
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 7);
+	REQUIRE(sp.plan.steer);
+	CHECK(verify(ts, sp.layout, sp.plan).empty());
+	const SpecialCall &en = sp.plan.specials[0];
+	const SpecialCall &ex = sp.plan.specials[1];
+	// Prev, Down, Next in the order the reviewer saw on level 10: Next has no room in the plan, so it is suppressed.
+	CHECK(steerSpecial(ts, sp.plan, en.toPiece).action == SpecialSteer::Action::Redirect);
+	CHECK(steerSpecial(ts, sp.plan, ex.toPiece).action == SpecialSteer::Action::Redirect);
+	CHECK(steerSpecial(ts, sp.plan, ex.toPiece).fromPiece == ex.fromPiece);
+	CHECK(steerSpecial(ts, sp.plan, 95).action == SpecialSteer::Action::Suppress);
+	// Down before Prev gives the same answers.
+	CHECK(steerSpecial(ts, sp.plan, ex.toPiece).action == SpecialSteer::Action::Redirect);
+	CHECK(steerSpecial(ts, sp.plan, en.toPiece).fromPiece == en.fromPiece);
+	// A second call of a family is a stray.
+	CHECK(steerSpecial(ts, sp.plan, en.toPiece, 1).action == SpecialSteer::Action::Suppress);
+	CHECK(steerSpecial(ts, sp.plan, ex.toPiece, 1).action == SpecialSteer::Action::Suppress);
+}
+
+TEST_CASE("placeSpecialRooms off (plan section 3.6): no special room is placed, every call is suppressed")
+{
+	Tileset ts = caveTileset();
+	ts.placeSpecialRooms = false;
+	for (uint64_t seed = 1; seed <= 100; ++seed) {
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), seed);
+		REQUIRE(sp.plan.steer);
+		CHECK(verify(ts, sp.layout, sp.plan).empty());
+		for (const SpecialCall &sc : sp.plan.specials) {
+			CHECK(!sc.place);
+			CHECK(!sc.note.empty());
+		}
+		for (int piece : {83, 84, 85, 86, 91, 92, 93, 94}) CHECK(steerSpecial(ts, sp.plan, piece).action == SpecialSteer::Action::Suppress);
+		for (const Room &r : sp.plan.rooms) CHECK(r.piece == ts.pieceBase + r.mask);
+	}
 }
 
 TEST_CASE("loops: link steps close the rings, and the ends of a ring are ordinary rooms")
@@ -374,8 +504,8 @@ TEST_CASE("loops: link steps close the rings, and the ends of a ring are ordinar
 TEST_CASE("a tileset without special rooms suppresses both calls and keeps every end an ordinary fixed room")
 {
 	Tileset ts = caveTileset();
-	ts.entrance = DeadEndFamily{};
-	ts.exit = DeadEndFamily{};
+	ts.prev = DeadEndFamily{};
+	ts.down = DeadEndFamily{};
 	for (uint64_t seed = 1; seed <= 200; ++seed) {
 		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), seed);
 		REQUIRE(sp.plan.steer);
@@ -383,10 +513,10 @@ TEST_CASE("a tileset without special rooms suppresses both calls and keeps every
 		for (const SpecialCall &sc : sp.plan.specials) {
 			CHECK(!sc.place);
 			CHECK(!sc.note.empty());
-			CHECK(steerSpecial(ts, sp.plan, 0, 83).action == SpecialSteer::Action::Suppress);
+			CHECK(steerSpecial(ts, sp.plan, 83).action == SpecialSteer::Action::Suppress);
 		}
-		CHECK(sp.plan.rooms[static_cast<size_t>(sp.plan.specials[0].room)].fixed);
-		CHECK(sp.plan.rooms[static_cast<size_t>(sp.plan.specials[1].room)].fixed);
+		CHECK(sp.plan.rooms[static_cast<size_t>(sp.plan.specials[0].room)].fix == Room::Fix::AfterWalk);
+		CHECK(sp.plan.rooms[static_cast<size_t>(sp.plan.specials[1].room)].fix == Room::Fix::AfterWalk);
 	}
 }
 
@@ -397,19 +527,19 @@ TEST_CASE("steerSpecial: the hook is told which rotation, and strays are suppres
 	REQUIRE(sp.plan.steer);
 	const SpecialCall &en = sp.plan.specials[0];
 	const SpecialCall &ex = sp.plan.specials[1];
-	SpecialSteer s = steerSpecial(ts, sp.plan, 0, en.toPiece);
+	SpecialSteer s = steerSpecial(ts, sp.plan, en.toPiece);
 	CHECK(s.action == SpecialSteer::Action::Redirect);
 	CHECK(s.fromPiece == en.fromPiece);
 	CHECK(en.fromPiece >= ts.pieceBase + 1);
 	CHECK(popcount(static_cast<unsigned>(en.fromPiece - ts.pieceBase)) == 1);
-	// An entry of the wrong group for the call index is not steered.
-	CHECK(steerSpecial(ts, sp.plan, 0, ex.toPiece).action == SpecialSteer::Action::Suppress);
-	CHECK(steerSpecial(ts, sp.plan, 1, 99).action == SpecialSteer::Action::Suppress);
-	CHECK(steerSpecial(ts, sp.plan, -1, en.toPiece).action == SpecialSteer::Action::Suppress);
-	CHECK(steerSpecial(ts, sp.plan, 5, en.toPiece).action == SpecialSteer::Action::Suppress);
+	// The exit family finds the exit, not the entrance.
+	s = steerSpecial(ts, sp.plan, ex.toPiece);
+	CHECK(s.action == SpecialSteer::Action::Redirect);
+	CHECK(s.fromPiece == ex.fromPiece);
+	CHECK(steerSpecial(ts, sp.plan, 99).action == SpecialSteer::Action::Suppress);
 	Plan off = sp.plan;
 	off.steer = false;
-	CHECK(steerSpecial(ts, off, 0, en.toPiece).action == SpecialSteer::Action::Suppress);
+	CHECK(steerSpecial(ts, off, en.toPiece).action == SpecialSteer::Action::Suppress);
 }
 
 TEST_CASE("ring grower: no-op only for tilesets that call it, and the graph moves inside it when no walk follows")
@@ -448,7 +578,8 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 		ts.notSteerableReason = "Arcane runs its own room grower.";
 		CHECK(planMaze(ts, good).reason == "Arcane runs its own room grower.");
 	}
-	// 2. The layout is wider than the level holds: a 9-wide corridor on a Cave (7 across).
+	const Tileset slotCave = caveTileset(200);
+	// 2. The layout is wider than the largest allowed level holds (a Cave capped at a 200-tile slot: 7 across).
 	{
 		bool found = false;
 		for (uint64_t seed = 1; seed < 400 && !found; ++seed) {
@@ -458,9 +589,10 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 				for (int x = 0; x < l.width; ++x)
 					if (l.at(x, y).role != Role::Empty) { minX = std::min(minX, x); maxX = std::max(maxX, x); }
 			if (maxX - minX + 1 > 7) {
-				const Plan p = planMaze(cave, l);
+				const Plan p = planMaze(slotCave, l);
 				CHECK(!p.steer);
 				CHECK(p.reason.find("across") != std::string::npos);
+				CHECK(p.reason.find("smaller size") != std::string::npos);
 				CHECK(p.reason.find("Cave") != std::string::npos);
 				found = true;
 			}
@@ -493,12 +625,12 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 		bad.rulesMet = false;
 		const Plan p = planMaze(cave, bad);
 		CHECK(!p.steer);
-		CHECK(p.reason.find("rules") != std::string::npos);
+		CHECK(p.reason.find("shape") != std::string::npos);
 	}
 	// 5. A level with room for one room only: nothing fits, and planForSeed says so after its refits.
 	{
 		Tileset ts = cave;
-		ts.levelTilesX = ts.levelTilesY = 24;
+		ts.maxLevelTiles = 24;
 		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1);
 		CHECK(!sp.plan.steer);
 		CHECK(!sp.plan.reason.empty());
@@ -506,10 +638,14 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 	// 6. Plain English: no code names in the reasons.
 	{
 		Tileset ts = cave;
-		ts.levelTilesX = ts.levelTilesY = 72; // 1 + 1 + 1 rooms: a corridor of 3 can not hold a 10-room path
+		ts.maxLevelTiles = 72; // 1 + 1 + 1 rooms: a corridor of 3 can not hold a 10-room path
 		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1);
 		CHECK(!sp.plan.steer);
 		CHECK(sp.plan.reason.find("0x") == std::string::npos);
+		// No preset field names: an author never sees them.
+		for (const char *name : {"MaxPath", "MinPath", "Width", "Height", "grid", "Rules", "rules"})
+			CHECK(sp.plan.reason.find(name) == std::string::npos);
+		CHECK(sp.plan.reason.find("smaller size or a simpler shape") != std::string::npos);
 	}
 }
 
@@ -517,8 +653,9 @@ TEST_CASE("fitRules clamps the grid to the level and leaves a roomy level alone"
 {
 	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
 	CHECK(r.width == 12);
-	CHECK(fitRules(caveTileset(), r).width == 7);
-	CHECK(fitRules(caveTileset(), r).height == 7);
+	CHECK(fitRules(caveTileset(200), r).width == 7);  // a 200-tile slot
+	CHECK(fitRules(caveTileset(200), r).height == 7);
+	CHECK(fitRules(caveTileset(), r).width == 12);    // the allowed maximum holds the whole Large grid
 	CHECK(fitRules(cryptTileset(), r).width == 12);
 }
 

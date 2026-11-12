@@ -21,7 +21,7 @@ record them here first, then copy them there.
 - [Player Bars](player-bars.md): life and mana reads, screen shift, orb widgets, native bars.
 - [DPS Counter](dps-counter.md): the server damage apply `0x44a9b0` (hooked) and the missile owner.
 - [Cartographer](cartographer.md): stub of native addresses from the pd2-resurrected research (maze steering, outdoor
-  builder, level regeneration); nothing validated here yet, so it has no index row below until the S0 probe produces byte signatures. Docs: [docs/cartographer/](../cartographer/README.md).
+  builder, level regeneration); only the maze entries have byte signatures (checked statically; index rows below), the rest is unvalidated. Docs: [docs/cartographer/](../cartographer/README.md).
 
 The pre-registry documents above (all except Quick NPC and the Cartographer stub) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
@@ -74,6 +74,8 @@ Plugins do not gate on this image: there is no version check, and addresses here
 | D2R.exe | `0x438a70` (hook at `0x438a7a`) | Server skill select `(unit, isLeft, skill, a4)`: tears down the old right-skill aura | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x43b680` | Start the right-skill aura `(game, unit, skill)`; proposed hook | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x42e600` / `0x42e350` | Player regen tick (every frame; hpregen 74) / mana step (manarecovery 26); `0x42e600` proposed hook | [better-auras.md](better-auras.md#4-player-regen) |
+| D2R.exe | `0x3eb850` / `0x3eb960` / `0x3e9820` / `0x3e77a0` / `0x32c6a0` | Cartographer maze: entrance and exit placer / piece picker / ring grower / add-room / LvlMaze lookup; byte signatures, static only | [cartographer.md](cartographer.md#1a-maze-signatures-issue-29) |
+| D2R.exe | `0x360bb0` / `0x360520` / `0x360470` / `0x360c80` | Cartographer maze: link two rooms / overlap checks; byte signatures, static only | [cartographer.md](cartographer.md#1a-maze-signatures-issue-29) |
 
 This table is an index. The feature documents hold the guards and evidence; an entry here is not enough to justify
 an unguarded hook.
