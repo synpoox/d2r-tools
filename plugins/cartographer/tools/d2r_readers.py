@@ -36,7 +36,8 @@ def load(data: Path, table: str) -> Table:
 
 def ds1_header(data: bytes) -> tuple[int, int, int, int, int, int, int, int]:
     """(version, width, height, act 0-4, tag type, offset of the tile layers, wall layers, floor layers). Width and
-    height count tiles; the layers are walls (a tile grid, then an orientation grid, per layer), floors, shadow, tags."""
+    height count tiles; the layers are walls (a tile grid, then an orientation grid, per layer), floors, shadow,
+    tags."""
     version, width, height = struct.unpack_from("<3i", data, 0)
     o, act, tag = 12, 0, 0
     if version >= 8:
@@ -118,6 +119,8 @@ def layout(data: bytes, dt1s: dict[str, dict]) -> Layout:
         raise ValueError(f"DS1 version {version}: only 4 and up keep the tile layers in the order layout() reads")
     n = w * h
     grids = [struct.unpack_from(f"<{n}I", data, o + k * n * 4) for k in range(2 * walls + floors)]
+    # A key held by several DT1s is taken from the first in path order; the game picks among them by rarity, so the
+    # flags (and the cliff test) may come from another DT1 than the one it draws.
     order = sorted(dt1s)
     named: dict[tuple, Tile] = {}  # each distinct (orientation, main, sub) is looked up once
 

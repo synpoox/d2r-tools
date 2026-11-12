@@ -382,36 +382,36 @@ Jungle	outdoor	21	541	Act 3 - Jungle NS	1	1	p	x	p	x	path	1	river,straight,exits=
 Jungle	outdoor	21	542	Act 3 - Jungle NSW	1	1	p	x	p	p	path	1	river,tee,exits=3	name	ok	act3/jungle/rivnsw.ds1;act3/jungle/rivnsw2.ds1;act3/jungle/rivnsw3.ds1	hd/env/preset/act3/jungle/rivnsw.json;hd/env/preset/act3/jungle/rivnsw2.json;hd/env/preset/act3/jungle/rivnsw3.json
 Jungle	outdoor	21	543	Act 3 - Jungle NSE	1	1	p	p	p	x	path	1	river,tee,exits=3	name	ok	act3/jungle/rivnse.ds1;act3/jungle/rivnse2.ds1;act3/jungle/rivnse3.ds1	hd/env/preset/act3/jungle/rivnse.json;hd/env/preset/act3/jungle/rivnse2.json;hd/env/preset/act3/jungle/rivnse3.json
 Jungle	outdoor	21	544	Act 3 - Jungle NSEW	1	1	p	p	p	p	path	1	river,cross,exits=4	name	ok	act3/jungle/rivnsew.ds1;act3/jungle/rivnsew2.ds1;act3/jungle/rivnsew3.ds1	hd/env/preset/act3/jungle/rivnsew.json;hd/env/preset/act3/jungle/rivnsew2.json;hd/env/preset/act3/jungle/rivnsew3.json
-Jungle	outdoor	21	545	Act 3 - Jungle W E	1	1	x	p	x	p	border	1	transition,woe	ds1		act3/jungle/rivwoe.ds1	hd/env/preset/act3/jungle/rivwoe.json
-Jungle	outdoor	21	546	Act 3 - Jungle W S	1	1	x	x	p	p	border	1	transition,wos	ds1		act3/jungle/rivwos.ds1	hd/env/preset/act3/jungle/rivwos.json
-Jungle	outdoor	21	547	Act 3 - Jungle W N	1	1	p	x	x	p	border	1	transition,won	ds1		act3/jungle/rivwon.ds1	hd/env/preset/act3/jungle/rivwon.json
-Jungle	outdoor	21	548	Act 3 - Jungle E W	1	1	x	p	x	p	border	1	transition,eow	ds1		act3/jungle/riveow.ds1	hd/env/preset/act3/jungle/riveow.json
-Jungle	outdoor	21	549	Act 3 - Jungle E S	1	1	x	p	p	x	border	1	transition,eos	ds1		act3/jungle/riveos.ds1	hd/env/preset/act3/jungle/riveos.json
-Jungle	outdoor	21	550	Act 3 - Jungle E N	1	1	p	p	x	x	border	1	transition,eon	ds1		act3/jungle/riveon.ds1	hd/env/preset/act3/jungle/riveon.json
-Jungle	outdoor	21	551	Act 3 - Jungle EW S	1	1	x	p	p	p	border	1	transition,ewos	ds1		act3/jungle/rivewos.ds1	hd/env/preset/act3/jungle/rivewos.json
-Jungle	outdoor	21	552	Act 3 - Jungle EW N	1	1	p	p	x	p	border	1	transition,ewon	ds1		act3/jungle/rivewon.ds1	hd/env/preset/act3/jungle/rivewon.json
-Jungle	outdoor	21	553	Act 3 - Jungle S W	1	1	x	x	p	p	border	1	transition,sow	ds1		act3/jungle/rivsow.ds1	hd/env/preset/act3/jungle/rivsow.json
-Jungle	outdoor	21	554	Act 3 - Jungle S E	1	1	x	p	p	x	border	1	transition,soe	ds1		act3/jungle/rivsoe.ds1	hd/env/preset/act3/jungle/rivsoe.json
-Jungle	outdoor	21	555	Act 3 - Jungle S N	1	1	p	x	p	x	border	1	transition,son	ds1		act3/jungle/rivson.ds1	hd/env/preset/act3/jungle/rivson.json
-Jungle	outdoor	21	556	Act 3 - Jungle SW E	1	1	x	p	p	p	border	1	transition,swoe	ds1		act3/jungle/rivswoe.ds1	hd/env/preset/act3/jungle/rivswoe.json
-Jungle	outdoor	21	557	Act 3 - Jungle SW N	1	1	p	x	p	p	border	1	transition,swon	ds1		act3/jungle/rivswon.ds1	hd/env/preset/act3/jungle/rivswon.json
-Jungle	outdoor	21	558	Act 3 - Jungle SE W	1	1	x	p	p	p	border	1	transition,seow	ds1		act3/jungle/rivseow.ds1	hd/env/preset/act3/jungle/rivseow.json
-Jungle	outdoor	21	559	Act 3 - Jungle SE N	1	1	p	p	p	x	border	1	transition,seon	ds1		act3/jungle/rivseon.ds1	hd/env/preset/act3/jungle/rivseon.json
-Jungle	outdoor	21	560	Act 3 - Jungle SEW N	1	1	p	p	p	p	border	1	transition,sewon	ds1		act3/jungle/rivsewon.ds1	hd/env/preset/act3/jungle/rivsewon.json
-Jungle	outdoor	21	561	Act 3 - Jungle N W	1	1	p	x	x	p	border	1	transition,now	ds1		act3/jungle/rivnow.ds1	hd/env/preset/act3/jungle/rivnow.json
-Jungle	outdoor	21	562	Act 3 - Jungle N E	1	1	p	p	x	x	border	1	transition,noe	ds1		act3/jungle/rivnoe.ds1	hd/env/preset/act3/jungle/rivnoe.json
-Jungle	outdoor	21	563	Act 3 - Jungle N S	1	1	p	x	p	x	border	1	transition,nos	ds1		act3/jungle/rivnos.ds1	hd/env/preset/act3/jungle/rivnos.json
-Jungle	outdoor	21	564	Act 3 - Jungle NW E	1	1	p	p	x	p	border	1	transition,nwoe	ds1		act3/jungle/rivnwoe.ds1	hd/env/preset/act3/jungle/rivnwoe.json
-Jungle	outdoor	21	565	Act 3 - Jungle NW S	1	1	p	x	p	p	border	1	transition,nwos	ds1		act3/jungle/rivnwos.ds1	hd/env/preset/act3/jungle/rivnwos.json
-Jungle	outdoor	21	566	Act 3 - Jungle NE W	1	1	p	p	x	p	border	1	transition,neow	ds1		act3/jungle/rivneow.ds1	hd/env/preset/act3/jungle/rivneow.json
-Jungle	outdoor	21	567	Act 3 - Jungle NE S	1	1	p	p	p	x	border	1	transition,neos	ds1		act3/jungle/rivneos.ds1	hd/env/preset/act3/jungle/rivneos.json
-Jungle	outdoor	21	568	Act 3 - Jungle NEW S	1	1	p	p	p	p	border	1	transition,newos	ds1		act3/jungle/rivnewos.ds1	hd/env/preset/act3/jungle/rivnewos.json
-Jungle	outdoor	21	569	Act 3 - Jungle NS W	1	1	p	x	p	p	border	1	transition,nsow	ds1		act3/jungle/rivnsow.ds1	hd/env/preset/act3/jungle/rivnsow.json
-Jungle	outdoor	21	570	Act 3 - Jungle NS E	1	1	p	p	p	x	border	1	transition,nsoe	ds1		act3/jungle/rivnsoe.ds1	hd/env/preset/act3/jungle/rivnsoe.json
-Jungle	outdoor	21	571	Act 3 - Jungle NSW E	1	1	p	p	p	p	border	1	transition,nswoe	ds1		act3/jungle/rivnswoe.ds1	hd/env/preset/act3/jungle/rivnswoe.json
-Jungle	outdoor	21	572	Act 3 - Jungle NSE W	1	1	p	p	p	p	border	1	transition,nseow	ds1		act3/jungle/rivnseow.ds1	hd/env/preset/act3/jungle/rivnseow.json
-Jungle	outdoor	21	573	Act 3 - Jungle Head	2	1	xp	x	px	x	border	1	transition,head	ds1		act3/jungle/transl.ds1;act3/jungle/transu.ds1	hd/env/preset/act3/jungle/transl.json;hd/env/preset/act3/jungle/transu.json
-Jungle	outdoor	21	574	Act 3 - Jungle Tail	2	1	pp	x	xp	x	border	1	transition,tail	ds1		act3/jungle/travl.ds1;act3/jungle/travu.ds1	hd/env/preset/act3/jungle/travl.json;hd/env/preset/act3/jungle/travu.json
+Jungle	outdoor	21	545	Act 3 - Jungle W E	1	1	x	p	x	p	border	1	transition,woe	ds1	ok	act3/jungle/rivwoe.ds1	hd/env/preset/act3/jungle/rivwoe.json
+Jungle	outdoor	21	546	Act 3 - Jungle W S	1	1	x	x	p	p	border	1	transition,wos	ds1	ok	act3/jungle/rivwos.ds1	hd/env/preset/act3/jungle/rivwos.json
+Jungle	outdoor	21	547	Act 3 - Jungle W N	1	1	p	x	x	p	border	1	transition,won	ds1	ok	act3/jungle/rivwon.ds1	hd/env/preset/act3/jungle/rivwon.json
+Jungle	outdoor	21	548	Act 3 - Jungle E W	1	1	x	p	x	p	border	1	transition,eow	ds1	ok	act3/jungle/riveow.ds1	hd/env/preset/act3/jungle/riveow.json
+Jungle	outdoor	21	549	Act 3 - Jungle E S	1	1	x	p	p	x	border	1	transition,eos	ds1	ok	act3/jungle/riveos.ds1	hd/env/preset/act3/jungle/riveos.json
+Jungle	outdoor	21	550	Act 3 - Jungle E N	1	1	p	p	x	x	border	1	transition,eon	ds1	ok	act3/jungle/riveon.ds1	hd/env/preset/act3/jungle/riveon.json
+Jungle	outdoor	21	551	Act 3 - Jungle EW S	1	1	x	p	p	p	border	1	transition,ewos	ds1	ok	act3/jungle/rivewos.ds1	hd/env/preset/act3/jungle/rivewos.json
+Jungle	outdoor	21	552	Act 3 - Jungle EW N	1	1	p	p	x	p	border	1	transition,ewon	ds1	ok	act3/jungle/rivewon.ds1	hd/env/preset/act3/jungle/rivewon.json
+Jungle	outdoor	21	553	Act 3 - Jungle S W	1	1	x	x	p	p	border	1	transition,sow	ds1	ok	act3/jungle/rivsow.ds1	hd/env/preset/act3/jungle/rivsow.json
+Jungle	outdoor	21	554	Act 3 - Jungle S E	1	1	x	p	p	x	border	1	transition,soe	ds1	ok	act3/jungle/rivsoe.ds1	hd/env/preset/act3/jungle/rivsoe.json
+Jungle	outdoor	21	555	Act 3 - Jungle S N	1	1	p	x	p	x	border	1	transition,son	ds1	ok	act3/jungle/rivson.ds1	hd/env/preset/act3/jungle/rivson.json
+Jungle	outdoor	21	556	Act 3 - Jungle SW E	1	1	x	p	p	p	border	1	transition,swoe	ds1	ok	act3/jungle/rivswoe.ds1	hd/env/preset/act3/jungle/rivswoe.json
+Jungle	outdoor	21	557	Act 3 - Jungle SW N	1	1	p	x	p	p	border	1	transition,swon	ds1	ok	act3/jungle/rivswon.ds1	hd/env/preset/act3/jungle/rivswon.json
+Jungle	outdoor	21	558	Act 3 - Jungle SE W	1	1	x	p	p	p	border	1	transition,seow	ds1	ok	act3/jungle/rivseow.ds1	hd/env/preset/act3/jungle/rivseow.json
+Jungle	outdoor	21	559	Act 3 - Jungle SE N	1	1	p	p	p	x	border	1	transition,seon	ds1	ok	act3/jungle/rivseon.ds1	hd/env/preset/act3/jungle/rivseon.json
+Jungle	outdoor	21	560	Act 3 - Jungle SEW N	1	1	p	p	p	p	border	1	transition,sewon	ds1	ok	act3/jungle/rivsewon.ds1	hd/env/preset/act3/jungle/rivsewon.json
+Jungle	outdoor	21	561	Act 3 - Jungle N W	1	1	p	x	x	p	border	1	transition,now	ds1	ok	act3/jungle/rivnow.ds1	hd/env/preset/act3/jungle/rivnow.json
+Jungle	outdoor	21	562	Act 3 - Jungle N E	1	1	p	p	x	x	border	1	transition,noe	ds1	ok	act3/jungle/rivnoe.ds1	hd/env/preset/act3/jungle/rivnoe.json
+Jungle	outdoor	21	563	Act 3 - Jungle N S	1	1	p	x	p	x	border	1	transition,nos	ds1	ok	act3/jungle/rivnos.ds1	hd/env/preset/act3/jungle/rivnos.json
+Jungle	outdoor	21	564	Act 3 - Jungle NW E	1	1	p	p	x	p	border	1	transition,nwoe	ds1	ok	act3/jungle/rivnwoe.ds1	hd/env/preset/act3/jungle/rivnwoe.json
+Jungle	outdoor	21	565	Act 3 - Jungle NW S	1	1	p	x	p	p	border	1	transition,nwos	ds1	ok	act3/jungle/rivnwos.ds1	hd/env/preset/act3/jungle/rivnwos.json
+Jungle	outdoor	21	566	Act 3 - Jungle NE W	1	1	p	p	x	p	border	1	transition,neow	ds1	ok	act3/jungle/rivneow.ds1	hd/env/preset/act3/jungle/rivneow.json
+Jungle	outdoor	21	567	Act 3 - Jungle NE S	1	1	p	p	p	x	border	1	transition,neos	ds1	ok	act3/jungle/rivneos.ds1	hd/env/preset/act3/jungle/rivneos.json
+Jungle	outdoor	21	568	Act 3 - Jungle NEW S	1	1	p	p	p	p	border	1	transition,newos	ds1	ok	act3/jungle/rivnewos.ds1	hd/env/preset/act3/jungle/rivnewos.json
+Jungle	outdoor	21	569	Act 3 - Jungle NS W	1	1	p	x	p	p	border	1	transition,nsow	ds1	ok	act3/jungle/rivnsow.ds1	hd/env/preset/act3/jungle/rivnsow.json
+Jungle	outdoor	21	570	Act 3 - Jungle NS E	1	1	p	p	p	x	border	1	transition,nsoe	ds1	ok	act3/jungle/rivnsoe.ds1	hd/env/preset/act3/jungle/rivnsoe.json
+Jungle	outdoor	21	571	Act 3 - Jungle NSW E	1	1	p	p	p	p	border	1	transition,nswoe	ds1	ok	act3/jungle/rivnswoe.ds1	hd/env/preset/act3/jungle/rivnswoe.json
+Jungle	outdoor	21	572	Act 3 - Jungle NSE W	1	1	p	p	p	p	border	1	transition,nseow	ds1	ok	act3/jungle/rivnseow.ds1	hd/env/preset/act3/jungle/rivnseow.json
+Jungle	outdoor	21	573	Act 3 - Jungle Head	2	1	xp	x	px	x	border	1	transition,head	ds1	variants	act3/jungle/transl.ds1;act3/jungle/transu.ds1	hd/env/preset/act3/jungle/transl.json;hd/env/preset/act3/jungle/transu.json
+Jungle	outdoor	21	574	Act 3 - Jungle Tail	2	1	pp	x	xp	x	border	1	transition,tail	ds1	variants	act3/jungle/travl.ds1;act3/jungle/travu.ds1	hd/env/preset/act3/jungle/travl.json;hd/env/preset/act3/jungle/travu.json
 Jungle	outdoor	21	575	Act 3 - Clearing Webby W	1	1	x	x	x	p	clearing	1	clearing,deadend,exits=1,webby	name	ok	act3/jungle/spidw.ds1;act3/jungle/spidw2.ds1;act3/jungle/spidw3.ds1	hd/env/preset/act3/jungle/spidw.json;hd/env/preset/act3/jungle/spidw2.json;hd/env/preset/act3/jungle/spidw3.json
 Jungle	outdoor	21	576	Act 3 - Clearing Webby E	1	1	x	p	x	x	clearing	1	clearing,deadend,exits=1,webby	name	ok	act3/jungle/spide.ds1;act3/jungle/spide2.ds1;act3/jungle/spide3.ds1	hd/env/preset/act3/jungle/spide.json;hd/env/preset/act3/jungle/spide2.json;hd/env/preset/act3/jungle/spide3.json
 Jungle	outdoor	21	577	Act 3 - Clearing Webby EW	1	1	x	p	x	p	clearing	1	clearing,straight,exits=2,webby	name	ok	act3/jungle/spidew.ds1;act3/jungle/spidew2.ds1;act3/jungle/spidew3.ds1	hd/env/preset/act3/jungle/spidew.json;hd/env/preset/act3/jungle/spidew2.json;hd/env/preset/act3/jungle/spidew3.json

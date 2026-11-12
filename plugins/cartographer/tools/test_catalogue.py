@@ -2,15 +2,21 @@
 
     python -I -m unittest discover -s plugins/cartographer/tools -p "test_*.py"
 
-Everything runs without game data except test_regenerates, which is skipped when no extracted D2R `data` folder is
-found (see catalogue.data_root); the other output tests check the committed catalogue.tsv.
+Everything runs without game data except test_regenerates, which is skipped only when no extracted D2R `data`
+folder is found (see catalogue.data_root; CARTOGRAPHER_NO_DATA=1 forces that). A $D2R_DATA that is wrong fails it.
+The other output tests check the committed catalogue.tsv.
 """
 from __future__ import annotations
 
+import contextlib
+import io
+import os
 import struct
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -32,7 +38,8 @@ def dt1(tiles: dict[tuple[int, int, int], bytes]) -> bytes:
     return bytes(out)
 
 
-def ds1(w: int, h: int, floor: dict[tuple[int, int], int], files=("c:\\d2\\data\\global\\tiles\\act3\\a.tg1",)) -> bytes:
+def ds1(w: int, h: int, floor: dict[tuple[int, int], int],
+        files=("c:\\d2\\data\\global\\tiles\\act3\\a.tg1",)) -> bytes:
     """A version 18 DS1 of w x h tiles with one wall layer (empty) and one floor layer; floor cell -> raw value."""
     out = bytearray(struct.pack("<3i", 18, w - 1, h - 1))
     out += struct.pack("<2i", 3, 0)  # act, tag type
@@ -68,6 +75,47 @@ class Readers(unittest.TestCase):
         self.assertEqual(lay.flags[(1, 0)], BLOCKED)
         self.assertEqual(lay.keys[(0, 0)], ("f", (("x.dt1", 0, 1, 0),)))
         self.assertEqual(lay.unwalkable, frozenset({(1, 0)}))
+
+
+class BadInput(unittest.TestCase):
+    def tmp(self) -> Path:
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        return Path(d.name)
+
+    def test_missing_data_folder_names_the_path(self):
+        d = self.tmp() / "nowhere"
+        with self.assertRaises(cat.CatalogueError) as e:
+            cat.generate(d)
+        self.assertIn("nowhere", str(e.exception))
+
+    def test_a_wrong_d2r_data_is_an_error_not_no_data(self):
+        d = self.tmp() / "nowhere"
+        with mock.patch.dict(os.environ, {"D2R_DATA": str(d), "CARTOGRAPHER_NO_DATA": ""}):
+            with self.assertRaises(cat.CatalogueError) as e:
+                cat.data_root()
+        self.assertIn("D2R_DATA", str(e.exception))
+
+    def test_no_data_is_explicit(self):
+        with mock.patch.dict(os.environ, {"CARTOGRAPHER_NO_DATA": "1"}):
+            self.assertIsNone(cat.data_root())
+            with self.assertRaises(cat.CatalogueError):
+                cat.generate()
+
+    def test_main_prints_a_message_not_a_traceback(self):
+        d = self.tmp() / "nowhere"
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(cat.main(["--check", "--data", str(d)]), 2)
+        self.assertIn("nowhere", err.getvalue())
+
+    def test_corrupt_ds1_names_the_file(self):
+        root = self.tmp()
+        (root / "global" / "tiles" / "act3").mkdir(parents=True)
+        (root / "global" / "tiles" / "act3" / "bad.ds1").write_bytes(ds1(4, 4, {})[:20])
+        with self.assertRaises(cat.CatalogueError) as e:
+            cat.Reader(root).layout("act3/bad.ds1")
+        self.assertIn("bad.ds1", str(e.exception))
 
 
 class Sockets(unittest.TestCase):
@@ -139,6 +187,41 @@ class Classifier(unittest.TestCase):
         self.assertEqual((rows[0]["role"], rows[0]["weight"], rows[0]["source"]), ("boss", 5, "override"))
         self.assertEqual(len(problems), 3)
 
+    def test_bad_override_number_is_a_problem_not_a_traceback(self):
+        rows = [dict(lvlprest=1, role="path", weight=1, source="name", check="ok", w=1, h=1, leveltype=3)]
+        problems = cat.apply_overrides(rows, [dict(lvlprest="1", weight="many")])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("weight", problems[0])
+        self.assertEqual((rows[0]["weight"], rows[0]["source"]), (1, "name"))
+
+    def test_variants_survive_when_the_sockets_come_from_the_ds1(self):
+        class Two:  # two DS1 files whose north side differs
+            def layout(self, f):
+                blocked = {(x, 0) for x in range(3, 6)} if f.endswith("b.ds1") else set()
+                floor = {(x, y): FLOOR_BLOCKED if (x, y) in blocked else FLOOR_OPEN
+                         for x in range(6) for y in range(3)}
+                return rd.layout(ds1(6, 3, floor), {"x.dt1": {(0, 1, 0): OPEN, (0, 2, 0): BLOCKED}})
+        p = cat.Piece(573, "Act 3 - Jungle Head", 6, 3, ("act3/jungle/a.ds1", "act3/jungle/b.ds1"))
+        spec = next(s for s in cat.TILESETS if s.name == "Jungle")._replace(cell=3)
+        pattern, role, extra = spec.rows[3]
+        m, letters = cat.named_mask(pattern, p.name)
+        row = cat.make_row(spec, p, m, letters, role, extra, Two(), lambda _p: True)
+        self.assertEqual(row["check"], "variants")
+        self.assertEqual(row["source"], "ds1")
+
+    def test_transition_name_is_checked_against_the_ds1(self):
+        class One:  # every side open
+            def layout(self, f):
+                return rd.layout(ds1(3, 3, {(x, y): FLOOR_OPEN for x in range(3) for y in range(3)}),
+                                 {"x.dt1": {(0, 1, 0): OPEN}})
+        spec = next(s for s in cat.TILESETS if s.name == "Jungle")._replace(cell=3)
+        pattern, role, extra = spec.rows[2]
+        for name, check in (("Act 3 - Jungle NSEW N", "ok"), ("Act 3 - Jungle EW S", "name=SEW")):
+            p = cat.Piece(1, name, 3, 3, ("act3/jungle/a.ds1",))
+            m, letters = cat.named_mask(pattern, p.name)
+            row = cat.make_row(spec, p, m, letters, role, extra, One(), lambda _p: True)
+            self.assertEqual(row["check"], check, name)
+
     def test_every_tileset_has_a_builder(self):
         self.assertEqual({s.builder for s in cat.TILESETS}, {"maze", "outdoor"})
         self.assertEqual(len({s.name for s in cat.TILESETS}), len(cat.TILESETS))
@@ -192,6 +275,30 @@ class Committed(unittest.TestCase):
         self.assertEqual((self.by_id[573]["w"], self.by_id[573]["h"]), ("2", "1"))  # Head, 64 x 32
         self.assertEqual((self.by_id[574]["w"], self.by_id[574]["h"]), ("2", "1"))  # Tail
 
+    def test_variants_are_kept(self):
+        # the two DS1s of Head and Tail disagree on a side; the first file's edges are shipped, flagged
+        self.assertEqual((self.by_id[573]["check"], self.by_id[574]["check"]), ("variants", "variants"))
+        self.assertEqual(sum(1 for r in self.rows if r["check"] == "variants"), 2)
+        report = (HERE / "catalogue-report.txt").read_text(encoding="utf-8")
+        self.assertIn("2 with variants", report)
+        self.assertIn("  573 Act 3 - Jungle Head: variants", report)
+
+    def test_transition_names_agree_with_the_ds1(self):
+        for pid in range(545, 573):
+            r = self.by_id[pid]
+            self.assertEqual(r["check"], "ok", f"{pid} {r['name']}: the DS1 disagrees with the letters of the name")
+
+    def test_full_maze_families_follow_base_plus_mask(self):
+        # The game indexes a maze family as base + mask in LvlPrest order; this is why maze exits come from names.
+        # Act 5 Lava (1053-1058, six pieces) has no single base, so it is not a family of this kind.
+        checked = 0
+        for tileset in sorted({r["tileset"] for r in self.rows if r["builder"] == "maze"} - {"Act 5 Lava"}):
+            fam = [r for r in self.rows if r["tileset"] == tileset and r["role"] == "path"]
+            bases = {int(r["lvlprest"]) - mask_of_row(r) for r in fam}
+            self.assertEqual(len(bases), 1, f"{tileset}: LvlPrest minus mask is not one base: {sorted(bases)}")
+            checked += 1
+        self.assertEqual(checked, 14)
+
     def test_mask_zero_is_never_a_piece(self):
         self.assertNotIn(529, self.by_id)  # Act 3 Town
 
@@ -227,9 +334,11 @@ class Committed(unittest.TestCase):
 
 
 class Regenerates(unittest.TestCase):
-    @unittest.skipIf(cat.data_root() is None, "no extracted D2R data folder (set D2R_DATA)")
     def test_regenerates(self):
-        files, problems = cat.generate()
+        data = cat.data_root()  # raises when D2R_DATA is set but wrong
+        if data is None:
+            self.skipTest("no extracted D2R data folder (set D2R_DATA), or CARTOGRAPHER_NO_DATA is set")
+        files, problems = cat.generate(data)
         self.assertEqual(problems, [])
         for name, text in files.items():
             self.assertEqual((HERE / name).read_text(encoding="utf-8"), text, f"{name} is stale: run catalogue.py")

@@ -1,6 +1,8 @@
 475 pieces in 18 tilesets
-0 pieces whose check is not ok:
+2 pieces whose check is not ok (2 with variants: their DS1 files differ):
+    573 Act 3 - Jungle Head: variants
+    574 Act 3 - Jungle Tail: variants
 2 missing HD presets:
     916 Act 5 - Barricade 2: hd/env/preset/expansion/siege/newbarrbb2.json
     919 Act 5 - Barricade 5: hd/env/preset/expansion/siege/newbarrab2.json
-LvlPrest 530-604: 75 rows, 45 with a mask in the name, 45 of them where the DS1 mask equals it
+LvlPrest 530-604: 75 rows, 45 with a mask in the name, 73 of them where the DS1 mask equals it

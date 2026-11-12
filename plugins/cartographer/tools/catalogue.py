@@ -1,36 +1,57 @@
-"""Cartographer's internal tileset catalogue (issue #23, epic #19; docs/cartographer/plans/cartographer-outdoor-builder.md
-section 4).
+"""Cartographer's internal tileset catalogue (issue #23, epic #19;
+docs/cartographer/plans/cartographer-outdoor-builder.md section 4).
 
-    python plugins/cartographer/tools/catalogue.py            write catalogue.tsv, tilesets.tsv and catalogue-report.txt here
-    python plugins/cartographer/tools/catalogue.py --check    write nothing; exit 1 if the committed files differ
+    python plugins/cartographer/tools/catalogue.py
+        write catalogue.tsv, tilesets.tsv and catalogue-report.txt here
+    python plugins/cartographer/tools/catalogue.py --check
+        write nothing; exit 1 if the committed files differ
 
 Input: vanilla D2R's lvlprest.txt, the DS1s and DT1s of the same build (the `data` folder of an extract: --data,
-$D2R_DATA, or the d2rAI-toolkit's `d2r-data/93847/data` beside this repo; read only), and overrides.tsv. One row per piece, with the columns of COLUMNS.
+$D2R_DATA, or the d2rAI-toolkit's `d2r-data/93847/data` beside this repo; read only), and overrides.tsv. One row per
+piece, with the columns of COLUMNS. A data folder that was asked for (--data, $D2R_DATA) but is not there is an
+error; only when nothing was asked for and the toolkit is not found is there "no data" (the committed output is then
+all there is). CARTOGRAPHER_NO_DATA=1 says so explicitly (the tests use it to skip the regeneration test).
 
 How a row is made, in the order the later step wins:
 
-1. Name: a mask-named family (`Act 3 - Jungle NSE`, `Act 1 - Cave NW`, `Act 3 - Clearing Boggy S`) gets its exits from
-   the name. Exit bits: W 1, E 2, S 4, N 8 (D2's own order: a maze or jungle piece is `base + mask`).
+1. Name: a mask-named family (`Act 3 - Jungle NSE`, `Act 1 - Cave NW`, `Act 3 - Clearing Boggy S`) gets its exits
+   from the name. Exit bits: W 1, E 2, S 4, N 8 (D2's own order: a maze or jungle piece is `base + mask`, which a
+   test checks for every full maze family; Act 5 Lava, 1053-1058, has no single base).
 2. DS1: every piece with DS1s also gets its sockets from the tiles. A tile's 25 subtiles each block walking or not
    (DT1 flag bit 0); a side is `p` (open) where at least OPEN subtiles of the outermost subtile row of a macro-cell's
-   span are walkable, else `c` (a cliff DT1 closes it) or `x` (closed). A family with no mask in its name (Barricade
-   1-16) takes its sockets from this alone. For a named piece the DS1 mask is only a cross-check: `check` is `ok`,
-   or `ds1=<mask>` where the DS1 disagrees (the name's edges stay), or `variants` where the piece's DS1 files differ.
+   span are walkable, else `c` (a cliff DT1 closes it) or `x` (closed). A family with no mask in its name
+   (Barricade 1-16) takes its sockets from this alone. For a named piece the DS1 mask is only a cross-check:
+   `check` is `ok`, or `ds1=<mask>` where the DS1 disagrees (the name's edges stay). A jungle transition
+   (`Jungle EW S`) has two letter groups; its DS1 mask is checked against their union (`ok` or `name=<letters>`).
+   `variants` where the piece's DS1 files differ among themselves wins over every other value (the first file's
+   edges are used).
 3. overrides.tsv: hand-written cells win over both. A row names a `lvlprest` and any other column to set; a blank
    cell leaves the cell alone. `source` of an overridden row is `override`.
 
-Which builder a tileset uses (`maze` or `outdoor`) is a property of the tileset (TILESETS), never of the author's map.
-Sockets: `x` closed, `p` open, `c` cliff. In the jungle `p` is read as a walkable
-exit (path): each DS1 exit is a ~12-tile walkable corridor with a 2-tile river inside, and the DS1 walk flags match the
-name's mask for all 45 named pieces. That the game lets players walk across such an edge is pending the in-game check
-of #22.  Edge strings run west to east
-(N and S) and north to south (W and E), one character per macro-cell.
+Which builder a tileset uses (`maze` or `outdoor`) is a property of the tileset (TILESETS), never of the author's
+map. Sockets: `x` closed, `p` open, `c` cliff. In the jungle `p` is read as a walkable exit (path): each DS1 exit is
+a ~12-tile walkable corridor with a 2-tile river inside, and the DS1 walk flags match the name's mask for all 45
+named pieces. That the game lets players walk across such an edge is pending the in-game check of #22. Edge strings
+run west to east (N and S) and north to south (W and E), one character per macro-cell.
+
+Known limits (defaults the overrides refine; none of them is checked against the game):
+- Barricade and Snow sockets are weak: OPEN = 5 subtiles over a 16-tile side makes nearly any side `p`, so there is
+  no 4-bit pattern, and no `c` socket is produced although the Barricade DS1s list rockcliff.dt1. Unverified until
+  a hand-check or the phase that uses them.
+- A tile whose DT1 is absent from the extract (or whose key is in no DT1) counts as walkable. Nothing is unresolved
+  in build 93847 (one DT1 named in a header, expansion/siege/debris.dt1, is missing and unused).
+- A tile key is taken from the first DT1 in alphabetical order; the game picks among DT1s with the same
+  (orientation, main, sub) by rarity, so flags and the cliff test may come from another DT1 than the one it draws.
+- No `r` (ravine) socket: the tool and the tests allow only `xpc` until a ravine tileset arrives.
+- `weight` is a flat 1 and `role` is never `entry`, `boss` or `event`; overrides.tsv sets them.
+- Override cells for the edges are not checked against `xpc` or the row's w/h.
 """
 from __future__ import annotations
 
 import argparse
 import os
 import re
+import struct
 import sys
 from pathlib import Path
 from typing import NamedTuple
@@ -41,6 +62,10 @@ sys.path.insert(0, str(HERE))
 from d2r_readers import Layout, Tiles, header_dt1s, layout, load  # noqa: E402
 
 BUILD = "93847"
+
+
+class CatalogueError(Exception):
+    """A problem with the input that the user can fix: main() prints it and exits 2, with no traceback."""
 COLUMNS = ["tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgeN", "edgeE", "edgeS", "edgeW",
            "role", "weight", "tags", "source", "check", "ds1", "hd"]
 TILESET_COLUMNS = ["tileset", "builder", "leveltype", "group", "cell", "pieces", "ready"]
@@ -111,11 +136,20 @@ TILESETS: tuple[Spec, ...] = (
 
 # ---- inputs -----------------------------------------------------------------------------------------------------
 
+def checked_data(d: Path, what: str) -> Path:
+    table = d / "global" / "excel" / "lvlprest.txt"
+    if not table.is_file():
+        raise CatalogueError(f"{what} {d} is not a D2R data folder: {table} not found")
+    return d
+
+
 def data_root() -> Path | None:
-    """The extracted vanilla `data` folder, or None when there is none (the committed output is then all there is)."""
+    """The extracted vanilla `data` folder. None only when none was asked for and the toolkit's is not found (the
+    committed output is then all there is), or CARTOGRAPHER_NO_DATA is set. A wrong $D2R_DATA is an error."""
+    if os.environ.get("CARTOGRAPHER_NO_DATA"):
+        return None
     if os.environ.get("D2R_DATA"):
-        d = Path(os.environ["D2R_DATA"])
-        return d if (d / "global" / "excel" / "lvlprest.txt").is_file() else None
+        return checked_data(Path(os.environ["D2R_DATA"]), "$D2R_DATA")
     for p in HERE.parents:
         d = p / "d2rAI-toolkit" / "d2r-data" / BUILD / "data"
         if (d / "global" / "excel" / "lvlprest.txt").is_file():
@@ -135,18 +169,22 @@ def read_lvlprest(data: Path) -> dict[int, Piece]:
     t = load(data, "lvlprest")
     h = t.header
     out: dict[int, Piece] = {}
-    for r in t.rows:
-        if r[0] == "Expansion":
-            continue
-        files = tuple(r[h.index(f"File{k}")].replace("\\", "/").lower() for k in range(1, 7)
-                      if r[h.index(f"File{k}")] not in ("", "0"))
-        out[int(r[h.index("Def")])] = Piece(int(r[h.index("Def")]), r[0], int(r[h.index("SizeX")]),
-                                            int(r[h.index("SizeY")]), files)
+    try:
+        for r in t.rows:
+            if r[0] == "Expansion":
+                continue
+            files = tuple(r[h.index(f"File{k}")].replace("\\", "/").lower() for k in range(1, 7)
+                          if r[h.index(f"File{k}")] not in ("", "0"))
+            out[int(r[h.index("Def")])] = Piece(int(r[h.index("Def")]), r[0], int(r[h.index("SizeX")]),
+                                                int(r[h.index("SizeY")]), files)
+    except (ValueError, IndexError) as e:
+        raise CatalogueError(f"{data / 'global' / 'excel' / 'lvlprest.txt'}: not a lvlprest table ({e})") from e
     return out
 
 
 def hd_path(ds1: str) -> str:
-    """The HD preset of a DS1, relative to the data folder: `act3/jungle/rivw.ds1` -> `hd/env/preset/act3/jungle/rivw.json`."""
+    """The HD preset of a DS1, relative to the data folder:
+    `act3/jungle/rivw.ds1` -> `hd/env/preset/act3/jungle/rivw.json`."""
     return "hd/env/preset/" + ds1.rsplit(".", 1)[0] + ".json"
 
 
@@ -196,7 +234,10 @@ class Reader:
         if not f.is_file():
             return None
         data = f.read_bytes()
-        return layout(data, self.dt1.of(header_dt1s(data)))
+        try:
+            return layout(data, self.dt1.of(header_dt1s(data)))
+        except (struct.error, ValueError, IndexError) as e:
+            raise CatalogueError(f"{f}: not a readable DS1 or DT1 ({e})") from e
 
 
 # ---- the rows ---------------------------------------------------------------------------------------------------
@@ -221,6 +262,12 @@ def named_mask(spec_row: str, name: str) -> tuple[re.Match | None, str]:
         return None, ""
     letters = m.groupdict().get("m") or ""
     return (m, letters) if not letters or valid_mask(letters) else (None, "")
+
+
+def letters_union(m: re.Match) -> str:
+    """The exit letters of a transition's two groups (`Jungle EW S` -> `SEW`); "" for a name without both."""
+    kind, to = m.groupdict().get("kind") or "", m.groupdict().get("to") or ""
+    return "".join(c for c in "NSEW" if c in kind + to) if to else ""
 
 
 def name_edges(mask: int) -> dict[str, str]:
@@ -295,7 +342,12 @@ def make_row(spec: Spec, p: Piece, m: re.Match, letters: str, role: str, extra: 
     else:
         edges = ds1_edges or {s: "x" * (w if s in "NS" else h) for s in "NESW"}
         row["source"] = "ds1" if ds1_edges else "none"
-        row["check"] = "" if ds1_edges else "no-ds1"
+        if not ds1_edges:
+            row["check"] = "no-ds1"  # else a "variants" set above stays
+        elif not row["check"] and letters_union(m):
+            got = sum(BITS[s] for s in "NESW" if ds1_edges[s] == "p")
+            union = mask_of(letters_union(m))
+            row["check"] = "ok" if got == union else f"name={letters_of(union)}"
         if m.groupdict().get("kind") in ("Head", "Tail"):
             tags.append(m.group("kind").lower())
         if m.groupdict().get("to"):
@@ -322,7 +374,7 @@ def read_overrides(path: Path) -> list[dict]:
 
 
 def apply_overrides(rows: list[dict], overrides: list[dict]) -> list[str]:
-    """Set the overridden cells in place; returns the problems (an unknown piece or column, a bad role)."""
+    """Set the overridden cells in place; returns the problems (an unknown piece or column, a bad role or number)."""
     by_id = {r["lvlprest"]: r for r in rows}
     problems = []
     for o in overrides:
@@ -339,7 +391,11 @@ def apply_overrides(rows: list[dict], overrides: list[dict]) -> list[str]:
             elif col == "role" and val not in ROLES:
                 problems.append(f"overrides.tsv: lvlprest {r['lvlprest']}: role {val!r} is not one of {ROLES}")
             else:
-                r[col] = int(val) if col in ("w", "h", "weight", "leveltype") else val
+                try:
+                    r[col] = int(val) if col in ("w", "h", "weight", "leveltype") else val
+                except ValueError:
+                    problems.append(f"overrides.tsv: lvlprest {r['lvlprest']}: {col} {val!r} is not an integer")
+                    continue
                 r["source"] = "override"
     return problems
 
@@ -362,7 +418,8 @@ def tileset_rows(rows: list[dict]) -> list[dict]:
 def report(rows: list[dict]) -> str:
     lines = [f"{len(rows)} pieces in {len({r['tileset'] for r in rows})} tilesets"]
     bad = [r for r in rows if r["check"] not in ("ok", "", "n/a")]
-    lines.append(f"{len(bad)} pieces whose check is not ok:")
+    var = sum(1 for r in bad if r["check"] == "variants")
+    lines.append(f"{len(bad)} pieces whose check is not ok ({var} with variants: their DS1 files differ):")
     lines += [f"  {r['lvlprest']:>5} {r['name']}: {r['check']}" for r in bad]
     miss = [(r["lvlprest"], r["name"], h) for r in rows for h in r["hd"].split(";") if h.startswith("MISSING:")]
     lines.append(f"{len(miss)} missing HD presets:")
@@ -370,7 +427,8 @@ def report(rows: list[dict]) -> str:
     jun = [r for r in rows if r["tileset"] == "Jungle" and 530 <= r["lvlprest"] <= 604]
     ok = sum(1 for r in jun if r["check"] == "ok")
     named = sum(1 for r in jun if r["source"] == "name")
-    lines.append(f"LvlPrest 530-604: {len(jun)} rows, {named} with a mask in the name, {ok} of them where the DS1 mask equals it")
+    lines.append(f"LvlPrest 530-604: {len(jun)} rows, {named} with a mask in the name, "
+                 f"{ok} of them where the DS1 mask equals it")
     return "\n".join(lines) + "\n"
 
 
@@ -378,7 +436,8 @@ def generate(data: Path | None = None) -> tuple[dict[str, str], list[str]]:
     """({file name: text}, problems) for the data folder (D2R's by default)."""
     data = data or data_root()
     if data is None:
-        raise FileNotFoundError("no D2R data folder: pass --data or set D2R_DATA")
+        raise CatalogueError("no D2R data folder: pass --data or set D2R_DATA")
+    checked_data(data, "--data")
     pieces = read_lvlprest(data)
     rows = build_rows(pieces, Reader(data), lambda p: (data / p).is_file())
     problems = apply_overrides(rows, read_overrides(HERE / "overrides.tsv"))
@@ -391,7 +450,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true", help="write nothing; fail if the committed files differ")
     ap.add_argument("--data", type=Path, help="the data folder (default: D2R's, from the toolkit)")
     args = ap.parse_args(argv)
-    files, problems = generate(args.data)
+    try:
+        files, problems = generate(args.data)
+    except CatalogueError as e:
+        print(f"catalogue.py: {e}", file=sys.stderr)
+        return 2
     for p in problems:
         print(p, file=sys.stderr)
     if problems:
@@ -400,8 +463,8 @@ def main(argv: list[str] | None = None) -> int:
         stale = [n for n, text in files.items()
                  if not (HERE / n).is_file() or (HERE / n).read_text(encoding="utf-8") != text]
         if stale:
-            print(f"stale: {', '.join(stale)}: run python plugins/cartographer/tools/catalogue.py and commit the result",
-                  file=sys.stderr)
+            print(f"stale: {', '.join(stale)}: run python plugins/cartographer/tools/catalogue.py "
+                  "and commit the result", file=sys.stderr)
             return 1
         return 0
     for n, text in files.items():
