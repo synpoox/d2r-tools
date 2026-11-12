@@ -138,6 +138,14 @@ constexpr int kEdgeInset = 2;
 constexpr int kSpotGap = 2;
 std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale = 1);
 
+// Where the map Boss may be tried (issue #183): the centre first, then the tiles of the room one tile clear of its edge (where the room
+// is big enough), nearest the centre first, at most kBossSpots. A fail-open backstop only: the game's own free-spot search (SpawnMonster
+// p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from any start, on a ring grid 3 subtiles apart, so starts 5 subtiles apart (9 in all: the
+// centre and its 8 neighbour tiles, every offset mod 3) together reach every subtile but the 9 starts themselves (for a ~40 x 40 maze
+// room; an outdoor clearing may be larger than the rings reach). The refusals seen in #183 were the stale room of #184.
+constexpr int kBossSpots = 9;
+std::vector<Spot> bossSpots(const Rect &room, int scale = 1);
+
 // How many of the server room's units make one DRLG tile: server.w / drlg.w when the server rect is a whole multiple of the
 // DRLG rect in both directions (5 for subtiles), else 1.
 int spotScale(const Rect &server, const Rect &drlg);
@@ -203,10 +211,10 @@ struct SpawnPlan {
 // `room` is the rect the spots are placed in (the server room's, which is what the spawn code takes), `scale` its units per tile.
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale = 1);
 
-// The map's own Boss: the one monster at the room centre (a superunique when the name is one; the engine part falls back to its Class when the
+// The map's own Boss: one monster, the centre spot first and then bossSpots' others for the caller to try in order (a superunique when the name is one; the engine part falls back to its Class when the
 // game has spawned it already). No minions, no Drop: those belong to the Boss event. A name that is neither a monstats Id nor a superunique, or a
 // superunique whose Class is not in monstats, gives a problem.
-SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, uint64_t seed, int scale = 1);
+SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, int scale = 1);
 
 // The game keeps one bit per superuniques row that says it was spawned in this game: bit (row & 7) of byte (row >> 3).
 constexpr int kMaxSuperRow = 0xFFFF;

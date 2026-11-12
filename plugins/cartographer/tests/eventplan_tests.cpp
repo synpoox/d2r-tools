@@ -218,32 +218,53 @@ TEST_CASE("EventRoomTracker: the map Boss's tracker, made from the plan's boss r
 	CHECK_FALSE(t.onPopulated({40, 40, 8, 8}));
 }
 
-TEST_CASE("planMapBoss: one monster at the room centre, a superunique as itself, no minions") {
+TEST_CASE("planMapBoss: the centre first and then spots around it, a superunique as itself, no minions") {
 	const Rect room{0, 0, 20, 20};
-	SpawnPlan p = planMapBoss("Bishibosh", resolveSpawn(table(), "Bishibosh"), room, 1);
+	SpawnPlan p = planMapBoss("Bishibosh", resolveSpawn(table(), "Bishibosh"), room);
 	REQUIRE(p.problem.empty());
-	REQUIRE(p.spawns.size() == 1);
+	REQUIRE(p.spawns.size() > 1);  // the centre first, then spots around it (issue #183)
 	CHECK(p.spawns[0].superUnique);
 	CHECK(p.spawns[0].row == 0);
 	CHECK(p.spawns[0].classRow == 4);
 	CHECK(p.spawns[0].spot.x == 10);
 	CHECK(p.spawns[0].spot.y == 10);
-	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), room, 1);
-	REQUIRE(p.spawns.size() == 1);
+	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), room);
+	REQUIRE(p.spawns.size() > 1);
 	CHECK_FALSE(p.spawns[0].superUnique);
 	CHECK(p.spawns[0].row == 3);
 	// a server room rect: the same spacing rule as the events (the centre of a 40 x 20 rect)
-	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{100, 50, 40, 20}, 1, 5);
-	REQUIRE(p.spawns.size() == 1);
+	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{100, 50, 40, 20}, 5);
+	REQUIRE(p.spawns.size() > 1);
 	CHECK(p.spawns[0].spot.x == 120);
 	CHECK(p.spawns[0].spot.y == 60);
 	// problems are said
-	CHECK_FALSE(planMapBoss("Nobody", resolveSpawn(table(), "Nobody"), room, 1).problem.empty());
+	CHECK_FALSE(planMapBoss("Nobody", resolveSpawn(table(), "Nobody"), room).problem.empty());
 	Resolved noClass;
 	noClass.kind = ev::NameKind::Unique;
 	noClass.row = 2;
-	CHECK_FALSE(planMapBoss("X", noClass, room, 1).problem.empty());
-	CHECK_FALSE(planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{0, 0, 0, 0}, 1).problem.empty());
+	CHECK_FALSE(planMapBoss("X", noClass, room).problem.empty());
+	CHECK_FALSE(planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{0, 0, 0, 0}).problem.empty());
+}
+
+TEST_CASE("bossSpots: the centre first, then distinct spots inside the room nearest the centre first (issue #183)") {
+	const Rect room{30000, 120, 40, 40};  // a server rect: 8 x 8 tiles at 5 units a tile
+	const std::vector<Spot> s = bossSpots(room, 5);
+	REQUIRE(s.size() == static_cast<size_t>(kBossSpots));
+	CHECK(s[0].x == 30020);
+	CHECK(s[0].y == 140);
+	long last = 0;
+	for (size_t i = 0; i < s.size(); ++i) {
+		CHECK(s[i].x >= room.x + 5);
+		CHECK(s[i].x < room.x + room.w - 5 + 1);
+		CHECK(s[i].y >= room.y + 5);
+		CHECK(s[i].y < room.y + room.h - 5 + 1);
+		const long d = static_cast<long>(s[i].x - s[0].x) * (s[i].x - s[0].x) + static_cast<long>(s[i].y - s[0].y) * (s[i].y - s[0].y);
+		if (i > 1) CHECK(d >= last);
+		if (i >= 1) last = d;
+		for (size_t j = 0; j < i; ++j) CHECK((s[i].x != s[j].x || s[i].y != s[j].y));
+	}
+	CHECK(bossSpots(Rect{0, 0, 0, 0}, 1).empty());
+	CHECK(bossSpots(Rect{0, 0, 2, 2}, 1).size() >= 1);  // a tiny room still has its centre
 }
 
 TEST_CASE("planEvent: a Boss is the lead plus minions, centre first") {
