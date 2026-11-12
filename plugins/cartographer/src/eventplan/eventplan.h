@@ -203,6 +203,10 @@ bool superSeen(const uint8_t *bitmap, int row);
 // event only once its room is chosen and something spawned, so a banner never announces an event that did not happen.
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event);
 
+// Which lines a banner shows. The event's lines only once `announced`. A `late` banner (the player is already inside, so the map's
+// name was shown on entry) leaves the map name out and so repeats nothing; an empty result shows nothing.
+std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late);
+
 // True once each time the player goes from outside the map's level to inside it (and again after leaving and coming back).
 class EntryTracker {
 public:

@@ -529,8 +529,7 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 // True when something was placed, so the banner may announce the event.
 auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept -> bool {
 	if (state.event->kind == ev::Kind::Shrine) {
-		Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b
-		return true;  // the placement reports only in its own log
+		return Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b
 	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
 	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
@@ -599,7 +598,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			}
 			const int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			if (!plan) {
-				plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+				plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
 			}
 			state->tracker.emplace(plan, distance);
 		}
@@ -625,7 +624,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			if (generation == g_generation && g_state == state) {
 				state->announced = true;
 				if (state->entry.inside()) {
-					lines = ep::entryLines(state->mapName, &*state->event);
+					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the map name was shown on entry
 				}
 			}
 		}
@@ -819,7 +818,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			if (g_state != state || !state->entry.update(inMap)) {
 				return;
 			}
-			lines = ep::entryLines(state->mapName, state->announced && state->event ? &*state->event : nullptr);
+			lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
 		}
 		ShowEntryMessage(lines);
 	} catch (...) {

@@ -327,6 +327,10 @@ bool superSeen(const uint8_t *bitmap, int row) {
 	return ((bitmap[row >> 3] >> (row & 7)) & 1) != 0;
 }
 
+std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late) {
+	return entryLines(late ? std::string() : mapName, announced ? event : nullptr);
+}
+
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event) {
 	std::vector<std::string> lines;
 	if (!mapName.empty()) {
