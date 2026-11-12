@@ -93,14 +93,16 @@ PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool se
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);
 
-// The lists the plugin has put on players: unit id -> list address. Fixed size, so a hook never allocates.
+// The lists the plugin has put on players: unit id -> list address and the state it was given. Fixed size, so a hook never allocates.
 class PlayerLists {
 public:
 	static constexpr size_t kMax = 16;
 	// The list for `unit`, or 0.
 	uintptr_t find(uint32_t unit) const;
+	// The state the plugin gave the list of `unit` (never read back from the list), or 0.
+	int stateOf(uint32_t unit) const;
 	// False when the table is full or `list` is 0 (the caller then does not apply).
-	bool add(uint32_t unit, uintptr_t list);
+	bool add(uint32_t unit, uintptr_t list, int state = 0);
 	void remove(uint32_t unit);
 	void clear();
 	size_t size() const;
@@ -110,8 +112,37 @@ private:
 	struct Slot {
 		uint32_t unit = 0;
 		uintptr_t list = 0;
+		int state = 0;
 	};
 	Slot slots_[kMax];
 };
+
+// --- The state that carries the player's list to the clients (issue #104, cartographer.md section 7) -----------------
+// The game sends a stat list only as part of a state, so the player's list is given a state. The compiled states row
+// (build 93847) is 0x44 bytes: i16 overlay1-4 (+2, +4, +6, +8), castoverlay (+0xa), removerlay (+0xc), pgsvoverlay (+0xe);
+// the flag field (+0x10..+0x17, bit k at byte +0x10+k/8 mask 1<<(k%8); bit 0 nosend, bit 17 disguise); i16 stat (+0x18),
+// setfunc (+0x1a), remfunc (+0x1c); u16 group (+0x1e); i16 skill (+0x38), missile (+0x3a); byte canstack (+0x3c). A
+// lookup column that is empty is negative. The skills row is 0x2ec bytes with i16 aurastate (+0xa0), auratargetstate
+// (+0xa2), passivestate (+0xb4), state1-3 (+0x2d2, +0x2d4, +0x2d6).
+constexpr uint32_t kStateRowSize = 0x44;
+constexpr uint32_t kSkillRowSize = 0x2ec;
+
+// Empty when the SDK view of a table is the game's table: the row size is the wanted one, the pointers are equal and not
+// null, and the 64-bit count equals the SDK's 32-bit one. Else why not.
+std::string checkTableView(const void *viewRows, uint32_t viewCount, uint32_t viewRowSize, const void *dtRows, uint64_t dtCount,
+                           uint32_t wantRowSize);
+
+// States the game or the mod uses by a fixed id (a scan of D2R.exe call sites that pass a constant state, plus 11 and 92; an under-count).
+bool isStaticState(int state);
+
+struct StatePick {
+	int state = -1; // -1: none, and player stats stay off (there is no fallback to a row that has something set)
+};
+
+// The lowest state id that nothing uses: above 0 and below `count`; every column of the row empty (the whole flag field
+// zero, no overlay, stat, skill, missile, function, group, colour, light, sound, item, graphics or vfx entry; see
+// candidate() in statplan.cpp); not named by any skills row; not in the static list. `skills` may be null only with
+// skillCount 0 (then no skills row names a state). Rows are raw bytes.
+StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount);
 
 } // namespace cartographer::statplan

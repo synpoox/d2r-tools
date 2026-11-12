@@ -2,6 +2,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
@@ -196,6 +197,10 @@ TEST_CASE("PlayerLists tracks, replaces, removes and fills up")
 	CHECK(lists.find(3) == 0);
 	CHECK(lists.add(1, 0x1800)); // same unit: replaced, not added
 	CHECK(lists.find(1) == 0x1800);
+	CHECK(lists.stateOf(1) == 0);
+	CHECK(lists.add(2, 0x2000, 39));
+	CHECK(lists.stateOf(2) == 39); // the state is kept with the list
+	CHECK(lists.stateOf(7) == 0);
 	CHECK(lists.size() == 2);
 	lists.remove(1);
 	CHECK(lists.find(1) == 0);
@@ -312,4 +317,163 @@ TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
 	REQUIRE(off.skipped.size() == 1);
 	CHECK(off.skipped[0].why.find("PlayerStats is 0") != std::string::npos);
 	CHECK(buildPlan(props, testIds()).players.size() == 1);
+}
+
+// --- The state for the player's list (issue #104) -----------------------------------------------------------------------
+
+namespace {
+
+// A states table whose rows are all empty (lookups -1, the rest 0), `count` rows.
+std::vector<uint8_t> emptyStates(uint32_t count)
+{
+	std::vector<uint8_t> rows(static_cast<size_t>(count) * kStateRowSize, 0);
+	for (uint32_t i = 0; i < count; ++i) {
+		uint8_t *r = rows.data() + static_cast<size_t>(i) * kStateRowSize;
+		for (size_t off : {2, 4, 6, 8, 0xa, 0xc, 0xe, 0x18, 0x1a, 0x1c, 0x38, 0x3a}) {
+			r[off] = 0xff;
+			r[off + 1] = 0xff;
+		}
+	}
+	return rows;
+}
+
+void setI16(std::vector<uint8_t> &rows, uint32_t state, size_t off, int16_t v)
+{
+	std::memcpy(rows.data() + static_cast<size_t>(state) * kStateRowSize + off, &v, sizeof(v));
+}
+
+std::vector<uint8_t> noSkills(uint32_t count)
+{
+	std::vector<uint8_t> rows(static_cast<size_t>(count) * kSkillRowSize, 0);
+	for (uint32_t i = 0; i < count; ++i) {
+		for (size_t off : {0xa0, 0xa2, 0xb4, 0x2d2, 0x2d4, 0x2d6}) {
+			rows[static_cast<size_t>(i) * kSkillRowSize + off] = 0xff;
+			rows[static_cast<size_t>(i) * kSkillRowSize + off + 1] = 0xff;
+		}
+	}
+	return rows;
+}
+
+void setSkill(std::vector<uint8_t> &rows, uint32_t skill, size_t off, int16_t v)
+{
+	std::memcpy(rows.data() + static_cast<size_t>(skill) * kSkillRowSize + off, &v, sizeof(v));
+}
+
+} // namespace
+
+TEST_CASE("pickPlayerState takes the lowest empty state above 0 that is not in the static list")
+{
+	auto states = emptyStates(40);
+	const auto skills = noSkills(3);
+	const StatePick pick = pickPlayerState(states.data(), 40, skills.data(), 3);
+	CHECK(pick.state == 1);
+	// 6 and 7 are in the static list: with 1 to 5 taken the next free one is 8.
+	for (uint32_t s : {1u, 2u, 3u, 4u, 5u}) setI16(states, s, 0x18, 3);
+	CHECK(pickPlayerState(states.data(), 40, skills.data(), 3).state == 8);
+}
+
+TEST_CASE("pickPlayerState skips rows with an overlay, stat, function, group, nosend or disguise bit")
+{
+	auto states = emptyStates(14);
+	setI16(states, 1, 2, 5);     // overlay1
+	setI16(states, 2, 0xe, 0);   // pgsvoverlay 0 is a real overlay
+	setI16(states, 3, 0x18, 0);  // stat 0 is strength
+	setI16(states, 4, 0x1a, 7);  // setfunc
+	setI16(states, 5, 0x1c, 9);  // remfunc
+	setI16(states, 8, 0x1e, 2);  // group
+	states[9 * kStateRowSize + 0x10] = 1;   // nosend
+	states[10 * kStateRowSize + 0x12] = 2;  // disguise
+	const auto skills = noSkills(1);
+	CHECK(pickPlayerState(states.data(), 14, skills.data(), 1).state == 12);
+}
+
+TEST_CASE("pickPlayerState: 0 in setfunc and remfunc is empty; a row with any flag bit set is never taken")
+{
+	auto states = emptyStates(12);
+	setI16(states, 1, 0x1a, 0);
+	setI16(states, 1, 0x1c, 0);
+	states[1 * kStateRowSize + 0x11] = 0x10;  // bit 12 (curse)
+	const auto skills = noSkills(1);
+	CHECK(pickPlayerState(states.data(), 12, skills.data(), 1).state == 2);
+}
+
+TEST_CASE("pickPlayerState has no fallback: when only rows with something set are left it picks nothing")
+{
+	auto states = emptyStates(12);
+	const auto skills = noSkills(1);
+	states[1 * kStateRowSize + 0x11] = 0x10;  // flag bit 12 (curse)
+	setI16(states, 2, 0x38, 5);               // skill
+	setI16(states, 3, 0x3a, 5);               // missile
+	states[4 * kStateRowSize + 0x3c] = 1;     // canstack
+	states[5 * kStateRowSize + 0x10 + 5] = 1; // flag bit 40 (notondead)
+	for (uint32_t s : {8u, 9u, 10u, 11u}) setI16(states, s, 2, 1);
+	CHECK(pickPlayerState(states.data(), 12, skills.data(), 1).state == -1);
+}
+
+TEST_CASE("pickPlayerState skips a row with any of the function, colour, light, sound, item, graphics or vfx columns set")
+{
+	const auto skills = noSkills(1);
+	struct Col { size_t off; size_t size; uint32_t value; };
+	const Col cols[] = {
+		{0x32, 2, 1}, {0x34, 2, 1}, {0x36, 2, 1},                          // clteventfunc, cltactivefunc, srvactivefunc
+		{0x20, 1, 1}, {0x21, 1, 1}, {0x22, 1, 1}, {0x23, 1, 1}, {0x24, 1, 1}, // colorpri, colorshift, light r/g/b
+		{0x26, 2, 3}, {0x28, 2, 3}, {0x2a, 2, 3}, {0x2e, 2, 3}, {0x30, 2, 3}, // onsound, offsound, itemtype, gfxclass, cltevent
+		{0x2c, 1, 1}, {0x2d, 1, 1},                                         // itemtrans, gfxtype
+		{0x40, 4, 1},                                                       // vfxweaponstate
+	};
+	for (const Col &c : cols) {
+		auto states = emptyStates(8);
+		std::memcpy(states.data() + 1 * kStateRowSize + c.off, &c.value, c.size);
+		INFO("column at +" << c.off);
+		CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+	}
+	// A lookup column that is 0 or negative is empty.
+	auto states = emptyStates(8);
+	setI16(states, 1, 0x26, -1);
+	setI16(states, 1, 0x30, 0);
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 1);
+	// gfxclass is a plain word, not a lookup: only 0 is empty, a negative value is not.
+	setI16(states, 1, 0x2e, -1);
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+}
+
+TEST_CASE("pickPlayerState skips the states the game sets by a fixed id, including 11 and 92")
+{
+	auto states = emptyStates(100);
+	const auto skills = noSkills(1);
+	for (uint32_t s = 1; s < 100; ++s) {
+		if (s != 11 && s != 92) setI16(states, s, 2, 1);
+	}
+	CHECK(pickPlayerState(states.data(), 100, skills.data(), 1).state == -1);
+}
+
+TEST_CASE("pickPlayerState skips a state any skills row names, and returns -1 when nothing is left")
+{
+	auto states = emptyStates(10);
+	auto skills = noSkills(2);
+	setSkill(skills, 1, 0xb4, 1);   // passivestate
+	setSkill(skills, 0, 0x2d6, 2);  // state3
+	setSkill(skills, 0, 0xa0, 3);   // aurastate
+	CHECK(pickPlayerState(states.data(), 10, skills.data(), 2).state == 4);
+	for (uint32_t s : {4u, 5u, 8u, 9u}) setI16(states, s, 2, 1);
+	CHECK(pickPlayerState(states.data(), 10, skills.data(), 2).state == -1);
+	CHECK(pickPlayerState(nullptr, 10, skills.data(), 2).state == -1);
+	CHECK(pickPlayerState(states.data(), 10, nullptr, 2).state == -1);
+	CHECK(pickPlayerState(states.data(), 1, nullptr, 0).state == -1);
+}
+
+TEST_CASE("checkTableView accepts only the game's own table")
+{
+	int rows[4] = {};
+	CHECK(checkTableView(rows, 232, kStateRowSize, rows, 232, kStateRowSize).empty());
+	CHECK_FALSE(checkTableView(rows, 232, 0x40, rows, 232, kStateRowSize).empty());
+	CHECK_FALSE(checkTableView(rows, 232, kStateRowSize, rows + 1, 232, kStateRowSize).empty());
+	CHECK_FALSE(checkTableView(rows, 232, kStateRowSize, rows, 233, kStateRowSize).empty());
+	CHECK_FALSE(checkTableView(nullptr, 0, kStateRowSize, nullptr, 0, kStateRowSize).empty());
+}
+
+TEST_CASE("isStaticState lists the fixed ids")
+{
+	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));
+	for (int s : {1, 39, 108, 116, 230, 231}) CHECK_FALSE(isStaticState(s));
 }

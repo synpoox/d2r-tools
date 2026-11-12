@@ -8,7 +8,7 @@
 - Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (checked in game with a superunique name only).
 - When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (spawns checked in game; the banner text was not seen on screen).
 - When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters, event-spawned ones included (checked in game on cheat-spawned and event-spawned monsters).
-- Player stats from a map are off by default; `PlayerStats=1` in `cartographer.txt` turns them on, for a test character only; they do not show on the character sheet yet, and an autosave inside the map is untested.
+- Player stats from a map are off by default; `PlayerStats=1` in `cartographer.txt` turns them on, for a test character only; they are sent through an unused game state so the character sheet can show them (written and unit tested; not verified in game), and an autosave inside the map is untested.
 - `mapstats.txt` rows for `gold`, `hitpoints`, `level` and similar stats the game saves are refused on players, `hitpoints`, `mana` and `stamina` also on monsters, stats that need a skill, state or monster type number on both, and `cartographer check` names them.
 - `cartographer check` reports a `Stat` in `mapstats.txt` that is not in `itemstatcost.txt`, with a suggestion.
 - Map portal tooltip shows "Colossal Summit" instead of "Missing String"; run `tools\install.ps1` again to fix an older install (not yet checked in game).

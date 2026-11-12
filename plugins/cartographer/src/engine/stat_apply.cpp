@@ -38,6 +38,9 @@ constexpr int32_t StatLevel = 12;          // 0xc: the monster level stat
 constexpr int32_t StatMaxLife = 7;         // maxhp, in 1/256 life
 constexpr int MonsterProbes = 6;           // monsters logged in full per game
 constexpr int MaxEntries = 32;             // stats read back per probe
+constexpr int DtStatesRowsOffset = 0x290;  // on the data tables base: the compiled states rows pointer; the 64-bit count is at +0x298
+constexpr int DtStatesCountOffset = 0x298;
+constexpr uint32_t DataFlagLimit = 4;      // the base accessor takes a data flag below 4
 
 struct Game;
 struct Unit;
@@ -51,8 +54,16 @@ using MonsterSetupFn = uint64_t (*)(void* params, Unit* monster) noexcept;
 using UnitRoomFn = void* (*)(Unit*) noexcept;
 using RoomLevelFn = int32_t (*)(void* room) noexcept;
 using UnitStatFn = int32_t (*)(Unit*, int32_t stat, int32_t layer) noexcept;
+using SetListStateFn = void (*)(void* list, int32_t state) noexcept;
+using SetStateBitFn = void (*)(Unit*, int32_t state, int32_t on) noexcept;
+using StateOnFn = int32_t (*)(Unit*, int32_t state) noexcept;
+using FindStateListFn = void* (*)(Unit*, int32_t state) noexcept;
+using DataTablesBaseFn = uint8_t* (*)(uint32_t dataFlag) noexcept;
 
-enum PartId { NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, MonsterSetup, UnitRoom, RoomLevelId, UnitStat, PartCount };
+enum PartId {
+	NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, MonsterSetup, UnitRoom, RoomLevelId, UnitStat,
+	SetListState, SetStateBit, StateOn, FindStateList, StatDataTablesBase, PartCount
+};
 
 // UnitRoom, RoomLevelId and UnitStat are the portal's parts, found again here so this half stands alone.
 Part g_parts[PartCount] = {
@@ -65,6 +76,11 @@ Part g_parts[PartCount] = {
 	{"StatUnitRoom", sig::UnitRoom, 0, false, nullptr, {}, {}},
 	{"StatRoomLevelId", sig::RoomLevelId, 0, false, nullptr, {}, {}},
 	{"StatUnitStat", sig::UnitStat, 0, false, nullptr, {}, {}},
+	{"SetListState", sig::SetListState, 0, false, nullptr, {}, {}},
+	{"SetStateBit", sig::SetStateBit, 0, false, nullptr, {}, {}},
+	{"StateOn", sig::StateOn, 0, false, nullptr, {}, {}},
+	{"FindStateList", sig::FindStateList, 0, false, nullptr, {}, {}},
+	{"StatDataTablesBase", sig::DataTablesBase, 0, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
@@ -80,6 +96,9 @@ std::atomic<int> g_monsterCount{0};      // monsters given a list in this map
 std::atomic<int> g_monsterFailed{0};
 std::atomic<int> g_playerCount{0};
 std::atomic<bool> g_chainLogged{false};  // the first player's list chain was logged this game
+std::atomic<bool> g_stateRefused{false};  // the state for the player's list was refused this map: logged once, nothing more is tried
+const D2RL::PluginContext* g_context = nullptr;
+const D2RL::DataTableService* g_dataTables = nullptr;
 MonsterSetupFn g_original = nullptr;
 
 template <typename Fn>
@@ -103,7 +122,7 @@ auto UnitLevelId(Unit* unit) noexcept -> int32_t {
 }
 
 // New list on `unit` holding `entries` (layer 0). The recipe is the engine's own (cartographer.md section 6, Q1): NewStatList,
-// SetListStat for each stat, AttachStatList. No state is set (the plugin has no state of its own; it keeps the list address).
+// SetListStat for each stat, AttachStatList. No state is set here; a player's list gets one after (SetPlayerState).
 auto MakeList(Unit* unit, int32_t type, const std::vector<sp::Entry>& entries) noexcept -> void* {
 	const int32_t id = At<int32_t>(unit, UnitIdOffset);
 	void* list = Call<NewStatListFn>(NewStatList)(0, 0, type, id);
@@ -241,11 +260,88 @@ auto MonsterSetupHook(void* params, Unit* monster) noexcept -> uint64_t {
 
 // --- Players ------------------------------------------------------------------------------------------------------------
 
+// The state that carries the player's list to the clients (cartographer.md section 7), or -1 with `why`. The SDK's states table is
+// used only after it is shown to be the game's own for this data flag (same rows pointer and count as the data tables base, the
+// row size the layout expects); the skills table (the states skills name) needs the expected row size too. Else nothing is guessed.
+auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {
+	namespace Tables = D2RL::DataTables;
+	if (g_dataTables == nullptr || g_context == nullptr) {
+		*why = "D2RLoader has no DataTable service of the expected version";
+	} else if (!On(StatDataTablesBase)) {
+		*why = "the DataTablesBase part is off";
+	} else if (dataFlag >= DataFlagLimit) {
+		*why = "the unit's data flag " + std::to_string(dataFlag) + " is not below 4";
+	} else {
+		const uint8_t* dt = Call<DataTablesBaseFn>(StatDataTablesBase)(dataFlag);
+		if (dt == nullptr) {
+			*why = "the data tables base is null";
+			return -1;
+		}
+		std::string tried;
+		for (uint32_t bank = 1; bank <= 3; ++bank) {
+			Tables::TableView states{};
+			states.structSize = Tables::TableViewSize;
+			const Tables::Result r = g_dataTables->getTable(g_context, static_cast<Tables::Bank>(bank), Tables::TableId::States, &states);
+			if (r != Tables::Result::Success || !Tables::HasTableViewField(&states, Tables::TableViewRequiredSize)) {
+				tried += (tried.empty() ? "" : "; ") + std::string("bank ") + std::to_string(bank) + ": no view";
+				continue;
+			}
+			const std::string problem = sp::checkTableView(states.rows, states.rowCount, states.rowSize, At<const void*>(dt, DtStatesRowsOffset),
+			                                               At<uint64_t>(dt, DtStatesCountOffset), sp::kStateRowSize);
+			if (!problem.empty()) {
+				tried += (tried.empty() ? "" : "; ") + std::string("bank ") + std::to_string(bank) + ": " + problem;
+				continue;
+			}
+			Tables::TableView skills{};
+			skills.structSize = Tables::TableViewSize;
+			if (g_dataTables->getTable(g_context, static_cast<Tables::Bank>(bank), Tables::TableId::Skills, &skills) != Tables::Result::Success ||
+			    !Tables::HasTableViewField(&skills, Tables::TableViewRequiredSize) || skills.rowSize != sp::kSkillRowSize ||
+			    (skills.rows == nullptr && skills.rowCount != 0)) {
+				*why = "the skills table (bank " + std::to_string(bank) + ") has no view or not the expected row size, so the states skills use cannot be excluded";
+				return -1;
+			}
+			const sp::StatePick pick = sp::pickPlayerState(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount);
+			if (pick.state < 0) {
+				*why = "no state of the " + std::to_string(states.rowCount) + " in the table has every column empty and is unused; none is picked";
+				return -1;
+			}
+			std::string rowHex;
+			for (uint32_t i = 0; i < sp::kStateRowSize; ++i) {
+				char b[4];
+				std::snprintf(b, sizeof(b), "%02x", static_cast<const uint8_t*>(states.rows)[static_cast<size_t>(pick.state) * sp::kStateRowSize + i]);
+				rowHex += b;
+			}
+			plog::Info("statprobe: state %d carries the player's list (every column of its row is empty): bank %u, %u states, %u skills; row bytes %s", pick.state, bank,
+			           states.rowCount, skills.rowCount, rowHex.c_str());
+			return pick.state;
+		}
+		*why = "the SDK's states table is not the game's (" + tried + ")";
+	}
+	return -1;
+}
+
+// Gives the player's attached list its state and turns the state on, which is what makes the game send it with the stats. The caller has
+// checked the refusal rule (state off, no list carries it). SetStateBit is last, after the list is attached. Afterwards the game's
+// finder must return our list, checked before the bit is set; if not, the bit is never touched and false is returned (the caller takes
+// the list off).
+auto SetPlayerState(Unit* unit, void* list, int state, std::string* why) noexcept -> bool {
+	Call<SetListStateFn>(SetListState)(list, state);
+	// The finder reads only the list's state, never the bit: check it first, so a mismatch never toggles the bit.
+	if (Call<FindStateListFn>(FindStateList)(unit, state) != list) {
+		*why = "the game does not find the player's list by state " + std::to_string(state);
+		return false;
+	}
+	Call<SetStateBitFn>(SetStateBit)(unit, state, 1);
+	return true;
+}
+
 void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	uintptr_t list = 0;
+	int state = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		list = g_lists.find(id);
+		state = g_lists.stateOf(id);
 		g_lists.remove(id);
 		UpdateBusy();
 	}
@@ -259,6 +355,15 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 		plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
 		return;
 	}
+	// The state is the one the plugin stored with the list, never read back from the list. If the game freed the list and the
+	// address was reused, the finder no longer returns it for that state: forget it and touch nothing.
+	if (state <= 0 || !On(SetStateBit) || !On(FindStateList) ||
+	    Call<FindStateListFn>(FindStateList)(unit, state) != reinterpret_cast<void*>(list)) {
+		plog::Warn("map stats: the game does not find the player's list by its state %d any more; it is forgotten, not freed, and nothing was touched", state);
+		return;
+	}
+	// The order: state off first (the clients get the state-off packet), then off the chain, then freed.
+	Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 	Call<DetachStatListFn>(DetachStatList)(unit, reinterpret_cast<void*>(list));
 	Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), reinterpret_cast<void*>(list));
 	bool still = false;
@@ -267,19 +372,42 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 }
 
 void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t generation) noexcept {
+	if (g_stateRefused.load()) {
+		return;
+	}
+	std::string why;
+	const int state = ChoosePlayerState(At<uint8_t>(unit, UnitDataFlagOffset), &why);
+	if (state <= 0) {
+		g_stateRefused = true;
+		plog::Warn("map stats: player stats are off for this map: %s", why.c_str());
+		return;
+	}
 	const std::string before = Totals(unit, plan.players);
 	bool found = false;
 	const int chainBefore = Chain(unit, nullptr, &found);
+	// The refusal rule is checked before anything is made, so a refused state leaves nothing on the unit.
+	if (Call<StateOnFn>(StateOn)(unit, state) != 0 || Call<FindStateListFn>(FindStateList)(unit, state) != nullptr) {
+		g_stateRefused = true;
+		plog::Warn("map stats: player stats are off for this map: state %d is already in use on the player", state);
+		return;
+	}
 	void* list = MakeList(unit, UnitPlayer, plan.players);
 	if (list == nullptr) {
 		plog::Warn("map stats: the game gave no stat list for the player; the player has none of the map's stats");
+		return;
+	}
+	if (!SetPlayerState(unit, list, state, &why)) {
+		g_stateRefused = true;
+		Call<DetachStatListFn>(DetachStatList)(unit, list);
+		Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), list);
+		plog::Warn("map stats: player stats are off for this map, the list was taken off again: %s", why.c_str());
 		return;
 	}
 	bool ok = false, stale = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		stale = generation != g_generation;
-		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list));
+		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list), state);
 		UpdateBusy();
 	}
 	if (stale) {
@@ -288,7 +416,8 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 		return;
 	}
 	if (!ok) {
-		// Table full: take the list straight off again, so no list is out that the plugin cannot remove.
+		// Table full: take the list straight off again, so no list is out that the plugin cannot remove (state off first).
+		Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 		Call<DetachStatListFn>(DetachStatList)(unit, list);
 		Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), list);
 		plog::Warn("map stats: too many players to track; player %u has none of the map's stats", id);
@@ -351,9 +480,14 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	for (const PartStatus& s : PartStatuses()) {
 		tickOn = tickOn || (s.name == "PlayerTick" && s.on);
 	}
-	g_playersOn = tickOn && AllOn({NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, UnitRoom, RoomLevelId});
+	g_context = context;
+	if (context->QueryService(&g_dataTables) != D2RL::ServiceQueryResult::Success || !D2RL::HasDataTableServiceField(g_dataTables, D2RL::DataTableServiceRequiredSize)) {
+		g_dataTables = nullptr;
+	}
+	const bool partsOn = AllOn({NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, UnitRoom, RoomLevelId, SetListState, SetStateBit, StateOn, FindStateList, StatDataTablesBase});
+	g_playersOn = tickOn && partsOn && g_dataTables != nullptr;
 	if (!g_playersOn) {
-		plog::Warn("player map stats are off: %s", !tickOn ? "the PlayerTick part is off" : "a stat list part was not found");
+		plog::Warn("player map stats are off: %s", !tickOn ? "the PlayerTick part is off" : !partsOn ? "a stat list or state part was not found" : "D2RLoader has no DataTable service of the expected version");
 	}
 	if (!g_monstersOn) {
 		plog::Warn("monster map stats are off (see the parts above)");
@@ -399,6 +533,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	g_monsterCount = 0;
 	g_monsterFailed = 0;
 	g_playerCount = 0;
+	g_stateRefused = false;
 	UpdateBusy();
 }
 
@@ -474,6 +609,7 @@ void StatApplyGameLeft() noexcept {
 	g_monsterFailed = 0;
 	g_playerCount = 0;
 	g_chainLogged = false;
+	g_stateRefused = false;
 }
 
 auto StatApplyPartStatuses() -> std::vector<PartStatus> {

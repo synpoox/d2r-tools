@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include "../core/tsv.h"
 
@@ -234,18 +235,26 @@ uintptr_t PlayerLists::find(uint32_t unit) const
 	return 0;
 }
 
-bool PlayerLists::add(uint32_t unit, uintptr_t list)
+int PlayerLists::stateOf(uint32_t unit) const
+{
+	for (const Slot &s : slots_)
+		if (s.list != 0 && s.unit == unit) return s.state;
+	return 0;
+}
+
+bool PlayerLists::add(uint32_t unit, uintptr_t list, int state)
 {
 	if (list == 0) return false;
 	for (Slot &s : slots_) {
 		if (s.list != 0 && s.unit == unit) {
 			s.list = list;
+			s.state = state;
 			return true;
 		}
 	}
 	for (Slot &s : slots_) {
 		if (s.list == 0) {
-			s = {unit, list};
+			s = {unit, list, state};
 			return true;
 		}
 	}
@@ -268,6 +277,105 @@ size_t PlayerLists::size() const
 	size_t n = 0;
 	for (const Slot &s : slots_) n += s.list != 0 ? 1 : 0;
 	return n;
+}
+
+// --- The state for the player's list ---------------------------------------------------------------------------------------
+
+namespace {
+
+int16_t i16At(const uint8_t *row, size_t off)
+{
+	int16_t v;
+	std::memcpy(&v, row + off, sizeof(v));
+	return v;
+}
+
+bool flagBit(const uint8_t *row, int bit)
+{
+	return (row[0x10 + (bit >> 3)] & (1u << (bit & 7))) != 0;
+}
+
+bool namedBySkill(const uint8_t *skills, uint32_t skillCount, int state)
+{
+	static const size_t offsets[] = {0xa0, 0xa2, 0xb4, 0x2d2, 0x2d4, 0x2d6};
+	for (uint32_t i = 0; i < skillCount; ++i) {
+		for (const size_t off : offsets) {
+			const int16_t v = i16At(skills + static_cast<size_t>(i) * kSkillRowSize, off);
+			if (v >= 0 && v == state) return true;
+		}
+	}
+	return false;
+}
+
+// A state row nothing uses: every column of the compiled row (cartographer.md section 7) is empty. Lookup columns are empty
+// when negative (overlays, stat, skill, missile) or 0 or negative (sounds, itemtype, cltevent: the dump does not
+// say which one the loader writes); gfxclass is a plain word, empty when 0; setfunc and remfunc are empty when 0 or -1; clteventfunc, cltactivefunc, srvactivefunc, group, bytes (colour, light, gfxtype, itemtrans, canstack) and the
+// vfxweaponstate dword are empty when 0; the whole flag field is zero.
+bool candidate(const uint8_t *row)
+{
+	for (int i = 0; i < 8; ++i) {
+		if (row[0x10 + i] != 0) return false; // every flag bit clear, so also nosend (0) and disguise (17)
+	}
+	for (size_t off = 2; off <= 0xe; off += 2) {
+		if (i16At(row, off) >= 0) return false;
+	}
+	if (i16At(row, 0x18) >= 0 || i16At(row, 0x38) >= 0 || i16At(row, 0x3a) >= 0) return false; // stat, skill, missile
+	for (const size_t off : {size_t(0x1a), size_t(0x1c)}) {
+		const int16_t f = i16At(row, off);
+		if (f != 0 && f != -1) return false; // setfunc, remfunc: 0 and -1 both do nothing (entry 0 of the tables is null, -1 fails the bound)
+	}
+	for (const size_t off : {size_t(0x32), size_t(0x34), size_t(0x36)}) {
+		if (i16At(row, off) != 0) return false; // clteventfunc, cltactivefunc, srvactivefunc
+	}
+	if (i16At(row, 0x1e) != 0) return false; // group
+	for (const size_t off : {size_t(0x26), size_t(0x28), size_t(0x2a), size_t(0x30)}) {
+		if (i16At(row, off) > 0) return false; // onsound, offsound, itemtype, cltevent
+	}
+	if (i16At(row, 0x2e) != 0) return false; // gfxclass: a plain word (type 3), empty is 0
+	for (const size_t off : {size_t(0x20), size_t(0x21), size_t(0x22), size_t(0x23), size_t(0x24), size_t(0x2c), size_t(0x2d), size_t(0x3c)}) {
+		if (row[off] != 0) return false; // colorpri, colorshift, light r/g/b, itemtrans, gfxtype, canstack
+	}
+	uint32_t vfx;
+	std::memcpy(&vfx, row + 0x40, sizeof(vfx));
+	return vfx == 0; // vfxweaponstate
+}
+
+} // namespace
+
+std::string checkTableView(const void *viewRows, uint32_t viewCount, uint32_t viewRowSize, const void *dtRows, uint64_t dtCount,
+                           uint32_t wantRowSize)
+{
+	if (viewRowSize != wantRowSize) {
+		return "the row size is " + std::to_string(viewRowSize) + ", not " + std::to_string(wantRowSize);
+	}
+	if (viewRows == nullptr || dtRows == nullptr) return "a row pointer is null";
+	if (viewRows != dtRows) return "the SDK rows are not the game's rows";
+	if (dtCount != viewCount) {
+		return "the row counts differ (game " + std::to_string(dtCount) + ", SDK " + std::to_string(viewCount) + ")";
+	}
+	return "";
+}
+
+bool isStaticState(int s)
+{
+	return s == 0 || s == 6 || s == 7 || s == 11 || s == 18 || s == 22 || s == 24 || s == 52 || s == 62 || s == 92 || (s >= 100 && s <= 107) || s == 109 ||
+	       s == 118 || s == 154 || s == 164 || (s >= 165 && s <= 172) || s == 184 || s == 185 || s == 186 || s == 189 || s == 209 ||
+	       s == 219;
+}
+
+StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount)
+{
+	StatePick pick;
+	if (states == nullptr || (skills == nullptr && skillCount != 0)) return pick;
+	for (uint32_t s = 1; s < count; ++s) {
+		if (isStaticState(static_cast<int>(s)) || !candidate(states + static_cast<size_t>(s) * kStateRowSize) ||
+		    namedBySkill(skills, skillCount, static_cast<int>(s))) {
+			continue;
+		}
+		pick.state = static_cast<int>(s);
+		return pick;
+	}
+	return pick;
 }
 
 } // namespace cartographer::statplan
