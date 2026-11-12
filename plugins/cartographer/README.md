@@ -58,8 +58,8 @@ in [`examples/first-map/`](examples/first-map/).
 
 ## Manual install
 
-`tools\install.ps1` is optional. It only makes the edits below, adds rows to the end of each table and never changes an
-existing row, so you can make them yourself. Work in `<Mod>.mpq\data\global\excel\`; column detail is in
+`tools\install.ps1` is optional. It only makes the edits below, adds rows to the end of each table and never changes a
+game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\excel\`; column detail is in
 [docs/cartographer/tables.md](../../docs/cartographer/tables.md).
 
 1. **levels.txt**: add three rows at the end, each a copy of a game row with these cells changed. Give each the next free
@@ -81,7 +81,8 @@ existing row, so you can make them yourself. Work in `<Mod>.mpq\data\global\exce
    the `Name`, `Name` to `cartographer:boss_` plus the `Name`, `Class` to the entry's `Base`, `Mod1` to `Mod3` to its
    `Mods` (0 when unused), `MinGrp` and `MaxGrp` to its `Minions`, and `hcIdx` to one more than the highest `hcIdx` in the
    table (then one more for each further row). In both names, write every character that is not A-Z, a-z or 0-9 as `_` and
-   its two-digit hex code (`Shoreline Warden` becomes `Shoreline_20Warden`). Set the treasure class cells `TC`,
+   its two-digit **uppercase** hex code (`Shoreline Warden` becomes `Shoreline_20Warden`). Keep to the
+   [bosses.txt](#bossestxt) limits: at most 16 entries, `Mods` 1-255 (up to 3), `Minions` 0-10. Set the treasure class cells `TC`,
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
