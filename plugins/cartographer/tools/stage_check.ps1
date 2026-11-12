@@ -125,7 +125,7 @@ $AllowedSlots = @(5, 6, 7, 11)
 # Tables install.ps1 needs in the test mod's excel folder (the first two are required, the rest only matter for bosses).
 # itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
 $SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
-# core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
+# core-ui (the PD2 core-ui.dll plugin, not D2RLoader itself) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
 # game asserts at startup without the file, and also when the file has a header but no row (issue #219). Cartographer adds no
 # such level type, so the seed is the header plus one row for level type 36 (nothing draws it).
 $defaultModRx = '(?m)^\uFEFF?([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
@@ -279,8 +279,8 @@ if ($Restore) {
         } else { Write-Warning "Kept $($f.path): changed since staging (SHA-256 differs from the manifest)." }
     }
     foreach ($m in @($man.parked)) {
-        if (-not (Test-Path -PathType Leaf $m.to)) { Say "  parked plugin already gone: $($m.to)"; continue }
-        if (Test-Path -PathType Leaf $m.from) { Write-Warning "Left $($m.to) parked: $($m.from) exists again."; continue }
+        if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  parked plugin already gone: $($m.to)"; continue }
+        if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) parked: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
         Move-Item -LiteralPath $m.to -Destination $m.from; Say "  plugin put back: $($m.from)"
     }
     foreach ($file in @($man.rows | ForEach-Object { $_.file } | Select-Object -Unique)) {
@@ -401,7 +401,7 @@ if (Test-Path -PathType Leaf $manifestPath) {
             foreach ($f in @($old.files)) { $placed[$f.path] = $f.sha256 }
             foreach ($r in @($old.rows)) { $rowsWritten.Add(@{ file = $r.file; row = $r.row }) }
             foreach ($e in @($old.entries)) { $jsonAdded.Add(@{ file = $e.file; nl = $e.nl; text = $e.text }) }
-            foreach ($m in @($old.parked)) { $parked.Add(@{ from = $m.from; to = $m.to }) }
+            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to }) } }
             if ($old.defaultMod) { $defaultMod = @{ file = $old.defaultMod.file; original = $old.defaultMod.original } }
         }
     } catch { Write-Warning "Ignoring an unreadable manifest at ${manifestPath}: $($_.Exception.Message)" }
@@ -496,13 +496,16 @@ try {
     # Park every other plugin: a leftover PD2 core-* plugin breaks the character save in a test slot (see the help).
     if (-not $KeepPlugins -and (Test-Path -PathType Container $p.plugins)) {
         $ours = @((Split-Path $Dll -Leaf), 'test-harness.dll')
-        $stray = @(Get-ChildItem -LiteralPath $p.plugins -File -Filter '*.dll' | Where-Object { $ours -notcontains $_.Name })
+        # Never park a file this script placed (an earlier staging under another -Dll name); -Restore removes those.
+        $stray = @(Get-ChildItem -LiteralPath $p.plugins -File -Filter '*.dll' | Where-Object { $full = $_.FullName; $ours -notcontains $_.Name -and -not @($placed.Keys | Where-Object { $_ -ieq $full }) })
+        $parkDir = Join-Path (Split-Path $p.plugins -Parent) "plugins-off\staged-$Owner"
         foreach ($f in $stray) {
-            $to = Join-Path (Join-Path (Split-Path $p.plugins -Parent) "plugins-off\staged-$Owner") $f.Name
+            # Never delete anything: take the first free name (<name>, <name>.1, ...) so an earlier parked copy survives.
+            $to = Join-Path $parkDir $f.Name
+            for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $parkDir "$($f.Name).$n" }
             Plan "Park plugin $($f.Name): $($f.FullName) -> $to (-Restore moves it back)"
             if ($WhatIf) { continue }
-            if (Test-Path -LiteralPath $to) { Remove-Item -LiteralPath $to -Force }
-            $null = New-Item -ItemType Directory -Force (Split-Path $to -Parent)
+            $null = New-Item -ItemType Directory -Force $parkDir
             Move-Item -LiteralPath $f.FullName -Destination $to
             $parked.Add(@{ from = $f.FullName; to = $to })
         }
