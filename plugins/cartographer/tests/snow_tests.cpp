@@ -175,11 +175,81 @@ TEST_CASE("5000 seeds in both orientations plan, pass the check and chain their 
 		CHECK(plan.stamps.tilesW == r.cellsW * 16);
 		CHECK(plan.stamps.tilesH == r.cellsH * 16);
 		CHECK(plan.stamps.voidCells.empty());
-		CHECK(plan.stamps.event.known == false);
-		CHECK(plan.stamps.boss.known == false);
 	}
 	CHECK(horizontal > 1500);
 	CHECK(vertical > 1500);
+}
+
+TEST_CASE("entrance, boss and event rooms: three different run cells inside the layout, the same for a seed")
+{
+	const auto cellOf = [](const TileRect &r, const SnowRequest &q, int *cx, int *cy) {
+		*cx = (r.x - q.options.originX) / 16;
+		*cy = (r.y - q.options.originY) / 16;
+		return (r.x - q.options.originX) % 16 == 0 && (r.y - q.options.originY) % 16 == 0 && r.w == 16 && r.h == 16;
+	};
+	for (uint64_t seed = 0; seed < 3000; ++seed) {
+		SnowRequest r;
+		r.seed = seed * 104729 + 3;
+		r.cellsW = 3 + static_cast<int>(seed % 10);
+		r.cellsH = 3 + static_cast<int>((seed / 10) % 10);
+		r.options.originX = 6000;
+		r.options.originY = 3600;
+		const SnowPlan a = planSnowMap(r);
+		REQUIRE_MESSAGE(a.ok, a.reason);
+		const SnowPlan b = planSnowMap(r);
+		const StampPlan &s = a.stamps;
+		CHECK(s.boss.x == b.stamps.boss.x);
+		CHECK(s.boss.y == b.stamps.boss.y);
+		CHECK(s.event.x == b.stamps.event.x);
+		CHECK(s.event.y == b.stamps.event.y);
+		const bool horizontal = a.orientation == Orientation::Horizontal;
+		const int along = horizontal ? r.cellsW : r.cellsH;
+		const int runCells = (along - 2) * (horizontal ? r.cellsH : r.cellsW);
+		if (runCells < 3) {
+			CHECK_FALSE(s.boss.known);
+			CHECK_FALSE(s.event.known);
+			continue;
+		}
+		REQUIRE(s.entrance.known);
+		REQUIRE(s.boss.known);
+		REQUIRE(s.event.known);
+		int cells[3][2];
+		const TileRect *rects[3] = {&s.entrance, &s.boss, &s.event};
+		for (int i = 0; i < 3; ++i) {
+			CHECK(cellOf(*rects[i], r, &cells[i][0], &cells[i][1]));
+			CHECK(cells[i][0] >= 0);
+			CHECK(cells[i][1] >= 0);
+			CHECK(cells[i][0] < r.cellsW);
+			CHECK(cells[i][1] < r.cellsH);
+			const int index = horizontal ? cells[i][0] : cells[i][1];
+			CHECK(index > 0);  // never a cap
+			CHECK(index < along - 1);
+		}
+		for (int i = 0; i < 3; ++i)
+			for (int j = i + 1; j < 3; ++j) CHECK((cells[i][0] != cells[j][0] || cells[i][1] != cells[j][1]));
+	}
+}
+
+TEST_CASE("a Snow plan with a moved boss or event rectangle fails the check")
+{
+	const SnowRequest r = request(7, 8, 5, Orientation::Horizontal);
+	const SnowPlan good = planSnowMap(r);
+	REQUIRE(good.ok);
+	{
+		SnowPlan p = good;
+		p.stamps.boss.x += 16;
+		CHECK_FALSE(checkSnowPlan(r, p).empty());
+	}
+	{
+		SnowPlan p = good;
+		p.stamps.event = p.stamps.entrance;
+		CHECK_FALSE(checkSnowPlan(r, p).empty());
+	}
+	{
+		SnowPlan p = good;
+		p.stamps.event = TileRect{};
+		CHECK_FALSE(checkSnowPlan(r, p).empty());
+	}
 }
 
 TEST_CASE("a fixed orientation is kept and every line starts and ends with a cap")

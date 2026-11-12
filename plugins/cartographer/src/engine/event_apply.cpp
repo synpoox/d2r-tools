@@ -713,7 +713,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze or outdoor plan)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {

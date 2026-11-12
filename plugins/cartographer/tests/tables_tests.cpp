@@ -1149,6 +1149,8 @@ TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset i
 	CHECK(OutdoorOpenConflict(snow, "Snow").empty());
 	CHECK(OutdoorOpenConflict(snow, "Jungle").find("Jungle map is already open") != std::string::npos);  // Jungle pending, then Snow
 	CHECK(OutdoorOpenConflict(jungle, "Snow").find("Snow map is already open") != std::string::npos);    // and the reverse
+	CHECK(OutdoorOpenConflict(jungle, "Snow").find("Leave the game and start a new one") != std::string::npos);
+	CHECK(OutdoorOpenConflict(jungle, "Snow").find("Enter that portal") == std::string::npos);
 	CHECK(OutdoorOpenConflict(cave, "Jungle").empty());    // a maze map has its own job
 }
 
