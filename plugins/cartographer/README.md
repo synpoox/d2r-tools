@@ -100,7 +100,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 `Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
 `Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
 
-`MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default and not verified in game. A second map opened in the same game shows its name on the first map's portal too.
+`MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default (checked in game once on 2026-11-12: the tooltip, the automap title and the banner showed the name; see Tested). A second map opened in the same game shows its name on the first map's portal too.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
@@ -186,5 +186,6 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
   dropped (it opens nothing and is not passed to the game). The game's only direct caller of the use handler runs it only
   after the check passed (static reading), so this case is defensive and no in-game test is planned.
+- In game, `MapNames=1` (build 93847, D2RLoader 1.3.1-beta, test mod and test save, Normal, single player, two games, 2026-11-12; log lines and screenshots checked by hand, results in `docs/reverse-engineering/cartographer.md` section 10): the map's own name showed on the portal tooltip, the automap title and the entry banner, with no "Missing String"; the row was put back on leaving. Not checked: TCP/IP, other languages, a second map in the same game, a long name.
 - Map sync part 1: unit tests of the message, its validation, the client's check, the client list and the connect schedule (`mapsync_tests`). No game run: the connection, the delivery, the late join and the thread each callback runs on are the checks in `docs/reverse-engineering/cartographer.md` section 12 ("Needs game").
 - Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
