@@ -568,6 +568,10 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		plog::Warn("event '%s' not spawned: %s", state.event->name.c_str(), plan.problem.c_str());
 		return false;
 	}
+	if (static_cast<int>(plan.spawns.size()) < plan.requested) {
+		plog::Warn("event '%s' (%s): the event room %s has room for %zu of the %d monsters asked for", state.event->name.c_str(), ev::kindName(state.event->kind),
+		           Describe(rects.server).c_str(), plan.spawns.size(), plan.requested);
+	}
 	if (state.event->kind == ev::Kind::Ambush) {
 		if (!g_tickOn.load()) {
 			plog::Warn("event '%s' (Ambush) not armed: the PlayerTick or room parts are off, so no wave could start", state.event->name.c_str());
@@ -576,10 +580,6 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		Event6bArmAmbush(*state.event, plan.spawns, rects.server, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
 		plog::Info("event '%s' (%s): armed in the event room %s: %zu per wave", state.event->name.c_str(), ev::kindName(state.event->kind), Describe(rects.server).c_str(), plan.spawns.size());
 		return false;  // not announced yet: the first wave that spawns announces it
-	}
-	if (static_cast<int>(plan.spawns.size()) < plan.requested) {
-		plog::Warn("event '%s' (%s): the event room %s has room for %zu of the %d monsters asked for", state.event->name.c_str(), ev::kindName(state.event->kind),
-		           Describe(rects.server).c_str(), plan.spawns.size(), plan.requested);
 	}
 	int made = 0, failed = 0, supers = 0;
 	for (const ep::Spawn& s : plan.spawns) {
