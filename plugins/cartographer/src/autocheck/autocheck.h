@@ -20,7 +20,8 @@ auto itemName(Item item) -> const char *;
 struct Result {
 	Item item = Item::Open;
 	bool pass = false;
-	std::string detail;  // one short line of why; may be empty
+	bool notApplicable = false;  // the check does not apply to this map: settled as a pass, but counted apart (n/a=, not pass=)
+	std::string detail;          // one short line of why; may be empty
 };
 
 // What has been settled so far. Each item is settled once: a second record for the same item is ignored.
@@ -30,11 +31,14 @@ class Checklist {
 	auto next() const -> std::optional<Item>;
 	auto settled(Item item) const -> bool;
 	void record(Item item, bool pass, const std::string &detail);
+	// Settles an item that does not apply (a map with no Boss, say): not a pass and not a fail.
+	void recordNotApplicable(Item item, const std::string &detail);
 	// Settles every item not yet settled as a failure with `reason` (a missing part or a step that cannot go on). Fails open: the later items still get their line.
 	void failRest(const std::string &reason);
 	auto complete() const -> bool;
 	auto passCount() const -> size_t;
 	auto failCount() const -> size_t;
+	auto notApplicableCount() const -> size_t;
 	// The settled results in the order of Item, whatever order they were recorded in.
 	auto results() const -> std::vector<Result>;
 
@@ -43,9 +47,9 @@ class Checklist {
 	Result result_[ItemCount];
 };
 
-// "AUTOCHECK PASS open" or "AUTOCHECK FAIL boss: the game refused it".
+// "AUTOCHECK PASS open", "AUTOCHECK FAIL boss: the game refused it" or "AUTOCHECK N/A boss: the map has no Boss".
 auto resultLine(const Result &result) -> std::string;
-// "AUTOCHECK DONE pass=3 fail=2".
+// "AUTOCHECK DONE pass=3 fail=2", with " n/a=1" added when an item did not apply.
 auto doneLine(const Checklist &list) -> std::string;
 // Every result line in item order, then the DONE line. An unsettled item is written as a failure first (the copy is not changed).
 auto finalLines(Checklist list) -> std::vector<std::string>;

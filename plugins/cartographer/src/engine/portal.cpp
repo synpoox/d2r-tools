@@ -392,6 +392,49 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 }
 
+// The one open path for the console and AutoCheck: the map's row, its slot level, the same gates, then OpenMapPortal and what an opened map starts.
+// `via` is only for the log line. `mapOut` (optional) gets a copy of the map's row once it is open.
+auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>& tables, const std::string& name, const char* via, MapDef* mapOut) -> CheckOpen {
+	CheckOpen out;
+	if (!g_live.load()) {
+		out.why = "the portal is off (not every part it needs was found)";
+		return out;
+	}
+	const MapDef* map = tables != nullptr ? FindMap(tables->maps, name) : nullptr;
+	if (map == nullptr) {
+		out.noMap = true;
+		out.why = "there is no map called '" + name + "'";
+		return out;
+	}
+	const int level = SlotLevel(tables->slots, SlotNameFor(*map));
+	out.level = level;
+	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
+		out.refused = true;
+		out.why = problem;
+		return out;
+	}
+	const GateState state = GateStateOf(game, player);
+	const Gate gate = CheckGates(*map, state);
+	if (gate != Gate::Open) {
+		out.refused = true;
+		out.why = RefusalText(gate, *map, state);
+		return out;
+	}
+	plog::Info("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
+	out.opened = OpenMapPortal(game, player, *map, *tables, level, &out.shaped) != 0;
+	if (!out.opened) {
+		out.why = "the game would not open a portal for " + map->name;
+		return out;
+	}
+	StartMapStats(*map, tables, game, player);
+	StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
+	NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
+	if (mapOut != nullptr) {
+		*mapOut = *map;
+	}
+	return out;
+}
+
 // --- The console path ------------------------------------------------------------------------------------------------
 // 'cartographer open <Name>' runs on the UI thread and has no game or player. It posts a request; the player tick
 // (game thread, once per frame per player, with the game and the player) serves it for the local player, through the
@@ -430,78 +473,33 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 		Tell("Cartographer: the request waited too long. Run the command again.");
 		return;
 	}
-	const MapDef* map = tables != nullptr ? FindMap(tables->maps, taken.map) : nullptr;
-	if (map == nullptr) {
+	const CheckOpen opened = OpenNamedMap(game, unit, tables, taken.map, "from the console", nullptr);
+	if (opened.noMap) {
 		Tell("Cartographer: there is no map called '" + taken.map + "'. Run 'cartographer check'.");
-		return;
-	}
-	const int level = SlotLevel(tables->slots, SlotNameFor(*map));
-	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
-		Tell(problem);
-		return;
-	}
-	const GateState state = GateStateOf(game, unit);
-	const Gate gate = CheckGates(*map, state);
-	if (gate != Gate::Open) {
-		Tell(RefusalText(gate, *map, state));
-		return;
-	}
-	plog::Info("opening '%s' (%s) through level %d from the console", map->name.c_str(), map->tileset.c_str(), level);
-	const int32_t opened = OpenMapPortal(game, unit, *map, *tables, level);
-	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
-	if (opened != 0) {
-		StartMapStats(*map, tables, game, unit);
-		StartMapEvents(*map, tables, game, unit, level, IsMazeMap(*map));
-		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
+	} else if (!opened.opened && opened.refused) {
+		Tell(opened.why);
+	} else {
+		Tell(opened.opened ? "Cartographer: " + taken.map + " is open." : "Cartographer: the game would not open a portal for " + taken.map + ".");
 	}
 }
 
 }  // namespace
 
-// AutoCheck: the console path's body for a named map, with the refusal text returned instead of told. Same gates, same OpenMapPortal.
+// AutoCheck: the console path's body for a named map, with the refusal text returned instead of told.
 auto OpenMapForCheck(void* gamePtr, void* playerPtr, const std::string& name, MapDef* mapOut) -> CheckOpen {
-	CheckOpen out;
-	Game* game = static_cast<Game*>(gamePtr);
-	Unit* player = static_cast<Unit*>(playerPtr);
-	if (!g_live.load()) {
-		out.why = "the portal is off (not every part it needs was found)";
-		return out;
-	}
 	std::shared_ptr<const Tables> tables;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		tables = g_tables;
 	}
-	const MapDef* map = tables != nullptr ? FindMap(tables->maps, name) : nullptr;
-	if (map == nullptr) {
-		out.why = "there is no map called '" + name + "'";
-		return out;
+	return OpenNamedMap(static_cast<Game*>(gamePtr), static_cast<Unit*>(playerPtr), tables, name, "for AutoCheck", mapOut);
+}
+
+auto RoomLevelOf(void* room) noexcept -> int {
+	if (room == nullptr || g_parts[RoomLevelId].address == nullptr) {
+		return -1;
 	}
-	const int level = SlotLevel(tables->slots, SlotNameFor(*map));
-	out.level = level;
-	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
-		out.why = problem;
-		return out;
-	}
-	const GateState state = GateStateOf(game, player);
-	const Gate gate = CheckGates(*map, state);
-	if (gate != Gate::Open) {
-		out.why = RefusalText(gate, *map, state);
-		return out;
-	}
-	plog::Info("opening '%s' (%s) through level %d for AutoCheck", map->name.c_str(), map->tileset.c_str(), level);
-	out.opened = OpenMapPortal(game, player, *map, *tables, level, &out.shaped) != 0;
-	if (!out.opened) {
-		out.why = "the game would not open a portal for " + map->name;
-		return out;
-	}
-	StartMapStats(*map, tables, game, player);
-	StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
-	NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
-	if (mapOut != nullptr) {
-		*mapOut = *map;
-	}
-	return out;
+	return Call<RoomLevelFn>(RoomLevelId)(room);
 }
 
 auto PlayerLevelOf(void* player) noexcept -> int {

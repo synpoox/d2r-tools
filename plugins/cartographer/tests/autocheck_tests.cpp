@@ -91,3 +91,15 @@ TEST_CASE("autocheck: a stage times out only after the limit and never when the 
 	CHECK(timedOut(1000, 1501, 500));
 	CHECK_FALSE(timedOut(5000, 100, 500));
 }
+
+TEST_CASE("autocheck: an item that does not apply is written N/A and counted apart from pass") {
+	Checklist list;
+	list.record(Item::Open, true, "");
+	list.recordNotApplicable(Item::Boss, "the map has no Boss");
+	list.recordNotApplicable(Item::Boss, "ignored: settled once");
+	CHECK(resultLine(list.results()[1]) == "AUTOCHECK N/A boss: the map has no Boss");
+	CHECK(list.passCount() == 1);
+	CHECK(list.failCount() == 0);
+	CHECK(list.notApplicableCount() == 1);
+	CHECK(doneLine(list) == "AUTOCHECK DONE pass=1 fail=0 n/a=1");
+}

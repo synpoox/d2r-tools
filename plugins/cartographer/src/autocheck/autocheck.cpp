@@ -55,7 +55,16 @@ void Checklist::record(Item item, bool pass, const std::string &detail) {
 		return;
 	}
 	done_[i] = true;
-	result_[i] = Result{item, pass, detail};
+	result_[i] = Result{item, pass, false, detail};
+}
+
+void Checklist::recordNotApplicable(Item item, const std::string &detail) {
+	const size_t i = static_cast<size_t>(item);
+	if (done_[i]) {
+		return;
+	}
+	done_[i] = true;
+	result_[i] = Result{item, true, true, detail};
 }
 
 void Checklist::failRest(const std::string &reason) {
@@ -71,7 +80,7 @@ auto Checklist::complete() const -> bool {
 auto Checklist::passCount() const -> size_t {
 	size_t n = 0;
 	for (size_t i = 0; i < ItemCount; ++i) {
-		n += done_[i] && result_[i].pass ? 1 : 0;
+		n += done_[i] && result_[i].pass && !result_[i].notApplicable ? 1 : 0;
 	}
 	return n;
 }
@@ -80,6 +89,14 @@ auto Checklist::failCount() const -> size_t {
 	size_t n = 0;
 	for (size_t i = 0; i < ItemCount; ++i) {
 		n += done_[i] && !result_[i].pass ? 1 : 0;
+	}
+	return n;
+}
+
+auto Checklist::notApplicableCount() const -> size_t {
+	size_t n = 0;
+	for (size_t i = 0; i < ItemCount; ++i) {
+		n += done_[i] && result_[i].notApplicable ? 1 : 0;
 	}
 	return n;
 }
@@ -95,7 +112,7 @@ auto Checklist::results() const -> std::vector<Result> {
 }
 
 auto resultLine(const Result &result) -> std::string {
-	std::string line = std::string("AUTOCHECK ") + (result.pass ? "PASS " : "FAIL ") + itemName(result.item);
+	std::string line = std::string("AUTOCHECK ") + (result.notApplicable ? "N/A " : result.pass ? "PASS " : "FAIL ") + itemName(result.item);
 	const std::string detail = trimmed(result.detail);
 	if (!detail.empty()) {
 		line += ": " + detail;
@@ -104,7 +121,8 @@ auto resultLine(const Result &result) -> std::string {
 }
 
 auto doneLine(const Checklist &list) -> std::string {
-	return "AUTOCHECK DONE pass=" + std::to_string(list.passCount()) + " fail=" + std::to_string(list.failCount());
+	return "AUTOCHECK DONE pass=" + std::to_string(list.passCount()) + " fail=" + std::to_string(list.failCount()) +
+	       (list.notApplicableCount() > 0 ? " n/a=" + std::to_string(list.notApplicableCount()) : std::string());
 }
 
 auto finalLines(Checklist list) -> std::vector<std::string> {
