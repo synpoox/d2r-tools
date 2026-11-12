@@ -20,6 +20,9 @@ using stats::Target;
 
 // Highest stat id the engine part will pass to the game (itemstatcost has a few hundred rows).
 constexpr int kMaxStatId = 2047;
+// The game's state sender copies at most 16 entries of a list (cartographer.md section 7, static), so more player stats than
+// this would show on the server and not on the sheet.
+constexpr size_t kMaxPlayerStats = 16;
 
 // itemstatcost.txt: stat name -> id.
 struct StatIds {
