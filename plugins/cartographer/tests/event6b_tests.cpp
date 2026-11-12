@@ -332,3 +332,168 @@ TEST_CASE("describeFleeChecks: says which check would stop the flee") {
 	CHECK(describeFleeChecks(-1, -1).find("not fully probed") != std::string::npos);
 	CHECK(describeFleeChecks(-1, 0).find("will return without") != std::string::npos);
 }
+
+TEST_CASE("objectRowNames: the Expansion marker line takes no row") {
+	// The stock file: ..., `Expansion` (no compiled row), then the next line takes the next row.
+	const std::vector<std::string> classes = {"Null", "Casket5", "Expansion", "ClothChestR", "ShrineWildernessExp1"};
+	const std::vector<std::string> names = {"Test Data", "Casket", "", "Chest", "Shrine"};
+	const std::vector<std::string> rows = objectRowNames(classes, names);
+	REQUIRE(rows.size() == 4);
+	CHECK(rows[2] == "Chest");
+	CHECK(resolveObject(rows, "Shrine", 4).row == 3);
+	// A real mismatch is still refused.
+	CHECK(resolveObject(names, "Shrine", 4).result == ObjectResult::CountMismatch);
+	CHECK(resolveObject(rows, "Shrine", 5).result == ObjectResult::CountMismatch);
+}
+
+TEST_CASE("objectRowNames: any case of Expansion, other empty cells keep their row") {
+	const std::vector<std::string> rows = objectRowNames({"a", "EXPANSION", "b", "", "expansion"}, {"A", "", "B", "", ""});
+	REQUIRE(rows.size() == 3);
+	CHECK(rows[1] == "B");
+	CHECK(rows[2].empty());
+	CHECK(objectRowNames({}, {"x"}).empty());
+	CHECK(objectRowNames({"Expansion"}, {}).empty());
+}
+
+TEST_CASE("freeSpotAttempts: start points stay inside the room, radius by radius") {
+	const SpotBox room{25000, 10120, 40, 20};
+	const std::vector<SpotAttempt> a = freeSpotAttempts(room, 5);
+	REQUIRE(a.size() == 15);  // 5 starts x radii 5, 2, 0
+	CHECK(a[0].x == 25020);
+	CHECK(a[0].y == 10130);
+	CHECK(a[0].radius == 5);
+	CHECK(a[5].radius == 2);
+	CHECK(a[10].radius == 1);  // 3x3 footprint: covers a 3-wide chest
+	for (const SpotAttempt &s : a) {
+		CHECK(spotInBox(room, s.x, s.y));
+	}
+	for (size_t i = 0; i < 5; ++i) {
+		for (size_t j = i + 1; j < 5; ++j) {
+			CHECK((a[i].x != a[j].x || a[i].y != a[j].y));
+		}
+	}
+	const std::vector<SpotAttempt> b = freeSpotAttempts(room, 5);
+	REQUIRE(b.size() == a.size());
+	CHECK(b[7].x == a[7].x);
+	CHECK(b[7].y == a[7].y);
+}
+
+TEST_CASE("freeSpotAttempts: small radius limits, empty room") {
+	CHECK(freeSpotAttempts({0, 0, 40, 20}, 1).size() == 5);  // radius 1 only
+	CHECK(freeSpotAttempts({0, 0, 40, 20}, 0).size() == 5);
+	CHECK(freeSpotAttempts({0, 0, 0, 20}, 5).empty());
+	CHECK(freeSpotAttempts({0, 0, 40, -1}, 5).empty());
+	for (const SpotAttempt &s : freeSpotAttempts({100, 200, 2, 2}, 5)) {
+		CHECK(spotInBox({100, 200, 2, 2}, s.x, s.y));
+	}
+}
+
+TEST_CASE("spotInBox: low edge in, far edge out") {
+	const SpotBox room{25000, 10120, 40, 20};
+	CHECK(spotInBox(room, 25000, 10120));
+	CHECK(spotInBox(room, 25039, 10139));
+	CHECK_FALSE(spotInBox(room, 25040, 10130));
+	CHECK_FALSE(spotInBox(room, 25026, 10114));  // the free spot the game gave from the centre
+}
+
+namespace {
+
+// A table shaped like the stock objects.txt: 588 data lines, the `Expansion` marker at line 410, 587 rows once it is dropped. Every Name is "Shrine"
+// except one unique Name.
+struct StockObjects {
+	std::vector<std::string> classes, names;
+	StockObjects() {
+		for (int i = 0; i < 588; ++i) {
+			classes.push_back("Class" + std::to_string(i));
+			names.push_back("Shrine");
+		}
+		classes[410] = "Expansion";
+		names[410] = "";
+		classes[172] = "ShrineHealth";
+		classes[147] = "Chest3";
+		classes[414] = "ClothChestR";
+		names[300] = "OnlyOneName";
+	}
+};
+
+// n lines of "<prefix><i>" with the `Expansion` marker at line `marker` (-1 for none).
+std::vector<std::string> markedColumn(const char *prefix, int n, int marker) {
+	std::vector<std::string> out;
+	for (int i = 0; i < n; ++i) {
+		out.push_back(i == marker ? "Expansion" : prefix + std::to_string(i));
+	}
+	return out;
+}
+
+}  // namespace
+
+TEST_CASE("resolveObject4: Class resolves on a stock-shaped table with the Expansion marker dropped") {
+	const StockObjects t;
+	const std::vector<std::string> classes = dropMarkerLines(t.classes, t.classes);
+	const std::vector<std::string> names = dropMarkerLines(t.classes, t.names);
+	REQUIRE(classes.size() == 587);
+	REQUIRE(names.size() == 587);
+	const ObjectLookup health = resolveObject(classes, names, "ShrineHealth", 587);
+	CHECK(health.result == ObjectResult::Found);
+	CHECK(health.row == 172);
+	CHECK_FALSE(health.numeric);
+	CHECK(resolveObject(classes, names, "Chest3", 587).row == 147);
+	// After the marker the row is one less than the line.
+	const ObjectLookup cloth = resolveObject(classes, names, "ClothChestR", 587);
+	CHECK(cloth.result == ObjectResult::Found);
+	CHECK(cloth.row == 413);
+	// Class matching is case-insensitive when no exact case matches.
+	CHECK(resolveObject(classes, names, "shrinehealth", 587).row == 172);
+}
+
+TEST_CASE("resolveObject4: a shared Name is refused as ambiguous") {
+	const StockObjects t;
+	const std::vector<std::string> classes = dropMarkerLines(t.classes, t.classes);
+	const std::vector<std::string> names = dropMarkerLines(t.classes, t.names);
+	const ObjectLookup r = resolveObject(classes, names, "Shrine", 587);
+	CHECK(r.result == ObjectResult::Duplicate);
+	CHECK(r.row == -1);
+	CHECK(r.rows.size() == 586);
+}
+
+TEST_CASE("resolveObject4: a unique Name is the fallback when no Class matches") {
+	const StockObjects t;
+	const std::vector<std::string> classes = dropMarkerLines(t.classes, t.classes);
+	const std::vector<std::string> names = dropMarkerLines(t.classes, t.names);
+	const ObjectLookup r = resolveObject(classes, names, "OnlyOneName", 587);
+	CHECK(r.result == ObjectResult::Found);
+	CHECK(r.row == 300);  // before the marker, so the line is the row
+	// A column whose size differs from the game's row count is not trusted (the marker was not dropped).
+	CHECK(resolveObject(t.classes, t.names, "ShrineHealth", 587).result == ObjectResult::CountMismatch);
+}
+
+TEST_CASE("dropMarkerLines: the monstats shape, 752 lines to 751 rows") {
+	const std::vector<std::string> ids = markedColumn("m", 752, 410);
+	const std::vector<std::string> rows = dropMarkerLines(ids, ids);
+	REQUIRE(rows.size() == 751);
+	CHECK(rows[409] == "m409");
+	CHECK(rows[410] == "m411");
+	CHECK(rows[750] == "m751");
+	for (const std::string &id : rows) {
+		CHECK(id != "Expansion");
+	}
+}
+
+TEST_CASE("dropMarkerLines: the superuniques shape, 67 lines to 66 rows") {
+	const std::vector<std::string> supers = markedColumn("s", 67, 42);
+	const std::vector<std::string> classes = markedColumn("c", 67, 42);
+	const std::vector<std::string> keptSupers = dropMarkerLines(supers, supers);
+	const std::vector<std::string> keptClasses = dropMarkerLines(supers, classes);
+	REQUIRE(keptSupers.size() == 66);
+	REQUIRE(keptClasses.size() == 66);
+	CHECK(keptSupers[41] == "s41");
+	CHECK(keptSupers[42] == "s43");
+	CHECK(keptClasses[42] == "c43");
+}
+
+TEST_CASE("dropMarkerLines: no row is dropped when there is no marker") {
+	const std::vector<std::string> ids = markedColumn("m", 752, -1);
+	const std::vector<std::string> rows = dropMarkerLines(ids, ids);
+	CHECK(rows == ids);
+	CHECK(dropMarkerLines({}, {}).empty());
+}
