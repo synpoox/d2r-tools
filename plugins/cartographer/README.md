@@ -65,7 +65,7 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
    ("Cartographer Preset", a copy of Colossal Summit that keeps its name string, so a map portal's tooltip should read
-   "Colossal Summit" instead of "Missing String"; not yet checked in game) and its level preset to the mod's `levels.txt` and
+   "Colossal Summit" instead of "Missing String"; checked in game) and its level preset to the mod's `levels.txt` and
    `lvlprest.txt` (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no
    items. Running it again changes nothing once the tables are up to date; over an older install it repairs the slot level's
    name string. Players will likely also see "Colossal Summit" as the area name inside the map. D2RLoader compiles the
@@ -157,6 +157,7 @@ Run in game for Cave maps (see Tested): the plan, the steered build, the tileset
   - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
   - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
   - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+  - (2026-11-12, Normal) the portal tooltip in Harrogath reads "Colossal Summit" (not "Missing String"), with no owner suffix in single player; the entry banner reads "Entering The Colossal Summit", the automap title "Colossal Summit", the return portal "Harrogath"; leaving and entering again works. The map's own `Name` is not shown anywhere yet (issue #90); details in `docs/reverse-engineering/cartographer.md` section 10.
 - In game, the maze slot (Cave level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
   - 46 games in a row, each with a new game and a Cave map (`Corridor`, `Winding` and `Loop` in turn): the slot built the planned shape (built room grid equal to the plan), no crash, no error line;
   - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;

@@ -1106,6 +1106,41 @@ exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5d
 4. What does the owner suffix `" (%s)"` look like in single player (the `0x8d4b0` global decides whether it is appended)? Compare a stock portal tooltip with a hooked one.
 5. Does the text cache between two maps? Open two different maps in a row.
 
+### Game checks of 2026-11-12 (issues #87 and #90)
+
+Live run, slot level 138 ("Cartographer Preset", LevelName key `ColossalSummit`, as installed by `tools\install.ps1` from origin/main 5c2ba9a). D2R 3.3 build 93847,
+D2RLoader 1.3.1-beta, test mod and test save, single player, Normal difficulty (the two test maps had `Difficulty` set to Normal and the map was opened with
+`cartographer open Shorelines`; one map per game). Screenshots of the game window only, read by hand; no hook or probe code was run. The two memory writes
+below were made from outside the game with `WriteProcessMemory` into the loaded levels row (a test technique, not plugin code).
+
+| Check | Result | Evidence |
+|---|---|---|
+| #87: red portal tooltip in town | Reads "Colossal Summit", not "Missing String"; no `" (owner)"` suffix in single player (needs-game item 4) | `hover_portal_town` |
+| Entry banner | "Entering The Colossal Summit" | `enter_*` |
+| Automap title inside the map | "Colossal Summit" | `automap_inside` |
+| Return portal inside the map | "Harrogath" | `hover_portal_inside` |
+| Leave, then enter again | Town banner "Entering Harrogath"; the red portal stays and still reads "Colossal Summit"; entering again works | `back_in_town`, `reenter_1`, `reenter_tip` |
+| #90: the map's own `Name` ("Shorelines") | Appears nowhere: not on the tooltip, the banner or the automap. Still needs a runtime hook | all of the above |
+| Item 3: is the slot row writable? | **Yes.** Writing `Harrogath` over the row's LevelName (`+0xfd`) changed the automap title inside the map to "Harrogath" at once, with no reload | `automap_after_name_write` |
+| Item 1 (indirect): does the tooltip read the row key? | **Yes, live, no cache.** After the same write, the portal tooltip in town read "Harrogath" | `town_tip_after_write` |
+| Banner source | The banner follows **LevelEntry** (`+0x14d`), not LevelName: writing `EnteringHarrogath` over it changed the banner on the next entry to "Entering Harrogath" | `banner_after_entry_write1` |
+| Item 4: owner suffix | None in single player | `hover_portal_town` |
+
+So the tooltip, the automap title and the banner all read the slot level's own row strings at the time they are shown. Option 4 of Q4 (write the map's name into
+the slot row when the map opens) works for all three, in single player, with no code hook; the tooltip is read when hovered, the banner when entering. The
+row was found by a memory scan of the game process (one copy of the table; row 137 and row 138 are `0x18c` apart). A plugin would find it through the table or the
+row getter, and LevelName is `char[40]` (at most 39 characters), LevelEntry is a text key as well. A hook-free route for #90 is therefore possible;
+whether a literal name works as a key (rather than a string table key) was seen to work for "Harrogath" and "EnteringHarrogath", which are real keys, so
+a free-text name still needs a check (put a name no table has and see whether it shows as text or as "Missing String").
+
+**Not checked:** hit counts on `0xc189f`, `0xc7a30` and `0x3e2b736` (items 1 and 2 directly; no probe code exists, only behaviour was observed); whether the
+`0x8e1c9` data model feeds the banner (the banner is explained by LevelEntry, so probably not); two maps in two games (item 5; with one shared row key the text
+was the same for every map anyway); a free-text name; the item right-click path (the right-click on a map scroll did nothing in Normal because the map is
+Hell-gated, and the log gave no gate line, so the item path was not confirmed here); a map opened in Hell; TCP/IP and a second player (the owner suffix there).
+Test set-up notes: the spawned test item was a copy of the Identify scroll row, so it reads "Scroll of Identify". The character save failed every 30
+seconds with an encoding error after an assert on a stat index (`BC_ASSERT nStat`), probably because the test mod ships no `itemstatcost.txt`
+(the plugin logs it and skips map stats); this was not looked into and no Cartographer code was changed.
+
 ## 11. Event Spawn names from the game's compiled tables (issue #95)
 
 **Status:** written and unit tested (issue #95, code in `plugins/cartographer/src/engine/event_apply.cpp`, pure logic in `src/eventplan/`); the signatures were checked statically on the build 93847 dump (`check_portal_signatures.py`, both rows ok); **not run in a game**. The analysis below is static research from the dump. Context: section 9 resolves an event's `Spawn` against the mod's `monstats.txt` `Id` and `superuniques.txt` `Superunique` columns (`ReadSpawnNames`, `plugins/cartographer/src/plugin.cpp`); issue #95 asks whether the game's own loaded tables can do it, so a mod that ships those tables in another form (or none) still resolves. Labels: **static** is read from the dump; **inference** is reasoned from it; **needs game** is a check to run.
