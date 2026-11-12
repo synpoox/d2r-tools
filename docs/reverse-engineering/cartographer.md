@@ -2075,6 +2075,8 @@ A map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; t
 
 ## 16. Outdoor S2 spike results (issue #89)
 
+The Snow (Barricade) tileset pieces, sockets and plan grammar (issue #147, static evidence only) are in [cartographer-snow.md](cartographer-snow.md).
+
 Spike: `plugins/cartographer-outdoor-spike/` on `spike/cartographer-outdoor-s2` (never merged). Build 93847, slot 5 test save, level 138 (Act 5, DrlgType 3, LevelType 21), layout `*E,EWS,SW/-,*N,NS/-,-,*N` (3 x 3 blocks of 32 x 32 tiles: an L plus a branch; `*` is a Pygmy clearing; level rect `6000,3000 96x96`). Status per item: **live** = seen in a running game, **static** = from code or a log of the build, not walked.
 
 | Item | Result |
