@@ -264,9 +264,10 @@ auto LoadAll() -> Loaded {
 	} else {
 		loaded.report.Error(carto::SlotsFile, 0, "the file is missing, so the map item has no level to open. Run tools\\install.ps1 and restart the game.");
 	}
-	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build.
+	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build. An Outdoor slot's origin and declared
+	// size are read from the same file for the outdoor build hook.
 	text.clear();
-	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0) {
+	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0 || carto::SlotLevel(loaded.tables->slots, carto::OutdoorSlot) > 0) {
 		if (ReadFile(g_excelDir + L"\\levels.txt", &text)) {
 			carto::ReadSlotLevelTypes(loaded.tables->slots, text);
 		}

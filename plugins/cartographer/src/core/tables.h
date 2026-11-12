@@ -71,6 +71,8 @@ struct Settings {
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
 	int mapNames = 0;   // MapNames: 1 shows a map's own Name on the portal tooltip, the automap title and the entry banner (written, not verified in game)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
+	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
+	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
 	std::string town = "Harrogath";
 };
 
@@ -79,6 +81,11 @@ struct Slot {
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 	int drlgType = -1;  // levels.txt DrlgType of that level (1 maze, 2 preset, 3 outdoor); -1 when unknown
+	int act = -1;       // levels.txt Act of that level (0 based: 4 is Act 5); -1 when unknown
+	// levels.txt OffsetX, OffsetY, SizeX and SizeY of that level, in tiles. haveGeometry is true only when all four columns exist and parse; the
+	// outdoor build needs them because the level record's rectangle is still zero when the level build starts.
+	bool haveGeometry = false;
+	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 
 // Tilesets, shapes, sizes and difficulties as the author writes them.
@@ -105,9 +112,14 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// Fills in each slot's levelType and drlgType from the mod's levels.txt (columns Id, LevelType and DrlgType; each is read when its column
+// Fills in each slot's levelType, drlgType and act from the mod's levels.txt (columns Id, LevelType, DrlgType and Act; each is read when its column
 // exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
+
+// Empty, or why the Outdoor slot level must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
+// say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level
+// and calls the game, so it runs only for a level it has seen to be in Act 5.
+auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
 // The levels.txt LevelType an outdoor tileset's slot level must have (Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
 auto OutdoorLevelType(std::string_view tileset) -> int;
