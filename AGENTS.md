@@ -2,7 +2,7 @@
 
 Read this file, then the affected plugin's README and `CHANGELOG.md`, and search that plugin's `src/` and `tests/`
 before changing anything. Build, test and review steps are in [CONTRIBUTING.md](CONTRIBUTING.md); releases are in
-[docs/RELEASING.md](docs/RELEASING.md).
+[docs/RELEASING.md](docs/RELEASING.md). Issue tracker use and triage labels are in [docs/agents/](docs/agents/).
 
 ## Ownership and safety
 
