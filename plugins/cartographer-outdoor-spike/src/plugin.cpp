@@ -713,6 +713,21 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	plog::Init(context, PluginName);
 	crash_guard::Install(PluginVersion, context->exeBase);
 	ReadConfig(context);
+	{
+		// Build identity, for the S1 record: the image's PE TimeDateStamp, the loader's build strings and ABI.
+		uint32_t stamp = 0;
+		uint32_t peOff = 0;
+		const auto* exe = reinterpret_cast<const uint8_t*>(context->exeBase);
+		if (ReadBytes(exe + 0x3c, &peOff, 4) && ReadBytes(exe + peOff + 8, &stamp, 4))
+			plog::Info("image stamp 0x%08x (PE TimeDateStamp of the main image at %p)", stamp, static_cast<const void*>(exe));
+		else
+			plog::Info("image stamp: header unreadable");
+		wchar_t loaderExe[MAX_PATH] = L"";
+		GetModuleFileNameW(nullptr, loaderExe, MAX_PATH);
+		plog::Info("loader build version '%s' name '%s', plugin ABI %u, context size %u, process exe %ls",
+		           context->buildVersion != nullptr ? context->buildVersion : "(null)", context->buildName != nullptr ? context->buildName : "(null)",
+		           context->abiVersion, context->contextSize, loaderExe);
+	}
 	if (g_config.level >= 0) ParseLine(g_config.line);
 
 	// S0 byte checks, before any hook of ours: each signature must match exactly once.
