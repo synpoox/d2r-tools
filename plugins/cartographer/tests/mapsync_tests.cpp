@@ -85,7 +85,10 @@ TEST_CASE("decode refuses a bad message") {
 	bad[0] = kWireVersion + 1;
 	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadVersion);
 	std::memcpy(bad, buf, sizeof(bad));
-	bad[1] = 0x02;
+	bad[0] = 1;  // a literal v1 message (before the outdoor flag) is refused by version before any field is read
+	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadVersion);
+	std::memcpy(bad, buf, sizeof(bad));
+	bad[1] = 0x04;
 	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadFlags);
 	std::memcpy(bad, buf, sizeof(bad));
 	bad[8] = bad[9] = 0;
@@ -96,7 +99,7 @@ TEST_CASE("decode refuses a bad message") {
 	std::memcpy(bad, buf, sizeof(bad));
 	bad[1] = 0;  // no maze flag, but a seed
 	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadSeed);
-	for (const DecodeError e : {DecodeError::None, DecodeError::BadSize, DecodeError::BadVersion, DecodeError::BadFlags, DecodeError::BadSlot, DecodeError::BadOpening, DecodeError::BadSeed}) {
+	for (const DecodeError e : {DecodeError::None, DecodeError::BadSize, DecodeError::BadVersion, DecodeError::BadFlags, DecodeError::BadSlot, DecodeError::BadOpening, DecodeError::BadSeed, DecodeError::BadKind}) {
 		CHECK(std::strlen(describe(e)) > 0);
 	}
 }
@@ -359,4 +362,94 @@ TEST_CASE("an opening is applied once; a resend or an older one is not") {
 	CHECK(!a.take(1));
 	a.clear();  // a new game
 	CHECK(a.take(1));
+}
+
+namespace {
+
+MapIdentity outdoorSample() {
+	MapIdentity id = sample();
+	id.maze = false;
+	id.outdoor = true;
+	return id;
+}
+
+ApplyFacts outdoorFacts() {
+	ApplyFacts f;
+	f.slotLevelMatches = true;
+	f.clientOutdoorMap = true;
+	f.namesSetting = true;
+	f.outdoorBuildLive = true;
+	return f;
+}
+
+}  // namespace
+
+TEST_CASE("an outdoor identity carries its seed and round trips") {
+	uint8_t buf[kMaxMessageSize];
+	const MapIdentity id = outdoorSample();
+	REQUIRE(encodeMapOpen(id, buf, sizeof(buf)) == kMapOpenSize);
+	CHECK(buf[1] == kFlagOutdoor);
+	MapIdentity back;
+	REQUIRE(decodeMapOpen(buf, kMapOpenSize, &back) == DecodeError::None);
+	CHECK(back == id);
+	CHECK(back.outdoor);
+	CHECK(!back.maze);
+	CHECK(back.seed == 0x0123456789abcdefULL);
+}
+
+TEST_CASE("a maze and outdoor flag together is refused both ways") {
+	uint8_t buf[kMaxMessageSize];
+	MapIdentity both = sample();
+	both.outdoor = true;
+	CHECK(encodeMapOpen(both, buf, sizeof(buf)) == 0);
+	REQUIRE(encodeMapOpen(sample(), buf, sizeof(buf)) == kMapOpenSize);
+	buf[1] = kFlagMaze | kFlagOutdoor;
+	MapIdentity out;
+	CHECK(decodeMapOpen(buf, kMapOpenSize, &out) == DecodeError::BadKind);
+	buf[1] = 4;
+	CHECK(decodeMapOpen(buf, kMapOpenSize, &out) == DecodeError::BadFlags);
+}
+
+TEST_CASE("a good outdoor identity applies the outdoor seed and not the maze half") {
+	const ApplyPlan p = decideApply(outdoorSample(), outdoorFacts());
+	CHECK(p.outdoor);
+	CHECK(p.outdoorWhy == Skip::None);
+	CHECK(p.names);
+	CHECK(!p.maze);
+	CHECK(p.mazeWhy == Skip::NotMaze);
+}
+
+TEST_CASE("the outdoor half has its own refusals") {
+	ApplyFacts f = outdoorFacts();
+	f.outdoorBuildLive = false;
+	ApplyPlan p = decideApply(outdoorSample(), f);
+	CHECK(!p.outdoor);
+	CHECK(p.outdoorWhy == Skip::OutdoorOff);
+	CHECK(p.names);  // the name half does not depend on the layout
+	f = outdoorFacts();
+	f.outdoorSlotBuilt = true;
+	p = decideApply(outdoorSample(), f);
+	CHECK(!p.outdoor);
+	CHECK(p.outdoorWhy == Skip::AlreadyBuilt);
+	MapIdentity noSeed = outdoorSample();
+	noSeed.seed = 0;
+	p = decideApply(noSeed, outdoorFacts());
+	CHECK(p.outdoorWhy == Skip::NoSeed);
+	f = outdoorFacts();
+	f.slotLevelMatches = false;
+	p = decideApply(outdoorSample(), f);
+	CHECK(p.outdoorWhy == Skip::SlotMismatch);
+	CHECK(!p.names);
+	f = outdoorFacts();
+	f.clientOutdoorMap = false;  // the host says outdoor, this client's row is not
+	p = decideApply(outdoorSample(), f);
+	CHECK(p.outdoorWhy == Skip::KindMismatch);
+	CHECK(!p.outdoor);
+}
+
+TEST_CASE("a maze identity never applies an outdoor seed") {
+	const ApplyPlan p = decideApply(sample(), goodFacts());
+	CHECK(p.maze);
+	CHECK(!p.outdoor);
+	CHECK(p.outdoorWhy == Skip::NotOutdoor);
 }
