@@ -655,7 +655,7 @@ auto TickHook(void* game, void* unit) noexcept -> uint64_t {
 	const uint64_t result = g_tickOrig != nullptr ? g_tickOrig(game, unit) : 0;
 	if (unit != nullptr && F<int32_t>(unit, 0) == 0) {
 		if (g_portalRequested.exchange(false) && g_openPortal != nullptr) {
-			const int32_t opened = g_openPortal(game, unit, PortalKey, g_config.level, 8);
+			const int32_t opened = g_openPortal(game, unit, PortalKey, g_config.level, 1);
 			plog::Info("OpenRedPortal(level %d) returned %d", g_config.level, opened);
 			if (g_context != nullptr) g_context->WriteConsoleMessage(opened != 0 ? "S2 spike: portal opened" : "S2 spike: the game would not open a portal");
 		}
