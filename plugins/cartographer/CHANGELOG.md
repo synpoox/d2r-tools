@@ -43,3 +43,4 @@
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
 
+- Event monsters in a map with a `Monsters` list no longer trigger a game error.
