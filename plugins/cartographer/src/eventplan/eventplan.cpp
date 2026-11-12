@@ -148,6 +148,14 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) 
 	return out;
 }
 
+int minEventDistance(int levelW, int levelH) {
+	const int side = std::max(levelW, levelH);
+	if (side <= 0) {
+		return kMinEventDistance;
+	}
+	return std::clamp(side / 3, 1, kMinEventDistance);
+}
+
 EventRoomTracker::EventRoomTracker(std::optional<Rect> planned, int minDistance) : planned_(planned), minDistance_(minDistance) {}
 
 bool EventRoomTracker::onPopulated(const Rect &room) {
