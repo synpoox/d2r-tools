@@ -18,7 +18,7 @@
     It also adds or updates the Maze and Outdoor rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
-                    keyed 'cartoboss:<Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
+                    keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
@@ -340,14 +340,18 @@ $BossNameKeyPrefix = 'cartographer:'  # the plugin's string namespace (its Plugi
 # The local key is ASCII only: 'boss_' then each byte of the Name, kept when it is A-Z a-z 0-9, else '_' and two uppercase hex digits
 # ('Shoreline Warden' -> 'boss_Shoreline_20Warden'). The same rule as src/mapname BossLocalKey. The Name was read as Latin-1, so a
 # character is a byte.
-function Get-BossLocalKey([string]$Name) {
-    $sb = [System.Text.StringBuilder]::new('boss_')
+function Get-BossEscaped([string]$Name) {
+    $sb = [System.Text.StringBuilder]::new()
     foreach ($ch in $Name.ToCharArray()) {
         if (($ch -ge 'A' -and $ch -le 'Z') -or ($ch -ge 'a' -and $ch -le 'z') -or ($ch -ge '0' -and $ch -le '9')) { [void]$sb.Append($ch) }
         else { [void]$sb.Append('_').Append(([int]$ch -band 0xFF).ToString('X2')) }
     }
     $sb.ToString()
 }
+function Get-BossLocalKey([string]$Name) { 'boss_' + (Get-BossEscaped $Name) }
+# Trims only space, tab, CR and LF, like the plugin's Trim (core/text.h). .NET Trim() also strips U+00A0, U+0085, \v and \f, which
+# would give the two sides different keys for a Name that ends in one (easy to get in Latin-1).
+function Trim-BossCell([string]$Text) { $Text.Trim(' ', "`t", "`r", "`n") }
 $bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
 # A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
 $bossLines = @()
@@ -428,8 +432,8 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         $seen = @{}
         for ($b = 1; $b -lt $bossLines.Count; $b++) {
             $bc = $bossLines[$b] -split "`t"
-            $bossName = if ($bc.Count -gt $nameAt) { $bc[$nameAt].Trim() } else { '' }
-            $bossBase = if ($bc.Count -gt $baseAt) { $bc[$baseAt].Trim() } else { '' }
+            $bossName = if ($bc.Count -gt $nameAt) { Trim-BossCell $bc[$nameAt] } else { '' }
+            $bossBase = if ($bc.Count -gt $baseAt) { Trim-BossCell $bc[$baseAt] } else { '' }
             $skip = {
                 param([string]$why)
                 Write-Host "superuniques.txt: skipped bosses.txt row $b ('$bossName'): $why"
@@ -460,7 +464,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             }
             if ($rows.Count -ge $MaxBosses) { & $skip "bosses.txt may have at most $MaxBosses entries."; continue }
             $seen[$bossName.ToLowerInvariant()] = $true
-            $key = $BossKeyPrefix + $bossName
+            $key = $BossKeyPrefix + (Get-BossEscaped $bossName)  # escaped like the string key: ASCII only (BossKey in src/core/tables.cpp)
             # A copy of a vanilla row (read only); every cell that matters is set below.
             $cells = Cells $supers $templateLine
             Set-Cell $supers $cells 'hcIdx' "$($maxHc + $rows.Count + 1)"

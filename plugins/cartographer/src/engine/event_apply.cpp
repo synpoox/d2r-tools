@@ -5,6 +5,7 @@
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
 #include "engine/maze_hooks.h"
+#include "engine/outdoor_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "hookguard.h"
@@ -648,7 +649,13 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		if (!state->tracker) {
 			std::optional<ep::Rect> plan;
-			if (state->maze) {
+			const bool outdoor = !state->maze && state->level == OutdoorSlotLevelId();  // the Outdoor slot level: its plan's rooms (issue #145)
+			if (outdoor) {
+				const MazeEventRect m = OutdoorEventRoom();
+				if (m.known && m.levelId == state->level) {
+					plan = ep::Rect{m.x, m.y, m.w, m.h};
+				}
+			} else if (state->maze) {
 				const MazeEventRect m = MazeEventRoom();
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
@@ -658,11 +665,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			// The map's own Boss goes in the plan's boss room (the maze's far cell), apart from the event room. No plan rect, no map Boss.
-			// Outdoor (issue #145): the stamp plan's boss rectangle is read here instead, and the same tracker and spawn follow.
 			if (state->bossArmed) {
 				std::optional<ep::Rect> bossPlan;
-				if (state->maze) {
-					const MazeEventRect b = MazeBossRoom();
+				if (outdoor || state->maze) {
+					const MazeEventRect b = outdoor ? OutdoorBossRoom() : MazeBossRoom();
 					if (b.known && b.levelId == state->level) {
 						bossPlan = ep::Rect{b.x, b.y, b.w, b.h};
 					}
@@ -671,7 +677,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze plan)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze or outdoor plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {

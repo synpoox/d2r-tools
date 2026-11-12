@@ -104,7 +104,7 @@ Rules and limits:
 
 ## bosses.txt (optional)
 
-The bosses a map's `Boss` can name. A boss is always an entry of its own here, never a vanilla one. See the README for the columns (`Name`, `Base`, `Mods`, `Minions`) and how `tools\install.ps1` writes a `superuniques.txt` row per entry, keyed `cartoboss:<Name>`.
+The bosses a map's `Boss` can name. A boss is always an entry of its own here, never a vanilla one. See the README for the columns (`Name`, `Base`, `Mods`, `Minions`) and how `tools\install.ps1` writes a `superuniques.txt` row per entry, keyed `cartoboss:` plus the escaped Name.
 
 - `Name` cannot be the name of a vanilla superunique or monster (any case) and cannot repeat; such a row is skipped and reported.
 - `Base` must be a monstats `Id` whose `boss` column is not 1 (a vanilla boss such as `andariel` is refused); `Mods` has up to 3 ids that exist in `monumod.txt`; `Minions` is 0 to 10. At most 16 entries are used; the rest are reported and skipped.

@@ -48,6 +48,8 @@ constexpr int GridPieces = 0x08;      // grid object: the piece id at a piece's 
 constexpr int GridFlags = 0x58;       // grid object: 0x200 covered, 0x100 void, file index in bits 16..19
 constexpr int GridData = 0x18;        // in a grid object: uint64* cells
 constexpr int GridRows = 0x20;        // in a grid object: int32* index of each row's first cell (a cell is data[rows[y] + x])
+constexpr int ServerRoomDrlg = 0x18;  // a server room's DRLG room (UnitRoom's result; section 5, "Arrival room")
+constexpr int RoomFlags = 0x50;       // uint32; bits 16 and 17 (co::kArrivalFlags) make the level-entry finder pick the room
 constexpr int RoomPiece = 0x40, RoomNext = 0x48, RoomX = 0x60, RoomY = 0x64, RoomW = 0x68, RoomH = 0x6c;
 constexpr int PieceId = 0x00, PieceFile = 0x04;
 constexpr int32_t OutdoorType = 3;
@@ -60,14 +62,19 @@ using EntryFn = void (*)(uint8_t dataFlag, void* level) noexcept;  // 0x3ee320, 
 using StampFn = void (*)(uint8_t dataFlag, void* level, int32_t cx, int32_t cy, int32_t lvlPrest, int32_t file, char last) noexcept;  // 0x3ecfc0
 using VoidFn = void (*)(void* level, int32_t x, int32_t y) noexcept;                                                             // 0x3ede00
 
-enum OutdoorPartId { Act5Builder, EntryPart, StampPart, VoidPart, OwnLevelBuild, OutdoorPartCount };
-constexpr int OutdoorNeededParts = OwnLevelBuild;  // the parts every build needs; LevelBuild is added only when the maze hook did not take it
+// The three arrival parts are only checked (never called or hooked), as in the maze steering; a missing one leaves the arrival to the game and
+// does not turn the outdoor build off.
+enum OutdoorPartId { Act5Builder, EntryPart, StampPart, VoidPart, ArrivalFinderPart, ArrivalRoomFinderPart, ArrivalFlagTestPart, OwnLevelBuild, OutdoorPartCount };
+constexpr int OutdoorNeededParts = ArrivalFinderPart;  // the parts every build needs; LevelBuild is added only when the maze hook did not take it
 
 Part g_parts[OutdoorPartCount] = {
 	{"OutdoorAct5Builder", sig::OutdoorAct5Builder, 16, true, nullptr, {}, {}},
 	{"OutdoorEntry", sig::OutdoorEntry, 0, true, nullptr, {}, {}},
 	{"PieceStamp", sig::PieceStamp, 0, true, nullptr, {}, {}},
 	{"VoidCell", sig::VoidCell, 0, true, nullptr, {}, {}},
+	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
+	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
+	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
 	{"LevelBuild", sig::LevelBuild, 14, true, nullptr, {}, {}},
 };
 
@@ -96,6 +103,15 @@ SlotGeometry g_geometry;
 std::string g_slotRefusal;  // OutdoorSlotRefusal of the Outdoor slot row; empty when the slot may be built
 uint64_t g_nextJobId = 1;
 co::PlanCache g_cache(4);
+// What the last slot build left for the events and the probe (tiles, absolute). Guarded by g_lock; cleared when the game is left.
+MazeEventRect g_eventRoom, g_bossRoom;
+struct ArrivalFact {
+	bool known = false;
+	int32_t levelId = 0;
+	int32_t cellX = 0, cellY = 0, cellW = 0, cellH = 0;  // the entrance cell
+};
+ArrivalFact g_arrival;
+std::atomic<bool> g_arrivalLogged{false};
 cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
 
 // One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
@@ -305,6 +321,69 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 	return plan;
 }
 
+// --- The entry, event and boss rooms of the built level ----------------------------------------------------------------
+
+auto ToRect(const void* level, const std::vector<void*>& rooms, int index) -> MazeEventRect {
+	if (index < 0 || static_cast<size_t>(index) >= rooms.size()) {
+		return {};
+	}
+	const void* room = rooms[static_cast<size_t>(index)];
+	return {true, Read<int32_t>(level, LvlId), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)};
+}
+
+// After a build that is the plan: the room at the entrance cell's centre becomes the level entry (the game's finder takes the first room with
+// bits 16 or 17 of its flags, so every other room loses them), and the rooms at the event and boss cells' centres are recorded for the map
+// events. Not noexcept: it allocates; the caller catches.
+void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) {
+	std::vector<void*> rooms;
+	std::vector<co::BuiltRoom> rects;
+	for (void* room = Read<void*>(level, LvlFirstRoom); room != nullptr && rooms.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98); room = Read<void*>(room, RoomNext)) {
+		rooms.push_back(room);
+		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH), Read<uint32_t>(room, RoomFlags)});
+	}
+	const int id = Read<int32_t>(level, LvlId);
+	if (!asPlanned) {
+		// The level is built twice per entry (server, then client). Whatever an earlier build recorded stays: a build that is not the plan must not replace it.
+		plog::Info("outdoor arrival: left to the game, because the build is not the plan");
+		return;
+	}
+	const MazeEventRect event = ToRect(level, rooms, co::chooseCellRoom(plan.event, rects));
+	const MazeEventRect boss = ToRect(level, rooms, co::chooseCellRoom(plan.boss, rects));
+	plog::Info("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (event.known) {
+			g_eventRoom = event;  // a known room is never replaced by an unknown one
+		}
+		if (boss.known) {
+			g_bossRoom = boss;
+		}
+	}
+	for (int i = ArrivalFinderPart; i <= ArrivalFlagTestPart; ++i) {
+		if (!g_parts[i].status.on) {
+			plog::Info("outdoor arrival: left to the game, because the part %s was not found", g_parts[i].name);
+			return;
+		}
+	}
+	const co::ArrivalMark mark = co::planArrival(plan, rects);
+	if (!mark.mark) {
+		plog::Info("outdoor arrival: left to the game, because %s", mark.why.c_str());
+		return;
+	}
+	const auto flagsOf = [&](int i) { return Read<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags); };
+	Write<uint32_t>(rooms[static_cast<size_t>(mark.room)], RoomFlags, flagsOf(mark.room) | co::kArrivalFlags);
+	for (const int i : mark.clear) {
+		Write<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags, flagsOf(i) & ~co::kArrivalFlags);
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_arrival = {true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h};
+		g_arrivalLogged = false;
+	}
+	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
+	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
+}
+
 // --- The hooks -------------------------------------------------------------------------------------------------------
 
 // 0x3fe2e0 for the slot: replay the plan with the game's own piece stamper, then mark the unused cells void. For every other level (and for the
@@ -361,6 +440,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	const uint64_t result = original(dataFlag, level);
 	Write<int32_t>(level, LvlType, OutdoorType);
 
+	bool asPlanned = false;
 	try {
 		if (!ctx.fired) {
 			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the Outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
@@ -383,12 +463,17 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 				}
 			}
 			ProbeGrid(plan.stamps, grid);
+			asPlanned = ctx.fired && problems.empty();
 		}
 		if (plan.stamps.entrance.known) {
 			plog::Info("outdoor slot level %d: entrance cell at tile (%d,%d) %d x %d; event %s; boss %s", id, plan.stamps.entrance.x, plan.stamps.entrance.y, plan.stamps.entrance.w, plan.stamps.entrance.h,
 			           plan.stamps.event.known ? "planned" : "none", plan.stamps.boss.known ? "planned" : "none");
 		}
 		ProbeRooms(level, rect.x, rect.y);
+	} catch (...) {
+	}
+	try {
+		ArrangeRooms(level, plan.stamps, asPlanned);
 	} catch (...) {
 	}
 	return result;
@@ -505,6 +590,9 @@ auto OutdoorPartStatuses() -> std::vector<PartStatus> {
 		if (i == OwnLevelBuild && !g_ownLevelBuild) {
 			continue;  // shared with the maze hook: its part is listed with the maze parts
 		}
+		if (i >= ArrivalFinderPart && i <= ArrivalFlagTestPart && MazeSteeringLive()) {
+			continue;  // the same three guards, listed with the maze parts
+		}
 		out.push_back(g_parts[i].status);
 	}
 	return out;
@@ -512,6 +600,47 @@ auto OutdoorPartStatuses() -> std::vector<PartStatus> {
 
 auto OutdoorSlotLevelId() -> int {
 	return g_slotLevel.load();
+}
+
+auto OutdoorEventRoom() -> MazeEventRect {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_eventRoom;
+}
+
+auto OutdoorBossRoom() -> MazeEventRect {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_bossRoom;
+}
+
+auto OutdoorArrivalPending() -> bool {
+	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && g_slotLevel.load(std::memory_order_relaxed) > 0;
+}
+
+// `room` is what UnitRoom returned: the player's server room; its DRLG room (+0x18) carries the tile rect, as for the maze probe.
+void OutdoorProbeArrival(void* room, int32_t levelId) {
+	if (!g_probe.load() || room == nullptr || levelId != g_slotLevel.load() || g_arrivalLogged.exchange(true)) {
+		return;
+	}
+	ArrivalFact fact;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		fact = g_arrival;
+	}
+	const void* drlg = Read<const void*>(room, ServerRoomDrlg);
+	if (drlg == nullptr) {
+		plog::Info("[outdoor probe] arrival: the player's server room %p has no DRLG room", room);
+		return;
+	}
+	const int32_t x = Read<int32_t>(drlg, RoomX), y = Read<int32_t>(drlg, RoomY), w = Read<int32_t>(drlg, RoomW), h = Read<int32_t>(drlg, RoomH);
+	if (w <= 0 || h <= 0) {
+		plog::Info("[outdoor probe] arrival: the player's server room %p has no readable DRLG room (%p)", room, drlg);
+		return;
+	}
+	const bool have = fact.known && fact.levelId == levelId;
+	const bool inCell = have && x >= fact.cellX && y >= fact.cellY && x + w <= fact.cellX + fact.cellW && y + h <= fact.cellY + fact.cellH;
+	plog::Info("[outdoor probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d; the entrance cell is %s (%d,%d) %d x %d%s", drlg, room, levelId, x, y, w, h,
+	           have ? "at" : "unknown, last seen at", fact.cellX, fact.cellY, fact.cellW, fact.cellH,
+	           have ? (inCell ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
 }
 
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
@@ -562,6 +691,10 @@ void OutdoorGameLeft() {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_job.reset();
+		g_eventRoom = {};
+		g_bossRoom = {};
+		g_arrival = {};
+		g_arrivalLogged = false;
 	}
 	g_cache.clear();
 	g_slotState.clear();
@@ -570,7 +703,7 @@ void OutdoorGameLeft() {
 void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
 	// The parts are found either way (for 'cartographer check'), but nothing is hooked unless the build is wanted: with OutdoorBuild = 0, or with no
 	// Outdoor slot, the game runs exactly as without this code (no hook on the Act 5 builder, none added to the level build).
-	for (int i = 0; i < OutdoorNeededParts; ++i) {
+	for (int i = 0; i < OwnLevelBuild; ++i) {
 		ResolvePart(context, overrides, ranges, count, g_parts[i]);
 	}
 	if (!g_enabled.load() || g_slotLevel.load() <= 0) {

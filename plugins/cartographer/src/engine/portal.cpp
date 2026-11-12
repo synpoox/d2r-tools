@@ -576,16 +576,23 @@ namespace {
 
 // MazeProbe: once per game, where the local player stands when it is in the Maze slot level (compared with the entrance room).
 void MazeArrivalCheck(Unit* unit) noexcept {
-	if (!MazeArrivalPending()) {
-		return;  // the common case: MazeProbe is off, or the arrival was logged
+	const bool maze = MazeArrivalPending(), outdoor = OutdoorArrivalPending();
+	if (!maze && !outdoor) {
+		return;  // the common case: the probes are off, or the arrivals were logged
 	}
-	const int slot = MazeSlotLevelId();
-	if (slot <= 0 || g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
+	if (g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
 		return;
 	}
 	void* room = Call<UnitRoomFn>(UnitRoom)(unit);
-	if (room != nullptr && Call<RoomLevelFn>(RoomLevelId)(room) == slot) {
-		MazeProbeArrival(room, slot);
+	if (room == nullptr) {
+		return;
+	}
+	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
+	if (maze && level == MazeSlotLevelId() && level > 0) {
+		MazeProbeArrival(room, level);
+	}
+	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {
+		OutdoorProbeArrival(room, level);
 	}
 }
 
@@ -605,7 +612,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		g_firstLogged = true;  // once per game, and only once the player id is known: settles whether LocalPlayerReady.playerId is the unit id
 		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), known);
 	}
-	if (known != NoPlayer && MazeSteeringLive() && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+	if (known != NoPlayer && (MazeSteeringLive() || OutdoorBuildLive()) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MazeArrivalCheck(unit);
 	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
