@@ -475,7 +475,7 @@ TEST_CASE("pickPlayerState: the compiled empty rows of vanilla (39, 92, 116, 230
 	const size_t sz = kStateRowSize;
 	CHECK(empty.size() == sz);
 	const auto skills = noSkills(1);
-	for (uint16_t key : {39, 92, 116, 230, 231}) {
+	for (uint16_t key : std::initializer_list<uint16_t>{39, 92, 116, 230, 231}) {
 		const std::vector<uint8_t> row = compiledEmptyRow(key);
 		// The same row alone in a table of two (row 0 is never taken): the pick is state 1.
 		std::vector<uint8_t> table(2 * sz, 0);
