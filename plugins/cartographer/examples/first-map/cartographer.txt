@@ -2,4 +2,5 @@ Setting	Value
 Properties	6
 EventChance	20
 ItemStats	0
+PlayerStats	0
 Town	Harrogath

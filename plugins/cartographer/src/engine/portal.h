@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/tables.h"
+#include "statplan.h"
 
 #include <D2RLPlugin/api.h>
 
@@ -18,10 +19,11 @@ struct Tables {
 	std::vector<MapDef> maps;
 	Settings settings;
 	std::vector<Slot> slots;
-	// Optional tables, loaded and checked but not applied in game yet.
+	// Optional tables. The pool is applied in game (not yet verified there); shapes and events are loaded and checked only.
 	cartographer::layout::ShapeTable shapes;
 	std::vector<cartographer::stats::PoolRow> pool;  // empty: the built-in pool
 	std::vector<cartographer::events::Row> events;
+	cartographer::statplan::StatIds statIds;  // itemstatcost.txt: stat name -> id, for the map stats
 };
 
 // One engine part and what became of it.

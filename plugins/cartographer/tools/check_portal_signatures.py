@@ -42,6 +42,13 @@ PARTS = [
     ("UnitCoords", 0x34A040, 19, "75", 0),
     ("FindFreeSpot", 0x517F90, 23, "48 8B 05", 0),
     ("PlayerTick", 0x42E350, 27, "0F 84", 14),
+    # Map stats (cartographer.md section 6)
+    ("NewStatList", 0x2F7300, 45, None, 0),
+    ("SetListStat", 0x2F7C00, 0, "FF 25", 0),
+    ("AttachStatList", 0x2F2CB0, 0, "FF 25", 0),
+    ("DetachStatList", 0x2F7920, 9, "E8", 0),
+    ("FreeStatList", 0x2F4180, 3, "74", 0),
+    ("MonsterSetup", 0x494A60, 43, None, 14),
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000

@@ -65,6 +65,7 @@ struct Settings {
 	int properties = DefaultProperties;
 	int eventChance = DefaultEventChance;
 	int itemStats = 0;
+	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
 	std::string town = "Harrogath";
 };
