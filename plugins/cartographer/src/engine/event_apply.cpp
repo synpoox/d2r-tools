@@ -577,6 +577,10 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		plog::Info("event '%s' (%s): armed in the event room %s: %zu per wave", state.event->name.c_str(), ev::kindName(state.event->kind), Describe(rects.server).c_str(), plan.spawns.size());
 		return false;  // not announced yet: the first wave that spawns announces it
 	}
+	if (static_cast<int>(plan.spawns.size()) < plan.requested) {
+		plog::Warn("event '%s' (%s): the event room %s has room for %zu of the %d monsters asked for", state.event->name.c_str(), ev::kindName(state.event->kind),
+		           Describe(rects.server).c_str(), plan.spawns.size(), plan.requested);
+	}
 	int made = 0, failed = 0, supers = 0;
 	for (const ep::Spawn& s : plan.spawns) {
 		bool asSuper = false;
@@ -591,8 +595,8 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 			++failed;
 		}
 	}
-	plog::Info("event '%s' (%s): spawned %d of %zu in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
-	           ev::kindName(state.event->kind), made, plan.spawns.size(), Describe(rects.server).c_str(), supers, failed);
+	plog::Info("event '%s' (%s): spawned %d of %d in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
+	           ev::kindName(state.event->kind), made, plan.requested, Describe(rects.server).c_str(), supers, failed);
 	return made > 0;
 }
 
