@@ -18,6 +18,16 @@ else()
 	target_compile_options(cartographer_layout PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
+# Map events (phase 6a): pure C++, plain structs in and out. Uses the layout headers only (Layout, Point, rng.h).
+add_library(cartographer_events STATIC src/events/events.cpp src/events/events.h)
+target_include_directories(cartographer_events PUBLIC src/events)
+target_link_libraries(cartographer_events PUBLIC cartographer_layout)
+if(MSVC)
+	target_compile_options(cartographer_events PRIVATE /W4 /permissive- /utf-8)
+else()
+	target_compile_options(cartographer_events PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
