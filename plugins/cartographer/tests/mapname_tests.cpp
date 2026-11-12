@@ -353,9 +353,9 @@ TEST_CASE("boss name keys: stable, in the plugin's namespace, one record per nam
 	CHECK(BossStringsJson({"Bad\xff"}).find("\xef\xbf\xbd") != std::string::npos);
 	// The key is ASCII only and one-to-one: space, colon, '_', quote and a byte of 0x80 and above all become '_' and two hex digits.
 	CHECK(BossLocalKey("Shoreline Warden") == "boss_Shoreline_20Warden");
-	CHECK(BossLocalKey("King: a_b \"x\" René") == "boss_King_3A_20a_5Fb_20_22x_22_20Ren_E9");
+	CHECK(BossLocalKey("King: a_b \"x\" Ren\xE9") == "boss_King_3A_20a_5Fb_20_22x_22_20Ren_E9");
 	CHECK(BossLocalKey("a_b") != BossLocalKey("a b"));
-	const std::string hostile = BossStringsJson({"René the Lost", "Badÿ:\"_"});
+	const std::string hostile = BossStringsJson({"Ren\xE9 the Lost", "Bad\xff:\"_"});
 	for (size_t at = hostile.find("\"Key\":\""); at != std::string::npos; at = hostile.find("\"Key\":\"", at + 1)) {
 		for (size_t i = at + 7; hostile[i] != '"'; ++i) {
 			const auto byte = static_cast<unsigned char>(hostile[i]);
