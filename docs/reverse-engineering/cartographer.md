@@ -1,7 +1,7 @@
 # Cartographer native contracts (`cartographer`)
 
-**Status:** the nine maze rows in section 1a have byte signatures, checked statically against a build 93847 dump (no game
-evidence, no hook written); every other row of sections 1 and 2 is still a stub, not validated in this repo. Section 3 records phase 1 (`plugins/cartographer`).
+**Status:** the nine maze rows in section 1a and the twelve phase 1 parts in section 3 have byte signatures, checked statically against a build 93847 dump (no game
+evidence; the portal hooks are written, not validated in game); every other row of sections 1 and 2 is still a stub, not validated in this repo.
 **Date:** 2026-11-11 (carried over from pd2-resurrected research)
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
@@ -59,7 +59,7 @@ running image), not game.
 | Module | `D2R.exe` |
 | Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, under D2RLoader 1.3.1; read from a memory-layout image of the running D2RLoader process (see Evidence), SHA-256 not recorded |
 | Location | Function entry RVAs in the table; every signature starts at the entry (offset 0), so signature match address = function RVA |
-| Guard | The whole signature compared under its mask at the resolved RVA (a hook does this before it patches). Separately, each row records a max patch length: the bytes from the entry before the first relative branch or call, so a phase 3 patch must not split or overwrite one unless D2RLoader relocates it. Three entries are short: `0x32c6a0` 12, `0x360470` 11, `0x360c80` 13 (under the workflow's 14), so for those the masked full signature (25 bytes) is the check |
+| Guard | The whole signature compared under its mask at the resolved RVA (a hook does this before it patches). Separately, each row records a max patch length: the bytes from the entry before the first relative branch, call or RIP-relative instruction (the same definition as section 3; no RIP-relative instruction comes first in any of these nine, so the numbers hold), so a phase 3 patch must not split or overwrite one unless D2RLoader relocates it. Three entries are short: `0x32c6a0` 12, `0x360470` 11, `0x360c80` 13 (under the workflow's 14), so for those the masked full signature (25 bytes) is the check |
 | Contract | Roles as in section 1. Wildcards (`??`) cover relative call and branch displacements and, in `0x32c6a0`, the data-table offset and record size of `imul rcx,[rax+0x18c8],0x1c` (they shift whenever a txt table is added; with them masked the signature is still unique). No RIP-relative data is in a signature |
 | Evidence | Disassembly of the entries (Capstone, over the dump); each signature is the shortest whole-instruction prefix of at least 24 bytes that matches once (after masking) across all executable sections (`.text`, `.maho`, `.koishi`, `.btext`); `.pdata` and direct-call xrefs checked: every address except `0x360470` and `0x360c80` is a `.pdata` function start, those two are leaf functions without unwind data and have 39 and 29 direct callers. Direct callers (E8 only): `0x3e9820` and `0x3e96d0` only from the maze builder `0x3e69e0` (`0x3eb850` has 44 call sites in six functions, `0x3e69e0` among them); `0x3e77a0` calls the overlap checks and `0x360bb0` (consistent with section 1); `0x32c6a0` has one caller, `0x3e7760` |
 | Validation | Static only (the `Evidence` column of the table below says `static` for every row): `plugins/cartographer/tools/check_maze_signatures.py` run on the 93847 image, 9 of 9 unique and resolving to the recorded RVAs. Not tested in game, not checked on Steam build 94995 (same unpacked image per the registry, unverified here), no hook written |
@@ -93,40 +93,108 @@ written from this page alone for the rows without a signature (AGENTS.md); the 1
 
 ## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
 
-**Date:** 2026-11-11. **Status:** code written and built; not installed into a game and not run in game. Nothing here is
-validated at a game level.
+**Date:** 2026-11-11. **Status:** code written and built; byte signatures for all twelve parts recorded and checked
+against a dump of the running image (static). Not installed into a game and not run in game; nothing here is validated at
+a game level.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
-sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`, and the portal hooks are
-not installed (fail open: the item then does what D2R does with an unknown spell). The portal is live only when all
-required parts are on. Hooks go in use-first: the use hook does nothing until the check hook is in, so no portal can open
-ungated. A signature for any part can be supplied without a rebuild in `signatures.txt` (columns `Part`, `Signature`),
+sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
+written at load, and only then, whenever their own two parts resolve; until every required part is on they pass straight
+through to the game (fail open: the item does what D2R does with an unknown spell). The portal is live only when all
+required parts are on, and `cartographer check` can turn it on later by re-finding the called parts. The use hook goes
+in first and acts only while the portal is live, so no portal can open ungated. A signature for any part can be supplied without a rebuild in `signatures.txt` (columns `Part`, `Signature`),
 beside `maps.txt`; it replaces the built-in one.
 
 Build 93847, image stamp `0x6ab3782c`. The RVAs are evidence from pd2-resurrected `plugin/core-maps/map_open.cpp` and
-`plugin/common/pd2_engine.h`; the plugin does not use them.
+`plugin/common/pd2_engine.h` (UnitStat's from d2rAI-toolkit `rvas_93847.h`); the plugin finds the parts by signature and
+does not use them. The signatures are in `plugins/cartographer/src/core/part_signatures.h`.
 
-| Part | Role | RVA (evidence only) | Signature in the plugin | Required |
-|---|---|---|---|---|
-| ItemSpellCheck | Hooked. `(game, player, item, target) -> u64`; item spell 16 is the map | `0x5817f0` | entry bytes `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18` (15); uniqueness not verified, and if it matches more than once the part is off | yes |
-| ItemSpellUse | Hooked. `(game, player, item, target)`; runs the opening | `0x581680` | entry bytes `48 89 5C 24 18 48 89 6C 24 20 56 57 41 57` (14); uniqueness not verified | yes |
-| ItemRecord | Called. `(dataFlag, row) -> record`; record +0x80 code, +0x94 pSpell | `0x314110` | none yet | yes |
-| UnitClassOf | Called. `(unit, file, line) -> row` | `0x349860` | none yet | yes |
-| UnitRoom | Called. `(unit) -> room` | `0x34b440` | none yet | yes |
-| RoomLevelId | Called. `(room) -> level id` | `0x2efc10` | none yet | yes |
-| ClientMessage | Called. `(player, 0x15, player)`: "can't do that" | `0x491960` | none yet | yes |
-| OpenRedPortal | Called. `(game, player, key, level, max)`: red portal 60 by the player; counts openings per key and refuses at `max` (the one-map-per-game rule) | `0x5da800` | none yet | yes |
-| GameCounter | Called. `(game + 0x1aac8, &key) -> int*`; key `'MAPS'` (`0x4d415053`) | `0x5d88b0` | none yet | yes |
-| UnitStat | Called. `(unit, stat, 0) -> int`; stat 12 is the level | not in the registry; to be located from a dump | none yet | yes |
-| UnitCoords | Called. `(unit, int xy[2])` | `0x34a040` | none yet | no (spot check skipped) |
-| FindFreeSpot | Called. `(game, room, xy, 3, 0x400, &found, 5, 100)` | `0x517f90` | none yet | no (spot check skipped) |
+| Field | Record (issue #39) |
+|---|---|
+| Date | 2026-11-11 |
+| Consumer | Cartographer portal (`src/engine/portal.cpp`) |
+| Module | `D2R.exe` |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, under D2RLoader 1.3.1; memory-layout image of the running D2RLoader process (d2rAI-toolkit `tools/dump_image.py`). SHA-256 not recorded: the image is read from process memory, so it is not reproducible byte for byte (D2RLoader writes runtime pointers into it, such as the `UnitStat` thunk slot); the stamp and the checker output identify it |
+| Location | Function entry RVAs in the table; every signature starts at the entry (offset 0), so the match address is the function |
+| Guard | The whole signature compared under its mask at the resolved address; for a part that is only called, a unique match at the entry is the whole guard. For the two hooked parts the guard D2RLoader re-checks is the signature's own first bytes (15 and 14, no `??`), not bytes copied from the live entry at load. Max patch length (hooked parts only): the bytes from the entry before the first relative branch, call or RIP-relative instruction, so a patch must not split or overwrite one; both hooks copy fewer (15 of 44, 14 of 38). Called-only parts show `n/a (called)`: they are never patched, and the value would only invite it. The column reads signature length / max patch, as in section 1a |
+| Contract | Roles and signatures in the table. Wildcards (`??`) cover relative branch and call targets, RIP-relative displacements, struct-table offsets (`ItemRecord`: the table count offset `+0x15a8`) and the thunk's jump slot (`UnitStat`). One exception: `GameCounter` keeps one call displacement unmasked (below) |
+| Evidence | Disassembly of each entry (Capstone, over the dump). Each signature is the shortest whole-instruction prefix of at least 24 bytes that matches once, with masked bytes as wildcards, across all executable sections (`.text`, `.maho`, `.koishi`, `.btext`; each section's VirtualSize, as the plugin scans). Roles checked from the code: `OpenRedPortal` calls `UnitRoom`, a room check, `GameCounter` on `game + 0x1aac8` (read, and incremented after a successful opening), `UnitCoords` and `FindFreeSpot` (`3, 0x400, 5, 100` as recorded), a create call with object 60, and `ClientMessage(player, 0x15, player)` on a refusal; `UnitClassOf` returns `[unit + 4]`; `RoomLevelId` follows `[room + 0x18]` into a function reading `[[level + 0x90] + 0x1f8]`; `ItemRecord` is a bounds-checked `base + row * 0x1c0` over a vector at table `+0x15a0` |
+| Validation | Static only: `plugins/cartographer/tools/check_portal_signatures.py` on the 93847 image, 12 of 12 unique and resolving to the recorded RVAs, and `GameCounter` confirmed as the target of two calls in `OpenRedPortal`; unit tests parse every signature and check each is at least 24 bytes (uniqueness is the checker's job). Not installed into a game, not run in game, not checked on Steam build 94995 |
+| Failure mode | Fail open: a signature with no match or more than one match, or a guard mismatch, logs which part and leaves the portal off |
+| Coexistence | The dump is of a D2RLoader process, so detours already in place show in it. None of the hooked or called entries starts with `E9`; `UnitStat` starts with D2RLoader's own `FF 25` thunk (below). Another plugin detouring a part later fails that part's guard |
+
+| Part | Role | RVA | Signature (offset 0 = function entry) | Offset | Guard / max patch bytes | Required |
+|---|---|---|---|---|---|---|
+| ItemSpellCheck | Hooked. `(game, player, item, target) -> u64`; item spell 16 is the map | `0x5817f0` | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 30 48 8B EA 48 8B F1` | 0 | 30 / 44 (hook copies 15) | yes |
+| ItemSpellUse | Hooked. `(game, player, item, target)`; runs the opening | `0x581680` | `48 89 5C 24 18 48 89 6C 24 20 56 57 41 57 48 83 EC 30 48 8B EA 48 8B F1` | 0 | 24 / 38 (hook copies 14) | yes |
+| ItemRecord | Called. `(dataFlag, row) -> record`; record +0x80 code, +0x94 pSpell | `0x314110` | `40 57 48 83 EC 30 8B FA E8 ?? ?? ?? ?? 3B B8 ?? ?? ?? ?? 72 ?? 33 C0 48 83 C4 30` | 0 | 27 / n/a (called) | yes |
+| UnitClassOf | Called. `(unit, file, line) -> row` | `0x349860` | `48 83 EC 28 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC B8 FF FF FF FF 48 83 C4 28 C3 8B 41 04` | 0 | 41 / n/a (called) | yes |
+| UnitRoom | Called. `(unit) -> room` | `0x34b440` | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 8B 0B 83 E9 02 74 ?? 83 E9 02 74 ?? 83 F9 01 74 ?? 48 8B 4B 38 48 85 C9 74 ?? 48 83 C4 20` | 0 | 63 / n/a (called) | yes |
+| RoomLevelId | Called. `(room) -> level id` | `0x2efc10` | `48 85 C9 75 ?? 33 C0 C3 48 8B 49 18 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 48 85 C9` | 0 | 35 / n/a (called) | yes |
+| ClientMessage | Called. `(player, 0x15, player)`: "can't do that" | `0x491960` | `48 89 5C 24 08 48 89 74 24 18 57 48 83 EC 20 49 8B F8 0F B7 F2 48 8B D9` | 0 | 24 / n/a (called) | yes |
+| OpenRedPortal | Called. `(game, player, key, level, max)`: red portal 60 by the player; counts openings per key and refuses at `max` (the one-map-per-game rule) | `0x5da800` | `48 89 5C 24 08 48 89 6C 24 10 44 89 44 24 18 56 57 41 56 48 83 EC 70 48 8B E9` | 0 | 26 / n/a (called) | yes |
+| GameCounter | Called. `(game + 0x1aac8, &key) -> int*`; key `'MAPS'` (`0x4d415053`) | `0x5d88b0` | `48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 41 08 4C 8B F2 48 8B D9 4D 85 C0 75 ?? 48 8B 11 E8 A4 3F 00 00` | 0 | 44 / n/a (called) | yes |
+| UnitStat | Called. `(unit, stat, layer) -> int`; stat 12 is the level | `0x2f5020` (d2rAI-toolkit `rvas_93847.h`; pd2-resurrected: a jump into D2RCore) | `FF 25 ?? ?? ?? ?? 90 90 90 90 48 89 74 24 20 57 48 83 EC 20 41 0F B7 E8 8B FA` | 0 | 26 / n/a (called) | yes |
+| UnitCoords | Called. `(unit, int xy[2])` | `0x34a040` | `48 89 5C 24 10 57 48 83 EC 20 48 8B FA 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 85 FF 75 ?? 48 8D 4C 24 30 40 88 7C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 8B 0B 83 E9 02 74 ?? 83 E9 02 74 ?? 83 F9 01 74 ?? 48 8B 4B 38 48 85 C9` | 0 | 89 / n/a (called) | no (spot check skipped) |
+| FindFreeSpot | Called. `(game, room, xy, 3, 0x400, &found, 5, 100)` | `0x517f90` | `48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 90 00 00 00 48 8B 05 ?? ?? ?? ??` | 0 | 30 / n/a (called) | no (spot check skipped) |
+| PlayerTick | Hooked (issue #40). The player mana step `(game, player) -> al`; the server runs it once per frame for every live player, so the console command gets a game and a player there. Optional: the map item does not need it | `0x42e350` | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??` (81 bytes, `??` on every rel32; hook cuts the first 14: five whole instructions, no relative operand) | 0 | 14 hook bytes (first 14 of the signature, no `??`) | no (console command only) |
+
+PlayerTick evidence (static, read-only, against `D2RLoader_6ab3782c_dump.exe`, a memory-layout dump made by
+d2rAI-toolkit `tools/dump_image.py`): the 81-byte signature has 1 match (RVA `0x42e350`; its first 14 bytes alone match 15
+places, so the whole signature is used). It runs past the prologue into the body (null check of the player, the
+`8D 53 55` = state 0x55 test), so another function cannot become the unique match by register allocation alone.
+Reproduce: read the dump file, convert the signature to a regex (`??` = `.`, with `re.S`) and `finditer` over all bytes:
+one match at `0x42e350`. The call at `0x42e74d` (`E8 FE FB FF FF`) resolves to `0x42e350` too. `rdx` is the player and `rcx`
+the game (saved to `rdi`/`r15` at entry). Its only caller is the player regen tick `0x42e600` (better-auras.md section 4),
+which reaches it on every path for a live player (`0x42e74d`). `0x42e600` itself is hooked by Better Auras, and a second
+hook on the same entry is refused, so the tick part uses `0x42e350` instead. Contract: the hook calls the original
+first, then serves a posted console request when the unit is a player (`+0` == 0) whose unit id (`+8`) equals the
+`playerId` of the SDK's `LocalPlayerReady` event, using the SDK event as the source of "which player is local". That
+`playerId` is the unit id is an assumption (not documented by the SDK): if it is wrong, the request is dropped after 10 s
+with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
+`cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
+The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
+checks in the plugin README. Not validated in game.
+
+Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the nearest `.pdata` entry before it starts at `0x2efb70`, a different function). The plugin checks `.pdata` only for hooked parts overridden in `signatures.txt`, so `RoomLevelId` needs only a unique match. None looks wrong. Findings per part:
+
+- **ItemSpellCheck, ItemSpellUse:** the 15 and 14 entry bytes recorded earlier were not unique (3140 and 11 matches in the
+  executable sections), so with them both parts would have stayed off. Extended to 30 and 24 bytes, each unique; the hook
+  sizes are unchanged and inside the max patch length.
+- **UnitStat (load timing):** the parts are looked up once at plugin load, so the thunk must already be in place then; the dump
+  shows it only in a running process. If it is not, the part and the portal stay off until `cartographer check` looks again
+  (it re-scans all called parts with the load-time overrides and turns the portal on if every required part is found; it never
+  writes code: the two item hooks are installed at load when their own parts resolve, and pass through to the game until the
+  portal is on, so a missing hooked part needs a restart). Put "UnitStat found at load" on the in-game checklist.
+- **UnitStat:** `0x2f5020` is a D2RLoader thunk, `jmp [rip+x]` plus four NOPs, into D2RCore (pd2-resurrected found the same);
+  the bytes after it are the dead original body, and calling the thunk is the way to read a stat. The signature covers the
+  thunk and the start of the dead body, so it exists only while D2RLoader's thunk is in place; without it the part is off.
+  The jump slot is masked. Do not patch it.
+- **RoomLevelId:** a 17-byte wrapper (`[room + 0x18]`, then a jump). Four wrappers have the same masked bytes (`0x2efc10`,
+  `0x2efc30`, `0x2efd00`, `0x2f0720`; the next one, `0x2efc30`, is also a twin and jumps to `0x360fd0`). `0x2efc10` is
+  unique only because it is the one twin followed by padding and another twin, so the signature takes in the 15 bytes of padding
+  and the next function's first three bytes. Its uniqueness rests on code layout: a linker reordering, a change to the
+  neighbour or to the padding breaks it (fail open). A sturdier way for later is to find it through a caller or its jump
+  target `0x360fc0` and follow the rel32.
+- **GameCounter:** an `unordered_map<int,int>` lookup, and three copies of it have identical bytes apart from their call
+  displacements (`0x5d88b0`, `0xd8590`, `0x8723b0`). No fully masked signature tells them apart, so the first call
+  displacement (`E8 A4 3F 00 00`, to the map's rehash helper) is kept unmasked. This is the most build-sensitive signature
+  here: a game update that moves the helper turns the part off (fail open), and the signature is then re-derived. `tools/check_portal_signatures.py` also checks that `OpenRedPortal` contains
+  two `E8` calls (at `+0x5e` and `+0x13e`) whose target is the matched `GameCounter`, which ties the right copy to a unique part;
+  a later step could derive `GameCounter` from there.
+- **UnitRoom, UnitCoords:** share an assert-check prologue with many accessors, so the shortest unique prefix is long
+  (63 and 89 bytes); `UnitCoords` is optional.
 
 Game layout used: `game + 0x104` difficulty (u8), `game + 0x106` data flag (u8), `game + 0x1aac8` counters; item
 record `+0x80` code (4 letters), `+0x94` pSpell. Item spell 16 is free in vanilla D2R. The town is Harrogath, level 109.
 
-Guard: one signature match per part, and D2RLoader re-checks the copied entry bytes of the two hooks. Failure mode for
-every part: fail open, log the reason, leave the portal off. Coexistence: another plugin hooking the same dispatchers is
-not handled; D2RLoader refuses a second hook on the same bytes and the part then reports that.
+Failure mode for every part: fail open, log the reason, leave the portal off. Coexistence: another plugin hooking the
+same dispatchers is not handled; D2RLoader refuses a second hook on the same bytes and the part then reports that.
 
-What remains: dump the running game (`d2rAI-toolkit/tools/dump_image.py`, read-only), record a unique signature for each
-"none yet" part, confirm the two entry signatures are unique, then run the game check listed in the plugin README.
+Re-check on a new build: write a memory-layout image with d2rAI-toolkit's `tools/dump_image.py` (game running through
+D2RLoader), then `python -I plugins/cartographer/tools/check_portal_signatures.py <image> --stamp <stamp>`. The packed
+`D2R.exe` on disk cannot be checked (encrypted code).
+
+What remains: the in-game check listed in the plugin README and the #20 pull request (install, the signatures all
+resolving at load with `cartographer check`, the hooks going in, one opening and the refusals). Nothing in section 3 is
+validated in game, and the hook entries and `UnitStat`'s thunk are only checked in the dump of a running process.
