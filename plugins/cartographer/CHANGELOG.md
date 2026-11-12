@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `cartographer check` and the report now say when `core-maps` is loaded too; use one or the other.
-- Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, reports problems in them (including a column that appears twice), and lets a map's `Shape` name a `shapes.txt` row (read and checked only; not applied in game yet). A number too big for the game is cut, and the message then adds "(you typed ...)".
+- Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt` and reports problems in them (read and checked only; not applied in game yet).
 - New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
 - Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
 - Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.
