@@ -1172,8 +1172,8 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 
 ### Open
 
-- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142, and it needs the S2 spike (#89). The whole feature stays off until a game check settles it.
-- The entry room: whether the plan's entrance cell is where the player arrives is also #142.
+- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142; the S2 spike (section 16) saw the void edge as acceptable in game (dark rock, no hole). The whole feature stays off until the builder itself is checked in game.
+- The entry room: whether the plan's entrance cell is where the player arrives is also #142 (section 16: a portal arrival landed in the entry cell, with a room flag the spike set).
 - Nothing opens an outdoor map yet (#144), so `OutdoorMapOpened` has no caller.
 - `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
 - Nothing here has run in a game.
@@ -2080,3 +2080,59 @@ The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), 
 ### Game check (listed for later)
 
 A map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; the log shows the row and record writes; read a monster's level and kinds. Then `Density` 100 and `Uniques` 100 on a slot with a nonzero base and count packs. Leave the game and check the log reports the row put back.
+
+## 16. Outdoor S2 spike results (issue #89)
+
+Spike: `plugins/cartographer-outdoor-spike/` on `spike/cartographer-outdoor-s2` (never merged). Build 93847, slot 5 test save, level 138 (Act 5, DrlgType 3, LevelType 21), layout `*E,EWS,SW/-,*N,NS/-,-,*N` (3 x 3 blocks of 32 x 32 tiles: an L plus a branch; `*` is a Pygmy clearing; level rect `6000,3000 96x96`). Status per item: **live** = seen in a running game, **static** = from code or a log of the build, not walked.
+
+| Item | Result |
+|---|---|
+| Layout stamps and the level builds | **Live.** 6 pieces stamped, 96 rooms for 6 blocks (16 rooms of 8 x 8 per block); `0x3ee780` made no rooms for the 3 void blocks. |
+| Void edge (`0x3ede00`, grid `+0x58` = `0x100`, no room) | **Live, acceptable.** A `cheat goto` onto a void block does not place the player there: the game falls back to the entry (tiles 19,18). A click-walk from the entry toward the void block below it stopped at tile y 24 inside the entry clearing (the block begins at y 32). The screenshots show dark rock, not a hole. Fill or a border piece is **not needed for play**; the automap edge was not checked. |
+| Edges walk as predicted | **Live for 4 of 5.** Walked: (0,0) to (1,0) (tile x 19 to 34); (1,0) to (1,1) (tile y 17 to 43); (1,0) to (2,0) (x 59 to 68, past 64); (2,0) to (2,1) (y 17 to 42, x 78). **Static only: (2,1) to (2,2):** `cheat goto` reaches the block centre (80,80) with the player on open ground, but the click-walk from (2,1) stopped at (78,42), so no crossing was walked. The client loads collision only a few rooms around the player (a whole-level dump shows 95 to 100 % blocked), so a walker works from the position, not from a whole-map dump. |
+| Portal lands on the entry cell | **Live.** `OpenRedPortal(game, player, key, 138, 1)` returned 1 and the portal opened in town; entering it logged `ARRIVAL ... subtile (30098,15082) tile (6019,3016) level-relative (19,16) = cell (0,0): IN THE ENTRY CELL`. The finder (`0x3da650`) took the room the spike marked with `0x30000` (tile 16,16 of the entry cell). Not tested without the mark (`arrival = "other"`). |
+| Boss cell is a clearing | **Live.** The `*N` cell (1,1) shows the open Pygmy clearing with monsters in it (a Demon Rascal is named on screen); the player stood in it. The monster and object rows were those cloned from Act 5 row 111, so the layout alone does not decide what fills a clearing. |
+
+### Findings
+
+- `Vis0` to `Vis7` = 0 is recorded in section 8a (slot row requirements); the crash with `-1` was reproduced here.
+- The portal builds the level on the server inside the `OpenRedPortal` call; the client builds it again on arrival. The stamper and the void marking therefore run twice per entry, once per side, and both runs must give the same grid.
+- `OpenRedPortal`'s last argument is `1`, as the maps plugin passes it.
+- `core-maps.dll` was out of the test slot's plugins, so the spike's row 138 and hooks were the only users of the level build.
+- D2RCore needs `data\global\excel\d2rloader\core-ui\automap.txt` in the mod folder; without it the game asserts at start and faults.
+
+### What the outdoor builder still needs before players get outdoor maps
+
+1. A position-driven walk test over the whole layout (this spike crossed four of five edges by guided pathing), and a check that every `*` clearing joins its path piece in every orientation the generator can produce.
+2. The slot row as engine contract: `Vis` `0`, one row per slot with the offset and size the layout needs (section 8 Q4), and one shared hook on `0x3271c0` (section 3).
+3. A server-to-client consistency rule: both sides stamp from a seed or layout sent with the portal, never from independent random picks (section 12).
+4. Monster and object population per clearing, boss placement in the clearing, and an exit or waypoint to leave the map (the spike had none; the way out was the town portal).
+5. Automap and minimap edge behaviour, a border piece or fill if the automap shows the void, and the arrival choice made by the layout (the entry cell) instead of a spike-side room flag.
+6. The real player flow: the map item and portal tooltip path (sections 3 and 10) driving this slot, multiplayer sync (section 12) and a sweep over layouts and LevelTypes; none of that was run in this spike.
+
+## 17. AutoCheck: a game check the plugin runs by itself (issue #173)
+
+`AutoCheck=1` and `AutoCheckMap=<map Name>` in `cartographer.txt` (test slots only). In a Hell game the plugin opens the map through the console path's own gates and `OpenMapPortal` (no item), waits for the player to be in the portal level, logs the arrival, moves the player into the plan's boss room (the `goto` route), and writes `AUTOCHECK PASS|FAIL <item>` for `open`, `arrival`, `boss`, `monster-settings` and `stat-changes`, then `AUTOCHECK DONE pass=N fail=M` (an item that does not apply is written `AUTOCHECK N/A <item>` and counted as `n/a=K`, not in `pass`). Code: `src/engine/auto_check.cpp`; pure parts (checklist, lines, setting, stand point): `src/autocheck`. `AutoCheck=1` also turns on the arrival probe (the `[maze probe] arrival` line), nothing else of `MazeProbe`.
+
+### New part
+
+| Part | Role | RVA | Signature | Max patch / hook | Guard |
+|---|---|---|---|---|---|
+| UnitMove | Called. `(game, unit, room, x, y, arg6, arg7)` puts a unit at a subtile position in `room`; returns 0 when it could not. With a null room it only tries the unit's own room and its neighbours (`0x38dfb0`, `0x2efde0`), so a far cell fails: the check passes the room it found. arg6 (`[rbp+0x77]`): nonzero skips the free-spot search `0x362f90` (mask `0x1c09`). arg7 (`[rbp+0x7f]`): nonzero resets the path (`0x342210`) and sets unit flag `0x40000000` (`0x34e140`). Both are 0 here | `0x491ca0` | `40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11` | 25 (security cookie load) / 0, only called | 60-byte signature unique across the executable sections |
+| RoomAtTile | Called. `(dataFlag, act, tileX, tileY)` finds the room holding that tile of the act's levels. It is not a pure lookup: with no room and no level holding the tile it goes on through the find-or-create level function `0x3267c0` (id 0 when no level of the act holds the tile), which can allocate and link a new level into that act and build its rooms, so it must only be called on the act the tile belongs to. A 9-byte thunk (`mov rdx,[rdx+0x70]; jmp 0x328900`); callers: `goto` (`0x41031f`) and `0x49015c`. `act` is an element of the game's act list (`game+0x190`: pointer to the acts, count at +8; `0x4900c0..0x490110` index it with the byte `0x3e2b5c8` returns). The check does not call the loader import: it takes the act from the slot's levels.txt Act (`Slot::act`, the value `0x3e2b5c8` returns for the level), checks it against the count and that `acts[act]` and `acts[act]+0x70` are readable, calls the lookup once, and keeps the room only when its level (`RoomLevelId`) is the slot level; any failed step logs the reason and the player walks | `0x2f0810` | `48 8B 52 70 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC 48 8B 49 18 E9` (the padding and the next thunk make it unique; the 9-byte form matches 3 places) | 4 (the `jmp`) / 0, only called | 21-byte signature unique |
+| RoomBringUp | Called. `(game, room)`: builds and populates the room if it is not up (`0x48f190`, `0x503790`, `0x510f00`, populate `0x50acf0`, then `0x2f04e0`). The populate reaches the plugin's hook, so the check calls it with its own lock released | `0x4042a0` | `48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 85 C0 75 ?? 48 8B D3 48 8B CF E8` | 16 (first `call`) / 0, only called | 40-byte signature unique |
+
+The route is the one the console command `cheat goto` uses (handler `0x4100e0`, table record at `0x238bba0`; calls at `0x41031f`, `0x410332`, `0x410358`): find the room, bring it up, `UnitMove` into it. x and y are subtiles (the handler divides by 5 for the lookup). `goto` also calls `0x488180(game, player, levelId, 0)` to enter a level; the check does not use it: the portal is entered by hand so the arrival check stays real. Each part is resolved on its own; if any is missing, or the room is not found, or `UnitMove` returns 0, the boss step logs why and waits for the player to walk (120 s). Before the move, and while waiting for the Boss, the check re-reads that the player is in the slot level of a Hell game; if not, the Boss is a FAIL (`the player left the map`).
+
+Evidence: disassembly over the dump (`dump_dis.py`, stamp `0x6ab3782c`), signature uniqueness by `check_portal_signatures.py`. The act-list layout and the argument meanings are read from code, not run.
+
+### Searched, not found (static)
+
+- **Entering a portal (moving the player to another level).** `cheat goto` does it through `0x488180(game, player, levelId, 0)` (handler `0x4100e0`, found through the console cheat table at `0x238b120`), but it does not walk through the portal, so using it would skip the arrival check. The check therefore waits (180 s) for the player to walk into the red portal and logs `AUTOCHECK waiting`.
+- **Leaving the game.** The dump has the strings `ExitGame`, `QuitGameConfirmation` and `Leave Game`, but no handler was followed to a callable function, and the SDK has no leave call. After `AUTOCHECK DONE` the plugin logs `AUTOCHECK LEAVE not done` and the checker uses Save and Exit.
+
+Both are desk results (static only); finding them needs a debugger session in a test slot.
+
+### Needs a game
+
+Everything above. The unit mover's meaning of `x`/`y` (subtiles, as the server room rect is) and that standing in the boss room wakes its population are read from code and from the earlier `cheat goto 138,25020,10130` evidence, not run. A passing run needs: Hell game, a character in Harrogath, the map's slot installed, then one click on the portal.
