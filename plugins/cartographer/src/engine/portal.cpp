@@ -452,6 +452,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	return result;
 }
 
+void (*g_firstGameStart)() noexcept = nullptr;
+std::atomic<bool> g_firstGameStartDone{false};
+
 void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::GameplayEvent* event, void*) noexcept {
 	if (!D2RL::Lifecycle::HasGameplayEventField(event, D2RL::Lifecycle::GameplayEventRequiredSize)) {
 		return;
@@ -459,6 +462,9 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 	if (event->kind == D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady) {
 		plog::Info("local player ready (unit id %u)", event->playerId);
 		g_localPlayer = event->playerId;
+		if (g_firstGameStart != nullptr && !g_firstGameStartDone.exchange(true)) {
+			g_firstGameStart();
+		}
 		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
 		g_firstLogged = false;
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
@@ -630,6 +636,10 @@ auto RequestOpen(const std::string& name, std::string* mapName) -> OpenStart {
 		Tell("Cartographer: your earlier open request was never served and was dropped.");
 	}
 	return OpenStart::Posted;
+}
+
+void SetFirstGameStartNotify(void (*notify)() noexcept) {
+	g_firstGameStart = notify;
 }
 
 void SetTables(std::shared_ptr<const Tables> tables) {
