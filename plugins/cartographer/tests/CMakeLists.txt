@@ -21,6 +21,18 @@ foreach(test_source IN LISTS cartographer_core_tests)
 	target_compile_definitions(${test_name} PRIVATE CARTOGRAPHER_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../examples/first-map")
 endforeach()
 
+# outline_shapes_tests: the shapes live in the outdoor core (src/outdoor/outline_shapes.*), so the glob above skips them (no cartographer_outline_shapes target).
+add_executable(outline_shapes_tests outline_shapes_tests.cpp)
+target_link_libraries(outline_shapes_tests PRIVATE cartographer_outdoor)
+target_include_directories(outline_shapes_tests PRIVATE ../third_party/doctest)
+if(MSVC)
+	target_compile_options(outline_shapes_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+	set_property(TARGET outline_shapes_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+else()
+	target_compile_options(outline_shapes_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME outline_shapes_tests COMMAND outline_shapes_tests)
+
 # Catalogue tool tests (Python). Kept separate so it survives PR #42's CMake restructure.
 # CARTOGRAPHER_NO_DATA=1: CI has no game data.
 find_package(Python3 COMPONENTS Interpreter)
