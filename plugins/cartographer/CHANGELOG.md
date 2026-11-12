@@ -25,4 +25,4 @@
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
-- A map gives you at most 16 player stats, so the character sheet always matches (experimental).
+- A map gives you at most 16 stats, the most the character sheet can show (experimental).

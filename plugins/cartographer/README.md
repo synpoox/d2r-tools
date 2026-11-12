@@ -79,7 +79,7 @@ in [`examples/first-map/`](examples/first-map/).
 |---|---|---|
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
-| PlayerStats | `1` applies the map's player properties; test characters only | 0 |
+| PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
 | MapNames | `1` shows a map's own name on the portal, automap and banner (experimental) | 0 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |

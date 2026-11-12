@@ -95,15 +95,25 @@ TEST_CASE("buildPlan splits by target and resolves ids")
 	CHECK(describe(plan) == "monsters: item_maxhp_percent(1)=+30, damagepercent(4)=+15; players: fireresist(2)=-20");
 }
 
-TEST_CASE("buildPlan keeps at most 16 player stats and says why")
+TEST_CASE("buildPlan keeps the first 16 player stats in plan order and says why")
 {
+	std::string text = "Stat\tSend Other\n";
+	for (int i = 0; i < 20; ++i) text += "filler" + std::to_string(i) + "\t1\n"; // ids 0..19 include refused ones
 	std::vector<Property> props;
-	for (int i = 0; i < 18; ++i) props.push_back({Target::Players, "strength", i + 1});
-	props.push_back({Target::Monsters, "strength", 5});
-	const Plan plan = buildPlan(props, testIds(), true);
-	CHECK(plan.players.size() == 16);
+	for (int i = 0; i < 18; ++i) {
+		text += "capstat" + std::to_string(i) + "\t1\n";
+		props.push_back({Target::Players, "capstat" + std::to_string(i), i + 1});
+	}
+	props.push_back({Target::Monsters, "capstat0", 5});
+	const Plan plan = buildPlan(props, parseItemStatCost(text), true);
+	REQUIRE(plan.players.size() == 16);
+	for (size_t i = 0; i < 16; ++i) CHECK(plan.players[i].name == "capstat" + std::to_string(i));
 	CHECK(plan.monsters.size() == 1);
-	CHECK(plan.skipped.size() == 2);
+	REQUIRE(plan.skipped.size() == 2);
+	CHECK(plan.skipped[0].stat == "capstat16");
+	CHECK(plan.skipped[1].stat == "capstat17");
+	CHECK(plan.skipped[0].why == "the game sends at most 16 stats of a list to the character sheet");
+	CHECK(plan.skipped[1].why == plan.skipped[0].why);
 }
 
 TEST_CASE("buildPlan skips what it cannot resolve, with a reason")
