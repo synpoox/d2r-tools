@@ -226,12 +226,9 @@ auto SlotNameFor(const MapDef& map) noexcept -> const char* {
 	return MapSlotName(map);
 }
 
-// What stops an outdoor map from opening, or empty: OutdoorBuild is 0 (the hooks are then not installed), a part or hook is missing, the Outdoor slot row is
+// What stops an outdoor map from opening, or empty: a part or hook is missing, the Outdoor slot row is
 // refused (a vanilla level, not Act 5) or has another LevelType or DrlgType than the tileset needs.
 auto OutdoorProblem(const MapDef& map, const Tables& tables) -> std::string {
-	if (tables.settings.outdoorBuild == 0) {
-		return "Cartographer: " + map.tileset + " maps need OutdoorBuild = 1 in cartographer.txt (it is 0, so the outdoor build is off). Set it and restart the game.";
-	}
 	if (!OutdoorBuildLive()) {
 		return "Cartographer: the outdoor build is not running, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
 	}

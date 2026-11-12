@@ -85,7 +85,6 @@ LevelBuildFn g_ownLevelOriginal = nullptr;
 bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the maze hook did not): written at load only
 
 std::atomic<bool> g_live{false};     // every part is on and the hooks are in
-std::atomic<bool> g_enabled{false};  // OutdoorBuild = 1
 std::atomic<bool> g_probe{false};
 std::atomic<int> g_slotLevel{-1};  // the slot level of the open map (Jungle's until a map is opened); -1 with no outdoor slot
 // One outdoor slot per row of the tileset table (outdoor_tilesets.h); the index is the row's. An unknown tileset gets row 0.
@@ -573,7 +572,7 @@ auto OwnLevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 }  // namespace
 
 auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result) noexcept -> bool {
-	if (!g_live.load(std::memory_order_relaxed) || !g_enabled.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
+	if (!g_live.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
 		return false;  // every other level runs the game's own build, untouched
 	}
 	bool hadJob = false;
@@ -732,7 +731,6 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 		firstLevel = found[i] != nullptr ? found[i]->level : -1;
 	}
 	g_slotLevel = firstLevel;
-	g_enabled = tables != nullptr && tables->settings.outdoorBuild != 0;
 	g_probe = tables != nullptr && (tables->settings.outdoorProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
 
@@ -779,20 +777,19 @@ void OutdoorGameLeft() {
 }
 
 void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
-	// The parts are found either way (for 'cartographer check'), but nothing is hooked unless the build is wanted: with OutdoorBuild = 0, or with no
+	// The parts are found either way (for 'cartographer check'), but nothing is hooked without an
 	// Outdoor slot, the game runs exactly as without this code (no hook on the Act 5 builder, none added to the level build).
 	for (int i = 0; i < OwnLevelBuild; ++i) {
 		ResolvePart(context, overrides, ranges, count, g_parts[i]);
 	}
-	if (!g_enabled.load() || g_slotLevel.load() <= 0) {
+	if (g_slotLevel.load() <= 0) {
 		for (Part& part : g_parts) {
 			if (part.status.on) {
 				part.status.on = false;
-				part.status.detail = "found, not hooked: the outdoor build is off";
+				part.status.detail = "found, not hooked: no Outdoor slot";
 			}
 		}
-		plog::Info(g_slotLevel.load() > 0 ? "outdoor build off (OutdoorBuild = 0); no outdoor hook installed. Restart the game to turn it on"
-		                                 : "no Outdoor slot (slots.txt); no outdoor hook installed");
+		plog::Info("no Outdoor slot (slots.txt); no outdoor hook installed");
 		return;
 	}
 	bool allOn = true;
@@ -845,8 +842,7 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 		return;
 	}
 	g_live = true;
-	plog::Info("the outdoor build hooks are in%s; the build itself is %s (OutdoorBuild in cartographer.txt)", g_ownLevelBuild ? " (with their own level build hook)" : " (behind the maze steering's level build hook)",
-	           g_enabled.load() ? "on" : "off");
+	plog::Info("the outdoor build hooks are in%s", g_ownLevelBuild ? " (with their own level build hook)" : " (behind the maze steering's level build hook)");
 }
 
 }  // namespace carto

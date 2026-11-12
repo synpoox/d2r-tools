@@ -20,7 +20,7 @@ struct Tileset {
 };
 
 // Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the outdoor tilesets (the table in
-// outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot and OutdoorBuild = 1
+// outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
@@ -699,9 +699,17 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorBuild", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
+	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
+	bool retiredNoted = false;
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
+		if (EqualsNoCase(key, "OutdoorBuild")) {  // retired: outdoor maps are always built
+			if (!retiredNoted) {
+				report.Note(SettingsFile, row.line, "setting 'OutdoorBuild' is no longer used: outdoor maps are always built. The line is ignored.");
+				retiredNoted = true;
+			}
+			continue;
+		}
 		const std::string* name = Canonical(known, key);
 		const auto fail = [&](const std::string& message) { report.Error(SettingsFile, row.line, message + " The default is kept."); };
 		if (name == nullptr) {
@@ -740,9 +748,6 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "MazeProbe") {
 			hi = 1;
 			target = &settings.mazeProbe;
-		} else if (*name == "OutdoorBuild") {
-			hi = 1;
-			target = &settings.outdoorBuild;
 		} else if (*name == "OutdoorProbe") {
 			hi = 1;
 			target = &settings.outdoorProbe;

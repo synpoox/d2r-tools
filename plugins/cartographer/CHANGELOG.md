@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
@@ -31,10 +32,10 @@
 - The map Boss and events are placed in the right room of a maze map.
 - Outdoor map events and Boss minions get their full count, not just four.
 - Hosts and players need the same version of Cartographer to share a map; older versions no longer connect for map sync.
-- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (needs `OutdoorBuild=1`, not checked in game).
-- Outdoor maps (off, not checked in game): you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
-- Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
+- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (not checked in game).
+- Outdoor maps: you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
+- Jungle maps open from their item through a new `Outdoor` level (run `tools\install.ps1` again).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
-- Snow maps open from their item through a new `OutdoorSnow` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
-- Snow maps (off, not checked in game): you arrive in a planned entrance area, and the map Boss and event use their planned areas.
+- Snow maps open from their item through a new `OutdoorSnow` level (run `tools\install.ps1` again).
+- Snow maps: you arrive in a planned entrance area, and the map Boss and event use their planned areas.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
