@@ -217,3 +217,62 @@ TEST_CASE("golden draws")
 	Settings d;
 	CHECK(dump(drawMapStats(0xDEADBEEFCAFEull, MapRow{}, d, {})) == "M:coldresist=17 M:fireresist=20 M:item_maxhp_percent=59 P:coldresist=-18 P:poisonresist=-21 P:fireresist=-32 ");
 }
+
+TEST_CASE("Weight rule: 0 is off, negative is an error, big weights are not squashed")
+{
+	std::vector<PoolRow> pool = {{Target::Monsters, "off", 1, 1, 0}, {Target::Monsters, "neg", 1, 1, -1},
+		{Target::Monsters, "a", 1, 1, 5000}, {Target::Monsters, "b", 1, 1, 2000}};
+	const auto issues = checkPool(pool);
+	REQUIRE(issues.size() == 1); // 0 gives nothing, 5000 is under the cap
+	CHECK(issues[0].error);
+	CHECK(issues[0].row == 1);
+	CHECK(!issues[0].message.empty());
+
+	Settings s;
+	s.properties = 1;
+	int a = 0;
+	for (uint64_t seed = 0; seed < 4000; ++seed) {
+		const auto r = drawMapStats(seed, MapRow{}, s, pool);
+		REQUIRE(r.size() == 1);
+		REQUIRE(r[0].stat != "off");
+		REQUIRE(r[0].stat != "neg");
+		a += r[0].stat == "a";
+	}
+	CHECK(a > 2650); // 5000:2000 is about 71%, not 50% as a cap of 1000 would give
+	CHECK(a < 3050);
+}
+
+TEST_CASE("Weight above the cap warns and is clamped; the total is 64-bit")
+{
+	std::vector<PoolRow> pool = {{Target::Monsters, "x", 1, 1, 2000000000}, {Target::Monsters, "y", 1, 1, kMaxWeightLimit}};
+	const auto issues = checkPool(pool);
+	REQUIRE(issues.size() == 1);
+	CHECK(!issues[0].error);
+	CHECK(issues[0].row == 0);
+
+	// Both rows count as 1,000,000, so x and y are about even.
+	Settings s;
+	s.properties = 1;
+	int x = 0;
+	for (uint64_t seed = 0; seed < 2000; ++seed) x += drawMapStats(seed, MapRow{}, s, pool)[0].stat == "x";
+	CHECK(x > 850);
+	CHECK(x < 1150);
+
+	// A pool whose total passes 2^32 still draws every row.
+	std::vector<PoolRow> big;
+	for (int i = 0; i < 5000; ++i) big.push_back({Target::Monsters, "s" + std::to_string(i), 0, 0, kMaxWeightLimit});
+	s.properties = 5000;
+	CHECK(drawMapStats(7, MapRow{}, s, big).size() == 5000);
+}
+
+TEST_CASE("checkPool warns about Min/Max beyond the bound and Max below Min")
+{
+	std::vector<PoolRow> pool = {{Target::Players, "ok", 1, 5, 1}, {Target::Players, "huge", -2000000000, 5, 1},
+		{Target::Players, "flip", 9, 3, 1}};
+	const auto issues = checkPool(pool);
+	REQUIRE(issues.size() == 2);
+	CHECK(issues[0].row == 1);
+	CHECK(issues[1].row == 2);
+	CHECK(!issues[0].error);
+	CHECK(!issues[1].error);
+}

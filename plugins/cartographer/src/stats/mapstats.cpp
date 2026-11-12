@@ -1,6 +1,7 @@
 #include "mapstats.h"
 
 #include <cstddef>
+#include <string>
 
 #include "../layout/rng.h"
 
@@ -11,10 +12,10 @@ namespace {
 // Keeps this stream apart from the layout's stream for the same map seed.
 constexpr uint64_t kStatsSalt = 0x4D41505354415453ull; // "MAPSTATS"
 
-// Min/Max are clamped so Pcg32::range's hi - lo + 1 cannot overflow int; weights are clamped so the
-// total of any realistic pool (under 4 million rows) fits the 32 bits below() takes.
-constexpr int kBound = 500000000;
-constexpr int kMaxWeight = 1000;
+// Min/Max are clamped so Pcg32::range's hi - lo + 1 cannot overflow int. Weights are clamped to kMaxWeight (high
+// enough not to distort normal input) and summed in 64 bits, so no pool size can overflow the total.
+constexpr int kBound = kMaxBound;
+constexpr int kMaxWeight = kMaxWeightLimit;
 
 int clampInt(int v, int lo, int hi)
 {
@@ -24,6 +25,18 @@ int clampInt(int v, int lo, int hi)
 uint64_t weightOf(const PoolRow &r)
 {
 	return r.weight > 0 ? static_cast<uint64_t>(clampInt(r.weight, 0, kMaxWeight)) : 0;
+}
+
+// Uniform in [0, n) for a 64-bit n. Below 2^32 this is exactly Pcg32::below (same stream); above it, two 32-bit
+// words are combined and rejected the same way, so there is no modulo bias.
+uint64_t below64(layout::Pcg32 &rng, uint64_t n)
+{
+	if (n <= 0xFFFFFFFFull) return rng.below(static_cast<uint32_t>(n));
+	const uint64_t threshold = (0ull - n) % n;
+	for (;;) {
+		const uint64_t r = (static_cast<uint64_t>(rng.next()) << 32) | rng.next();
+		if (r >= threshold) return r % n;
+	}
 }
 
 PoolRow row(Target t, const char *stat, int mn, int mx, int w)
@@ -57,6 +70,28 @@ const std::vector<PoolRow> &builtInPool()
 	return pool;
 }
 
+std::vector<PoolIssue> checkPool(const std::vector<PoolRow> &pool)
+{
+	std::vector<PoolIssue> out;
+	for (size_t i = 0; i < pool.size(); ++i) {
+		const PoolRow &r = pool[i];
+		const std::string who = "row " + std::to_string(i + 1) + " (" + r.stat + ")";
+		if (r.weight < 0) {
+			out.push_back({true, i, who + ": Weight is below 0. Use 0 to switch the row off. The row is skipped."});
+			continue;
+		}
+		if (r.weight > kMaxWeight)
+			out.push_back({false, i, who + ": Weight " + std::to_string(r.weight) + " is above " +
+				std::to_string(kMaxWeight) + " and is used as " + std::to_string(kMaxWeight) + "."});
+		if (r.min < -kBound || r.min > kBound || r.max < -kBound || r.max > kBound)
+			out.push_back({false, i, who + ": Min and Max are limited to " + std::to_string(-kBound) + " to " +
+				std::to_string(kBound) + "; larger values are cut to that."});
+		if (r.max < r.min)
+			out.push_back({false, i, who + ": Max is below Min, so Min is always rolled."});
+	}
+	return out;
+}
+
 std::vector<Property> drawMapStats(uint64_t mapSeed, const MapRow &map, const Settings &settings,
 	const std::vector<PoolRow> &pool, const std::vector<Property> &itemStats)
 {
@@ -78,14 +113,14 @@ std::vector<Property> drawMapStats(uint64_t mapSeed, const MapRow &map, const Se
 			if (available[i]) total += weightOf(rows[i]);
 		if (total == 0) break;
 
-		uint32_t pick = rng.below(static_cast<uint32_t>(total));
+		uint64_t pick = below64(rng, total);
 		size_t chosen = 0;
 		for (size_t i = 0; i < rows.size(); ++i) {
 			if (!available[i]) continue;
 			chosen = i; // pick < total, so a row always matches before the scan ends
 			const uint64_t w = weightOf(rows[i]);
 			if (pick < w) break;
-			pick -= static_cast<uint32_t>(w);
+			pick -= w;
 		}
 
 		Property p;
