@@ -43,6 +43,11 @@ auto Contains(const std::vector<std::string>& names, std::string_view word) -> b
 	return std::find(names.begin(), names.end(), word) != names.end();
 }
 
+// Item codes are matched ignoring case, like FindMapByItem.
+auto ContainsNoCase(const std::vector<std::string>& names, std::string_view word) -> bool {
+	return std::any_of(names.begin(), names.end(), [&](const std::string& n) { return EqualsNoCase(n, word); });
+}
+
 // A whole number in [lo, hi].
 auto ParseInt(const std::string& cell, int lo, int hi, int* out) -> bool {
 	if (cell.empty()) {
@@ -69,14 +74,6 @@ auto NotInTable(const char* what, const std::string& word, const char* table, co
 
 }  // namespace
 
-auto BuiltinMap() -> MapDef {
-	MapDef map;
-	map.name = "Preset";
-	map.tileset = "Preset";
-	map.shape = "Corridor";
-	return map;
-}
-
 auto TilesetNames() -> std::vector<std::string> {
 	std::vector<std::string> out;
 	for (const Tileset& t : Tilesets) {
@@ -99,13 +96,13 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
-		report.Error(MapsFile, 0, "the file is empty. It needs a header row with Name, Tileset and Shape, then one row per map.");
+		report.Error(MapsFile, 0, "the file is empty. It needs a header row with Name, Tileset, Shape and Item, then one row per map.");
 		return maps;
 	}
 	bool missing = false;
-	for (const char* required : {"Name", "Tileset", "Shape"}) {
+	for (const char* required : {"Name", "Tileset", "Shape", "Item"}) {
 		if (table.Column(required) < 0) {
-			report.Error(MapsFile, 1, std::string("there is no '") + required + "' column in the header row. Every map needs Name, Tileset and Shape.");
+			report.Error(MapsFile, 1, std::string("there is no '") + required + "' column in the header row. Every map needs Name, Tileset, Shape and Item.");
 			missing = true;
 		}
 	}
@@ -201,11 +198,33 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 		number(cUniques, "Uniques", 0, 1000, &map.uniques);
 
 		map.item = table.Cell(row, cItem);
-		if (!map.item.empty()) {
-			if (map.item.size() > 4) {
-				fail("Item '" + map.item + "' is too long: an item code has up to 4 letters, like 'shm1'.");
-			} else if (names.haveItems && !Contains(names.itemCodes, map.item)) {
-				fail(NotInTable("item code", map.item, "the item tables (misc.txt, weapons.txt, armor.txt)", names.itemCodes));
+		if (map.item.empty()) {
+			fail("the Item cell is empty. A map is opened by its own item: put an item code here, like 't20'.");
+		} else if (map.item.size() > 4) {
+			fail("Item '" + map.item + "' is too long: an item code has up to 4 letters, like 'shm1'.");
+		} else if (names.haveItems && !ContainsNoCase(names.itemCodes, map.item)) {
+			fail(NotInTable("item code", map.item, "the item tables (misc.txt, weapons.txt, armor.txt)", names.itemCodes));
+		} else {
+			bool spellOk = true;
+			if (names.haveItemSpells) {
+				int spell = -1;
+				for (const auto& entry : names.itemSpells) {
+					if (EqualsNoCase(entry.first, map.item)) {
+						spell = entry.second;
+					}
+				}
+				if (spell != MapItemSpell) {
+					spellOk = false;
+					fail("Item '" + map.item + "' cannot open a map: it needs item spell " + std::to_string(MapItemSpell) +
+					     " (pSpell in misc.txt), and " + (spell < 0 ? std::string("it is not a misc.txt item.") : "it has " + std::to_string(spell) + "."));
+				}
+			}
+			for (const MapDef& other : maps) {
+				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
+					fail("item '" + map.item + "' already opens the map '" + other.name + "' (row " + std::to_string(other.line) +
+					     "). Each map needs an item of its own.");
+					break;
+				}
 			}
 		}
 
@@ -307,16 +326,6 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 	return slots;
 }
 
-auto MergeWithBuiltin(std::vector<MapDef> fromFile) -> std::vector<MapDef> {
-	std::vector<MapDef> out;
-	const MapDef builtin = BuiltinMap();
-	if (FindMap(fromFile, builtin.name) == nullptr) {
-		out.push_back(builtin);
-	}
-	out.insert(out.end(), std::make_move_iterator(fromFile.begin()), std::make_move_iterator(fromFile.end()));
-	return out;
-}
-
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {
 	for (const Slot& s : slots) {
 		if (EqualsNoCase(s.name, slot)) {
@@ -335,21 +344,13 @@ auto FindMap(const std::vector<MapDef>& maps, std::string_view name) -> const Ma
 	return nullptr;
 }
 
-auto ChooseMap(const std::vector<MapDef>& maps, std::string_view itemCode, uint32_t roll) -> const MapDef* {
-	std::vector<const MapDef*> pool;
+auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -> const MapDef* {
 	for (const MapDef& m : maps) {
 		if (!m.item.empty() && EqualsNoCase(m.item, itemCode)) {
-			pool.push_back(&m);
+			return &m;
 		}
 	}
-	if (pool.empty()) {
-		for (const MapDef& m : maps) {
-			if (m.item.empty()) {
-				pool.push_back(&m);
-			}
-		}
-	}
-	return pool.empty() ? nullptr : pool[roll % pool.size()];
+	return nullptr;
 }
 
 auto CheckGates(const MapDef& map, const GateState& state) -> Gate {

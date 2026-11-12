@@ -1,16 +1,15 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's map item and map slot level to a mod's tables. Safe to run twice.
+    Adds Cartographer's map slot level to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the built-in preset map)
+      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
       lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
-      misc.txt      the map item "cmap": a copy of the Scroll of Town Portal with item spell 16
-    The item's name is the plugin's own string (cartographer:CartographerMap, from the plugin's companion files), so
-    nothing in the mod's string files is edited.
     It also writes d2rloader\cartographer\slots.txt, which tells the plugin the level id it got.
-    All three tables are read and checked before anything is written. Each is backed up once as <name>.bak.
+    It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
+    item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
+    Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
     Rows are only added when missing, so running it again changes nothing. Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
@@ -30,9 +29,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $LevelName = 'Cartographer Preset'
-$ItemCode = 'cmap'
-$ItemName = 'Cartographer Map'
-$ItemNameKey = 'cartographer:CartographerMap'  # a string the plugin defines (namespace = its plugin id)
 $TemplateLevelId = '137'  # Act 5 - Colossal Summit: a preset level, so a copy opens with only the preset's rooms
 
 if (-not $ExcelDir) {
@@ -101,7 +97,7 @@ function Set-Cell($t, $cells, [string]$column, [string]$value) {
     $cells[(Column $t $column)] = $value
 }
 
-foreach ($name in 'levels.txt', 'lvlprest.txt', 'misc.txt') {
+foreach ($name in 'levels.txt', 'lvlprest.txt') {
     if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
 
@@ -157,25 +153,6 @@ if ((Find-Row $presets 'LevelId' "$levelId") -ge 0) {
     $presets.Lines.Add($cells -join "`t")
     Save-Table $presets
     Write-Host "lvlprest.txt: added the preset row for level $levelId (Def $($maxDef + 1))."
-}
-
-# --- misc.txt ---------------------------------------------------------------------------------------------------------
-$misc = Read-Table (Join-Path $ExcelDir 'misc.txt')
-if ((Find-Row $misc 'code' $ItemCode) -ge 0) {
-    Write-Host "misc.txt: item '$ItemCode' is already there."
-} else {
-    $templateRow = Find-Row $misc 'code' 'tsc'
-    if ($templateRow -lt 0) { throw 'misc.txt has no Scroll of Town Portal (tsc) to copy.' }
-    $cells = Cells $misc $misc.Lines[$templateRow]
-    Set-Cell $misc $cells 'name' $ItemName
-    Set-Cell $misc $cells 'code' $ItemCode
-    Set-Cell $misc $cells 'namestr' $ItemNameKey
-    Set-Cell $misc $cells 'pSpell' '16'
-    Set-Cell $misc $cells 'useable' '1'
-    Set-Cell $misc $cells 'spawnable' '0'
-    $misc.Lines.Add($cells -join "`t")
-    Save-Table $misc
-    Write-Host "misc.txt: added item '$ItemCode' (item spell 16)."
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------

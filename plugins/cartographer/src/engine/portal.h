@@ -38,9 +38,6 @@ void SetTables(std::shared_ptr<const Tables> tables);
 // Finds the parts and installs the hooks. Returns whether the portal is live; `parts` says why not.
 auto InstallPortal(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
-// The map named `name` opens on the next use of a map item. Returns false when there is no such map.
-auto ArmMap(const std::string& name) -> bool;
-
 // `cartographer check` calls it. The hooks are written at load only; this never writes code. It re-scans all the called
 // parts (using the signature overrides read at load) and turns the portal on when every required part is on. When the
 // item hooks were not installed at load (NeedsRestart), it changes nothing. Returns whether the portal is live.

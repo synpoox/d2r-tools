@@ -95,15 +95,12 @@ Part g_parts[PartCount] = {
 
 std::mutex g_lock;
 std::shared_ptr<const Tables> g_tables;
-std::string g_armed;
 const MapDef* g_pending = nullptr;  // chosen at the check, used at the use; kept alive by g_pendingTables
 std::shared_ptr<const Tables> g_pendingTables;
 const void* g_pendingGame = nullptr;    // the game, player and item the check passed for: the use must be the same
 const void* g_pendingPlayer = nullptr;
 const void* g_pendingItem = nullptr;
-const void* g_rollGame = nullptr;       // the game the map roll was seeded for
 std::atomic<bool> g_live{false};
-std::atomic<uint32_t> g_roll{0x9e3779b9u};
 const D2RL::PluginContext* g_context = nullptr;
 std::vector<SignatureOverride> g_overrides;  // kept for RescanPortal
 bool g_hooksIn = false;                      // both item hooks were installed at load; they pass through until g_live
@@ -263,26 +260,6 @@ void Tell(const std::string& text) noexcept {
 	}
 }
 
-// The map this use opens: the armed one, else the one an item of this code opens.
-auto PickMap(const Tables& tables, const std::string& code, const std::string& armed, const void* game) noexcept -> const MapDef* {
-	if (!armed.empty()) {
-		return FindMap(tables.maps, armed);
-	}
-	uint32_t roll = g_roll.load();
-	if (g_rollGame != game) {  // a new game: a new sequence of maps
-		LARGE_INTEGER counter{};
-		QueryPerformanceCounter(&counter);
-		roll = static_cast<uint32_t>(counter.QuadPart) ^ static_cast<uint32_t>(GetTickCount64()) ^ static_cast<uint32_t>(reinterpret_cast<uintptr_t>(game) >> 4);
-		roll = roll == 0 ? 0x9e3779b9u : roll;
-		g_rollGame = game;
-	}
-	roll ^= roll << 13;
-	roll ^= roll >> 17;
-	roll ^= roll << 5;
-	g_roll.store(roll);
-	return ChooseMap(tables.maps, code, roll);
-}
-
 // --- The hooks ---------------------------------------------------------------------------------------------------------
 
 auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept -> uint64_t {
@@ -295,11 +272,9 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		return g_checkOriginal(game, player, item, target);
 	}
 	std::shared_ptr<const Tables> tables;
-	std::string armed;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		tables = g_tables;
-		armed = g_armed;
 	}
 	{
 		// Any earlier pass is stale from here on: only a check that passes below sets it again.
@@ -307,7 +282,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		g_pending = nullptr;
 		g_pendingTables.reset();
 	}
-	const MapDef* map = tables != nullptr ? PickMap(*tables, code, armed, game) : nullptr;
+	const MapDef* map = tables != nullptr ? FindMapByItem(tables->maps, code) : nullptr;
 	const int level = tables != nullptr ? SlotLevel(tables->slots, PresetSlot) : -1;
 	const auto refuse = [&](const std::string& text) -> uint64_t {
 		Tell(text);
@@ -315,7 +290,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		return 0;
 	};
 	if (map == nullptr) {
-		return refuse("Cartographer: no map is set up for this item. Run 'cartographer check'.");
+		return g_checkOriginal(game, player, item, target);  // no map names this item: it is not a map item, so the game's own check
 	}
 	if (level <= 0) {
 		return refuse("Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.");
@@ -344,25 +319,29 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	const uint8_t* record = nullptr;
-	if (game != nullptr && player != nullptr && item != nullptr) {
-		(void)CodeOf(game, item, &record);
-	}
+	const std::string code = game != nullptr && player != nullptr && item != nullptr ? CodeOf(game, item, &record) : std::string();
 	if (record == nullptr || At<int32_t>(record, RecordSpellOffset) != MapSpell) {
 		g_useOriginal(game, player, item, target);
 		return;
 	}
 	std::shared_ptr<const Tables> tables;
 	const MapDef* map = nullptr;
+	bool mapItem = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		tables = g_pendingTables;
 		if (g_pendingGame == game && g_pendingPlayer == player && g_pendingItem == item) {
 			map = g_pending;
 		}
+		// A passed check decides, so a reload between check and use cannot turn a map item into a plain one.
+		mapItem = map != nullptr || (g_tables != nullptr && FindMapByItem(g_tables->maps, code) != nullptr);
 		g_pending = nullptr;
 		g_pendingTables.reset();
 		g_pendingGame = g_pendingPlayer = g_pendingItem = nullptr;
-		g_armed.clear();
+	}
+	if (!mapItem) {
+		g_useOriginal(game, player, item, target);  // no map names this item: it is not a map item, so the game's own use
+		return;
 	}
 	if (map == nullptr || tables == nullptr) {
 		return;  // the check refused (or did not run, or ran for another game, player or item): nothing opens
@@ -614,17 +593,6 @@ void SetTables(std::shared_ptr<const Tables> tables) {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_tables = std::move(tables);
 }
-
-auto ArmMap(const std::string& name) -> bool {
-	std::lock_guard<std::mutex> lock(g_lock);
-	const MapDef* map = g_tables != nullptr ? FindMap(g_tables->maps, name) : nullptr;
-	if (map == nullptr) {
-		return false;
-	}
-	g_armed = map->name;
-	return true;
-}
-
 
 auto RescanPortal() -> bool {
 	// The hooks are written at load only, never here. This looks again for the called parts (a part that was missing at

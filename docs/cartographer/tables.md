@@ -19,7 +19,7 @@ One row per map.
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl`, or a name from `shapes.txt` | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map | 85 | 90 |
-| `Item` | no | Item code of the map item | Cartographer's own map item | `shm1` |
+| `Item` | yes | Item code that opens this map, and only this map. Unique across maps. The item needs item spell 16 (`pSpell` in `misc.txt`); the mod provides it | none | `t20` |
 | `Boss` | no | A monster `Id` or unique monster name placed at the end of the path (case must match) | no boss | `fallenshaman1` |
 | `Monsters` | no | Up to 10 monster `Id`s, separated by commas | the tileset's own monsters | `quillrat1,zombie3` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
@@ -30,7 +30,7 @@ One row per map.
 | `Champions` | no | Percent more champion packs | 0 | 50 |
 | `Uniques` | no | Percent more unique packs | 0 | 25 |
 
-Smallest map: `Name`, `Tileset` and `Shape` filled in.
+Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in. A row with no `Item`, an unknown item code, an item without item spell 16, or an item another map already uses is refused with a message, and the row is skipped.
 
 ## mapstats.txt (optional)
 
