@@ -31,7 +31,8 @@ image stamp first, install them in one transaction, and on any mismatch log it a
 
 **Failure mode (required of a consumer):** a refused hook or a stamp mismatch logs the reason and leaves every aura
 feature off; the game plays vanilla. **Coexistence:** no D2RLoader hook was found on these entries (no `FF 25`); a
-second hook on the same entry fails the byte check and must stay off.
+second hook on the same entry fails the byte check and must stay off. Cartographer hooks `0x42e350` (the mana step, called
+from `0x42e600`) for its console open, so the two plugins use different entries and do not interact.
 
 ## 2. Aura system (server)
 

@@ -14,6 +14,9 @@ recorded: until they are, the plugin loads, reads and checks your tables, and th
   `cartographer-report.txt` ("maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"); the rest load.
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
+- **Console open**: `cartographer open <Name>` opens the portal itself, with no map item, through the same gates. It needs
+  the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
+  refuses and says so. Not tried in a game yet.
 - **Built-in preset map**: a map called `Preset` always exists, so a three-cell `maps.txt` row
   (`Name`, `Tileset` = `Preset`, `Shape`) works from the start.
 
@@ -68,3 +71,6 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - The installer on a copy of the vanilla 93847 tables, run twice.
 - Not yet: installed into a game, or opened in game. Game check: the item name key `cartographer:CartographerMap` is 28 characters;
   if `misc.txt` `namestr` has a fixed length, confirm the name is not cut off.
+- Game check for `cartographer open <Name>`: the log line "first player unit seen by the tick" shows the same id as
+  "local player ready"; the portal opens; step through it and back; leave the game with the portal still open; repeat with
+  Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.

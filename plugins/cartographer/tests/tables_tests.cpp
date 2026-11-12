@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "core/request.h"
 #include "core/sig.h"
 #include "core/tables.h"
 #include "core/tsv.h"
@@ -253,6 +254,31 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 	Pattern none{};
 	REQUIRE(ParsePattern("DE AD", &none));
 	CHECK(FindPattern(data, sizeof(data), none, &at) == 0);
+}
+
+TEST_CASE("an open request is served once, in time, and expires when the game never serves it") {
+	OpenRequest request;
+	CHECK(request.Take(0, 5000).state == OpenRequest::State::None);
+	request.Post("Preset", 1000);
+	CHECK(request.Pending());
+	const OpenRequest::Taken ready = request.Take(2000, 5000);
+	CHECK(ready.state == OpenRequest::State::Ready);
+	CHECK(ready.map == "Preset");
+	CHECK_FALSE(request.Pending());
+	CHECK(request.Take(2001, 5000).state == OpenRequest::State::None);  // served once
+	request.Post("Preset", 1000);
+	CHECK(request.Take(6001, 5000).state == OpenRequest::State::Expired);
+	request.Post("S", 100);
+	CHECK_FALSE(request.Stale(5100, 5000));
+	CHECK(request.Stale(5101, 5000));
+	request.Clear();
+	CHECK_FALSE(request.Stale(99999, 5000));
+	request.Post("A", 0);
+	request.Post("B", 10);  // a newer request replaces the older one
+	CHECK(request.Take(20, 5000).map == "B");
+	request.Post("C", 0);
+	request.Clear();
+	CHECK(request.Take(1, 5000).state == OpenRequest::State::None);
 }
 
 TEST_CASE("spelling suggestions") {

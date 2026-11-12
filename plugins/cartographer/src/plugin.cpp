@@ -2,7 +2,7 @@
 // opens a map through a map item (or "cartographer open <Name>"). Global: no mod needs to ship layouts; the installer
 // (tools\install.ps1) adds the item and the slot level to the mod's tables.
 //
-// Console command "cartographer": "check" re-reads the tables and prints what is wrong; "open <Name>" arms a map.
+// Console command "cartographer": "check" re-reads the tables and prints what is wrong; "open <Name>" opens a map without an item.
 #include <D2RLPlugin/api.h>
 
 #include "core/tables.h"
@@ -219,11 +219,23 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, "Usage: cartographer open <Name>");
 				return D2RL::ConsoleCommandResult::InvalidArguments;
 			}
-			if (!carto::ArmMap(rest)) {
+			switch (carto::RequestOpen(rest)) {
+			case carto::OpenStart::NoSuchMap:
 				Say(command, "Cartographer: there is no map called '" + rest + "'. Run 'cartographer check'.");
 				return D2RL::ConsoleCommandResult::Failed;
+			case carto::OpenStart::NotInGame:
+				Say(command, "Cartographer: join a game first.");
+				return D2RL::ConsoleCommandResult::Failed;
+			case carto::OpenStart::Unavailable:
+				Say(command, "Cartographer: opening without an item is not available (a game part is missing). Run 'cartographer check' to see which.");
+				return D2RL::ConsoleCommandResult::Failed;
+			case carto::OpenStart::NoServer:
+				Say(command, "Cartographer: a map can only be opened in a game you host, once the game is running.");
+				return D2RL::ConsoleCommandResult::Failed;
+			case carto::OpenStart::Posted:
+				Say(command, "Cartographer: opening " + rest + "...");
+				break;
 			}
-			Say(command, "Cartographer: " + rest + " will open the next time you use a map item in Harrogath.");
 			return D2RL::ConsoleCommandResult::Handled;
 		}
 	} catch (...) {
@@ -282,7 +294,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		plog::Error("loading failed; the plugin stays loaded with the portal off");
 	}
 	// Stay loaded even when parts are off, so "cartographer check" can say why.
-	return context->RegisterConsoleCommand(PluginName, Command, "Cartographer: 'check' re-reads the tables, 'open <Name>' arms a map.");
+	return context->RegisterConsoleCommand(PluginName, Command, "Cartographer: 'check' re-reads the tables, 'open <Name>' opens a map without an item.");
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {

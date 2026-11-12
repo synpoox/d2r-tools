@@ -120,6 +120,24 @@ Build 93847, image stamp `0x6ab3782c`. The RVAs are evidence from pd2-resurrecte
 | UnitStat | Called. `(unit, stat, 0) -> int`; stat 12 is the level | not in the registry; to be located from a dump | none yet | yes |
 | UnitCoords | Called. `(unit, int xy[2])` | `0x34a040` | none yet | no (spot check skipped) |
 | FindFreeSpot | Called. `(game, room, xy, 3, 0x400, &found, 5, 100)` | `0x517f90` | none yet | no (spot check skipped) |
+| PlayerTick | Hooked (issue #40). The player mana step `(game, player) -> al`; the server runs it once per frame for every live player, so the console command gets a game and a player there. Optional: the map item does not need it | `0x42e350` | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??` (81 bytes, `??` on every rel32; hook cuts the first 14: five whole instructions, no relative operand) | no (without it `cartographer open` refuses) |
+
+PlayerTick evidence (static, read-only, against `D2RLoader_6ab3782c_dump.exe`, a memory-layout dump made by
+d2rAI-toolkit `tools/dump_image.py`): the 81-byte signature has 1 match (RVA `0x42e350`; its first 14 bytes alone match 15
+places, so the whole signature is used). It runs past the prologue into the body (null check of the player, the
+`8D 53 55` = state 0x55 test), so another function cannot become the unique match by register allocation alone.
+Reproduce: read the dump file, convert the signature to a regex (`??` = `.`, with `re.S`) and `finditer` over all bytes:
+one match at `0x42e350`. The call at `0x42e74d` (`E8 FE FB FF FF`) resolves to `0x42e350` too. `rdx` is the player and `rcx`
+the game (saved to `rdi`/`r15` at entry). Its only caller is the player regen tick `0x42e600` (better-auras.md section 4),
+which reaches it on every path for a live player (`0x42e74d`). `0x42e600` itself is hooked by Better Auras, and a second
+hook on the same entry is refused, so the tick part uses `0x42e350` instead. Contract: the hook calls the original
+first, then serves a posted console request when the unit is a player (`+0` == 0) whose unit id (`+8`) equals the
+`playerId` of the SDK's `LocalPlayerReady` event, using the SDK event as the source of "which player is local". That
+`playerId` is the unit id is an assumption (not documented by the SDK): if it is wrong, the request is dropped after 10 s
+with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
+`cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
+The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
+checks in the plugin README. Not validated in game.
 
 Game layout used: `game + 0x104` difficulty (u8), `game + 0x106` data flag (u8), `game + 0x1aac8` counters; item
 record `+0x80` code (4 letters), `+0x94` pSpell. Item spell 16 is free in vanilla D2R. The town is Harrogath, level 109.
