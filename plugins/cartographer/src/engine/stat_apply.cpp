@@ -22,7 +22,7 @@ namespace {
 
 namespace sp = cartographer::statplan;
 
-// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 6.
+// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/06-stats-events-checks.md.
 constexpr int UnitTypeOffset = 0x00;       // int32: 0 player, 1 monster
 constexpr int UnitIdOffset = 0x08;         // uint32 (what the game's own unit id helper 0x34a330 returns)
 constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data flag helper 0x34a0e0 returns)
@@ -123,7 +123,7 @@ auto UnitLevelId(Unit* unit) noexcept -> int32_t {
 	return room != nullptr ? Call<RoomLevelFn>(RoomLevelId)(room) : -1;
 }
 
-// New list on `unit` holding `entries` (layer 0). The recipe is the engine's own (cartographer.md section 6, Q1): NewStatList,
+// New list on `unit` holding `entries` (layer 0). The recipe is the engine's own (cartographer/06-stats-events-checks.md, Q1): NewStatList,
 // SetListStat for each stat, AttachStatList. No state is set here; a player's list gets one after (SetPlayerState).
 auto MakeList(Unit* unit, int32_t type, const std::vector<sp::Entry>& entries) noexcept -> void* {
 	const int32_t id = At<int32_t>(unit, UnitIdOffset);
@@ -262,7 +262,7 @@ auto MonsterSetupHook(void* params, Unit* monster) noexcept -> uint64_t {
 
 // --- Players ------------------------------------------------------------------------------------------------------------
 
-// The state that carries the player's list to the clients (cartographer.md section 7), or -1 with `why`. The SDK's states table is
+// The state that carries the player's list to the clients (cartographer/07-map-stats-parts.md), or -1 with `why`. The SDK's states table is
 // used only after it is shown to be the game's own for this data flag (same rows pointer and count as the data tables base, the
 // row size the layout expects); the skills table (the states skills name) needs the expected row size too. Else nothing is guessed.
 auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {

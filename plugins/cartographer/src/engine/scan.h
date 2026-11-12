@@ -1,5 +1,5 @@
 // Finding engine functions by byte signature: shared by the portal hooks and the maze hooks. A part is one function (or a
-// hooked entry); its address is found once at load, never by a fixed address. Notes: docs/reverse-engineering/cartographer.md.
+// hooked entry); its address is found once at load, never by a fixed address. Notes: docs/reverse-engineering/cartographer.md (the index).
 #pragma once
 
 #include "portal.h"

@@ -6,7 +6,7 @@ Usage: python -I plugins/cartographer/tools/check_portal_signatures.py <image> [
 tools/dump_image.py. The packed D2R.exe on disk will not work: its code is encrypted.
 
 The signatures are read from src/core/part_signatures.h (the ones the plugin compiles in), so this checks what ships.
-For each part (docs/reverse-engineering/cartographer.md, section 3) it checks that the signature matches exactly once
+For each part (docs/reverse-engineering/cartographer/03-phase1-parts.md) it checks that the signature matches exactly once
 in the executable sections (VirtualSize of each, as the plugin's scanner does), that the match resolves to the recorded
 RVA, that the whole signature under its mask holds at that RVA (the guard), and that the recorded max patch length ends
 where the signature says: the byte there starts the first relative branch, call or RIP-relative instruction. For the
@@ -42,37 +42,37 @@ PARTS = [
     ("UnitCoords", 0x34A040, 19, "75", 0),
     ("FindFreeSpot", 0x517F90, 23, "48 8B 05", 0),
     ("PlayerTick", 0x42E350, 27, "0F 84", 14),
-    # Map stats (cartographer.md section 6)
+    # Map stats (cartographer/06-stats-events-checks.md)
     ("NewStatList", 0x2F7300, 45, None, 0),
     ("SetListStat", 0x2F7C00, 0, "FF 25", 0),
     ("AttachStatList", 0x2F2CB0, 0, "FF 25", 0),
     ("DetachStatList", 0x2F7920, 9, "E8", 0),
     ("FreeStatList", 0x2F4180, 3, "74", 0),
     ("MonsterSetup", 0x494A60, 43, None, 14),
-    # Map events (cartographer.md section 9)
+    # Map events (cartographer/09-map-events.md)
     ("PopulateRoom", 0x50ACF0, 12, "48 8B 05", 12),
     ("SpawnMonster", 0x492CF0, 56, None, 0),
     ("SpawnSuperUnique", 0x499BA0, 34, None, 0),
-    # Event Spawn names from the game's tables (cartographer.md section 11)
+    # Event Spawn names from the game's tables (cartographer/11-spawn-names.md)
     ("DataTablesBase", 0x300A90, 16, "72", 0),
     ("NameToRow", 0xA121F0, 13, "48 8B 05", 0),
-    # Client sync of player stats (cartographer.md section 7)
+    # Client sync of player stats (cartographer/07-map-stats-parts.md)
     ("FindStateList", 0x2F5940, 18, "75", 0),
     ("SetListState", 0x2F72F0, 3, "74", 0),
     ("SetStateBit", 0x3354C0, 30, "78", 0),
     ("StateOn", 0x3351B0, 20, "E8", 0),
-    # The map item's own stats (cartographer.md section 14); both only called.
+    # The map item's own stats (cartographer/14-item-stats.md); both only called.
     ("ItemListFind", 0x2F5B80, 26, "75", 0),
     ("ItemListCopy", 0x2F64E0, 0, "FF 25", 0),
-    # Shrine and Boss Drop (cartographer.md section 13). DeathDrop is hooked (15 bytes); its first relative operand (jne) is at +33.
+    # Shrine and Boss Drop (cartographer/13-ambush-treasure-shrine.md). DeathDrop is hooked (15 bytes); its first relative operand (jne) is at +33.
     ("DeathDrop", 0x447B80, 33, None, 15),
     ("DropRoller", 0x441300, 20, "48 8B 05", 0),
     ("DropLevel", 0x43E8A0, 15, "E8", 0),
     ("SpawnObject", 0x4022A0, 24, "E8", 0),
     ("CreateObject", 0x490410, 19, "48 8B 05", 0),
-    # The map's own Name on the tooltip, automap and banner (cartographer.md section 10): the levels row getter, only called.
+    # The map's own Name on the tooltip, automap and banner (cartographer/10-portal-tooltip.md): the levels row getter, only called.
     ("LevelsRow", 0x32C4A0, 18, "E8", 0),
-    # Ambush and Treasure (cartographer.md section 13). OperateObject is hooked (16 bytes: four whole instructions); its first relative
+    # Ambush and Treasure (cartographer/13-ambush-treasure-shrine.md). OperateObject is hooked (16 bytes: four whole instructions); its first relative
     # operand is the call at +32. The others are only called (their max patch is where the signature ends or its first call).
     ("OperateObject", 0x592C40, 32, None, 16),
     ("FleeSetup", 0x597030, 30, None, 0),
@@ -80,7 +80,7 @@ PARTS = [
     ("FleeTarget", 0x34C730, 28, None, 0),
     ("TcLookup", 0x397290, 18, None, 0),
     ("TcRoller", 0x4404F0, 12, None, 0),
-    # AutoCheck (cartographer.md section 17): the unit mover and the two room parts, only called.
+    # AutoCheck (cartographer/17-autocheck.md): the unit mover and the two room parts, only called.
     ("UnitMove", 0x491CA0, 25, "48 8B 05", 0),
     # The two parts the console command 'goto' calls to reach x,y (RoomAtTile is a thunk: its jmp is the first relative operand).
     ("RoomAtTile", 0x2F0810, 4, "E9", 0),

@@ -2,7 +2,7 @@
 // string file (one name text and one entry text per map) in its own string namespace through the SDK's resource service,
 // and when a map opens writes that map's two keys into the slot level's row of the game's levels table (LevelName and
 // LevelEntry, each a char[40]), then puts the originals back on leaving the game and on unload. Off by default
-// (MapNames=1 in cartographer.txt). Written, not verified in a game. Notes: docs/reverse-engineering/cartographer.md section 10.
+// (MapNames=1 in cartographer.txt). Written, not verified in a game. Notes: docs/reverse-engineering/cartographer/10-portal-tooltip.md.
 #pragma once
 
 #include "engine/portal.h"

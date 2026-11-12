@@ -194,7 +194,7 @@ left out and named in `cartographer-report.txt`; maps then do not open. An old `
 #### signatures.txt
 
 For a game build the plugin does not know: replaces how Cartographer finds one of the game's functions, without a
-rebuild. You will not normally need it. See [the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md).
+rebuild. You will not normally need it. See [the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md) (an index, one file per section).
 
 | Column | Meaning | Default |
 |---|---|---|

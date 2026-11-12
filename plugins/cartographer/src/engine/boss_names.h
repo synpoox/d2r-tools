@@ -1,7 +1,7 @@
 // A dedicated map Boss shows its own bosses.txt Name in game (issue #174). The superuniques.txt Name cell the installer writes is
 // a key in the plugin's string namespace (cartographer:boss_<Name>); this registers a text for each bosses.txt entry through the
 // SDK's resource service while the plugin loads, before the game compiles the table. Written, not verified in game. Notes:
-// docs/reverse-engineering/cartographer.md section 10.
+// docs/reverse-engineering/cartographer/10-portal-tooltip.md.
 #pragma once
 
 #include "engine/portal.h"

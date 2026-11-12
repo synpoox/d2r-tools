@@ -37,7 +37,7 @@ struct Resolved {
 // both tables is the monster. Not found: kind Unresolved.
 Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn);
 
-// --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer.md section 11) ---------------------
+// --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer/11-spawn-names.md) ---------------------
 
 // The compiled monstats row is 0x1fc bytes with the `Id` inline at +2 (47 bytes, NUL-terminated; the u16 at +0 is the row's own
 // index, seen in game); a superuniques row is 0x3c.

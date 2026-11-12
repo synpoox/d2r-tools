@@ -1,7 +1,7 @@
 // Cartographer map sync (phase 7, part 1): the host tells each joined client which map is open. This file is the message
 // (encode, decode, validation) and the small decisions around it that need no game: the client's check against its own
 // maps.txt, the host's list of clients, and the client's connect retry schedule. Pure C++ on plain structs: no engine, no
-// SDK. The engine part (src/engine/map_sync.cpp) sends and receives; notes in docs/reverse-engineering/cartographer.md section 12.
+// SDK. The engine part (src/engine/map_sync.cpp) sends and receives; notes in docs/reverse-engineering/cartographer/12-map-sync.md.
 #pragma once
 #include <cstddef>
 #include <cstdint>

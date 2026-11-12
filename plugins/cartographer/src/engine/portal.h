@@ -1,7 +1,7 @@
 // The map item and the red portal: hooks D2R's item spell check and use, and on item spell 16 gates the map (Hell,
 // Harrogath, one per game, a free spot) and opens a red portal to the slot level. Every address is found by byte
 // signature at load; a part that finds no single match stays off. The two item hooks go in at load whenever their own
-// parts were found and pass straight through to the game until every part the portal needs is on. Notes: docs/reverse-engineering/cartographer.md.
+// parts were found and pass straight through to the game until every part the portal needs is on. Notes: docs/reverse-engineering/cartographer.md (the index).
 #pragma once
 
 #include "core/tables.h"
