@@ -975,3 +975,140 @@ exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5d
 3. Is the slot row writable? Write a different key at `+0xfd` and re-hover.
 4. What does the owner suffix `" (%s)"` look like in single player (the `0x8d4b0` global decides whether it is appended)? Compare a stock portal tooltip with a hooked one.
 5. Does the text cache between two maps? Open two different maps in a row.
+
+## 12. Multiplayer map sync engine checks (issue #98)
+
+Desk research for phase 7 (multiplayer): four questions about syncing a drawn map to a TCP/IP or open-game client. Read from the build 93847 dump
+with `dump_dis.py` (Capstone) and from the pinned SDK (`third_party/PluginSDK` at 717f727); nothing was run in a game and no code changed. Each claim is
+marked **static** (read from dump bytes or tables), **SDK** (read from the pinned headers), **inference** (follows from those, not observed) or
+**needs game** (with the check). `D2RCore.dll` is not in the dump, so anything the loader or core does on the wire is not covered. Battle.net and the
+outdoor builder are out of scope.
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer phase 7 (multiplayer map sync); no code exists yet |
+| Module | `D2R.exe`, D2R 3.3 build 93847, stamp `0x6ab3782c`, under D2RLoader 1.3.1 |
+| Location | The table below. Final addresses are found by byte signature |
+| Guard | Each prefix below matched exactly once in the dump's executable sections (`??` is a relative operand) |
+| Evidence | `dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]` and `pat "<hex>"`; callers found by scanning `E8`/`E9` targets. SDK headers `network.h`, `lifecycle.h`, `lifecycle_events.h`, `threads.h` and `examples/network-ping` |
+| Validation | None in a game. Static and SDK reading only |
+| Failure mode | If a check below fails, multiplayer stays off for Cartographer: the plugin refuses to open a map for a remote client and logs why |
+| Coexistence | The packet table entries that are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150) are not touched. `NetworkService` is the loader's own route and needs no hook |
+
+| RVA | Role | Prefix |
+|---|---|---|
+| `0x58f680` | Portal operate (object operate slot 15, server side) | `48 89 4C 24 08 55 53 56 57 41 56 41 57` |
+| `0x592c40` | Object operate dispatcher (table `0x23a51c0`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 50 48 8B F1` |
+| `0x129930` | Client packet `0x03` (LoadAct) handler | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 8B 79 02` |
+| `0x129b80` | Client packet `0x07` handler (lazy room build trigger) | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 56 48 83 EC 30 0F B7 69 01` |
+| `0x86bc0` | Client act load (`isClient = 1`, seed from the packet) | `48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 81 EC A0 00 00 00 48 8B 05 ?? ?? ?? ??` |
+| `0x86e20` | Client unit placement (second lazy room build trigger) | `48 89 5C 24 18 55 57 41 54 41 56 41 57 48 83 EC 40 48 8B D9` |
+| `0x2ef1c0` | Act creation (runs the DRLG for the act) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 44 0F B6 F1` |
+| `0x48aa50` | Server act creation (`isClient = 0`, seed from `game + 0x12c`) | `48 89 5C 24 18 48 89 6C 24 20 56 57 41 56 48 83 EC 60 0F B6 EA` |
+| `0x2ef320` | World room lookup stub, tail-jumps to `0x328680` (callers `0x86ebe`, `0x86f98`, `0x129bf1`) | `48 8B 44 24 30 48 85 C0 ?? ?? 48 8B 40 18 48 8B 52 70 48 89 44 24 30 ?? ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08` |
+| `0x4817f0` | Server send `(clientCtx, buf, len)` | `40 55 56 57 48 83 EC 40 49 8B E8 48 8B F2` |
+| `0x44db20` | Unit death (`D2Game\src\Unit\SUnitDmg.cpp`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 50 48 8B E9` |
+| `0x4475c0` | Called from the death path; returns 0 unless the unit at `[arg2 + 8]` is type 1 (a player) | `40 53 55 56 41 55 48 83 EC 38 48 8B 5A 08` |
+| `0x490300` | Missile owner resolver | `48 89 74 24 18 57 48 83 EC 20 48 8B FA 48 8B F1 48 85 D2 ?? ?? 48 8D 4C 24 38 88 54 24 38` |
+
+Already recorded elsewhere and relied on here: maze level build `0x3271c0` and room lookup `0x327400` (section 5), spawn calls `0x492cf0` and `0x499ba0` and the room
+populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game + 0x1d8` (section 6).
+
+### Q1. How can a plugin send a small message host to client and back?
+
+- **SDK (primary route).** `NetworkService` (`network.h`) is the supported route for private plugin messages. A plugin registers a channel with a 64-bit
+  compatibility token, connects to the host (`connectToHost`), sends to the host (`sendToHost`) or to one client peer (`sendToClient`), and receives on host and
+  client callbacks. A payload is at most 224 bytes. `getPeerPlayer` maps a peer to a player and must be called on the game thread. The `network-ping` example is
+  the pattern to copy. No engine address or hook is needed for it.
+- **SDK limits.** Not available on Battle.net (out of scope). Plugin roles are Client, Server or Shared; Cartographer is Shared with native hooks, and Shared
+  plugins must match between host and client. `runOnGameThread` returns Unavailable on a remote TCP/IP client (`threads.h`: a remote client has no local
+  authoritative game thread), so client side work has to run from a hook or a tick the plugin already owns, not from a hop the SDK cannot give.
+- **Static (fallback, the game's own packet path).** The client packet handler table is at RVA `0x22bbc40`, stride `0x18`, entries `{handler, size, 0}`,
+  index = classic packet id. Seven entries are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150); the loader's own transport packet id was not
+  located (D2RCore is not in the dump). The server sends with `0x4817f0(clientCtx, buf, len)`. A plugin-made packet would need a free packet id, a handler table
+  entry and a size, which collides with the loader's thunks and with other plugins. **Not recommended**; consider it only if the SDK route fails a check below.
+- **Needs game.**
+  1. A Shared plugin with a channel on a host and one remote TCP/IP client: does the connection complete, and what does the connection event say when the client
+     lacks the plugin or has a different compatibility token (reject reason)?
+  2. A host to client message of 224 bytes: is it delivered intact, and on which thread does the client callback run?
+  3. Does the host see the client's reply on its server thread, and can `getPeerPlayer` be called there?
+- **Recommended route.** `NetworkService`, one channel, a token derived from the plugin's wire version. The host sends the map plan (seed, map id, a few bytes)
+  before the client builds the level; the client acks. Fall back to "map off" for a client whose connection is rejected.
+
+### Q2. Where does a TCP/IP or open-game client build the slot level, and do the maze hooks run on the client, the server, or both?
+
+- **Static: both sides run their own DRLG.** Each act is created by `0x2ef1c0`. The server calls it from `0x48aa50` with `isClient = 0` and the seed at `game + 0x12c`.
+  The client calls it from the packet `0x03` handler `0x129930` through `0x86bc0` with `isClient = 1` and the seed taken from the packet. Level seeds are
+  deterministic from the act seed: `drlg + 0x860 + level id` through `0x367110`. The same level id and act seed give the same layout on both sides, which is the
+  property the plan cache in `maze_hooks.cpp` ("per game, so the server's build and the client's build get the same plan") relies on.
+- **Static: client rooms are built lazily.** On the client a room is built through `0x2ef320` -> `0x328680` -> `0x327400` -> `0x3271c0` when the client needs it. Two
+  triggers were found: the packet `0x07` handler `0x129b80` and the unit placement function `0x86e20` (the stub's callers are `0x129bf1`, `0x86ebe`, `0x86f98`).
+  Other triggers may exist (not searched exhaustively).
+- **Static consequence.** `LevelBuild` (`0x3271c0`) and the maze hooks run on **both** the server and the client, each against its own DRLG instance. In single player
+  both DRLGs live in one process, so the hook runs twice for one level (already true today). In a TCP/IP game it runs once per DRLG: the host has both, a remote client
+  has only the client DRLG. A remote client therefore has the plan only if the plugin put it there before the first lazy build, i.e. before the packet `0x03` / `0x07`
+  handlers or the unit placement run for the slot level.
+- **Not located.** The server side sender of packet `0x03` (LoadAct) and of packet `0x07`: callers of `0x4817f0` with those ids were not found (only unrelated ids
+  `0x21` and `0x1d` to `0x1f`); they may go through D2RCore or a table. The receiving handlers are static, so the answer above stands, but the exact host moment at
+  which a client is told to load the act is unknown, which matters for when the plan message must be sent.
+- **Inference.** The host must send the plan for the destination map when a client is about to enter a map portal (Q3 gives the moment), and the client's plan cache
+  must be keyed like the host's. The host's own build is unchanged.
+- **Needs game.**
+  1. Log `0x3271c0` entry (level id, thread) on a host and on a remote client while the client enters the slot level; expect host server DRLG, host client DRLG and remote
+     client DRLG.
+  2. Does the remote client reach `0x3271c0` for the slot level before or after the plugin message arrives? If before, it builds the stock slot layout.
+  3. Does the lazy build ever run on a thread other than the client main thread?
+  4. Log `0x4817f0` ids when a client enters an act and when it enters the slot level, to find the LoadAct sender.
+
+### Q3. How can the portal entry be held until a client confirms?
+
+- **Static: the gate point is the server portal operate.** Objects 59 and 60 (the red portal) use OperateFn 15, slot 15 of the table at `0x23a51c0`, which is the
+  server function `0x58f680`, reached through the dispatcher `0x592c40`. It runs where the object is operated (the host). Its refusal paths return 0 (for example at
+  `0x58fcd4`), the existing way the game declines an operate.
+- **Inference (route).** Hook `0x58f680` (the 13-byte prefix above is unique). For the red portal and a client the plugin has not marked as synced: send the plan over
+  `NetworkService` (Q1), return 0, and when the client acks, mark it synced and let the next click through (or call the original). Hooking the dispatcher `0x592c40`
+  also works but sees every object operate.
+- **Needs game.**
+  1. The register layout of `0x58f680` (which holds the operating player and which the portal unit) was read for the refusal path only; confirm it.
+  2. Does a refused operate show the player anything, and does the client retry or must the player click again? A "waiting for client" line through section 9's chat
+     path (`0x477a30`) is the likely feedback.
+  3. A client that never acks (not running the plugin): timeout, then stock behaviour or refusal? A Shared plugin must match, so the connection event (Q1) may already
+     have told the host.
+  4. The host's own player can skip the wait (same process, the plan is already there).
+- **Recommended route.** Gate at `0x58f680` with an ack from `NetworkService`, one pending entry per portal and client, with a timeout.
+
+### Q4. What does kill credit need for monsters spawned by map events in multiplayer?
+
+- **Static: where credit is decided.** `0x44db20` is the unit death function. The killer is resolved in the block `0x44dc00` to `0x44dd01`: unit types through `0x34ab60` and
+  `0x34b9d0`, then `0x588b00(killer, victim, ...)` and `0x4471e0(victim, 0, &out)`, owner fields of the killer (`[killer + 0x38]`, `0x341a30`, `0x341a20`, `0x349b70`), and
+  the block ends in `0x4475c0(player, &out, 1, ...)` (call at `0x44dcfc`), which returns 0 unless the unit in its second argument is type 1 (a player). This has the shape of "find the
+  player the kill counts for, then run their kill side effects" (**inference**: the callees were not read in full).
+- **SDK.** The `MonsterDeath` listener (server thread) gives the killer identity only, with no owner resolution (a missile or minion shows as itself), so it is not a credit
+  mechanism.
+- **Static: spawn path.** The map events spawn through `0x492cf0` / `0x499ba0` (section 9). The victim is an ordinary server monster made by the game's spawn core; nothing in
+  the death path was found that checks how it was spawned.
+- **Static: bosses.** The superunique spawn is gated by the once-per-game bitmap at `game + 0x1d8` (per game, not per player), so one superunique can be spawned once per game: a
+  design limit for several maps in one game, not a credit item.
+- **Inference.** Monsters spawned on the host are real server units and replicate through the normal unit packets, so credit, experience, drops and quest flags are decided
+  server side and need no plugin message. What is open is display: the plugin's monster stats (section 7) are applied on the server unit, and whether a client shows them depends
+  on whether those stats replicate.
+- **Needs game.**
+  1. Kill a map event monster as a non-host client, directly, with a minion and with a missile: experience, kill count and drop owner.
+  2. Do the monster stats from section 7 reach a remote client's display (health bar, hover text), or only the server's numbers?
+  3. Does the monster level override (section 6) change the experience award for a client far from the monster?
+- **Recommended route.** Spawn on the host only through the section 9 calls and leave credit to the engine, verified by the three checks. If credit is wrong for minions or
+  missiles, resolve the owner with `0x490300` and the owner chain of the `0x44dc00` block before touching `0x4475c0`.
+
+### Needs game (summary)
+
+1. Q1: channel connect and reject behaviour with a remote TCP/IP client; 224 byte delivery; callback threads.
+2. Q2: `0x3271c0` hit order on host and remote client for the slot level; does the plan arrive before the remote client's first lazy build; the LoadAct sender.
+3. Q3: `0x58f680` register layout; refusal feedback and retry; a client that never acks; the host's own player.
+4. Q4: credit and drops for a remote client (own attack, minion, missile); stat replication to clients' displays; range effects.
+
+### Recommended route (all four)
+
+`NetworkService` for the plan message (Q1); keep the maze hooks as they are on both sides (Q2) with the plan in the per-game cache before the client's first build; gate the
+portal entry at `0x58f680` until the client acks (Q3); spawn events on the host only and leave credit to the engine, verified by the Q4 checks. The unlocated pieces (LoadAct sender,
+retry behaviour, stat replication) are needs-game items and do not block writing the plugin code.
