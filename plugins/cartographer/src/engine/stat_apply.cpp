@@ -25,7 +25,8 @@ namespace sp = cartographer::statplan;
 constexpr int UnitTypeOffset = 0x00;       // int32: 0 player, 1 monster
 constexpr int UnitIdOffset = 0x08;         // uint32 (what the game's own unit id helper 0x34a330 returns)
 constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data flag helper 0x34a0e0 returns)
-constexpr int ListHeadOffset = 0x90;       // a unit's stat list chain: head, or the second head at 0x98; next at 0x68
+constexpr int UnitOwnerListOffset = 0x88;  // the unit's own stat list (the engine's 0x34b870 returns it): the chain hangs on it, not on the unit
+constexpr int ListHeadOffset = 0x90;       // on that owner list: the chain head, or the second head at 0x98 (bit 13 lists); next at 0x68
 constexpr int ListHeadAltOffset = 0x98;
 constexpr int ListNextOffset = 0x68;
 constexpr int MaxChain = 512;              // a chain longer than this is not walked further
@@ -116,13 +117,33 @@ auto MakeList(Unit* unit, int32_t type, const std::vector<sp::Entry>& entries) n
 	return list;
 }
 
-// How many lists are on the unit's chain, and whether `find` is one of them.
+// A pointer the chain walk may read: committed, readable memory. The first live run (issue #80) faulted because the walk
+// started at the unit instead of its owner list (+0x88), so every step of the walk is checked and stops at anything else.
+auto Readable(const void* p, size_t n) noexcept -> bool {
+	if (reinterpret_cast<uintptr_t>(p) < 0x10000) {
+		return false;
+	}
+	MEMORY_BASIC_INFORMATION mbi{};
+	if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0) {
+		return false;
+	}
+	return reinterpret_cast<uintptr_t>(p) + n <= reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+}
+
+// How many lists are on the unit's chain, and whether `find` is one of them. A link that is not readable ends the walk.
 auto Chain(Unit* unit, const void* find, bool* found) noexcept -> int {
 	int n = 0;
 	*found = false;
+	const uint8_t* owner = At<const uint8_t*>(unit, UnitOwnerListOffset);
+	if (!Readable(owner, ListHeadAltOffset + sizeof(void*))) {
+		return 0;
+	}
 	for (const int head : {ListHeadOffset, ListHeadAltOffset}) {
-		const uint8_t* p = At<const uint8_t*>(unit, head);
+		const uint8_t* p = At<const uint8_t*>(owner, head);
 		for (int i = 0; p != nullptr && i < MaxChain; ++i, ++n) {
+			if (!Readable(p + ListNextOffset, sizeof(void*))) {
+				break;
+			}
 			*found = *found || (find != nullptr && p == find);
 			p = At<const uint8_t*>(p, ListNextOffset);
 		}
@@ -391,7 +412,12 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 		if (!g_chainLogged.load(std::memory_order_relaxed) && At<int32_t>(unit, UnitTypeOffset) == UnitPlayer) {
 			g_chainLogged = true;  // once per game: a list left on the player by an earlier map (a save and reload) would show here
 			bool found = false;
-			plog::Info("statprobe: first player unit %u of this game holds %d stat lists", At<uint32_t>(unit, UnitIdOffset), Chain(unit, nullptr, &found));
+			const int lists = Chain(unit, nullptr, &found);
+			const uint8_t* owner = At<const uint8_t*>(unit, UnitOwnerListOffset);
+			const bool ok = Readable(owner, 0xa0);
+			plog::Info("statprobe: first player unit %u of this game holds %d stat lists (owner list %p, heads +0x%x = %p, +0x%x = %p)", At<uint32_t>(unit, UnitIdOffset), lists,
+			           static_cast<const void*>(owner), ListHeadOffset, ok ? At<const void*>(owner, ListHeadOffset) : nullptr, ListHeadAltOffset,
+			           ok ? At<const void*>(owner, ListHeadAltOffset) : nullptr);
 		}
 		if (!g_busy.load(std::memory_order_relaxed) || !g_playersOn.load() || At<int32_t>(unit, UnitTypeOffset) != UnitPlayer) {
 			return;

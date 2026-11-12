@@ -18,13 +18,12 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map
   stays in your inventory; the reason is in the log and the console, and on screen you see "I can't use this yet." Both
   opening in Hell and a refusal (level gate) were seen in a game.
-- **Map properties** (written, **not yet verified in game**): when a map opens, `Properties` random properties are drawn
+- **Map properties** (monsters checked in game; the player's stats do not show on the character sheet): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
   monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
   `cartographer.txt`; it is `0` by default and then nothing is attached to the player. **Turn `PlayerStats` on only on a
-  test character** until the in-game save check (section 7, check 5) has passed: the player's stats are removed when the
-  player leaves the map level, but a Save and Exit inside the map, or an autosave there, may save the character while they
-  are still on it. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
+  test character**: the stats apply and are removed when the player leaves the map level, and a Save and Exit inside the
+  map saved a test character without them, but the character screen does not show them (one live check). Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
@@ -95,7 +94,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
 | Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
-| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (not yet verified in game), the rest are kept for later phases | cartographer.txt |
+| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (checked in game for monsters), the rest are kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above) and
 `Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
@@ -134,7 +133,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build.
+Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build. The map properties part has its own live checks, listed under Tested.
 
 ## Tested
 
@@ -163,9 +162,13 @@ Not run in game: every point above is expected behaviour, checked only by unit t
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
 - Map properties: unit tests of the draw and the apply plan (`statplan_tests`), and the six stat parts' signatures, each
-  unique and resolving to its recorded address in a dump of build 93847 (`check_portal_signatures.py`). **Not run in a game**:
-  that the stats take effect, show the game's text, reach the client and are removed again are the checks in
-  `docs/reverse-engineering/cartographer.md` section 7.
+  unique and resolving to its recorded address in a dump of build 93847 (`check_portal_signatures.py`). In game (same
+  build and test setup, 2026-11-12; details in `docs/reverse-engineering/cartographer.md` section 7): monster stats
+  apply to monsters spawned in the map level and not in town (life doubled, fire resistance, seen in the overlay);
+  `PlayerStats=1` applied strength and cold resistance on the server, removed them on leaving the map and the game, and
+  a Save and Exit inside the map left the test character unchanged. **Not seen in game**: the player's stats on the
+  character sheet (they do not show), the monsters' own damage and life bar as played, natural (non-cheat) spawns, and
+  guards failing open (no mismatching build to test).
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
