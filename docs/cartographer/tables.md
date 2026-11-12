@@ -31,7 +31,7 @@ General rules for every table:
 - Words that are Cartographer's own (tileset, shape, size, difficulty, target, kind) ignore case.
 - Names from the game's own tables (monster `Id`, superunique name, stat names) must match exactly, capital letters included. Item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
-- A number too big for the game is cut to fit, and the message adds "(you typed N)".
+- In `mapstats.txt` and `mapevents.txt`, a message about a `Weight`, `Count` or `Waves` past 2,147,483,647 (or below -2,147,483,648) adds "(you typed N)".
 - A bad row is skipped and named in `cartographer-report.txt` (and by `cartographer check`); the other rows still load.
 
 ## maps.txt (required)
