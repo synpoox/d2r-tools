@@ -156,6 +156,11 @@ auto resolveConfig(int autoCheck, const std::string &autoCheckMap, const std::ve
 	return config;
 }
 
+auto noBossRoomReason(bool outdoor) -> std::string {
+	return outdoor ? "no boss room to go to: the outdoor plan has none I can read (the slot build did not run as planned, or the layout has BossRoom off)"
+	               : "no boss room to go to: the plan has none I can read (only Cave and Crypt maps with BossRoom on have one)";
+}
+
 auto bossStandPoint(int tileX, int tileY, int tileW, int tileH) -> Point {
 	const int offsetX = std::max(1, tileW / 4);
 	const int offsetY = std::max(1, tileH / 2);

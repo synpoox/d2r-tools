@@ -71,6 +71,9 @@ struct Point {
 inline constexpr int SubtilesPerTile = 5;
 auto bossStandPoint(int tileX, int tileY, int tileW, int tileH) -> Point;
 
+// Why the boss step found no plan boss room to go to, for an outdoor map or a maze map.
+auto noBossRoomReason(bool outdoor) -> std::string;
+
 // Whether a stage that began at `startMs` has run past `limitMs` at `nowMs` (the clock may step back: an earlier now is not a timeout).
 auto timedOut(unsigned long long startMs, unsigned long long nowMs, unsigned long long limitMs) -> bool;
 
