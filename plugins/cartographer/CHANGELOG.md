@@ -2,34 +2,19 @@
 
 ## Unreleased
 
-- In a Cave or Crypt maze you now arrive in the planned entrance room, loop mazes included; that room gets no random chests or shrines (#127; written and unit tested, not verified in game).
-- `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
-- When a host opens a map, joined TCP/IP clients are told which map it is; they check it against their own `maps.txt` and log it (nothing else uses it yet; written and unit tested, not verified in game).
-- A TCP/IP client now shows the host's map name (with `MapNames=1`) and builds the host's maze layout, where its own tables fit (#130; written and unit tested, not verified in game).
-- Small preset maps now get their event, in the first room far enough from where you arrive, and the banner names an event only after it has spawned (#115, #121; written, not verified in game).
-- Boss `Drop` rolls an extra treasure class when the boss dies and Ambush events spawn their waves when you reach the event room (both seen working in game once); Treasure monsters spawn and the flee call runs (that they flee is not confirmed).
-- Shrine and Treasure chest events now find a spot inside a small event room, and a `Spawn` given as an `objects.txt` Class (such as `ShrineHealth`) or a unique Name finds the right row on the stock file; a Name shared by several lines is refused; written and unit tested, not verified in game (#135).
-- Boss and Horde names read from `monstats.txt` and `superuniques.txt` when the game's tables are not used no longer pick the next row after the stock files' `Expansion` line (unit tested, not verified in game).
-- Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (checked in game with a superunique name only).
-- When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (spawns checked in game; the banner text was not seen on screen).
-- When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters, event-spawned ones included (checked in game on cheat-spawned and event-spawned monsters).
-- Player stats from a map are off by default; `PlayerStats=1` in `cartographer.txt` turns them on, for a test character only; they are sent through an unused game state so the character sheet can show them (written and unit tested; not verified in game), and an autosave inside the map is untested.
-- Player stats now look for an unused game state with the empty values the game's compiled table really uses; `cartographer check` and the log say which state is picked or why none is (written and unit tested; not verified in game, #104).
-- `mapstats.txt` rows for `gold`, `hitpoints`, `level` and similar stats the game saves are refused on players, `hitpoints`, `mana` and `stamina` also on monsters, stats that need a skill, state or monster type number on both, and `cartographer check` names them.
-- `cartographer check` reports a `Stat` in `mapstats.txt` that is not in `itemstatcost.txt`, with a suggestion.
-- Map portal tooltip shows "Colossal Summit" instead of "Missing String"; run `tools\install.ps1` again to fix an older install (checked in game).
-- Cave and Crypt maps can be built from their layout through a manual `Maze` slot (checked in game for Cave maps; Crypt not yet); one Maze slot serves one tileset (Cave or Crypt), and a map of the other tileset is refused with a message. Turn on `MazeProbe` in `cartographer.txt` to log what the game builds.
-- `tools\install.ps1` keeps the other rows of `slots.txt` (such as the `Maze` row) when it runs again.
-- `cartographer check` and the report now say when `core-maps` is loaded too; use one or the other.
-- Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt` and reports problems in them, and lets a map's `Shape` name a `shapes.txt` row (checked only; not applied in game yet).
-- New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
-- Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
-- Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.
-- A map's item opens a red portal to that map from Harrogath in Hell, once per game.
-- `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map without its item.
-- `tools\install.ps1` adds the map level to your mod's tables (no items), checks every table first and keeps a `.bak` copy (safe to run twice).
-- Reads the tables from the mod folder that D2RLoader 1.3.1 passes (before, no maps were found with that version).
-- Without a mod, no tables are read and there are no maps; only the default settings apply.
-- A `signatures.txt` entry that cannot be checked (wildcards where the game is patched, or not at the start of a function) is refused and logged.
-- Finds the engine parts the portal needs by byte signature (checked in game on build 93847); the portal stays off if any part is not found exactly once.
-- `cartographer check` looks again for the engine parts the game calls and turns the portal on if all are now found; a part the plugin hooks has to be found at load, or the game must be restarted.
+- Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
+- Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
+- Plain-English checking of `maps.txt` and `cartographer.txt`, with a skipped-row report in `cartographer-report.txt`.
+- `cartographer check` lists problems in your tables; `cartographer open <Name>` opens a map in town without its item.
+- `tools\install.ps1` adds the map level to your mod's tables (no items), keeps a `.bak` copy and is safe to run twice.
+- Cave and Crypt maps are built from their layout through a manual `Maze` slot; one slot serves one tileset.
+- Random map properties from `mapstats.txt` apply to the map's monsters; `PlayerStats=1` adds player properties (off by default, test characters only, experimental).
+- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental); shrines and chests now fit small event rooms, and Boss and Horde names read correctly for Act 5 and superuniques.
+- Small maps get their event in a room far enough from where you arrive.
+- You arrive in the planned entrance room of a maze (experimental).
+- `MapNames=1` shows a map's own name on its portal, automap and banner (off by default, experimental).
+- Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
+- The map portal tooltip reads "Colossal Summit" instead of "Missing String"; run `tools\install.ps1` again on an older install.
+- `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
+- Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported (`shapes.txt` is checked only for now).
+- New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.

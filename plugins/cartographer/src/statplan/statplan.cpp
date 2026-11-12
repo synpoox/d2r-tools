@@ -362,7 +362,7 @@ bool isEmpty(const uint8_t *row, const Column &c)
 // A state row nothing uses: every column of the compiled row (cartographer.md section 7) holds its empty value. So no overlay,
 // stat, skill, missile, function, group, colour, light, sound, item, graphics or vfx entry, and the whole flag field is zero
 // (also nosend (0) and disguise (17)). The sound, itemtype and group columns must be exactly 0 and the other lookups exactly
-// negative: a sound or event index 0 is a real row and is not taken for empty.
+// negative: cltevent 0 is a real event (`hitbymissile`) and is not taken for empty; sound row 0 is `none`.
 bool candidate(const uint8_t *row)
 {
 	for (const Column &c : kColumns) {
