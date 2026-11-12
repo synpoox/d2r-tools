@@ -249,23 +249,24 @@ if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
 $BossKeyPrefix = 'cartoboss:'
 $MaxBosses = 16
 $bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
+# A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
+$bossLines = @()
 if (Test-Path $bossPath) {
     $bossText = $bytes.GetString([System.IO.File]::ReadAllBytes($bossPath))
     $bossLines = @($bossText -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
-    $bossHeader = if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
+}
+if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
+    $bossHeader = @(if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" })
     $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
     $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
     $superPath = Join-Path $ExcelDir 'superuniques.txt'
     $monstatsPath = Join-Path $ExcelDir 'monstats.txt'
     $supers = $null
     $needed = 'Superunique', 'hcIdx', 'Name', 'Class', 'Mod1', 'Mod2', 'Mod3', 'MinGrp', 'MaxGrp'
-    if ($bossLines.Count -lt 2) {
-        Write-Host 'bosses.txt: no entries, nothing to add to superuniques.txt.'
-    } elseif ($nameAt -lt 0 -or $baseAt -lt 0) {
+    $noEntries = $bossLines.Count -lt 2
+    if (-not $noEntries -and ($nameAt -lt 0 -or $baseAt -lt 0)) {
         Write-Host "bosses.txt: needs 'Name' and 'Base' columns; superuniques.txt was not touched."
-    } elseif (-not (Test-Path $superPath)) {
-        Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
-    } elseif (-not (Test-Path $monstatsPath)) {
+    } elseif (-not $noEntries -and -not (Test-Path $monstatsPath)) {
         Write-Host 'bosses.txt: this mod has no monstats.txt to check the Base monsters against; superuniques.txt was not touched.'
     } else {
         $supers = Read-Table $superPath
@@ -276,16 +277,18 @@ if (Test-Path $bossPath) {
         }
     }
     if ($supers) {
-        $monstats = Read-Table $monstatsPath
-        $mIdCol = Column $monstats 'Id'
-        $mBossCol = [array]::IndexOf($monstats.Header, 'boss')
-        $monsterIds = @{}
-        $bossIds = @{}
-        for ($i = 1; $i -lt $monstats.Lines.Count; $i++) {
+        # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name-versus-monster check ignores case, like ContainsNoCase.
+        $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $bossIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
+        $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
+        $mBossCol = if ($monstats) { [array]::IndexOf($monstats.Header, 'boss') } else { -1 }
+        for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {
             $c = $monstats.Lines[$i] -split "`t"
             if ($c.Count -gt $mIdCol -and $c[$mIdCol] -ne '') {
-                $monsterIds[$c[$mIdCol]] = $true
-                if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { $bossIds[$c[$mIdCol]] = $true }
+                [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add($c[$mIdCol])
+                if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { [void]$bossIds.Add($c[$mIdCol]) }
             }
         }
         $modIds = $null
@@ -333,10 +336,10 @@ if (Test-Path $bossPath) {
             }
             if ($bossName -eq '') { & $skip 'the Name cell is empty.'; continue }
             if ($seen.ContainsKey($bossName.ToLowerInvariant())) { & $skip 'a boss with that name is already listed.'; continue }
-            if ($vanillaSupers.ContainsKey($bossName.ToLowerInvariant()) -or $monsterIds.ContainsKey($bossName)) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
+            if ($vanillaSupers.ContainsKey($bossName.ToLowerInvariant()) -or $monsterIdsNoCase.Contains($bossName)) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
             if ($bossBase -eq '') { & $skip 'the Base cell is empty.'; continue }
-            if (-not $monsterIds.ContainsKey($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
-            if ($bossIds.ContainsKey($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
+            if (-not $monsterIds.Contains($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
+            if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
             $mods = @()
             $bad = ''
             if ($modsAt -ge 0 -and $bc.Count -gt $modsAt -and $bc[$modsAt].Trim() -ne '') {
@@ -381,6 +384,8 @@ if (Test-Path $bossPath) {
             Write-Host 'superuniques.txt: boss rows already up to date.'
         }
     }
+} elseif ($bossLines.Count -ge 2) {
+    Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------
