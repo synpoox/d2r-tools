@@ -1,6 +1,7 @@
 #include "statplan.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
@@ -307,37 +308,109 @@ bool namedBySkill(const uint8_t *skills, uint32_t skillCount, int state)
 	return false;
 }
 
-// A state row nothing uses: every column of the compiled row (cartographer.md section 7) is empty. Lookup columns are empty
-// when negative (overlays, stat, skill, missile) or 0 or negative (sounds, itemtype, cltevent: the dump does not
-// say which one the loader writes); gfxclass is a plain word, empty when 0; setfunc and remfunc are empty when 0 or -1; clteventfunc, cltactivefunc, srvactivefunc, group, bytes (colour, light, gfxtype, itemtrans, canstack) and the
-// vfxweaponstate dword are empty when 0; the whole flag field is zero.
+// How a column looks when it is empty in the compiled row. Settled from the compiler's own output, `states.bin` of D2RLoader 1.3.1
+// (build 93847), read against `states.txt`: all 232 rows, every column, empty cell against stored bytes (cartographer.md section 7).
+enum class Empty : uint8_t {
+	Zero,      // all bytes 0
+	Negative,  // a name lookup that found nothing: -1 (0 is a real row)
+	ZeroOrM1,  // setfunc, remfunc: 0 is stored; -1 also does nothing in the engine's dispatch (table entry 0 is null, -1 fails the bound)
+	AllOnes,   // itemtrans: the byte 0xff
+};
+
+struct Column {
+	size_t off;
+	size_t width;
+	Empty empty;
+	const char *name;
+};
+
+const Column kColumns[] = {
+	{0x02, 2, Empty::Negative, "overlay1"},    {0x04, 2, Empty::Negative, "overlay2"},    {0x06, 2, Empty::Negative, "overlay3"},
+	{0x08, 2, Empty::Negative, "overlay4"},    {0x0a, 2, Empty::Negative, "castoverlay"}, {0x0c, 2, Empty::Negative, "removerlay"},
+	{0x0e, 2, Empty::Negative, "pgsvoverlay"}, {0x10, 1, Empty::Zero, "flags 0-7"},       {0x11, 1, Empty::Zero, "flags 8-15"},
+	{0x12, 1, Empty::Zero, "flags 16-23"},     {0x13, 1, Empty::Zero, "flags 24-31"},     {0x14, 1, Empty::Zero, "flags 32-39"},
+	{0x15, 1, Empty::Zero, "flags 40-47"},     {0x16, 1, Empty::Zero, "flags 48-55"},     {0x17, 1, Empty::Zero, "flags 56-63"},
+	{0x18, 2, Empty::Negative, "stat"},        {0x1a, 2, Empty::ZeroOrM1, "setfunc"},     {0x1c, 2, Empty::ZeroOrM1, "remfunc"},
+	{0x1e, 2, Empty::Zero, "group"},           {0x20, 1, Empty::Zero, "colorpri"},        {0x21, 1, Empty::Zero, "colorshift"},
+	{0x22, 1, Empty::Zero, "light-r"},         {0x23, 1, Empty::Zero, "light-g"},         {0x24, 1, Empty::Zero, "light-b"},
+	{0x26, 2, Empty::Zero, "onsound"},         {0x28, 2, Empty::Zero, "offsound"},        {0x2a, 2, Empty::Zero, "itemtype"},
+	{0x2c, 1, Empty::AllOnes, "itemtrans"},    {0x2d, 1, Empty::Zero, "gfxtype"},         {0x2e, 2, Empty::Zero, "gfxclass"},
+	{0x30, 2, Empty::Negative, "cltevent"},    {0x32, 2, Empty::Zero, "clteventfunc"},    {0x34, 2, Empty::Zero, "cltactivefunc"},
+	{0x36, 2, Empty::Zero, "srvactivefunc"},   {0x38, 2, Empty::Negative, "skill"},       {0x3a, 2, Empty::Negative, "missile"},
+	{0x3c, 1, Empty::Zero, "canstack"},        {0x40, 4, Empty::Zero, "vfxweaponstate"},
+};
+
+uint32_t valueAt(const uint8_t *row, const Column &c)
+{
+	uint32_t v = 0;
+	std::memcpy(&v, row + c.off, c.width);
+	return v;
+}
+
+bool isEmpty(const uint8_t *row, const Column &c)
+{
+	const uint32_t v = valueAt(row, c);
+	switch (c.empty) {
+	case Empty::Zero: return v == 0;
+	case Empty::Negative: return (v & (1u << (c.width * 8 - 1))) != 0;
+	case Empty::ZeroOrM1: return v == 0 || v == 0xffffu;
+	case Empty::AllOnes: return v == 0xffu;
+	}
+	return false;
+}
+
+// A state row nothing uses: every column of the compiled row (cartographer.md section 7) holds its empty value. So no overlay,
+// stat, skill, missile, function, group, colour, light, sound, item, graphics or vfx entry, and the whole flag field is zero
+// (also nosend (0) and disguise (17)). The sound, itemtype and group columns must be exactly 0 and the other lookups exactly
+// negative: a sound or event index 0 is a real row and is not taken for empty.
 bool candidate(const uint8_t *row)
 {
-	for (int i = 0; i < 8; ++i) {
-		if (row[0x10 + i] != 0) return false; // every flag bit clear, so also nosend (0) and disguise (17)
+	for (const Column &c : kColumns) {
+		if (!isEmpty(row, c)) return false;
 	}
-	for (size_t off = 2; off <= 0xe; off += 2) {
-		if (i16At(row, off) >= 0) return false;
+	return true;
+}
+
+int failingColumns(const uint8_t *row)
+{
+	int n = 0;
+	for (const Column &c : kColumns) n += isEmpty(row, c) ? 0 : 1;
+	return n;
+}
+
+const char *const kFlagNames[] = {"nosend", "aura", "hide", "hidedead", "transform", "pgsv", "active", "remhit", "damblue", "damred", "attblue", "attred",
+                                  "curse", "curable", "plrstaydeath", "monstaydeath", "bossstaydeath", "disguise", "restrict", "blue", "armblue", "rfblue",
+                                  "rcblue", "rlblue", "rpblue", "stambarblue", "armred", "rfred", "rcred", "rlred", "rpred", "exp", "shatter", "life",
+                                  "udead", "green", "nooverlays", "noclear", "bossinv", "meleeonly", "notondead", "sunderfull", "sunder-res-reduce"};
+
+// "state N: K column(s) not empty; first <column> at +0xOO = 0xVV [(flag name)], empty is <rule>"
+std::string rejectionText(int state, const uint8_t *row)
+{
+	int failing = 0;
+	const Column *first = nullptr;
+	for (const Column &c : kColumns) {
+		if (!isEmpty(row, c)) {
+			if (first == nullptr) first = &c;
+			++failing;
+		}
 	}
-	if (i16At(row, 0x18) >= 0 || i16At(row, 0x38) >= 0 || i16At(row, 0x3a) >= 0) return false; // stat, skill, missile
-	for (const size_t off : {size_t(0x1a), size_t(0x1c)}) {
-		const int16_t f = i16At(row, off);
-		if (f != 0 && f != -1) return false; // setfunc, remfunc: 0 and -1 both do nothing (entry 0 of the tables is null, -1 fails the bound)
+	std::string text = "state " + std::to_string(state) + ": " + std::to_string(failing) + " column(s) not empty";
+	if (first == nullptr) return text;
+	const uint32_t v = valueAt(row, *first);
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "; first %s at +0x%02x = 0x%0*x", first->name, static_cast<unsigned>(first->off), static_cast<int>(first->width * 2), v);
+	text += buf;
+	if (first->off >= 0x10 && first->off < 0x18) {
+		for (size_t bit = 0; bit < 8; ++bit) {
+			const size_t idx = (first->off - 0x10) * 8 + bit;
+			if ((v & (1u << bit)) != 0 && idx < sizeof(kFlagNames) / sizeof(kFlagNames[0])) {
+				text += std::string(" (flag ") + kFlagNames[idx] + ")";
+				break;
+			}
+		}
 	}
-	for (const size_t off : {size_t(0x32), size_t(0x34), size_t(0x36)}) {
-		if (i16At(row, off) != 0) return false; // clteventfunc, cltactivefunc, srvactivefunc
-	}
-	if (i16At(row, 0x1e) != 0) return false; // group
-	for (const size_t off : {size_t(0x26), size_t(0x28), size_t(0x2a), size_t(0x30)}) {
-		if (i16At(row, off) > 0) return false; // onsound, offsound, itemtype, cltevent
-	}
-	if (i16At(row, 0x2e) != 0) return false; // gfxclass: a plain word (type 3), empty is 0
-	for (const size_t off : {size_t(0x20), size_t(0x21), size_t(0x22), size_t(0x23), size_t(0x24), size_t(0x2c), size_t(0x2d), size_t(0x3c)}) {
-		if (row[off] != 0) return false; // colorpri, colorshift, light r/g/b, itemtrans, gfxtype, canstack
-	}
-	uint32_t vfx;
-	std::memcpy(&vfx, row + 0x40, sizeof(vfx));
-	return vfx == 0; // vfxweaponstate
+	text += std::string(", empty is ") + (first->empty == Empty::Negative ? "negative" : first->empty == Empty::AllOnes ? "0xff" : first->empty == Empty::ZeroOrM1 ? "0 or 0xffff" : "0");
+	return text;
 }
 
 } // namespace
@@ -376,6 +449,38 @@ StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *
 		return pick;
 	}
 	return pick;
+}
+
+std::vector<std::string> explainNoPick(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount, size_t maxRows)
+{
+	std::vector<std::string> lines;
+	if (states == nullptr) return lines;
+	struct Rank {
+		int failing;
+		uint32_t state;
+	};
+	std::vector<Rank> ranks;
+	uint32_t empty = 0, emptyStatic = 0, emptyNamed = 0, usable = 0;
+	for (uint32_t s = 1; s < count; ++s) {
+		const uint8_t *row = states + static_cast<size_t>(s) * kStateRowSize;
+		const bool fixed = isStaticState(static_cast<int>(s));
+		const bool named = skills != nullptr && namedBySkill(skills, skillCount, static_cast<int>(s));
+		if (candidate(row)) {
+			++empty;
+			emptyStatic += fixed ? 1 : 0;
+			emptyNamed += (!fixed && named) ? 1 : 0;
+			usable += (!fixed && !named) ? 1 : 0;
+		} else if (!fixed && !named) {
+			ranks.push_back({failingColumns(row), s});
+		}
+	}
+	lines.push_back(std::to_string(empty) + " of " + std::to_string(count > 0 ? count - 1 : 0) + " rows above 0 have every column empty: " + std::to_string(emptyStatic) +
+	                " in the static list, " + std::to_string(emptyNamed) + " named by a skills row, " + std::to_string(usable) + " usable");
+	std::stable_sort(ranks.begin(), ranks.end(), [](const Rank &a, const Rank &b) { return a.failing < b.failing; });
+	for (size_t i = 0; i < ranks.size() && i < maxRows; ++i) {
+		lines.push_back(rejectionText(static_cast<int>(ranks[i].state), states + static_cast<size_t>(ranks[i].state) * kStateRowSize));
+	}
+	return lines;
 }
 
 } // namespace cartographer::statplan

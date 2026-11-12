@@ -122,7 +122,7 @@ private:
 // (build 93847) is 0x44 bytes: i16 overlay1-4 (+2, +4, +6, +8), castoverlay (+0xa), removerlay (+0xc), pgsvoverlay (+0xe);
 // the flag field (+0x10..+0x17, bit k at byte +0x10+k/8 mask 1<<(k%8); bit 0 nosend, bit 17 disguise); i16 stat (+0x18),
 // setfunc (+0x1a), remfunc (+0x1c); u16 group (+0x1e); i16 skill (+0x38), missile (+0x3a); byte canstack (+0x3c). A
-// lookup column that is empty is negative. The skills row is 0x2ec bytes with i16 aurastate (+0xa0), auratargetstate
+// name lookup that finds nothing is stored as -1 (0xffff), the other empty columns as 0, itemtrans as 0xff (see statplan.cpp). The skills row is 0x2ec bytes with i16 aurastate (+0xa0), auratargetstate
 // (+0xa2), passivestate (+0xb4), state1-3 (+0x2d2, +0x2d4, +0x2d6).
 constexpr uint32_t kStateRowSize = 0x44;
 constexpr uint32_t kSkillRowSize = 0x2ec;
@@ -144,5 +144,10 @@ struct StatePick {
 // candidate() in statplan.cpp); not named by any skills row; not in the static list. `skills` may be null only with
 // skillCount 0 (then no skills row names a state). Rows are raw bytes.
 StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount);
+
+// Why a table gives no pick, for the log and 'cartographer check': one summary line (how many rows have every column empty and how many of
+// those are static or named by a skill), then up to `maxRows` of the rows closest to qualifying (not static, not named by a skill; fewest
+// non-empty columns first), each with its first non-empty column, its offset and its value. Empty for a null table.
+std::vector<std::string> explainNoPick(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount, size_t maxRows = 4);
 
 } // namespace cartographer::statplan
