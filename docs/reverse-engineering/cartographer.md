@@ -1134,6 +1134,66 @@ exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5d
 4. What does the owner suffix `" (%s)"` look like in single player (the `0x8d4b0` global decides whether it is appended)? Compare a stock portal tooltip with a hooked one.
 5. Does the text cache between two maps? Open two different maps in a row.
 
+### Game checks of 2026-11-12 (issues #87 and #90)
+
+Live run, slot level 138 ("Cartographer Preset", LevelName key `ColossalSummit`, as installed by `tools\install.ps1` from origin/main 5c2ba9a). D2R 3.3 build 93847,
+D2RLoader 1.3.1-beta, test mod and test save, single player, Normal difficulty (the two test maps had `Difficulty` set to Normal and the map was opened with
+`cartographer open Shorelines`; one map per game). Screenshots of the game window only, read by hand; no hook or probe code was run. The two memory writes
+below were made from outside the game with `WriteProcessMemory` into the loaded levels row (a test technique, not plugin code).
+
+| Check | Result | Evidence |
+|---|---|---|
+| #87: red portal tooltip in town | Reads "Colossal Summit", not "Missing String"; no `" (owner)"` suffix in single player (needs-game item 4) | `hover_portal_town` |
+| Entry banner | "Entering The Colossal Summit" | `enter_*` |
+| Automap title inside the map | "Colossal Summit" | `automap_inside` |
+| Return portal inside the map | "Harrogath" | `hover_portal_inside` |
+| Leave, then enter again | Town banner "Entering Harrogath"; the red portal stays and still reads "Colossal Summit"; entering again works | `back_in_town`, `reenter_1`, `reenter_tip` |
+| #90: the map's own `Name` ("Shorelines") | Appears nowhere: not on the tooltip, the banner or the automap. Still needs a runtime hook | all of the above |
+| Item 3: is the slot row writable? | **Yes.** Writing `Harrogath` over the row's LevelName (`+0xfd`) changed the automap title inside the map to "Harrogath" at once, with no reload | `automap_after_name_write` |
+| Item 1 (indirect): does the tooltip read the row key? | **Yes, live, no cache.** After the same write, the portal tooltip in town read "Harrogath" | `town_tip_after_write` |
+| Banner source | The banner follows **LevelEntry** (`+0x14d`), not LevelName: writing `EnteringHarrogath` over it changed the banner on the next entry to "Entering Harrogath" | `banner_after_entry_write1` |
+| Item 4: owner suffix | None in single player | `hover_portal_town` |
+
+So the tooltip, the automap title and the banner all read the slot level's own row strings at the time they are shown. Writing existing string keys into LevelName
+(`+0xfd`) and LevelEntry (`+0x14d`) changed the tooltip, the automap title and the banner live, in single player, with no hook; the tooltip is read when hovered, the
+banner when entering. The row was found by a memory scan of the game process (one copy of the table; row 137 and row 138 are `0x18c` apart). The writes were made from
+outside with `WriteProcessMemory`; whether the same write works in process was not tried ("writable" is shown only for that). That a plugin could find the row through the
+table or the row getter is inference.
+
+**Not shown:** the map's own name. Only existing keys were written, never a map's `Name`. Section 3 already shows that a LevelName that is not a key reads "Missing String"
+(the first tooltip, #87), so a free-text `Name` such as "Shorelines" is expected to do the same. A string key per map is therefore a prerequisite for this route
+(Q5: a runtime-registered string or a resolvable prefixed key; unverified). Option 4 of Q4 as written covers `+0xfd` only; the banner also needs `+0x14d`, so the route is two writes.
+
+Static facts (dump `D2RLoader_6ab3782c_dump.exe`, stamp `0x6ab3782c`): the levels.txt loader builds its column descriptors on the stack, `0x20` bytes each
+`{+0 name, +8 type, +0xc size, +0x10 offset}`; the names are loaded at `0x3300d4` (LevelName), `0x3300e2` (LevelWarp) and `0x3300f0` (LevelEntry), and the fields are stored at
+`0x33024d..0x3302ad`:
+
+| Column | type | size | offset |
+|---|---|---|---|
+| LevelName | 1 (string) | `0x27` | `0xfd` |
+| LevelWarp | 1 | `0x27` | `0x125` |
+| LevelEntry | 1 | `0x27` | `0x14d` |
+
+Each field is `0x28` apart, a `char[40]`: a text key of at most 39 characters plus the NUL, not an index.
+
+Conditions for the write route to be safe (for #90's design, not checked in game):
+
+- Size: write at most 39 characters and always write the NUL; refuse, or fall back to the shared key, for a longer key (a `plugin-id:` prefix counts toward the 39).
+- Restore: the row is process-wide table data and outlives the game. Save the original 40 bytes of both fields and write them back on map close, on `GameLeft` and on plugin
+  unload, also for the Maze slot (139); otherwise the next game's slot (and `cheat goto 138`) shows the last map's name.
+- Threads: write on the game thread when the map opens, before the portal exists, so no reader sees a half-written key. One copy of the table was found; a second data bank was not checked.
+- Multiplayer: each process has its own tables. A host write changes only the host's text; a TCP/IP client keeps "Colossal Summit" unless its own plugin writes the same key, which needs the
+  map identity sent to the client (#98 sync, section 12).
+- Free text: needs a key (see above).
+
+**Not checked:** hit counts on `0xc189f`, `0xc7a30` and `0x3e2b736` (items 1 and 2 directly; no probe code exists, only behaviour was observed); whether the
+`0x8e1c9` data model feeds the banner (the banner is explained by LevelEntry, so probably not); two maps in two games (item 5; with one shared row key the text
+was the same for every map anyway); a free-text name; the item right-click path (the right-click on a map scroll did nothing, cause not found; the log gave no gate line, so the item path was not confirmed here); a map opened in Hell; TCP/IP and a second player (the owner suffix there).
+Test set-up notes: the spawned test item was a copy of the Identify scroll row, so it reads "Scroll of Identify". The character save failed every 30
+seconds with an encoding error after an assert on a stat index (`BC_ASSERT nStat`). The cause is not shown. A missing `itemstatcost.txt` in the test mod is an unlikely guess (a mod without the table gets the
+game's base table; the file only makes Cartographer skip map stats, and `PlayerStats` is off by default). To tell, rerun the same save and mod without `cartographer.dll`: if the assert stays,
+it is setup or save state; if it goes, it is Cartographer. Not looked into; no Cartographer code was changed.
+
 ## 11. Event Spawn names from the game's compiled tables (issue #95)
 
 **Status:** written and unit tested (issue #95, code in `plugins/cartographer/src/engine/event_apply.cpp`, pure logic in `src/eventplan/`); the signatures were checked statically on the build 93847 dump (`check_portal_signatures.py`, both rows ok); **not run in a game**. The analysis below is static research from the dump. Context: section 9 resolves an event's `Spawn` against the mod's `monstats.txt` `Id` and `superuniques.txt` `Superunique` columns (`ReadSpawnNames`, `plugins/cartographer/src/plugin.cpp`); issue #95 asks whether the game's own loaded tables can do it, so a mod that ships those tables in another form (or none) still resolves. Labels: **static** is read from the dump; **inference** is reasoned from it; **needs game** is a check to run.
