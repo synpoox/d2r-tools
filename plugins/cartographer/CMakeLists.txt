@@ -34,9 +34,29 @@ endfunction()
 cartographer_library(cartographer_core src/core/tables.cpp)
 target_include_directories(cartographer_core PUBLIC src)
 
-# The layout generator (phase 2): pure C++, no engine headers.
-cartographer_library(cartographer_layout src/layout/layout.cpp src/layout/layout.h src/layout/rng.h)
-target_include_directories(cartographer_layout PUBLIC src/layout)
+# Cores: every directory src/<core>/ except core/ (the table loader above) and engine/ (plugin-only code) is a pure
+# C++ library cartographer_<core> built from its *.cpp, with src/<core> as its public include path. A new core needs no
+# edit here: add the directory. Dependencies on other cores go in src/<core>/deps.cmake as
+# `set(CARTOGRAPHER_CORE_DEPS layout)` (names without the cartographer_ prefix). Tests: tests/<core>_tests.cpp.
+file(GLOB cartographer_core_dirs LIST_DIRECTORIES true RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/src CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*)
+list(SORT cartographer_core_dirs)
+set(CARTOGRAPHER_CORES "")
+foreach(core IN LISTS cartographer_core_dirs)
+	if(NOT IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/${core} OR core STREQUAL "core" OR core STREQUAL "engine")
+		continue()
+	endif()
+	file(GLOB core_sources CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/${core}/*.cpp)
+	cartographer_library(cartographer_${core} ${core_sources})
+	target_include_directories(cartographer_${core} PUBLIC src/${core})
+	set(CARTOGRAPHER_CORE_DEPS "")
+	if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/src/${core}/deps.cmake)
+		include(${CMAKE_CURRENT_SOURCE_DIR}/src/${core}/deps.cmake)
+	endif()
+	foreach(dep IN LISTS CARTOGRAPHER_CORE_DEPS)
+		target_link_libraries(cartographer_${core} PUBLIC cartographer_${dep})
+	endforeach()
+	list(APPEND CARTOGRAPHER_CORES cartographer_${core})
+endforeach()
 
 add_library(cartographer SHARED
 	src/plugin.cpp
@@ -45,16 +65,12 @@ add_library(cartographer SHARED
 	src/cartographer.rc
 )
 target_compile_features(cartographer PRIVATE cxx_std_20)
-target_link_libraries(cartographer PRIVATE cartographer_core cartographer_layout D2RLPlugin::D2RLPlugin user32)
+target_link_libraries(cartographer PRIVATE cartographer_core ${CARTOGRAPHER_CORES} D2RLPlugin::D2RLPlugin user32)
 set_target_properties(cartographer PROPERTIES OUTPUT_NAME "cartographer")
 if(MSVC)
 	target_compile_options(cartographer PRIVATE /W4 /permissive- /EHsc /utf-8)
 	set_property(TARGET cartographer PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # static CRT: no VC++ runtime dependency
 endif()
-
-# The map stats draw core (phase 5a): pure C++, no engine headers. It includes ../layout/rng.h.
-cartographer_library(cartographer_stats src/stats/mapstats.cpp src/stats/mapstats.h)
-target_include_directories(cartographer_stats PUBLIC src/stats)
 
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
