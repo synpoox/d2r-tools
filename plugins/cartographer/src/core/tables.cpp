@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
 
 namespace carto {
@@ -89,6 +90,32 @@ auto ParseWhole(const std::string& cell, int* out) -> bool {
 	return true;
 }
 
+// True when the typed whole number was cut to fit int32, so the value a message shows is not what was typed.
+auto WasCut(int value, const std::string& typed) -> bool {
+	const std::string shown = std::to_string(value);
+	size_t digits = (!typed.empty() && (typed[0] == '-' || typed[0] == '+')) ? 1 : 0;
+	while (digits + 1 < typed.size() && typed[digits] == '0') {
+		++digits;
+	}
+	const std::string plain = std::string(!typed.empty() && typed[0] == '-' ? "-" : "") + typed.substr(digits);
+	return !typed.empty() && plain != shown && !(shown == "0" && plain == "-0");
+}
+
+// A cut number is shown in the message as the cut value; this names what was typed. The message itself is never changed.
+auto TypedSuffix(const std::string& typed) -> std::string {
+	return " (you typed " + typed + ")";
+}
+
+// The header cell is the first of its name (ignoring case): a repeated name is reported once, as a repeat, not again as unused.
+auto FirstOfName(const std::vector<std::string>& header, size_t i) -> bool {
+	for (size_t j = 0; j < i; ++j) {
+		if (EqualsNoCase(header[j], header[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 auto Range(int lo, int hi) -> std::string {
 	return "between " + std::to_string(lo) + " and " + std::to_string(hi);
 }
@@ -157,8 +184,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		return maps;
 	}
 	ReportRepeatedColumns(MapsFile, table, report);
-	for (const std::string& column : table.header) {
-		if (Canonical(MapColumns, column) == nullptr) {
+	for (size_t i = 0; i < table.header.size(); ++i) {
+		const std::string& column = table.header[i];
+		if (Canonical(MapColumns, column) == nullptr && FirstOfName(table.header, i)) {
 			report.Note(MapsFile, 1, "the column '" + column + "' is not used and is ignored." + DidYouMean(column, MapColumns));
 		}
 	}
@@ -322,8 +350,9 @@ namespace {
 
 // Notes for header cells no column uses, with a spelling suggestion.
 void NoteUnusedColumns(const char* file, const Tsv& table, const std::vector<std::string>& used, Report& report) {
-	for (const std::string& column : table.header) {
-		if (!column.empty() && Canonical(used, column) == nullptr) {
+	for (size_t i = 0; i < table.header.size(); ++i) {
+		const std::string& column = table.header[i];
+		if (!column.empty() && Canonical(used, column) == nullptr && FirstOfName(table.header, i)) {
 			report.Note(file, 1, "the column '" + column + "' is not used and is ignored." + DidYouMean(column, used));
 		}
 	}
@@ -394,6 +423,7 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 	using cartographer::stats::PoolRow;
 	std::vector<PoolRow> pool;
 	std::vector<int> lines;
+	std::vector<std::string> weightText;  // what was typed in Weight, for messages after the int32 cut
 	const Tsv table = ParseTsv(text);
 	if (NoteIfEmpty(MapStatsFile, table, report) || !RequireColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max"}, report)) {
 		return pool;
@@ -436,13 +466,17 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 		if (ok) {
 			pool.push_back(entry);
 			lines.push_back(row.line);
+			weightText.push_back(table.Cell(row, cWeight));
 		}
 	}
 	// The core's own checks. A negative Weight is an error there and the row is dropped; the rest are notes.
 	std::vector<bool> drop(pool.size(), false);
 	for (const cartographer::stats::PoolIssue& issue : cartographer::stats::checkPool(pool)) {
 		const std::string lead = "row " + std::to_string(issue.row + 1) + " (" + pool[issue.row].stat + "): ";
-		const std::string message = issue.message.rfind(lead, 0) == 0 ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
+		std::string message = issue.message.rfind(lead, 0) == 0 ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
+		if (message.find("Weight") != std::string::npos && WasCut(pool[issue.row].weight, weightText[issue.row])) {
+			message += TypedSuffix(weightText[issue.row]);
+		}
 		if (issue.error) {
 			report.Error(MapStatsFile, lines[issue.row], message);
 			drop[issue.row] = true;
@@ -474,6 +508,12 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 	for (const TsvRow& r : table.rows) {
 		Row row;
 		bool ok = true;
+		struct Typed {
+			const char* name;
+			int value;
+			std::string text;
+		};
+		std::vector<Typed> typed;  // what was typed, for messages after the int32 cut
 		row.line = r.line;
 		row.name = table.Cell(r, cName);
 		row.kindText = table.Cell(r, cKind);
@@ -496,6 +536,7 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 			}
 			if (ParseWhole(cell, &v)) {
 				*n.value = v;
+				typed.push_back({n.name, v, cell});
 			} else {
 				report.Error(MapEventsFile, r.line, "'" + (row.name.empty() ? std::string("this event") : row.name) + "' has " + n.name + " '" + cell + "', which is not a whole number. This row is skipped.");
 				ok = false;
@@ -504,12 +545,30 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 		if (!ok) {
 			continue;
 		}
-		const std::string error = cartographer::events::validateRow(row, r.line);
+		// Name the typed number only for the label the message is about: the text after the last "' has " (the name is user text).
+		const auto echo = [&](std::string message, bool skipped) {
+			if (message.empty()) {
+				return message;
+			}
+			const size_t has = message.rfind("' has ");
+			if (has != std::string::npos) {
+				for (const Typed& t : typed) {
+					if (message.compare(has + 6, std::strlen(t.name) + 1, std::string(t.name) + " ") == 0 && WasCut(t.value, t.text)) {
+						if (skipped) {
+							message += " This row is skipped.";
+						}
+						return message + TypedSuffix(t.text);
+					}
+				}
+			}
+			return skipped ? message + " This row is skipped." : message;
+		};
+		const std::string error = echo(cartographer::events::validateRow(row, r.line), true);
 		if (!error.empty()) {
-			ReportCoreMessage(report, true, MapEventsFile, error + " This row is skipped.");
+			ReportCoreMessage(report, true, MapEventsFile, error);
 			continue;
 		}
-		const std::string warning = cartographer::events::warnRow(row, r.line);
+		const std::string warning = echo(cartographer::events::warnRow(row, r.line), false);
 		if (!warning.empty()) {
 			ReportCoreMessage(report, false, MapEventsFile, warning);
 		}
