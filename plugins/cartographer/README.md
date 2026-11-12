@@ -94,17 +94,19 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
   - `cartographer open <Name>` opens the portal with no item in town, and refuses outside town ("only be opened in town");
   - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
     (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);
-  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
-  - a map open in Hell, `Gated` (character level 20): refused at level 1 (log "needs character level 20 (you are 1)", item kept),
+  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded;
+  - (Hell game) a map open in Hell, `Gated` (character level 20): refused at level 1 (log "needs character level 20 (you are 1)", item kept),
     opened at level 25;
-  - an item with spell 16 that no map names does nothing and is kept, as with Cartographer unloaded;
-  - a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
-  - Save and Exit from the map level with the portal open is clean, and the next game opens a map again;
-  - Better Auras loaded alongside: both load, the map still opens.
-- Not exercised in game: the "no free spot" refusal (the level read and the spot search were seen only succeeding), the
-  spell-16 use with no matching check (below), and the TCP/IP client refusal.
+  - (Hell game) an item with spell 16 that no map names does nothing and is kept, as with Cartographer unloaded;
+  - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
+  - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
+  - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+- Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
+  succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
+  forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
-  dropped (it opens nothing and is not passed to the game).
-- Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; as a TCP/IP client the command refuses.
+  dropped (it opens nothing and is not passed to the game). The game's code has a path to the use handler that skips the
+  check, but which action takes it is not decoded, so no in-game test is named yet.
+- Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
