@@ -40,4 +40,8 @@ auto StatApplyPartStatuses() -> std::vector<PartStatus>;
 // For 'cartographer check': one line saying what is applied.
 auto StatApplySummary() -> std::string;
 
+// For 'cartographer check': which state the player stats would use in each bank, or why none qualifies (the first failing column of
+// the closest rows). Read-only; the lines are plain text.
+auto StatApplyStateReport() -> std::vector<std::string>;
+
 }  // namespace carto

@@ -323,16 +323,20 @@ TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
 
 namespace {
 
-// A states table whose rows are all empty (lookups -1, the rest 0), `count` rows.
+// A states table whose rows are all empty as the compiler stores them (cartographer.md section 7): the lookups overlay1-4, castoverlay,
+// removerlay, pgsvoverlay, stat, cltevent, skill and missile are 0xffff, itemtrans is the byte 0xff, the rest is 0 (also setfunc/remfunc).
 std::vector<uint8_t> emptyStates(uint32_t count)
 {
 	std::vector<uint8_t> rows(static_cast<size_t>(count) * kStateRowSize, 0);
 	for (uint32_t i = 0; i < count; ++i) {
 		uint8_t *r = rows.data() + static_cast<size_t>(i) * kStateRowSize;
-		for (size_t off : {2, 4, 6, 8, 0xa, 0xc, 0xe, 0x18, 0x1a, 0x1c, 0x38, 0x3a}) {
+		const uint16_t key = static_cast<uint16_t>(i);
+		std::memcpy(r, &key, sizeof(key));
+		for (size_t off : {2, 4, 6, 8, 0xa, 0xc, 0xe, 0x18, 0x30, 0x38, 0x3a}) {
 			r[off] = 0xff;
 			r[off + 1] = 0xff;
 		}
+		r[0x2c] = 0xff;
 	}
 	return rows;
 }
@@ -427,14 +431,103 @@ TEST_CASE("pickPlayerState skips a row with any of the function, colour, light, 
 		INFO("column at +" << c.off);
 		CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
 	}
-	// A lookup column that is 0 or negative is empty.
+	// The compiled empty values are exact: sound and item columns are 0 (a negative one is not what the compiler writes), cltevent is
+	// negative (0 is a real event), itemtrans is 0xff (0 is a real transform), gfxclass is a plain word (0 only).
 	auto states = emptyStates(8);
-	setI16(states, 1, 0x26, -1);
-	setI16(states, 1, 0x30, 0);
 	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 1);
-	// gfxclass is a plain word, not a lookup: only 0 is empty, a negative value is not.
+	setI16(states, 1, 0x26, -1);
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+	states = emptyStates(8);
+	setI16(states, 1, 0x30, 0);
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+	states = emptyStates(8);
+	states[1 * kStateRowSize + 0x2c] = 0;
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+	states = emptyStates(8);
 	setI16(states, 1, 0x2e, -1);
 	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
+}
+
+namespace {
+
+// A compiled states row as D2RLoader 1.3.1 stores an empty one (states.bin of build 93847, rows 39, 92, 116, 230, 231 predicted from
+// states.txt and checked against the file): key, 14 bytes of 0xff (overlays), 8 zero flag bytes, stat 0xffff, 18 zero bytes
+// (setfunc, remfunc, group, colour, light, sounds, itemtype), itemtrans 0xff, 3 zero bytes (gfxtype, gfxclass), cltevent 0xffff,
+// 6 zero bytes (three functions), skill and missile 0xffff, 8 zero bytes (canstack, padding, vfxweaponstate).
+std::vector<uint8_t> compiledEmptyRow(uint16_t key)
+{
+	std::vector<uint8_t> r(kStateRowSize, 0);
+	r[0] = static_cast<uint8_t>(key & 0xff);
+	r[1] = static_cast<uint8_t>(key >> 8);
+	for (size_t i = 2; i < 16; ++i) r[i] = 0xff;
+	r[0x18] = r[0x19] = 0xff;
+	r[0x2c] = 0xff;
+	r[0x30] = r[0x31] = 0xff;
+	r[0x38] = r[0x39] = r[0x3a] = r[0x3b] = 0xff;
+	return r;
+}
+
+} // namespace
+
+TEST_CASE("pickPlayerState: the compiled empty rows of vanilla (39, 92, 116, 230, 231) qualify, and 39 is the pick")
+{
+	const std::vector<uint8_t> empty = compiledEmptyRow(0);
+	const size_t sz = kStateRowSize;
+	CHECK(empty.size() == sz);
+	const auto skills = noSkills(1);
+	for (uint16_t key : {39, 92, 116, 230, 231}) {
+		const std::vector<uint8_t> row = compiledEmptyRow(key);
+		// The same row alone in a table of two (row 0 is never taken): the pick is state 1.
+		std::vector<uint8_t> table(2 * sz, 0);
+		std::memcpy(table.data() + sz, row.data(), sz);
+		INFO("key " << key);
+		CHECK(pickPlayerState(table.data(), 2, skills.data(), 1).state == 1);
+	}
+	// A table with the vanilla layout of candidates: 39 is the lowest not static and not named; 92 is static.
+	std::vector<uint8_t> table(232 * sz, 0);
+	for (uint32_t s = 0; s < 232; ++s) {
+		std::vector<uint8_t> row = compiledEmptyRow(static_cast<uint16_t>(s));
+		row[0x10] = 1;  // nosend: everything else is taken
+		std::memcpy(table.data() + s * sz, row.data(), sz);
+	}
+	for (uint32_t s : {92u, 116u, 230u, 231u}) {
+		const std::vector<uint8_t> row = compiledEmptyRow(static_cast<uint16_t>(s));
+		std::memcpy(table.data() + s * sz, row.data(), sz);
+	}
+	CHECK(pickPlayerState(table.data(), 232, skills.data(), 1).state == 116);  // 92 is in the static list
+	const std::vector<uint8_t> row39 = compiledEmptyRow(39);
+	std::memcpy(table.data() + 39 * sz, row39.data(), sz);
+	CHECK(pickPlayerState(table.data(), 232, skills.data(), 1).state == 39);
+}
+
+TEST_CASE("explainNoPick names the first failing column, its offset and value, and counts the empty rows that are static or named")
+{
+	const size_t sz = kStateRowSize;
+	std::vector<uint8_t> table(8 * sz, 0);
+	for (uint32_t s = 0; s < 8; ++s) {
+		const std::vector<uint8_t> row = compiledEmptyRow(static_cast<uint16_t>(s));
+		std::memcpy(table.data() + s * sz, row.data(), sz);
+	}
+	auto skills = noSkills(1);
+	setSkill(skills, 0, 0xa0, 3);          // state 3 is named by a skill
+	table[1 * sz + 0x2c] = 0;              // itemtrans 0: the case the first game run hit, with every other column fine
+	table[2 * sz + 0x12] = 0x02;           // disguise flag, and also
+	setI16(table, 2, 0x38, 5);             // a skill
+	table[4 * sz + 0x2c] = 0;              // itemtrans, and
+	table[4 * sz + 0x3c] = 1;              // canstack
+	table[5 * sz + 0x2c] = 0;
+	table[6 * sz + 0x2c] = 0;
+	table[7 * sz + 0x2c] = 0;
+	const auto lines = explainNoPick(table.data(), 8, skills.data(), 1, 3);
+	REQUIRE(lines.size() == 4);
+	CHECK(lines[0].find("1 of 7 rows") == 0);       // only state 3 has every column empty
+	CHECK(lines[0].find("1 named by a skills row") != std::string::npos);
+	CHECK(lines[0].find("0 usable") != std::string::npos);
+	// Static states (6, 7) are never listed; rows with the fewest failing columns come first, lowest state first on a tie.
+	CHECK(lines[1] == "state 1: 1 column(s) not empty; first itemtrans at +0x2c = 0x00, empty is 0xff");
+	CHECK(lines[2] == "state 5: 1 column(s) not empty; first itemtrans at +0x2c = 0x00, empty is 0xff");
+	CHECK(lines[3].find("state 2: 2 column(s) not empty; first flags 16-23 at +0x12 = 0x02 (flag disguise)") == 0);
+	CHECK(explainNoPick(nullptr, 8, skills.data(), 1).empty());
 }
 
 TEST_CASE("pickPlayerState skips the states the game sets by a fixed id, including 11 and 92")
