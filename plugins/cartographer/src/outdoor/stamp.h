@@ -83,9 +83,12 @@ struct StampPlan {
 	bool ok() const { return errors.empty(); }
 };
 
-// Builds the plan. On failure `errors` says why in plain English (picks with errors, no used cell, more than one
-// entrance, the cropped layout over the size limits, a piece bigger than one macro-cell, mask 0 or a jungle piece
-// that breaks the 0x211 + mask rule) and the rest of the plan is left empty.
+// Builds the plan. On failure `errors` says why in plain English: bad cell sizes, picks with errors or made for another
+// layout, no used cell, the cropped layout over the size limits, a cell with no piece or an exit mask over 15, piece 529
+// (the Act 3 town), a pinned DS1 variant over 15, a jungle piece that breaks the 0x211 + mask rule, or no entrance /
+// more than one entrance, event or boss cell. On failure `stamps`, `voidCells` and the rectangles are empty; the size
+// fields (macroMinX/Y, macroW/H, tilesW/H) stay set when the failure was the size check, and the cell fields (cellsW/H)
+// are set only past it.
 StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, const StampOptions &options);
 
 // Independent check of a plan against the layout it was made from. Empty means every used macro-cell is stamped once,

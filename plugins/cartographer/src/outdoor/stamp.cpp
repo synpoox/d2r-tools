@@ -98,8 +98,9 @@ StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, cons
 			std::to_string(o.maxMacroCells) + " x " + std::to_string(o.maxMacroCells) + " the outdoor builder allows.");
 	}
 	if ((o.maxTilesX > 0 && plan.tilesW > o.maxTilesX) || (o.maxTilesY > 0 && plan.tilesH > o.maxTilesY)) {
+		auto limit = [](int v) { return v > 0 ? std::to_string(v) : std::string("unlimited"); };
 		fail("the map needs " + std::to_string(plan.tilesW) + " x " + std::to_string(plan.tilesH) + " tiles, more than the slot level's " +
-			std::to_string(o.maxTilesX) + " x " + std::to_string(o.maxTilesY) + ".");
+			limit(o.maxTilesX) + " x " + limit(o.maxTilesY) + ".");
 	}
 	if (!plan.ok()) return plan;
 
@@ -118,6 +119,14 @@ StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, cons
 			}
 			if (cell.mask > 15) {
 				fail(where(x, y) + " has an exit mask over 15.");
+				continue;
+			}
+			if (pick.lvlPrest == 529) {
+				fail(where(x, y) + " has piece 529, the Act 3 town, which must never be stamped.");
+				continue;
+			}
+			if (o.pinFiles && pick.ds1Variant > 15) {
+				fail(where(x, y) + " has DS1 variant " + std::to_string(pick.ds1Variant) + ", which the 4-bit file index cannot hold.");
 				continue;
 			}
 			if (inJungleMaskRange(pick.lvlPrest) && pick.lvlPrest != jungleLvlPrest(cell.mask)) {

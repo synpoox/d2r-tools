@@ -411,6 +411,99 @@ TEST_CASE("the jungle edge rule: a mask piece is 0x211 + mask, and mask 0 and 52
 	CHECK(p.errors[0].find("jungle edge rule") != std::string::npos);
 }
 
+TEST_CASE("the planner itself refuses piece 529 and a pinned DS1 variant over 15")
+{
+	const LoadResult cat = loadJungle();
+	const Layout l = s1Line();
+	PickResult r = pickPieces(l, cat.catalogue, "Jungle", 7);
+	REQUIRE(r.ok());
+
+	PickResult town = r;
+	town.cells[1].lvlPrest = 529;
+	StampPlan p = planStamps(l, town, StampOptions{});
+	CHECK(!p.ok());
+	CHECK(p.stamps.empty());
+	REQUIRE(!p.errors.empty());
+	CHECK(p.errors[0].find("Act 3 town") != std::string::npos);
+
+	PickResult wide = r;
+	wide.cells[1].ds1Variant = 16;
+	StampOptions pin;
+	pin.pinFiles = true;
+	p = planStamps(l, wide, pin);
+	CHECK(!p.ok());
+	REQUIRE(!p.errors.empty());
+	CHECK(p.errors[0].find("4-bit file index") != std::string::npos);
+	CHECK(planStamps(l, wide, StampOptions{}).ok()); // not pinned: the variant is not passed on
+}
+
+TEST_CASE("checkStampPlan names the fault in a corrupted plan")
+{
+	const LoadResult cat = loadJungle();
+	Layout l;
+	l.width = 4;
+	l.height = 4;
+	l.cells.resize(16);
+	l.at(1, 1) = {layout::kEast, Role::Entrance};
+	l.at(2, 1) = {static_cast<uint8_t>(layout::kWest | layout::kSouth), Role::Path};
+	l.at(2, 2) = {layout::kNorth, Role::Boss};
+	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 3);
+	REQUIRE(r.ok());
+	const StampOptions o;
+	const StampPlan good = planStamps(l, r, o);
+	REQUIRE(good.ok());
+	REQUIRE(checkStampPlan(l, r, o, good).empty());
+
+	auto expectFault = [&](const StampPlan &bad, const char *text) {
+		const std::vector<std::string> problems = checkStampPlan(l, r, o, bad);
+		INFO("expected: " << text);
+		REQUIRE(!problems.empty());
+		bool found = false;
+		for (const std::string &m : problems) found = found || m.find(text) != std::string::npos;
+		CHECK(found);
+	};
+
+	StampPlan bad = good;
+	bad.stamps[1].cx += 1; // off the macro-cell grid
+	expectFault(bad, "is not aligned to the macro-cell grid");
+
+	bad = good;
+	bad.voidCells.pop_back(); // the last void cell dropped
+	expectFault(bad, "is not stamped and not listed void");
+
+	bad = good;
+	bad.voidCells.erase(bad.voidCells.begin()); // the first void cell dropped
+	expectFault(bad, "is not stamped and not listed void");
+
+	bad = good;
+	bad.voidCells.push_back({0, 0}); // a stamped cell listed as void
+	expectFault(bad, "the void list holds cells that are stamped");
+
+	bad = good;
+	bad.entrance.x += 8; // the entrance rectangle shifted
+	expectFault(bad, "rectangle is not on");
+
+	bad = good;
+	std::swap(bad.stamps[0], bad.stamps[1]); // two stamps out of order
+	expectFault(bad, "out of row-major order");
+
+	bad = good;
+	bad.stamps.pop_back(); // a stamp missing
+	expectFault(bad, "stamps for 3 used cells");
+
+	bad = good;
+	bad.stamps[0].lvlPrest = 529; // the Act 3 town
+	expectFault(bad, "Act 3 town piece");
+
+	bad = good;
+	bad.stamps[0].file = 16; // does not fit the 4-bit flag
+	expectFault(bad, "4-bit flag");
+
+	bad = good;
+	bad.tilesW += 8; // the level size no longer matches the box
+	expectFault(bad, "does not match the cropped box");
+}
+
 TEST_CASE("an L-shape is cropped to its box and the empty macro-cell becomes void grid cells")
 {
 	const LoadResult cat = loadJungle();
@@ -472,6 +565,12 @@ TEST_CASE("size limits and bad inputs give plain-English errors and no stamps")
 	p = planStamps(l, r, small);
 	CHECK(!p.ok());
 	CHECK(p.errors[0].find("160 x 32 tiles") != std::string::npos);
+
+	StampOptions onlyX;
+	onlyX.maxTilesX = 128; // no limit on the other axis: the message must not say 0
+	p = planStamps(l, r, onlyX);
+	REQUIRE(!p.errors.empty());
+	CHECK(p.errors[0].find("128 x unlimited") != std::string::npos);
 
 	StampOptions odd;
 	odd.macroTiles = 30;
@@ -558,6 +657,7 @@ TEST_CASE("10k seeds of every shape preset on Jungle: the stamp plan is complete
 			}
 			INFO(layout::shapeName(shape) << " " << layout::sizeName(size));
 			CHECK(failures == 0);
+			CHECK(tooBig == 0); // no layout of any preset is wider or taller than 12 blocks
 			if (std::getenv("CARTOGRAPHER_STATS"))
 				std::printf("stamp %-9s %-6s seeds %d  failures %d  over 12x12 %d\n", layout::shapeName(shape), layout::sizeName(size), kSeeds, failures, tooBig);
 		}
