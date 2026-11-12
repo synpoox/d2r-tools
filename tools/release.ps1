@@ -57,7 +57,7 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     $zip = Join-Path $out "$name-$ver.zip"
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
     New-Item -ItemType Directory -Force (Join-Path $bundle $name) | Out-Null
-    Copy-Item (Join-Path $stage '*') -Destination (Join-Path $bundle $name)
+    Copy-Item (Join-Path $stage '*') -Destination (Join-Path $bundle $name) -Recurse
     $files += $zip
 
     $changes += "###### $display $ver`n`n$($sec.Body)"

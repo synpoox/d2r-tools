@@ -403,10 +403,20 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 					std::memcpy(part.guard, pattern.bytes, part.hookSize);
 				}
 			}
+			// An override of a hooked part must keep the built-in entry bytes: the hook is written for that prologue.
+			if (part.address != nullptr && isOverride && part.hookSize > 0 && part.signature != nullptr) {
+				Pattern builtIn{};
+				if (!ParsePattern(part.signature, &builtIn) || builtIn.size < part.hookSize ||
+				    std::memcmp(builtIn.bytes, pattern.bytes, part.hookSize) != 0) {
+					why = "the signature from signatures.txt does not start with the built-in entry bytes this hook is written for";
+					part.address = nullptr;
+				}
+			}
 			if (part.address != nullptr && isOverride) {
 				bool known = false;
-				if (!IsFunctionEntry(context->exeBase, part.address, &known) && known) {
-					why = "the signature from signatures.txt does not match at the start of a function";
+				if (!IsFunctionEntry(context->exeBase, part.address, &known)) {
+					why = known ? "the signature from signatures.txt does not match at the start of a function"
+					            : "the game's exception directory is missing, so the signature from signatures.txt cannot be checked";
 					part.address = nullptr;
 				}
 			}

@@ -30,7 +30,9 @@ recorded: until they are, the plugin loads, reads and checks your tables, and th
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the map item `cmap` (a Scroll of Town Portal copy),
    one level ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `misc.txt`,
    `levels.txt` and `lvlprest.txt` (backing each up once as `.bak`) and writes `slots.txt`. Running
-   it again changes nothing.
+   it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
+   its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
+   edited tables, or remove them, before starting.
 4. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader. Check `cartographer-report.txt` in the plugin's log folder.
 
@@ -64,4 +66,5 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 
 - Unit tests of the table loader, the gates and the signature scanner (`tools\build.ps1 -Plugin cartographer -Test`).
 - The installer on a copy of the vanilla 93847 tables, run twice.
-- Not yet: installed into a game, or opened in game.
+- Not yet: installed into a game, or opened in game. Game check: the item name key `cartographer:CartographerMap` is 28 characters;
+  if `misc.txt` `namestr` has a fixed length, confirm the name is not cut off.
