@@ -90,11 +90,26 @@ auto ParseWhole(const std::string& cell, int* out) -> bool {
 }
 
 // A message built from a number cut to int32 shows the cut value; swap in what was typed ("Weight 2147483647" -> "Weight 99999999999").
+// Only a value that was actually cut is echoed. The number comes after the user's Name/Stat in every message, so the last match is the
+// number itself, never text inside a name; a match followed by another digit is part of a longer number and is left alone.
 void EchoTyped(std::string& message, const char* label, int value, const std::string& typed) {
-	const std::string cut = std::string(label) + " " + std::to_string(value);
-	const size_t at = message.find(cut);
-	if (at != std::string::npos) {
+	const std::string shown = std::to_string(value);
+	size_t digits = (!typed.empty() && (typed[0] == '-' || typed[0] == '+')) ? 1 : 0;
+	while (digits + 1 < typed.size() && typed[digits] == '0') {
+		++digits;
+	}
+	const std::string plain = std::string(!typed.empty() && typed[0] == '-' ? "-" : "") + typed.substr(digits);
+	if (plain == shown || (shown == "0" && plain == "-0")) {
+		return;  // not cut: the message already shows the number
+	}
+	const std::string cut = std::string(label) + " " + shown;
+	for (size_t at = message.rfind(cut); at != std::string::npos; at = at == 0 ? std::string::npos : message.rfind(cut, at - 1)) {
+		const size_t end = at + cut.size();
+		if (end < message.size() && message[end] >= '0' && message[end] <= '9') {
+			continue;
+		}
 		message.replace(at, cut.size(), std::string(label) + " " + typed);
+		return;
 	}
 }
 

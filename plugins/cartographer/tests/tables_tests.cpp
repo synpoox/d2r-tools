@@ -622,6 +622,22 @@ TEST_CASE("messages after the int32 cut echo the number typed") {
 	CHECK(events.problems[0].text.find("2147483647") == std::string::npos);
 }
 
+TEST_CASE("the echo only replaces the number, not text in a Name") {
+	Report events;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nCount 0\tHorde\tzombie1\t+0\n", events);
+	REQUIRE(events.Errors() == 1);
+	const std::string& text = events.problems[0].text;
+	CHECK_MESSAGE(text.find("'Count 0'") != std::string::npos, text);  // the name is untouched
+	CHECK_MESSAGE(text.find("has Count 0.") != std::string::npos, text);    // +0 was not cut: the message is left as the core wrote it
+	CHECK(text.find("has Count +0") == std::string::npos);
+
+	Report cut;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nCount 2147483647\tHorde\tzombie1\t3000000000\n", cut);
+	REQUIRE(cut.Errors() == 1);
+	CHECK_MESSAGE(cut.problems[0].text.find("'Count 2147483647'") != std::string::npos, cut.problems[0].text);
+	CHECK_MESSAGE(cut.problems[0].text.find("Count 3000000000") != std::string::npos, cut.problems[0].text);
+}
+
 TEST_CASE("a repeated unknown column is reported once") {
 	const GameNames names;
 	Report report;
