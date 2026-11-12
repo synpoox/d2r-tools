@@ -130,12 +130,15 @@ struct Spot {
 	int x = 0, y = 0;
 };
 
-// Up to `n` distinct spots inside `room`, kept kEdgeInset clear of its edge where the room is big enough: the centre
+// Up to `n` distinct spots inside `room` (spaced kEdgeInset/kSpotGap, or kTightInset/kTightGap when that holds fewer than `n`), kept kEdgeInset clear of its edge where the room is big enough: the centre
 // first, then a grid around it, kSpotGap apart. Same inputs, same spots. Fewer than `n` when the room is too small.
 // kEdgeInset and kSpotGap are in tiles; `scale` is how many of the room's own units make a tile (1 for a rect in tiles,
 // 5 for the server room's rect), so the spacing stays the same on the ground.
 constexpr int kEdgeInset = 2;
 constexpr int kSpotGap = 2;
+// When the room cannot hold `n` spots at that spacing (an outdoor event room is one 8 x 8 tile room), the spots are packed one tile apart.
+constexpr int kTightInset = 1;
+constexpr int kTightGap = 1;
 std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale = 1);
 
 // Where the map Boss may be tried (issue #183): the centre first, then the tiles of the room one tile clear of its edge (where the room
@@ -202,6 +205,7 @@ struct Spawn {
 struct SpawnPlan {
 	std::vector<Spawn> spawns;
 	std::string problem;  // empty when usable
+	int requested = 0;    // how many monsters the event asked for (Count, 1 + Minions, wave size); spawns.size() is less when the room has no more spots
 };
 
 // A Boss: the named boss at the room centre, plus `minions` of its class around it. A Horde: `hordeSize` of the named

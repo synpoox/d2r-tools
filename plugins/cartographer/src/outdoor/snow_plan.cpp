@@ -79,6 +79,56 @@ void entranceCell(Orientation o, int cellsW, int cellsH, int *x, int *y) {
 	}
 }
 
+// The cells of the boss and the event room: run cells (never a cap), distinct from each other and from the entrance. The boss goes to the run
+// cell farthest from the entrance (squared distance in cells); the event to the one whose nearer neighbour of the two is farthest. Ties are
+// broken by the seed, so a seed always gives the same rooms. `known` stays false when the map has fewer than three run cells.
+struct RoomCells {
+	bool known = false;
+	int bossX = 0, bossY = 0, eventX = 0, eventY = 0;
+};
+
+RoomCells chooseRoomCells(const SnowRequest &r, Orientation o) {
+	RoomCells out;
+	int ex = 0, ey = 0;
+	entranceCell(o, r.cellsW, r.cellsH, &ex, &ey);
+	const bool horizontal = isHorizontal(o);
+	const int along = horizontal ? r.cellsW : r.cellsH;
+	std::vector<std::pair<int, int>> runs;  // row-major
+	for (int y = 0; y < r.cellsH; ++y) {
+		for (int x = 0; x < r.cellsW; ++x) {
+			const int index = horizontal ? x : y;
+			if (index > 0 && index < along - 1 && !(x == ex && y == ey)) runs.emplace_back(x, y);
+		}
+	}
+	if (runs.size() < 2) return out;
+	layout::Pcg32 rng(layout::splitmix64(r.seed + 0x524F4F4Dull));
+	const auto dist2 = [](int ax, int ay, int bx, int by) { return (ax - bx) * (ax - bx) + (ay - by) * (ay - by); };
+	// The best by score; among equal scores the seed's pick (a reservoir over the ties).
+	const auto best = [&](const std::vector<std::pair<int, int>> &from, auto score) {
+		int top = -1, ties = 0;
+		std::pair<int, int> at{0, 0};
+		for (const auto &c : from) {
+			const int v = score(c.first, c.second);
+			if (v > top) {
+				top = v;
+				ties = 1;
+				at = c;
+			} else if (v == top && rng.below(static_cast<uint32_t>(++ties)) == 0) {
+				at = c;
+			}
+		}
+		return at;
+	};
+	const auto boss = best(runs, [&](int x, int y) { return dist2(x, y, ex, ey); });
+	std::vector<std::pair<int, int>> rest;
+	for (const auto &c : runs) {
+		if (c != boss) rest.push_back(c);
+	}
+	const auto event = best(rest, [&](int x, int y) { return std::min(dist2(x, y, ex, ey), dist2(x, y, boss.first, boss.second)); });
+	out = {true, boss.first, boss.second, event.first, event.second};
+	return out;
+}
+
 // Size problems, shared by the planner and the checker. Empty means the size is acceptable.
 std::string sizeProblem(const SnowRequest &r, Orientation o) {
 	if (r.cellsW < 1 || r.cellsH < 1) return "the map needs at least one cell on each side.";
@@ -228,6 +278,10 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 		}
 	}
 	plan.entrance = cellRect(request.options, ex, ey);
+	if (const RoomCells rooms = chooseRoomCells(request, o); rooms.known) {
+		plan.boss = cellRect(request.options, rooms.bossX, rooms.bossY);
+		plan.event = cellRect(request.options, rooms.eventX, rooms.eventY);
+	}
 
 	out.ok = true;
 	out.hash = stampPlanHash(plan);
@@ -301,7 +355,16 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 	const TileRect want = cellRect(request.options, ex, ey);
 	if (!sp.entrance.known || sp.entrance.x != want.x || sp.entrance.y != want.y || sp.entrance.w != want.w || sp.entrance.h != want.h)
 		bad.push_back("the entrance rectangle is not on " + cellName(ex, ey));
-	if (sp.event.known || sp.boss.known) bad.push_back("a Snow plan has no event or boss rectangle yet");
+	const RoomCells rooms = chooseRoomCells(request, o);
+	if (sp.boss.known != rooms.known || sp.event.known != rooms.known) {
+		bad.push_back(rooms.known ? "the plan lacks its boss or event rectangle" : "the plan has a boss or event rectangle but the map has no room for them");
+	} else if (rooms.known) {
+		const TileRect wantBoss = cellRect(request.options, rooms.bossX, rooms.bossY), wantEvent = cellRect(request.options, rooms.eventX, rooms.eventY);
+		const auto same = [](const TileRect &a, const TileRect &b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };
+		if (!same(sp.boss, wantBoss)) bad.push_back("the boss rectangle is not on " + cellName(rooms.bossX, rooms.bossY));
+		if (!same(sp.event, wantEvent)) bad.push_back("the event rectangle is not on " + cellName(rooms.eventX, rooms.eventY));
+		if (same(sp.boss, sp.event) || same(sp.boss, sp.entrance) || same(sp.event, sp.entrance)) bad.push_back("the entrance, boss and event rectangles are not three different cells");
+	}
 	return bad;
 }
 
