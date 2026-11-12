@@ -152,6 +152,7 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) 
 	std::vector<Spot> out = placeOnGrid(room, n, seed, kEdgeInset * scale, kSpotGap * scale);
 	if (static_cast<int>(out.size()) < n) {
 		// An outdoor event room is one 8 x 8 tile room: the usual spacing fits only 4 spots. Pack tighter (one tile) before giving spots up.
+		// The tight pass replaces the whole layout (a Horde of 6 becomes a 3 x 3 block around the centre); it is not added to the normal one.
 		std::vector<Spot> tight = placeOnGrid(room, n, seed, kTightInset * scale, kTightGap * scale);
 		if (tight.size() > out.size()) {
 			out = std::move(tight);
