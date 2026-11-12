@@ -7,7 +7,7 @@
 // OFF by default (OutdoorBuild = 0 in cartographer.txt) until the game checks of issue #89 and #142 confirm the void marker and the
 // entry room. Fail open: a missing part, a plan that cannot be made or a level that is not as expected leaves that build to the game,
 // with the reason in the log. A Jungle map opens through portal.cpp (issue #144), which calls OutdoorMapOpened.
-// Notes and evidence: docs/reverse-engineering/cartographer.md section 8a.
+// Notes and evidence: docs/reverse-engineering/cartographer/08a-outdoor-build-hook.md.
 #pragma once
 
 #include "maze_hooks.h"
@@ -74,6 +74,10 @@ auto OutdoorSlotLevelId() -> int;
 // left. Not known when the layout has no such cell. Any thread.
 auto OutdoorEventRoom() -> MazeEventRect;
 auto OutdoorBossRoom() -> MazeEventRect;
+
+// What the arrival probe found for the local player in this game: 0 not yet, 1 in the planned entrance cell, 2 not in it, 3 could not be told.
+// Cleared when the game is left. The probe runs when OutdoorProbe or AutoCheck is 1. Read by AutoCheck. Any thread.
+auto OutdoorArrivalResult() -> int;
 
 // OutdoorProbe: where the local player first stands in the Outdoor slot level, compared with the entrance cell (as MazeProbeArrival). Game thread.
 auto OutdoorArrivalPending() -> bool;

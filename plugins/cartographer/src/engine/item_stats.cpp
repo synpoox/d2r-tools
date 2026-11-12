@@ -12,7 +12,7 @@ namespace {
 
 namespace sp = cartographer::statplan;
 
-// Build 93847; evidence in docs/reverse-engineering/cartographer.md section 14.
+// Build 93847; evidence in docs/reverse-engineering/cartographer/14-item-stats.md.
 constexpr int32_t MagicListFlags = 0x40;  // the item's base magic list (created with flags 0x40); state 0 asks for a match by flags
 constexpr int MaxStats = 16;              // the game's own sender sends 16 at most
 // The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use and cut to MaxStats here.

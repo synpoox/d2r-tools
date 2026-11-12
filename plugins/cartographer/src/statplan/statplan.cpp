@@ -373,7 +373,7 @@ bool namedBySkill(const uint8_t *skills, uint32_t skillCount, int state)
 }
 
 // How a column looks when it is empty in the compiled row. Settled from the compiler's own output, `states.bin` of D2RLoader 1.3.1
-// (build 93847), read against `states.txt`: all 232 rows, every column, empty cell against stored bytes (cartographer.md section 7).
+// (build 93847), read against `states.txt`: all 232 rows, every column, empty cell against stored bytes (cartographer/07-map-stats-parts.md).
 enum class Empty : uint8_t {
 	Zero,      // all bytes 0
 	Negative,  // a name lookup that found nothing: -1 (0 is a real row)
@@ -423,7 +423,7 @@ bool isEmpty(const uint8_t *row, const Column &c)
 	return false;
 }
 
-// A state row nothing uses: every column of the compiled row (cartographer.md section 7) holds its empty value. So no overlay,
+// A state row nothing uses: every column of the compiled row (cartographer/07-map-stats-parts.md) holds its empty value. So no overlay,
 // stat, skill, missile, function, group, colour, light, sound, item, graphics or vfx entry, and the whole flag field is zero
 // (also nosend (0) and disguise (17)). The sound, itemtype and group columns must be exactly 0 and the other lookups exactly
 // negative: cltevent 0 is a real event (`hitbymissile`) and is not taken for empty; sound row 0 is `none`.

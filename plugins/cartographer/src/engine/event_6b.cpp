@@ -23,7 +23,7 @@ namespace e6 = cartographer::event6b;
 namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
-// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 13.
+// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/13-ambush-treasure-shrine.md.
 constexpr int UnitTypeOffset = 0x00;         // int32: 1 monster
 constexpr int UnitIdOffset = 0x08;           // uint32
 constexpr int32_t UnitTypeMonster = 1;

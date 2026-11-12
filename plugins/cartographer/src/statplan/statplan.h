@@ -20,7 +20,7 @@ using stats::Target;
 
 // Highest stat id the engine part will pass to the game (itemstatcost has a few hundred rows).
 constexpr int kMaxStatId = 2047;
-// The game's state sender copies at most 16 entries of a list (cartographer.md section 7, static), so more player stats than
+// The game's state sender copies at most 16 entries of a list (cartographer/07-map-stats-parts.md, static), so more player stats than
 // this would show on the server and not on the sheet.
 constexpr size_t kMaxPlayerStats = 16;
 
@@ -160,7 +160,7 @@ private:
 	Slot slots_[kMax];
 };
 
-// --- The state that carries the player's list to the clients (issue #104, cartographer.md section 7) -----------------
+// --- The state that carries the player's list to the clients (issue #104, cartographer/07-map-stats-parts.md) -----------------
 // The game sends a stat list only as part of a state, so the player's list is given a state. The compiled states row
 // (build 93847) is 0x44 bytes: i16 overlay1-4 (+2, +4, +6, +8), castoverlay (+0xa), removerlay (+0xc), pgsvoverlay (+0xe);
 // the flag field (+0x10..+0x17, bit k at byte +0x10+k/8 mask 1<<(k%8); bit 0 nosend, bit 17 disguise); i16 stat (+0x18),

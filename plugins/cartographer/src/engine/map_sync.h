@@ -4,7 +4,7 @@
 // (MapNames, in its own copy of the slot level's row) and, for a Cave or Crypt map, the host's layout seed (the maze job of its next
 // slot build), each only where it fits the client's own tables. Stats and events stay with the host. No new engine address and no hook of its own: everything here goes through the SDK, so a
 // missing or older NetworkService only turns the sync off (logged) and the game runs as before. Single player and a host with no client
-// send nothing. Written, not verified in a game: docs/reverse-engineering/cartographer.md section 12.
+// send nothing. Written, not verified in a game: docs/reverse-engineering/cartographer/12-map-sync.md.
 #pragma once
 
 #include "mapsync.h"
