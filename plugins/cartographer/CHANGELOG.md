@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
 - When a host opens a map, joined TCP/IP clients are told which map it is; they check it against their own `maps.txt` and log it (nothing else uses it yet; written and unit tested, not verified in game).
 - Small preset maps now get their event, in the first room far enough from where you arrive, and the banner names an event only after it has spawned (#115, #121; written, not verified in game).
 - Shrine events place an object from `objects.txt` and a Boss `Drop` rolls an extra treasure class when the boss dies (written and unit tested; not yet verified in game).

@@ -67,6 +67,8 @@ PARTS = [
     ("DropLevel", 0x43E8A0, 15, "E8", 0),
     ("SpawnObject", 0x4022A0, 24, "E8", 0),
     ("CreateObject", 0x490410, 19, "48 8B 05", 0),
+    # The map's own Name on the tooltip, automap and banner (cartographer.md section 10): the levels row getter, only called.
+    ("LevelsRow", 0x32C4A0, 18, "E8", 0),
     # Ambush and Treasure (cartographer.md section 13). OperateObject is hooked (16 bytes: four whole instructions); its first relative
     # operand is the call at +32. The others are only called (their max patch is where the signature ends or its first call).
     ("OperateObject", 0x592C40, 32, None, 16),
