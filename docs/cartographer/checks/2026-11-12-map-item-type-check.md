@@ -41,3 +41,24 @@ logs and screenshots are not kept in the repository.
 
 - A belt with more than 4 slots.
 - Other difficulties and more than one map item of the same kind in a stack or in the stash.
+
+## Jungle map (Overgrown Reach) rerun, head cdad137 (OutdoorBuild removed)
+
+Live in game, slot 6, Hell, single player, test save `cartoh` (level 40 Barbarian), D2R 3.3, D2RLoader 1.3.1-beta. The plugin was built from `cdad137` (#228 after
+merging `origin/main`, which removed `OutdoorBuild`); staged with that branch's `stage_check.ps1 -MapItems` and the example tables. The installed `cartographer.dll`
+matched `dist\cartographer\cartographer.dll` (SHA-256 starts `03E09883`) and the log showed `cartographer: 0.1.0 loaded (mod D2RToolsTest, D2R 3.3.0, image 0x6ab3782c)`.
+The `core-*.dll` plugins were parked for the run and put back by `-Restore`; slot 6 was unlocked afterwards. Logs and screenshots are not kept in the repository.
+
+- **Overgrown Reach Map (t22) opens its portal**: right-clicked from the inventory in Harrogath in a new game. The item was consumed and a red portal opened:
+
+      Cartographer: Overgrown Reach is open.
+      map sync: Overgrown Reach is open (row 2 'Overgrown Reach', slot level 139, opening 1, outdoor seed 15463937561057475297); 0 client(s) to tell
+
+  The earlier refusal ("Jungle maps need OutdoorBuild = 1") did not appear.
+- **The map builds and can be entered**: the log showed `outdoor slot level 139: built as planned (18 stamps, 432 void cells; ... 288 rooms)`, and the character
+  stepped through the portal into a jungle level (arrival room marked as the level entry).
+- **Tooltip**: hovering the item before use showed "Overgrown Reach Map".
+- **Inventory icon**: the scroll art (the Scroll of Identify picture), not a map icon. Recorded only.
+- **Log**: no `OutdoorBuild` line in `cartographer.log` or `d2rloader.log`.
+
+Not done in this run: walking the Jungle level, fighting, and leaving by a portal; Save and Exit from inside the map.
