@@ -166,7 +166,9 @@ TEST_CASE("settings default to 6 properties, 20 percent events, no item stats, H
 	CHECK(defaults.eventChance == 20);
 	CHECK(defaults.itemStats == 0);
 	CHECK(defaults.town == "Harrogath");
-	CHECK(report.problems.empty());
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);  // an empty optional file is a note
+	CHECK(report.problems[0].severity == Severity::Note);
 }
 
 TEST_CASE("settings: blank means default, a bad value keeps it and says why") {
@@ -449,7 +451,8 @@ TEST_CASE("shapes.txt: a good row loads, a bad row is reported with its line and
 	CHECK_MESSAGE(Report::Line(report.problems[0]).find("shapes.txt row 3: MinPath must be a whole number") == 0, Report::Line(report.problems[0]));
 	Report empty;
 	CHECK(LoadShapes("", empty).shapes.empty());
-	CHECK(empty.problems.empty());
+	REQUIRE(empty.problems.size() == 1);
+	CHECK(empty.problems[0].severity == Severity::Note);
 }
 
 TEST_CASE("maps.txt Shape may name a shapes.txt row, ignoring case; an unknown name is an error") {
@@ -501,10 +504,61 @@ TEST_CASE("mapstats.txt: rows load; bad rows are skipped and the rest are checke
 
 	Report noColumns;
 	CHECK(LoadMapStats("Stat\tMin\nfireresist\t1\n", noColumns).empty());
-	REQUIRE(noColumns.Errors() == 1);
+	REQUIRE(noColumns.Errors() == 2);
 	CHECK(noColumns.problems[0].text.find("no 'Target' column") != std::string::npos);
 	Report none;
 	CHECK(LoadMapStats("", none).empty());
+	REQUIRE(none.problems.size() == 1);  // an empty optional file is a note, not an error
+	CHECK(none.problems[0].severity == Severity::Note);
+}
+
+TEST_CASE("mapstats.txt: Min and Max are required (column and cell)") {
+	Report noMin;
+	CHECK(LoadMapStats("Target\tStat\tMax\nMonsters\tfireresist\t5\n", noMin).empty());
+	REQUIRE(noMin.Errors() == 1);
+	CHECK(noMin.problems[0].text.find("no 'Min' column") != std::string::npos);
+	Report blank;
+	const auto pool = LoadMapStats("Target\tStat\tMin\tMax\nMonsters\titem_maxhp_percent\t\t\nMonsters\tfireresist\t1\t\nMonsters\tcoldresist\t1\t2\n", blank);
+	REQUIRE(pool.size() == 1);
+	CHECK(pool[0].stat == "coldresist");
+	REQUIRE(blank.Errors() == 3);  // Min and Max of the first row, Max of the second
+	CHECK(blank.problems[0].line == 2);
+	CHECK(blank.problems[0].text.find("Min is empty") == 0);
+}
+
+TEST_CASE("mapstats.txt: a number beyond int32 is cut with a warning, not called a non-number") {
+	Report report;
+	const auto pool = LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tfireresist\t1\t3000000000\t99999999999\nMonsters\tcoldresist\t-99999999999\t5\t\n", report);
+	REQUIRE(pool.size() == 2);
+	CHECK(report.Errors() == 0);
+	CHECK(pool[0].max == INT32_MAX);
+	CHECK(pool[1].min == INT32_MIN);
+	bool cut = false;
+	for (const Problem& p : report.problems) {
+		cut = cut || p.text.find("larger values are cut") != std::string::npos;
+	}
+	CHECK(cut);
+	Report text;
+	CHECK(LoadMapStats("Target\tStat\tMin\tMax\nMonsters\tfireresist\t1\t3x\n", text).empty());
+	CHECK(text.problems[0].text.find("is not a whole number") != std::string::npos);
+}
+
+TEST_CASE("repeated header columns are reported in maps, mapstats and mapevents") {
+	Report stats;
+	CHECK(LoadMapStats("Target\tStat\tMin\tMax\tmin\nMonsters\tfireresist\t1\t2\t9\n", stats).size() == 1);
+	REQUIRE(stats.Errors() == 1);
+	CHECK(stats.problems[0].line == 1);
+	CHECK(stats.problems[0].text.find("'min' appears more than once") != std::string::npos);
+	Report events;
+	CHECK(LoadMapEvents("Name\tKind\tSpawn\tName\nA\tBoss\tx\tB\n", events).size() == 1);
+	CHECK(events.Errors() == 1);
+	Report maps;
+	LoadMaps(std::string("Name\tTileset\tShape\tItem\tItem\nA\tJungle\tLoop\tt20\tt21\n"), Names(), maps);
+	bool seen = false;
+	for (const Problem& p : maps.problems) {
+		seen = seen || p.text.find("appears more than once") != std::string::npos;
+	}
+	CHECK(seen);
 }
 
 TEST_CASE("mapevents.txt: rows load; bad rows are skipped with the row's line") {
@@ -532,4 +586,24 @@ TEST_CASE("mapevents.txt: rows load; bad rows are skipped with the row's line") 
 
 	Report none;
 	CHECK(LoadMapEvents("", none).empty());
+	REQUIRE(none.problems.size() == 1);
+	CHECK(none.problems[0].severity == Severity::Note);
+}
+
+TEST_CASE("mapevents.txt: Waves is only read on Ambush rows; a number beyond int32 gets the range message") {
+	Report report;
+	const auto events = LoadMapEvents(
+	    "Name\tKind\tSpawn\tCount\tWaves\n"
+	    "Boss row\tBoss\tDiablo\t\tabc\n"
+	    "Ambush bad\tAmbush\tzombie1\t\tabc\n"
+	    "Big\tHorde\tzombie1\t3000000000\t\n",
+	    report);
+	REQUIRE(events.size() == 1);
+	CHECK(events[0].name == "Boss row");
+	CHECK(!events[0].waves.has_value());
+	REQUIRE(report.Errors() == 2);
+	CHECK(report.problems[0].line == 3);
+	CHECK(report.problems[0].text.find("Waves 'abc'") != std::string::npos);
+	CHECK(report.problems[1].line == 4);
+	CHECK(report.problems[1].text.find("not a whole number") == std::string::npos);
 }

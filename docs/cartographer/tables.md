@@ -40,7 +40,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. or the `Name` of a row in `shapes.txt` (matched ignoring case). A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` (checked only; not applied yet) | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (checked only; not applied yet) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
@@ -86,7 +86,10 @@ There is no text column. The text comes from the game's own stat description.
 Rules and limits:
 
 - `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
-- `Min` and `Max` beyond 500,000,000 (or below -500,000,000) are cut to that, and `check` warns.
+- `Min` and `Max` need a column and a number on every row; a blank cell is an error and the row is skipped.
+- `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
+- An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
+- A column named twice in the header is an error; only the first one is used.
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.

@@ -64,6 +64,31 @@ auto ParseInt(const std::string& cell, int lo, int hi, int* out) -> bool {
 	return true;
 }
 
+// A whole number of any size: one beyond int32 is cut to INT32_MIN/INT32_MAX so the range checks that follow can say
+// "too large" or cut it with a warning, instead of calling it "not a whole number".
+auto ParseWhole(const std::string& cell, int* out) -> bool {
+	size_t i = (cell.size() > 1 && (cell[0] == '-' || cell[0] == '+')) ? 1 : 0;
+	if (i >= cell.size()) {
+		return false;
+	}
+	for (size_t k = i; k < cell.size(); ++k) {
+		if (cell[k] < '0' || cell[k] > '9') {
+			return false;
+		}
+	}
+	const bool negative = cell[0] == '-';
+	long long v = 0;
+	for (; i < cell.size(); ++i) {
+		v = v * 10 + (cell[i] - '0');
+		if (v > 4000000000LL) {
+			v = 4000000000LL;  // far past int32; more digits cannot change the cut result
+		}
+	}
+	v = negative ? -v : v;
+	*out = static_cast<int>(v < INT32_MIN ? INT32_MIN : (v > INT32_MAX ? INT32_MAX : v));
+	return true;
+}
+
 auto Range(int lo, int hi) -> std::string {
 	return "between " + std::to_string(lo) + " and " + std::to_string(hi);
 }
@@ -94,6 +119,26 @@ auto ReadyTilesetNames() -> std::vector<std::string> {
 	return out;
 }
 
+namespace {
+
+// A header that names a column twice: only the first is read. An error, like shapes.txt, so nobody edits the wrong one.
+void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
+	for (size_t i = 0; i < table.header.size(); ++i) {
+		if (table.header[i].empty()) {
+			continue;
+		}
+		for (size_t j = 0; j < i; ++j) {
+			if (EqualsNoCase(table.header[j], table.header[i])) {
+				report.Error(file, 1, "the column '" + table.header[i] + "' appears more than once (columns " + std::to_string(j + 1) + " and " + std::to_string(i + 1) +
+				                          "). Only the first is used.");
+				break;
+			}
+		}
+	}
+}
+
+}  // namespace
+
 auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
@@ -111,6 +156,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 	if (missing) {
 		return maps;
 	}
+	ReportRepeatedColumns(MapsFile, table, report);
 	for (const std::string& column : table.header) {
 		if (Canonical(MapColumns, column) == nullptr) {
 			report.Note(MapsFile, 1, "the column '" + column + "' is not used and is ignored." + DidYouMean(column, MapColumns));
@@ -283,6 +329,15 @@ void NoteUnusedColumns(const char* file, const Tsv& table, const std::vector<std
 	}
 }
 
+// An optional file with nothing in it is the same as no file: a note, and the defaults are used.
+auto NoteIfEmpty(const char* file, const Tsv& table, Report& report) -> bool {
+	if (!table.header.empty()) {
+		return false;
+	}
+	report.Note(file, 0, "the file is empty, so it is not used.");
+	return true;
+}
+
 // A required column that is missing makes the whole file unusable.
 auto RequireColumns(const char* file, const Tsv& table, const std::vector<std::string>& required, Report& report) -> bool {
 	if (table.header.empty()) {
@@ -325,6 +380,9 @@ void ReportCoreMessage(Report& report, bool error, const char* file, const std::
 }  // namespace
 
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable {
+	if (NoteIfEmpty(ShapesFile, ParseTsv(text), report)) {
+		return {};
+	}
 	cartographer::layout::ParseResult parsed = cartographer::layout::parseShapesTxt(text, ShapesFile);
 	for (const std::string& error : parsed.errors) {
 		ReportCoreMessage(report, true, ShapesFile, error);
@@ -337,9 +395,10 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 	std::vector<PoolRow> pool;
 	std::vector<int> lines;
 	const Tsv table = ParseTsv(text);
-	if (!RequireColumns(MapStatsFile, table, {"Target", "Stat"}, report)) {
+	if (NoteIfEmpty(MapStatsFile, table, report) || !RequireColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max"}, report)) {
 		return pool;
 	}
+	ReportRepeatedColumns(MapStatsFile, table, report);
 	NoteUnusedColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max", "Weight"}, report);
 	const int cTarget = table.Column("Target"), cStat = table.Column("Stat"), cMin = table.Column("Min");
 	const int cMax = table.Column("Max"), cWeight = table.Column("Weight");
@@ -368,7 +427,9 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 		} numbers[] = {{cMin, "Min", &entry.min}, {cMax, "Max", &entry.max}, {cWeight, "Weight", &entry.weight}};
 		for (const auto& n : numbers) {
 			const std::string cell = table.Cell(row, n.column);
-			if (!cell.empty() && !ParseInt(cell, INT32_MIN, INT32_MAX, n.value)) {
+			if (cell.empty() && n.column != cWeight) {
+				fail(std::string(n.name) + " is empty. Give a whole number.");  // Min and Max are required; Weight defaults to 1
+			} else if (!cell.empty() && !ParseWhole(cell, n.value)) {
 				fail(std::string(n.name) + " '" + cell + "' is not a whole number.");
 			}
 		}
@@ -402,9 +463,10 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 	using cartographer::events::Row;
 	std::vector<Row> rows;
 	const Tsv table = ParseTsv(text);
-	if (!RequireColumns(MapEventsFile, table, {"Name", "Kind", "Spawn"}, report)) {
+	if (NoteIfEmpty(MapEventsFile, table, report) || !RequireColumns(MapEventsFile, table, {"Name", "Kind", "Spawn"}, report)) {
 		return rows;
 	}
+	ReportRepeatedColumns(MapEventsFile, table, report);
 	NoteUnusedColumns(MapEventsFile, table, {"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"}, report);
 	const int cName = table.Column("Name"), cKind = table.Column("Kind"), cSpawn = table.Column("Spawn");
 	const int cCount = table.Column("Count"), cWaves = table.Column("Waves"), cDrop = table.Column("Drop");
@@ -429,10 +491,10 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 		for (const auto& n : numbers) {
 			const std::string cell = table.Cell(r, n.column);
 			int v = 0;
-			if (cell.empty()) {
-				continue;
+			if (cell.empty() || (n.column == cWaves && row.kind != cartographer::events::Kind::Ambush)) {
+				continue;  // blank, or Waves on a row that is not an Ambush: not looked at
 			}
-			if (ParseInt(cell, INT32_MIN, INT32_MAX, &v)) {
+			if (ParseWhole(cell, &v)) {
 				*n.value = v;
 			} else {
 				report.Error(MapEventsFile, r.line, "'" + (row.name.empty() ? std::string("this event") : row.name) + "' has " + n.name + " '" + cell + "', which is not a whole number. This row is skipped.");
@@ -458,10 +520,10 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 
 auto LoadSettings(std::string_view text, Report& report) -> Settings {
 	Settings settings;
-	if (text.empty()) {
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(SettingsFile, table, report)) {
 		return settings;
 	}
-	const Tsv table = ParseTsv(text);
 	const int cSetting = table.Column("Setting"), cValue = table.Column("Value");
 	if (cSetting < 0 || cValue < 0) {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
