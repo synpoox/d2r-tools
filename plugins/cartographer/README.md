@@ -27,7 +27,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 
 ## Your first map
 
-[Your first map in 5 minutes](../../docs/cartographer/first-map.md) walks through the item, the `maps.txt` row and the
+[Your first map](../../docs/cartographer/first-map.md) walks through the item, the `maps.txt` row and the
 check. [tables.md](../../docs/cartographer/tables.md) lists every column of every table, and a working set of tables is
 in [`examples/first-map/`](examples/first-map/).
 
@@ -41,21 +41,15 @@ in [`examples/first-map/`](examples/first-map/).
 
 ## Installation
 
-1. Close the game.
-2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
-   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
-   no items. The level is a Cave by default; add
-   `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
-   `.bin` table files the game reads those instead: rebuild or remove them first.
-   If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
-   to pick another spot (`-MazeOffsetX` and the like).
-4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
-   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
-   `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
-5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
-   the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
-   portal stays off and `cartographer check` says which part.
+Step by step, with the example tables: [Your first map](../../docs/cartographer/first-map.md).
+
+1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
+2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
+   `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
+   of the repository (the release zip does not carry it). It adds the Maze, Outdoor and Snow levels and their three slots,
+   plus a `superuniques.txt` row per boss; `-Tileset Crypt` makes the Maze level a Crypt.
+3. Give each map an item in `misc.txt` with item spell 16 (`pSpell`) and add `maps.txt` next to `bosses.txt`.
+4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
 
 ## Manual install
 
