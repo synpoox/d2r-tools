@@ -74,12 +74,13 @@ auto bossStandPoint(int tileX, int tileY, int tileW, int tileH) -> Point;
 // Why the boss step found no plan boss room to go to, for an outdoor map or a maze map.
 auto noBossRoomReason(bool outdoor) -> std::string;
 
-// What the arrival probe's result (0 not yet, 1 in the entrance cell, 2 not in it, 3 could not be told) means for the arrival item. `settled` is
-// false while the probe has not run. `outdoor` picks the log line the failure detail points at.
+// What the arrival probe's result (0 not yet, 1 in the entrance cell, 2 not in it, 3 could not be told, 4 no entrance cell was marked) means for the
+// arrival item. `settled` is false while the probe has not run; `notApplicable` settles it as N/A instead of pass/fail. `outdoor` picks the log line the failure detail points at.
 struct ArrivalVerdict {
 	bool settled = false;
 	bool pass = false;
 	std::string detail;
+	bool notApplicable = false;
 };
 auto arrivalVerdict(int result, bool outdoor) -> ArrivalVerdict;
 

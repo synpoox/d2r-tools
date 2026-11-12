@@ -330,7 +330,9 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 			return;
 		}
 		const ac::ArrivalVerdict verdict = ac::arrivalVerdict(result, outdoor);
-		if (verdict.settled) {
+		if (verdict.settled && verdict.notApplicable) {
+			SettleNotApplicable(ac::Item::Arrival, verdict.detail);
+		} else if (verdict.settled) {
 			Settle(ac::Item::Arrival, verdict.pass, verdict.detail);
 		} else if (ac::timedOut(g_run.phaseStartMs, NowMs(), ArrivalReadMs)) {
 			Settle(ac::Item::Arrival, false, ac::arrivalVerdict(3, outdoor).detail);
