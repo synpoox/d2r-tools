@@ -165,7 +165,7 @@ void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
 
 }  // namespace
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -308,12 +308,15 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
-		map.boss = table.Cell(row, cBoss);
-		if (!map.boss.empty() && names.haveMonsters && names.haveSuperUniques && !Contains(names.monsters, map.boss) &&
-		    !Contains(names.superUniques, map.boss)) {
-			std::vector<std::string> both = names.monsters;
-			both.insert(both.end(), names.superUniques.begin(), names.superUniques.end());
-			fail(NotInTable("Boss", map.boss, "monstats.txt (Id) or superuniques.txt (Superunique)", both));
+		// A Boss names a bosses.txt entry. Anything else is refused with a message, and the map still opens without a Boss.
+		if (const std::string boss = table.Cell(row, cBoss); !boss.empty()) {
+			static const std::vector<BossDef> none;
+			std::string problem;
+			if (const BossDef* entry = ResolveBoss(bosses != nullptr ? *bosses : none, boss, names, &problem)) {
+				map.boss = entry->name;
+			} else {
+				report.Error(MapsFile, row.line, problem + " The map opens without a Boss.");
+			}
 		}
 
 		const std::string monsters = table.Cell(row, cMonsters);
@@ -337,6 +340,39 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 	}
 	return maps;
+}
+
+auto BossKey(std::string_view name) -> std::string {
+	return std::string(BossKeyPrefix) + std::string(name);
+}
+
+auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {
+	return rowFound ? BossPath::Superunique : (baseFound ? BossPath::PlainMonster : BossPath::None);
+}
+
+auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef* {
+	for (const BossDef& def : bosses) {
+		if (EqualsNoCase(def.name, value)) {
+			return &def;
+		}
+	}
+	const std::string word(value);
+	if (word.size() >= std::string_view(BossKeyPrefix).size() && EqualsNoCase(word.substr(0, std::string_view(BossKeyPrefix).size()), BossKeyPrefix)) {
+		*problem = "Boss '" + word + "' is a superuniques.txt key the installer writes, not a name. Put the Name of the bosses.txt entry here.";
+		return nullptr;
+	}
+	const bool vanillaBoss = ContainsNoCase(names.superUniques, word);
+	if (vanillaBoss || ContainsNoCase(names.monsters, word)) {
+		*problem = "Boss '" + word + "' is a vanilla " + (vanillaBoss ? "boss (superuniques.txt)" : "monster (monstats.txt)") +
+		           ". A map's Boss must be an entry of its own in bosses.txt; vanilla bosses are never used.";
+	} else {
+		std::vector<std::string> own;
+		for (const BossDef& def : bosses) {
+			own.push_back(def.name);
+		}
+		*problem = "Boss '" + word + "' is not an entry in bosses.txt" + (bosses.empty() ? " (there are none)." : "." + DidYouMean(word, own));
+	}
+	return nullptr;
 }
 
 namespace {
@@ -486,6 +522,76 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 		}
 	}
 	return kept;
+}
+
+auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -> std::vector<BossDef> {
+	std::vector<BossDef> out;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(BossesFile, table, report) || !RequireColumns(BossesFile, table, {"Name", "Base"}, report)) {
+		return out;
+	}
+	ReportRepeatedColumns(BossesFile, table, report);
+	NoteUnusedColumns(BossesFile, table, {"Name", "Base", "Mods", "Minions"}, report);
+	const int cName = table.Column("Name"), cBase = table.Column("Base"), cMods = table.Column("Mods"), cMinions = table.Column("Minions");
+	for (const TsvRow& r : table.rows) {
+		BossDef def;
+		def.line = r.line;
+		bool ok = true;
+		const auto fail = [&](const std::string& message) {
+			report.Error(BossesFile, r.line, message + " This row is skipped.");
+			ok = false;
+		};
+		def.name = table.Cell(r, cName);
+		def.base = table.Cell(r, cBase);
+		if (def.name.empty()) {
+			fail("the Name cell is empty.");
+		} else if (ContainsNoCase(names.superUniques, def.name) || ContainsNoCase(names.monsters, def.name)) {
+			fail("'" + def.name + "' is the name of a vanilla boss or monster. A boss entry needs a name of its own.");
+		} else {
+			for (const BossDef& other : out) {
+				if (EqualsNoCase(other.name, def.name)) {
+					fail("a boss called '" + def.name + "' is already on row " + std::to_string(other.line) + ".");
+					break;
+				}
+			}
+		}
+		if (def.base.empty()) {
+			fail("the Base cell is empty. Put a monstats.txt Id here.");
+		} else if (names.haveMonsters && !Contains(names.monsters, def.base)) {
+			fail(NotInTable("Base monster", def.base, "monstats.txt", names.monsters));
+		} else if (names.haveBossFlags && Contains(names.bossMonsters, def.base)) {
+			fail("Base '" + def.base + "' is a vanilla boss (its monstats.txt boss column is 1). A boss entry needs an ordinary monster as its Base.");
+		}
+		const std::string mods = table.Cell(r, cMods);
+		if (!mods.empty()) {
+			for (const std::string& part : Split(mods, ',')) {
+				int v = 0;
+				if (!ParseInt(part, 1, 255, &v)) {
+					fail("Mods entry '" + part + "' is not a whole number " + Range(1, 255) + ".");
+					break;
+				}
+				if (names.haveMods && std::find(names.monsterMods.begin(), names.monsterMods.end(), v) == names.monsterMods.end()) {
+					fail("Mods entry '" + part + "' is not an id in monumod.txt.");
+					break;
+				}
+				def.mods.push_back(v);
+			}
+			if (ok && def.mods.size() > 3) {
+				fail("Mods has " + std::to_string(def.mods.size()) + " entries; the limit is 3.");
+			}
+		}
+		const std::string minions = table.Cell(r, cMinions);
+		if (!minions.empty() && !ParseInt(minions, 0, 10, &def.minions)) {
+			fail("Minions '" + minions + "' is not a whole number " + Range(0, 10) + ".");
+		}
+		if (ok && out.size() >= MaxBosses) {
+			fail("bosses.txt may have at most " + std::to_string(MaxBosses) + " entries (the game's once-per-game spawn bit list has an unknown length).");
+		}
+		if (ok) {
+			out.push_back(std::move(def));
+		}
+	}
+	return out;
 }
 
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row> {

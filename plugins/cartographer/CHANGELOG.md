@@ -14,6 +14,7 @@
 - `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
+- Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).

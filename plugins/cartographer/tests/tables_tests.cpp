@@ -26,7 +26,12 @@ const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonst
 auto Names() -> GameNames {
 	GameNames n;
 	n.haveMonsters = n.haveSuperUniques = n.haveItems = true;
-	n.monsters = {"zombie1", "skeleton1", "Diablo"};
+	n.monsters = {"zombie1", "skeleton1", "Diablo", "andariel"};
+	n.haveBossFlags = n.haveMods = true;
+	n.bossMonsters = {"andariel"};
+	for (int i = 0; i <= 44; ++i) {
+		n.monsterMods.push_back(i);
+	}
 	n.superUniques = {"Bonebreak", "The Countess"};
 	n.itemCodes = {"tsc", "shm1", "t20", "t21", "t22", "t23", "t24"};
 	return n;
@@ -135,7 +140,7 @@ TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row
 		"BadItem\tCave\tLoop\t\t\tzzzz\n"
 		"ok\tCave\tLoop\t\t\tt24\n",
 		report);
-	CHECK(maps.size() == 1);
+	CHECK(maps.size() == 2);  // the Nobody boss is refused, the map still loads
 	CHECK(report.Errors() == 5);
 	const std::string text = Joined(report);
 	CHECK(text.find("shape 'Zigzag'") != std::string::npos);
@@ -145,11 +150,124 @@ TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row
 	CHECK(text.find("already on row 2") != std::string::npos);
 }
 
-TEST_CASE("a boss may be a monstats Id or a superunique name") {
+namespace {
+
+auto Bosses() -> std::vector<BossDef> {
 	Report report;
-	const auto maps = Load("A\tCave\tLoop\t\t\tt20\tBonebreak\nB\tCave\tLoop\t\t\tt21\tDiablo\n", report);
-	CHECK(maps.size() == 2);
+	const auto bosses = LoadBosses("Name\tBase\tMods\tMinions\nThe Drowned King\tzombie1\t5,9\t3\nGrave Warden\tskeleton1\n", Names(), report);
+	REQUIRE(report.problems.empty());
+	return bosses;
+}
+
+}  // namespace
+
+TEST_CASE("bosses.txt rows load with their mods and minions") {
+	const auto bosses = Bosses();
+	REQUIRE(bosses.size() == 2);
+	CHECK(bosses[0].name == "The Drowned King");
+	CHECK(bosses[0].base == "zombie1");
+	CHECK(bosses[0].mods == std::vector<int>{5, 9});
+	CHECK(bosses[0].minions == 3);
+	CHECK(bosses[1].mods.empty());
+	CHECK(bosses[1].minions == 0);
+}
+
+TEST_CASE("a bosses.txt entry named like a vanilla boss or monster, or with a bad cell, is skipped") {
+	Report report;
+	const auto bosses = LoadBosses(
+		"Name\tBase\tMods\tMinions\n"
+		"Bonebreak\tzombie1\n"
+		"diablo\tzombie1\n"
+		"NoBase\tnobody\n"
+		"BadMods\tzombie1\t1,2,3,4\n"
+		"BadMinions\tzombie1\t\t11\n"
+		"Fine\tzombie1\n"
+		"fine\tskeleton1\n",
+		Names(), report);
+	REQUIRE(bosses.size() == 1);
+	CHECK(bosses[0].name == "Fine");
+	CHECK(report.Errors() == 6);
+	CHECK(Joined(report).find("vanilla boss or monster") != std::string::npos);
+}
+
+TEST_CASE("a bosses.txt Base that is a vanilla boss, a Mods id outside monumod.txt, or a 17th entry is skipped") {
+	Report report;
+	std::string body = "Name\tBase\tMods\nA\tandariel\nB\tzombie1\t200\nC\tzombie1\t44\n";
+	CHECK(LoadBosses(body, Names(), report).size() == 1);
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Base 'andariel' is a vanilla boss") != std::string::npos);
+	CHECK(text.find("not an id in monumod.txt") != std::string::npos);
+	Report many;
+	body = "Name\tBase\n";
+	for (size_t i = 0; i < MaxBosses + 1; ++i) {
+		body += "Boss" + std::to_string(i) + "\tzombie1\n";
+	}
+	CHECK(LoadBosses(body, Names(), many).size() == MaxBosses);
+	CHECK(many.Errors() == 1);
+}
+
+TEST_CASE("a Boss that names a cartoboss: key gets its own refusal") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\tcartoboss:The Drowned King\n", Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss.empty());
+	const std::string text = Joined(report);
+	CHECK(text.find("superuniques.txt key the installer writes") != std::string::npos);
+	CHECK(text.find("vanilla") == std::string::npos);
+}
+
+TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
+	CHECK(BossKey("The Drowned King") == "cartoboss:The Drowned King");
+	for (const std::string& vanilla : Names().superUniques) {
+		CHECK(BossKey(vanilla) != vanilla);
+	}
+}
+
+TEST_CASE("a map's Boss resolves to a bosses.txt entry only") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\tthe drowned king\n", Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss == "The Drowned King");
 	CHECK(report.problems.empty());
+}
+
+TEST_CASE("a vanilla or unknown Boss is refused with a message and the map opens without it") {
+	const auto bosses = Bosses();
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) +
+		"A\tCave\tLoop\t\t\tt20\tBonebreak\n"
+		"B\tCave\tLoop\t\t\tt21\tDiablo\n"
+		"C\tCave\tLoop\t\t\tt22\tNobody\n"
+		"D\tCave\tLoop\t\t\tt23\n",
+		Names(), report, nullptr, &bosses);
+	REQUIRE(maps.size() == 4);
+	for (const MapDef& map : maps) {
+		CHECK(map.boss.empty());
+	}
+	CHECK(report.Errors() == 3);
+	const std::string text = Joined(report);
+	CHECK(text.find("Boss 'Bonebreak' is a vanilla boss") != std::string::npos);
+	CHECK(text.find("Boss 'Diablo' is a vanilla monster") != std::string::npos);
+	CHECK(text.find("Boss 'Nobody' is not an entry in bosses.txt") != std::string::npos);
+	CHECK(text.find("The map opens without a Boss.") != std::string::npos);
+}
+
+TEST_CASE("without bosses.txt every Boss is refused") {
+	Report report;
+	const auto maps = Load("A\tCave\tLoop\t\t\tt20\tAnything\n", report);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].boss.empty());
+	CHECK(Joined(report).find("(there are none)") != std::string::npos);
+}
+
+TEST_CASE("the boss spawn path: its own row, else the base monster plain, else none") {
+	CHECK(PickBossPath(true, true) == BossPath::Superunique);
+	CHECK(PickBossPath(true, false) == BossPath::Superunique);
+	CHECK(PickBossPath(false, true) == BossPath::PlainMonster);
+	CHECK(PickBossPath(false, false) == BossPath::None);
 }
 
 TEST_CASE("a missing required column is a whole-file error and loads nothing") {
@@ -670,9 +788,12 @@ auto ExampleNames() -> GameNames {
 
 TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problems") {
 	Report report;
-	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report);
+	const auto bosses = LoadBosses(ExampleFile("bosses.txt"), ExampleNames(), report);
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, nullptr, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
+	REQUIRE(bosses.size() == 1);
 	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
 	CHECK(maps[0].size == "Large");
@@ -697,7 +818,8 @@ TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats a
 	const cartographer::layout::ShapeTable shapes = LoadShapes(ExampleFile("shapes.txt"), report);
 	const auto pool = LoadMapStats(ExampleFile("mapstats.txt"), report);
 	const auto events = LoadMapEvents(ExampleFile("mapevents.txt"), report);
-	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes);
+	const auto bosses = LoadBosses(ExampleFile("bosses.txt"), ExampleNames(), report);
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
 	REQUIRE(shapes.shapes.size() == 1);
 	CHECK(shapes.shapes[0].name == "Snake");
