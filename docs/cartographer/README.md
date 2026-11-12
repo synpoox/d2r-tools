@@ -60,7 +60,6 @@ Leave a cell blank, or leave a column out, and you get the default:
 | Monster level | 85 |
 | Random properties | 6 |
 | Chance of an event | 20% |
-| Difficulty | Hell |
 | Opens from | Harrogath |
 
 ## Step 3: tune it (optional)
@@ -101,7 +100,6 @@ A tileset that is not ready is refused when the game loads, with a message that 
 | `Item` | Required. The item code that opens this map, and only this map; no two maps share one. The item needs item spell 16 in `misc.txt` |
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |
 | `Monsters` | Up to 10 monster `Id`s, separated by commas, with the case matching. Blank: the tileset's own monsters |
-| `Difficulty` | `Normal`, `Nightmare` or `Hell` |
 | `MinCharLevel` | The character level the player needs |
 | `Properties` | How many random properties this map gets |
 | `EventChance` | Percent chance of an event |

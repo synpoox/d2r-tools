@@ -10,6 +10,7 @@
 #include "core/sig.h"
 #include "core/text.h"
 #include "engine/stat_apply.h"
+#include "engine/item_stats.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
 #include "log.h"
@@ -180,9 +181,10 @@ void Tell(const std::string& text) noexcept {
 }
 
 // The map is open: draws its properties and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
-void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player) noexcept {
+void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
+                   const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)));
+		StatApplyMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), itemStats);
 	} catch (...) {
 		plog::Error("drawing the map's stats failed; '%s' opens without them", map.name.c_str());
 	}
@@ -357,10 +359,24 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
+	// ItemStats=1: the item's own stats, read now, before the game uses the item up.
+	std::vector<cartographer::statplan::ItemStat> itemStats;
+	if (tables->settings.itemStats != 0) {
+		try {
+			std::string note;
+			itemStats = ReadMapItemStats(item, &note);
+			if (!note.empty()) {
+				plog::Warn("ItemStats: %s", note.c_str());
+			}
+		} catch (...) {
+			plog::Error("reading the map item's stats failed; '%s' draws its properties as usual", map->name.c_str());
+			itemStats.clear();
+		}
+	}
 	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level);
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(*map, tables, game, player);
+		StartMapStats(*map, tables, game, player, itemStats);
 		StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}

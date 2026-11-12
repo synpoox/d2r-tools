@@ -58,7 +58,6 @@ struct MapDef {
 	std::string name, tileset, shape, size = "Medium", item, boss;
 	std::vector<std::string> monsters;
 	int level = DefaultMonsterLevel;
-	int difficulty = Hell;
 	int minCharLevel = 1;
 	int properties = -1;   // -1: use the cartographer.txt value
 	int eventChance = -1;  // -1: use the cartographer.txt value
@@ -133,7 +132,7 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 // The map called `name` (ignoring case), or nullptr.
 auto FindMap(const std::vector<MapDef>& maps, std::string_view name) -> const MapDef*;
 
-// --- Gates (plan section 2): Hell, Harrogath, one map per game, plus the map's own difficulty and character level ----
+// --- Gates (plan section 2): Hell, Harrogath, one map per game, plus the map's character level ----
 
 struct GateState {
 	int difficulty = 0;  // 0 Normal, 1 Nightmare, 2 Hell
