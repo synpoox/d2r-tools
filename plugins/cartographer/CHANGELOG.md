@@ -19,6 +19,7 @@
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default).
+- `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.

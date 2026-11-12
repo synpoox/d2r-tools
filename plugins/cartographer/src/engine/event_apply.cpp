@@ -1,6 +1,7 @@
 #include "engine/event_apply.h"
 
 #include "core/part_signatures.h"
+#include "engine/auto_check.h"
 #include "engine/event_6b.h"
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
@@ -597,6 +598,7 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
+		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
 		return;
 	}
 	bool asSuper = false;
@@ -605,6 +607,9 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
 	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
+	AutoCheckNoteBoss(state.bossName, made, asSuper,
+	                  made ? (fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string())
+	                       : std::string("the game refused to spawn it"));
 }
 
 void OnPopulated(Game* game, void* room) noexcept {

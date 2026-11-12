@@ -111,6 +111,7 @@ std::shared_ptr<const Job> g_job;
 Prepared g_cache;
 uint64_t g_nextJobId = 1;
 std::atomic<bool> g_arrivalLogged{false};
+std::atomic<int> g_arrivalResult{0};  // MazeArrival: what the arrival probe found (AutoCheck reads it)
 // What the slot level held when the hooks first saw it in this game, before any write: the declared size (the limit every
 // plan uses) and the game's own LvlMaze row. Keyed by level id, cleared on GameLeft. Guarded by g_lock.
 cm::DeclaredSizes g_declared;
@@ -781,7 +782,7 @@ auto MazeSlotLevelId() -> int {
 
 void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
 	g_slotLevel = tables != nullptr ? SlotLevel(tables->slots, MazeSlot) : -1;
-	g_probe = tables != nullptr && tables->settings.mazeProbe != 0;
+	g_probe = tables != nullptr && (tables->settings.mazeProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
 
 namespace {
@@ -808,6 +809,7 @@ auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	g_eventRoom = {};
 	g_bossRoom = {};
 	g_arrivalLogged = false;
+	g_arrivalResult = 0;
 	plog::Info("maze map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
 	return true;
@@ -857,6 +859,7 @@ void MazeGameLeft() {
 	g_eventRoom = {};
 	g_bossRoom = {};
 	g_arrivalLogged = false;
+	g_arrivalResult = 0;
 }
 
 auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool {
@@ -887,6 +890,10 @@ auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect
 auto MazeEventRoom() -> MazeEventRect {
 	std::lock_guard<std::mutex> lock(g_lock);
 	return g_eventRoom;
+}
+
+auto MazeArrivalResult() -> int {
+	return g_arrivalResult.load();
 }
 
 auto MazeBossRoom() -> MazeEventRect {
@@ -949,6 +956,7 @@ void MazeProbeArrival(void* room, int32_t levelId) {
 	} else {
 		std::snprintf(cell, sizeof(cell), "(%d,%d)", cellX, cellY);
 	}
+	g_arrivalResult = entrance.known && inCell ? (cellX == entrance.x && cellY == entrance.y ? 1 : 2) : 3;
 	plog::Info("[maze probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d, in plan cell %s; the entrance cell is %s (%d,%d)%s", drlg,
 	           room, levelId, x, y, w, h, cell, entrance.known ? "at" : "unknown, last seen at", entrance.x, entrance.y,
 	           entrance.known && inCell ? (cellX == entrance.x && cellY == entrance.y ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
