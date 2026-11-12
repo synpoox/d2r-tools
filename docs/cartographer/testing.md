@@ -207,7 +207,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 
 ## Staging a game check (`stage_check.ps1`)
 
-`plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>]`
+`plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>] [-MapItems]`
 sets up one test slot for a check. Only slots 5, 6, 7 and 11 are accepted (the ones approved for Cartographer checks); slot 1 and every other slot are refused.
 Before it locks anything it checks the inputs, `install.ps1`, the vanilla tables, that no game runs in the slot, that every write target is outside the owner's own install,
 and that `-Saves` is not inside the owner's real save folders (the vanilla `Saved Games\Diablo II Resurrected` root and every mod folder under it, junctions resolved): use a scratch folder of test saves.
@@ -224,3 +224,30 @@ It prints the launch command and the log path (`<slot>\d2rloader\logs\cartograph
 removes only the files whose SHA-256 still matches the manifest (a changed file stays, with a warning) and only the `AutoCheck` rows it wrote, deletes the manifest and unlocks the slot.
 Changes `install.ps1` made inside a table that was already in the slot (not seeded by this script) stay.
 It reads paths from the toolkit config (`MODKIT_TESTING_CONFIG`, default `C:\D2RTestSlots\modkit-testing.toml`). Use a different `-Owner` per lane: a second run with the same owner counts as "already ours".
+
+## Map items in a test slot (`-MapItems`)
+
+A map item that has no icon or tooltip, does nothing on right-click and makes the save fail ("Character save failed ... encoding-error=yes") was seen in the outdoor check (items `cm0` to `cm2`, cloned from the Rejuvenation Potion `rvs` with spell 16). Read statically, against the vanilla 3.3.0 tables and the toolkit's extracted data (nothing was run in a game), the causes are:
+
+- **Two of the three codes were vanilla items.** `cm1` and `cm2` are the Small and Large Charm in `misc.txt`; a second row with the same code is not a new item. Pick codes that no `misc.txt`, `weapons.txt` or `armor.txt` row uses; `t20`, `t21` and `t22` are free in all three.
+- **No picture entry.** The HD client looks an item's icon up in `data\hd\items\items.json` by code. A new code with no entry has no icon, and the toolkit's notes (`knowledge/hd-graphics.md`) record the client asking for `[default_unit]` every frame and then crashing. The mod's `items.json` replaces the game's whole file, so it has to be a full copy plus the new entries.
+- **The wrong base item.** `rvs` is a potion (type `rpot`, `autobelt` 1, `stat1`/`stat2` hitpoints and mana, `spelldesc` 4). Spell 16 on top of that gives a row that is half a potion. The example rows clone the Scroll of Identify (`isc`, type `scro`, no stats) instead, with `spawnable` 0 and the vendor columns blank so no NPC sells them.
+- **No name string.** `namestr` is a key in `item-names.json` (also replaced as a whole file, in `strings` and `strings-legacy`). The `rvs` clones borrowed the potion's key, so they had a name, but a row with its own `namestr` needs its own record.
+- **The save failure is not explained by these.** The log gives only `native-result=1 encoding-error=yes` for the character writer. The duplicate charm codes are the likeliest cause (an item whose code resolves to a row of another type is written with the wrong extra bits), but this was not shown. Cheat-spawned items can also be unsaveable (`savecheatitems`). The verification below separates the two.
+
+The supported path is `stage_check.ps1 -MapItems` with the overrides in `plugins\cartographer\examples\first-map\map-items.txt` (`t20`, `t21`, `t22`, matching the example `maps.txt`; the file holds only `code`, `name`, `base` and the columns to change, no game data). The switch stages, in the slot's test mod only (a player's install gets none of these files; `-Tables` skips `misc.txt` so it never lands in the Cartographer folder):
+
+- `misc.txt` (seeded from the vanilla table if the slot lacks it) plus the three rows. Each row is the `base` row (`isc`) read from the slot's `misc.txt` (or the vanilla one) with `pSpell`, `rarity`, `spawnable`, `PermStoreItem`, `multibuy`, `namestr` and `name` set by column name and every vendor `Min`/`Max` column blank, so any column order works; a missing base item stops the script, and a code that is already there is left alone;
+- `data\hd\items\items.json`, seeded from `-VanillaData` (default `<toolkit>\d2r-data\93847\data`), plus `{ "t20": { "asset": "scroll/identify_scroll" } }` and the same for `t21`, `t22`;
+- `data\local\lng\strings\item-names.json` and `strings-legacy\item-names.json`, likewise seeded and extended with a record per code (ids from 28106, and above the highest id (compared by its low 16 bits) in any `*.json` of the mod's and the vanilla `strings` and `strings-legacy` folders; the `name` text in every language: 13 for `strings`, the 8 that vanilla legacy records carry for `strings-legacy`). An empty `[]` file is handled, and `-WhatIf` lists the entries it would add even when the slot lacks the files.
+
+The files it creates are in the manifest, so `-Restore` removes them (a file it extended but did not create keeps the added entries and the script warns). Staging was exercised twice on uniquely named scratch folders (a fresh mod, and a mod with a scrambled-column `misc.txt`, empty `[]` JSON files and a higher id in another string file): `-WhatIf` listing the entries, a real run, and a second run that changed nothing; JSON valid, BOM and line endings kept, 172 fields per row. It was not run against a slot for real.
+
+To get an item into the test character: start the game, open the console, `debug_mode`, then `cheat spawn t20,inv 0` (`cheat spawn <code>,inv 0` puts it in the inventory; without `inv 0` or room it drops on the ground; see the toolkit's `knowledge/cheat-commands.md`). Spawn it again after every reload, since cheat-spawned items may not be kept in the save.
+
+Exact game steps to verify (needs a game, test slot and test save only):
+
+1. Stage with `-MapItems -Tables <the example pack> -AutoCheckMap` as needed, start the game, `cartographer check`: expect no "item ... is not in the item tables" and no "needs item spell 16" for `t20`, `t21`, `t22`.
+2. `debug_mode`, `cheat spawn t20,inv 0`. Expect a scroll icon in the inventory, the tooltip "Shorelines Map", and no `[default_unit]` lines in `blz-log.txt`.
+3. In Harrogath on a Hell character, right-click the item: the portal opens, or a refusal with the reason (log and "I can't use this yet"), and the item stays on a refusal.
+4. Save and Exit, then read `d2rloader.log` for "Character save failed". If it appears with the codes now unique and the scroll base, the cause is the cheat-spawned item; repeat once with `cheat savecheatitems 1` (or the Cheat Settings toggle) and record both results.
