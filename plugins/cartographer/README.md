@@ -48,7 +48,8 @@ in [`examples/first-map/`](examples/first-map/).
    no items. The level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
-   The installer refuses a spot another level in `levels.txt` already uses (it says which, and `-MazeOffsetX` and the like pick another).
+   If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
+   to pick another spot (`-MazeOffsetX` and the like).
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
    of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
@@ -69,7 +70,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
-   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
 
