@@ -309,7 +309,8 @@ auto LoadAll() -> Loaded {
 	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0 || carto::SlotLevel(loaded.tables->slots, carto::OutdoorSlot) > 0) {
 		carto::ReadSlotLevelTypes(loaded.tables->slots, text);
 		for (const carto::MapDef& map : loaded.tables->maps) {
-			if (const std::string problem = carto::MazeTilesetProblem(map, *loaded.tables); !problem.empty()) {
+			const std::string problem = carto::MapIsOutdoor(map) ? carto::OutdoorSlotProblem(map, loaded.tables->slots) : carto::MazeTilesetProblem(map, *loaded.tables);
+			if (!problem.empty()) {
 				loaded.report.Error(carto::MapsFile, map.line, problem.substr(problem.rfind("Cartographer: ") == 0 ? 14 : 0));
 			}
 		}
