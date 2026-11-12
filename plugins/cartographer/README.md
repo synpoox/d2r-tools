@@ -229,7 +229,7 @@ installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part ca
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
 
-Not verified in game. Outdoor maps are not yet sent to other players in multiplayer, so use them in single player.
+Not verified in game. In multiplayer (TCP/IP, experimental) the host sends the outdoor layout to clients; that has not been run in a game either.
 
 ## Status
 

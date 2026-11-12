@@ -1184,7 +1184,28 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 
 ### Opening an outdoor map (issue #144)
 
-A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). It needs `OutdoorBuild = 1` (the hooks are not installed otherwise). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 16). Desk work only; the open path has not run in a game. Multiplayer: the host seed is not sent to clients for outdoor maps yet (section 12 carries the maze seed only; left to PR #182). The installer sets `SubType` and `SubTheme` to -1 on the Outdoor row only (the Maze row is unchanged), so the Siege sub-level set of level 111 is not carried over. Before the portal opens, `OpenMapPortal` makes the plan (`OutdoorPlanProblem`, the same cached plan the build uses) and refuses with its reason if it fails, so the game's own Act 5 builder never runs on a Jungle-typed slot. After the slot level has been built with a map open (`OutdoorSlotBuilt`, a `SlotBuildState` like the maze's, cleared on leaving the game), or while it is being built, a second outdoor open is refused with a message. The installer's repair path for an existing "Cartographer Outdoor" row fixes Quest, LevelGroup, Entry, Warp, SubType, SubTheme and Vis (Act, DrlgType, LevelType, size and offsets are refused by the plugin at open instead).
+A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). It needs `OutdoorBuild = 1` (the hooks are not installed otherwise). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 16). Desk work only; the open path has not run in a game. Multiplayer: the host sends the outdoor seed through map sync (see "Multiplayer layout sync" below). The installer sets `SubType` and `SubTheme` to -1 on the Outdoor row only (the Maze row is unchanged), so the Siege sub-level set of level 111 is not carried over. Before the portal opens, `OpenMapPortal` makes the plan (`OutdoorPlanProblem`, the same cached plan the build uses) and refuses with its reason if it fails, so the game's own Act 5 builder never runs on a Jungle-typed slot. After the slot level has been built with a map open (`OutdoorSlotBuilt`, a `SlotBuildState` like the maze's, cleared on leaving the game), or while it is being built, a second outdoor open is refused with a message. The installer's repair path for an existing "Cartographer Outdoor" row fixes Quest, LevelGroup, Entry, Warp, SubType, SubTheme and Vis (Act, DrlgType, LevelType, size and offsets are refused by the plugin at open instead).
+
+### Multiplayer layout sync (issue #146)
+
+Question: what does a remote TCP/IP client know when it builds the outdoor slot level, and can the plan be a pure function of that? Static, build 93847 (stamp `0x6ab3782c`), dump `D2RLoader_6ab3782c_dump.exe`. Not run in a game.
+
+| Fact | Evidence | Level |
+|---|---|---|
+| The level reseed `0x367110` is `mov [rcx], edx; mov [rcx+4], 0x29a; ret`: the level RNG pair is only what the caller passes, with no time, thread or server read | capstone on the dump, `0x367110..0x367119` | static |
+| The act seed reaches `drlg+0x860` the same way on both sides: act creation `0x2ef1c0` passes its third argument (`r8d`, via `ebp`) as `r9d` to `0x326ba0`, which reseeds the DRLG with it (`0x326e99`) and stores the first draw, `low32(seed * 0x6ac690c5 + 0x29a)`, at `drlg+0x860` (`0x326f03`). So `drlg+0x860` is a pure function of the act seed; the server passes `game + 0x12c`, the client the packet `0x03` seed (section 12, Q2). (The `call 0x367110` at `0x2ef3b3` and `[rsp+0x60]` are in a separate function starting at `0x2ef340`, which has no direct callers; they are not the act seed path.) | capstone on the dump: `0x2ef1c0`, `0x326ba0` (`0x326e99`, `0x326f03`), `0x2ef340`; section 12 | static. Closes the earlier "not re-traced" caveat; the act seed being equal on both sides is section 12, Q2 |
+| `LevelBuild` runs on the host's server DRLG, the host's client DRLG and a remote client's DRLG, each against its own level record | section 12, Q2 | static |
+| A remote client therefore has, when it builds the level: its own tables and the map sync message (maps row, slot level, opening, layout seed). It does not have the host's job id (`g_nextJobId`), the host's `seedSalt` (tick, player id, opening count) or any other host process state | `OutdoorMapOpened`, `MapSyncMapOpened` | code |
+
+Decision: the stamps' file draws depend on nothing else. The level build still reseeds from `[drlg+0x860] + [level+0x1f8]` (`0x3271dc..0x3271f0`) after our stamps, and the native tail's last fallback (`0x3da650`) draws from that; those draws depend on the act seed, equally on both sides (previous row).
+
+- The plan is a function of `MapRequest` = (tileset, shape, size, seed, origin, size limits, options, shapes.txt) and the built-in catalogue. Origin and limits are the slot row's `levels.txt` values and the rest the map's `maps.txt` row, so host and client agree when their tables agree (the same condition as the maze half). The job id and the salt only produce the seed on the host (`mixSeed(salt, id)`); a client takes the host's seed as it is (`OutdoorMapOpened(..., fixedSeed)`).
+- The one other input was the level RNG seed, `int32(drlg[0x860]) + level id`, which draws each stamp's DS1 file when `pinFiles` is off. It now comes from the plan's hash (itself a function of the request) and the level id through `src/outdoor/outdoor_seed.*` (`slotRngSeedFor`), so it does not rely on the act seed being equal on the two sides. The second word stays `0x29a`. Section 8a "Second reseed" still holds.
+- Wire: map sync wire version 2 adds the flag `kFlagOutdoor` (2), never together with the maze flag; the seed is the open outdoor map's seed (`OutdoorOpenSeed()`). The client applies it with `OutdoorMapOpened(map, tables, 0, seed)` from its own `maps.txt` row, and skips, logging the reason, when: the slot level or the map kind differs, the outdoor build is off or not live, the host sent seed 0, or the Outdoor slot level already started to build here (`OutdoorSlotRanAny`; no rebuild). Pure decision in `src/mapsync/mapsync.cpp` `decideApply`, unit tested.
+- The host's call is in `portal.cpp` (`NoteMapOpenedForClients`): `MapSyncMapOpened(..., maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor)`, with `outdoor = MapIsOutdoor(map)`. The client classifies a map with the same `MapIsOutdoor`, so both agree (a Jungle map's name still syncs).
+
+Needs a game (deferred by the owner until the plugin is complete): a TCP/IP host and a remote client with identical tables open one Jungle map. Confirm (1) both logs show the same `outdoor slot level N: planned ... plan <hash>` line and `built as planned`; (2) the room lists (count and rect of each room, `OutdoorProbe = 1`) are equal; (3) the client log shows `the next build of the Outdoor slot level here uses the host's layout seed` before its first build of the slot level, and, if the client builds first, the skip line and the stock layout instead; (4) in a single-process host both DRLGs print one plan line (cached).
+
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 
@@ -1216,6 +1237,8 @@ A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `Outdoo
 6. **Rate.** Over many map opens the share with an event is near `EventChance`, and the row drawn follows `Weight`.
 7. **Leaving the game.** After `GameLeft` and a new game there is no banner and no event from the old map, and no spawn in a level that was not opened.
 8. **Row index of the `.txt` fallback.** When the game's tables are not used, the `monstats.txt` / `superuniques.txt` row index is the parsed row count; check it against the game's row for a mod whose file has a blank line (the `spawn '..': monstats row N from the game's table` line gives the game's own row to compare with).
+
+Settled in game on 2026-11-12 for items 2 and 3 (map Boss and Treasure rooms and spawns) and the #174 boss name plates: see [Hell check 3](../cartographer/checks/2026-11-12-hell-check-3.md) (the #183 refusal/retry path was not exercised).
 
 ### Game checks of 2026-11-12 (issue #92)
 
@@ -1249,6 +1272,31 @@ Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the m
 - **Outdoor:** waits on issue #145. The hook point is in `OnPopulated` (`event_apply.cpp`), where `bossPlan` is read from `MazeBossRoom()` for a maze; an outdoor map reads its stamp plan's boss rectangle there, and the tracker and `SpawnMapBoss` are unchanged.
 - **`Monsters`:** not part of this change. The monster pool is written into the slot level's region record, with Density and Uniques (and Level in the levels row), in issue #156 (section 15).
 - **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
+
+### Plan rooms and the map Boss spot (issues #184 and #183, written and unit tested, not run in game)
+
+Evidence is static (dump `D2RLoader_6ab3782c_dump.exe`, build 93847, around `0x493cc0`) plus the hell-check-2 log; not yet run in game after the fix.
+
+- **#184 (the cause)**: `ctx.rooms[plan room]` is the walk's own record of that plan room, and the index was right. After the build the
+  level's list holds only 8 x 8 rooms (`room sizes 8x8:162` = 18 x 9 cells), and the walk's record is then stale: either the cell's
+  top-left 8 x 8 room or no room at all (freed memory). Every readable value the old code took from it sat on a cell corner, e.g.
+  (6000,24), (6192,48), (6048,48), (6000,144); the rest read `(1,0) 0 x 0` (5 of 8 games; in 4 it mattered, the 5th rolled no event).
+  The rooms are now matched by rect in the level's list (`LvlFirstRoom` / `RoomNext`), the rule `MarkArrival` already uses: the room
+  with area whose corner is in the plan room's cell and whose centre is nearest the cell's centre (`planCellRoom`; rooms with no area
+  are skipped, in the box check too). When none matches, the event falls back to the distance rule (the log says so) and only the
+  map Boss is left off. No engine address is involved.
+- **#183 (the cause)**: the game never tries only the exact centre. `SpawnMonster` with p7 = `0xa` (and the superunique path) searches
+  rings 3, 6, ... 30 subtiles from the start inside the room rect and takes the first free subtile (`0x493f13..0x493f34`, `0x49423e`,
+  collision test `0x364d50`; see "Position validity" in section 7). Each ring is walked in full, but only every third ring is
+  tried, so one search from the centre tests about a third of a ~40 x 40 maze room (outdoor clearings may be larger than the rings
+  reach); a refusal means no free subtile on any of its rings. Both refusals in the log, (6000,24) and (6048,48), were the cell's top-left 8 x 8 room,
+  a corner of a Cave cell: the #184 stale record again. With #184 fixed the Boss goes to the cell's centre room, so #183 was most
+  likely a consequence of #184. "The spot is not walkable" was only the `cheat goto` observation, not what the game logged.
+- **Spots as a backstop (fail open)**: the Boss is still tried at up to 9 starts, the centre and its 8 neighbour tiles (5 subtiles
+  apart, so every offset mod 3 of the ring grid: together they test every subtile but the 9 starts), because starts shift the ring grid onto subtiles the first search skipped. The
+  superunique is tried at every start before the first plain spawn, so the Boss keeps its own row and minions whenever any start
+  takes it. The engine's `0x402f50` (section 3, used by the Shrine) was not used: it is not clipped to the room and `SpawnMonster`
+  would search again from what it returned. Needs a game to confirm.
 
 ## 10. Red portal tooltip and area name (issue #90)
 

@@ -14,7 +14,7 @@ namespace cartographer::mapsync {
 // --- The wire format -----------------------------------------------------------------------------------------------
 
 // Bump when a message changes; the channel token carries it, so a host and a client on different versions never connect.
-constexpr uint8_t kWireVersion = 1;
+constexpr uint8_t kWireVersion = 2;  // 2: the outdoor flag
 constexpr uint64_t kChannelToken = 0x4341525400000000ULL | kWireVersion;  // "CART" and the wire version
 constexpr uint16_t kChannelId = 1;
 
@@ -27,11 +27,12 @@ constexpr size_t kMapOpenSize = 20;
 constexpr size_t kMaxMessageSize = 224;  // the SDK's payload limit
 static_assert(kMapOpenSize <= kMaxMessageSize);
 
-constexpr uint8_t kFlagMaze = 1;  // the map is built by the maze steering (Cave, Crypt): `seed` is its layout seed
+constexpr uint8_t kFlagMaze = 1;     // the map is built by the maze steering (Cave, Crypt): `seed` is its layout seed
+constexpr uint8_t kFlagOutdoor = 2;  // the map is built by the outdoor build (Jungle): `seed` is its layout seed. Never together with kFlagMaze
 
 // The open map. `mapIndex` is the row in maps.txt (0 based, rows that failed to load are not counted), `nameHash` the hash of its
 // Name, so a client whose maps.txt differs is noticed. `opening` is how many maps this game has opened (1 for the first). `seed` is
-// the layout seed of a maze map; a preset map has no layout seed and sends 0.
+// the layout seed of a maze or outdoor map; a preset map has no layout seed and sends 0.
 struct MapIdentity {
 	uint16_t mapIndex = 0;
 	uint32_t nameHash = 0;
@@ -39,8 +40,9 @@ struct MapIdentity {
 	uint16_t opening = 0;
 	uint64_t seed = 0;
 	bool maze = false;
+	bool outdoor = false;
 	bool operator==(const MapIdentity &o) const {
-		return mapIndex == o.mapIndex && nameHash == o.nameHash && slotLevel == o.slotLevel && opening == o.opening && seed == o.seed && maze == o.maze;
+		return mapIndex == o.mapIndex && nameHash == o.nameHash && slotLevel == o.slotLevel && opening == o.opening && seed == o.seed && maze == o.maze && outdoor == o.outdoor;
 	}
 };
 
@@ -55,6 +57,7 @@ enum class DecodeError {
 	BadSlot,     // slot level 0
 	BadOpening,  // opening 0
 	BadSeed,     // a preset map with a seed
+	BadKind,     // both the maze and the outdoor flag
 };
 const char *describe(DecodeError e);
 
@@ -103,6 +106,10 @@ struct ApplyFacts {
 	bool mazeSteeringLive = false;  // every maze part is on and the hooks are in
 	bool tilesetFits = false;       // the client's Maze slot level can build this map's tileset
 	bool slotBuilt = false;         // the client's slot level was already built (with or without a map open) in this game
+	// The outdoor half, the client's own side. For an outdoor identity `slotLevelMatches` is about the client's Outdoor slot level.
+	bool clientOutdoorMap = false;  // the client's own maps.txt row is an outdoor (Jungle) map
+	bool outdoorBuildLive = false;  // OutdoorBuild = 1 here, every outdoor part is on and the hooks are in
+	bool outdoorSlotBuilt = false;  // the client's Outdoor slot level was already built (with or without a map open) in this game
 };
 
 enum class Skip {
@@ -115,15 +122,19 @@ enum class Skip {
 	SteeringOff,      // the client's maze steering is off
 	TilesetMismatch,  // the client's Maze slot builds the other tileset
 	AlreadyBuilt,     // the client built the slot level before the identity arrived; it is not rebuilt
+	NotOutdoor,       // a maze or preset map has no outdoor layout
+	OutdoorOff,       // the client's outdoor build is off
 };
 const char *describe(Skip s);
 
-// Which halves of the identity the client applies: the map's name (MapNames) and the maze layout seed.
+// Which halves of the identity the client applies: the map's name (MapNames), the maze layout seed and the outdoor layout seed.
 struct ApplyPlan {
 	bool names = false;
 	Skip namesWhy = Skip::None;
 	bool maze = false;
 	Skip mazeWhy = Skip::None;
+	bool outdoor = false;
+	Skip outdoorWhy = Skip::None;
 };
 // A slot or kind mismatch skips both halves (the client's tables do not describe the host's map). Pure.
 ApplyPlan decideApply(const MapIdentity &id, const ApplyFacts &facts);

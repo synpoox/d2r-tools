@@ -248,7 +248,37 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 	return plan;
 }
 
-SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, uint64_t seed, int scale) {
+std::vector<Spot> bossSpots(const Rect &room, int scale) {
+	scale = std::max(1, scale);
+	std::vector<Spot> out;
+	if (room.w <= 0 || room.h <= 0) {
+		return out;
+	}
+	const int cx = centreX(room), cy = centreY(room);
+	out.push_back({cx, cy});
+	Rect in = room;
+	if (room.w > 2 * scale + 1 && room.h > 2 * scale + 1) {
+		in = {room.x + scale, room.y + scale, room.w - 2 * scale, room.h - 2 * scale};
+	}
+	std::vector<Spot> ring;
+	for (int y = in.y; y < in.y + in.h; y += scale) {
+		for (int x = in.x; x < in.x + in.w; x += scale) {
+			if (x != cx || y != cy) ring.push_back({x, y});
+		}
+	}
+	std::sort(ring.begin(), ring.end(), [&](const Spot &a, const Spot &b) {
+		const long da = static_cast<long>(a.x - cx) * (a.x - cx) + static_cast<long>(a.y - cy) * (a.y - cy);
+		const long db = static_cast<long>(b.x - cx) * (b.x - cx) + static_cast<long>(b.y - cy) * (b.y - cy);
+		return da != db ? da < db : a.y != b.y ? a.y < b.y : a.x < b.x;
+	});
+	for (const Spot &s : ring) {
+		if (static_cast<int>(out.size()) >= kBossSpots) break;
+		out.push_back(s);
+	}
+	return out;
+}
+
+SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, int scale) {
 	SpawnPlan plan;
 	if (boss.kind != events::NameKind::Monster && boss.kind != events::NameKind::Unique) {
 		plan.problem = "Boss '" + name + "' is not a monstats Id or a superuniques name";
@@ -258,17 +288,19 @@ SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect 
 		plan.problem = "Boss '" + name + "' has no monster to spawn (its Class is not in monstats.txt)";
 		return plan;
 	}
-	const std::vector<Spot> spots = placements(room, 1, seed, scale);
+	const std::vector<Spot> spots = bossSpots(room, scale);
 	if (spots.empty()) {
 		plan.problem = "the boss room is too small to place anything";
 		return plan;
 	}
-	Spawn s;
-	s.spot = spots[0];
-	s.classRow = boss.classRow;
-	s.superUnique = boss.kind == events::NameKind::Unique;
-	s.row = s.superUnique ? boss.row : boss.classRow;
-	plan.spawns.push_back(s);
+	for (const Spot &spot : spots) {  // the centre first; the caller tries them in order until the game accepts one
+		Spawn s;
+		s.spot = spot;
+		s.classRow = boss.classRow;
+		s.superUnique = boss.kind == events::NameKind::Unique;
+		s.row = s.superUnique ? boss.row : boss.classRow;
+		plan.spawns.push_back(s);
+	}
 	return plan;
 }
 

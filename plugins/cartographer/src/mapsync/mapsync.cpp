@@ -36,7 +36,7 @@ uint64_t get64(const uint8_t *p) {
 	return v;
 }
 
-bool valid(const MapIdentity &id) { return id.slotLevel != 0 && id.opening != 0 && (id.maze || id.seed == 0); }
+bool valid(const MapIdentity &id) { return id.slotLevel != 0 && id.opening != 0 && (id.maze || id.outdoor || id.seed == 0) && !(id.maze && id.outdoor); }
 
 }  // namespace
 
@@ -59,6 +59,7 @@ const char *describe(DecodeError e) {
 	case DecodeError::BadSlot: return "slot level is 0";
 	case DecodeError::BadOpening: return "opening count is 0";
 	case DecodeError::BadSeed: return "a preset map with a seed";
+	case DecodeError::BadKind: return "both the maze and the outdoor flag";
 	}
 	return "?";
 }
@@ -68,7 +69,7 @@ size_t encodeMapOpen(const MapIdentity &id, uint8_t *out, size_t cap) {
 		return 0;
 	}
 	out[0] = kWireVersion;
-	out[1] = id.maze ? kFlagMaze : 0;
+	out[1] = static_cast<uint8_t>((id.maze ? kFlagMaze : 0) | (id.outdoor ? kFlagOutdoor : 0));
 	put16(out + 2, id.mapIndex);
 	put32(out + 4, id.nameHash);
 	put16(out + 8, id.slotLevel);
@@ -85,11 +86,12 @@ DecodeError decodeMapOpen(const void *data, size_t size, MapIdentity *out) {
 	if (p[0] != kWireVersion) {
 		return DecodeError::BadVersion;
 	}
-	if ((p[1] & ~kFlagMaze) != 0) {
+	if ((p[1] & ~(kFlagMaze | kFlagOutdoor)) != 0) {
 		return DecodeError::BadFlags;
 	}
 	MapIdentity id;
 	id.maze = (p[1] & kFlagMaze) != 0;
+	id.outdoor = (p[1] & kFlagOutdoor) != 0;
 	id.mapIndex = get16(p + 2);
 	id.nameHash = get32(p + 4);
 	id.slotLevel = get16(p + 8);
@@ -101,7 +103,10 @@ DecodeError decodeMapOpen(const void *data, size_t size, MapIdentity *out) {
 	if (id.opening == 0) {
 		return DecodeError::BadOpening;
 	}
-	if (!id.maze && id.seed != 0) {
+	if (id.maze && id.outdoor) {
+		return DecodeError::BadKind;
+	}
+	if (!id.maze && !id.outdoor && id.seed != 0) {
 		return DecodeError::BadSeed;
 	}
 	*out = id;
@@ -227,6 +232,8 @@ const char *describe(Skip s)
 	case Skip::SteeringOff: return "the maze steering is off here";
 	case Skip::TilesetMismatch: return "this client's Maze slot builds the other tileset";
 	case Skip::AlreadyBuilt: return "the slot level was already built here before the host's map arrived, so its layout is not changed";
+	case Skip::NotOutdoor: return "this map has no outdoor layout";
+	case Skip::OutdoorOff: return "the outdoor build is off here";
 	}
 	return "?";
 }
@@ -235,15 +242,26 @@ ApplyPlan decideApply(const MapIdentity &id, const ApplyFacts &f)
 {
 	ApplyPlan p;
 	if (!f.slotLevelMatches) {
-		p.namesWhy = p.mazeWhy = Skip::SlotMismatch;
+		p.namesWhy = p.mazeWhy = p.outdoorWhy = Skip::SlotMismatch;
 		return p;
 	}
-	if (id.maze != f.clientMazeMap) {
-		p.namesWhy = p.mazeWhy = Skip::KindMismatch;
+	if (id.maze != f.clientMazeMap || id.outdoor != f.clientOutdoorMap) {
+		p.namesWhy = p.mazeWhy = p.outdoorWhy = Skip::KindMismatch;
 		return p;
 	}
 	p.names = f.namesSetting;
 	p.namesWhy = f.namesSetting ? Skip::None : Skip::SettingOff;
+	if (!id.outdoor) {
+		p.outdoorWhy = Skip::NotOutdoor;
+	} else if (id.seed == 0) {
+		p.outdoorWhy = Skip::NoSeed;
+	} else if (!f.outdoorBuildLive) {
+		p.outdoorWhy = Skip::OutdoorOff;
+	} else if (f.outdoorSlotBuilt) {
+		p.outdoorWhy = Skip::AlreadyBuilt;
+	} else {
+		p.outdoor = true;
+	}
 	if (!id.maze) {
 		p.mazeWhy = Skip::NotMaze;
 	} else if (id.seed == 0) {
