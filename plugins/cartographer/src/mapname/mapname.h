@@ -41,6 +41,17 @@ auto KeyFits(const std::string& key) -> bool;
 // `names` are display names (see DisplayName); more than MaxMaps are ignored.
 auto StringsJson(const std::vector<std::string>& names) -> std::string;
 
+// A dedicated map Boss's own name (issue #174). tools\install.ps1 writes the superuniques.txt Name cell as BossRowKey(name) and the
+// plugin registers a text for BossLocalKey(name) in its string namespace, so the game shows the bosses.txt Name. Both sides build the
+// key from the entry's Name as written (trimmed), so the key is stable and a removed entry takes its key with it. The key is ASCII only:
+// "boss_" then each byte of the Name, kept when it is A-Z a-z 0-9 and otherwise written as '_' and two uppercase hex digits
+// ("Shoreline Warden" -> "boss_Shoreline_20Warden"). install.ps1 (BossLocalKey) does the same.
+auto BossLocalKey(const std::string& name) -> std::string;
+auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::string;
+
+// The plugin's boss string file: one record per name (a repeated name once), the display text in every language (see DisplayName).
+auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
+
 // Writes `key` into a 40-byte field (the rest zero). False, and the field untouched, when the key does not fit.
 auto WriteKey(uint8_t* field, const std::string& key) -> bool;
 
