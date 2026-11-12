@@ -547,7 +547,7 @@ auto SpawnAmbushUnit(void* game, void* room, const ep::Spawn& s, void** unit) no
 // True when something was placed, so the banner may announce the event. An Ambush is only armed here: it announces itself when its first wave spawns.
 auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept -> bool {
 	if (Event6bPlacesObject(*state.event, state.spawn.kind)) {
-		return Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b: a Shrine, or a Treasure chest
+		return Event6bPlaceShrine(game, room, rects.server);  // phase 6b: a Shrine, or a Treasure chest
 	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
 	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
@@ -812,7 +812,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			// Phase 6b: a Shrine's Spawn (or a Treasure chest's) is an objects row, not a monster; it is announced only when it resolves to exactly one row.
 			if (!g_spawnOn.load()) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
-			} else if (!(event->kind == ev::Kind::Shrine ? Event6bPrepareShrine(*event, tables->objectNames, player, &shrineWhy) : Event6bPrepareChest(*event, tables->objectNames, level, player, &shrineWhy))) {
+			} else if (!(event->kind == ev::Kind::Shrine ? Event6bPrepareShrine(*event, tables->objectClasses, tables->objectNames, player, &shrineWhy) : Event6bPrepareChest(*event, tables->objectClasses, tables->objectNames, level, player, &shrineWhy))) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), shrineWhy.c_str());
 			} else {
 				state->event = std::move(event);

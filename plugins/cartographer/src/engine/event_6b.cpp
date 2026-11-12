@@ -486,7 +486,7 @@ auto Event6bSummary() -> std::string {
 	return "phase 6b: " + SummaryNow(g_populatorOn);
 }
 
-auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
+auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
 	if (!On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
 		*why = "a Shrine part is off (FreeSpot, CreateObject or DataTablesBase; see the parts above)";
 		return false;
@@ -502,7 +502,7 @@ auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>
 		return false;
 	}
 	const uint64_t gameRows = At<uint32_t>(dt, DtObjectCountOffset);
-	const e6::ObjectLookup lookup = e6::resolveObject(objectNames, event.spawn, gameRows);
+	const e6::ObjectLookup lookup = e6::resolveObject(objectClasses, objectNames, event.spawn, gameRows);
 	const std::string text = e6::describeObjectLookup(lookup, event.spawn, objectNames.size(), gameRows);
 	plog::Info("eventprobe: shrine: Spawn '%s': %s (objects.txt: %zu lines, game: %llu rows)", event.spawn.c_str(), text.c_str(), objectNames.size(), static_cast<unsigned long long>(gameRows));
 	if (lookup.result != e6::ObjectResult::Found) {
@@ -558,8 +558,8 @@ auto Event6bPlacesObject(const ev::Event& event, ev::NameKind spawnKind) noexcep
 	return route == e6::Route::Shrine || route == e6::Route::TreasureChest;
 }
 
-auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
-	if (!Event6bPrepareShrine(event, objectNames, player, why)) {
+auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
+	if (!Event6bPrepareShrine(event, objectClasses, objectNames, player, why)) {
 		return false;
 	}
 	{
@@ -730,7 +730,7 @@ bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, Ambu
 	return false;
 }
 
-bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
+bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) noexcept {
 	try {
 		int row = -1;
 		{
@@ -753,23 +753,34 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 			plog::Warn("shrine not placed: objects row %d is not below the game's row count%s%s", row, dt == nullptr ? ": " : "", dt == nullptr ? why.c_str() : "");
 			return false;
 		}
-		const std::vector<ep::Spot> spots = ep::placements(serverRect, 1, seed, scale);
-		if (spots.empty()) {
+		// The engine's search takes the first clear footprint in a growing square, which can be in the next room (game check of
+		// 2026-11-12). Try several start points and smaller footprints and keep only a spot inside the event room's rect.
+		const e6::SpotBox box{serverRect.x, serverRect.y, serverRect.w, serverRect.h};
+		const std::vector<e6::SpotAttempt> attempts = e6::freeSpotAttempts(box, FreeSpotRadius);
+		if (attempts.empty()) {
 			plog::Warn("shrine not placed: the event room is too small to place anything");
 			return false;
 		}
-		int32_t xy[2] = {spots[0].x, spots[0].y};
+		int32_t xy[2] = {0, 0};
 		void* landed = nullptr;
-		plog::Info("eventprobe: shrine: objects row %d, free spot near (%d,%d) from room %p (radius %d, mask 0x%x)", row, xy[0], xy[1], room, FreeSpotRadius, FreeSpotMask);
-		Call<FreeSpotFn>(FreeSpot)(room, xy, FreeSpotRadius, FreeSpotMask, &landed);
-		if (landed == nullptr) {
-			plog::Warn("shrine not placed: the game found no free spot near (%d,%d) in the event room", spots[0].x, spots[0].y);
-			return false;
+		bool found = false;
+		int tried = 0;
+		for (const e6::SpotAttempt& attempt : attempts) {
+			xy[0] = attempt.x;
+			xy[1] = attempt.y;
+			landed = nullptr;
+			++tried;
+			Call<FreeSpotFn>(FreeSpot)(room, xy, attempt.radius, FreeSpotMask, &landed);
+			const bool inside = landed == room && e6::spotInBox(box, xy[0], xy[1]);
+			plog::Info("eventprobe: shrine: objects row %d, free spot try %d: near (%d,%d) radius %d (mask 0x%x) gave %s (%d,%d) room %p (%s the event room)", row, tried, attempt.x, attempt.y, attempt.radius, FreeSpotMask, landed == nullptr ? "nothing" : "a spot", xy[0], xy[1], landed, inside ? "in" : "NOT in");
+			if (inside) {
+				found = true;
+				break;
+			}
 		}
-		plog::Info("eventprobe: shrine: free spot (%d,%d) in room %p (%s the event room)", xy[0], xy[1], landed, landed == room ? "in" : "NOT in");
-		if (landed != room) {
+		if (!found) {
 			// The neighbouring room may not be populated yet; refuse rather than create an object there.
-			plog::Warn("shrine not placed: the free spot (%d,%d) is outside the event room (room %p, not %p)", xy[0], xy[1], landed, room);
+			plog::Warn("shrine not placed: none of %d free-spot tries gave a spot inside the event room (%d,%d) %d x %d", tried, box.x, box.y, box.w, box.h);
 			return false;
 		}
 		void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);
