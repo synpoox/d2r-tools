@@ -137,8 +137,4 @@ Wiring (issue #147, second PR): the tables, the installer, the plan cache and th
 
 ## Adding a tileset
 
-Jungle and Snow share the outdoor plumbing in `src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`), so a new tileset (Barbarian Highlands style fields, a third Act 5 look) is mostly data. What a tileset supplies, and what it gets for free:
-
-- Supplies: the piece table (LvlPrest ids, DS1 files, file counts, and whatever joins pieces: exit masks for Jungle, fence sockets for Snow); the way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium and Large, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
-- For free: `pickFarthestCell` turns the candidate cells and the anchors (entrance, then entrance and boss) into the boss and event cells, the same for a seed; `StampPlan` and `stampPlanHash` carry the result to the hook; `cellName`, `lowerAscii` and the plan cache key give the checker its wording and the cache its keys; `chooseCellRoom` and `planArrival` reduce each cell to one built room (the arrival, the Boss and the event all use the cell's top-left room); the outdoor hook, `event_apply` and AutoCheck read the entrance, boss and event rectangles from the stamp plan without knowing the tileset.
-- Still per tileset: the independent plan check (`checkSnowPlan` is the model: re-derive every cell, socket and rectangle without the planner), the slot level row and installer step, and the in-game checks listed above.
+Moved to [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md): every touch point, what the table drives and what a tileset gets for free.

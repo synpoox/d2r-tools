@@ -8,12 +8,15 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "layout.h"
 #include "outdoor.h"
 #include "outdoor_plan.h"
+#include "outdoor_tilesets.h"
 #include "rng.h"
 #include "stamp.h"
 
@@ -1110,4 +1113,85 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 	MapRequest jungle = jungleRequest(4242);
 	CHECK(cache.get(jungle, cat, &built)->hash != first->hash);  // Jungle and Snow never share a cache entry
 	CHECK(built);
+}
+
+// --- The tileset table (outdoor_tilesets.h) ----------------------------------------------------------------------------------
+
+TEST_CASE("the outdoor tileset table holds Jungle then Snow, with the values the hooks and the installer rely on")
+{
+	// Pinned: these are the slot rows, levels.txt names and LevelTypes of shipped installs. A change here is a compatibility change.
+	REQUIRE(OutdoorTilesetCount == 2);
+	CHECK(std::string(OutdoorTilesets[0].name) == "Jungle");
+	CHECK(OutdoorTilesets[0].levelType == 21);
+	CHECK(std::string(OutdoorTilesets[0].slot) == "Outdoor");
+	CHECK(std::string(OutdoorTilesets[0].levelName) == "Cartographer Outdoor");
+	CHECK(OutdoorTilesets[0].planner == Planner::Jungle);
+	CHECK(std::string(OutdoorTilesets[1].name) == "Snow");
+	CHECK(OutdoorTilesets[1].levelType == 31);
+	CHECK(std::string(OutdoorTilesets[1].slot) == "OutdoorSnow");
+	CHECK(std::string(OutdoorTilesets[1].levelName) == "Cartographer Snow");
+	CHECK(OutdoorTilesets[1].planner == Planner::Snow);
+	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
+	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
+	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);
+	CHECK(findOutdoorTileset("Lava") == nullptr);
+	CHECK(findOutdoorTilesetBySlot("outdoorsnow") == &OutdoorTilesets[1]);
+	CHECK(findOutdoorTilesetBySlot("Maze") == nullptr);
+	CHECK(outdoorTilesetIndex("snow") == 1);
+	CHECK(outdoorTilesetIndex("Jungle") == 0);
+	CHECK(outdoorTilesetIndex("Lava") == 0);
+	CHECK(outdoorTilesetNames() == "Jungle or Snow");
+	MapRequest r;
+	r.tileset = "Lava";
+	const MapPlan refused = planOutdoorMap(r, builtinJungleCatalogue());
+	CHECK_FALSE(refused.ok);
+	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle or Snow.");
+}
+
+TEST_CASE("tools/install.ps1 lists the same outdoor tilesets as the table, in the same order")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	const std::string text = all.str();
+	const size_t start = text.find("$OutdoorTilesets = @(");
+	REQUIRE(start != std::string::npos);
+	const std::string block = text.substr(start, text.find("\n)", start) - start);
+	// Each row reads  @{ Tileset = 'Jungle'; Slot = 'Outdoor'; LevelName = '...'; LevelType = '21'; ...
+	const auto field = [](const std::string &row, const char *key) {
+		const size_t at = row.find(std::string(key) + " = '");
+		REQUIRE(at != std::string::npos);
+		const size_t from = at + std::string(key).size() + 4;
+		return row.substr(from, row.find('\'', from) - from);
+	};
+	size_t row = 0, at = 0;
+	while ((at = block.find("@{", at)) != std::string::npos) {
+		const std::string body = block.substr(at, block.find('}', at) - at);
+		REQUIRE(row < OutdoorTilesetCount);
+		CHECK(field(body, "Tileset") == OutdoorTilesets[row].name);
+		CHECK(field(body, "Slot") == OutdoorTilesets[row].slot);
+		CHECK(field(body, "LevelName") == OutdoorTilesets[row].levelName);
+		CHECK(field(body, "LevelType") == std::to_string(OutdoorTilesets[row].levelType));
+		++row;
+		at += 2;
+	}
+	CHECK(row == OutdoorTilesetCount);
+}
+
+TEST_CASE("pickFarthestCell with no anchors or no candidates picks nothing and draws nothing from the rng")
+{
+	const std::vector<GridCell> cells = {{0, 0}, {1, 0}, {2, 0}};
+	layout::Pcg32 rng(77);
+	layout::Pcg32 untouched(77);
+	GridCell out{9, 9};
+	CHECK_FALSE(pickFarthestCell(cells, {}, rng, out));
+	CHECK(out == GridCell{9, 9});
+	CHECK_FALSE(pickFarthestCell({}, {{0, 0}}, rng, out));
+	CHECK(out == GridCell{9, 9});
+	CHECK(rng.below(1000000) == untouched.below(1000000));  // the stream did not move
+	// With an anchor the farthest cell wins.
+	CHECK(pickFarthestCell(cells, {{0, 0}}, rng, out));
+	CHECK(out == GridCell{2, 0});
 }

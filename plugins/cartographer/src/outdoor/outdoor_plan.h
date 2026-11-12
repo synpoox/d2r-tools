@@ -32,7 +32,7 @@ namespace cartographer::outdoor {
 std::string builtinJungleCatalogueText();
 const Catalogue &builtinJungleCatalogue();
 
-// True for the tilesets this build can plan: Jungle (the catalogue above) and Snow (snow_plan.h). Case-insensitive.
+// True for the tilesets in the table (outdoor_tilesets.h). Case-insensitive.
 bool outdoorTilesetKnown(std::string_view tileset);
 
 struct MapRequest {
@@ -120,7 +120,7 @@ struct GridCell {
 
 // The candidate whose squared distance (in cells) to the nearest anchor is greatest. Among equal scores the pick is the rng's: a reservoir over the
 // ties, one draw per further tie, in candidate order. With one anchor this is "farthest from it"; with two (entrance and boss) it maximises the
-// distance to the nearer one. A tileset supplies only its candidate cells and anchors. Returns false (and leaves `out`) when there are no candidates.
+// distance to the nearer one. A tileset supplies only its candidate cells and anchors. Returns false (and leaves `out`, with no rng draw) when there are no candidates or no anchors.
 bool pickFarthestCell(const std::vector<GridCell> &candidates, const std::vector<GridCell> &anchors, layout::Pcg32 &rng, GridCell &out);
 
 // --- Rooms of the built level: the entry, event and boss rooms --------------------------------------------------------

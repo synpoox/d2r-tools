@@ -3,23 +3,13 @@
 #include <cstdint>
 #include <cstring>
 
+#include "ascii.h"
+
 namespace cartographer::event6b {
 
 namespace {
 
-char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
-
-bool equalsNoCase(std::string_view a, std::string_view b) {
-	if (a.size() != b.size()) {
-		return false;
-	}
-	for (size_t i = 0; i < a.size(); ++i) {
-		if (lower(a[i]) != lower(b[i])) {
-			return false;
-		}
-	}
-	return true;
-}
+using layout::equalsNoCase;
 
 std::vector<int> linesNamed(const std::vector<std::string> &names, std::string_view spawn, bool exact) {
 	std::vector<int> rows;

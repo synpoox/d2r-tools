@@ -4,35 +4,27 @@
 #include <algorithm>
 #include <optional>
 
+#include "ascii.h"
 #include "rng.h"
 
 namespace cartographer::maze {
 
 namespace {
 
-char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : c; }
-
-bool sameNoCase(std::string_view a, std::string_view b)
-{
-	if (a.size() != b.size()) return false;
-	for (size_t i = 0; i < a.size(); ++i) {
-		if (lower(a[i]) != lower(b[i])) return false;
-	}
-	return true;
-}
+using layout::equalsNoCase;
 
 } // namespace
 
 bool builtinTileset(std::string_view name, Tileset &out)
 {
 	Tileset t;
-	if (sameNoCase(name, "Cave")) {
+	if (equalsNoCase(name, "Cave")) {
 		t.name = "Cave";
 		t.levelType = 3;
 		t.roomTiles = 24;
 		t.pieceBase = 52;
 		t.prev = {true, {83, 84, 85, 86}}; // Prev W, E, S, N
-	} else if (sameNoCase(name, "Crypt")) {
+	} else if (equalsNoCase(name, "Crypt")) {
 		t.name = "Crypt";
 		t.levelType = 4;
 		t.roomTiles = 8;

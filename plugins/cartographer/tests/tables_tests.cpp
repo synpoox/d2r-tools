@@ -503,7 +503,7 @@ TEST_CASE("slot geometry (origin and declared size) is read from levels.txt only
 TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is checked against the tileset") {
 	Report report;
 	auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nOutdoor\t140\nMaze\t139\n", report);
-	CHECK(slots[1].name == OutdoorSlot);
+	CHECK(slots[1].name == "Outdoor");
 	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\tLevelType\nA\t138\t2\t2\nB\t139\t1\t3\nC\t140\t3\t21\n");
 	CHECK(slots[0].drlgType == 2);
 	CHECK(slots[1].drlgType == 3);
@@ -527,7 +527,7 @@ TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is ch
 	snow.tileset = "Snow";
 	CHECK(OutdoorSlotProblem(snow, slots).empty());  // a Snow map is checked against the OutdoorSnow slot, which this table does not have
 	slots.push_back(slots[1]);                       // an OutdoorSnow slot on a level that has the Jungle LevelType
-	slots.back().name = SnowSlot;
+	slots.back().name = "OutdoorSnow";
 	const std::string wrong = OutdoorSlotProblem(snow, slots);
 	CHECK(wrong.find("OutdoorSnow") != std::string::npos);
 	CHECK(wrong.find("LevelType 21") != std::string::npos);
@@ -1129,7 +1129,7 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 	REQUIRE(maps.size() == 2);
 	CHECK(report.Errors() == 0);
 	CHECK(MapIsOutdoor(maps[0]));
-	CHECK(std::string(MapSlotName(maps[0])) == OutdoorSlot);
+	CHECK(std::string(MapSlotName(maps[0])) == "Outdoor");
 	CHECK(!MapIsOutdoor(maps[1]));
 	CHECK(std::string(MapSlotName(maps[1])) == MazeSlot);
 	const auto ready = ReadyTilesetNames();
@@ -1140,7 +1140,7 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 	REQUIRE(snowMaps.size() == 1);
 	CHECK(snowReport.Errors() == 0);
 	CHECK(MapIsOutdoor(snowMaps[0]));
-	CHECK(std::string(MapSlotName(snowMaps[0])) == SnowSlot);
+	CHECK(std::string(MapSlotName(snowMaps[0])) == "OutdoorSnow");
 }
 
 TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset is open and unbuilt") {
@@ -1173,7 +1173,7 @@ TEST_CASE("an Outdoor slot on a level the installer did not write is dropped; th
 	auto both = LoadSlots("Slot\tLevel\nMaze\t138\nOutdoor\t139\n", good);
 	ValidateSlots(both, levels, good);
 	CHECK(good.Errors() == 0);
-	CHECK(SlotLevel(both, OutdoorSlot) == 139);
+	CHECK(SlotLevel(both, "Outdoor") == 139);
 	CHECK(SlotLevel(both, MazeSlot) == 138);
 	Report swapped;
 	auto crossed = LoadSlots("Slot\tLevel\nMaze\t139\n", swapped);  // the Outdoor level under the Maze name: refused by the Maze name rule
@@ -1203,7 +1203,7 @@ TEST_CASE("the Outdoor level the installer writes passes the slot checks for a J
 	CHECK(OutdoorSlotProblem(jungle, slots).empty());
 	jungle.tileset = "Snow";  // a Snow map needs the OutdoorSnow slot, not this one
 	CHECK(OutdoorSlotProblem(jungle, slots).empty());
-	CHECK(std::string(MapSlotName(jungle)) == SnowSlot);
+	CHECK(std::string(MapSlotName(jungle)) == "OutdoorSnow");
 	jungle.tileset = "Jungle";
 	slots[0].levelType = 31;  // the Outdoor slot on a Snow LevelType: refused for a Jungle map
 	CHECK(!OutdoorSlotProblem(jungle, slots).empty());
@@ -1222,7 +1222,7 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 	ReadSlotLevelTypes(slots, levels);
 	REQUIRE(slots.size() == 3);
 	CHECK(report.Errors() == 0);
-	CHECK(SlotLevel(slots, SnowSlot) == 140);
+	CHECK(SlotLevel(slots, "OutdoorSnow") == 140);
 	CHECK(OutdoorSlotRefusal(slots[2]).empty());
 	CHECK(slots[2].levelType == 31);
 	CHECK(slots[2].sizeX == 192);
@@ -1250,4 +1250,31 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 	CHECK(OutdoorSlotRefusal(other[0]).find("vanilla") != std::string::npos);
 	CHECK(IsOutdoorSlotName("outdoorsnow"));
 	CHECK(OutdoorSlotLevelName("Maze").empty());
+}
+
+TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
+{
+	const auto all = TilesetNames();
+	REQUIRE(all.size() == 16);
+	CHECK(all[13] == "Temple");
+	CHECK(all[14] == "Jungle");  // the outdoor rows come last, in table order
+	CHECK(all[15] == "Snow");
+	const auto ready = ReadyTilesetNames();
+	const std::vector<std::string> want = {"Cave", "Crypt", "Jungle", "Snow"};
+	CHECK(ready == want);
+	CHECK(OutdoorLevelType("Jungle") == 21);
+	CHECK(OutdoorLevelType("snow") == 31);
+	CHECK(OutdoorSlotLevelName("Outdoor") == "Cartographer Outdoor");
+	CHECK(OutdoorSlotLevelName("outdoorsnow") == "Cartographer Snow");
+	CHECK(IsOutdoorSlotName("Outdoor"));
+	CHECK_FALSE(IsOutdoorSlotName("Maze"));
+	CHECK_FALSE(HasOutdoorSlot({}));
+	Slot maze;
+	maze.name = "Maze";
+	maze.level = 138;
+	Slot snow;
+	snow.name = "OutdoorSnow";
+	snow.level = 140;
+	CHECK_FALSE(HasOutdoorSlot({maze}));
+	CHECK(HasOutdoorSlot({maze, snow}));
 }

@@ -1,5 +1,6 @@
 #include "tables.h"
 
+#include "outdoor_tilesets.h"
 #include "text.h"
 #include "tsv.h"
 
@@ -18,13 +19,13 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); Jungle and Snow are buildable
-// through the outdoor build hook, which needs the Outdoor (Jungle) or OutdoorSnow (Snow) slot and OutdoorBuild = 1 (each is checked when the map opens); the others
-// are accepted names that the loader refuses with a message that says so, until their builders ship.
+// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the outdoor tilesets (the table in
+// outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot and OutdoorBuild = 1
+// (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
-	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", true},     {"Snow", true},
+	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
@@ -133,6 +134,9 @@ auto TilesetNames() -> std::vector<std::string> {
 	for (const Tileset& t : Tilesets) {
 		out.emplace_back(t.name);
 	}
+	for (const cartographer::outdoor::OutdoorTileset& t : cartographer::outdoor::OutdoorTilesets) {
+		out.emplace_back(t.name);
+	}
 	return out;
 }
 
@@ -142,6 +146,9 @@ auto ReadyTilesetNames() -> std::vector<std::string> {
 		if (t.ready) {
 			out.emplace_back(t.name);
 		}
+	}
+	for (const cartographer::outdoor::OutdoorTileset& t : cartographer::outdoor::OutdoorTilesets) {
+		out.emplace_back(t.name);
 	}
 	return out;
 }
@@ -862,17 +869,21 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 }
 
 auto IsOutdoorSlotName(std::string_view slot) -> bool {
-	return EqualsNoCase(slot, OutdoorSlot) || EqualsNoCase(slot, SnowSlot);
+	return cartographer::outdoor::findOutdoorTilesetBySlot(slot) != nullptr;
+}
+
+auto HasOutdoorSlot(const std::vector<Slot>& slots) -> bool {
+	for (const cartographer::outdoor::OutdoorTileset& t : cartographer::outdoor::OutdoorTilesets) {
+		if (SlotLevel(slots, t.slot) > 0) {
+			return true;
+		}
+	}
+	return false;
 }
 
 auto OutdoorSlotLevelName(std::string_view slot) -> std::string {
-	if (EqualsNoCase(slot, OutdoorSlot)) {
-		return OutdoorLevelName;
-	}
-	if (EqualsNoCase(slot, SnowSlot)) {
-		return SnowLevelName;
-	}
-	return {};
+	const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTilesetBySlot(slot);
+	return row != nullptr ? std::string(row->levelName) : std::string();
 }
 
 auto OutdoorSlotRefusal(const Slot& slot) -> std::string {
@@ -888,13 +899,8 @@ auto OutdoorSlotRefusal(const Slot& slot) -> std::string {
 }
 
 auto OutdoorLevelType(std::string_view tileset) -> int {
-	if (EqualsNoCase(tileset, "Jungle")) {
-		return 21;
-	}
-	if (EqualsNoCase(tileset, "Snow")) {
-		return 31;
-	}
-	return -1;
+	const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(tileset);
+	return row != nullptr ? row->levelType : -1;
 }
 
 auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> std::string {
@@ -926,10 +932,8 @@ auto MapIsOutdoor(const MapDef& map) -> bool {
 }
 
 auto MapSlotName(const MapDef& map) -> const char* {
-	if (!MapIsOutdoor(map)) {
-		return MazeSlot;
-	}
-	return EqualsNoCase(map.tileset, "Snow") ? SnowSlot : OutdoorSlot;
+	const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(map.tileset);
+	return row != nullptr ? row->slot : MazeSlot;
 }
 
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
