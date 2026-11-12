@@ -252,10 +252,13 @@ A blank cell keeps the default; Tunneling Depths keeps level 85 here.
 
 **Special rooms.** Owner decision: a Cartographer map has an entrance (the portal) and no exit. A maze has one special room, the entrance: the portal room at the start of the path, made from the tileset's Prev piece when that end is a one-exit dead end (a ring's entrance stays an ordinary mask room). No Next or Down room is placed or steered: the slot's code still calls for them, and the steering hook answers every such call with a suppression, so the order and number of the slot's calls cannot move the entrance or place another special room. The end of the path holds the boss and the reserved event room, built from ordinary mask pieces. There is no switch for this.
 
+**Level size rule.** The level has (2 x k + 1) rooms per axis; the plan grows one axis at a time, smallest total growth first, and stops at the largest level. Compared with growing both axes together, this changes the level size in 4,111 of 8,998 sampled Cave/Crypt plans (mostly smaller; 18 grow, and in all 18 the first room moves), so such differences are not regressions.
+
 **To verify in the engine [V] (maze slot, before the hooks ship).**
 - The largest level size the engine accepts. The core asks for up to 360 tiles on an axis (15 Cave rooms across), and most Large Cave Corridor plans reach it. If the engine caps lower, Large Cave maps mostly fall back.
 - A level origin (`OffsetX/OffsetY`, level +0x24/+0x28) clear of the act's other levels, so that a 360 x 360 level does not overlap them in world coordinates.
 - The hook clamps `Tileset::maxLevelTiles` to the verified value before it writes the size.
+- Suppressing the slot's Down/Next calls is safe: the slot code accepts a `0x3eb850` call that places nothing (including what the `int*` out parameter must hold), and later warp and level-link code does not expect an exit room.
 - After the slot's case returns, the hook checks that the Prev call came when the plan places the entrance. If it did not, the room is still an ordinary piece, so the hook logs it and falls back.
 
 ## 4. Map stats and events: how they work
