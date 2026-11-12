@@ -176,7 +176,7 @@ minions) and the log says which path was taken. The same happens for a second sp
 Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
 
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell) with an ASCII name and with a UTF-8 `bosses.txt`; a Latin-1 file showed `*` for the accented letters before the conversion above existed, and the conversion has not been checked in game. A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
+and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`; PR #261).
 If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |
@@ -291,8 +291,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit), and `ItemStats=1` for a player stat.
 - **Outdoor maps (Jungle and Snow)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow walls and multiplayer were not checked.
 - **Experimental or not verified in game**: Treasure chest loot (the chest opened but dropped nothing in one game, #220), what a Boss `Drop` roll drops
-  (the roll runs when the Boss dies, 5 of 5 kills), a Treasure thief's flee (it walked away; its flee state was not read), the event
-  name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync, and
-  accented names from a Latin-1 `bosses.txt`.
+  (the roll runs when the Boss dies, 5 of 5 kills), the event
+  name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).
