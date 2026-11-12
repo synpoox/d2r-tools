@@ -2,6 +2,7 @@
 
 #include "map_sync.h"
 #include "maze_hooks.h"
+#include "outdoor_hooks.h"
 #include "scan.h"
 
 #include "core/part_signatures.h"
@@ -504,6 +505,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 	}
 	if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		MazeGameLeft();
+		OutdoorGameLeft();
 	}
 }
 
@@ -611,6 +613,7 @@ void SetFirstGameStartNotify(void (*notify)() noexcept) {
 
 void SetTables(std::shared_ptr<const Tables> tables) {
 	SetMazeTables(tables);
+	SetOutdoorTables(tables);
 	MapNamesSetTables(tables);
 	MapSyncSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -661,6 +664,9 @@ auto PartStatuses() -> std::vector<PartStatus> {
 	for (PartStatus& status : MazePartStatuses()) {
 		out.push_back(std::move(status));
 	}
+	for (PartStatus& status : OutdoorPartStatuses()) {
+		out.push_back(std::move(status));
+	}
 	return out;
 }
 
@@ -704,6 +710,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
+	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}
@@ -714,6 +721,9 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
 	}
 	for (const PartStatus& status : MazePartStatuses()) {
+		plog::Info("part %s: %s", status.name.c_str(), status.detail.c_str());
+	}
+	for (const PartStatus& status : OutdoorPartStatuses()) {
 		plog::Info("part %s: %s", status.name.c_str(), status.detail.c_str());
 	}
 	g_installed = true;

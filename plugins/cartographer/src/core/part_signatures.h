@@ -54,10 +54,9 @@ inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 8
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
 inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
 
-// The outdoor slot parts (build 93847; cartographer.md sections 4 and 8), re-checked by tools/check_maze_signatures.py. Nothing uses them yet:
-// the outdoor builder (issue #19, phase 5) will hook OutdoorEntry (the spike hooked 19 bytes) and OutdoorAct5Builder (16 bytes) and only call
-// PieceStamp and VoidCell. The hook lengths are the spike's, from section 4; each must be re-derived when a hook is added. LevelBuild above is
-// the fifth part (the spike hooked 14 bytes of it).
+// The outdoor slot parts (build 93847; cartographer.md sections 4 and 8), re-checked by tools/check_maze_signatures.py. src/engine/outdoor_hooks.cpp
+// hooks OutdoorAct5Builder (16 bytes) and, when the maze hook does not, LevelBuild (14 bytes); it only calls OutdoorEntry, PieceStamp and VoidCell.
+// The hook lengths are derived in section 8a (capstone, no relative operand inside a patch) and pinned in tools/check_maze_signatures.py.
 inline constexpr const char* OutdoorEntry = "48 89 54 24 10 53 55 56 57 41 54 41 56 41 57 48 83 EC 50 4C 8B 7A 18 33 C0 4C 8B F2 44 0F B6 E1 49 89 87 A8 00 00 00 49 8D 4F 08 8B 42 2C 99 83";
 inline constexpr const char* OutdoorAct5Builder = "40 55 53 56 57 41 54 41 56 41 57 48 8D 6C 24 D9 48 81 EC C0 00 00 00 83 BA F8 01 00 00 6E 48 8B F2 44 0F B6 F1";
 inline constexpr const char* PieceStamp = "48 89 5C 24 08 44 89 4C 24 20 44 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 4C 8B 62 18 48 8B FA 48 63 B4 24 90 00 00 00 45 8B E9 8B D6 4C 89 64 24";

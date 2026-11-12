@@ -72,6 +72,8 @@ struct Settings {
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
 	int mapNames = 0;   // MapNames: 1 shows a map's own Name on the portal tooltip, the automap title and the entry banner (written, not verified in game)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
+	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
+	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
 	std::string town = "Harrogath";
 };
 
@@ -80,6 +82,10 @@ struct Slot {
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 	int drlgType = -1;  // levels.txt DrlgType of that level (1 maze, 2 preset, 3 outdoor); -1 when unknown
+	// levels.txt OffsetX, OffsetY, SizeX and SizeY of that level, in tiles. haveGeometry is true only when all four columns exist and parse; the
+	// outdoor build needs them because the level record's rectangle is still zero when the level build starts.
+	bool haveGeometry = false;
+	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 
 // Tilesets, shapes, sizes and difficulties as the author writes them.

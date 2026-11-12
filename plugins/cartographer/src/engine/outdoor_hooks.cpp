@@ -1,0 +1,575 @@
+#include "outdoor_hooks.h"
+
+#include "core/part_signatures.h"
+#include "core/text.h"
+#include "log.h"
+#include "maze_hooks.h"
+#include "steer.h"
+
+#include "outdoor_plan.h"
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <atomic>
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <vector>
+
+namespace carto {
+
+namespace {
+
+namespace co = cartographer::outdoor;
+
+// --- Engine facts. Offsets are into D2R's own structures (build 93847); each is recorded with its evidence in
+// docs/reverse-engineering/cartographer.md sections 1, 4, 8 and 8a. The functions are found by signature, never by address.
+constexpr int LvlType = 0x00;         // int32: 1 maze, 2 preset, 3 outdoor
+constexpr int LvlRoomCount = 0x08;    // int32
+constexpr int LvlFirstRoom = 0x10;    // room*: the newest room, next at RoomNext
+constexpr int LvlGrid = 0x18;         // the outdoor block: four grids and the cell counts (0x340 bytes, allocated with the level)
+constexpr int LvlOriginX = 0x24;      // int32, tiles: still 0 when the level build starts for an outdoor slot (section 4, S1)
+constexpr int LvlOriginY = 0x28;
+constexpr int LvlSizeX = 0x2c;        // int32, tiles
+constexpr int LvlSizeY = 0x30;
+constexpr int LvlDrlg = 0x1c8;        // drlg*
+constexpr int LvlTileType = 0x1e0;     // int32: the LevelType
+constexpr int LvlSeed = 0x1e4;        // int32 pair: the level RNG state (the reseed writes both)
+constexpr int LvlSeed2 = 0x1e8;
+constexpr int LvlId = 0x1f8;          // int32
+constexpr int DrlgSeedBase = 0x860;   // uint32
+constexpr int GridCellsW = 0xb0;      // int32 in the outdoor block: the size in grid cells
+constexpr int GridCellsH = 0xb4;
+constexpr int GridPieces = 0x08;      // grid object: the piece id at a piece's origin cell
+constexpr int GridFlags = 0x58;       // grid object: 0x200 covered, 0x100 void, file index in bits 16..19
+constexpr int GridData = 0x18;        // in a grid object: uint64* cells
+constexpr int GridRows = 0x20;        // in a grid object: int32* index of each row's first cell (a cell is data[rows[y] + x])
+constexpr int RoomPiece = 0x40, RoomNext = 0x48, RoomX = 0x60, RoomY = 0x64, RoomW = 0x68, RoomH = 0x6c;
+constexpr int PieceId = 0x00, PieceFile = 0x04;
+constexpr int32_t OutdoorType = 3;
+constexpr int32_t NativeTailType = 0;  // no branch of the level build's dispatch matches it, so only its native tail runs
+constexpr int32_t SecondSeedWord = 0x29a;
+constexpr int MaxRooms = 4096;
+constexpr int MaxGridCells = 64 * 64;
+
+using EntryFn = void (*)(uint8_t dataFlag, void* level) noexcept;  // 0x3ee320, and the Act 5 builder it calls (same shape)
+using StampFn = void (*)(uint8_t dataFlag, void* level, int32_t cx, int32_t cy, int32_t lvlPrest, int32_t file, char last) noexcept;  // 0x3ecfc0
+using VoidFn = void (*)(void* level, int32_t x, int32_t y) noexcept;                                                             // 0x3ede00
+
+enum OutdoorPartId { Act5Builder, EntryPart, StampPart, VoidPart, OwnLevelBuild, OutdoorPartCount };
+constexpr int OutdoorNeededParts = OwnLevelBuild;  // the parts every build needs; LevelBuild is added only when the maze hook did not take it
+
+Part g_parts[OutdoorPartCount] = {
+	{"OutdoorAct5Builder", sig::OutdoorAct5Builder, 16, true, nullptr, {}, {}},
+	{"OutdoorEntry", sig::OutdoorEntry, 0, true, nullptr, {}, {}},
+	{"PieceStamp", sig::PieceStamp, 0, true, nullptr, {}, {}},
+	{"VoidCell", sig::VoidCell, 0, true, nullptr, {}, {}},
+	{"LevelBuild", sig::LevelBuild, 14, true, nullptr, {}, {}},
+};
+
+EntryFn g_act5Original = nullptr;
+LevelBuildFn g_ownLevelOriginal = nullptr;
+bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the maze hook did not): written at load only
+
+std::atomic<bool> g_live{false};     // every part is on and the hooks are in
+std::atomic<bool> g_enabled{false};  // OutdoorBuild = 1
+std::atomic<bool> g_probe{false};
+std::atomic<int> g_slotLevel{-1};
+
+struct Job {
+	uint64_t id = 0;
+	std::string name, tileset, shape, size;
+	uint64_t seed = 0;
+	cartographer::layout::ShapeTable shapes;
+};
+struct SlotGeometry {
+	bool known = false;
+	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
+};
+std::mutex g_lock;
+std::shared_ptr<const Job> g_job;
+SlotGeometry g_geometry;
+uint64_t g_nextJobId = 1;
+co::PlanCache g_cache(4);
+
+// One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
+struct BuildCtx {
+	void* level = nullptr;
+	const co::MapPlan* plan = nullptr;
+	bool fired = false;
+	int stamped = 0;
+	int voided = 0;
+};
+thread_local BuildCtx* t_ctx = nullptr;
+
+// --- Reading and writing the game's memory ----------------------------------------------------------------------------
+
+auto Readable(const void* p, size_t n) noexcept -> bool {
+	if (p == nullptr) {
+		return false;
+	}
+	MEMORY_BASIC_INFORMATION mbi{};
+	if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0) {
+		return false;
+	}
+	const auto* end = static_cast<const uint8_t*>(mbi.BaseAddress) + mbi.RegionSize;
+	return static_cast<const uint8_t*>(p) + n <= end;
+}
+
+template <typename T>
+auto Read(const void* base, int offset) noexcept -> T {
+	T value{};
+	if (Readable(static_cast<const uint8_t*>(base) + offset, sizeof(T))) {
+		std::memcpy(&value, static_cast<const uint8_t*>(base) + offset, sizeof(T));
+	}
+	return value;
+}
+
+template <typename T>
+void Write(void* base, int offset, T value) noexcept {
+	std::memcpy(static_cast<uint8_t*>(base) + offset, &value, sizeof(T));
+}
+
+template <typename Fn>
+auto Call(OutdoorPartId id) noexcept -> Fn {
+	return reinterpret_cast<Fn>(const_cast<uint8_t*>(g_parts[id].address));
+}
+
+auto IsSlotLevel(const void* level) noexcept -> bool {
+	const int slot = g_slotLevel.load();
+	return slot > 0 && level != nullptr && Readable(level, 0x200) && Read<int32_t>(level, LvlId) == slot;
+}
+
+// --- The grids, read as the game's grid reader (0x3fa790) does: data[rows[y] + x] ---------------------------------------------
+
+auto GridCell(const void* block, int gridOffset, int x, int y, bool* ok) noexcept -> uint64_t {
+	const auto* grid = static_cast<const uint8_t*>(block) + gridOffset;
+	const auto* rows = Read<const uint8_t*>(grid, GridRows);
+	const auto* data = Read<const uint8_t*>(grid, GridData);
+	if (rows == nullptr || data == nullptr || !Readable(rows + static_cast<size_t>(y) * 4, 4)) {
+		*ok = false;
+		return 0;
+	}
+	const int64_t at = static_cast<int64_t>(Read<int32_t>(rows, y * 4)) + x;
+	if (at < 0 || at > (1 << 20) || !Readable(data + static_cast<size_t>(at) * 8, 8)) {
+		*ok = false;
+		return 0;
+	}
+	return Read<uint64_t>(data, static_cast<int>(at * 8));
+}
+
+// The built level's piece and flag grids, if they are readable and the size the plan expects. `why` says what is wrong otherwise.
+auto SampleGrid(const void* level, const co::StampPlan& plan, co::GridSample* out, std::string* why) -> bool {
+	const void* block = Read<const void*>(level, LvlGrid);
+	if (block == nullptr || !Readable(block, 0x340)) {
+		*why = "the level has no readable outdoor block";
+		return false;
+	}
+	const int w = Read<int32_t>(block, GridCellsW), h = Read<int32_t>(block, GridCellsH);
+	if (w != plan.cellsW || h != plan.cellsH) {
+		*why = "the game's grid is " + std::to_string(w) + " x " + std::to_string(h) + " cells, the plan's is " + std::to_string(plan.cellsW) + " x " + std::to_string(plan.cellsH);
+		return false;
+	}
+	if (w <= 0 || h <= 0 || w * h > MaxGridCells) {
+		*why = "the grid size is out of range";
+		return false;
+	}
+	out->piece.assign(static_cast<size_t>(w) * h, 0);
+	out->flags.assign(static_cast<size_t>(w) * h, 0);
+	bool ok = true;
+	for (int y = 0; y < h; ++y) {
+		for (int x = 0; x < w; ++x) {
+			out->piece[static_cast<size_t>(y) * w + x] = GridCell(block, GridPieces, x, y, &ok);
+			out->flags[static_cast<size_t>(y) * w + x] = GridCell(block, GridFlags, x, y, &ok);
+		}
+	}
+	if (!ok) {
+		*why = "a grid cell could not be read";
+	}
+	return ok;
+}
+
+// --- Probes (OutdoorProbe = 1 in cartographer.txt): what the game does, for the checks that need a game ------------------------
+
+void ProbeLevel(const void* level, const char* when) noexcept {
+	if (!g_probe.load()) {
+		return;
+	}
+	const void* block = Read<const void*>(level, LvlGrid);
+	plog::Info("[outdoor probe] %s: level %d type %d levelType %d origin (%d,%d) size (%d,%d) rooms %d first room %p seed %08x %08x outdoor block %p (%d x %d cells)", when,
+	           Read<int32_t>(level, LvlId), Read<int32_t>(level, LvlType), Read<int32_t>(level, LvlTileType), Read<int32_t>(level, LvlOriginX), Read<int32_t>(level, LvlOriginY),
+	           Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY), Read<int32_t>(level, LvlRoomCount), Read<const void*>(level, LvlFirstRoom),
+	           Read<uint32_t>(level, LvlSeed), Read<uint32_t>(level, LvlSeed2), block, Read<int32_t>(block, GridCellsW), Read<int32_t>(block, GridCellsH));
+}
+
+// The grid as characters: '#' a piece's origin cell, '+' covered by a piece, ' ' void, '.' none of these.
+void ProbeGrid(const co::StampPlan& plan, const co::GridSample& grid) noexcept {
+	if (!g_probe.load()) {
+		return;
+	}
+	try {
+		plog::Info("[outdoor probe] grid %d x %d cells ('#' piece, '+' covered, ' ' void, '.' none), planned stamps:\n%s", plan.cellsW, plan.cellsH, co::stampPlanAscii(plan).c_str());
+		std::string row;
+		for (int y = 0; y < plan.cellsH; ++y) {
+			row.clear();
+			for (int x = 0; x < plan.cellsW; ++x) {
+				const size_t i = static_cast<size_t>(y) * plan.cellsW + x;
+				row += grid.piece[i] != 0 ? '#' : (grid.flags[i] & 0x200) != 0 ? '+' : (grid.flags[i] & 0x100) != 0 ? ' ' : '.';
+			}
+			plog::Info("[outdoor probe] grid %2d |%s|", y, row.c_str());
+		}
+	} catch (...) {
+	}
+}
+
+void ProbeRooms(const void* level, int originX, int originY) noexcept {
+	if (!g_probe.load()) {
+		return;
+	}
+	int n = 0;
+	for (const void* room = Read<const void*>(level, LvlFirstRoom); room != nullptr && n < MaxRooms && Readable(room, 0x98); room = Read<const void*>(room, RoomNext), ++n) {
+		const void* piece = Read<const void*>(room, RoomPiece);
+		plog::Info("[outdoor probe] room %s%d file %d at (%d,%d) %d x %d", piece != nullptr ? "piece " : "fill ", piece != nullptr ? Read<int32_t>(piece, PieceId) : -1,
+		           piece != nullptr ? Read<int32_t>(piece, PieceFile) : -1, Read<int32_t>(room, RoomX) - originX, Read<int32_t>(room, RoomY) - originY,
+		           Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH));
+	}
+}
+
+// --- The plan --------------------------------------------------------------------------------------------------------
+
+// The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
+auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
+	std::shared_ptr<const Job> job;
+	SlotGeometry geometry;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		job = g_job;
+		geometry = g_geometry;
+	}
+	if (job == nullptr) {
+		*why = "no outdoor map was opened in this game";
+		return nullptr;
+	}
+	if (!geometry.known) {
+		*why = "levels.txt could not be read for the Outdoor slot level's OffsetX, OffsetY, SizeX and SizeY";
+		return nullptr;
+	}
+	const int want = OutdoorLevelType(job->tileset);
+	const int have = Read<int32_t>(level, LvlTileType);
+	if (want < 0 || have != want) {
+		*why = "the Outdoor slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
+		return nullptr;
+	}
+	co::MapRequest request;
+	request.tileset = job->tileset;
+	request.shape = job->shape;
+	request.size = job->size;
+	request.seed = job->seed;
+	request.shapes = &job->shapes;
+	request.options.originX = geometry.offsetX;
+	request.options.originY = geometry.offsetY;
+	request.options.maxTilesX = geometry.sizeX;
+	request.options.maxTilesY = geometry.sizeY;
+	bool built = false;
+	std::shared_ptr<const co::MapPlan> plan = g_cache.get(request, co::builtinJungleCatalogue(), &built);
+	if (!plan->ok) {
+		*why = plan->reason;
+		return nullptr;
+	}
+	if (built) {
+		plog::Info("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", Read<int32_t>(level, LvlId),
+		           job->name.c_str(), job->tileset.c_str(), job->shape.c_str(), job->size.c_str(), static_cast<unsigned long long>(job->seed), static_cast<int>(plan->stamps.stamps.size()),
+		           static_cast<int>(plan->stamps.voidCells.size()), plan->stamps.tilesW, plan->stamps.tilesH, plan->stamps.originX, plan->stamps.originY,
+		           static_cast<unsigned long long>(plan->hash));
+	}
+	return plan;
+}
+
+// --- The hooks -------------------------------------------------------------------------------------------------------
+
+// 0x3fe2e0 for the slot: replay the plan with the game's own piece stamper, then mark the unused cells void. For every other level (and for the
+// slot when no build of ours is running) the game's own Act 5 builder runs. The grids were allocated by the entry function before this runs.
+void Act5Hook(uint8_t dataFlag, void* level) noexcept {
+	if (g_act5Original == nullptr) {
+		return;  // the loader gave no way back (logged at install); there is nothing to call
+	}
+	BuildCtx* ctx = t_ctx;
+	if (ctx == nullptr || ctx->level != level || ctx->plan == nullptr) {
+		g_act5Original(dataFlag, level);
+		return;
+	}
+	ctx->fired = true;
+	const co::StampPlan& plan = ctx->plan->stamps;
+	const auto stamp = Call<StampFn>(StampPart);
+	for (const co::Stamp& s : plan.stamps) {
+		stamp(dataFlag, level, s.cx, s.cy, s.lvlPrest, s.file, 0);
+		++ctx->stamped;
+	}
+	const auto mark = Call<VoidFn>(VoidPart);
+	for (const cartographer::layout::Point& p : plan.voidCells) {
+		mark(level, p.x, p.y);
+		++ctx->voided;
+	}
+}
+
+// The slot level's whole build, from the level build hook: rectangle, seed, the entry function (which reaches Act5Hook and then makes the
+// rooms), then the level build's native tail. No allocation and nothing that throws past the logging, which is wrapped.
+auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::MapPlan& plan) noexcept -> uint64_t {
+	const int id = Read<int32_t>(level, LvlId);
+	const co::LevelRect rect = co::levelRectOf(plan.stamps);
+	ProbeLevel(level, "before the slot build");
+	// The rectangle is written before the build, as act start-up does for the game's own outdoor levels: it is 0 for a slot (section 4, S1).
+	Write<int32_t>(level, LvlOriginX, rect.x);
+	Write<int32_t>(level, LvlOriginY, rect.y);
+	Write<int32_t>(level, LvlSizeX, rect.w);
+	Write<int32_t>(level, LvlSizeY, rect.h);
+	// The same seed the original draws: the level RNG decides each piece's DS1 file when the plan leaves it to the engine.
+	const co::LevelSeed seed = co::levelSeedFor(Read<uint32_t>(Read<const void*>(level, LvlDrlg), DrlgSeedBase), id);
+	Write<int32_t>(level, LvlSeed, seed.first);
+	Write<int32_t>(level, LvlSeed2, seed.second);
+
+	BuildCtx ctx;
+	ctx.level = level;
+	ctx.plan = &plan;
+	BuildCtx* previous = t_ctx;
+	t_ctx = &ctx;
+	Call<EntryFn>(EntryPart)(dataFlag, level);
+	t_ctx = previous;
+
+	// The native tail (saved room bits, the warp-spot scan): type 0 matches no branch of the dispatch, so D2RCore's outdoor generator is never reached.
+	Write<int32_t>(level, LvlType, NativeTailType);
+	const uint64_t result = original(dataFlag, level);
+	Write<int32_t>(level, LvlType, OutdoorType);
+
+	try {
+		if (!ctx.fired) {
+			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the Outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
+		}
+		ProbeLevel(level, "after the slot build");
+		co::GridSample grid;
+		std::string why;
+		if (!SampleGrid(level, plan.stamps, &grid, &why)) {
+			plog::Warn("outdoor slot level %d: the built grid was not checked: %s", id, why.c_str());
+		} else {
+			co::GridCounts counts;
+			const std::vector<std::string> problems = co::compareGrid(plan.stamps, grid, &counts);
+			if (ctx.fired && problems.empty()) {
+				plog::Info("outdoor slot level %d: built as planned (%d stamps, %d void cells; grid %d cells: %d pieces, %d covered, %d void, %d neither), %d rooms", id, ctx.stamped, ctx.voided,
+				           counts.cells, counts.pieces, counts.covered, counts.voided, counts.other, Read<int32_t>(level, LvlRoomCount));
+			} else if (!problems.empty()) {
+				plog::Warn("outdoor slot level %d: the built grid is not the plan: %s%s", id, problems.front().c_str(), problems.size() > 1 ? " (and more; turn OutdoorProbe on)" : "");
+				for (size_t i = 1; i < problems.size() && g_probe.load(); ++i) {
+					plog::Info("[outdoor probe] grid difference: %s", problems[i].c_str());
+				}
+			}
+			ProbeGrid(plan.stamps, grid);
+		}
+		if (plan.stamps.entrance.known) {
+			plog::Info("outdoor slot level %d: entrance cell at tile (%d,%d) %d x %d; event %s; boss %s", id, plan.stamps.entrance.x, plan.stamps.entrance.y, plan.stamps.entrance.w, plan.stamps.entrance.h,
+			           plan.stamps.event.known ? "planned" : "none", plan.stamps.boss.known ? "planned" : "none");
+		}
+		ProbeRooms(level, rect.x, rect.y);
+	} catch (...) {
+	}
+	return result;
+}
+
+// Whether to build the slot level ourselves, and if so, do it. See the header.
+auto BuildSlotLevel(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result) noexcept -> bool {
+	const int id = Read<int32_t>(level, LvlId);
+	if (Read<int32_t>(level, LvlType) != OutdoorType) {
+		plog::Warn("outdoor slot level %d: not an outdoor level (levels.txt DrlgType must be 3); building the game's own level", id);
+		return false;
+	}
+	if (t_ctx != nullptr) {
+		return false;  // a build of ours is running on this thread: never nest
+	}
+	const void* drlg = Read<const void*>(level, LvlDrlg);
+	const void* block = Read<const void*>(level, LvlGrid);
+	if (drlg == nullptr || !Readable(drlg, DrlgSeedBase + 4) || block == nullptr || !Readable(block, 0x340)) {
+		plog::Warn("outdoor slot level %d: the level has no readable drlg or outdoor block; building the game's own level", id);
+		return false;
+	}
+	if (Read<int32_t>(level, LvlRoomCount) != 0 || Read<const void*>(level, LvlFirstRoom) != nullptr) {
+		plog::Warn("outdoor slot level %d: the level already holds %d rooms before the build; building the game's own level", id, Read<int32_t>(level, LvlRoomCount));
+		return false;
+	}
+	std::shared_ptr<const co::MapPlan> plan;
+	std::string why;
+	try {
+		plan = PrepareSlot(level, &why);
+	} catch (...) {
+		plog::Error("outdoor slot level %d: an exception while preparing the plan; building the game's own level", id);
+		return false;
+	}
+	if (plan == nullptr) {
+		try {
+			plog::Warn("outdoor slot level %d: building the game's own level: %s", id, why.c_str());
+		} catch (...) {
+		}
+		return false;
+	}
+	*result = RunBuild(dataFlag, level, original, *plan);  // from here the level is ours; `plan` keeps the cached plan alive for the build
+	return true;
+}
+
+auto OwnLevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
+	if (g_ownLevelOriginal == nullptr) {
+		return 0;  // the loader gave no way back (logged at install): every level build is skipped until a restart
+	}
+	uint64_t result = 0;
+	if (OutdoorLevelBuild(dataFlag, level, g_ownLevelOriginal, &result)) {
+		return result;
+	}
+	return g_ownLevelOriginal(dataFlag, level);
+}
+
+}  // namespace
+
+auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result) noexcept -> bool {
+	if (!g_live.load(std::memory_order_relaxed) || !g_enabled.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
+		return false;  // every other level runs the game's own build, untouched
+	}
+	return BuildSlotLevel(dataFlag, level, original, result);
+}
+
+auto OutdoorBuildLive() -> bool {
+	return g_live.load();
+}
+
+auto OutdoorPartStatuses() -> std::vector<PartStatus> {
+	std::vector<PartStatus> out;
+	for (int i = 0; i < OutdoorPartCount; ++i) {
+		if (i == OwnLevelBuild && !g_ownLevelBuild) {
+			continue;  // shared with the maze hook: its part is listed with the maze parts
+		}
+		out.push_back(g_parts[i].status);
+	}
+	return out;
+}
+
+auto OutdoorSlotLevelId() -> int {
+	return g_slotLevel.load();
+}
+
+void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
+	const Slot* slot = nullptr;
+	if (tables != nullptr) {
+		for (const Slot& s : tables->slots) {
+			if (EqualsNoCase(s.name, OutdoorSlot)) {
+				slot = &s;
+				break;
+			}
+		}
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_geometry = {};
+		if (slot != nullptr && slot->haveGeometry) {
+			g_geometry = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY};
+		}
+	}
+	g_cache.clear();
+	g_slotLevel = slot != nullptr ? slot->level : -1;
+	g_enabled = tables != nullptr && tables->settings.outdoorBuild != 0;
+	g_probe = tables != nullptr && tables->settings.outdoorProbe != 0;
+}
+
+void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed) {
+	auto job = std::make_shared<Job>();
+	job->name = map.name;
+	job->tileset = map.tileset;
+	job->shape = map.shape;
+	job->size = map.size;
+	job->shapes = tables.shapes;
+	std::lock_guard<std::mutex> lock(g_lock);
+	job->id = g_nextJobId++;
+	job->seed = fixedSeed != 0 ? fixedSeed : cartographer::maze::mixSeed(seedSalt, job->id);
+	g_job = job;
+	plog::Info("outdoor map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
+	           static_cast<unsigned long long>(job->seed));
+}
+
+void OutdoorMapCancelled() {
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_job.reset();
+}
+
+void OutdoorGameLeft() {
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_job.reset();
+	}
+	g_cache.clear();
+}
+
+void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
+	for (int i = 0; i < OutdoorNeededParts; ++i) {
+		ResolvePart(context, overrides, ranges, count, g_parts[i]);
+	}
+	bool allOn = true;
+	for (int i = 0; i < OutdoorNeededParts; ++i) {
+		allOn = allOn && g_parts[i].status.on;
+	}
+	const auto turnOff = [](const char* detail) {
+		for (Part& part : g_parts) {
+			if (part.status.on) {
+				part.status.on = false;
+				part.status.detail = detail;
+			}
+		}
+	};
+	if (!allOn) {
+		// Nothing is hooked: one missing part turns only the outdoor build off, and a half-installed set could not be taken out.
+		turnOff("off: not hooked, because another outdoor part was not found");
+		plog::Warn("the outdoor build is off: not every outdoor part was found (see 'cartographer check'); the game builds the Outdoor slot level itself");
+		return;
+	}
+	// The level build (0x3271c0) is hooked once. When the maze steering took it, its hook calls ours for every level; otherwise this plugin hooks it.
+	const bool shared = MazeSteeringLive();
+	if (!shared && MazeLevelBuildHookTried()) {
+		turnOff("off: not hooked, because the level build hook of the maze steering was refused or gave no way back");
+		plog::Warn("the outdoor build is off: the level build hook of the maze steering did not go in cleanly (see 'cartographer check')");
+		return;
+	}
+	if (!shared) {
+		ResolvePart(context, overrides, ranges, count, g_parts[OwnLevelBuild]);
+		if (!g_parts[OwnLevelBuild].status.on) {
+			turnOff("off: not hooked, because the LevelBuild part was not found");
+			plog::Warn("the outdoor build is off: the LevelBuild part was not found (see 'cartographer check')");
+			return;
+		}
+		g_ownLevelBuild = true;
+	}
+	const auto install = [&](OutdoorPartId id, void* target, void** original) {
+		Part& part = g_parts[id];
+		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
+		const bool ok = hooked && *original != nullptr;
+		part.status.on = ok;
+		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
+		if (hooked && !ok) {
+			plog::Error("part %s: D2RLoader installed the hook but gave no original; %s until the game is restarted; restart it after removing what conflicts", part.name,
+			            id == OwnLevelBuild ? "EVERY level build is skipped (not only the outdoor slot), so no level will load" : "the game's Act 5 outdoor builder is skipped");
+		}
+		return ok;
+	};
+	// The inner hook first; the level build, which switches the build on, last.
+	bool ok = install(Act5Builder, reinterpret_cast<void*>(&Act5Hook), reinterpret_cast<void**>(&g_act5Original));
+	if (ok && g_ownLevelBuild) {
+		ok = install(OwnLevelBuild, reinterpret_cast<void*>(&OwnLevelBuildHook), reinterpret_cast<void**>(&g_ownLevelOriginal));
+	}
+	if (!ok) {
+		plog::Warn("the outdoor build is off: a hook was refused (see 'cartographer check'); the hooks that went in pass straight through");
+		return;
+	}
+	g_live = true;
+	plog::Info("the outdoor build hooks are in%s; the build itself is %s (OutdoorBuild in cartographer.txt)", g_ownLevelBuild ? " (with their own level build hook)" : " (behind the maze steering's level build hook)",
+	           g_enabled.load() ? "on" : "off");
+}
+
+}  // namespace carto

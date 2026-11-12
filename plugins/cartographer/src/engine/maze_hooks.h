@@ -19,6 +19,9 @@ namespace carto {
 // Finds the maze parts and installs the four hooks. Never throws. `ranges` are the exe's executable sections.
 void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count);
 
+// True once InstallMazeHooks reached the level build hook (0x3271c0), whether or not it went in: the outdoor build shares it, or stays off.
+auto MazeLevelBuildHookTried() -> bool;
+
 // True when every maze part is on and the hooks are in: a Cave or Crypt map can be opened.
 auto MazeSteeringLive() -> bool;
 
