@@ -114,7 +114,7 @@ The bosses a map can have. A map's `Boss` in `maps.txt` must name a row here by 
 these own entries, never a vanilla boss: a `Boss` that names a vanilla superunique (such as Bishibosh) or a vanilla
 monster, or a name that is not in this file, is refused at load (the report and the log say so) and that map opens
 without a Boss. Without this file no map has a Boss. `tools\install.ps1` writes one `superuniques.txt` row per entry,
-keyed `cartoboss:<Name>`, so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
+keyed `cartoboss:` plus the Name (non-letters and digits written as `_` and a hex code, like the text key), so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
 (the `Base` must be an ordinary monster in `monstats.txt`, never a vanilla boss such as `andariel`; each `Mods` id must
 be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
 rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
@@ -124,7 +124,7 @@ minions) and the log says which path was taken. The same happens for a second sp
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game.
+and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game. If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |
 |---|---|---|
