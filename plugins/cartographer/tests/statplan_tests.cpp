@@ -95,6 +95,17 @@ TEST_CASE("buildPlan splits by target and resolves ids")
 	CHECK(describe(plan) == "monsters: item_maxhp_percent(1)=+30, damagepercent(4)=+15; players: fireresist(2)=-20");
 }
 
+TEST_CASE("buildPlan keeps at most 16 player stats and says why")
+{
+	std::vector<Property> props;
+	for (int i = 0; i < 18; ++i) props.push_back({Target::Players, "strength", i + 1});
+	props.push_back({Target::Monsters, "strength", 5});
+	const Plan plan = buildPlan(props, testIds(), true);
+	CHECK(plan.players.size() == 16);
+	CHECK(plan.monsters.size() == 1);
+	CHECK(plan.skipped.size() == 2);
+}
+
 TEST_CASE("buildPlan skips what it cannot resolve, with a reason")
 {
 	const std::vector<Property> props = {

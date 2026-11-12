@@ -898,6 +898,10 @@ Result: Route A works for the player's own sheet in single player. Still not che
 
 **Dump scan for hard-coded states (review of PR #131, static).** Every `E8` call to `SetStateBit` `0x3354c0`, `StateOn` `0x3351b0`, `FindStateList` `0x2f5940`, `SetListState` `0x2f72f0`, `GetStateRow` `0x21b0c0` and `0x336280` in the dump (stamp `0x6ab3782c`) was taken with the last `mov edx, imm32` within 40 bytes before it. No call passes `0x27`, `0x74`, `0xe6` or `0xe7` to a state function; the known ones are found (`0x5c` at `0x448e4e`, `0x79` at `0x339e1e` and `0x339ded`). Four calls with `0x27` (`0x34a602`, `0x351443`, `0x3514a6`, `0x42f9c2`) go to `0x336280`, which bounds its argument to 1..`0x2a` and reads `[dt + idx*8 + 0x2c8]`, the per-flag bit arrays: its argument is a flag index and `0x27` is flag 39 `meleeonly`, not state 39. Limits: only about half of the call sites set `edx` by an immediate; `D2RCore.dll` is not in the dump; record-style callers (like `0x433d20` with `+0x6c = 0x38`) were not scanned. The run-time refusal rule stays the backstop.
 
+### Issue #104 closing note (2026-11-12, desk work)
+
+The issue's symptom (sheet unchanged) is fixed by Route A (PR #113, #131) and was seen working in game (second check above, PR #137): the stat list needs a state, because the game's sender ships a list only with its state. The one further change is the 16-entry cap (static, from the `0x2f64e0 ..., 0x10` call; the loader's replacement of that body was not read): `buildPlan` keeps at most 16 player stats and lists the rest as skipped, so the server totals and the sheet agree. Unit tested (`statplan_tests`), not seen in game. Still open and needing a game: a joining client, other clients in multiplayer, an autosave inside the map (the save writer confirmed to run with the list attached), death and curses with state 39, a second character. In-game check for the cap: a map with 17 Players rows, enter; the log plan shows 16 and one skipped line, and the sheet shows the first 16.
+
 ## 8. Outdoor builder engine checks (issue #83)
 
 Static answers for the twelve open questions of plan section 7 ("Still to check, in Ghidra or in game") of
