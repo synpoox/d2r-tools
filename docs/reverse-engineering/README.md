@@ -20,8 +20,8 @@ record them here first, then copy them there.
   and regen interception points.
 - [Player Bars](player-bars.md): life and mana reads, screen shift, orb widgets, native bars.
 - [DPS Counter](dps-counter.md): the server damage apply `0x44a9b0` (hooked) and the missile owner.
-- [Cartographer](cartographer.md): stub of native addresses from the pd2-resurrected research (maze steering, outdoor
-  builder, level regeneration); only the maze entries have byte signatures (checked statically; index rows below), the rest is unvalidated. Docs: [docs/cartographer/](../cartographer/README.md).
+- [Cartographer](cartographer.md): native addresses from the pd2-resurrected research (maze steering, outdoor builder, level regeneration, the map item and red portal);
+  the maze entries and the phase 1 portal parts have byte signatures (checked statically; index rows below), the rest is unvalidated. Docs: [docs/cartographer/](../cartographer/README.md).
 
 The pre-registry documents above (all except Quick NPC and the Cartographer stub) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
@@ -76,6 +76,10 @@ Plugins do not gate on this image: there is no version check, and addresses here
 | D2R.exe | `0x42e600` / `0x42e350` | Player regen tick (every frame; hpregen 74) / mana step (manarecovery 26); `0x42e350` hooked by Cartographer (PlayerTick), `0x42e600` hooked by Better Auras | [better-auras.md](better-auras.md#4-player-regen) |
 | D2R.exe | `0x3eb850` / `0x3eb960` / `0x3e9820` / `0x3e77a0` / `0x32c6a0` | Cartographer maze: entrance and exit placer / piece picker / ring grower / add-room / LvlMaze lookup; byte signatures, static only | [cartographer.md](cartographer.md#1a-maze-signatures-issue-29) |
 | D2R.exe | `0x360bb0` / `0x360520` / `0x360470` / `0x360c80` | Cartographer maze: link two rooms / overlap checks; byte signatures, static only | [cartographer.md](cartographer.md#1a-maze-signatures-issue-29) |
+| D2R.exe | `0x5817f0` / `0x581680` | Item spell check / use dispatchers `(game, player, item, target)`; Cartographer hooks (static, dump) | [cartographer.md](cartographer.md#3-phase-1-parts-the-map-item-and-the-red-portal-pluginscartographer-issue-20) |
+| D2R.exe | `0x314110` / `0x349860` / `0x34b440` / `0x2efc10` | Item record `(dataFlag, row)` / unit class `(unit, file, line)` / unit room `(unit)` / room level id `(room)` (static, dump) | [cartographer.md](cartographer.md#3-phase-1-parts-the-map-item-and-the-red-portal-pluginscartographer-issue-20) |
+| D2R.exe | `0x491960` / `0x5da800` / `0x5d88b0` | Client message `(player, 0x15, player)` / open red portal `(game, player, key, level, max)` / game counter `(game + 0x1aac8, &key) -> int*` (static, dump) | [cartographer.md](cartographer.md#3-phase-1-parts-the-map-item-and-the-red-portal-pluginscartographer-issue-20) |
+| D2R.exe | `0x2f5020` / `0x34a040` / `0x517f90` | Unit stat `(unit, stat, layer)`, a D2RLoader thunk / unit coords `(unit, int xy[2])` / find free spot (static, dump) | [cartographer.md](cartographer.md#3-phase-1-parts-the-map-item-and-the-red-portal-pluginscartographer-issue-20) |
 
 This table is an index. The feature documents hold the guards and evidence; an entry here is not enough to justify
 an unguarded hook.

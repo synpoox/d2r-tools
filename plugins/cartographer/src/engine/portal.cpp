@@ -1,5 +1,6 @@
 #include "portal.h"
 
+#include "core/part_signatures.h"
 #include "core/request.h"
 #include "core/sig.h"
 #include "core/text.h"
@@ -57,11 +58,11 @@ auto At(const void* base, int offset) noexcept -> T {
 }
 
 // One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte.
-// Only the two dispatchers' entry bytes are known so far (build 93847); the rest wait for a dump: the part table in
-// docs/reverse-engineering/cartographer.md says which, and signatures.txt can supply them without a rebuild.
+// The signatures are in core/part_signatures.h (build 93847); the part table in docs/reverse-engineering/cartographer.md
+// records each one, and signatures.txt can replace them without a rebuild.
 struct Part {
 	const char* name;
-	const char* signature;  // nullptr: none recorded yet
+	const char* signature;  // nullptr: none; only a signatures.txt line can then turn the part on
 	uint32_t hookSize;      // entry bytes copied for an inline hook; 0: only called
 	bool required;
 	const uint8_t* address;
@@ -72,18 +73,18 @@ struct Part {
 enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PlayerTick, PartCount };
 
 Part g_parts[PartCount] = {
-	{"ItemSpellCheck", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18", 15, true, nullptr, {}, {}},
-	{"ItemSpellUse", "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57", 14, true, nullptr, {}, {}},
-	{"ItemRecord", nullptr, 0, true, nullptr, {}, {}},
-	{"UnitClassOf", nullptr, 0, true, nullptr, {}, {}},
-	{"UnitRoom", nullptr, 0, true, nullptr, {}, {}},
-	{"RoomLevelId", nullptr, 0, true, nullptr, {}, {}},
-	{"ClientMessage", nullptr, 0, true, nullptr, {}, {}},
-	{"OpenRedPortal", nullptr, 0, true, nullptr, {}, {}},
-	{"GameCounter", nullptr, 0, true, nullptr, {}, {}},
-	{"UnitStat", nullptr, 0, true, nullptr, {}, {}},
-	{"UnitCoords", nullptr, 0, false, nullptr, {}, {}},
-	{"FindFreeSpot", nullptr, 0, false, nullptr, {}, {}},
+	{"ItemSpellCheck", sig::ItemSpellCheck, 15, true, nullptr, {}, {}},
+	{"ItemSpellUse", sig::ItemSpellUse, 14, true, nullptr, {}, {}},
+	{"ItemRecord", sig::ItemRecord, 0, true, nullptr, {}, {}},
+	{"UnitClassOf", sig::UnitClassOf, 0, true, nullptr, {}, {}},
+	{"UnitRoom", sig::UnitRoom, 0, true, nullptr, {}, {}},
+	{"RoomLevelId", sig::RoomLevelId, 0, true, nullptr, {}, {}},
+	{"ClientMessage", sig::ClientMessage, 0, true, nullptr, {}, {}},
+	{"OpenRedPortal", sig::OpenRedPortal, 0, true, nullptr, {}, {}},
+	{"GameCounter", sig::GameCounter, 0, true, nullptr, {}, {}},
+	{"UnitStat", sig::UnitStat, 0, true, nullptr, {}, {}},
+	{"UnitCoords", sig::UnitCoords, 0, false, nullptr, {}, {}},
+	{"FindFreeSpot", sig::FindFreeSpot, 0, false, nullptr, {}, {}},
 	// Not needed by the map item: only the console command waits on it. Build 93847: the player mana step
 	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer.md section 3).
 	{"PlayerTick",
@@ -104,6 +105,8 @@ const void* g_rollGame = nullptr;       // the game the map roll was seeded for
 std::atomic<bool> g_live{false};
 std::atomic<uint32_t> g_roll{0x9e3779b9u};
 const D2RL::PluginContext* g_context = nullptr;
+std::vector<SignatureOverride> g_overrides;  // kept for RescanPortal
+bool g_hooksIn = false;                      // both item hooks were installed at load; they pass through until g_live
 CheckFn g_checkOriginal = nullptr;
 UseFn g_useOriginal = nullptr;
 PlayerTickFn g_tickOriginal = nullptr;
@@ -283,6 +286,9 @@ auto PickMap(const Tables& tables, const std::string& code, const std::string& a
 // --- The hooks ---------------------------------------------------------------------------------------------------------
 
 auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept -> uint64_t {
+	if (!g_live.load()) {
+		return g_checkOriginal != nullptr ? g_checkOriginal(game, player, item, target) : 0;  // the portal is off: the game's own check
+	}
 	const uint8_t* record = nullptr;
 	const std::string code = game != nullptr && player != nullptr && item != nullptr ? CodeOf(game, item, &record) : std::string();
 	if (record == nullptr || At<int32_t>(record, RecordSpellOffset) != MapSpell) {
@@ -331,11 +337,17 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 }
 
 void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
+	if (!g_live.load()) {
+		if (g_useOriginal != nullptr) {
+			g_useOriginal(game, player, item, target);  // the portal is off: the game's own use
+		}
+		return;
+	}
 	const uint8_t* record = nullptr;
 	if (game != nullptr && player != nullptr && item != nullptr) {
 		(void)CodeOf(game, item, &record);
 	}
-	if (record == nullptr || At<int32_t>(record, RecordSpellOffset) != MapSpell || !g_live.load()) {
+	if (record == nullptr || At<int32_t>(record, RecordSpellOffset) != MapSpell) {
 		g_useOriginal(game, player, item, target);
 		return;
 	}
@@ -460,11 +472,6 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	if (part.address == nullptr) {
 		return;
 	}
-	if (!g_live) {
-		part.status.on = false;
-		part.status.detail = "off: the map item's parts are not all on";
-		return;
-	}
 	if (context->QueryService(&lifecycle) != D2RL::ServiceQueryResult::Success || lifecycle == nullptr ||
 	    !D2RL::HasLifecycleServiceField(lifecycle, D2RL::LifecycleServiceRequiredSize)) {
 		part.status.on = false;
@@ -506,6 +513,77 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 }
 
+// Finds one part by its signature (or the one from signatures.txt) and checks its guards; sets its address and status.
+void ResolvePart(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count, Part& part) {
+	part.status = {part.name, false, ""};
+	const char* signature = part.signature;
+	std::string overridden;
+	bool isOverride = false;
+	for (const SignatureOverride& o : overrides) {
+		if (EqualsNoCase(o.part, part.name)) {
+			overridden = o.signature;
+			signature = overridden.c_str();
+			isOverride = true;
+		}
+	}
+	if (signature == nullptr) {
+		part.status.detail = "off: no signature recorded for this part yet";
+	} else {
+		std::string why;
+		Pattern pattern{};
+		part.address = nullptr;
+		if (count == 0) {
+			why = "the game image could not be read";
+		} else {
+			part.address = FindUnique(ranges, count, signature, pattern, &why);
+		}
+		// A hooked part's signature must pin every byte the hook cuts (they are the guard), and a signature from
+		// signatures.txt is untrusted: it must also start at a function.
+		if (part.address != nullptr && part.hookSize > 0) {
+			bool concrete = pattern.size >= part.hookSize && part.hookSize <= sizeof(part.guard);
+			for (uint32_t i = 0; concrete && i < part.hookSize; ++i) {
+				concrete = !pattern.wild[i];
+			}
+			if (!concrete) {
+				why = "the signature must give at least " + std::to_string(part.hookSize) + " exact bytes (no ??) at the entry, because the hook cuts them";
+				part.address = nullptr;
+			} else {
+				std::memcpy(part.guard, pattern.bytes, part.hookSize);
+			}
+		}
+		// An override of a hooked part must keep the built-in entry bytes: the hook is written for that prologue.
+		if (part.address != nullptr && isOverride && part.hookSize > 0 && part.signature != nullptr) {
+			Pattern builtIn{};
+			if (!ParsePattern(part.signature, &builtIn) || builtIn.size < part.hookSize ||
+			    std::memcmp(builtIn.bytes, pattern.bytes, part.hookSize) != 0) {
+				why = "the signature from signatures.txt does not start with the built-in entry bytes this hook is written for";
+				part.address = nullptr;
+			}
+		}
+		// Only a hooked part must start at a .pdata function: a called-only part can be a leaf with no .pdata entry
+		// (RoomLevelId, 0x2efc10, is one), so it needs a unique match only.
+		if (part.address != nullptr && isOverride && part.hookSize > 0) {
+			bool known = false;
+			if (!IsFunctionEntry(context->exeBase, part.address, &known)) {
+				why = known ? "the signature from signatures.txt does not match at the start of a function"
+				            : "the game's exception directory is missing, so the signature from signatures.txt cannot be checked";
+				part.address = nullptr;
+			}
+		}
+		part.status.on = part.address != nullptr;
+		part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
+	}
+}
+
+auto RequiredPartsOn() noexcept -> bool {
+	for (const Part& part : g_parts) {
+		if (part.required && !part.status.on) {
+			return false;
+		}
+	}
+	return true;
+}
+
 }  // namespace
 
 auto RequestOpen(const std::string& name) -> OpenStart {
@@ -514,7 +592,7 @@ auto RequestOpen(const std::string& name) -> OpenStart {
 	if (map == nullptr) {
 		return OpenStart::NoSuchMap;
 	}
-	if (!g_consoleLive.load()) {
+	if (!g_consoleLive.load() || !g_live.load()) {
 		return OpenStart::Unavailable;
 	}
 	if (g_localPlayer.load() == NoPlayer) {
@@ -547,8 +625,37 @@ auto ArmMap(const std::string& name) -> bool {
 	return true;
 }
 
+
+auto RescanPortal() -> bool {
+	// The hooks are written at load only, never here. This looks again for the called parts (a part that was missing at
+	// load, such as D2RLoader's UnitStat thunk, may be there now) and turns the portal on when every required part is.
+	if (g_context == nullptr || g_live.load()) {
+		return g_live.load();
+	}
+	if (!g_hooksIn) {
+		plog::Warn("the item hooks were not installed at load: restart the game after fixing the parts that are off");
+		return false;
+	}
+	CodeRange ranges[8];
+	const int count = CodeRanges(g_context->exeBase, ranges, 8);
+	for (Part& part : g_parts) {
+		if (part.hookSize == 0) {  // the called parts only; a hooked part is settled at load
+			ResolvePart(g_context, g_overrides, ranges, count, part);
+		}
+	}
+	g_live = RequiredPartsOn();
+	for (const Part& part : g_parts) {
+		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
+	}
+	return g_live.load();
+}
+
 auto PortalLive() -> bool {
 	return g_live.load();
+}
+
+auto NeedsRestart() -> bool {
+	return !g_hooksIn;
 }
 
 auto PartStatuses() -> std::vector<PartStatus> {
@@ -561,85 +668,28 @@ auto PartStatuses() -> std::vector<PartStatus> {
 
 auto InstallPortal(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	g_context = context;
+	g_overrides = overrides;
 	CodeRange ranges[8];
 	const int count = CodeRanges(context->exeBase, ranges, 8);
-	bool allRequired = true;
 	for (Part& part : g_parts) {
-		part.status = {part.name, false, ""};
-		const char* signature = part.signature;
-		std::string overridden;
-		bool isOverride = false;
-		for (const SignatureOverride& o : overrides) {
-			if (EqualsNoCase(o.part, part.name)) {
-				overridden = o.signature;
-				signature = overridden.c_str();
-				isOverride = true;
-			}
-		}
-		if (signature == nullptr) {
-			part.status.detail = "off: no signature recorded for this part yet";
-		} else {
-			std::string why;
-			Pattern pattern{};
-			part.address = nullptr;
-			if (count == 0) {
-				why = "the game image could not be read";
-			} else {
-				part.address = FindUnique(ranges, count, signature, pattern, &why);
-			}
-			// A hooked part's signature must pin every byte the hook cuts (they are the guard), and a signature from
-			// signatures.txt is untrusted: it must also start at a function.
-			if (part.address != nullptr && part.hookSize > 0) {
-				bool concrete = pattern.size >= part.hookSize && part.hookSize <= sizeof(part.guard);
-				for (uint32_t i = 0; concrete && i < part.hookSize; ++i) {
-					concrete = !pattern.wild[i];
-				}
-				if (!concrete) {
-					why = "the signature must give at least " + std::to_string(part.hookSize) + " exact bytes (no ??) at the entry, because the hook cuts them";
-					part.address = nullptr;
-				} else {
-					std::memcpy(part.guard, pattern.bytes, part.hookSize);
-				}
-			}
-			// An override of a hooked part must keep the built-in entry bytes: the hook is written for that prologue.
-			if (part.address != nullptr && isOverride && part.hookSize > 0 && part.signature != nullptr) {
-				Pattern builtIn{};
-				if (!ParsePattern(part.signature, &builtIn) || builtIn.size < part.hookSize ||
-				    std::memcmp(builtIn.bytes, pattern.bytes, part.hookSize) != 0) {
-					why = "the signature from signatures.txt does not start with the built-in entry bytes this hook is written for";
-					part.address = nullptr;
-				}
-			}
-			// Only a hooked part must start at a .pdata function: a called-only part can be a leaf with no .pdata entry
-			// (RoomLevelId, 0x2efc10, is one), so it needs a unique match only.
-			if (part.address != nullptr && isOverride && part.hookSize > 0) {
-				bool known = false;
-				if (!IsFunctionEntry(context->exeBase, part.address, &known)) {
-					why = known ? "the signature from signatures.txt does not match at the start of a function"
-					            : "the game's exception directory is missing, so the signature from signatures.txt cannot be checked";
-					part.address = nullptr;
-				}
-			}
-			part.status.on = part.address != nullptr;
-			part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
-		}
-		if (part.required && !part.status.on) {
-			allRequired = false;
-		}
+		ResolvePart(context, overrides, ranges, count, part);
 	}
-	if (allRequired) {
-		const auto install = [&](PartId id, void* target, void** original) {
-			Part& part = g_parts[id];
-			const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
-			const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original) && *original != nullptr;
-			part.status.on = ok;
-			part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
-			return ok;
-		};
-		// The use hook goes in first and does nothing until g_live: no portal can open ungated.
-		g_live = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal)) &&
-		         install(ItemSpellCheck, reinterpret_cast<void*>(&SpellCheckHook), reinterpret_cast<void**>(&g_checkOriginal));
-	}
+	// Both item hooks go in now, once, whenever the two hooked parts were found: code is never written later. They pass
+	// straight through to the game until g_live, which needs every required part. The use hook goes in first.
+	const auto install = [&](PartId id, void* target, void** original) {
+		Part& part = g_parts[id];
+		if (!part.status.on) {
+			return false;
+		}
+		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+		const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original) && *original != nullptr;
+		part.status.on = ok;
+		part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
+		return ok;
+	};
+	g_hooksIn = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal)) &&
+	            install(ItemSpellCheck, reinterpret_cast<void*>(&SpellCheckHook), reinterpret_cast<void**>(&g_checkOriginal));
+	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");

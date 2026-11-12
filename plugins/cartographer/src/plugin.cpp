@@ -198,8 +198,9 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 	try {
 		if (carto::EqualsNoCase(verb, "check")) {
 			const Loaded loaded = Reload();
+			(void)carto::RescanPortal();
 			Say(command, std::string("Cartographer ") + PluginVersion + ": " + std::to_string(loaded.tables->maps.size()) + " map(s), " +
-			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : "off."));
+			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : carto::NeedsRestart() ? "off; a part it hooks was missing at load, so a restart is needed once it is fixed." : "off."));
 			int shown = 0;
 			for (const carto::Problem& p : loaded.report.problems) {
 				if (++shown > 10) {

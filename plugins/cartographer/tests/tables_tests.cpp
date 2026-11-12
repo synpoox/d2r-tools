@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "core/part_signatures.h"
 #include "core/request.h"
 #include "core/sig.h"
 #include "core/tables.h"
@@ -254,6 +255,17 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 	Pattern none{};
 	REQUIRE(ParsePattern("DE AD", &none));
 	CHECK(FindPattern(data, sizeof(data), none, &at) == 0);
+}
+
+TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
+	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
+	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot};
+	for (const char* text : all) {
+		Pattern p{};
+		INFO(text);
+		CHECK(ParsePattern(text, &p));
+		CHECK(p.size >= 24);  // a lower bound only: uniqueness in the game is shown by tools/check_portal_signatures.py
+	}
 }
 
 TEST_CASE("an open request is served once, in time, and expires when the game never serves it") {

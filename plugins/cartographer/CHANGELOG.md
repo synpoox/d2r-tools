@@ -9,3 +9,5 @@
 - Without a mod, no tables are read; only the built-in map and the default settings apply.
 - A `signatures.txt` entry that cannot be checked (wildcards where the game is patched, or not at the start of a function) is refused and logged.
 - The map item's name is Cartographer's own text, so the installer no longer edits your `item-names.json`.
+- Finds the engine parts the portal needs by byte signature (checked against game build 93847 only, not yet in game); the portal stays off if any part is not found exactly once.
+- `cartographer check` looks again for the engine parts the game calls and turns the portal on if all are now found; a part the plugin hooks has to be found at load, or the game must be restarted.
