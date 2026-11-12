@@ -55,9 +55,12 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
-   ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `levels.txt` and `lvlprest.txt`
-   (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no items. Running
-   it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
+   ("Cartographer Preset", a copy of Colossal Summit that keeps its name string, so a map portal's tooltip should read
+   "Colossal Summit" instead of "Missing String"; not yet checked in game) and its level preset to the mod's `levels.txt` and
+   `lvlprest.txt` (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no
+   items. Running it again changes nothing once the tables are up to date; over an older install it repairs the slot level's
+   name string. Players will likely also see "Colossal Summit" as the area name inside the map. D2RLoader compiles the
+   mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy of a
@@ -109,7 +112,7 @@ does not add the Maze level; add it by hand:
   Maze	139
   ```
 
-  Add the `Maze` row yourself with your new level's id. Running `tools\install.ps1` again keeps it: the installer only adds or
+  Add the `Maze` row yourself with your new level's id, and keep a `LevelName` that has a string (for example the copied level's) so a map portal's tooltip does not read "Missing String". Running `tools\install.ps1` again keeps it: the installer only adds or
   updates the `Preset` row and leaves every other row alone.
 - `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
   all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row. Cartographer
