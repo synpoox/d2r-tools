@@ -35,7 +35,7 @@ too and read `Zombie`, so the Boss was told from them by its name and its mods l
   (`g1-hover-d.png`). FAIL, same cause.
 - **`Gérard Östberg` (UTF-8 file, game 3, installer rerun, tables restaged)**: the panel read `Gérard Östberg` correctly
   (`g3-h4.png`). So the game draws these letters; what fails is the Latin-1 byte file. Whether the plugin or the file format is to
-  blame is not decided here (the docs do not say which encoding `bosses.txt` should have). Only the UTF-8 file's `Gérard Östberg` was
+  blame is not decided here (the docs do not say which encoding `bosses.txt` should have). Tracked in [#253](https://github.com/synpoox/d2r-tools/issues/253). Only the UTF-8 file's `Gérard Östberg` was
   hovered; `Röné, Jr.` was not tried in UTF-8.
 
 The spawn lines, from the kept plugin log (the `?` is a Latin-1 byte the log viewer does not decode):
@@ -79,7 +79,7 @@ was rewritten each time (timestamps 14:29:28 and 14:32:56). Reload: after game 2
 (`menu3.png`), up from level 1 at the start (the level-ups came from the kills), so the save kept the progress. Game 3 was left with
 the game stopped, not exited, so it has no save line.
 
-One other line in the loader log, once, at 14:25:54 (game 1, after the portal was entered, before any exit; not repeated in games 2 or 3):
+One other line in the loader log, at game 1's map entry (14:25:54) and game 3's (14:35:30, `g3-d2rloader.log` line 125); game 2 was clean ([#254](https://github.com/synpoox/d2r-tools/issues/254)):
 
     ASSERTION - a game check failed ... BC_ASSERT: i != dataTable->warpDefs.end() ... D2Common\src\DataTbls\LvlTbls.cpp:817
     "Error in DRLG related to stairs that connect levels"
