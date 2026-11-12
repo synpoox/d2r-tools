@@ -145,7 +145,7 @@ bool fixAfterWalk(const Plan &plan, int roomIndex);
 
 // --- the arrival room ---------------------------------------------------------------------------------------------
 
-// The game's level-entry finder (0x3da650; docs/reverse-engineering/cartographer.md section 5, "Arrival room: why the player
+// The game's level-entry finder (0x3da650; docs/reverse-engineering/cartographer/05-maze-slot.md, "Arrival room: why the player
 // arrives elsewhere") takes the first room of the level whose flags (room +0x50) hold any of kArrivalFlags. After the
 // build the hook gives the room in the middle of the plan's entrance cell these bits and clears them on every other room,
 // so the finder's first answer is the entrance whatever the tileset's own pieces carry.

@@ -3,7 +3,7 @@
 // player stats to a player while the player stands in the slot level (from the player tick the portal already hooks).
 // Every address is found by byte signature at load; a part that finds no single match, or whose guard does not match,
 // is logged and left off (a map then opens without that half of its stats). Nothing here is checked in a game yet; the
-// probe lines it logs ("statprobe:") are for the needs-game checks in docs/reverse-engineering/cartographer.md section 6.
+// probe lines it logs ("statprobe:") are for the needs-game checks in docs/reverse-engineering/cartographer/06-stats-events-checks.md.
 #pragma once
 
 #include "engine/portal.h"
@@ -30,7 +30,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 
 // The PlayerStats setting of cartographer.txt (off by default). While off, nothing is ever attached to the player: the
 // player's list sits on the unit and a Save and Exit or an autosave inside the map may happen before it comes off. Only
-// for a test slot until the save check in docs/reverse-engineering/cartographer.md section 7 has passed.
+// for a test slot until the save check in docs/reverse-engineering/cartographer/07-map-stats-parts.md has passed.
 void StatApplySetPlayerStats(bool on) noexcept;
 
 // Called from the portal's player tick hook (game thread), after the game's own tick. `game` and `unit` are the tick's.

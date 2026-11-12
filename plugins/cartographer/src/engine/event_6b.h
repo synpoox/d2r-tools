@@ -9,7 +9,7 @@
 // Every address is found by byte signature at load (0x402f50 as the call target inside the SpawnObject handler); a part that does not
 // match is left off and logged, the rest keep working, and the event is simply not announced (Shrine) or has no extra drop (Boss).
 // Nothing here is checked in a game yet; the "eventprobe:" lines it logs are for the needs-game checks in
-// docs/reverse-engineering/cartographer.md section 13. State is cleared when the game is left.
+// docs/reverse-engineering/cartographer/13-ambush-treasure-shrine.md. State is cleared when the game is left.
 #pragma once
 
 #include "engine/portal.h"

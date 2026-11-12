@@ -2,7 +2,7 @@
 // headers. The game reads three text keys from the slot level's row in its levels table (LevelName at +0xfd and
 // LevelEntry at +0x14d, each a char[40]); the plugin registers one text per map under its own string namespace and, when a
 // map opens, writes the map's two keys into those fields, then puts the originals back. Notes:
-// docs/reverse-engineering/cartographer.md section 10.
+// docs/reverse-engineering/cartographer/10-portal-tooltip.md.
 #pragma once
 
 #include <cstddef>

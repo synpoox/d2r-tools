@@ -76,7 +76,7 @@ struct BossDef {
 };
 
 // The most entries bosses.txt may have. The game keeps a once-per-game "already spawned" bit per superuniques row in a bitmap of
-// unknown length (docs/reverse-engineering/cartographer.md), so the number of added rows is kept small.
+// unknown length (docs/reverse-engineering/cartographer/01-addresses.md), so the number of added rows is kept small.
 inline constexpr size_t MaxBosses = 16;
 
 // The superuniques.txt key of the entry called `name`: BossKeyPrefix plus EscapeKeyBytes(name), ASCII only (install.ps1 Get-BossEscaped).

@@ -3,7 +3,7 @@
 // the random one. Only the Maze slot level is touched; every other level runs the game's own code. All four hooks go in
 // at load and pass straight through until every part is on; a part that is missing or refused turns only the maze steering
 // off (every other level keeps working). If the plan cannot be built or the engine refuses a step, that build falls back to
-// the game's own maze with the reason logged. Notes: docs/reverse-engineering/cartographer.md sections 1, 1a and 5.
+// the game's own maze with the reason logged. Notes: docs/reverse-engineering/cartographer.md (index): sections 1, 1a and 5.
 #pragma once
 
 #include "portal.h"

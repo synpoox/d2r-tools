@@ -28,7 +28,7 @@ namespace {
 namespace co = cartographer::outdoor;
 
 // --- Engine facts. Offsets are into D2R's own structures (build 93847); each is recorded with its evidence in
-// docs/reverse-engineering/cartographer.md sections 1, 4, 8 and 8a. The functions are found by signature, never by address.
+// docs/reverse-engineering/cartographer.md (index): sections 1, 4, 8 and 8a. The functions are found by signature, never by address.
 constexpr int LvlType = 0x00;         // int32: 1 maze, 2 preset, 3 outdoor
 constexpr int LvlRoomCount = 0x08;    // int32
 constexpr int LvlFirstRoom = 0x10;    // room*: the newest room, next at RoomNext

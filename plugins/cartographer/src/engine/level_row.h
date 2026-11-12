@@ -5,7 +5,7 @@
 // on leaving the game, on unload and when the portal does not open; the record belongs to the game, so a failed open puts it back
 // and leaving the game only forgets it. `Champions` has no field and is not applied. Only a slot level (above the last vanilla level)
 // is ever written. Each part is switched off with a log line when its memory does not look as described. Written, not verified in a
-// game. Notes: docs/reverse-engineering/cartographer.md section 15; pure part: src/levelrow.
+// game. Notes: docs/reverse-engineering/cartographer/15-map-monster-columns.md; pure part: src/levelrow.
 #pragma once
 
 #include "core/tables.h"

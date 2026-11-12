@@ -386,7 +386,7 @@ TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
 
 namespace {
 
-// A states table whose rows are all empty as the compiler stores them (cartographer.md section 7): the lookups overlay1-4, castoverlay,
+// A states table whose rows are all empty as the compiler stores them (cartographer/07-map-stats-parts.md): the lookups overlay1-4, castoverlay,
 // removerlay, pgsvoverlay, stat, cltevent, skill and missile are 0xffff, itemtrans is the byte 0xff, the rest is 0 (also setfunc/remfunc).
 std::vector<uint8_t> emptyStates(uint32_t count)
 {

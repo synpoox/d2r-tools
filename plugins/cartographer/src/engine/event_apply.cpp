@@ -29,7 +29,7 @@ namespace {
 namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
-// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 9.
+// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/09-map-events.md.
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
@@ -210,7 +210,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no overlay", lines.size());
 }
 
-// --- Spawn names from the game's loaded tables (cartographer.md section 11) -----------------------------------------------
+// --- Spawn names from the game's loaded tables (cartographer/11-spawn-names.md) -----------------------------------------------
 // Monstats `Id`: the SDK table, scanned. Superuniques: the game's own name map, called (never cached), only after a self-check
 // has shown that the SDK views are the game's tables for the unit's data flag and that the monstats map maps every Id back to its
 // row. A route that fails its check is off for that (table view revision, data flag) and the mod's .txt files are used instead.

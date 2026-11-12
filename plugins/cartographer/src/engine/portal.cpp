@@ -30,7 +30,7 @@ namespace carto {
 namespace {
 
 // --- Engine facts. Offsets are into D2R's own structures (build 93847); each one is recorded with its evidence in
-// docs/reverse-engineering/cartographer.md. The functions are found by signature, never by address.
+// docs/reverse-engineering/cartographer.md (the index). The functions are found by signature, never by address.
 constexpr int GameDifficultyOffset = 0x104;  // uint8: 0 Normal, 1 Nightmare, 2 Hell
 constexpr int GameDataFlagOffset = 0x106;    // uint8: the first argument of the item record lookup
 constexpr int GameCountersOffset = 0x1aac8;  // per-game counters (key -> int)
@@ -79,7 +79,7 @@ Part g_parts[PartCount] = {
 	{"UnitCoords", sig::UnitCoords, 0, false, nullptr, {}, {}},
 	{"FindFreeSpot", sig::FindFreeSpot, 0, false, nullptr, {}, {}},
 	// Not needed by the map item: only the console command waits on it. Build 93847: the player mana step
-	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer.md section 3).
+	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer/03-phase1-parts.md).
 	{"PlayerTick", sig::PlayerTick, 14, false, nullptr, {}, {}},
 };
 

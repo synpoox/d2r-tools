@@ -5,7 +5,7 @@ Usage: python -I plugins/cartographer/tools/check_maze_signatures.py <image> [--
 <image> is the running game image written in memory layout (section file offset == RVA), as made by d2rAI-toolkit's
 tools/dump_image.py. The packed D2R.exe on disk will not work: its code is encrypted.
 
-For each maze function (docs/reverse-engineering/cartographer.md, "1a. Maze signatures") it checks that the signature
+For each maze function (docs/reverse-engineering/cartographer/01a-maze-signatures.md, "1a. Maze signatures") it checks that the signature
 matches exactly once in the executable sections (VirtualSize of each, as the runtime scanner of scrollable-waypoints
 does), that the match resolves to the recorded RVA, and that the guard (the whole signature compared under its mask at
 the recorded RVA, which is what a hook checks before it patches) holds there. Where the signature reaches the end of
@@ -49,7 +49,7 @@ SIGNATURES = [
 # Where an image byte past the end of a signature is checked: part name -> the instruction boundaries (bytes from the entry) of the
 # prologue up to the first relative operand, from the same disassembly. The outdoor rows were produced with capstone on the build 93847 dump
 # (x86-64, Cs(CS_ARCH_X86, CS_MODE_64), md.disasm(code_at_rva, rva)): the offsets of the instructions from the entry, stopping at the first
-# call, jmp or jcc with a relative operand (docs/reverse-engineering/cartographer.md section 8a). A hook length must be one of these and not above the max patch.
+# call, jmp or jcc with a relative operand (docs/reverse-engineering/cartographer/08a-outdoor-build-hook.md). A hook length must be one of these and not above the max patch.
 BOUNDARIES = {
     "LevelBuild": [5, 6, 8, 10, 14, 21, 24, 28, 34, 41, 48],
     "OutdoorEntry": [5, 6, 7, 8, 9, 11, 13, 15, 19, 23, 25, 28, 32, 39, 43, 46, 47, 50, 53, 56, 63, 67, 68, 71, 73, 75, 78, 81, 88, 90],

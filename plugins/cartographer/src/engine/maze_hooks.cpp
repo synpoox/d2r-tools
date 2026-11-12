@@ -30,7 +30,7 @@ namespace {
 namespace cm = cartographer::maze;
 
 // --- Engine facts. Offsets are into D2R's own structures (build 93847); each is recorded with its evidence in
-// docs/reverse-engineering/cartographer.md sections 1, 1a and 5. The functions are found by signature, never by address.
+// docs/reverse-engineering/cartographer.md (index): sections 1, 1a and 5. The functions are found by signature, never by address.
 constexpr int LvlType = 0x00;         // int32: 1 maze, 2 preset, 3 outdoor
 constexpr int LvlRoomCount = 0x08;    // int32
 constexpr int LvlFirstRoom = 0x10;    // room*: the newest room (0x360ba0 adds at the head), next at RoomNext
@@ -421,7 +421,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 // The plan's event room and boss room: the rect of the built DRLG room in each plan cell, which the event spawn compares with the room the
 // game populates. ctx.rooms[plan room] is the walk's record of that room, but once the build splits the cell that record is stale: it is
 // the cell's top-left 8 x 8 room, or no room at all (freed memory, read as (1,0) 0 x 0; issue #184, static from the dump plus the
-// hell-check-2 log, see section 9 of cartographer.md). So each room is matched by rect in the level's list against its plan cell, as
+// hell-check-2 log, see docs/reverse-engineering/cartographer/09-map-events.md). So each room is matched by rect in the level's list against its plan cell, as
 // the arrival is. A room that cannot be found is refused here with the reason: the event then falls back to the distance rule and
 // the map Boss is left off.
 void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
@@ -728,7 +728,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		} else {
 			const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
 			// The size goes in before the original runs (the first room is centred in it and the span checks read it), and
-			// never the origin: a world lookup can reach this level from elsewhere (docs/reverse-engineering/cartographer.md Q2).
+			// never the origin: a world lookup can reach this level from elsewhere (docs/reverse-engineering/cartographer/05-maze-slot.md Q2).
 			Write<int32_t>(level, LvlSizeX, plan.levelTilesX);
 			Write<int32_t>(level, LvlSizeY, plan.levelTilesY);
 			Write<const int32_t*>(level, LvlMazeRow, ctx.prep.row);
