@@ -638,6 +638,67 @@ TEST_CASE("mapevents.txt: Waves is only read on Ambush rows; a number beyond int
 	CHECK(report.problems[1].text.find("not a whole number") == std::string::npos);
 }
 
+TEST_CASE("a value cut to int32 gets a suffix naming what was typed; the message is not changed") {
+	Report stats;
+	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tfireresist\t1\t3\t99999999999\n", stats);
+	REQUIRE(!stats.problems.empty());
+	CHECK_MESSAGE(stats.problems[0].text.find("Weight 2147483647 is above") != std::string::npos, stats.problems[0].text);
+	CHECK_MESSAGE(stats.problems[0].text.find("(you typed 99999999999)") != std::string::npos, stats.problems[0].text);
+
+	Report events;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nBig\tHorde\tzombie1\t3000000000\n", events);
+	REQUIRE(events.Errors() == 1);
+	CHECK_MESSAGE(events.problems[0].text.find("has Count 2147483647.") != std::string::npos, events.problems[0].text);
+	CHECK_MESSAGE(events.problems[0].text.find("(you typed 3000000000)") != std::string::npos, events.problems[0].text);
+}
+
+TEST_CASE("no suffix for a value that was not cut, or an empty Weight") {
+	Report events;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nCount 0\tHorde\tzombie1\t+0\n", events);
+	REQUIRE(events.Errors() == 1);
+	CHECK_MESSAGE(events.problems[0].text.find("you typed") == std::string::npos, events.problems[0].text);
+	CHECK_MESSAGE(events.problems[0].text.find("'Count 0'") != std::string::npos, events.problems[0].text);
+
+	Report stats;
+	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tWeight 1\t5\t3\t\n", stats);
+	for (const Problem& p : stats.problems) {
+		CHECK_MESSAGE(p.text.find("you typed") == std::string::npos, p.text);
+	}
+}
+
+TEST_CASE("the suffix names only the label the message is about; a Name is kept as typed") {
+	Report a;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\tWeight\nWeight 2147483647\tHorde\tzombie1\t0\t99999999999\n", a);
+	REQUIRE(a.Errors() == 1);
+	CHECK_MESSAGE(a.problems[0].text.find("'Weight 2147483647' has Count 0.") != std::string::npos, a.problems[0].text);
+	CHECK_MESSAGE(a.problems[0].text.find("you typed") == std::string::npos, a.problems[0].text);
+
+	Report b;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nCount 2147483647\tBogus\tzombie1\t3000000000\n", b);
+	REQUIRE(b.Errors() == 1);
+	CHECK_MESSAGE(b.problems[0].text.find("'Count 2147483647' has Kind 'Bogus'") != std::string::npos, b.problems[0].text);
+	CHECK_MESSAGE(b.problems[0].text.find("you typed") == std::string::npos, b.problems[0].text);
+}
+
+TEST_CASE("a repeated unknown column is reported once") {
+	const GameNames names;
+	Report report;
+	LoadMaps("Name\tTileset\tShape\tItem\tColour\tcolour\nA\tPreset\tCorridor\tt20\t\t\n", names, report, nullptr);
+	int unused = 0;
+	for (const Problem& p : report.problems) {
+		unused += p.text.find("is not used") != std::string::npos ? 1 : 0;
+	}
+	CHECK(unused == 1);
+
+	Report stats;
+	LoadMapStats("Target\tStat\tMin\tMax\tfoo\tfoo\n", stats);
+	int statsUnused = 0;
+	for (const Problem& p : stats.problems) {
+		statsUnused += p.text.find("is not used") != std::string::npos ? 1 : 0;
+	}
+	CHECK(statsUnused == 1);
+}
+
 TEST_CASE("no notice when core-maps is not loaded") {
 	CHECK(carto::CoreMapsNotice(false).empty());
 }
