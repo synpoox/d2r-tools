@@ -20,7 +20,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Outdoor map rooms** (`OutdoorBuild`, off, not checked in game): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
   placement are experimental).
-- **Map names** (off by default, experimental): `MapNames=1` shows a map's own name on its portal, automap and entry banner.
+- **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
 - **Multiplayer sync** (experimental): when the host opens a map, TCP/IP clients are told which map it is. Not on Battle.net.
 - **Console**: `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map's portal
   in town without its item.
@@ -81,7 +81,7 @@ in [`examples/first-map/`](examples/first-map/).
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
 | PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
-| MapNames | `1` shows a map's own name on the portal, automap and banner (experimental) | 0 |
+| MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |

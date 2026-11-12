@@ -831,6 +831,13 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(settings.town == "Harrogath");
 }
 
+TEST_CASE("MapNames is on unless cartographer.txt turns it off") {
+	Report none;
+	CHECK(LoadSettings("Setting\tValue\n", none).mapNames == 1);
+	Report off;
+	CHECK(LoadSettings("Setting\tValue\nMapNames\t0\n", off).mapNames == 0);
+}
+
 TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats and mapevents") {
 	Report report;
 	const cartographer::layout::ShapeTable shapes = LoadShapes(ExampleFile("shapes.txt"), report);

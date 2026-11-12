@@ -155,7 +155,7 @@ Global settings. `Properties` and `PlayerStats` are used when a map opens (not y
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player. **Use `1` only on a test slot** until the in-game save check has passed (see below); `0` or `1` | 0 | 0 |
-| `MapNames` | `1` shows a map's own name on its portal tooltip, the automap title and the entry banner (experimental); `0` or `1` | 0 | 1 |
+| `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the entry banner (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 
