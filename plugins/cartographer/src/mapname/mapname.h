@@ -45,7 +45,7 @@ auto StringsJson(const std::vector<std::string>& names) -> std::string;
 // plugin registers a text for BossLocalKey(name) in its string namespace, so the game shows the bosses.txt Name. Both sides build the
 // key from the entry's Name as written (trimmed), so the key is stable and a removed entry takes its key with it. The key is ASCII only:
 // "boss_" then each byte of the Name, kept when it is A-Z a-z 0-9 and otherwise written as '_' and two uppercase hex digits
-// ("Shoreline Warden" -> "boss_Shoreline_20Warden"). install.ps1 (BossLocalKey) does the same.
+// ("Shoreline Warden" -> "boss_Shoreline_20Warden"). install.ps1 (Get-BossLocalKey, built on Get-BossEscaped) does the same.
 auto BossLocalKey(const std::string& name) -> std::string;
 auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::string;
 
