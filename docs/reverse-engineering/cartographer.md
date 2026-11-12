@@ -975,3 +975,70 @@ exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5d
 3. Is the slot row writable? Write a different key at `+0xfd` and re-hover.
 4. What does the owner suffix `" (%s)"` look like in single player (the `0x8d4b0` global decides whether it is appended)? Compare a stock portal tooltip with a hooked one.
 5. Does the text cache between two maps? Open two different maps in a row.
+
+## 11. Event Spawn names from the game's compiled tables (issue #95)
+
+**Status:** static research only, from the build 93847 dump; **nothing was run in a game and no code was changed**. Context: section 9 resolves an event's `Spawn` against the mod's `monstats.txt` `Id` and `superuniques.txt` `Superunique` columns (`ReadSpawnNames`, `plugins/cartographer/src/plugin.cpp`); issue #95 asks whether the game's own loaded tables can do it, so a mod that ships those tables in another form (or none) still resolves. Labels: **static** is read from the dump; **inference** is reasoned from it; **needs game** is a check to run.
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer event `Spawn` resolution (a future change to `ReadSpawnNames`) |
+| Module | `D2R.exe` |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the dump `D2RLoader_6ab3782c_dump.exe` |
+| Location | Data tables base `0x300a90(dataFlag)` (cl, below 4). MonStats row getter `0x976e0 (dataFlag, index)`, SuperUniques row getter `0x397220 (dataFlag, index)`. Name to row lookup `0xa121f0 (map, name, logOnMiss) -> row, negative on a miss`. Engine resolvers `0x3a9050 (dataFlag, name, out)` and `0x3a9150`. Table fields (with `dt` the base): `dt+0xf58` monstats row vector (count at `+0xf60`, row size `0x1fc`), `dt+0xf70` monstats name map pointer, `dt+0x1078` superuniques row vector (count at `+0x1080`, row size `0x3c`), `dt+0x1090` superuniques name map pointer; also `dt+0xf90` monsounds and `dt+0xfd0` monplace maps |
+| Which hook | None. The route is reading rows (SDK) and, for superuniques, one call-only lookup |
+| Guard | Masked prefixes below, each unique by `pat`. `0x976e0` is hookable (15-byte cut, no relative operand) and `0x300a90` hookable (16 bytes); `0x397220` (relative `call` inside the first 14 bytes), `0xa121f0` (`mov rax,[rip+..]` at +12) and `0x3a9050` / `0x3a9150` (`je rel32` at +3) are call-only |
+| Contract | See Q1 to Q4 |
+| Evidence | `dump_dis.py ... dis` of the getters, of the monstats and superuniques table loaders (found by their unique stores of the row size, `0x1fc` and `0x3c`, to `[rsp+0x28]`) and of the resolvers; `pat` for every prefix |
+| Validation | Static only. **Not run in a game** |
+| Failure mode | If a guard does not match, or the startup self-check of Q4 fails, keep the `.txt` route of section 9 as it is today |
+| Coexistence | No hooks. A call-only use of `0xa121f0` reads a hash map on the game thread |
+
+Masked prefixes (all checked unique on the dump with `pat`; `??` is a relative or absolute operand):
+
+| Address | Role | Prefix | Class |
+|---|---|---|---|
+| `0x976e0` | MonStats row getter | `48 89 5C 24 08 48 89 74 24 20 57 48 83 EC 30 48 63 F2 E8 ?? ?? ?? ?? 48 8B F8 48 8B DE 85 F6 78 09 48 3B 98 60 0F 00 00 72 18` (the shorter form up to `48 8B F8` matches 14 sites) | hookable |
+| `0x397220` | SuperUniques row getter | `40 53 48 83 EC 30 48 63 DA E8 ?? ?? ?? ?? 48 8B CB 48 3B 98 80 10 00 00` | call-only |
+| `0xa121f0` | name to row lookup | `40 55 56 57 41 54 48 8B EC 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E8 44 89 45 AC` | call-only |
+| `0x3a9050` | by-name resolver (MonPreset `Place`) | `4D 85 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24 10 57 48 83 EC 20 33 C0 41 C6 40 01 00 66 41 89 40 02` | call-only |
+| `0x3a9150` | by-name resolver (MonPet `monster`) | `4D 85 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 40 49 63 D9 49 8B F0` | call-only |
+| `0x300a90` | data tables base `(dataFlag)` | `48 83 EC 28 0F B6 C1 48 89 44 24 38 48 83 F8 04 72 19 48 8D 44 24 38 48 8D 4C 24 40 48 89 44 24 40 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 44 24 38 48 8D 0D ?? ?? ?? ?? 48 03 C0 48 8B 04 C1 48 83 C4 28 C3` (three sibling accessors share the first 40 bytes; the tail tells them apart) | hookable |
+
+### Q1. Compiled monstats record: where is the `Id`, and how does the game look a row up by `Id`?
+
+- **Row and getter (static).** `0x976e0` calls `0x300a90`, compares the index with the count at `dt+0xf60`, and returns `[dt+0xf58] + index * 0x1fc`.
+- **The `Id` text is stored inline in the row (static plus inference).** The loader describes its columns in 0x20-byte entries `{name, type, size, row offset, extra}`. The `Id` entry has type `0x13` and size `0x2f`, and `extra` is the name map at `dt+0xf70`. Reading: a 47-character key plus the terminator, in a 48-byte field at row `+0`. The type, the size and the offset are static; that type `0x13` means "inline key text" is **inference** (it fits the toolkit's `knowledge/tables.md` note of a 47-character `Id` key, and the flag bytes at `+0x3c/+0x3e/+0x3f` in `monster-count-addresses.md`, which sit just after it). No hash or string-table index of the `Id` is stored in the row.
+- **Lookup by name (static).** The loader fills a case-insensitive hash map (compares go through a lower-case table) at `*(dt+0xf70)`, `Id` to row index. `0xa121f0(rcx = map, rdx = name, r8d = logOnMiss)` returns the row index in `eax`, negative on a miss (every caller does `test eax,eax; js`). A null name returns the map's default (`[map+0x3c]`). The same function serves monsounds (`dt+0xf90`), superuniques (`dt+0x1090`) and monplace (`dt+0xfd0`).
+- **The engine's own by-name users (static).** `0x3a9050` (MonPreset `Place`) and `0x3a9150` (MonPet `monster`) call `0xa121f0` for superuniques, then monstats, then (`0x3a9050` only) monplace, and store a kind (2, 1, 0) and the row in a small out record. They are load-time callbacks and log on a miss, so they are not proposed. I did not find the cheat or console `mspawn` resolver in `D2R.exe` (the toolkit's `cheat-commands.md` says the same); it is probably in D2RCore (inference).
+- **Needs game:** that the map is still alive after the load (the lookup is called outside the loader). Inference for "yes": `0x3a9050` reads `*(dt+0xf70)` and asserts when it is null.
+
+### Q2. The same for superuniques (`Name` key, `Class` field)
+
+- **Row and getter (static).** `0x397220` returns `[dt+0x1078] + index * 0x3c`, with a null return for an index past the count at `+0x1080`.
+- **The `Superunique` key is not in the row (static).** The loader marks the key column type `0x11` (size 0, lookup only) and registers it into the map at `*(dt+0x1090)`; the row has no key text. So the name cannot be found by reading rows: only through the map with `0xa121f0`, or from the txt file.
+- **Fields in the row (static, from the loader and two consumers).** `Name` is a string-table index, a `u16` at `+2` (descriptor type `0x18`, through the string-table callback `0x308be0`). `Class` is at `+8`, resolved at load through the monstats map into a monstats row index (inference for the exact width; the consumers of `+8` treat it as a monstats row). The `u16` at `+0` is unproven (inference: the row's own id).
+- **Lookup by name (static).** `0xa121f0(*(dt+0x1090), name, 0)`, as in Q1.
+
+### Q3. Does the SDK `DataTableService` give enough, the row count plus a raw row pointer, to read those fields without engine calls?
+
+- **MonStats: yes.** `getTable(TableId::MonStats)` (22) gives `{rows, rowCount, rowSize}`. Check `rowSize == 0x1fc` (the header says to check it before casting), then compare the 48-byte inline `Id` at row `+0` with the name, case-insensitively, over `rowCount` rows. No engine call. **Inference:** the SDK's `rows` is the same vector as `dt+0xf58`; the rowSize check is the guard. A linear scan once per map open is cheap.
+- **SuperUniques: not for the name.** `getTable(TableId::SuperUniques)` (28) gives `0x3c`-byte rows, but the key is not in them (Q2). Once the row is known they give `Class` (`+8`) and `Name` (`+2`). `findRowById` supports neither table (`data_tables.h`).
+- Rows are read-only, game-thread-only and expire on the next table load (the header's contract), which suits a once-per-map-open read.
+
+### Q4. The safest route, and its guard
+
+- **Recommendation (inference).** Keep the section 9 `.txt` route as the fallback and put the game's tables first:
+  1. **Monstats `Id`:** the SDK table (no engine call, no signature), guarded by `rowSize == 0x1fc` and non-null `rows` for a non-zero count.
+  2. **Superuniques `Name`:** one call-only lookup, `0xa121f0(*(dt+0x1090), name, 0)` with `dt = 0x300a90(dataFlag)`, found by the unique prefixes above. It needs two struct offsets, so it is guarded by the self-check below. If the SDK later offers a name lookup for these tables, use that instead.
+  3. **Class and display name:** after the row is known, read `Class` (`+8`) and `Name` (`+2`) from the SDK rows (`rowSize == 0x3c`).
+- **Startup self-check (the guard that matters).** Before trusting `0xa121f0`, look up every monstats row's own `Id` through `*(dt+0xf70)` and require the returned index to equal the row's index (duplicates in different case aside). A mismatch or a null map turns the superunique route off and logs why. This proves the calling convention and the `dt` offsets on the running build, and the monstats side is read independently through the SDK. Do not call `0x3a9050` / `0x3a9150` (they log on a miss and are load-time callbacks) or the row getters (the SDK already gives the rows).
+- **No hook is needed.** All calls are on the game thread at map open, where the plugin already runs.
+
+### Needs game
+
+1. Does `*(dt+0xf70)` resolve a stock `Id` to its row index at map open (the self-check), and `*(dt+0x1090)` a stock superunique name? Log the index and compare with the SDK row.
+2. Is the miss value negative at runtime, with `logOnMiss = 0` printing nothing?
+3. Does the 48-byte `Id` at monstats row `+0` match `monstats.txt` for a mod that renames monsters, and is `Class` at superuniques `+8` a monstats row index (compare with the txt's `Class`)?
+4. What is the `u16` at superuniques row `+0`?
