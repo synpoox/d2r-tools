@@ -30,7 +30,7 @@ from the loaded image and logged by the outdoor spike at load (section 4). Coexi
 | RVA | Role (per the plans) | Evidence pointer |
 |---|---|---|
 | `0x3271c0` | Level build `(dataFlag, level)`: reseeds `+0x1e4`, dispatches on level `+0x00` (type 3 goes to the D2RCore stub), runs the tail. Signed; hooked and replaced for the slot level in the spike (§4) | outdoor plan §2; §4 |
-| `0x3e96d0` | Maze random walk `(level)`: adds rooms until the room count is reached. Replaced for the map level. Signature recorded in section 1a; hooked by Cartographer (not run in game) | drlg-steering.md; steer-proto |
+| `0x3e96d0` | Maze random walk `(level)`: adds rooms until the room count is reached. Replaced for the map level. Signature recorded in section 1a; hooked by Cartographer (run in game 2026-11-12, section 5) | drlg-steering.md; steer-proto |
 | `0x3eb850` | Maze entrance and exit placer `(level, int[4], int*)`. Steered | drlg-steering.md; steer-proto |
 | `0x3eb960` | Maze piece picker `(room, clearFixed)`: piece = tileset base + exit mask (base hardcoded). Planned hook for the piece set | drlg-steering.md section 2.3; steer-proto |
 | `0x3e9820` | Maze ring grower. No-op in the planned steering for more tilesets | drlg-steering.md |
@@ -99,7 +99,7 @@ Two more rows, for the hooks of `plugins/cartographer/src/engine/maze_hooks.cpp`
 | `0x3271c0` | Level build (writes the slot level's size, then runs the original) | `48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2` | 14 / 48 |
 | `0x3e96d0` | Maze walk (steered for the slot level) | `48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18` | 18 / 50 |
 
-Hook cuts (whole instructions, all exact bytes): `0x3271c0` 14, `0x3e96d0` 18, `0x3eb850` 17, `0x3e9820` 14. Cartographer hooks these four (written, not run in game).
+Hook cuts (whole instructions, all exact bytes): `0x3271c0` 14, `0x3e96d0` 18, `0x3eb850` 17, `0x3e9820` 14. Cartographer hooks these four (run in game 2026-11-12, section 5).
 
 **One hook on `0x3271c0`, two users.** The outdoor builder plan also needs the level build. The loader refuses a second `InstallInlineHook` on the same entry (its guard no longer matches), so the outdoor work must not install its own: it will share this one hook, which dispatches by level (the maze slot to the maze code, the outdoor slot to the outdoor code, every other level to the original). The rows `0x3e77a0`,
 `0x360bb0` and `0x3eb960` are only called. All seven must be found or the maze steering stays off (fail open, logged per part).
@@ -375,7 +375,7 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 | Guard | The section 1a rows keep their signatures. The functions in the table below are unsigned, read-only evidence, except `0x3271c0`, which is already signed in sections 1 and 4 (its row is listed for the masked prefix only). Section 1a repeats the same function's first 24 bytes as the maze hooks' own signature (`sig::LevelBuild`): it is the same prefix as section 4's, not a different one, kept so the maze parts check themselves without the portal parts. The others were followed from signed functions or from the level build `0x3271c0`. The masked prefix shown for each matched exactly once across `.text`, `.maho`, `.koishi` and `.btext` of the dump (relative displacements and RIP-relative operands masked), so it can become a signature later; none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
 | Contract | See the answers below |
 | Evidence | Disassembly (Capstone) of the functions named, over the dump (the Ghidra decompile was only a reading aid and is not needed). Reproduce a listing with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]`, and a prefix match with `... pat "<hex with ??>"` (read-only; refuses a different stamp; needs `capstone`). Example: `dis 0x32751e 3` shows `mov rdx, rbx / movzx ecx, r12b / call 0x3271c0` |
-| Validation | Static only. No game. The hooks built on it are written but not run in a game. Not checked on Steam build 94995 |
+| Validation | Static, then the guided maze hooks were run in game on build 93847 on 2026-11-12 ("Game checks of 2026-11-12" below; probe lines `[maze probe]`, 46 consecutive clean games). Not checked on Steam build 94995 |
 | Failure mode | Fail open: a hook built on this leaves the maze off if a signature or guard does not match, as in section 1a |
 | Coexistence | No new patch is proposed on this page |
 
@@ -431,16 +431,46 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 
 ### Status after issue #78
 
-The maze steering hooks now depend on these answers; none is game-validated yet (the code logs the reason and falls back to
+The maze steering hooks now depend on these answers; game-validated on 2026-11-12 (next subsection) (the code logs the reason and falls back to
 the game's own maze when a step fails): the size written at `+0x2c/+0x30` in the `0x3271c0` hook before the original (Q4), the
 slot row's declared rect as the lookup rect (Q2), the suppressed second `0x3eb850` call and the rotation counter kept in 0..3
-(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Also unverified: whether `0x3271c0` runs
+(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Checked in game on 2026-11-12 (next subsection): whether `0x3271c0` runs
 before the plan exists, whether the add-room checks (`0x360c80`) reject adjacent but unlinked plan cells, whether the piece
 struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for every room. `MazeProbe=1` logs the data to check.
 
+### Game checks of 2026-11-12 (issues #78 and #62)
+
+Run in a test slot (D2R build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty,
+Barbarian; the character was often killed on arrival by Dark Rangers, which does not matter for the build).The mod's tables were brought to a clean Cartographer state first: vanilla `levels.txt`, `lvlprest.txt`, `lvlmaze.txt`
+and `misc.txt` (five map item rows), then `tools\install.ps1`, then one Cave level added by hand (level 139, DrlgType 1, LevelType 3,
+Act 5, 360 x 360 in all three columns, Depend 0, Position 0, OffsetX 6000, OffsetY 0, `lvlmaze.txt` row `Cartographer Maze 139 4 4 4 24 24 500`),`slots.txt` `Maze 139`, `MazeProbe 1`. `maps.txt` had `CaveCorridor` (Small), `CaveWinding` (Medium), `CaveLoop`
+(Large) and `CryptBranching` (Medium, the wrong tileset on purpose). Levels: **live** = seen in the running game through the
+`[maze probe]` log lines; **static** = read only; **not done**.
+
+Probe facts the numbers rely on: one plan cell is `roomTiles` (Cave 24) tiles and becomes 3 x 3 engine rooms of 8 x 8, so a plan of
+N cells gives 9 N engine rooms. The new probe lines print the built and the planned room grid one character per plan cell, the
+engine's room sizes, and how many piece structs the rooms have.
+
+| # | Check | Level | Result |
+|---|---|---|---|
+| 1 | Probe: slot rect and levels, room count and box, `rot` after each `0x3eb850` call, map in the planned shape | live | Slot rect `139:(6000,0)+(360,360)` clear of the other seven levels of the act. Built room grid equals the planned grid for `CaveCorridor` (5 x 5 box, 9 cells), `CaveWinding` (9 x 7, 26 cells) and `CaveLoop` (10 x 6, 28 cells): 81, 234 and 252 rooms, all 8 x 8, none outside the grid. `rot` after every call stayed in 0..3 (`3 -> 3`, `3 -> 0`; `2 -> 3`, `3 -> 0`; `3 -> 1`, `1 -> 2`). The character stood on the map level and walked (a Cave map). **Not usable: arrival versus entrance room.** The arrival probe reads a room at (0,0) of size 0 x 0 (the player's room is a client room, not a DRLG room), and the entrance is counted once per sub-room (9 entrance rooms for one entrance cell), so the "entrance known" test (exactly one) never holds. Probe limits, not engine findings |
+| 2 | Does `0x3271c0` run for the slot before a map job exists, is the slot left usable | live | Not on its own: with a map opened the first call for the slot comes at the open (rooms 0 before it), and again on entering after the teardown with the same plan and seed. With no map opened (`cheat goto 139,...` straight from town) the hook ran for the slot, logged "building the game's own maze: no maze map was opened in this game", and the character stood in a normal Cave level. So a lazy build without a job is possible and is handled |
+| 3 | Add-room checks (`0x360c80`) reject adjacent but unlinked cells | live, partly | Every built grid equals the planned grid cell for cell, no room was added or moved (252 = 28 x 9 for the Loop, 234 = 26 x 9, 81 = 9 x 9), for shapes whose planned cells touch without a link (the Loop and the Winding). The probe does not print piece masks, so a rejected candidate is not logged on its own; this is the evidence that no unlinked neighbour was added |
+| 4 | Piece struct per room; `clearFixed` | live | Per room: 81 of 81, 234 of 234 and 252 of 252 rooms have their own piece struct (no two rooms share one). After the build no room has the Fixed flag set (0 of 252). `clearFixed=1` was not observed as a call argument; the 0 Fixed rooms are the evidence it holds |
+| 5 | The suppressed Down call builds cleanly | live | Yes, in every game: the second `0x3eb850` call is answered by the hook, the build ends "built as planned (N rooms, ...)" with no crash_guard entry and no new crash file (the crash-report folder stayed at the 6 files it had before the run) |
+| 6 | Level `+0x2c/+0x30` and private row writes accepted; 360 x 360 accepted | live | Yes. 360 x 360 in all three columns is accepted at load and allocation; the hook wrote the plan size (for example 216 x 216, 264 x 168), the level rect then read back as the plan size and the walk finished; the private row behind `+0x18` was accepted |
+| 7 | A mismatched tileset, then reopen in the same game | live | `CryptBranching` on the Cave slot: the load gives a warning (the map is listed with a problem); `cartographer open CryptBranching` refuses with "the Maze slot level is a Cave level (LevelType 3), so it cannot build the Crypt map" and no portal; repeating the open is refused the same way; after a Cave map had been built, opening another map in the same game is refused ("already built ... Leave the game and start a new one") |
+| 8 | Forced plan failure falls back to the game's maze | live | Slot rect set to 60 x 60 (all three columns), `CaveLoop` opened: log "building the game's own maze: Cave levels hold at most 1 by 1 rooms, which is too small for this shape. Use a smaller size or a simpler shape."; the portal opened, the character entered a Cave level, no crash, no new crash file |
+| 9 | Leave the game, new game: the maze map opens again | live | Yes, at every one of the games below: Save and Exit, new game, a map opened and built with the new seed and plan (also a different map each time, because the previous plan does not carry over) |
+| 10 | The 50-games check | live, 46 of 50 games run | 46 consecutive games in one session, one per game: Save and Exit (or die and Continue), start a new game, `cartographer open <Name>` cycling `CaveCorridor`, `CaveWinding`, `CaveLoop` (16, 15 and 15 games), enter the portal. Every game: "built as planned", the built grid equal to the planned grid, no crash-report file, no error line in `cartographer.log`. A few earlier games with the same checks, from a first version of the script that failed to leave the game every other time, are not counted. Each game was judged from the log (`built as planned`, grids equal, crash folder), not from a screenshot |
+
+Not covered by these runs: a Crypt slot (the slot was Cave; the Crypt refusal was exercised only as the tileset mismatch), Hell or
+Nightmare difficulty, a TCP/IP client, the slot with an engine-side Fixed flag (none was set), and the arrival room (see 1).
+Frames per second and load time were not measured.
+
 ### Left for the game
 
-See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size.
+See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Items 1 to 3 were settled in game on 2026-11-12 (above); the arrival room of item 3 is not (probe limit, check 1).
 
 1. The whole game accepting a 360 x 360 maze level (Q1, size and lopsided checks).
 2. The origin being clear of every other level's rect, including outdoor levels (Q2 log).

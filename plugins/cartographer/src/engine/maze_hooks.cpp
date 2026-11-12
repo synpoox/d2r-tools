@@ -212,6 +212,95 @@ void ProbeLevelList(const void* level) noexcept {
 	plog::Info("[maze probe] level list: %d levels", count);
 }
 
+// The engine's rooms and the plan's cells as two character grids (one character per plan room, '#' room, 'E' entrance), so the
+// built shape can be compared with the planned one by eye, and the engine's room sizes (is a room the plan's room size?).
+void ProbeShape(const void* level, const cm::Tileset& ts, const cm::Plan& plan, const char* when, int32_t minX, int32_t minY) noexcept {
+	constexpr int GridMax = 40;
+	const int unit = ts.roomTiles > 0 ? ts.roomTiles : 24;
+	char built[GridMax][GridMax + 1] = {};
+	char planned[GridMax][GridMax + 1] = {};
+	for (int y = 0; y < GridMax; ++y) {
+		std::memset(built[y], '.', GridMax);
+		std::memset(planned[y], '.', GridMax);
+	}
+	int sizes[4][3] = {};  // distinct (w, h) and how many rooms have it
+	int distinct = 0, outside = 0, withPiece = 0, count = 0, fixedRooms = 0, sharedPieces = 0;
+	const void* seenPiece[MaxRooms] = {};
+	int seenCount = 0;
+	const void* room = Read<const void*>(level, LvlFirstRoom);
+	for (; room != nullptr && count < MaxRooms && Readable(room, 0x98); room = Read<const void*>(room, RoomNext), ++count) {
+		const int32_t w = Read<int32_t>(room, RoomW), h = Read<int32_t>(room, RoomH);
+		int k = 0;
+		while (k < distinct && !(sizes[k][0] == w && sizes[k][1] == h)) {
+			++k;
+		}
+		if (k == distinct && distinct < 4) {
+			sizes[distinct][0] = w;
+			sizes[distinct][1] = h;
+			++distinct;
+		}
+		if (k < distinct) {
+			++sizes[k][2];
+		}
+		const int cx = (Read<int32_t>(room, RoomX) - minX) / unit, cy = (Read<int32_t>(room, RoomY) - minY) / unit;
+		const void* piece = Read<const void*>(room, RoomPiece);
+		withPiece += piece != nullptr ? 1 : 0;
+		if (piece != nullptr) {
+			fixedRooms += (Read<uint32_t>(piece, PieceFlags) & PieceFixed) != 0 ? 1 : 0;
+			bool seen = false;
+			for (int q = 0; q < seenCount && !seen; ++q) {
+				seen = seenPiece[q] == piece;
+			}
+			if (seen) {
+				++sharedPieces;
+			} else if (seenCount < MaxRooms) {
+				seenPiece[seenCount++] = piece;
+			}
+		}
+		if (cx < 0 || cy < 0 || cx >= GridMax || cy >= GridMax) {
+			++outside;
+			continue;
+		}
+		built[cy][cx] = piece != nullptr && cm::isPrevPiece(ts, Read<int32_t>(piece, PieceId)) ? 'E' : (built[cy][cx] == 'E' ? 'E' : '#');
+	}
+	int pMinX = 1 << 30, pMinY = 1 << 30;
+	for (const cm::Room& r : plan.rooms) {
+		pMinX = std::min(pMinX, r.dx);
+		pMinY = std::min(pMinY, r.dy);
+	}
+	for (size_t i = 0; i < plan.rooms.size(); ++i) {
+		const int cx = plan.rooms[i].dx - pMinX, cy = plan.rooms[i].dy - pMinY;
+		if (cx >= 0 && cy >= 0 && cx < GridMax && cy < GridMax) {
+			planned[cy][cx] = static_cast<int>(i) == plan.entrance.room && plan.entrance.place ? 'E' : '#';
+		}
+	}
+	char sz[160];
+	size_t used = 0;
+	sz[0] = '\0';
+	for (int k = 0; k < distinct && used + 40 < sizeof(sz); ++k) {
+		const int n = std::snprintf(sz + used, sizeof(sz) - used, " %dx%d:%d", sizes[k][0], sizes[k][1], sizes[k][2]);
+		used += n > 0 ? static_cast<size_t>(n) : 0;
+	}
+	plog::Info("[maze probe] %s: room sizes (w x h : rooms)%s; rooms with a piece %d (distinct piece structs %d, rooms sharing one %d, Fixed flag set on %d), outside the grid %d; one character below = %d tiles", when, sz, withPiece, seenCount, sharedPieces, fixedRooms, outside, unit);
+	for (int pass = 0; pass < 2; ++pass) {
+		char (*grid)[GridMax + 1] = pass == 0 ? built : planned;
+		int rows = 0, cols = 0;
+		for (int y = 0; y < GridMax; ++y) {
+			for (int x = 0; x < GridMax; ++x) {
+				if (grid[y][x] != '.') {
+					rows = std::max(rows, y + 1);
+					cols = std::max(cols, x + 1);
+				}
+			}
+		}
+		plog::Info("[maze probe] %s: %s grid %d x %d", when, pass == 0 ? "built" : "planned", cols, rows);
+		for (int y = 0; y < rows; ++y) {
+			grid[y][cols] = '\0';
+			plog::Info("[maze probe] %s: %s %s", when, pass == 0 ? "built  " : "planned", grid[y]);
+		}
+	}
+}
+
 // The rooms the walk made: how many, their bounding box, and the entrance room (a Prev piece).
 void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, const char* when) noexcept {
 	const void* room = Read<const void*>(level, LvlFirstRoom);
@@ -249,6 +338,7 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 	           Read<int32_t>(level, LvlRoomCount), static_cast<int>(plan.rooms.size()), minX, minY, maxX, maxY, maxX - minX, maxY - minY, entrances, entX, entY);
 	plog::Info("[maze probe] %s: level rect now origin (%d,%d) size (%d,%d); the plan asked for %d x %d", when, Read<int32_t>(level, LvlOriginX), Read<int32_t>(level, LvlOriginY),
 	           Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY), plan.levelTilesX, plan.levelTilesY);
+	ProbeShape(level, ts, plan, when, minX, minY);
 }
 
 // The plan's event room: the rect of its DRLG room, which the event spawn compares with the room the game populates.
