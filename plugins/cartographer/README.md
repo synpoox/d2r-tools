@@ -82,7 +82,9 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, and the plugin builds that level from the map's layout
 instead of the game's random maze. **One Maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
 or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
-try to open it (and named in `cartographer check` and the report); it never opens a vanilla maze instead. `tools\install.ps1`
+try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
+refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1`
 does not add the Maze level; add it by hand:
 
 - `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer creates

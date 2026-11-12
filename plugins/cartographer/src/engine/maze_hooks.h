@@ -38,8 +38,8 @@ void MazeGameLeft();
 // The local player's room was seen in the Maze slot level (probe logging only; does nothing unless MazeProbe is on).
 void MazeProbeArrival(void* room, int32_t levelId);
 
-// True when the Maze slot level has been built in this game: it is not rebuilt, so another map cannot be opened through it
-// until the game is left.
+// True while a slot build is running, or once one ran for an opened map in this game; no map is opened through the slot then
+// (the level can be torn down and rebuilt, so a later open could mix plans) until the game is left.
 auto MazeSlotBuilt() -> bool;
 
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.

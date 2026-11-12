@@ -3,6 +3,7 @@
 // below is covered by tests/maze_tests.cpp.
 #pragma once
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -40,6 +41,29 @@ public:
 
 private:
 	std::map<int, Size> sizes_;
+};
+
+// Whether a map can still be opened through the Maze slot. A build that ran while a map was open (a job existed) uses the slot
+// up for the game; a build that ran with no map open (the game's lazy world lookup) does not, and neither refuses a later
+// open on its own; a build still in progress refuses an open for as long as it runs. Cleared when the game is left.
+class SlotBuildState {
+public:
+	void begin() { ++building_; }
+	void end(bool hadJob)
+	{
+		if (hadJob) built_ = true;
+		--building_;
+	}
+	bool blocked() const { return built_.load() || building_.load() > 0; }
+	void clear()
+	{
+		built_ = false;
+		building_ = 0;
+	}
+
+private:
+	std::atomic<bool> built_{false};
+	std::atomic<int> building_{0};
 };
 
 // Empty when a Maze slot level of `slotLevelType` (levels.txt LevelType: 3 Cave, 4 Crypt, -1 unknown) can build a map on

@@ -880,6 +880,21 @@ TEST_CASE("declared sizes: the first size seen in a game is the limit, whatever 
 	CHECK(d.record(200, 96, 96).x == 96);
 }
 
+TEST_CASE("slot build state: only a build with a map open uses the slot up, and a running build blocks an open")
+{
+	SlotBuildState st;
+	CHECK(!st.blocked());
+	st.begin();  // a build with no map open (lazy world lookup)
+	CHECK(st.blocked());
+	st.end(false);
+	CHECK(!st.blocked());
+	st.begin();  // a build for an opened map
+	st.end(true);
+	CHECK(st.blocked());
+	st.clear();
+	CHECK(!st.blocked());
+}
+
 TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English")
 {
 	Tileset cave, crypt;

@@ -80,7 +80,7 @@ RingFn g_ringOriginal = nullptr;
 std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevel{-1};
 std::atomic<bool> g_probe{false};
-std::atomic<bool> g_slotBuilt{false};  // the slot level was built in this game (cleared on GameLeft)
+cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
 
 // The map that was opened, and the plan for it. Guarded by g_lock.
 struct Job {
@@ -305,8 +305,11 @@ void Fallback(BuildCtx& ctx, const std::string& why) noexcept {
 	ctx.steer = false;
 	ctx.fellBack = true;
 	RestoreSlot(ctx.level, ctx.orig);
-	if (ctx.why.empty()) {
-		ctx.why = why;
+	try {
+		if (ctx.why.empty()) {
+			ctx.why = why;
+		}
+	} catch (...) {  // out of memory: the fall back still happens; only the reason is lost from the summary
 	}
 	plog::Warn("maze slot level %d: falling back to the game's own maze build: %s", ctx.level != nullptr ? Read<int32_t>(ctx.level, LvlId) : -1, why.c_str());
 }
@@ -375,7 +378,10 @@ void WalkHook(void* level) noexcept {
 	try {
 		done = SteeredWalk(level, *ctx, &why);
 	} catch (...) {
-		why = "an exception while building the rooms";
+		try {
+			why = "an exception while building the rooms";
+		} catch (...) {  // out of memory: Fallback logs an empty reason
+		}
 	}
 	if (!done) {
 		Fallback(*ctx, why);
@@ -405,7 +411,16 @@ void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
 			groupPtr = &group;
 		}
 	}
-	const cm::SpecialAnswer answer = cm::answerSpecial(ctx->prep.plan->tileset, plan, ctx->special, groupPtr, before);
+	cm::SpecialAnswer answer;
+	try {
+		answer = cm::answerSpecial(ctx->prep.plan->tileset, plan, ctx->special, groupPtr, before);
+	} catch (...) {  // out of memory while writing the fault text: stop steering, the game's walk finishes
+		ctx->steer = false;
+		ctx->fellBack = true;
+		RestoreSlot(level, ctx->orig);
+		g_specialOriginal(level, entry, rot);
+		return;
+	}
 	switch (answer.kind) {
 	case cm::SpecialAnswer::Kind::Original:
 		g_specialOriginal(level, entry, rot);
@@ -422,10 +437,14 @@ void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
 		break;
 	}
 	if (g_probe.load()) {
+		char index[16] = "";
+		if (answer.kind == cm::SpecialAnswer::Kind::Redirect) {
+			std::snprintf(index, sizeof(index), "%d", answer.index);
+		}
 		const char* what = answer.kind == cm::SpecialAnswer::Kind::Original ? "passed" : answer.kind == cm::SpecialAnswer::Kind::Redirect ? "redirected" : "suppressed";
 		plog::Info("[maze probe] special-room call %s: entry {%d,%d,%d,%d} rot %u -> %u%s%s", what, entry != nullptr ? entry[0] : -1, entry != nullptr ? entry[1] : -1,
 		           entry != nullptr ? entry[2] : -1, entry != nullptr ? entry[3] : -1, before, rot != nullptr ? *rot : 0xffffffffu,
-		           answer.kind == cm::SpecialAnswer::Kind::Redirect ? ", plan entry index " : "", answer.kind == cm::SpecialAnswer::Kind::Redirect ? std::to_string(answer.index).c_str() : "");
+		           answer.kind == cm::SpecialAnswer::Kind::Redirect ? ", plan entry index " : "", index);
 	}
 }
 
@@ -458,21 +477,26 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	BuildCtx ctx;
 	ctx.level = level;
 	const int id = Read<int32_t>(level, LvlId);
+	if (Read<int32_t>(level, LvlType) != MazeType) {
+		// Not a maze level (levels.txt DrlgType must be 1): nothing of ours is recorded or written to it.
+		plog::Warn("maze slot level %d: not a maze level (levels.txt DrlgType must be 1); building the game's own level", id);
+		return g_levelOriginal(dataFlag, level);
+	}
 	ProbeLevel(level, "before the slot build");
 	ProbeLevelList(level);
+	bool hadJob = false;
 	try {
 		{
 			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
 			std::lock_guard<std::mutex> lock(g_lock);
+			hadJob = g_job != nullptr;
 			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
 			ctx.orig.sizeX = size.x;
 			ctx.orig.sizeY = size.y;
 			ctx.orig.row = g_ownRows.emplace(id, Read<const int32_t*>(level, LvlMazeRow)).first->second;
 		}
 		std::string why;
-		if (Read<int32_t>(level, LvlType) != MazeType) {
-			why = "the Maze slot level is not a maze level (levels.txt DrlgType must be 1)";
-		} else if (const std::optional<Prepared> prep = Prepare(level, ctx.orig.sizeX, ctx.orig.sizeY, &why)) {
+		if (const std::optional<Prepared> prep = Prepare(level, ctx.orig.sizeX, ctx.orig.sizeY, &why)) {
 			ctx.prep = *prep;
 			if (!prep->plan->steer) {
 				why = prep->plan->reason;
@@ -500,13 +524,15 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		}
 	} catch (...) {
 		ctx.steer = false;
+		RestoreSlot(level, ctx.orig);  // a no-op until the declared size was recorded
 		plog::Error("maze slot level %d: an exception while preparing the plan; building the game's own maze", id);
 	}
 	BuildCtx* previous = t_ctx;
 	t_ctx = ctx.steer ? &ctx : nullptr;
+	g_slotState.begin();
 	const uint64_t result = g_levelOriginal(dataFlag, level);
+	g_slotState.end(hadJob);
 	t_ctx = previous;
-	g_slotBuilt = true;
 	if (ctx.steer) {
 		try {
 			const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
@@ -575,13 +601,13 @@ void MazeGameLeft() {
 	g_cache = {};
 	g_declared.clear();
 	g_ownRows.clear();
-	g_slotBuilt = false;
+	g_slotState.clear();
 	g_entrance = {};
 	g_arrivalLogged = false;
 }
 
 auto MazeSlotBuilt() -> bool {
-	return g_slotBuilt.load();
+	return g_slotState.blocked();
 }
 
 auto MazeArrivalPending() -> bool {

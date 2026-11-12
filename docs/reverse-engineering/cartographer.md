@@ -59,7 +59,7 @@ running image), not game.
 | Field | Record |
 |---|---|
 | Date | 2026-11-11 |
-| Consumer | Cartographer guided maze (plan section 5, phase 3); no hook exists yet |
+| Consumer | Cartographer guided maze (plan section 5, phase 3); hooked in `plugins/cartographer/src/engine/maze_hooks.cpp` (issue #78) |
 | Module | `D2R.exe` |
 | Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, under D2RLoader 1.3.1; read from a memory-layout image of the running D2RLoader process (see Evidence), SHA-256 not recorded |
 | Location | Function entry RVAs in the table; every signature starts at the entry (offset 0), so signature match address = function RVA |
@@ -313,14 +313,14 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 | Field | Record |
 |---|---|
 | Date | 2026-11-12 |
-| Consumer | Cartographer guided maze hook (plan section 5, phase 3b); no hook exists yet |
+| Consumer | Cartographer guided maze hook (plan section 5, phase 3b); hooked in `plugins/cartographer/src/engine/maze_hooks.cpp` (issue #78) |
 | Module | `D2R.exe` |
 | Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the same memory-layout dump as section 1a (`D2RLoader_6ab3782c_dump.exe`) |
 | Location | RVAs in the table below. Offsets are the DRLG level record (one per level per act; list head at `drlg+0x868`, next at level `+0x1b8`): `+0x00` DRLG type (1 maze, 2 preset, 3 outdoor), `+0x08` room count, `+0x10` first room, `+0x18` LvlMaze row, `+0x24/+0x28` origin x/y (tiles), `+0x2c/+0x30` width/height (tiles), `+0x1f8` level id. Room: `+0x48` next, `+0x50` flags, `+0x60/+0x64` x/y, `+0x68/+0x6c` w/h |
 | Guard | The section 1a rows keep their signatures. The functions in the table below are unsigned, read-only evidence, except `0x3271c0`, which is already signed in sections 1 and 4 (its row is listed for the masked prefix only). Section 1a repeats the same function's first 24 bytes as the maze hooks' own signature (`sig::LevelBuild`): it is the same prefix as section 4's, not a different one, kept so the maze parts check themselves without the portal parts. The others were followed from signed functions or from the level build `0x3271c0`. The masked prefix shown for each matched exactly once across `.text`, `.maho`, `.koishi` and `.btext` of the dump (relative displacements and RIP-relative operands masked), so it can become a signature later; none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
 | Contract | See the answers below |
 | Evidence | Disassembly (Capstone) of the functions named, over the dump (the Ghidra decompile was only a reading aid and is not needed). Reproduce a listing with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]`, and a prefix match with `... pat "<hex with ??>"` (read-only; refuses a different stamp; needs `capstone`). Example: `dis 0x32751e 3` shows `mov rdx, rbx / movzx ecx, r12b / call 0x3271c0` |
-| Validation | Static only. No game, no hook. Not checked on Steam build 94995 |
+| Validation | Static only. No game. The hooks built on it are written but not run in a game. Not checked on Steam build 94995 |
 | Failure mode | Fail open: a hook built on this leaves the maze off if a signature or guard does not match, as in section 1a |
 | Coexistence | No new patch is proposed on this page |
 
@@ -379,7 +379,7 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 The maze steering hooks now depend on these answers; none is game-validated yet (the code logs the reason and falls back to
 the game's own maze when a step fails): the size written at `+0x2c/+0x30` in the `0x3271c0` hook before the original (Q4), the
 slot row's declared rect as the lookup rect (Q2), the suppressed second `0x3eb850` call and the rotation counter kept in 0..3
-(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk is the vanilla one. Also unverified: whether `0x3271c0` runs
+(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Also unverified: whether `0x3271c0` runs
 before the plan exists, whether the add-room checks (`0x360c80`) reject adjacent but unlinked plan cells, whether the piece
 struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for every room. `MazeProbe=1` logs the data to check.
 
