@@ -10,7 +10,10 @@ For each part (docs/reverse-engineering/cartographer.md, section 3) it checks th
 in the executable sections (VirtualSize of each, as the plugin's scanner does), that the match resolves to the recorded
 RVA, that the whole signature under its mask holds at that RVA (the guard), and that the recorded max patch length ends
 where the signature says: the byte there starts the first relative branch, call or RIP-relative instruction. For the two
-hooked parts it also checks that the hook size (bytes copied for the inline hook) fits in the max patch length. Exit status
+hooked parts it also checks that the hook size (bytes copied for the inline hook) fits in the max patch length. The
+max patch length of a part that is only called is informational (never patched) and printed as n/a. Finally it checks
+that OpenRedPortal contains calls (E8) to the matched GameCounter, which ties GameCounter's one unmasked displacement to
+the right copy. Exit status
 0 only if every row passes. On a new build, a row that prints "no match", "N matches" or another RVA needs its signature
 or RVA re-derived and the recording updated (docs/reverse-engineering/RVA-AND-INTERCEPTION-WORKFLOW.md). The sibling
 check_maze_signatures.py (maze parts) works the same way.
@@ -75,6 +78,23 @@ def sections(img):
     return stamp, out
 
 
+def check_counter_calls(img, found):
+    """OpenRedPortal calls GameCounter (at +0x5e and +0x13e in build 93847); report the E8 call sites that reach it."""
+    portal, counter = found.get("OpenRedPortal"), found.get("GameCounter")
+    if portal is None or counter is None:
+        print("OpenRedPortal -> GameCounter: not checked (a part did not resolve)")
+        return 1
+    sites = []
+    for off in range(0, 0x200):
+        if img[portal + off] == 0xE8:
+            target = portal + off + 5 + struct.unpack_from("<i", img, portal + off + 1)[0]
+            if target == counter:
+                sites.append(off)
+    ok = len(sites) >= 2
+    print(f"OpenRedPortal -> GameCounter: E8 calls at {', '.join('+0x%x' % o for o in sites) or 'none'}: {'ok' if ok else 'fewer than two'}")
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("image")
@@ -90,6 +110,7 @@ def main():
     code = [(n, va, sz) for (n, va, sz, fl) in secs if fl & IMAGE_SCN_MEM_EXECUTE and sz > 0]
     print("executable sections: " + ", ".join(f"{n}@0x{va:x}+0x{sz:x}" for n, va, sz in code))
     bad = 0
+    found = {}
     for name, rva, maxpatch, stop, hook in PARTS:
         if name not in sigs:
             print(f"{name:15} no signature in part_signatures.h")
@@ -121,9 +142,13 @@ def main():
             status = f"hook size {hook} exceeds max patch {maxpatch}"
         if status != "ok":
             bad += 1
-        print(f"{name:15} 0x{rva:06x}  sig {len(toks)} bytes ({toks.count('??')} masked), max patch {maxpatch}"
+        else:
+            found[name] = rva
+        shown = str(maxpatch) if hook else "n/a (called)"
+        print(f"{name:15} 0x{rva:06x}  sig {len(toks)} bytes ({toks.count('??')} masked), max patch {shown}"
               f"{', hook ' + str(hook) if hook else ''}: {status}"
               + (f" ({', '.join(hex(h) for h in hits[:4])})" if hits and status != "ok" else ""))
+    bad += check_counter_calls(img, found)
     print("all signatures ok" if not bad else f"{bad} signature(s) failed")
     return 1 if bad else 0
 

@@ -256,14 +256,14 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 	CHECK(FindPattern(data, sizeof(data), none, &at) == 0);
 }
 
-TEST_CASE("signatures: every recorded part signature parses and is long enough to be unique") {
+TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);
 		CHECK(ParsePattern(text, &p));
-		CHECK(p.size >= 24);  // shorter prefixes match more than once in the game's code
+		CHECK(p.size >= 24);  // a lower bound only: uniqueness in the game is shown by tools/check_portal_signatures.py
 	}
 }
 

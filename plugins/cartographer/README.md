@@ -69,6 +69,7 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - The installer on a copy of the vanilla 93847 tables, run twice.
 - The portal parts' byte signatures, each unique and resolving to its recorded address in a dump of build 93847
   (`python -I plugins\cartographer\tools\check_portal_signatures.py <dump>`; static, no game).
-- Not yet: installed into a game, or opened in game.
-- Not yet: installed into a game, or opened in game. Game check: the item name key `cartographer:CartographerMap` is 28 characters;
+- Not yet: installed into a game, or opened in game. Game checks: all twelve parts found at load, `UnitStat` in particular (it is
+  D2RLoader's thunk and must be in place when Cartographer loads; if it is not, `cartographer check` looks again for parts that
+  were missing and installs the hooks if all are now found); the item name key `cartographer:CartographerMap` is 28 characters;
   if `misc.txt` `namestr` has a fixed length, confirm the name is not cut off.

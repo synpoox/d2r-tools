@@ -10,3 +10,4 @@
 - A `signatures.txt` entry that cannot be checked (wildcards where the game is patched, or not at the start of a function) is refused and logged.
 - The map item's name is Cartographer's own text, so the installer no longer edits your `item-names.json`.
 - Finds the engine parts the portal needs by byte signature (checked against game build 93847 only, not yet in game); the portal stays off if any part is not found exactly once.
+- `cartographer check` looks again for engine parts that were missing at load and turns the portal on if all are now found.
