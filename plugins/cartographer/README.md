@@ -41,8 +41,9 @@ in [`examples/first-map/`](examples/first-map/).
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the map level and the `Preset` slot to the mod's
-   tables (backing up each file once as `.bak`) and adds no items. Running it again is safe. If the mod ships its own
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
+   tables (backing up each file once as `.bak`) and adds no items. The level is a Cave by default; add
+   `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
    of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
@@ -58,8 +59,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset`, `Cave` or `Crypt`; other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` (not used by `Preset`) | required |
+| Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
@@ -82,8 +83,9 @@ in [`examples/first-map/`](examples/first-map/).
 
 ### Optional files
 
-These files sit beside `maps.txt`, are tab separated with a header row, and can be left out. A bad row is skipped and
-named in `cartographer-report.txt`. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
+These files sit beside `maps.txt` and are tab separated with a header row. `slots.txt` is required, but the installer
+writes it; the others can be left out. A bad row is skipped and named in `cartographer-report.txt`, except in
+`signatures.txt`, where a bad row is skipped silently and shows only as that engine part being off. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
 
 #### mapstats.txt
 
@@ -133,20 +135,21 @@ that cannot be built is skipped.
 | MinBranchLen, MaxBranchLen | Rooms in one side room | the base shape's |
 | Loop | `1` for a ring back to the entrance, `0` for a path | the base shape's |
 | MinLoops, MaxLoops | Extra loops that rejoin the layout | the base shape's |
-| Width, Height | Grid size in rooms, 2 to 32 | from `Size` |
+| Width, Height | Grid size in rooms, 2 to 32 | the base shape's, else from `Size` |
 | BossRoom | `1` to place a boss room, `0` for none | the base shape's |
 
 Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	MaxPath	Straight	MinBranches	MaxBranches	Loop`.
 
 #### slots.txt
 
-Which level each slot opens. `tools\install.ps1` writes the `Preset` row; you add the `Maze` row yourself (see
-[Maze slot](#maze-slot-cave-and-crypt)).
+Which level the `Maze` slot opens. `tools\install.ps1` writes the row (see [Maze slot](#maze-slot-cave-and-crypt)). A slot
+that names a level of the original game, a town, a level with no row in `levels.txt`, or a level another slot uses is
+left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Preset` or `Maze` | required |
-| Level | The level id in the mod's `levels.txt`, 1 to 65535 | required |
+| Slot | `Maze` | required |
+| Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
 
@@ -162,22 +165,13 @@ A part found this way is checked before it is used; if the check fails the part 
 
 ## Maze slot (Cave and Crypt)
 
-A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, which you add by hand. One Maze slot serves one
-tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second Cave or
-Crypt map in the same game is refused. Without the slot, only Cave and Crypt maps are refused.
+Every map is a generated maze, built on the `Maze` level that `tools\install.ps1` adds. One Maze level serves one
+tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second map in the
+same game is refused. Without the level, no map opens.
 
-1. In the mod's `levels.txt`, add a level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and
-   `SizeY` up to 360 in all three difficulties, `Depend` 0, `Position` 0 and `OffsetX` about 6000, plus a matching
-   `lvlmaze.txt` row. Keep a `LevelName` that has a string.
-2. Add a `Maze` row to `slots.txt` (tab separated, header `Slot` and `Level`) with the new level's id:
-
-   ```
-   Slot	Level
-   Preset	138
-   Maze	139
-   ```
-
-3. Restart the game. If the plan cannot be built, the game builds its own maze and the log says why.
+The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a game Cave (or Crypt) level, with its
+`lvlmaze.txt` row and the `Maze` row of `slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
+Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Status
 

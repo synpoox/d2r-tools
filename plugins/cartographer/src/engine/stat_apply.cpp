@@ -509,7 +509,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	if (tables == nullptr || (!g_monstersOn.load() && !g_playersOn.load())) {
 		return;
 	}
-	const int slot = SlotLevel(tables->slots, PresetSlot);
+	const int slot = SlotLevel(tables->slots, MazeSlot);
 	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);
 	cartographer::stats::Settings settings;
 	settings.properties = tables->settings.properties;

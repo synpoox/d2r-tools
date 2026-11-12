@@ -62,7 +62,7 @@ auto MazeSlotBuilt() -> bool;
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.
 auto MazeArrivalPending() -> bool;
 
-// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot, not the Preset slot.
+// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot.
 auto MapIsMaze(const MapDef& map) -> bool;
 
 // Empty, or why the Maze slot level cannot build `map` (a Cave level cannot build a Crypt map, and the other way round).

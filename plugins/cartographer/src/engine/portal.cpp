@@ -205,14 +205,13 @@ void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game
 	}
 }
 
-// A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
-// Preset slot.
+// Every map (Cave or Crypt) opens through the Maze slot and is built by the maze steering hooks.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
 	return MapIsMaze(map);
 }
 
-auto SlotNameFor(const MapDef& map) noexcept -> const char* {
-	return IsMazeMap(map) ? MazeSlot : PresetSlot;
+auto SlotNameFor(const MapDef&) noexcept -> const char* {
+	return MazeSlot;
 }
 
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).

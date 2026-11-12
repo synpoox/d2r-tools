@@ -71,12 +71,12 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
-   ("Cartographer Preset", a copy of Colossal Summit that keeps its name string, so a map portal's tooltip reads
-   "Colossal Summit" instead of "Missing String" (checked in game)) and its level preset to the mod's `levels.txt` and
-   `lvlprest.txt` (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no
-   items. Running it again changes nothing once the tables are up to date; over an older install it repairs the slot level's
-   name string. In game the automap title reads "Colossal Summit" and the entry banner "Entering The Colossal Summit". D2RLoader compiles the
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the Maze level needs: one level
+   ("Cartographer Maze", copied from a game Cave level, or a Crypt level with `-Tileset Crypt`, so it keeps a name string)
+   and its maze row to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` row to
+   `slots.txt` (other rows are kept). It adds no items. Running it again changes nothing once the tables are up to date.
+   Rows of an older install ("Cartographer Preset", its `lvlprest.txt` row, the `Preset` slot row) are left alone and
+   can be deleted. Written and run on a synthetic copy of the tables only; not run against a game install. D2RLoader compiles the
    mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
@@ -87,14 +87,14 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 ## Configuration
 
 `maps.txt` has one row per map, with a header row. Only `Name`, `Tileset`, `Shape` and `Item` are needed; a blank cell means the
-default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore case; names from the game's tables
+default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names from the game's tables
 (monster ids, boss names) must match exactly; item codes ignore case.
 
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset`, `Cave` or `Crypt` (maze, needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet). Not used by `Preset`. | required |
+| Tileset | `Cave` or `Crypt` (needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet). | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
@@ -103,8 +103,9 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (checked in game for monsters), the rest are kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (0, see below) and
-`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
-`Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
+`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but every
+map opens through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`. The `Preset` tileset is gone: a `Preset` row is refused as an unknown tileset.
+A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, or repeats another slot's level or name; unit tested, not run in game.
 
 `MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default and not verified in game. A second map opened in the same game shows its name on the first map's portal too.
 
@@ -118,22 +119,21 @@ instead of the game's random maze. **One Maze slot is one tileset**: its level h
 or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
 try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
 refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
-`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1`
-does not add the Maze level; add it by hand:
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds the Maze level
+(`-Tileset Crypt` for a Crypt; Cave is the default):
 
-- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer creates
+- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer writes
   it). It is tab separated with the header `Slot` and `Level`, one row per slot, the level being the `Id` in `levels.txt`:
 
   ```
   Slot	Level
-  Preset	138
-  Maze	139
+  Maze	138
   ```
 
-  Add the `Maze` row yourself with your new level's id, and keep a `LevelName` that has a string (for example the copied level's) so a map portal's tooltip does not read "Missing String". Running `tools\install.ps1` again keeps it: the installer only adds or
-  updates the `Preset` row and leaves every other row alone.
-- `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
-  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row. Cartographer
+  Running `tools\install.ps1` again keeps it: the installer only adds or updates the `Maze` row and leaves every other row alone.
+- `levels.txt`: the installer's new level is in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` 360 in
+  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` 6000, every `Warp` -1 (0 crashed the game), a `LevelName` copied from a
+  game level so it has a string, and a matching `lvlmaze.txt` row. Cartographer
   reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave and Crypt maps are refused.
 - Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
   plan cannot be built or the engine refuses a step, the game's own walk finishes that maze (with the slot's own size and

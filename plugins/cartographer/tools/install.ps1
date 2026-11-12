@@ -1,17 +1,23 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's map slot level to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze level to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
-      lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
-    It also adds or updates the Preset row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
-    any other row (such as a hand-added Maze row) is kept.
+      levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
+                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a game maze level of that type, so its
+                    LevelName keeps a string
+      lvlmaze.txt   its maze row (a maze level needs one with its own level id)
+    It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
+    any other row is kept.
+    One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
     Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
-    Rows are only added when missing, so running it again changes nothing once the tables are up to date (an older install's LevelName is repaired). The new level keeps Colossal Summit's LevelName string key, so a map portal's tooltip should read "Colossal Summit" instead of "Missing String" (not yet checked in game). Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
+    Rows are only added when missing, so running it again changes nothing once the tables are up to date.
+    Rows from an older install ("Cartographer Preset" in levels.txt and lvlprest.txt, the Preset row of slots.txt) are left alone:
+    nothing uses them any more and they can be deleted. Restart the game afterwards (a mod that ships .bin tables must have
+    them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
     The mod's folder, for example <game>\mods\MyMod. The tables are read from <ModDirectory>\<Mod>.mpq\data.
@@ -19,18 +25,25 @@
 .PARAMETER ExcelDir
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
+.PARAMETER Tileset
+    Cave (the default) or Crypt: the kind of maze the Maze level builds.
+
 .EXAMPLE
     plugins\cartographer\tools\install.ps1 -ModDirectory "C:\Games\Diablo II Resurrected\mods\MyMod"
 #>
 [CmdletBinding()]
 param(
     [string]$ModDirectory,
-    [string]$ExcelDir
+    [string]$ExcelDir,
+    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave'
 )
 
 $ErrorActionPreference = 'Stop'
-$LevelName = 'Cartographer Preset'
-$TemplateLevelId = '137'  # Act 5 - Colossal Summit: a preset level, so a copy opens with only the preset's rooms
+$LevelName = 'Cartographer Maze'
+$OldLevelName = 'Cartographer Preset'
+$LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelType: 3 Cave, 4 Crypt
+$MazeSize = '360'  # SizeX and SizeY in every difficulty: the largest plan is 360 tiles on a side
+$ActFive = '4'     # levels.txt Act is zero-based
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -98,34 +111,41 @@ function Set-Cell($t, $cells, [string]$column, [string]$value) {
     $cells[(Column $t $column)] = $value
 }
 
-foreach ($name in 'levels.txt', 'lvlprest.txt') {
+# Sets a column only when the table has it (a column some builds of the table do not carry).
+function Set-CellIf($t, $cells, [string]$column, [string]$value) {
+    $i = [array]::IndexOf($t.Header, $column)
+    if ($i -ge 0) { $cells[$i] = $value }
+}
+
+foreach ($name in 'levels.txt', 'lvlmaze.txt') {
     if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
 
 # --- levels.txt -------------------------------------------------------------------------------------------------------
 $levels = Read-Table (Join-Path $ExcelDir 'levels.txt')
-$existing = Find-Row $levels 'Name' $LevelName
 $idCol = Column $levels 'Id'
+$typeCol = Column $levels 'LevelType'
+$existing = Find-Row $levels 'Name' $LevelName
 if ($existing -ge 0) {
     $levelId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
+    $haveType = (Cells $levels $levels.Lines[$existing])[$typeCol]
     Write-Host "levels.txt: '$LevelName' is already there (level $levelId)."
-    # An older install set LevelName to a key with no string, so the portal tooltip read "Missing String": restore the copied key.
-    if ($levels.Header -contains 'LevelName') {
-        $nameCol = Column $levels 'LevelName'
-        $cells = Cells $levels $levels.Lines[$existing]
-        $templateRow = Find-Row $levels 'Id' $TemplateLevelId
-        if ($cells[$nameCol] -eq $LevelName -and $templateRow -lt 0) {
-            Write-Host "levels.txt: level $TemplateLevelId (Colossal Summit) is gone from this mod, so the old LevelName of level $levelId was left as it is (its portal tooltip may read 'Missing String')."
-        } elseif ($cells[$nameCol] -eq $LevelName) {
-            $cells[$nameCol] = (Cells $levels $levels.Lines[$templateRow])[$nameCol]
-            $levels.Lines[$existing] = $cells -join "`t"
-            Save-Table $levels
-            Write-Host "levels.txt: gave level $levelId the string key '$($cells[$nameCol])' (its old LevelName had no string)."
-        }
+    if ($haveType -ne $LevelType) {
+        Write-Host "levels.txt: note: level $levelId has LevelType $haveType, not $LevelType ($Tileset). One Maze level serves one tileset; change its LevelType by hand to switch."
     }
 } else {
-    $templateRow = Find-Row $levels 'Id' $TemplateLevelId
-    if ($templateRow -lt 0) { throw "levels.txt has no level $TemplateLevelId (Act 5 - Colossal Summit) to copy." }
+    # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below).
+    $drlgCol = Column $levels 'DrlgType'
+    $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, $idCol))
+    $templateRow = -1
+    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+        $cells = $levels.Lines[$i] -split "`t"
+        $parsed = 0
+        if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $LevelType -and
+            [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
+    }
+    if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $LevelType ($Tileset) to copy." }
+    $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
     $maxId = 0
     for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
         $cells = $levels.Lines[$i] -split "`t"
@@ -136,38 +156,49 @@ if ($existing -ge 0) {
     $cells = Cells $levels $levels.Lines[$templateRow]
     Set-Cell $levels $cells 'Name' $LevelName
     Set-Cell $levels $cells 'Id' "$levelId"
+    Set-Cell $levels $cells 'Act' $ActFive
+    Set-Cell $levels $cells 'DrlgType' '1'
+    Set-Cell $levels $cells 'LevelType' $LevelType
+    Set-Cell $levels $cells 'Depend' '0'
+    Set-Cell $levels $cells 'OffsetX' '6000'
+    Set-Cell $levels $cells 'OffsetY' '0'
+    Set-CellIf $levels $cells 'Position' '0'
     for ($n = 0; $n -lt 8; $n++) {
         Set-Cell $levels $cells "Vis$n" '0'
-        Set-Cell $levels $cells "Warp$n" '-1'
+        Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
     }
+    $sized = 0
+    foreach ($h in $levels.Header) {
+        if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $MazeSize; $sized++ }
+    }
+    if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
     Set-Cell $levels $cells 'Waypoint' '255'
     # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
     $levels.Lines.Add($cells -join "`t")
     Save-Table $levels
-    Write-Host "levels.txt: added '$LevelName' as level $levelId."
+    Write-Host "levels.txt: added '$LevelName' as level $levelId ($Tileset, copied from level $templateId)."
+}
+if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
+    Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
 }
 
-# --- lvlprest.txt -----------------------------------------------------------------------------------------------------
-$presets = Read-Table (Join-Path $ExcelDir 'lvlprest.txt')
-if ((Find-Row $presets 'LevelId' "$levelId") -ge 0) {
-    Write-Host "lvlprest.txt: level $levelId already has its preset row."
+# --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
+$mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
+if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
+    Write-Host "lvlmaze.txt: level $levelId already has its maze row."
 } else {
-    $templateRow = Find-Row $presets 'LevelId' $TemplateLevelId
-    if ($templateRow -lt 0) { throw "lvlprest.txt has no preset for level $TemplateLevelId to copy." }
-    $defCol = Column $presets 'Def'
-    $maxDef = 0
-    for ($i = 1; $i -lt $presets.Lines.Count; $i++) {
-        $cells = $presets.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $defCol -and [int]::TryParse($cells[$defCol], [ref]$parsed) -and $parsed -gt $maxDef) { $maxDef = $parsed }
+    if ($mazes.Lines.Count -lt 2) { throw 'lvlmaze.txt has no row to copy.' }
+    $cells = Cells $mazes $mazes.Lines[1]
+    Set-Cell $mazes $cells 'Name' $LevelName
+    Set-Cell $mazes $cells 'Level' "$levelId"
+    foreach ($h in $mazes.Header) {
+        if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
+        elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h '24' }
+        elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
     }
-    $cells = Cells $presets $presets.Lines[$templateRow]
-    Set-Cell $presets $cells 'Name' $LevelName
-    Set-Cell $presets $cells 'Def' "$($maxDef + 1)"
-    Set-Cell $presets $cells 'LevelId' "$levelId"
-    $presets.Lines.Add($cells -join "`t")
-    Save-Table $presets
-    Write-Host "lvlprest.txt: added the preset row for level $levelId (Def $($maxDef + 1))."
+    $mazes.Lines.Add($cells -join "`t")
+    Save-Table $mazes
+    Write-Host "lvlmaze.txt: added the maze row for level $levelId."
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------
@@ -177,25 +208,28 @@ Write-Pending
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
-# Existing rows are kept (a hand-added Maze row, for one): only the Preset row is added or updated.
+# Existing rows are kept (an older install's Preset row, for one): only the Maze row is added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
 if (Test-Path $slotPath) {
     foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
 }
 $slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
 if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
-    $presetAt = -1
-    for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq 'Preset') { $presetAt = $i; break } }
-    if ($presetAt -lt 0) { $slotLines.Add("Preset`t$levelId") }
-    else { $slotLines[$presetAt] = "Preset`t$levelId" }
+    $mazeAt = -1
+    for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq 'Maze') { $mazeAt = $i; break } }
+    if ($mazeAt -lt 0) { $slotLines.Add("Maze`t$levelId") }
+    else { $slotLines[$mazeAt] = "Maze`t$levelId" }
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
-    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Preset`t$levelId")
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId")
+}
+if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0) {
+    Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
 }
 $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host "slots.txt: Preset is level $levelId (other rows kept)."
+    Write-Host "slots.txt: Maze is level $levelId (other rows kept)."
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
