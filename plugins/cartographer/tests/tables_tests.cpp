@@ -479,16 +479,23 @@ TEST_CASE("the Outdoor slot is refused unless it is a new level that levels.txt 
 	CHECK(!OutdoorSlotRefusal(unread[0]).empty());
 }
 
-TEST_CASE("the outdoor settings default to off and take 0 or 1") {
+TEST_CASE("OutdoorProbe defaults to off and takes 0 or 1") {
 	Report report;
-	CHECK(LoadSettings("", report).outdoorBuild == 0);
 	CHECK(LoadSettings("", report).outdoorProbe == 0);
-	const Settings on = LoadSettings("Setting\tValue\nOutdoorBuild\t1\nOutdoorProbe\t1\n", report);
-	CHECK(on.outdoorBuild == 1);
-	CHECK(on.outdoorProbe == 1);
+	CHECK(LoadSettings("Setting\tValue\nOutdoorProbe\t1\n", report).outdoorProbe == 1);
 	CHECK(report.Errors() == 0);
-	CHECK(LoadSettings("Setting\tValue\noutdoorbuild\t2\n", report).outdoorBuild == 0);  // out of range: the default is kept, with an error
+	CHECK(LoadSettings("Setting\tValue\nOutdoorProbe\t2\n", report).outdoorProbe == 0);  // out of range: the default is kept, with an error
 	CHECK(report.Errors() == 1);
+}
+
+TEST_CASE("an old OutdoorBuild line is ignored with one note, not an error, and the other settings still load") {
+	Report report;
+	const Settings settings = LoadSettings("Setting\tValue\nOutdoorBuild\t0\noutdoorbuild\t1\nEventChance\t7\n", report);
+	CHECK(report.Errors() == 0);
+	CHECK(settings.eventChance == 7);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].text.find("no longer used") != std::string::npos);
+	// Outdoor maps do not depend on any setting (Settings has no switch for them), so a 0 here cannot turn them off.
 }
 
 TEST_CASE("slot geometry (origin and declared size) is read from levels.txt only when all four columns parse") {
