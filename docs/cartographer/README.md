@@ -34,7 +34,7 @@ That is two maps. Four cells each is all a map needs.
 - **Name** is what the player sees when they enter.
 - **Tileset** is the kind of place. `Jungle` is outdoors. `Cave` is a maze of rooms.
 - **Shape** is how the path feels.
-- **Item** is the item code that opens this map (here `t20` opens Shorelines). Every map needs one, and no two maps share one. The item must be an item in `misc.txt` with item spell 16 (`pSpell`), such as a copy of a scroll. The item belongs to your mod; Cartographer adds none. An item that opens no map is an ordinary item.
+- **Item** is the item code that opens this map (here `t20` opens Shorelines). Every map needs one, and no two maps share one. The item must be an item in `misc.txt` with item spell 16 (`pSpell`), of type `cmap`, such as a copy of a scroll. The item belongs to your mod; Cartographer adds none. An item that opens no map is an ordinary item.
 
 You do not pick indoor or outdoor. The tileset does that for you.
 

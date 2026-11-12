@@ -46,7 +46,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental, not verified in game) | 85 | 90 |
-| `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
+| `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; experimental, not verified in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
@@ -72,6 +72,19 @@ A `Boss` that is not a `bosses.txt` entry is also an error, but only the Boss is
 Each name check is skipped only when the game table it needs cannot be read, and the report says so: `Monsters` needs `monstats` (a `Boss` is checked against `bosses.txt`, and against `monstats` and `superuniques` to name a vanilla boss), and `Item` needs the item tables. The spell-16 check needs `misc.txt` with a `pSpell` column; without it the check is skipped, and an item without spell 16 simply never opens its map.
 
 A map opens only in Hell, in Harrogath, for a character of at least `MinCharLevel`, once per game. This is what acts in game today. A refused map stays in the inventory and a sentence says why. Planned, not built yet: a maze map has an entrance and no exit, the player arrives through the portal, and the boss and the event room are at the far end of the path.
+
+## Map item type (itemtypes.txt)
+
+Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0.
+
+| Column | Value | Why |
+|---|---|---|
+| `ItemType`, `Code` | `Map`, `cmap` | The game names an item of type `scro` or `book` after its item spell (a spell-16 item would read "Scroll of Town Portal"), so a map item needs a type of its own. A row with code `cmap` that is not this one stops the installer. |
+| `Equiv1` | `misc` | The parent of `herb`, `scro`, `key` and `elix`: plain miscellaneous. `scro`, `book` or a potion type would make it a scroll (a tome takes it, a Town Portal scroll) or a potion (belt). |
+| `Equiv2`, `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition, no magic or rare quality. |
+| `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal`, `Beltable` | 0 | Not throwable, not beltable, no auto-stack. |
+| `StorePage` | empty | No vendor page lists it (the `misc.txt` vendor columns are empty too). |
+| everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
 
 ## mapstats.txt (optional)
 

@@ -24,9 +24,14 @@
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
+      itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
+                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
+                    and an empty StorePage, so no vendor lists it. The game names an item of type scro or book after its item spell, not its
+                    namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
+                    before anything is written. Existing rows are never changed.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
-    item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
-    Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
+    item spell 16 (pSpell in misc.txt) and type cmap. That is the mod author's to set up.
+    The tables are read and checked before anything is written. Each is backed up once as <name>.bak.
     Rows are only added when missing, so running it again changes nothing once the tables are up to date.
     Rows from an older install ("Cartographer Preset" in levels.txt and lvlprest.txt, the Preset row of slots.txt) are left alone:
     nothing uses them any more and they can be deleted. Restart the game afterwards (a mod that ships .bin tables must have
@@ -195,7 +200,7 @@ function Write-OverlapRefusal([string]$name, [string]$param, [int]$offX, [int]$o
     Write-Host "levels.txt: to fix, run the installer again with another spot (-${param}OffsetX and -${param}OffsetY, for example -${param}OffsetY 9000), or move the other level by hand. Nothing was written for '$name'."
 }
 
-foreach ($name in 'levels.txt', 'lvlmaze.txt') {
+foreach ($name in 'levels.txt', 'lvlmaze.txt', 'itemtypes.txt') {
     if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
 
@@ -384,6 +389,40 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$
 # --- levels.txt: the Outdoor level (Jungle) and the Snow level --------------------------------------------------------
 $outdoorId = Ensure-OutdoorLevel $OutdoorLevelName $OutdoorLevelType $OutdoorSize $OutdoorOffsetX $OutdoorOffsetY $OutdoorTemplateId 'Jungle' 'Outdoor'
 $snowId = Ensure-OutdoorLevel $SnowLevelName $SnowLevelType $SnowSize $SnowOffsetX $SnowOffsetY $SnowTemplateId 'Snow' 'Snow'
+
+# --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------
+# A copy of the Herb row (the vanilla non-quest miscellaneous type), appended once. Equiv1 misc is what Herb, Scroll and Key use: the game treats
+# the item as plain miscellaneous. It is not 'scro' or 'book' (so it is not a scroll: not a Town Portal scroll, never goes in a tome, and the game
+# does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed.
+$MapTypeCode = 'cmap'
+$MapTypeName = 'Map'
+$itemTypes = Read-Table (Join-Path $ExcelDir 'itemtypes.txt')
+$itCode = Column $itemTypes 'Code'; $itName = Column $itemTypes 'ItemType'
+$mapTypeRow = -1
+for ($i = 1; $i -lt $itemTypes.Lines.Count; $i++) {
+    $c = $itemTypes.Lines[$i] -split "`t"
+    if ($c.Count -gt $itCode -and $c[$itCode] -ieq $MapTypeCode) {
+        if ($c.Count -gt $itName -and $c[$itName] -ceq $MapTypeName) { $mapTypeRow = $i; break }
+        throw "itemtypes.txt: the code '$MapTypeCode' is already used by another item type ('$($c[$itName])', row $i). Cartographer's map items need the type '$MapTypeCode'. Nothing was changed; rename or remove that row, or use a mod without it."
+    }
+}
+if ($mapTypeRow -ge 0) {
+    Write-Host "itemtypes.txt: '$MapTypeName' ($MapTypeCode) is already there."
+} else {
+    $herbRow = Find-Row $itemTypes 'Code' 'herb'
+    if ($herbRow -lt 0) { throw "itemtypes.txt has no 'herb' row to copy for the '$MapTypeName' type." }
+    $cells = Cells $itemTypes $itemTypes.Lines[$herbRow]
+    Set-Cell $itemTypes $cells 'ItemType' $MapTypeName
+    Set-Cell $itemTypes $cells 'Code' $MapTypeCode
+    Set-Cell $itemTypes $cells 'Equiv1' 'misc'
+    Set-Cell $itemTypes $cells 'Equiv2' ''
+    foreach ($col in 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable') { Set-CellIf $itemTypes $cells $col '0' }
+    foreach ($col in 'Magic', 'Rare', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
+    Set-Cell $itemTypes $cells 'StorePage' ''
+    $itemTypes.Lines.Add($cells -join "`t")
+    Save-Table $itemTypes
+    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, not throwable, not beltable, no auto-stack, no store page."
+}
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
 $mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')

@@ -29,7 +29,7 @@ and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from the plugin folder. It adds the Maze level to the mod's
-   `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`) and writes `slots.txt`. It builds a Cave level; add
+   `levels.txt` and `lvlmaze.txt` and the `Map` item type to `itemtypes.txt` (backing each up once as `.bak`) and writes `slots.txt`. It builds a Cave level; add
    `-Tileset Crypt` for a Crypt (every map then uses that tileset). It is safe to run twice.
    If your mod ships `.bin` table files, rebuild them from the edited `.txt` tables or remove them (this also applies to
    the `misc.txt` edit in step 2).
@@ -37,12 +37,13 @@ and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into
 ## 2. Make an item that opens the map
 
 Each map has an item of its own, a plain new row in your mod's `misc.txt`: right-click it in the inventory, it is used up and opens that map's portal (only that map).
-Copy the Scroll of Identify row (`isc`: it keeps the scroll picture and has no stats) to a new row and change these columns. Set its `type` to `herb`, any type except `scro`, `book` or a quest type: the game names an item of type `scro` or `book` after its item spell, so with spell 16 the tooltip would read "Scroll of Town Portal" whatever `namestr` says. A potion is a poor base: it carries stats and belt settings.
+Copy the Scroll of Identify row (`isc`: it keeps the scroll picture and has no stats) to a new row and change these columns. Set its `type` to `cmap`, the Map item type that `tools\install.ps1` added to your `itemtypes.txt` (by hand: [Manual install](../../plugins/cartographer/README.md#manual-install), step 5). Not `scro` or `book`: the game names an item of those types after its item spell, so with spell 16 the tooltip would read "Scroll of Town Portal" whatever `namestr` says. A potion is a poor base: it carries stats and belt settings.
 
 - `code`: 3 characters that no row of `misc.txt`, `weapons.txt` or `armor.txt` uses (the vanilla charms `cm1` to `cm3`
   and runes `r01` and up are taken). This guide uses `t20`. Use 3 characters: a 4-character code gets no picture (not yet
   confirmed in game).
-- `type`: `herb` (see above).
+- `type`: `cmap` (see above).
+- `belt`: `0` (the Scroll of Identify row has 1; a map must not go in the belt).
 - `name`: any text, for example `Shorelines Map`.
 - `pSpell`: `16`.
 - `namestr`: the key of the item's name in your `item-names.json` strings (add the record there).

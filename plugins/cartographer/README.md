@@ -45,13 +45,13 @@ in [`examples/first-map/`](examples/first-map/).
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
-   no items. The level is a Cave by default; add
+   no items; it also adds the item type `Map` (`cmap`) to `itemtypes.txt`. The level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    The installer refuses a spot another level in `levels.txt` already uses (it says which, and `-MazeOffsetX` and the like pick another).
-4. Give each map an item of its own: a new row in your mod's `misc.txt` with item spell 16 (`pSpell`), for example a copy of the
-   Scroll of Identify, `isc`, with its `type` set to `herb` (not `scro` or `book`: the game names those by their spell, so your item
-   would read "Scroll of Town Portal"). Put `maps.txt` and, if you like, `cartographer.txt` in
+4. Give each map an item of its own: a new row in your mod's `misc.txt` with item spell 16 (`pSpell`) and `type` `cmap` (the item
+   type the installer added), for example a copy of the Scroll of Identify, `isc`, with `belt` 0 (not type `scro` or `book`: the game
+   names those by their spell, so your item would read "Scroll of Town Portal"). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
@@ -88,6 +88,10 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
    header `Slot` and `Level`, then rows `Maze`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
+5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty, and `StorePage` empty. The `Map` type is for the map items: a type of its own
+   because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
+   miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll or go in a tome; not a potion
+   type, so no belt). A row with code `cmap` that is not this one must be changed first.
 
 ## Configuration
 

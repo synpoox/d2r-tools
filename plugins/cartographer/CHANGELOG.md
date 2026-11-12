@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Map items now show their own name: the guide sets the new row's type to `herb`, not a scroll.
+- Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.

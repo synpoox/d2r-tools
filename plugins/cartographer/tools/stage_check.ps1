@@ -55,7 +55,7 @@
 .PARAMETER MapItems
     Adds the example map items (examples\first-map\map-items.txt: t20, t21, t22) to the test mod so a map can be opened from its
     item. A map item needs three things in the test mod, and this switch stages all three (test staging only; players get
-    no such files): the misc.txt rows (the base row, the Scroll of Identify, with its type changed to herb: an item of type scro or book is named by its spell, not by namestr), copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
+    no such files): the misc.txt rows (the base row, the Scroll of Identify, with its type changed to cmap, the Map item type install.ps1 adds to itemtypes.txt: an item of type scro or book is named by its spell, not by namestr, and belt 0), copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
     code in data\hd\items\items.json (the picture; without it the item has no icon), and a name per code in
     data\local\lng\strings\item-names.json and strings-legacy (the tooltip). The mod's own copy of items.json and
     item-names.json replaces the game's whole file, so each is seeded from -VanillaData when the slot lacks it. Then
@@ -116,7 +116,7 @@ $latin1 = [System.Text.Encoding]::GetEncoding(28591)
 $AllowedSlots = @(5, 6, 7, 11)
 # Tables install.ps1 needs in the test mod's excel folder (the first two are required, the rest only matter for bosses).
 # itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
-$SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
+$SeedTables = @('levels.txt', 'lvlmaze.txt', 'itemtypes.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
 # core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
 # game asserts at startup without the file, and also when the file has a header but no row (issue #219). Cartographer adds no
 # such level type, so the seed is the header plus one row for level type 36 (nothing draws it).
@@ -339,7 +339,7 @@ if ($Saves) {
 }
 if (-not (Test-Path -PathType Container $VanillaExcel)) { throw "No vanilla tables folder at $VanillaExcel. Pass -VanillaExcel." }
 $missingSeed = @()
-foreach ($name in @('levels.txt', 'lvlmaze.txt')) {
+foreach ($name in @('levels.txt', 'lvlmaze.txt', 'itemtypes.txt')) {
     if (-not (Test-Path -PathType Leaf (Join-Path $excel $name)) -and -not (Test-Path -PathType Leaf (Join-Path $VanillaExcel $name))) { $missingSeed += $name }
 }
 if ($missingSeed.Count -gt 0) { throw "Neither the slot's test mod nor $VanillaExcel has $($missingSeed -join ', '), which install.ps1 requires." }
