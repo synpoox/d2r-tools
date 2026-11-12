@@ -1,7 +1,7 @@
 # Cartographer native contracts (`cartographer`)
 
 **Status:** the nine maze rows in section 1a and the twelve phase 1 parts in section 3 have byte signatures, checked statically against a build 93847 dump (no game
-evidence; the portal hooks are written, not validated in game). Section 5 answers the maze slot's level size, origin and `0x3eb850` questions statically (issue #62), with the in-game checks still open. Section 6 answers, statically, how to apply stats to monsters, the player and the map item, how to override region density and level for one level, the event entry points and the entry text path (issue #72), each claim marked static, inference or needs game. Section 7 answers, statically, the twelve open outdoor builder questions (issue #83), each marked static, inference or needs game with the exact in-game check. The outdoor rows (section 4) have byte signatures that matched on build 93847 in a test slot, and the spike exercised the parts live at the levels shown per row. Every other row of sections 1 and 2 is still a stub, not validated in this repo.
+evidence; the portal hooks are written, not validated in game). Section 5 answers the maze slot's level size, origin and `0x3eb850` questions statically (issue #62), with the in-game checks still open. Section 6 answers, statically, how to apply stats to monsters, the player and the map item, how to override region density and level for one level, the event entry points and the entry text path (issue #72), each claim marked static, inference or needs game. Section 8 answers, statically, the twelve open outdoor builder questions (issue #83), each marked static, inference or needs game with the exact in-game check. The outdoor rows (section 4) have byte signatures that matched on build 93847 in a test slot, and the spike exercised the parts live at the levels shown per row. Every other row of sections 1 and 2 is still a stub, not validated in this repo.
 **Date:** 2026-11-11 (carried over from pd2-resurrected research)
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
@@ -305,7 +305,7 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
 - **Slot used:** 11 (`D2RToolsTest`). Game stopped, slot unlocked, the spike DLL removed, and the slot's plugins, config, logs,
   `levels.txt` and save folder restored from a backup taken before the runs.
 
-See also section 7 for the static answers to the open outdoor builder questions (issue #83).
+See also section 8 for the static answers to the open outdoor builder questions (issue #83).
 
 ## 5. Maze slot engine checks (issue #62)
 
@@ -387,7 +387,7 @@ struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for eve
 
 ### Left for the game
 
-See also section 7 (Q6 and Q10) for the portal arrival and the outdoor size.
+See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size.
 
 1. The whole game accepting a 360 x 360 maze level (Q1, size and lopsided checks).
 2. The origin being clear of every other level's rect, including outdoor levels (Q2 log).
@@ -548,7 +548,7 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 4. Every spawn, superunique, TC and object call exercised once, including the six TC stack args, and which room-activation path runs for the slot level (the per-row checks in Q3).
 5. The chat packet display rule and the best text route (Q4).
 
-## 7. Outdoor builder engine checks (issue #83)
+## 8. Outdoor builder engine checks (issue #83)
 
 Static answers for the twelve open questions of plan section 7 ("Still to check, in Ghidra or in game") of
 [cartographer-outdoor-builder.md](../cartographer/plans/cartographer-outdoor-builder.md). Everything is read from the build 93847 dump
@@ -564,7 +564,7 @@ evidence for the outdoor builder stays in section 4.
 | Module | `D2R.exe` |
 | Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the same memory-layout dump as sections 1a and 5 (`D2RLoader_6ab3782c_dump.exe`) |
 | Location | RVAs in the table below. Level record offsets as in section 5; outdoor grid block (level `+0x18`, `0x340` bytes): grids at `+0x08` (piece id), `+0x30`, `+0x58` (flags), `+0x80`, each a `{w, h, rows*, cells*}` record whose cells are `u64`; `+0xb0/+0xb4` grid size in 8-tile cells; `+0xb8` and `+0xc0..+0xe8` outline lists; `+0x338` neighbour list |
-| Guard | Existing signed rows (`0x3271c0`, `0x3ee320`, `0x3fe2e0`, `0x3ecfc0`, `0x3ee780`, `0x3fa7f0`, `0x3fa790`, `0x3fac10`, section 4) keep their signatures; no second signature is recorded for them. The rows in the table below are unsigned, read-only evidence. The prefix of each was cut as the shortest whole-instruction prefix of at least 24 bytes (relative calls, jumps and RIP-relative operands masked) and checked with `pat` to match exactly once, at its own RVA, across the executable sections of the dump (`.text` in each case); none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
+| Guard | Existing signed rows (`0x3271c0`, `0x3ee320`, `0x3fe2e0`, `0x3ecfc0`, `0x3ee780`, `0x3fa7f0`, `0x3fa790`, `0x3fac10`, section 4) keep their signatures; no second signature is recorded for them. The rows in the table below are unsigned, read-only evidence. The prefix of each was cut as the shortest unique whole-instruction prefix of at least 24 bytes, extended where a twin needed it (relative calls, jumps and RIP-relative operands masked) and checked with `pat` to match exactly once, at its own RVA, across the executable sections of the dump (`.text` in each case); none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
 | Rule | The 14-byte rule of section 6: a 14-byte patch at the entry, rounded up to a whole instruction, must contain no relative operand (RIP-relative memory, relative call or jump). "hookable" passes, "call-only" does not. No hook is proposed on this page |
 | Evidence | Disassembly of the functions named. Reproduce with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]` and `... pat "<hex with ??>"` |
 | Validation | Static only. No game, no hook. Not checked on Steam build 94995 |
@@ -579,14 +579,14 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 | `0x3ede00` | Void cell setter `(level, x, y)`: SETs piece grid `+0x08` to 0 and flag grid `+0x58` to `0x100` | Q3 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00` |
 | `0x3edda0` | Clear cell `(level, x, y)`: SETs both grids to 0 (same shape as `0x3ede00`; only the last constant differs) | Q3 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 45 33 C9` |
 | `0x3efaf0` | Outdoor outline and border pass `(dataFlag, level)`; its chunk holds the loop at `0x3f00a0` that ORs `0x100` into edge cells | Q3 | hookable | `48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 17 4C 8B EA` |
-| `0x3f95e0` | Fill pass over the flag grid: cells with `(flags & 0x3f0ff80) == 0` get a value chosen by a switch (`0x100` in the first case); `.pdata` chunk `0x3f95e0..0x3f98bc` | Q3 | hookable | `88 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC C8 00 00 00` |
+| `0x3f95e0` | Per-room grid pass `(dataFlag, arg)`: `arg` holds the level at `+0x90`; allocates three grids at `[arg+0x40]` with `0x3fa7f0` and loops grid `+0x50` of that block, ORing (op 0) a value chosen by a switch on `level+0x1e0 - 0x10` (jump table `0x3f987c`; `0x100` only for 16, Act 2 desert) into cells whose `(flags & 0x3f0ff80) == 0`; `.pdata` chunk `0x3f95e0..0x3f98bc`. Not the outdoor flag grid | Q3 | hookable | `88 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC C8 00 00 00` |
 | `0x327c40` | Level teardown `(dataFlag, level, keep)`; dispatches on level `+0x00` to `0x3e69d0` (maze), `0x3dd370` (preset) or `0x3ee220` (outdoor); frees `+0x1c0`, `+0x1d8`, `+0x1f0` | Q4 | hookable | `48 89 5C 24 08 48 89 6C 24 18 56 57 41 56 48 83 EC 20 41 8B E8 48 89 54 24 48` |
 | `0x3ee220` | Outdoor free `(level, keep)`: frees the four grids, the outline lists, the neighbour list and, when `keep` is 0, the block at level `+0x18` | Q4 | hookable | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 48 8B 59 18` |
 | `0x3f9a90` | Outline list free `(list*)`: walks a circular list through `+0x10`, then frees the head; skips a NULL head | Q4 | hookable | `48 89 5C 24 10 56 48 83 EC 20 48 8B 19 48 8B F1 48 85 DB 74 ?? 48 8B 5B 10` |
 | `0x3fa730` | Grid free `(grid)`: frees `+0x20` when set, then zeroes `+0x18` and `+0x20` | Q4 | hookable | `40 53 48 83 EC 20 48 83 79 20 00 48 8B D9 74 ?? 48 89 7C 24 30 E8 ?? ?? ?? ??` |
 | `0x360730` | Neighbour list free `(head)`: NULL tolerant, walks `+0x20` | Q4 | call-only | `48 85 C9 74 ?? 53 48 83 EC 20 48 8B D9 48 89 7C 24 30 48 8B FB 48 8B 5B 20` |
 | `0x3daad0` | Vis exit lookup `(dataFlag, level, exit index)`: the Vis entry from the drlg list at `drlg+0x118`, else the levels.txt row at `+0x68 + n*4`; no RNG | Q5 | hookable | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 20 57 48 83 EC 20 48 8B 9A C8 01 00 00` |
-| `0x334ed0` | Tile to subtile: multiplies two ints by 5 in place (17 bytes; the prefix runs into the padding after it) | Q5, Q6 | call-only | `8B 01 44 8D 04 80 44 89 01 8B 02 8D 0C 80 89 0A C3 CC CC CC CC CC CC CC` |
+| `0x334ed0` | Tile to subtile: multiplies two ints by 5 in place (17 bytes, no relative operand; the first 14 bytes end on an instruction boundary; the prefix runs into the padding after it) | Q5, Q6 | hookable | `8B 01 44 8D 04 80 44 89 01 8B 02 8D 0C 80 89 0A C3 CC CC CC CC CC CC CC` |
 | `0x402820` | Debug console command `WarpToPreset` handler; stores its arguments in the globals at `0x2a9a5c0`, `0x2a9a5c4`, `0x2a9a5cc` and the byte `0x2a9a5c9` | Q9 | call-only | `40 53 48 83 EC 20 48 C7 05 ?? ?? ?? ?? 00 00 00 00 48 8B D9 C6 05 ?? ?? ?? ?? 00` |
 | `0x3feb80` | Act 5 pass for level id `0x6f` only: up to 90 random even-cell tries through `0x3ff420`, then a second pass with the same restamp | Q8 | hookable | `48 8B C4 53 41 55 48 83 EC 68 83 BA F8 01 00 00 6F 48 8B DA 44 0F B6 E9` |
 | `0x3ff420` | Barricade restamp at one cell `(dataFlag, level, x, y)`: a piece id in `0x393..0x39a` is stamped again as `+0x10` with file `-1` | Q8 | hookable | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 40 41 8B F8 48 8B F2 0F B6 E9` |
@@ -594,7 +594,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 | `0x3ff0e0` | Act 5 helper that reads the outline list at block `+0xb8` (tests level id `0x75`) | Q8 | hookable | `88 4C 24 08 53 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 78 48 8B 4A 18` |
 | `0x3fe9e0` | Act 5 cave entrance table walk: 20-byte records at `0x1d12bf8`; LvlPrest ids per side | Q8 | hookable | `48 89 5C 24 10 48 89 6C 24 18 56 41 56 41 57 48 83 EC 40 4C 8B 72 18 48 8D 1D ?? ?? ?? ??` |
 | `0x3edfb0` | Piece id at a cell `(level, x, y)` (reads grid `+0x08`) | Q8 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 48 8B 71 18 41 8B D8 8B FA` |
-| `0x3e75bc` | Maze path chunk (`.pdata` `0x3e75bc..0x3e775c`) holding the level id test against `[0x2a9a5cc]` at `0x3e75f6` | Q9 | call-only | `8B 83 F8 01 00 00 83 F8 1C 74 ?? 83 F8 6B 74 ?? 48 8B CB E8 ?? ?? ?? ??` |
+| `0x3e75bc` | Maze path chunk, not an entry (`.pdata` `0x3e75bc..0x3e775c`, in the middle of a function) holding the level id test against `[0x2a9a5cc]` at `0x3e75f6` | Q9 | chunk (no hook point) | `8B 83 F8 01 00 00 83 F8 1C 74 ?? 83 F8 6B 74 ?? 48 8B CB E8 ?? ?? ?? ??` |
 | `0x3277e0` | Reads `[drlg + 0x110]`; its result picks which of the two `WarpToPreset` preset ids is used | Q9 | call-only | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 8B 83 10 01 00 00 83 E0 01` |
 | `0x32c360` | LvlPrest row lookup `(dataFlag, id)` | Q9 | hookable | `48 89 5C 24 08 48 89 74 24 20 57 48 83 EC 30 48 63 F2 E8 ?? ?? ?? ?? 48 8B F8 48 8B DE 85 F6 78 ?? 48 3B 98 C0 14 00 00` |
 
@@ -626,17 +626,19 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 
 - **Cell flags seen (static), grid `+0x58`:** `0x200` covered (set with `bts 9` in `0x3ecfc0` next to the 16-bit file index masks `0xf0000`), `0x400` marks an
   Act 5 border cell (tested with `bt rax, 0xa` in `0x3feee0`, which stamps the entrance and exit pieces 907..910 there), and `0x100` is the
-  "void" mark below. The mask `0x3f0ff80` (bits 7..15 and 16..21) is what the fill pass `0x3f95e0` treats as "already decided".
+  "void" mark below. The mask `0x3f0ff80` (bits 7..15 and 20..25) is the test `0x3f95e0` applies to its own per-room grid; it is not shown to be a decided-cell test on the outdoor flag grid.
 - **What `0x100` is (static):** a cell that is deliberately empty. `0x3ede00(level, x, y)` SETs the piece id (grid `+0x08`) to 0 and the flag
   (grid `+0x58`) to `0x100`; its twin `0x3edda0` SETs both to 0 (fully cleared). The border pass `0x3efaf0` ORs `0x100` along the edge cells
-  whose bit 0 is clear (loop at `0x3f00a0`, op 0 of `0x3faa50`). The fill pass `0x3f95e0` SETs `0x100` (first case of its switch; other cases give
-  `0x120000`, `0x100000`, `0xa00000`, `0x1600000`, `0x600000` for level id `0x75`) into every cell that has none of the `0x3f0ff80` bits.
+  whose bit 0 is clear (loop at `0x3f00a0`, op 0 of `0x3faa50`). `0x3f95e0` is not a setter of `0x100` for this grid: its argument holds the level at `+0x90`,
+  it allocates its own three grids at `[arg+0x40]` (`0x3fa7f0`, `0x3f965f`..`0x3f9687`) and loops grid `+0x50` of that block (a per-room grid, not level `+0x18` -> `+0x58`),
+  with op `r13d` = 0 (OR). The value depends on a switch on `level+0x1e0 - 0x10` (jump table `0x3f987c`): `0x100` only for 16 (Act 2 desert), `0x120000` for 21 (jungle),
+  `0x100000` for 22, `0xa00000` for 27, `0x1600000` for 28, `0x600000` for 31 when the level id is `0x75`, else 0.
   `0x3ede00` and `0x3edda0` are only reached through function pointers: their addresses sit in three tables in the data (`0x1eb2cb1`, `0x34dd3a1`, `0x3c3d310` hold
   `0x3ede00`; `0x1eb2ca5`, `0x34dd395`, `0x3c3d304` hold `0x3edda0`, as 8-byte absolute pointers), and no direct call exists.
 - **Consequence for the slot:** a cell that is stamped by `0x3ecfc0` carries a piece id and the file bits, never `0x100`; the section 4 dump shows
-  every cell of the 20x4 line covered, so no `0x100` is expected there. A plan that leaves cells unstamped should either stamp them or
-  SET `0x100` itself, because the fill pass treats `0x100` as decided and skips them.
-- **Evidence level:** static for who writes it; **inference** for what the rest of the engine does with it (no reader of the bit was found in the
+  every cell of the 20x4 line covered, so no `0x100` is expected there. A plan that leaves cells unstamped should stamp them or
+  SET `0x100` itself; what the rest of the engine does with an unstamped cell is not shown here (see the evidence level).
+- **Evidence level:** static for who writes it (`0x3ede00` and `0x3efaf0` only; `0x3f95e0` is described above, not a setter here); **inference** for what the rest of the engine does with it (no reader of the bit was found in the
   stamper or the room maker `0x3ee780`; the bit is read only as part of the `0x3f0ff80` test). **Needs game:** log the `+0x58` grid after the build of the slot level and
   after a `0x3ede00` call from the hook; observe the `0x100` cell is not turned into a room by `0x3ee780` (room count unchanged by the mark).
 
@@ -647,8 +649,8 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
   garbage `+0x1d8` is freed through the allocator vtable and would fault.
 - **Outdoor free `0x3ee220` (static):** reads the block at level `+0x18` with no NULL check (`mov eax, [rbx]` at `0x3ee244`), so a type 3 level
   needs a real block until it is torn down. It clears bits `0x20` and `0x40` of block `+0x00`, frees the four grids with `0x3fa730`
-  (NULL tolerant: it tests `+0x20` first), frees block `+0xb8` and the six lists `+0xc0..+0xe8` with `0x3f9a90`, zeroes `+0xf0..+0x32f`, calls `0x360730` on `+0x338`
-  (NULL tolerant), and frees the block itself only when `keep` is 0.
+  (NULL tolerant: it tests `+0x20` first), frees block `+0xb8` and the six lists `+0xc0..+0xe8` with `0x3f9a90`, zeroes `+0xf0..+0x32f`, and, only when `keep` is 0 (`test r14d, r14d; jne` at `0x3ee2c3`), calls `0x360730` on `+0x338`
+  (NULL tolerant) and then frees the block itself.
 - **Outline lists `0x3f9a90` (static):** takes the address of the list head. A NULL head is skipped. A non-null head must point to a circular list
   whose nodes link through `+0x10` and whose end is the head itself (the loop stops when the next pointer equals the head); anything else walks
   unrelated memory. So a NULL `+0xb8` is safe, a stale or foreign one is not.
@@ -662,6 +664,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
   saved room bits `+0x258` (ORs `1` into room `+0xa0` for each saved bit, rooms in list order), the room list `+0x10/+0x48`, each room's `+0x50`
   flags, and for rooms with a warp bit (`0xff0`) or a `0x30000` bit it calls `0x3daad0` (no RNG; Vis lookup) and records the room centre.
   The centre is `+0x60 + (+0x68)/2` and `+0x64 + (+0x6c)/2`, converted by `0x334ed0` (times 5) into the arrays at level `+0x208` (x) and `+0x22c` (y), counted in `+0x250` (9 slots each).
+- **See also section 4:** the spike already ran the native tail live with level type 0, which is stronger than this static read.
 - **Consequence:** a hook that replaces the dispatch (as the spike does) can run the original tail afterwards without touching the RNG. The
   tail needs the rooms to be in the list and the room flags to be set by the builder; the type word `+0x00` may be anything at that point.
   The one place that does depend on RNG is the level-entry finder (`0x3da650`, last fallback, section 5 Q3).
@@ -673,16 +676,16 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 - **Creation (static):** `OpenRedPortal` `0x5da800` finds a free spot near the player (`0x517f90`), spawns object 60 there (`0x432ce0`), then calls
   `0x34e9d0(portal, level)` with the `level` argument. Only the destination **level id** is set here; no coordinates are chosen at creation.
   What `0x34e9d0` stores inside the object is not read (the first lines test the pointer; the body was not followed).
-- **Use (static, with inference for the exit index):** the unit move calls the level-entry finder (`0x3da650`) from `0x2ef8b0`, which gets the target
+- **Use (static for `0x2ef8b0`; inference for everything before it):** only this is static: `0x2ef8b0` calls `0x3da650` (`0x2ef8de`), `0x334ed0` and `0x362f90` with collision mask `0x1c09`. That red-portal use reaches `0x2ef8b0` (who calls it was not read), and that `0x34e9d0` leaves nothing the arrival reads, are **inference**. `0x2ef8b0` gets the target
   level, converts the returned room centre to subtiles (`0x334ed0`, then adds 3 to centre in the tile) and asks `0x362f90` for a free spot with collision mask `0x1c09`. The finder is
   described in section 5 Q3 (first room with `(room+0x50 & 0x30000)`, then warp-flag rooms against the Vis entries, then the room at the declared
   centre, then a seeded random room); in the code read here it takes the shortcut straight to the first helper (`0x3dad90`) when the exit index is `0xd` and
   the levels.txt row field at `+0x90` is non-zero, and to `0x3dac20` for other exit indexes when `+0x90` is non-zero.
   `0x3dad90` returns the first room that has a unit in its list whose object row has bit `0x40` at `+0x127` (the meaning of that row bit is not
   determined here) and writes its position into the out parameters.
-- **Consequence:** for the slot, the arrival coordinates come from room data (flags `0x30000` or exit bits) or from the declared centre and not from anything the portal object holds. An outdoor slot level with no exit-flagged rooms arrives at the declared-centre room
+- **Consequence (inference, from the unverified portal-to-`0x2ef8b0` link and the unread `0x34e9d0`):** for the slot, the arrival coordinates would come from room data (flags `0x30000` or exit bits) or from the declared centre and not from anything the portal object holds. An outdoor slot level with no exit-flagged rooms arrives at the declared-centre room
   (`+0x24 + w/2 - 2`, `+0x28 + h/2 - 2`), then at a random room.
-- **Evidence level:** static for the chain; inference for which exit index the portal use path passes. **Needs game:** log the arguments and result of `0x3da650` (exit index, out x/y,
+- **Evidence level:** static for `0x2ef8b0` calling `0x3da650`, `0x334ed0` and `0x362f90`; **inference** for the whole chain from portal use to `0x3da650`, including the exit index. **Needs game:** confirm the chain by logging the callers and arguments of `0x2ef8b0` and `0x3da650` (exit index, out x/y,
   returned room) and the final position after entering the slot level by the red portal; observe which branch answered and that the character stands on a walkable cell.
 
 ### Q7. What the mask means in `Riv*.ds1` (DS1 walk flags)
@@ -709,14 +712,14 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
   `0x361 + i` (865..879) for i in 0..14 in a loop at `0x3fe382`.
 - **Not found:** where the plain barricade pieces 915..930 enter the grid. They are not an immediate in the DRLG range, and the 915 and 987
   values found in the data at `0x1d12d2c` and `0x1d12d40` are in an unrelated table. Inference: they come from the generic path under `0x3fe3b7` (`0x3efa20`, `0x3ff0e0`) or from D2RCore.
-- **Evidence level:** static for the restamp and the Frigid Highlands gate; **needs game** for the origin of 915..930. **Exact check:** count the `0x3ecfc0` calls while building level 111 (and
+- **Evidence level:** static for the restamp and the Frigid Highlands gate (the immediate scan covered `0x3e0000..0x400400` only; other DRLG code such as `0x3da650` and `0x3dd370` lies below it); **needs game** for the origin of 915..930. **Exact check:** count the `0x3ecfc0` calls while building level 111 (and
   112, 117) with the spike's counter hook, logging `(lvlprest id, file, cx, cy)` per call; the ids in 915..930 and the call that placed each name the stamper. A wanted layout does not need this: the slot stamps its own pieces.
 
 ### Q9. The special level id `DAT_142a9a5cc` in `0x3ee320`
 
 - **Static:** it is the target of the debug console command `WarpToPreset`. The command table entry at `0x400dc0` (next to `SetObjectMode`) names it; its handler
-  `0x402820` parses the arguments into the globals at `0x2a9a5c0` and `0x2a9a5c4` (preset ids), `0x2a9a5cc` (level id) and sets the byte `0x2a9a5c9` (enable). In `0x3ee320` (at `0x3ee4e7`, after the Act 1 builder
-  call) and in the maze path (`0x3e75f6`), when the level being built has `+0x1f8` equal to `[0x2a9a5cc]` and the byte is set, the code asks `0x3277e0` for a flag, picks one of the two preset ids,
+  `0x402820` parses the arguments into the globals at `0x2a9a5c0` and `0x2a9a5c4` (preset ids), `0x2a9a5cc` (level id) and sets the byte `0x2a9a5c9` (enable). It stores its first argument in both `0x2a9a5c0` and `0x2a9a5c4`, and its second in `0x2372488` (`0x40286d`), outside that range. In `0x3ee320` (at `0x3ee4e7`, after the Act 1 builder
+  call) and in the maze path (`0x3e75f6`), when the level being built has `+0x1f8` equal to `[0x2a9a5cc]` (`0x3ee4e7`; the byte `0x2a9a5c9` is not tested there) and the chosen preset id is non-zero (`test ebx, ebx` at `0x3ee516`), the code asks `0x3277e0` for a flag, picks one of the two preset ids,
   looks the LvlPrest row up (`0x32c360`) and forces that preset into the grid, then writes the used id back. In the dump all of `0x2a9a5c0..0x2a9a5d0` are zero, and 0 is no valid level id, so the branch is dead
   in normal play.
 - **Consequence:** nothing for a normal slot level. It matters only if a player has typed `WarpToPreset` for the slot's level id (the debug hook would stamp a preset into it); the slot id differs
