@@ -373,6 +373,33 @@ TEST_CASE("RouteCache: keyed by revision and data flag; a newer revision drops t
 	CHECK_FALSE(RouteKey{1, 2} == RouteKey{2, 2});
 }
 
+TEST_CASE("idRowAccepted: a repeated Id may come back as either copy's row") {
+	CHECK(idRowAccepted({4}, 4));
+	CHECK_FALSE(idRowAccepted({4}, 5));
+	CHECK_FALSE(idRowAccepted({4}, -1));
+	CHECK(idRowAccepted({4, 90}, 4));   // the game kept the first copy
+	CHECK(idRowAccepted({4, 90}, 90));  // or the last
+	CHECK_FALSE(idRowAccepted({4, 90}, 50));
+	CHECK_FALSE(idRowAccepted({}, 0));
+}
+
+TEST_CASE("superClassOf and checkSuperClass: the game's Class is compared with the txt where the txt has the name") {
+	SpawnTable t;
+	t.monsters = {"zombie", "", "fallen", "Skeleton"};
+	t.supers = {{"Bishibosh", "fallen"}, {"Rakanishu", "nothere"}, {"", "zombie"}};
+	CHECK(superClassOf(t, 0) == "fallen");
+	CHECK(superClassOf(t, -1).empty());
+	CHECK(superClassOf(t, 3).empty());
+	CHECK(checkSuperClass(t, "Bishibosh", "fallen") == ClassCheck::Agrees);
+	CHECK(checkSuperClass(t, "bishibosh", "FALLEN") == ClassCheck::Agrees);  // case-insensitive, both sides
+	CHECK(checkSuperClass(t, "Bishibosh", "zombie") == ClassCheck::Differs);
+	CHECK(checkSuperClass(t, "Rakanishu", "fallen") == ClassCheck::Differs);  // names, not rows: the txt's Class is not the game's
+	CHECK(checkSuperClass(t, "Corpsefire", "fallen") == ClassCheck::NoReference);  // the txt does not have the name
+	CHECK(checkSuperClass(t, "Bishibosh", "") == ClassCheck::NoReference);         // no game Id to compare
+	CHECK(checkSuperClass(t, "", "fallen") == ClassCheck::NoReference);
+	CHECK(checkSuperClass(SpawnTable{}, "Bishibosh", "fallen") == ClassCheck::NoReference);
+}
+
 TEST_CASE("scaleKind says why the spot scale is what it is") {
 	CHECK(scaleKind({0, 0, 20, 16}, {0, 0, 20, 16}) == ScaleKind::Same);
 	CHECK(scaleKind({0, 0, 100, 80}, {0, 0, 20, 16}) == ScaleKind::Multiple);

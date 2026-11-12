@@ -65,8 +65,17 @@ inline constexpr const char* NameToRow = "40 55 56 57 41 54 48 8B EC 48 83 EC 78
 // signature is the whole function. SetStateBit (unit, state, on) turns the state on or off, which is what makes the game send it.
 // StateOn (unit, state) is nonzero while the state is on.
 inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B DA 48 8B F9 48 85 C9 75 13 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B CF E8 ?? ?? ?? ??";
-inline constexpr const char* SetListState = "48 85 C9 74 ?? 89 51 20 C3";
+inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
+// Phase 6b: the Shrine object and the Boss Drop (cartographer.md section 13). DeathDrop (game, victim, arg3, info) is hooked
+// (the hook cuts the first 15 bytes: whole instructions, no relative operand); the rest are only called. SpawnObject is the
+// handler of the debug command `SpawnObject`: it is only read, to find the free-spot search (0x402f50), which has no signature of
+// its own: it is byte-identical to a sibling for 452 bytes, so it is the target of the call at SpawnObject + 0xff.
+inline constexpr const char* DeathDrop = "48 8B C4 44 89 40 18 53 55 56 57 41 54 41 56 41 57 48 83 EC 70 4D 8B F9 48 8B EA 4C 8B F1";
+inline constexpr const char* DropRoller = "40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 98 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 88 00 00 00 4C 8B BC 24 18 01 00 00";
+inline constexpr const char* DropLevel = "48 89 5C 24 08 57 48 83 EC 20 8B FA 48 8B D9 E8 ?? ?? ?? ?? 83 F8 01 75 ?? 45 33 C0 8D 50 0B";
+inline constexpr const char* SpawnObject = "40 55 41 56 41 57 48 83 EC 60 4C 8B F1 41 BF 01 00 00 00 41 8B CF 8B EA E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ??";
+inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF 48 81 EC 90 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48";
 
 }  // namespace carto::sig
