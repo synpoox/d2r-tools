@@ -23,7 +23,7 @@ The pd2-resurrected links above are under https://github.com/synpoox/pd2-resurre
 Every row in section 1 has: Build 93847, Guard "not yet: needs a byte signature" (except the nine maze rows of
 section 1a, which have one, and the rows marked "signed", which carry a signature that matched exactly once in the running image; their Guard and Validation are in section 4), Status "not validated in this repo" (the 1a rows: static only), and
 Failure mode "fail open: log and leave Cartographer's map off". The tested image stamp is the registry's
-(`0x6ab3782c`); the outdoor spike did not log the stamp itself (it was logged only in the follow-up run, section 4). Coexistence: D2RCore patches or thunks some DRLG code (`0x3e2b5ce`); see that row.
+(`0x6ab3782c`); the outdoor spike did not log the stamp itself (section 4). Coexistence: D2RCore patches or thunks some DRLG code (`0x3e2b5ce`); see that row.
 
 ## 1. Addresses
 
@@ -91,7 +91,7 @@ packed `D2R.exe` on disk cannot be checked (encrypted code).
 
 ## 2. Not yet recorded
 
-Signatures for `0x3e96d0`, `0x3f3970` and `0x86bc0` (the other rows have signatures in section 1a or, for the outdoor rows, section 4), contracts beyond the roles above, and any game validation of the maze rows. Until then no hook may be
+Signatures for `0x3e96d0`, `0x3f3970` and `0x86bc0` (the other rows have signatures in section 1a or, for the outdoor rows, section 4, or are found from a signed function by following its calls, as `0x367110`, `0x3e2b5ce` and `0x3e2b5c8` are), contracts beyond the roles above, and any game validation of the maze rows. Until then no hook may be
 written from this page alone for the rows without a signature (AGENTS.md); the 1a rows are static only.
 
 ## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
@@ -214,7 +214,7 @@ loader banner, not logged by the spike.
 
 **Probe commands** (console, test harness): `cartographer pos`, `track on|off|reset` (logs `pos subtile ...` lines and the
 reached extents), `coll <mask> [dump]` (collision at the player; `dump` writes an 800x160 subtile file), `peek <addr> <len>`,
-`rooms <level ptr>`, plus the S0 commands. Config: the spike's own file sets the block line, offsets and size.
+`rooms <level ptr>`, plus the S0 commands `cartographer probe-outdoor` (byte checks, the module behind the thunk, call counts) and `cartographer reset` (counters). Config (the spike's own toml): `level` (levels.txt row), `line` (block line, e.g. `E,EW,EW,EW,W`), `offset_x`, `offset_y`, `stamp` (false: leave the Act 5 branch to D2R) and `build`.
 
 ### S0
 
@@ -233,7 +233,7 @@ reported "tracked" by D2RLoader's hook diagnostics:
 | `0x3fa790` grid read | - (called) | `48 8B 41 20 4D 63 C0 48 63 D2 4E 63 0C 80 48 8B 41 18 4C 03 CA 4A 8B 04 C8` |
 | `0x3fac10` Act 1 builder | 10 | `48 89 5C 24 08 57 48 83 EC 20 0F B6 F9 48 8B DA 8B 8A F8 01 00 00 8D 41 FE 83 F8 01 76 0D 83 F9 11 74 08 48 8B CA` |
 
-The signatures were built from a decrypted dump of the same build, because the `D2R.exe` on disk is encrypted. The
+The signatures were built from a decrypted dump of the same build, because the `D2R.exe` on disk is encrypted. How they were cut from the dump (tool, command, where the dump is kept) is not recorded: the spike code only scans for them, it does not show the cutting. The
 spike checks every signature at load, before it installs its own hooks, and is all-or-nothing: if any signature fails, every hook stays off
 and the plugin logs it and leaves the level to the game (fail open). No signature failed.
 
@@ -261,7 +261,7 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
   five 32-tile blocks, each 4x4 grid cells of 8 tiles (a 20x4 cell grid over 160x32 tiles). `0x3ecfc0` takes the file from the level RNG at
   `+0x1e4` (file 0 each time here).
 - **Jungle tiles render in Act 5:** yes. Jungle ground, palms, ferns and a fallen-tree bridge render on the level (in game).
-- **Rooms:** 80 rooms (8x8 tiles each, a 160x32 tile rect; plan §1.5 expected a piece/fill split: the room count and size are from the spike's LogRooms, which does not tell piece rooms from fill rooms) on both the server and the client drlg. The room lists and grid dumps of every build
+- **Rooms:** 80 rooms (8x8 tiles each, a 160x32 tile rect) on both the server and the client drlg. The spike's LogRooms prints every room as `piece` or `fill`, so the logs carry the split plan §1.5 expected, but it was not counted for this record (it matters for the room bits at `+0x258` and S2). The room lists and grid dumps of every build
   (server, client, client again after leaving and returning, and server and client in a second game) are identical.
 - **Monsters:** spawn on the level (Frigid Highlands monsters, from the cloned levels.txt row; they attack).
 - **Leave and return:** `cheat goto 1` then back to 138: the client rebuilt the level and the room list and grid dump
@@ -278,8 +278,7 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
   these runs (restored afterwards), the first stall was a locked chest object.
 - **Collision (partial, own-room only):** `0x350a20` is reliable only inside the player's own room (it walks that room's
   near list; elsewhere it reports blocked, about 98 percent of the level). The spike sampled the player in 65 of 80 rooms
-  (the north-west and east edges were not reached) and kept each own-room window. That OR-merged map is a lower
-  bound that over-reports open ground (it showed open tiles in the dark channel the character could not enter), so it is
+  (the north-west and east edges were not reached) and kept each own-room window. That OR-merged map is a partial map (65 of 80 rooms), not a bound either way: it over-reports open ground (it showed open tiles in the dark channel the character could not enter) and leaves the unsampled rooms blocked, so it is
   not used as proof. It shows a walkable band through rows 9..13 at all four seams and a 1897-tile connected component from x 5 to 150.
 - **Automap (live, compared by eye):** the automap draws a continuous blue dotted line along the whole line (both ends and
   across the seams seen) with tree rows flanking the corridor, matching `[E][EW][EW][EW][W]` running east-west. It was
@@ -288,6 +287,6 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
 - **River or path (still open, leaning river):** the line is one row of blocks, so every seam is shared by two blocks
   and the mask alone cannot separate "river" from "path". What was seen: the dotted automap line and a dark flat channel run
   continuously through the corridor, and walkable ground exists on the same rows at all four seams. Which feature runs through
-  each 32-tile seam was not separated with trustworthy collision data, so this stays open, leaning river.
+  each 32-tile seam was not separated with trustworthy collision data, so this stays open, leaning river (visual: the automap line and the dark channel). It gets decided in S2 (an L-shape plus a branch, with a closed edge next to an occupied cell) or from the DS1 walk flags in the catalogue tool.
 - **Slot used:** 11 (`D2RToolsTest`). Game stopped, slot unlocked, the spike DLL removed and the slot's own plugins
   restored.
