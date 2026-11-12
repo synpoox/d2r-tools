@@ -31,8 +31,10 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
 - D2RLoader (tested with 1.3.1-beta)
-- Not `core-maps` (the PD2-Resurrected map plugin): use one or the other, never both. Both hook item spell 16 and the same
-  spawn functions. If `core-maps.dll` is loaded, `cartographer check` and `cartographer-report.txt` say so.
+- Not `core-maps` (the PD2-Resurrected map plugin): use one or the other, never both, because both change how map items
+  work. `cartographer check` always says so when `core-maps.dll` is loaded (and rewrites `cartographer-report.txt`). The
+  check at startup may miss it if `core-maps` loads after Cartographer (the load order is not verified); the report is
+  also rewritten at the first game start, which catches it without `check` when the game-start listener is registered.
 - A mod (without one, no tables are read, so there are no maps and only the default settings apply), because the map level is added to the mod's tables (step 3 below).
 
 ## Installation

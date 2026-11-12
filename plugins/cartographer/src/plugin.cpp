@@ -147,10 +147,6 @@ auto LoadAll() -> Loaded {
 	if (!names.haveItemSpells) {
 		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
 	}
-	const std::string coreMaps = CoreMapsNotice();
-	if (!coreMaps.empty()) {
-		loaded.report.Note("maps.txt", 0, coreMaps);
-	}
 	std::string text;
 	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt, mapstats.txt and mapevents.txt are all optional.
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::ShapesFile), &text)) {
@@ -231,7 +227,20 @@ auto Reload() -> Loaded {
 	for (const carto::Problem& p : loaded.report.problems) {
 		plog::Warn("%s", carto::Report::Line(p).c_str());
 	}
+	if (const std::string coreMaps = CoreMapsNotice(); !coreMaps.empty()) {
+		plog::Warn("%s", coreMaps.c_str());
+	}
 	return loaded;
+}
+
+// core-maps may load after Cartographer, so the load-time check can miss it. The first game start re-checks, once.
+void OnFirstGameStart() noexcept {
+	try {
+		if (!CoreMapsNotice().empty()) {
+			(void)Reload();
+		}
+	} catch (...) {
+	}
 }
 
 void Say(const D2RL::ConsoleCommandContext* command, const std::string& line) {
@@ -354,6 +363,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		std::vector<carto::PartStatus> parts;
+		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);
 	} catch (...) {
 		g_loadFailed = true;

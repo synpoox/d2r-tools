@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "core/coexist.h"
 #include "core/part_signatures.h"
 #include "core/request.h"
 #include "core/sig.h"
@@ -606,4 +607,14 @@ TEST_CASE("mapevents.txt: Waves is only read on Ambush rows; a number beyond int
 	CHECK(report.problems[0].text.find("Waves 'abc'") != std::string::npos);
 	CHECK(report.problems[1].line == 4);
 	CHECK(report.problems[1].text.find("not a whole number") == std::string::npos);
+}
+
+TEST_CASE("no notice when core-maps is not loaded") {
+	CHECK(carto::CoreMapsNotice(false).empty());
+}
+
+TEST_CASE("the notice names core-maps and says to use one") {
+	const std::string text = carto::CoreMapsNotice(true);
+	CHECK(text.find("core-maps") != std::string::npos);
+	CHECK(text.find("Remove one") != std::string::npos);
 }
