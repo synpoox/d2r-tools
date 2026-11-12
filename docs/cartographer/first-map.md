@@ -8,7 +8,21 @@ Every column is explained in [tables.md](tables.md).
 > map in game. Today only the `Preset` tileset is built; `Cave`, `Jungle` and the others are known names that are refused
 > with a message until they are ready.
 
-You need a mod (Cartographer reads nothing without one), D2RLoader, and Diablo II: Resurrected.
+## What works today
+
+Today a map only **opens a portal**. These columns take effect in game: `Name` (the message "Cartographer: <Name> is open."
+and `cartographer open <Name>`), `Item`, `Difficulty` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
+to the log). Everything else (`Size`, `Level`, `Boss`, `Monsters`, `Properties`, `EventChance`, `Density`, `Champions`,
+`Uniques`, and the settings in `cartographer.txt`) is checked and reported but **not applied yet**: every map opens the same
+level, the one preset level the installer adds. Generated layouts, bosses and properties come in later phases.
+
+## Prerequisites
+
+- D2RLoader and Diablo II: Resurrected, and a mod. Cartographer reads nothing without one.
+- The mod ships `levels.txt`, `lvlprest.txt` and `misc.txt` as text tables in its own `data\global\excel` folder. The
+  installer stops if `levels.txt` or `lvlprest.txt` is missing, and without `misc.txt` the item spell check is skipped.
+- A way for the player to get the map item (step 2). Cartographer adds no items, drops or recipes. Use your mod's own drop,
+  shop or cube recipe, or, to test only, add the item with whatever tool you already use for that.
 
 ## 1. Install the plugin
 
@@ -16,7 +30,8 @@ You need a mod (Cartographer reads nothing without one), D2RLoader, and Diablo I
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from the plugin folder. It adds one level to the mod's
    `levels.txt` and `lvlprest.txt` (backing each up once as `.bak`) and writes `slots.txt`. It is safe to run twice.
-   If your mod ships `.bin` table files, rebuild them from the edited `.txt` tables or remove them.
+   If your mod ships `.bin` table files, rebuild them from the edited `.txt` tables or remove them (this also applies to
+   the `misc.txt` edit in step 2).
 
 ## 2. Make an item that opens the map
 
@@ -26,7 +41,8 @@ and change two things:
 - `code`: up to 4 characters that no other item uses. This guide uses `t20`.
 - `pSpell`: `16`.
 
-Give it a name in your string tables so players can tell it apart. Cartographer adds no items of its own.
+Give it a name in your string tables so players can tell it apart. Cartographer adds no items of its own, so also decide
+how players get it (a drop, a shop or a cube recipe in your mod).
 
 ## 3. Add the map
 
@@ -38,15 +54,19 @@ Name	Tileset	Shape	Item
 Shorelines	Preset	Corridor	t20
 ```
 
-That map gets the defaults: size Medium, monster level 85, 6 random properties, Hell difficulty, any character level,
-opened from Harrogath. `Shape` has to be filled in but a `Preset` map does not use it yet.
+Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), none is applied in game yet.
+What does act: Hell difficulty, any character level, opened from Harrogath. `Shape` has to be filled in but a `Preset` map
+does not use it yet.
 
-Optional columns go to the right and a blank cell keeps the default. A tuned version:
+Optional columns go to the right and a blank cell keeps the default. A fuller row:
 
 ```
 Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	Difficulty	MinCharLevel
 Shorelines	Preset	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	Hell	80
 ```
+
+In game today only `Item`, `Difficulty` and `MinCharLevel` change what happens here; `Size`, `Level`, `Boss` and
+`Monsters` are accepted and checked, then ignored, so this map opens the same level as the plain row above.
 
 Upper and lower case do not matter for Cartographer's own words (`Preset`, `Large`, `Hell`) or for item codes. Names
 from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
@@ -54,7 +74,7 @@ from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
 ## 4. Start the game and check
 
 1. Start the game through D2RLoader, then press the console key and type `cartographer check`.
-2. It says how many maps loaded and lists every problem, for example "maps.txt row 3: tileset 'Jungel' is not known.
+2. It says how many maps loaded and lists the problems (the console shows the first 10; all of them are in `cartographer-report.txt`), for example "maps.txt row 3: tileset 'Jungel' is not known.
    Did you mean 'Jungle'?". A bad row is skipped; the others still load. The same text is in `cartographer-report.txt`
    in the plugin's log folder.
 3. Fix what it names and run `cartographer check` again; it re-reads your tables.
@@ -64,19 +84,23 @@ off, and `check` says which part.
 
 ## 5. Open the map
 
-Create a Hell character of level 80 or more (or leave `Difficulty` and `MinCharLevel` blank), go to Harrogath, and use the `t20`
-item. A red portal appears beside you; step in. You can also type `cartographer open Shorelines` in the console to open
-the portal with no item.
+The quickest test is `cartographer open Shorelines` in the console: it opens the portal with no item, but only in a game you
+host (not on someone else's server), once the game is running, in Harrogath, with the map's gates met.
+
+To test the item: create a Hell character of level 80 or more (or leave `Difficulty` and `MinCharLevel` blank), get the
+`t20` item by whatever way you set up in step 2, go to Harrogath and use it. A red portal appears beside you; step in.
 
 Only one map can be opened per game. A refused map is meant to stay in your inventory with a message that says why (wrong difficulty,
 not in town, character level too low, a map already open this game, no free spot for the portal).
 
 ## Where to go next
 
-- Give the map a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required).
-- Change the random properties or add events: `mapstats.txt` and `mapevents.txt` (examples in the same folder). The plugin does
-  not read these two yet.
-- Change the defaults for every map: `cartographer.txt`.
+- Add more maps: one row and one item each. Each row's `Item`, `Difficulty` and `MinCharLevel` work now.
+- Plan a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required) are checked now
+  and will apply once layouts are generated (later phases).
+- Random properties and events: `mapstats.txt` and `mapevents.txt` (examples in the same folder). The plugin does not read
+  these two yet.
+- The defaults for every map: `cartographer.txt`. Its settings are checked, not applied yet.
 
 ## When something does not work
 

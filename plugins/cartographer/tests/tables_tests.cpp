@@ -8,6 +8,8 @@
 #include "core/sig.h"
 #include "core/tables.h"
 #include "core/tsv.h"
+#include "events.h"
+#include "mapstats.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -414,35 +416,56 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(settings.town == "Harrogath");
 }
 
-TEST_CASE("the example pack's mapstats.txt and mapevents.txt follow the documented columns and limits") {
-	// The plugin does not read these two tables yet; this checks the pack against the rules in tables.md.
+TEST_CASE("the example pack's mapstats.txt and mapevents.txt pass the real stats and events checks") {
+	// The plugin does not read these two tables yet; the pack is run through the same checks the later phases use.
 	const Tsv stats = ParseTsv(ExampleFile("mapstats.txt"));
 	REQUIRE(stats.header == std::vector<std::string>{"Target", "Stat", "Min", "Max", "Weight"});
-	CHECK(stats.rows.size() == 4);
+	std::vector<cartographer::stats::PoolRow> pool;
 	for (const TsvRow& row : stats.rows) {
 		const std::string target = stats.Cell(row, 0);
-		CHECK((EqualsNoCase(target, "Monsters") || EqualsNoCase(target, "Players")));
-		CHECK(!stats.Cell(row, 1).empty());
-		const int min = std::atoi(stats.Cell(row, 2).c_str()), max = std::atoi(stats.Cell(row, 3).c_str());
-		CHECK(min <= max);
-		CHECK(std::atoi(stats.Cell(row, 4).c_str()) >= 0);
+		CHECK((EqualsNoCase(target, "Players") || EqualsNoCase(target, "Monsters")));
+		cartographer::stats::PoolRow p;
+		p.target = EqualsNoCase(target, "Players") ? cartographer::stats::Target::Players : cartographer::stats::Target::Monsters;
+		p.stat = stats.Cell(row, 1);
+		p.min = std::atoi(stats.Cell(row, 2).c_str());
+		p.max = std::atoi(stats.Cell(row, 3).c_str());
+		p.weight = std::atoi(stats.Cell(row, 4).c_str());
+		pool.push_back(p);
 	}
+	CHECK(pool.size() == 4);
+	for (const auto& issue : cartographer::stats::checkPool(pool)) {
+		FAIL_CHECK(issue.message);
+	}
+
 	const Tsv events = ParseTsv(ExampleFile("mapevents.txt"));
 	REQUIRE(events.header == std::vector<std::string>{"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"});
-	CHECK(events.rows.size() == 3);
-	for (const TsvRow& row : events.rows) {
-		const std::string kind = events.Cell(row, 1);
-		CHECK((EqualsNoCase(kind, "Boss") || EqualsNoCase(kind, "Ambush") || EqualsNoCase(kind, "Horde") ||
-		       EqualsNoCase(kind, "Treasure") || EqualsNoCase(kind, "Shrine")));
-		CHECK(!events.Cell(row, 0).empty());
-		CHECK(!events.Cell(row, 2).empty());
-		if (!events.Cell(row, 3).empty()) {
-			const int count = std::atoi(events.Cell(row, 3).c_str());
-			CHECK((count >= 1 && count <= 200));
+	std::vector<cartographer::events::Row> rows;
+	for (const TsvRow& r : events.rows) {
+		cartographer::events::Row row;
+		row.name = events.Cell(r, 0);
+		row.kindText = events.Cell(r, 1);
+		if (const auto kind = cartographer::events::parseKindName(row.kindText)) {
+			row.kind = *kind;
 		}
-		if (!events.Cell(row, 4).empty()) {
-			const int waves = std::atoi(events.Cell(row, 4).c_str());
-			CHECK((waves >= 1 && waves <= 50));
+		row.spawn = events.Cell(r, 2);
+		if (!events.Cell(r, 3).empty()) {
+			row.count = std::atoi(events.Cell(r, 3).c_str());
 		}
+		if (!events.Cell(r, 4).empty()) {
+			row.waves = std::atoi(events.Cell(r, 4).c_str());
+		}
+		row.drop = events.Cell(r, 5);
+		row.message = events.Cell(r, 6);
+		if (!events.Cell(r, 7).empty()) {
+			row.weight = std::atoi(events.Cell(r, 7).c_str());
+		}
+		rows.push_back(row);
+	}
+	CHECK(rows.size() == 3);
+	for (const std::string& problem : cartographer::events::validateRows(rows)) {
+		FAIL_CHECK(problem);
+	}
+	for (const std::string& note : cartographer::events::warnRows(rows)) {
+		FAIL_CHECK(note);
 	}
 }

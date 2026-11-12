@@ -6,13 +6,17 @@
 All tables are tab-separated `.txt` files with a header row (save from a spreadsheet as "Text (Tab delimited)", or edit in
 any text editor). They live in the mod's `<Mod>.mpq\data\global\excel\d2rloader\cartographer\` folder.
 
-What the plugin reads today:
+What the plugin reads, and what takes effect in game today:
 
-| File | Read today? |
-|---|---|
-| `maps.txt`, `cartographer.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. |
-| `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. |
-| `mapstats.txt`, `mapevents.txt`, `shapes.txt`, `tilesets.txt` | Not yet. The rules below are what the code behind them follows, but nothing in the plugin draws, rolls or builds from these files yet (generated layouts, properties and events come in later phases). A file you add now is ignored. |
+| File | Read today? | Applied in game today? |
+|---|---|---|
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
+| `cartographer.txt` | Yes, checked the same way. | No. The settings are checked and reported but nothing uses them yet. |
+| `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
+| `mapstats.txt`, `mapevents.txt`, `shapes.txt`, `tilesets.txt` | Not yet. | No. The rules below are what the code behind them follows, but nothing in the plugin draws, rolls or builds from these files yet (generated layouts, properties and events come in later phases). A file you add now is ignored. |
+
+Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
+happens in game.
 
 Nothing in this plugin has been run in a game yet. This page is checked against the code and the unit tests only.
 
@@ -33,13 +37,13 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
-| `Name` | yes | The map's name, shown on entry and used by `cartographer open`. Unique across maps, ignoring case | none | Shorelines |
+| `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. Names from `shapes.txt` are not accepted yet. A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
-| `Level` | no | Monster level in the map, 1 to 255 | 85 | 90 |
+| `Level` | no | Monster level in the map, 1 to 255 (checked only; not applied yet) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
-| `Boss` | no | A monstats `Id` or a superuniques name placed at the end of the path (case must match) | no boss | `Bishibosh` |
+| `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
@@ -60,9 +64,9 @@ A row is refused with a message, and skipped, when:
 - `Item` is empty, longer than 4 characters, not an item in `misc.txt`, `weapons.txt` or `armor.txt`, an item without item spell 16, or an item another map already uses;
 - `Boss` or a `Monsters` entry is not in the game's tables, or `Monsters` has more than 10 entries.
 
-When the game's own tables cannot be read, the `Boss`, `Monsters` and `Item` names are not checked (the report says so). The spell-16 check needs `misc.txt` with a `pSpell` column; without it the check is skipped, and an item without spell 16 simply never opens its map.
+Each name check is skipped only when the game table it needs cannot be read, and the report says so: `Boss` needs both `monstats` and `superuniques`, `Monsters` needs `monstats`, and `Item` needs the item tables. The spell-16 check needs `misc.txt` with a `pSpell` column; without it the check is skipped, and an item without spell 16 simply never opens its map.
 
-A map opens only in the `Difficulty` it names (Hell unless you say otherwise), in Harrogath, for a character of at least `MinCharLevel`, once per game. A refused map stays in the inventory and a sentence says why. A maze map (when they are built) has an entrance and no exit: the player arrives through the portal, and the boss and the event room are at the far end of the path.
+A map opens only in the `Difficulty` it names (Hell unless you say otherwise), in Harrogath, for a character of at least `MinCharLevel`, once per game. This is what acts in game today. A refused map stays in the inventory and a sentence says why. Planned, not built yet: a maze map has an entrance and no exit, the player arrives through the portal, and the boss and the event room are at the far end of the path.
 
 ## mapstats.txt (optional)
 
@@ -123,7 +127,7 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings. Checked and reported today, not applied yet. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|

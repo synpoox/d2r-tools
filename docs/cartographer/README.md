@@ -1,4 +1,4 @@
-# Cartographer: your first map in 5 minutes
+# Cartographer: feature tour (draft)
 
 > What works today is in [first-map.md](first-map.md) (the step-by-step guide) and [tables.md](tables.md) (every column). This page is the longer, planned feature tour.
 
