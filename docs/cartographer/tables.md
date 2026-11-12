@@ -42,9 +42,19 @@ There is no text column. The text comes from the game's own stat description.
 |---|---|---|---|
 | `Target` | `Monsters` or `Players` | none (required) | Monsters |
 | `Stat` | A stat name from the game's stat table | none (required) | `item_maxhp_percent` |
-| `Min` | Lowest rolled value | none (required) | 10 |
-| `Max` | Highest rolled value | none (required) | 20 |
-| `Weight` | How often it is drawn compared with the others | 1 | 3 |
+| `Min` | Lowest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 10 |
+| `Max` | Highest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 20 |
+| `Weight` | How often it is drawn compared with the others. 0 switches the row off. Limit 1,000,000 | 1 | 3 |
+
+Rules and limits:
+
+- `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
+- `Min` and `Max` beyond 500,000,000 (or below -500,000,000) are cut to that, and `check` warns.
+- If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
+- Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
+- If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
+- A negative `Properties` in `maps.txt` counts as empty (the setting is used); a negative `Properties` in `cartographer.txt` counts as 0.
+- With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. If the item has no stats, a normal draw is made instead.
 
 ## mapevents.txt (optional)
 
@@ -55,11 +65,19 @@ What events exist. A map has `EventChance` percent chance of one event. One row 
 | `Name` | Shown to the player when the event starts | none (required) | The Drowned King |
 | `Kind` | `Boss`, `Ambush`, `Horde`, `Treasure` or `Shrine` | none (required) | Boss |
 | `Spawn` | A monster `Id`, a unique monster name or an object name | none (required) | `Bishibosh` |
-| `Count` | Minions (Boss), wave size (Ambush) or horde size (Horde) | 1 | 6 |
-| `Waves` | Number of waves (Ambush only) | 3 | 4 |
+| `Count` | Minions (Boss), wave size (Ambush) or horde size (Horde). 1 to 200 | 1 | 6 |
+| `Waves` | Number of waves (Ambush only; ignored on other kinds). 1 to 50 | 3 | 4 |
 | `Drop` | A treasure class name. For Treasure, the drop. For Boss, extra loot | none | Act 5 (H) Super C |
 | `Message` | Extra text shown when the event starts | none | The water churns... |
-| `Weight` | How often it is drawn compared with the others | 1 | 2 |
+| `Weight` | How often it is drawn compared with the others. 0 switches the row off. Limit 1,000,000 | 1 | 2 |
+
+Rules and limits:
+
+- `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
+- `Count` must be 1 to 200 and `Waves` 1 to 50; a value outside that is an error and the row is skipped. `Waves` is only looked at on `Ambush` rows.
+- A `Kind` that is not one of the five is an error, and `check` suggests the closest one ("Did you mean Boss?").
+- A `Treasure` with no `Drop` still works but drops nothing special, so `check` warns.
+- Errors name the line of the row in the file.
 
 The kinds:
 
