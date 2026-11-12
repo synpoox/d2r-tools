@@ -18,12 +18,12 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map
   stays in your inventory; the reason is in the log and the console, and on screen you see "I can't use this yet." Both
   opening in Hell and a refusal (level gate) were seen in a game.
-- **Map properties** (monsters checked in game on cheat-spawned ones only; the player's stats do not show on the character sheet): when a map opens, `Properties` random properties are drawn
+- **Map properties** (monsters checked in game on cheat-spawned ones only; the player's stats showed on the character sheet in single player, from one run on the test character): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
   monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
   `cartographer.txt`; it is `0` by default and then nothing is attached to the player. **Turn `PlayerStats` on only on a
   test character**: the stats apply and are removed when the player leaves the map level, and a Save and Exit inside the
-  map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), but the character screen does not show them (one live check, in which no unused game state was found because the rule for an empty state row was wrong; it is corrected from the game compiler's output, not verified in game, and `cartographer check` prints the state it would use or, if none, why the closest rows were refused). Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
+  map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), and the character screen showed them inside the map and back to normal on leaving (single player, one run, test character; `cartographer check` prints the state it would use or, if none, why the closest rows were refused). Not checked: joining clients and multiplayer, more than 16 player stats, death and curses, and a save with the stats attached where the save writer is confirmed to run. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
@@ -178,8 +178,8 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
   build and test setup, 2026-11-12; details in `docs/reverse-engineering/cartographer.md` section 7): monster stats
   apply to monsters spawned in the map level and not in town (life doubled, fire resistance, seen in the overlay);
   `PlayerStats=1` applied strength and cold resistance on the server, removed them on leaving the map and the game, and
-  a Save and Exit inside the map left the test character unchanged. **Not seen in game**: the player's stats on the
-  character sheet (they do not show), the monsters' own damage and life bar as played, natural (non-cheat) spawns, and
+  a Save and Exit inside the map left the test character unchanged; a second run showed strength and cold resistance on the
+  character sheet inside the map and back to normal after leaving (single player, one run, test character). **Not seen in game**: the monsters' own damage and life bar as played, natural (non-cheat) spawns, and
   guards failing open (no mismatching build to test).
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
