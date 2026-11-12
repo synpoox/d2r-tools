@@ -20,8 +20,10 @@ record them here first, then copy them there.
   and regen interception points.
 - [Player Bars](player-bars.md): life and mana reads, screen shift, orb widgets, native bars.
 - [DPS Counter](dps-counter.md): the server damage apply `0x44a9b0` (hooked) and the missile owner.
+- [Cartographer](cartographer.md): stub of native addresses from the pd2-resurrected research (maze steering, outdoor
+  builder, level regeneration); nothing validated here yet, so it has no index row below until the S0 probe produces byte signatures. Docs: [docs/cartographer/](../cartographer/README.md).
 
-The pre-registry documents above (all except Quick NPC) keep their original format; bring each to the
+The pre-registry documents above (all except Quick NPC and the Cartographer stub) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
 
 ## Tested compatibility profiles
