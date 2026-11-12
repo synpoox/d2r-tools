@@ -1234,6 +1234,7 @@ headers and guides, not run), **needs game** (not shown). Nothing here was run i
 - Multiplayer: as above, a TCP/IP client keeps "Colossal Summit" unless its own plugin writes the same keys (needs the map identity from the #98 sync).
 - **Known limit, one row per slot:** a second map opened through the same slot in one game rewrites the slot row, so the first map's portal (if it still stands) and the automap show the newest map's name. Not redesigned.
 - **Data flag, inference:** the plugin picks the levels bank with the server's data flag (`game + 0x106`). The readers pick theirs by themselves; the tooltip uses the object unit's flag (`0x34a0e0`, `unit + 0x1bd`, at `0xc185d` and `0xc188a`). That both give the same bank in single player is inference, not shown. If they differed, the write would land in a bank nobody reads (the slot keeps its name).
+- Restore by saved row pointer: if the game freed its levels table and left the heap untouched, bytes that still hold our key would be written into freed memory. `Readable` and the exact 40-byte key match make a stray write very unlikely, and the game loads the table once and tears it down at exit, so this is accepted.
 - Restore on `GameLeft` assumes the event fires on a thread that may touch the table; one copy of the table was found in the earlier check, a second data bank was not (the plugin uses the game's own data flag).
 
 ## 11. Event Spawn names from the game's compiled tables (issue #95)

@@ -197,7 +197,7 @@ TEST_CASE("registration plan: a change waits while a row holds a key, then appli
 	plan.Want(true, {"One", "Two"});
 	CHECK(plan.Next(false) == Step::Apply);
 	plan.Dropped();
-	plan.Applied();
+	plan.Applied(plan.Wanted());
 	CHECK(plan.Registered());
 	CHECK(plan.Held() == std::vector<std::string>({"One", "Two"}));
 	CHECK(plan.Next(true) == Step::Nothing);
@@ -210,7 +210,7 @@ TEST_CASE("registration plan: a change waits while a row holds a key, then appli
 	CHECK(plan.Next(false) == Step::Apply);
 	plan.Dropped();
 	CHECK_FALSE(plan.Registered());
-	plan.Applied();
+	plan.Applied(plan.Wanted());
 	CHECK(plan.Held() == std::vector<std::string>({"Zero", "One", "Two"}));
 	CHECK(plan.Next(false) == Step::Nothing);
 }
@@ -220,7 +220,7 @@ TEST_CASE("registration plan: MapNames=0 mid-game is deferred, a later change re
 	RegistrationPlan plan;
 	plan.Want(true, {"One"});
 	plan.Dropped();
-	plan.Applied();
+	plan.Applied(plan.Wanted());
 
 	plan.Want(false, {"One"});
 	CHECK(plan.Next(true) == Step::Deferred);
@@ -233,7 +233,7 @@ TEST_CASE("registration plan: MapNames=0 mid-game is deferred, a later change re
 	plan.Want(false, {"One"});
 	CHECK(plan.Next(false) == Step::Apply);
 	plan.Dropped();
-	plan.Applied();  // wants nothing: holds nothing
+	plan.Applied({});  // wants nothing: holds nothing
 	CHECK_FALSE(plan.Registered());
 	CHECK(plan.Held().empty());
 	CHECK(plan.Next(false) == Step::Nothing);
@@ -252,4 +252,80 @@ TEST_CASE("registration plan: a failed registration is tried again at the next c
 	plan.Dropped();  // the loader refused: Applied() is not called
 	CHECK_FALSE(plan.Registered());
 	CHECK(plan.Next(false) == Step::Apply);
+}
+
+TEST_CASE("registration plan: a registration of an older list is not taken for the newer wanted list") {
+	using Step = RegistrationPlan::Step;
+	RegistrationPlan plan;
+	plan.Want(true, {"One"});
+	plan.Dropped();
+	const std::vector<std::string> registered = plan.Wanted();
+	plan.Want(true, {"One", "Two"});  // a reload while the registration was under way
+	plan.Applied(registered);
+	CHECK(plan.Held() == std::vector<std::string>({"One"}));
+	CHECK(plan.Next(false) == Step::Apply);
+}
+
+TEST_CASE("row saver: a failed restore keeps the registration until the process ends") {
+	using Step = RegistrationPlan::Step;
+	RowSaver saver;
+	RegistrationPlan plan;
+	plan.Want(true, {"One"});
+	plan.Dropped();
+	plan.Applied(plan.Wanted());
+	uint8_t name[FieldSize] = {}, entry[FieldSize] = {};
+	CHECK(saver.Remember(138, name, entry));
+	CHECK(saver.HoldsKeys());
+	plan.Want(false, {});  // MapNames=0 pending
+	CHECK(plan.Next(saver.HoldsKeys()) == Step::Deferred);
+	// GameLeft: the restore failed (the engine marks it), then everything remembered is taken.
+	saver.MarkStuck();
+	saver.TakeAll();
+	CHECK(saver.Count() == 0);
+	CHECK(saver.Stuck());
+	CHECK(saver.HoldsKeys());
+	CHECK(plan.Next(saver.HoldsKeys()) == Step::Deferred);  // still not applied
+	// A restore that worked leaves nothing held.
+	RowSaver clean;
+	CHECK(clean.Remember(138, name, entry));
+	clean.TakeAll();
+	CHECK_FALSE(clean.HoldsKeys());
+	CHECK(plan.Next(clean.HoldsKeys()) == Step::Apply);
+}
+
+TEST_CASE("row saver: a failed second open puts the previous keys back, so the restore still matches") {
+	RowSaver saver;
+	uint8_t original[FieldSize] = {}, originalEntry[FieldSize] = {};
+	std::memcpy(original, "ColossalSummit", 14);
+	std::memcpy(originalEntry, "EnteringColossalSummit", 22);
+	uint8_t keyA[FieldSize] = {}, keyAEntry[FieldSize] = {}, keyB[FieldSize] = {}, keyBEntry[FieldSize] = {};
+	REQUIRE(WriteKey(keyA, "cartographer:N0"));
+	REQUIRE(WriteKey(keyAEntry, "cartographer:E0"));
+	REQUIRE(WriteKey(keyB, "cartographer:N1"));
+	REQUIRE(WriteKey(keyBEntry, "cartographer:E1"));
+	// The row's bytes as the engine would hold them.
+	uint8_t rowName[FieldSize], rowEntry[FieldSize];
+	std::memcpy(rowName, original, FieldSize);
+	std::memcpy(rowEntry, originalEntry, FieldSize);
+	// Map A opens (first on the slot).
+	CHECK(saver.Remember(138, rowName, rowEntry));
+	CHECK(saver.SetKeys(138, keyA, keyAEntry));
+	std::memcpy(rowName, keyA, FieldSize);
+	std::memcpy(rowEntry, keyAEntry, FieldSize);
+	// Map B opens on the same slot and fails: the keys are recorded as B's, then the undo writes A back and records A's.
+	CHECK(saver.SetKeys(138, keyB, keyBEntry));
+	std::memcpy(rowName, keyB, FieldSize);
+	CHECK(saver.SetKeys(138, keyA, keyAEntry));
+	std::memcpy(rowName, keyA, FieldSize);
+	std::memcpy(rowEntry, keyAEntry, FieldSize);
+	// GameLeft: the fields hold the recorded keys, so the original goes back.
+	SavedRow saved;
+	REQUIRE(saver.Take(138, &saved));
+	CHECK(std::memcmp(rowName, saved.keyName, FieldSize) == 0);
+	CHECK(std::memcmp(rowEntry, saved.keyEntry, FieldSize) == 0);
+	std::memcpy(rowName, saved.name, FieldSize);
+	std::memcpy(rowEntry, saved.entry, FieldSize);
+	CHECK(std::memcmp(rowName, original, FieldSize) == 0);
+	CHECK(std::memcmp(rowEntry, originalEntry, FieldSize) == 0);
+	CHECK_FALSE(saver.SetKeys(139, keyA, keyAEntry));  // not remembered
 }

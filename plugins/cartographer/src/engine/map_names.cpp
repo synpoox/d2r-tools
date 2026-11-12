@@ -8,6 +8,7 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -27,21 +28,19 @@ using LevelsRowFn = uint8_t* (*)(uint32_t dataFlag, int32_t levelId) noexcept;
 Part g_part = {"LevelsRow", sig::LevelsRow, 0, false, nullptr, {}, {}};
 
 std::mutex g_lock;     // state below; the game thread takes it in MapNamesBeforeOpen, so no SDK call is made while holding it
-std::mutex g_regLock;  // one registration change at a time; never taken by the game thread's open path
+std::mutex g_regLock;  // one registration change at a time; the game thread only try-locks it (ApplyPlan), so it never waits behind an SDK call
+std::atomic<bool> g_again{false};  // a change was asked for while another thread held g_regLock: the holder runs it
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::ResourceService* g_resources = nullptr;
 const D2RL::LocalizationService* g_localization = nullptr;
 bool g_installed = false;
 mn::RegistrationPlan g_plan;  // what the tables want against what the loader holds
 D2RL::Resources::RegistrationHandle g_handle = D2RL::Resources::InvalidHandle;
-bool g_stuck = false;         // a restore failed: a row may still hold one of our keys
 
-// A row this plugin wrote into, with the exact bytes it wrote (the restore only touches a field that still holds them).
+// A row this plugin wrote into (the keys it wrote are in g_saver; the restore only touches a field that still holds them).
 struct Target {
 	int level;
 	const uint8_t* row;
-	uint8_t name[mn::FieldSize];
-	uint8_t entry[mn::FieldSize];
 };
 mn::RowSaver g_saver;
 std::vector<Target> g_targets;
@@ -56,9 +55,9 @@ struct LastWrite {
 };
 LastWrite g_last;
 
-// Rows hold keys of ours (or a restore failed): the registration must stay as it is. g_lock must be held.
+// Rows hold keys of ours (or a restore failed, for the rest of the process): the registration must stay as it is. g_lock must be held.
 auto RowsHeldLocked() -> bool {
-	return g_saver.Count() > 0 || g_stuck;
+	return g_saver.HoldsKeys();
 }
 
 auto RowOf(uint32_t dataFlag, int level) noexcept -> uint8_t* {
@@ -146,12 +145,12 @@ auto TextOf(const std::string& localKey, std::string* out) noexcept -> bool {
 // pending until MapNamesRestore / MapNamesOpenFailed calls this again). The SDK calls are made without g_lock, so the game
 // thread is never held up behind them; g_regLock keeps two changes apart, and the plan says "nothing registered" while one
 // is under way, which makes MapNamesBeforeOpen skip.
-void ApplyPlan() noexcept {
+void ApplyOnce() noexcept {
 	try {
-		std::lock_guard<std::mutex> change(g_regLock);
 		D2RL::Resources::RegistrationHandle oldHandle = D2RL::Resources::InvalidHandle;
 		std::string json;
 		bool registerNew = false;
+		std::vector<std::string> registeredNames;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (!g_installed || g_resources == nullptr || g_localization == nullptr) {
@@ -170,7 +169,8 @@ void ApplyPlan() noexcept {
 			g_plan.Dropped();
 			registerNew = g_plan.WantsRegistration();
 			if (registerNew) {
-				json = mn::StringsJson(g_plan.Wanted());
+				registeredNames = g_plan.Wanted();
+				json = mn::StringsJson(registeredNames);
 			}
 		}
 		if (oldHandle != D2RL::Resources::InvalidHandle) {
@@ -192,10 +192,33 @@ void ApplyPlan() noexcept {
 		}
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_handle = handle;
-		g_plan.Applied();
+		g_plan.Applied(registeredNames);
 		plog::Info("map names: registered %zu map name(s) as strings", g_plan.Held().size());
 	} catch (...) {
 		plog::Warn("map names: building the strings file failed; maps keep the slot level's name");
+	}
+}
+
+// Runs ApplyOnce under g_regLock. The game thread (gameThread) only try-locks: if another thread is in the middle of a
+// change it asks that thread to run it again and returns, so the game thread never waits behind an SDK call.
+void ApplyPlan(bool gameThread = false) noexcept {
+	g_again = true;
+	for (;;) {
+		std::unique_lock<std::mutex> change(g_regLock, std::defer_lock);
+		if (gameThread) {
+			if (!change.try_lock()) {
+				return;  // the holder sees g_again and runs it
+			}
+		} else {
+			change.lock();
+		}
+		while (g_again.exchange(false)) {
+			ApplyOnce();
+		}
+		change.unlock();
+		if (!g_again.load()) {
+			return;
+		}
 	}
 }
 
@@ -243,11 +266,11 @@ void RestoreLevelLocked(int level) noexcept {
 		// Each field on its own: after a half-finished write only one of them holds our key.
 		bool ok = true;
 		bool any = false;
-		if (FieldHolds(nameField, target->name)) {
+		if (FieldHolds(nameField, saved.keyName)) {
 			any = true;
 			ok = WriteGame(nameField, saved.name, mn::FieldSize) && ok;
 		}
-		if (FieldHolds(entryField, target->entry)) {
+		if (FieldHolds(entryField, saved.keyEntry)) {
 			any = true;
 			ok = WriteGame(entryField, saved.entry, mn::FieldSize) && ok;
 		}
@@ -257,7 +280,7 @@ void RestoreLevelLocked(int level) noexcept {
 			plog::Info("map names: level %d text put back", level);
 		} else {
 			// The saved original is dropped (Take) so the plugin's own key is never remembered as the original next game.
-			g_stuck = true;
+			g_saver.MarkStuck();
 			plog::Error("map names: level %d text could not be put back; the registered strings stay", level);
 		}
 	}
@@ -299,8 +322,9 @@ void UndoLastLocked() noexcept {
 	for (const Target& t : g_targets) {
 		if (t.level == last.level) {
 			uint8_t* row = const_cast<uint8_t*>(t.row);
+			g_saver.SetKeys(last.level, last.prevName, last.prevEntry);  // the row holds the previous map's keys again; the restore must match those
 			if (!WriteGame(row + mn::RowNameOffset, last.prevName, mn::FieldSize) || !WriteGame(row + mn::RowEntryOffset, last.prevEntry, mn::FieldSize)) {
-				g_stuck = true;
+				g_saver.MarkStuck();
 				plog::Error("map names: level %d previous text could not be put back", last.level);
 			}
 			return;
@@ -435,16 +459,14 @@ auto MapNamesBeforeOpen(const MapDef& map, const Tables& tables, int level, uint
 		g_last.valid = true;
 		if (!had) {
 			g_saver.Remember(level, nameField, entryField);
-			Target target{level, row, {}, {}};
-			g_targets.push_back(target);
+			g_targets.push_back(Target{level, row});
 		}
 		for (Target& t : g_targets) {
 			if (t.level == level) {
 				t.row = row;
-				std::memcpy(t.name, newName, mn::FieldSize);
-				std::memcpy(t.entry, newEntry, mn::FieldSize);
 			}
 		}
+		g_saver.SetKeys(level, newName, newEntry);
 		plog::Info("map names: level %d row %p: writing '%s' and '%s'", level, static_cast<const void*>(row), nameKey.c_str(), entryKey.c_str());
 		if (!WriteGame(nameField, newName, mn::FieldSize) || !WriteGame(entryField, newEntry, mn::FieldSize)) {
 			plog::Warn("map names: writing the row failed; putting the previous text back");
@@ -466,7 +488,7 @@ void MapNamesOpenFailed(int level) noexcept {
 				UndoLastLocked();
 			}
 		}
-		ApplyPlan();
+		ApplyPlan(true);
 	} catch (...) {
 		plog::Error("map names: undoing the level text failed");
 	}
@@ -474,15 +496,14 @@ void MapNamesOpenFailed(int level) noexcept {
 
 void MapNamesRestore() noexcept {
 	MapNamesUnload();
-	ApplyPlan();  // a table change that waited for the rows
+	ApplyPlan(true);  // a table change that waited for the rows
 }
 
 void MapNamesUnload() noexcept {
 	try {
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_last = LastWrite();
-		RestoreAllLocked();
-		g_stuck = false;
+		RestoreAllLocked();  // a failed restore keeps the registration (the saver stays stuck)
 	} catch (...) {
 		plog::Error("map names: restoring the level text failed");
 	}

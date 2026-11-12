@@ -56,6 +56,9 @@ struct SavedRow {
 	int level = 0;
 	uint8_t name[FieldSize] = {};
 	uint8_t entry[FieldSize] = {};
+	// The keys this plugin last wrote into the row (set with SetKeys); the restore touches a field only while it holds them.
+	uint8_t keyName[FieldSize] = {};
+	uint8_t keyEntry[FieldSize] = {};
 };
 
 class RowSaver {
@@ -65,6 +68,14 @@ public:
 	auto Remember(int level, const uint8_t* name, const uint8_t* entry) -> bool;
 	auto Has(int level) const -> bool;
 	auto Count() const -> size_t { return rows_.size(); }
+	// Records the keys now written into `level`'s row. A failed open that puts the previous map's keys back records those
+	// again, so the later restore still matches the row. False when the level is not remembered.
+	auto SetKeys(int level, const uint8_t* name, const uint8_t* entry) -> bool;
+	// A restore failed: a row may still hold one of the plugin's keys. Stays set for the rest of the process (TakeAll does not clear it).
+	void MarkStuck() { stuck_ = true; }
+	auto Stuck() const -> bool { return stuck_; }
+	// True while the registration must stay as it is: a level is remembered, or a restore failed.
+	auto HoldsKeys() const -> bool { return !rows_.empty() || stuck_; }
 	// Hands back everything remembered and forgets it.
 	auto TakeAll() -> std::vector<SavedRow>;
 	// Hands back the one level's copy and forgets only that. False when the level is not remembered.
@@ -72,6 +83,7 @@ public:
 
 private:
 	std::vector<SavedRow> rows_;
+	bool stuck_ = false;
 };
 
 // What the plugin's string registration should be (from the tables) against what the loader holds. A change is applied only
@@ -87,8 +99,9 @@ public:
 	auto Next(bool rowsHeld) const -> Step;
 	// The loader's registration was removed (or is being replaced): it holds nothing now.
 	void Dropped();
-	// The wanted registration was made: the loader holds it now.
-	void Applied();
+	// A registration of `names` was made: the loader holds that list now (not whatever is wanted at this moment, which a
+	// reload may have changed while the SDK call was under way; then the next Next() says Apply).
+	void Applied(std::vector<std::string> names);
 
 	auto Registered() const -> bool { return heldRegistered_; }
 	auto Held() const -> const std::vector<std::string>& { return held_; }

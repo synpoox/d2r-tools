@@ -238,9 +238,23 @@ void RegistrationPlan::Dropped() {
 	held_.clear();
 }
 
-void RegistrationPlan::Applied() {
-	heldRegistered_ = wantRegistered_;
-	held_ = want_;
+void RegistrationPlan::Applied(std::vector<std::string> names) {
+	heldRegistered_ = !names.empty();
+	held_ = std::move(names);
+}
+
+auto RowSaver::SetKeys(int level, const uint8_t* name, const uint8_t* entry) -> bool {
+	if (name == nullptr || entry == nullptr) {
+		return false;
+	}
+	for (SavedRow& row : rows_) {
+		if (row.level == level) {
+			std::memcpy(row.keyName, name, FieldSize);
+			std::memcpy(row.keyEntry, entry, FieldSize);
+			return true;
+		}
+	}
+	return false;
 }
 
 auto RowSaver::TakeAll() -> std::vector<SavedRow> {
