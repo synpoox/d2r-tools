@@ -2055,9 +2055,10 @@ Readers: `0x419e80` picks the monster kind from `+0x10`, `+0x11` and `+0x14`; `0
 
 ### Guards (runtime, per part, fail open)
 
-- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze or Preset) (`SlotAllowed`). Local, independent of `ValidateSlots`.
+- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze) (`SlotAllowed`). Local, independent of `ValidateSlots`.
 - Row: readable, `Id` equals the slot level; `Level` off when a `MonLvl*` field is outside 0..255.
-- Record: pointer from `game + 0x1d0` and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- Record: pointer from `game + 0x1d0`, the level below the levels count (64-bit at `tables + 0x1468`, the bound `0x508750` loops to; the array holds levels 1 up to count - 1) and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- Monsters list: refused with a log line (the slot keeps its own list) when it has more than 10 entries, a weight outside 0..255, weights that are all 0 (the game's weighted pick would find none) or a sum above 255 (the record keeps the sum in a byte, `0x509940` adds the weights into `record + 0x11`). A monster whose monstats row has bit 0 clear at `+0x3c` is left out, as `0x509940` does (`test` against the byte at `0x1d996d0`, which is `1`, at `0x509940` line `(byte)DAT_141d996d0 & *(byte *)(row + 0x3c)`, the same test as `0x493280`); when none is kept the list is refused. Static only: the name of monstats `+0x3c` bit 0 is not known.
 - A part whose check fails is switched off with a log line; the others still apply. A write that fails stops the open and the undo restores what was written.
 
 ### Restore
@@ -2069,7 +2070,7 @@ The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), 
 - Needs game: that `Density`, `Uniques` and `Monsters` written to the record change the spawns (static reading says so, nothing was observed), and that `Level` shows in monster levels.
 - Inference: entry `+3` is a member count (`0x4195e0`) and 0 is a safe value; the plugin writes 0.
 - Normal difficulty also reads the row's umon list; not reached, as maps open in Hell only (#159).
-- The array bound is not checked beyond `Readable` and the level id.
+- The level is bounded by the levels count read at `tables + 0x1468` through the data tables base; when that cannot be read the record parts are off.
 - One record per slot: a second map through the same slot in one game overwrites the first map's values for rooms that populate later.
 - Client side: a TCP/IP client writes none of this; the host spawns the monsters.
 
@@ -2105,3 +2106,30 @@ Spike: `plugins/cartographer-outdoor-spike/` on `spike/cartographer-outdoor-s2` 
 4. Monster and object population per clearing, boss placement in the clearing, and an exit or waypoint to leave the map (the spike had none; the way out was the town portal).
 5. Automap and minimap edge behaviour, a border piece or fill if the automap shows the void, and the arrival choice made by the layout (the entry cell) instead of a spike-side room flag.
 6. The real player flow: the map item and portal tooltip path (sections 3 and 10) driving this slot, multiplayer sync (section 12) and a sweep over layouts and LevelTypes; none of that was run in this spike.
+
+## 17. AutoCheck: a game check the plugin runs by itself (issue #173)
+
+`AutoCheck=1` and `AutoCheckMap=<map Name>` in `cartographer.txt` (test slots only). In a Hell game the plugin opens the map through the console path's own gates and `OpenMapPortal` (no item), waits for the player to be in the portal level, logs the arrival, moves the player into the plan's boss room (the `goto` route), and writes `AUTOCHECK PASS|FAIL <item>` for `open`, `arrival`, `boss`, `monster-settings` and `stat-changes`, then `AUTOCHECK DONE pass=N fail=M` (an item that does not apply is written `AUTOCHECK N/A <item>` and counted as `n/a=K`, not in `pass`). Code: `src/engine/auto_check.cpp`; pure parts (checklist, lines, setting, stand point): `src/autocheck`. `AutoCheck=1` also turns on the arrival probe (the `[maze probe] arrival` line), nothing else of `MazeProbe`.
+
+### New part
+
+| Part | Role | RVA | Signature | Max patch / hook | Guard |
+|---|---|---|---|---|---|
+| UnitMove | Called. `(game, unit, room, x, y, arg6, arg7)` puts a unit at a subtile position in `room`; returns 0 when it could not. With a null room it only tries the unit's own room and its neighbours (`0x38dfb0`, `0x2efde0`), so a far cell fails: the check passes the room it found. arg6 (`[rbp+0x77]`): nonzero skips the free-spot search `0x362f90` (mask `0x1c09`). arg7 (`[rbp+0x7f]`): nonzero resets the path (`0x342210`) and sets unit flag `0x40000000` (`0x34e140`). Both are 0 here | `0x491ca0` | `40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11` | 25 (security cookie load) / 0, only called | 60-byte signature unique across the executable sections |
+| RoomAtTile | Called. `(dataFlag, act, tileX, tileY)` finds the room holding that tile of the act's levels. It is not a pure lookup: with no room and no level holding the tile it goes on through the find-or-create level function `0x3267c0` (id 0 when no level of the act holds the tile), which can allocate and link a new level into that act and build its rooms, so it must only be called on the act the tile belongs to. A 9-byte thunk (`mov rdx,[rdx+0x70]; jmp 0x328900`); callers: `goto` (`0x41031f`) and `0x49015c`. `act` is an element of the game's act list (`game+0x190`: pointer to the acts, count at +8; `0x4900c0..0x490110` index it with the byte `0x3e2b5c8` returns). The check does not call the loader import: it takes the act from the slot's levels.txt Act (`Slot::act`, the value `0x3e2b5c8` returns for the level), checks it against the count and that `acts[act]` and `acts[act]+0x70` are readable, calls the lookup once, and keeps the room only when its level (`RoomLevelId`) is the slot level; any failed step logs the reason and the player walks | `0x2f0810` | `48 8B 52 70 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC 48 8B 49 18 E9` (the padding and the next thunk make it unique; the 9-byte form matches 3 places) | 4 (the `jmp`) / 0, only called | 21-byte signature unique |
+| RoomBringUp | Called. `(game, room)`: builds and populates the room if it is not up (`0x48f190`, `0x503790`, `0x510f00`, populate `0x50acf0`, then `0x2f04e0`). The populate reaches the plugin's hook, so the check calls it with its own lock released | `0x4042a0` | `48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 85 C0 75 ?? 48 8B D3 48 8B CF E8` | 16 (first `call`) / 0, only called | 40-byte signature unique |
+
+The route is the one the console command `cheat goto` uses (handler `0x4100e0`, table record at `0x238bba0`; calls at `0x41031f`, `0x410332`, `0x410358`): find the room, bring it up, `UnitMove` into it. x and y are subtiles (the handler divides by 5 for the lookup). `goto` also calls `0x488180(game, player, levelId, 0)` to enter a level; the check does not use it: the portal is entered by hand so the arrival check stays real. Each part is resolved on its own; if any is missing, or the room is not found, or `UnitMove` returns 0, the boss step logs why and waits for the player to walk (120 s). Before the move, and while waiting for the Boss, the check re-reads that the player is in the slot level of a Hell game; if not, the Boss is a FAIL (`the player left the map`).
+
+Evidence: disassembly over the dump (`dump_dis.py`, stamp `0x6ab3782c`), signature uniqueness by `check_portal_signatures.py`. The act-list layout and the argument meanings are read from code, not run.
+
+### Searched, not found (static)
+
+- **Entering a portal (moving the player to another level).** `cheat goto` does it through `0x488180(game, player, levelId, 0)` (handler `0x4100e0`, found through the console cheat table at `0x238b120`), but it does not walk through the portal, so using it would skip the arrival check. The check therefore waits (180 s) for the player to walk into the red portal and logs `AUTOCHECK waiting`.
+- **Leaving the game.** The dump has the strings `ExitGame`, `QuitGameConfirmation` and `Leave Game`, but no handler was followed to a callable function, and the SDK has no leave call. After `AUTOCHECK DONE` the plugin logs `AUTOCHECK LEAVE not done` and the checker uses Save and Exit.
+
+Both are desk results (static only); finding them needs a debugger session in a test slot.
+
+### Needs a game
+
+Everything above. The unit mover's meaning of `x`/`y` (subtiles, as the server room rect is) and that standing in the boss room wakes its population are read from code and from the earlier `cheat goto 138,25020,10130` evidence, not run. A passing run needs: Hell game, a character in Harrogath, the map's slot installed, then one click on the portal.
