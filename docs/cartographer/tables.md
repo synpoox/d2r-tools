@@ -13,7 +13,7 @@ What the plugin reads, and what takes effect in game today:
 | `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss`, `Properties` and `EventChance` act; every map opens the installed Maze level. `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level when it opens (experimental, not verified in game); `Champions` is checked, then ignored. |
 | `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze` row); you do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player unless `PlayerStats` is 0 (written and unit tested; **not yet verified in game**). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: no, it is read and checked, but nothing rolls events from it yet (later phase). |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player unless `PlayerStats` is 0 (monsters and the player checked in game, single player, one test character). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: no, it is read and checked, but nothing rolls events from it yet (later phase). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
@@ -147,7 +147,7 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings. `Properties` and `PlayerStats` are used when a map opens (not yet verified in game); the others are checked and reported only. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings. `Properties` and `PlayerStats` are used when a map opens (checked in game, single player); the others are checked and reported only. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
