@@ -276,6 +276,11 @@ void ProbeRooms(const void* level, int originX, int originY) noexcept {
 
 auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan>;
 
+// The slot row name of an outdoor tileset, for messages.
+auto SlotNameOf(const std::string& tileset) -> const char* {
+	return SlotIndexFor(tileset) == 1 ? SnowSlot : OutdoorSlot;
+}
+
 // The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
 auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	std::shared_ptr<const Job> job;
@@ -302,13 +307,13 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		return nullptr;
 	}
 	if (!geometry.known) {
-		*why = "levels.txt could not be read for the Outdoor slot level's OffsetX, OffsetY, SizeX and SizeY";
+		*why = std::string("levels.txt could not be read for the ") + SlotNameOf(job->tileset) + " slot level's OffsetX, OffsetY, SizeX and SizeY";
 		return nullptr;
 	}
 	const int want = OutdoorLevelType(job->tileset);
 	const int have = Read<int32_t>(level, LvlTileType);
 	if (want < 0 || have != want) {
-		*why = "the Outdoor slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
+		*why = "the " + std::string(SlotNameOf(job->tileset)) + " slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
 		return nullptr;
 	}
 	return PlanForJob(*job, geometry, level, why);
@@ -465,7 +470,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	bool asPlanned = false;
 	try {
 		if (!ctx.fired) {
-			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the Outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
+			plog::Warn("outdoor slot level %d: the game did not take its Act 5 branch, so the plan was NOT stamped: the outdoor slot level must be in Act 5 (levels.txt Act 5)", id);
 		}
 		ProbeLevel(level, "after the slot build");
 		co::GridSample grid;
@@ -592,7 +597,7 @@ auto OutdoorPlanProblem() -> std::string {
 			return "Cartographer: " + refusal + ", so " + job->name + " cannot be built.";
 		}
 		if (!geometry.known) {
-			return "Cartographer: levels.txt could not be read for the Outdoor slot level's size, so " + job->name + " cannot be built.";
+			return std::string("Cartographer: levels.txt could not be read for the ") + SlotNameOf(job->tileset) + " slot level's size, so " + job->name + " cannot be built.";
 		}
 		std::string why;
 		if (PlanForJob(*job, geometry, nullptr, &why) == nullptr) {
@@ -721,6 +726,11 @@ void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt
 	g_job = job;
 	plog::Info("outdoor map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
+}
+
+auto OutdoorPendingTileset() -> std::string {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->tileset : std::string();
 }
 
 void OutdoorMapCancelled() {

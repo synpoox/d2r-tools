@@ -193,6 +193,10 @@ auto MapIsOutdoor(const MapDef& map) -> bool;
 // The slot a map opens through: "OutdoorSnow" for a Snow map, "Outdoor" for another outdoor map, otherwise "Maze".
 auto MapSlotName(const MapDef& map) -> const char*;
 
+// Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The two outdoor
+// slots (Jungle on Outdoor, Snow on OutdoorSnow) share one open-map job, so a second open on the other slot would leave the first portal's level unplanned.
+auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
+
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;
 

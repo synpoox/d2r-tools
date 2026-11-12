@@ -1136,6 +1136,22 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 	CHECK(std::string(MapSlotName(snowMaps[0])) == SnowSlot);
 }
 
+TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset is open and unbuilt") {
+	Report report;
+	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nFrost\tSnow\tWinding\t\t\tt22\nDeep\tCave\tLoop\t\t\tt21\n", report);
+	REQUIRE(maps.size() == 3);
+	const MapDef& jungle = maps[0];
+	const MapDef& snow = maps[1];
+	const MapDef& cave = maps[2];
+	CHECK(OutdoorOpenConflict(jungle, "").empty());        // nothing pending
+	CHECK(OutdoorOpenConflict(snow, "").empty());
+	CHECK(OutdoorOpenConflict(jungle, "Jungle").empty());  // the same slot replaces its own job
+	CHECK(OutdoorOpenConflict(snow, "Snow").empty());
+	CHECK(OutdoorOpenConflict(snow, "Jungle").find("Jungle map is already open") != std::string::npos);  // Jungle pending, then Snow
+	CHECK(OutdoorOpenConflict(jungle, "Snow").find("Snow map is already open") != std::string::npos);    // and the reverse
+	CHECK(OutdoorOpenConflict(cave, "Jungle").empty());    // a maze map has its own job
+}
+
 TEST_CASE("an Outdoor slot on a level the installer did not write is dropped; the installer's level is kept") {
 	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Outdoor\t139\t21\nSomeone's Level\t140\t21\n";
 	Report bad;
