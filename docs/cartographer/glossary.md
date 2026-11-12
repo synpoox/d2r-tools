@@ -25,3 +25,9 @@ _Avoid_: level type, theme
 **Shape**:
 In Cartographer, the feel of a map's path: `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. It decides the layout graph.
 _Avoid_: layout type, pattern
+
+**Maze level**:
+A level the game builds as a maze of rooms (`DrlgType` 1 in `levels.txt`), such as a Cave or Crypt. The installer adds one, "Cartographer Maze", that Cartographer then builds from a map's layout.
+
+**Slot**:
+A name in `slots.txt` (`Maze`, `Outdoor`, `OutdoorSnow`) for the level id of one of those added levels. The installer writes the file; you do not edit it.

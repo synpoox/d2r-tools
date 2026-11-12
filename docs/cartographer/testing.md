@@ -52,7 +52,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 
 ## Your first map
 
-New to Cartographer? [Your first map in 5 minutes](./first-map.md) walks through the item, the
+New to Cartographer? [Your first map](./first-map.md) walks through the item, the
 `maps.txt` row and the check. [tables.md](./tables.md) lists every column of every table, and a working
 set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/first-map/) (plain text, no game files).
 

@@ -1,130 +1,84 @@
-# Your first map in 5 minutes
+# Your first map
 
-You will add one map to your mod: an item you own opens a red portal in Harrogath, and the portal leads to the map.
-Every file used here is in [`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/).
-Every column is explained in [tables.md](tables.md).
+One map: an item opens a red portal in Harrogath (Hell only) to a generated level. The example tables are in
+[`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/); every column is in
+[tables.md](tables.md), Cartographer's own terms in the [glossary](glossary.md). What was checked in game is in
+[checks/](checks/). More maps are one row and one item each; `mapstats.txt`, `mapevents.txt`, `shapes.txt` and
+`cartographer.txt` are in tables.md.
 
-> **Not tried in a game yet.** The steps match what the plugin checks today (unit tested), but nobody has opened a
-> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` and `Snow`; the other tilesets are known names
-> that are refused with a message until they are ready.
+You need D2RLoader, a mod, and its tables as `.txt` in `<Mod>.mpq\data\global\excel`: `levels`, `lvlmaze` and `misc`,
+plus `superuniques` and `monstats` for bosses (without them a boss spawns as a plain monster).
 
-## What works today
+## 1. Install
 
-A map opens a portal to a generated maze on the Maze level the installer adds. These columns take effect in game: `Name`
-(the message "Cartographer: <Name> is open." and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it,
-and when), `Tileset` (Cave or Crypt), `Shape` and `Size` (the maze layout), `Boss` (placed in the far room), `Properties`
-and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens
-(experimental, not verified in game). `Champions` is checked and reported but **not applied yet**.
+1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\` (from a release zip; to build it see
+   [CONTRIBUTING.md](../../CONTRIBUTING.md)).
+2. Copy [`bosses.txt`](../../plugins/cartographer/examples/first-map/bosses.txt) to
+   `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`. The installer reads it, so do this first.
+3. Run the installer from the repository's `plugins\cartographer` folder (it is not in the release zip):
+   `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`
+4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row and a `superuniques.txt` row per boss (each table backed
+   up once as `.bak`), and writes `slots.txt`. It is safe to run twice. Expect lines like:
 
-## Prerequisites
+   ```
+   levels.txt: added 'Cartographer Maze' as level N (Cave, copied from level N).
+   slots.txt: Maze is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
+   ```
 
-- D2RLoader and Diablo II: Resurrected, and a mod. Cartographer reads nothing without one.
-- The mod ships `levels.txt`, `lvlmaze.txt` and `misc.txt` as text tables in its own `data\global\excel` folder. The
-  installer stops if `levels.txt` or `lvlmaze.txt` is missing, and without `misc.txt` the item spell check is skipped.
-- A way for the player to get the map item (step 2). Cartographer adds no items, drops or recipes. Use your mod's own drop,
-  shop or cube recipe, or, to test only, add the item with whatever tool you already use for that.
+   `-Tileset Crypt` makes the Maze level a Crypt. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
+   edited table, or the game ignores the `.txt`.
 
-## 1. Install the plugin
+## 2. Make the map item
 
-1. Close the game.
-2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from the plugin folder. It adds the Maze level to the mod's
-   `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`) and writes `slots.txt`. It builds a Cave level; add
-   `-Tileset Crypt` for a Crypt (every map then uses that tileset). It is safe to run twice.
-   If your mod ships `.bin` table files, rebuild them from the edited `.txt` tables or remove them (this also applies to
-   the `misc.txt` edit in step 2).
-
-## 2. Make an item that opens the map
-
-Each map has an item of its own. In your mod's `misc.txt`, copy the row of an ordinary item (the Scroll of Identify, `isc`,
-is a good base: not a potion, which carries stats and belt settings) to a new row and change these columns:
-
-- `code`: 3 characters that no row of `misc.txt`, `weapons.txt` or `armor.txt` uses (the vanilla charms `cm1` to `cm3`
-  and runes `r01` and up are taken). This guide uses `t20`. Use 3 characters: a 4-character code gets no picture (not yet
-  confirmed in game).
-- `name`: any text, for example `Shorelines Map`.
-- `pSpell`: `16`.
-- `namestr`: the key of the item's name in your `item-names.json` strings (add the record there).
-- `rarity`, `spawnable`, `PermStoreItem` and `multibuy`: `0`, and clear every vendor `Min` and `Max` column (`CharsiMin`,
-  `GheedMagicMax` and so on), so no NPC sells it and it never drops by chance. Set them differently if the item should be sold.
-
-The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "scroll/identify_scroll" } }`),
-or the item has no icon.
-
-The example pack's `maps.txt` has three maps, using items `t20`, `t21` and a Jungle map that uses `t22`; make a row for
-each. [`examples/first-map/map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists the values
-for those three (the columns above, by name). The Jungle map needs the `Outdoor` level from the
-installer (run `tools\install.ps1`); without it the map is refused when you use its item.
-
-Cartographer adds no items of its own, so decide how players get it (a drop, a shop or a cube recipe in your mod). To test
-only, spawn it with the console: `debug_mode`, then `cheat spawn t20,inv 0`. In a Cartographer test slot,
-`tools\stage_check.ps1 -MapItems` sets up the rows, picture entries and names for you; see
-[testing.md](testing.md#map-items-in-a-test-slot--mapitems).
+Cartographer adds no items. Add one row per map to the mod's `misc.txt` with a free 3-character `code` and `pSpell` 16
+(copy a plain item such as `isc`), then give players the item through your own drop, shop or recipe. The values for the
+three example maps are in [`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt).
 
 ## 3. Add the map
 
-Create `maps.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`. It is a tab-separated text file (a
-spreadsheet saved as "Text (Tab delimited)" works). Four columns are enough:
+Put `maps.txt` next to `bosses.txt`. Four columns are enough; the rest default (Medium, level 85, 6 properties,
+any character level):
 
 ```
-Name	Tileset	Shape	Item
-Shorelines	Cave	Corridor	t20
+Name	Tileset	Shape	Item	Size	Boss	MinCharLevel
+Shorelines	Cave	Corridor	t20	Large	Shoreline Warden	80
 ```
 
-Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), size and properties apply in game; the monster level is written into the map's level (experimental, not verified in game).
-What does act: Hell difficulty, any character level, opened from Harrogath.
+`Boss` must be a `Name` in `bosses.txt`. `Cave`, `Crypt`, `Jungle` and `Snow` are built. The example `maps.txt` has
+three maps (`t20`, `t21`, `t22`); `check` skips a row whose item is not in your tables.
 
-Optional columns go to the right and a blank cell keeps the default. A fuller row:
+## 4. Check
+
+Start the game through D2RLoader and run `cartographer check` in the console. It re-reads your tables and ends with:
 
 ```
-Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel
-Shorelines	Cave	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	80
+Cartographer <version>: 3 map(s), 0 problem(s). The portal is on.
 ```
 
-In game today `Size`, `Boss` and the other applied columns change the map; `Level` and `Monsters` are accepted and
-checked, then ignored.
+Problems are listed first, for example `maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?`; a bad
+row is skipped and the rest load. The full list is `cartographer-report.txt`, next to `cartographer.log`, in the
+plugin's log folder (`<game>\d2rloader\logs\`, or `mods\<Mod>\d2rloader\logs\`). If the portal is off, `check` says why.
 
-Upper and lower case do not matter for Cartographer's own words (`Cave`, `Large`) or for item codes. Names
-from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
+## 5. Open it
 
-## 4. Start the game and check
+`cartographer open Shorelines` opens the portal without the item (single player or a game you host, in Harrogath, in
+Hell). With the item: a Hell character of at least `MinCharLevel` uses it in Harrogath and steps into the red portal.
+The console shows `Cartographer: Shorelines is open.` A refused map stays in the inventory with a message saying why
+(not Hell, not in town, level too low, a map already open this game, no free spot).
 
-1. Start the game through D2RLoader, then press the console key and type `cartographer check`.
-2. It says how many maps loaded and lists the problems (the console shows the first 10), for example "maps.txt row 3:
-   tileset 'Jungel' is not known. Did you mean 'Jungle'?". A bad row is skipped; the others still load. All of them
-   are also in `cartographer-report.txt` in the plugin's log folder.
-3. Fix what it names and run `cartographer check` again; it re-reads your tables.
+A map with a `Boss` logs this when its room is built:
 
-The check also reports whether the portal is on. If a game part could not be found, the tables still load but the portal stays
-off, and `check` says which part.
+```
+map Boss 'Shoreline Warden': spawned in the boss room (x,y) 40 x 40 (as a superunique)
+```
 
-## 5. Open the map
-
-The quickest test is `cartographer open Shorelines` in the console: it opens the portal with no item, but only in a game you
-host (not on someone else's server), once the game is running, in Harrogath, with the map's gates met.
-
-To test the item: create a Hell character of level 80 or more (or leave `MinCharLevel` blank), get the
-`t20` item by whatever way you set up in step 2, go to Harrogath and use it. A red portal appears beside you; step in.
-
-Only one map can be opened per game. A refused map is meant to stay in your inventory with a message that says why (not Hell,
-not in town, character level too low, a map already open this game, no free spot for the portal).
-
-## Where to go next
-
-- Add more maps: one row and one item each (all use the installed tileset, Cave or Crypt).
-- Plan a boss, a shape or a size: the optional columns in [tables.md](tables.md#mapstxt-required) apply now;
-  `Level`, `Monsters`, `Density` and `Uniques` are experimental, and `Champions` is checked only.
-- Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same
-  folder) are applied; `cartographer check` reports bad rows.
-- The defaults for every map: `cartographer.txt`. `Properties` and `PlayerStats` are used; the other settings are checked and reported but nothing uses them yet (see [tables.md](tables.md#cartographertxt-optional)).
+`refused by the game` in place of `spawned` means the boss did not appear.
 
 ## When something does not work
 
-| Message or symptom | Likely cause |
+| Message | Cause |
 |---|---|
-| "Item ... cannot open a map: it needs item spell 16" | `pSpell` in your `misc.txt` row is not 16 |
-| "item ... is not in the item tables" | the code is not in `misc.txt`, `weapons.txt` or `armor.txt` of the mod; the text suggests the closest code |
-| "tileset ... is planned but Cartographer cannot build it yet" | use `Cave` or `Crypt` for now |
-| "slots.txt ... is missing" | run `tools\install.ps1` and restart the game |
-| The item acts like an ordinary item | no map names that item in its `Item` cell |
-| Nothing is read at all | the game is running without a mod, or the tables are not in the folder named in step 3 |
+| `Item ... cannot open a map: it needs item spell 16` | `pSpell` in the `misc.txt` row is not 16 |
+| `item code ... is not in the item tables` | the code is not in the mod's `misc.txt`, `weapons.txt` or `armor.txt` |
+| `tileset ... is planned but Cartographer cannot build it yet` | use `Cave`, `Crypt`, `Jungle` or `Snow` |
+| `Check that the Maze row in slots.txt names a level that exists in levels.txt` | run `tools\install.ps1` and restart the game |
