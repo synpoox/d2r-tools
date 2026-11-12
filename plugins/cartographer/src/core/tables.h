@@ -71,7 +71,8 @@ struct Settings {
 
 struct Slot {
 	std::string name;
-	int level = 0;  // levels.txt Id
+	int level = 0;      // levels.txt Id
+	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 };
 
 // Tilesets, shapes, sizes and difficulties as the author writes them.
@@ -97,6 +98,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
+
+// Fills in each slot's levelType from the mod's levels.txt (columns Id and LevelType). A slot with no row keeps -1.
+void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;

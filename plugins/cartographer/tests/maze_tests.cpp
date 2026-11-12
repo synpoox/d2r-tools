@@ -858,3 +858,39 @@ TEST_CASE("the private LvlMaze row and the piece every room has after the walk")
 	CHECK(pieceAfterWalk(plan, -1) == 0);
 	CHECK(!fixAfterWalk(plan, 9999));
 }
+
+TEST_CASE("declared sizes: the first size seen in a game is the limit, whatever the level record holds later")
+{
+	DeclaredSizes d;
+	CHECK(d.record(200, 360, 360).x == 360);
+	// the hooks wrote a small plan's size into the level record; the next plan still sees 360
+	const DeclaredSizes::Size again = d.record(200, 96, 96);
+	CHECK(again.x == 360);
+	CHECK(again.y == 360);
+	// another level id has its own record
+	CHECK(d.record(201, 120, 130).y == 130);
+	// a failed read is not recorded
+	CHECK(d.record(202, 0, 0).x == 0);
+	CHECK(d.record(202, 80, 80).x == 80);
+	// a small map followed by a large one is limited by the row, not by the small map's box
+	Tileset ts;
+	REQUIRE(builtinTileset("Cave", ts));
+	CHECK(clampToSlot(ts, again.x, again.y).tileset.maxLevelTiles == std::min(ts.maxLevelTiles, std::min(360, kMaxLevelTiles)));
+	d.clear();
+	CHECK(d.record(200, 96, 96).x == 96);
+}
+
+TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English")
+{
+	Tileset cave, crypt;
+	REQUIRE(builtinTileset("Cave", cave));
+	REQUIRE(builtinTileset("Crypt", crypt));
+	CHECK(slotTypeProblem(cave, 3, "A").empty());
+	CHECK(slotTypeProblem(crypt, 4, "B").empty());
+	const std::string wrong = slotTypeProblem(crypt, 3, "Deep");
+	CHECK(wrong.find("Cave level (LevelType 3)") != std::string::npos);
+	CHECK(wrong.find("Crypt map 'Deep'") != std::string::npos);
+	CHECK(slotTypeProblem(cave, 4, "C").find("Crypt level") != std::string::npos);
+	CHECK(slotTypeProblem(cave, 5, "C").find("neither Cave") != std::string::npos);
+	CHECK(slotTypeProblem(cave, -1, "C").find("could not read the LevelType") != std::string::npos);
+}

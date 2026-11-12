@@ -648,6 +648,25 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 	return slots;
 }
 
+void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
+	const Tsv table = ParseTsv(levelsText);
+	const int cId = table.Column("Id"), cType = table.Column("LevelType");
+	if (cId < 0 || cType < 0) {
+		return;
+	}
+	for (const TsvRow& row : table.rows) {
+		int id = 0, type = 0;
+		if (!ParseInt(table.Cell(row, cId), 0, 65535, &id) || !ParseInt(table.Cell(row, cType), 0, 255, &type)) {
+			continue;
+		}
+		for (Slot& slot : slots) {
+			if (slot.level == id) {
+				slot.levelType = type;
+			}
+		}
+	}
+}
+
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {
 	for (const Slot& s : slots) {
 		if (EqualsNoCase(s.name, slot)) {

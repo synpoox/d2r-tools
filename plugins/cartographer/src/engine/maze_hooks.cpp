@@ -1,6 +1,7 @@
 #include "maze_hooks.h"
 
 #include "core/part_signatures.h"
+#include "core/text.h"
 #include "log.h"
 #include "steer.h"
 
@@ -13,6 +14,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -78,6 +80,7 @@ RingFn g_ringOriginal = nullptr;
 std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevel{-1};
 std::atomic<bool> g_probe{false};
+std::atomic<bool> g_slotBuilt{false};  // the slot level was built in this game (cleared on GameLeft)
 
 // The map that was opened, and the plan for it. Guarded by g_lock.
 struct Job {
@@ -96,6 +99,14 @@ std::shared_ptr<const Job> g_job;
 Prepared g_cache;
 uint64_t g_nextJobId = 1;
 std::atomic<bool> g_arrivalLogged{false};
+// What the slot level held when the hooks first saw it in this game, before any write: the declared size (the limit every
+// plan uses) and the game's own LvlMaze row. Keyed by level id, cleared on GameLeft. Guarded by g_lock.
+cm::DeclaredSizes g_declared;
+std::map<int, const int32_t*> g_ownRows;
+struct SlotOriginal {
+	int sizeX = 0, sizeY = 0;
+	const int32_t* row = nullptr;
+};
 struct Entrance {
 	bool known = false;
 	int32_t x = 0, y = 0, levelId = 0;
@@ -106,6 +117,7 @@ Entrance g_entrance;  // guarded by g_lock
 // while it is set and the level is the one being built.
 struct BuildCtx {
 	void* level = nullptr;
+	SlotOriginal orig;
 	Prepared prep;
 	bool steer = false;
 	bool fellBack = false;
@@ -240,10 +252,10 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 
 // --- The plan --------------------------------------------------------------------------------------------------------
 
-// The plan for the current map at the size this level declares the first time it is built; cached per game, so the server's
-// build and the client's build get the same plan (a rebuilt level record already holds the size written for the plan).
-// Empty, with a reason, when no map was opened.
-auto Prepare(void* level, std::string* why) -> std::optional<Prepared> {
+// The plan for the current map at the size this level declared when it was first seen in this game (`declX` x `declY`, from
+// g_declared, never the level record's current size, which the hooks overwrite); cached per game, so the server's build and
+// the client's build get the same plan. Empty, with a reason, when no map was opened.
+auto Prepare(void* level, int declX, int declY, std::string* why) -> std::optional<Prepared> {
 	std::shared_ptr<const Job> job;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -253,7 +265,6 @@ auto Prepare(void* level, std::string* why) -> std::optional<Prepared> {
 		*why = "no maze map was opened in this game";
 		return std::nullopt;
 	}
-	const int declX = Read<int32_t>(level, LvlSizeX), declY = Read<int32_t>(level, LvlSizeY);
 	std::lock_guard<std::mutex> lock(g_lock);
 	if (g_cache.job == job && g_cache.plan != nullptr) {
 		const cm::Plan& cached = g_cache.plan->seedPlan.plan;
@@ -279,9 +290,21 @@ auto Prepare(void* level, std::string* why) -> std::optional<Prepared> {
 
 // --- The hooks -------------------------------------------------------------------------------------------------------
 
+// Puts back what the slot level declared and its own LvlMaze row, so the game's walk (and any later unsteered build) runs
+// against the level it was written for, not the plan's tight box and room count.
+void RestoreSlot(void* level, const SlotOriginal& orig) noexcept {
+	if (level == nullptr || orig.sizeX < 1) {
+		return;
+	}
+	Write<int32_t>(level, LvlSizeX, orig.sizeX);
+	Write<int32_t>(level, LvlSizeY, orig.sizeY);
+	Write<const int32_t*>(level, LvlMazeRow, orig.row);
+}
+
 void Fallback(BuildCtx& ctx, const std::string& why) noexcept {
 	ctx.steer = false;
 	ctx.fellBack = true;
+	RestoreSlot(ctx.level, ctx.orig);
 	if (ctx.why.empty()) {
 		ctx.why = why;
 	}
@@ -290,7 +313,7 @@ void Fallback(BuildCtx& ctx, const std::string& why) noexcept {
 
 // Replaces the walk: the plan's rooms in creation order, then its loop links, then the piece of every room.
 // False (with ctx.why set by the caller from `why`) when the engine refuses a step; the caller then lets the game's walk finish.
-auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) noexcept -> bool {
+auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may throw (strings, vectors); WalkHook catches
 	const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
 	void* first = Read<void*>(level, LvlFirstRoom);
 	if (first == nullptr || Read<int32_t>(level, LvlRoomCount) != 1 || Read<void*>(first, RoomNext) != nullptr) {
@@ -427,7 +450,7 @@ auto IsSlotLevel(const void* level) noexcept -> bool {
 
 auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	if (g_levelOriginal == nullptr) {
-		return 0;  // the loader gave no way back (logged at install): the build is skipped until a restart
+		return 0;  // the loader gave no way back (logged at install): every level build is skipped until a restart
 	}
 	if (!g_live.load() || !IsSlotLevel(level)) {
 		return g_levelOriginal(dataFlag, level);  // every other level runs the game's own build, untouched
@@ -438,10 +461,18 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	ProbeLevel(level, "before the slot build");
 	ProbeLevelList(level);
 	try {
+		{
+			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
+			std::lock_guard<std::mutex> lock(g_lock);
+			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
+			ctx.orig.sizeX = size.x;
+			ctx.orig.sizeY = size.y;
+			ctx.orig.row = g_ownRows.emplace(id, Read<const int32_t*>(level, LvlMazeRow)).first->second;
+		}
 		std::string why;
 		if (Read<int32_t>(level, LvlType) != MazeType) {
 			why = "the Maze slot level is not a maze level (levels.txt DrlgType must be 1)";
-		} else if (const std::optional<Prepared> prep = Prepare(level, &why)) {
+		} else if (const std::optional<Prepared> prep = Prepare(level, ctx.orig.sizeX, ctx.orig.sizeY, &why)) {
 			ctx.prep = *prep;
 			if (!prep->plan->steer) {
 				why = prep->plan->reason;
@@ -453,6 +484,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			}
 		}
 		if (!ctx.steer) {
+			// A cancelled or replaced job, or an earlier build, may have left the plan's size and private row on the level.
+			RestoreSlot(level, ctx.orig);
 			plog::Warn("maze slot level %d: building the game's own maze: %s", id, why.c_str());
 		} else {
 			const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
@@ -473,6 +506,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	t_ctx = ctx.steer ? &ctx : nullptr;
 	const uint64_t result = g_levelOriginal(dataFlag, level);
 	t_ctx = previous;
+	g_slotBuilt = true;
 	if (ctx.steer) {
 		try {
 			const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
@@ -539,8 +573,32 @@ void MazeGameLeft() {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();
 	g_cache = {};
+	g_declared.clear();
+	g_ownRows.clear();
+	g_slotBuilt = false;
 	g_entrance = {};
 	g_arrivalLogged = false;
+}
+
+auto MazeSlotBuilt() -> bool {
+	return g_slotBuilt.load();
+}
+
+auto MazeArrivalPending() -> bool {
+	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && g_slotLevel.load(std::memory_order_relaxed) > 0;
+}
+
+auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string {
+	cm::Tileset ts;
+	if (!cm::builtinTileset(map.tileset, ts)) {
+		return {};
+	}
+	for (const Slot& slot : tables.slots) {
+		if (EqualsNoCase(slot.name, MazeSlot)) {
+			return cm::slotTypeProblem(ts, slot.levelType, map.name);
+		}
+	}
+	return {};  // no Maze slot: the "not installed" message says so
 }
 
 void MazeProbeArrival(void* room, int32_t levelId) {
@@ -583,7 +641,8 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
 		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's maze code is skipped until the game is restarted; restart it after removing what conflicts", part.name);
+			plog::Error("part %s: D2RLoader installed the hook but gave no original; %s until the game is restarted; restart it after removing what conflicts", part.name,
+			            id == LevelBuild ? "EVERY level build is skipped (not only the maze), so no level will load" : "the game's maze code is skipped");
 		}
 		return ok;
 	};

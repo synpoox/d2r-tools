@@ -206,6 +206,18 @@ TEST_CASE("slots load and are found ignoring case") {
 	CHECK(report.Errors() == 1);
 }
 
+TEST_CASE("slot level types are read from levels.txt") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nMaze\t139\nGone\t500\n", report);
+	ReadSlotLevelTypes(slots, "Name\tId\tLevelType\nA\t138\t2\nB\t139\t3\n");
+	REQUIRE(slots.size() == 3);
+	CHECK(slots[0].levelType == 2);
+	CHECK(slots[1].levelType == 3);
+	CHECK(slots[2].levelType == -1);
+	ReadSlotLevelTypes(slots, "Name\tId\n");  // no LevelType column: nothing changes
+	CHECK(slots[1].levelType == 3);
+}
+
 TEST_CASE("every map needs an Item: a blank cell is refused") {
 	Report report;
 	const auto maps = Load("Has\tPreset\tLoop\t\t\tt20\nNone\tPreset\tLoop\n", report);

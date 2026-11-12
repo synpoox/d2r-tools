@@ -186,13 +186,21 @@ auto SlotNameFor(const MapDef& map) noexcept -> const char* {
 }
 
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).
-auto SlotProblem(const MapDef& map, int level) -> std::string {
+auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::string {
 	if (level <= 0) {
 		return IsMazeMap(map) ? "Cartographer: the Maze slot is not installed. Add it to slots.txt and levels.txt (see the Cartographer README), then restart the game."
 		                      : "Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.";
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
+	}
+	if (IsMazeMap(map)) {
+		if (const std::string problem = MazeTilesetProblem(map, tables); !problem.empty()) {
+			return problem;
+		}
+		if (MazeSlotBuilt()) {
+			return "Cartographer: the Maze level was already built in this game and is not rebuilt, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+		}
 	}
 	return {};
 }
@@ -249,7 +257,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		}
 		return g_checkOriginal(game, player, item, target);  // no map names this item: it is not a map item, so the game's own check
 	}
-	if (const std::string problem = SlotProblem(*map, level); !problem.empty()) {
+	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
 		return refuse(problem);
 	}
 	const GateState state = GateStateOf(game, player);
@@ -308,7 +316,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;  // the check refused (or did not run, or ran for another game, player or item): nothing opens
 	}
 	const int level = SlotLevel(tables->slots, SlotNameFor(*map));
-	if (const std::string problem = SlotProblem(*map, level); !problem.empty()) {
+	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
 		Tell(problem);  // the check passed, so a slot or the steering went away in between
 		return;
 	}
@@ -361,7 +369,7 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 		return;
 	}
 	const int level = SlotLevel(tables->slots, SlotNameFor(*map));
-	if (const std::string problem = SlotProblem(*map, level); !problem.empty()) {
+	if (const std::string problem = SlotProblem(*map, *tables, level); !problem.empty()) {
 		Tell(problem);
 		return;
 	}
@@ -378,6 +386,9 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 
 // MazeProbe: once per game, where the local player stands when it is in the Maze slot level (compared with the entrance room).
 void MazeArrivalCheck(Unit* unit) noexcept {
+	if (!MazeArrivalPending()) {
+		return;  // the common case: MazeProbe is off, or the arrival was logged
+	}
 	const int slot = MazeSlotLevelId();
 	if (slot <= 0 || g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
 		return;

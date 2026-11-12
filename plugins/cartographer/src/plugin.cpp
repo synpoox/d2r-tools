@@ -10,6 +10,7 @@
 #include "core/text.h"
 #include "core/tsv.h"
 #include "crash_guard.h"
+#include "engine/maze_hooks.h"
 #include "engine/portal.h"
 #include "log.h"
 
@@ -175,6 +176,18 @@ auto LoadAll() -> Loaded {
 		loaded.tables->slots = carto::LoadSlots(text, loaded.report);
 	} else {
 		loaded.report.Error(carto::SlotsFile, 0, "the file is missing, so the map item has no level to open. Run tools\\install.ps1 and restart the game.");
+	}
+	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build.
+	text.clear();
+	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0) {
+		if (ReadFile(g_excelDir + L"\\levels.txt", &text)) {
+			carto::ReadSlotLevelTypes(loaded.tables->slots, text);
+		}
+		for (const carto::MapDef& map : loaded.tables->maps) {
+			if (const std::string problem = carto::MazeTilesetProblem(map, *loaded.tables); !problem.empty()) {
+				loaded.report.Error(carto::MapsFile, map.line, problem.substr(problem.rfind("Cartographer: ") == 0 ? 14 : 0));
+			}
+		}
 	}
 	return loaded;
 }

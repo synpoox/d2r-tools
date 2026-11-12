@@ -4,6 +4,7 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <map>
 #include <string>
 #include <string_view>
 
@@ -23,6 +24,27 @@ struct SlotFit {
 	Tileset tileset;
 };
 SlotFit clampToSlot(Tileset tileset, int declaredX, int declaredY);
+
+// The size a slot level declares (levels.txt SizeX / SizeY), recorded once per game, per level id, the first time the
+// level is seen and before the hooks write anything to it. Every later plan is limited to this record, never to the
+// level record's current size (the hooks overwrite that with the plan's size). Cleared when the game is left.
+class DeclaredSizes {
+public:
+	struct Size {
+		int x = 0, y = 0;
+	};
+	// The recorded size of `levelId`: stores (x, y) if none is recorded yet and returns it. A size with a side below 1 is not
+	// recorded (a failed read) and is returned as given.
+	Size record(int levelId, int x, int y);
+	void clear() { sizes_.clear(); }
+
+private:
+	std::map<int, Size> sizes_;
+};
+
+// Empty when a Maze slot level of `slotLevelType` (levels.txt LevelType: 3 Cave, 4 Crypt, -1 unknown) can build a map on
+// `tileset`; otherwise the plain-English reason it cannot, naming `mapName`. A Maze slot is one LevelType, so one tileset.
+std::string slotTypeProblem(const Tileset &tileset, int slotLevelType, std::string_view mapName);
 
 // The plan for one opened map: the tileset, shape and size from maps.txt, the seed from the opening, and the level size
 // the slot row declares. Pure and deterministic in its arguments, so the server and the client build the same maze from

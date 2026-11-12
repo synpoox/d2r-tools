@@ -62,6 +62,27 @@ SlotFit clampToSlot(Tileset tileset, int declaredX, int declaredY)
 	return fit;
 }
 
+DeclaredSizes::Size DeclaredSizes::record(int levelId, int x, int y)
+{
+	if (x < 1 || y < 1) return {x, y};
+	return sizes_.emplace(levelId, Size{x, y}).first->second;
+}
+
+std::string slotTypeProblem(const Tileset &tileset, int slotLevelType, std::string_view mapName)
+{
+	if (slotLevelType == tileset.levelType) return {};
+	const std::string who = "the " + tileset.name + " map '" + std::string(mapName) + "'";
+	if (slotLevelType < 0) {
+		return "Cartographer: could not read the LevelType of the Maze slot level from the mod's levels.txt, so " + who +
+		       " is not opened. Check that the Maze row in slots.txt names a level that exists in levels.txt (see the Cartographer README).";
+	}
+	const std::string slotIs = slotLevelType == 3   ? "a Cave level (LevelType 3)"
+	                           : slotLevelType == 4 ? "a Crypt level (LevelType 4)"
+	                                                : "LevelType " + std::to_string(slotLevelType) + ", neither Cave (3) nor Crypt (4)";
+	return "Cartographer: the Maze slot level is " + slotIs + ", so it cannot build " + who + " (needs LevelType " + std::to_string(tileset.levelType) +
+	       "). One Maze slot serves one tileset: use a map of that tileset, or give the slot a level of the other type (see the Cartographer README).";
+}
+
 uint64_t mixSeed(uint64_t a, uint64_t b)
 {
 	return layout::splitmix64(a ^ layout::splitmix64(b));
