@@ -5,7 +5,7 @@ Live in game: the plugin built from `main` at `8efa0d6` (DLL SHA-256 `4a870f5b..
 test save `cartoh` (a level 1 Barbarian), D2R 3.3 build 93847, D2RLoader 1.3.1-beta. Staged with `stage_check.ps1 -MapItems` and a
 scratch pack: `maps.txt` with 'Overgrown' (Jungle, Winding, Medium) and 'Frostline' (Snow, Winding, Medium), `OutdoorBuild=1`,
 `OutdoorProbe=1`, `EventChance=0`, no Boss, the default `PlayerStats` (on), and `mapstats.txt` with Players rows `strength +25` and
-`coldresist +30`. The default automap seed was used (no `-CoreUiAutomap`). Both maps were opened with `cartographer open <Name>`, not from an
+`coldresist +30`, and a Monsters row (3 property rows in all; 21 monsters were given the map's stats). The default automap seed was used (no `-CoreUiAutomap`). Both maps were opened with `cartographer open <Name>`, not from an
 item; the map items' tooltip was not tested. The earlier run is [map item check](2026-11-12-items-check.md). Logs and
 screenshots are not kept in the repository.
 
@@ -13,7 +13,7 @@ screenshots are not kept in the repository.
 |---|---|
 | 1. Jungle entry banner | PASS: "ENTERING OVERGROWN" seen on screen after the portal (`jenter_6.png`, and again in `jungle_charsheet2.png`). |
 | 2. Snow entry banner | PASS: "ENTERING FROSTLINE" seen on screen after the portal (`senter_6.png`). |
-| 3. One outdoor map per game | PASS (by console): with 'Overgrown' open, `cartographer open Frostline` was refused (`s5_second_open.png`, log below). Not tried from a second map item. |
+| 3. One outdoor map per game | PASS (by console): with 'Overgrown' open, `cartographer open Frostline` was refused (in the log only, below; `s5_second_open.png` shows Harrogath with one portal and no refusal text). Not tried from a second map item. |
 | 4. Map name on the automap | PASS: the automap title (top right) read "OVERGROWN" in the Jungle map (`jungle_automap.png`). Snow's automap was not captured: the level 1 character died in Frostline before the shot. |
 | 5. PlayerStats | PASS in the Jungle map, 3 times in and out: see below. |
 
@@ -42,8 +42,9 @@ Cartographer: Frostline is open.
 ## Not settled / limits
 
 - The banner was caught in the Jungle map once the screenshots were taken in a quick burst; the first entry (a single shot after a 2 s wait) missed it.
-- The Frostline game ended with the character dead (level 1 in Hell); the Save and Exit click that followed was not confirmed, and no
-  stats were checked in Snow.
+- The Frostline game ended with the character dead (level 1 in Hell); the Save and Exit click that followed was not confirmed, and Snow stats were checked
+  only in the log (the Snow entry applied +25 Strength and +30 Cold Resistance, `[43=0 0=30] -> [43=30 0=55]`), not on the character sheet.
+  After the death the plugin logged `map stats: the player's list is no longer on the unit (2 lists); it is forgotten, not freed`, the intended safe path.
 - The one-map refusal was seen only for a console open, Jungle then Snow, not for a second map item or the same tileset.
 - `core-maps.dll` is in the slot's plugins folder, and the plugin logged its "loaded next to Cartographer" warning; the console open does not
   depend on the item hook.
