@@ -18,13 +18,13 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); Jungle is buildable
-// through the outdoor build hook, which needs the Outdoor slot and OutdoorBuild = 1 (each is checked when the map opens); the others
+// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); Jungle and Snow are buildable
+// through the outdoor build hook, which needs the Outdoor (Jungle) or OutdoorSnow (Snow) slot and OutdoorBuild = 1 (each is checked when the map opens); the others
 // are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
-	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", true},     {"Snow", false},
+	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", true},     {"Snow", true},
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};

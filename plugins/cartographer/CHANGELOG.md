@@ -29,4 +29,4 @@
 - Outdoor maps (off, not checked in game): you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
 - Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
-- `tools\install.ps1` also adds a `Cartographer Snow` level and an `OutdoorSnow` slot for the coming Snow maps (run it again; Snow maps do not open yet).
+- Snow maps open from their item through a new `OutdoorSnow` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).

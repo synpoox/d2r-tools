@@ -31,12 +31,12 @@ namespace cartographer::outdoor {
 std::string builtinJungleCatalogueText();
 const Catalogue &builtinJungleCatalogue();
 
-// True for the tilesets this build can plan: Jungle (the catalogue above). Case-insensitive.
+// True for the tilesets this build can plan: Jungle (the catalogue above) and Snow (snow_plan.h). Case-insensitive.
 bool outdoorTilesetKnown(std::string_view tileset);
 
 struct MapRequest {
 	std::string tileset;  // the maps.txt Tileset, e.g. "Jungle"
-	std::string shape;    // a shape name; blank means Winding
+	std::string shape;    // a shape name; blank means Winding. Snow has no shapes: it is ignored there.
 	std::string size;     // Small, Medium or Large; blank means Medium
 	uint64_t seed = 0;    // the map's layout seed
 	StampOptions options; // origin, size limits (the slot row's), pinFiles, listVoid
@@ -46,8 +46,8 @@ struct MapRequest {
 struct MapPlan {
 	bool ok = false;
 	std::string reason;     // plain English, when !ok: why the game must build its own level
-	layout::Layout layout;  // empty unless the shape resolved
-	PickResult picks;
+	layout::Layout layout;  // empty unless the shape resolved (always empty for Snow)
+	PickResult picks;       // empty for Snow
 	StampPlan stamps;       // complete only when ok
 	uint64_t hash = 0;      // over the layout, the picks and the stamp plan: stable across platforms
 	std::string cacheKey;   // what PlanCache keyed it by

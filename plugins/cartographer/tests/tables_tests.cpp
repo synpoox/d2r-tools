@@ -1116,7 +1116,7 @@ TEST_CASE("the notice names core-maps and says to use one") {
 	CHECK(text.find("Remove one") != std::string::npos);
 }
 
-TEST_CASE("Jungle is a ready tileset and opens through the Outdoor slot; Cave and Crypt through the Maze slot") {
+TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave and Crypt through the Maze slot") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nDeep\tCave\tLoop\t\t\tt21\n", report);
 	REQUIRE(maps.size() == 2);
@@ -1127,13 +1127,13 @@ TEST_CASE("Jungle is a ready tileset and opens through the Outdoor slot; Cave an
 	CHECK(std::string(MapSlotName(maps[1])) == MazeSlot);
 	const auto ready = ReadyTilesetNames();
 	CHECK(std::find(ready.begin(), ready.end(), "Jungle") != ready.end());
-	CHECK(std::find(ready.begin(), ready.end(), "Snow") == ready.end());  // Snow has a plan and a slot, but not the outdoor hook wiring yet
+	CHECK(std::find(ready.begin(), ready.end(), "Snow") != ready.end());
 	Report snowReport;
-	CHECK(Load("Frost\tSnow\tWinding\t\t\tt22\n", snowReport).empty());  // refused at load until the hook is wired
-	MapDef snow;
-	snow.tileset = "Snow";
-	CHECK(MapIsOutdoor(snow));
-	CHECK(std::string(MapSlotName(snow)) == SnowSlot);
+	const auto snowMaps = Load("Frost\tSnow\tWinding\t\t\tt22\n", snowReport);
+	REQUIRE(snowMaps.size() == 1);
+	CHECK(snowReport.Errors() == 0);
+	CHECK(MapIsOutdoor(snowMaps[0]));
+	CHECK(std::string(MapSlotName(snowMaps[0])) == SnowSlot);
 }
 
 TEST_CASE("an Outdoor slot on a level the installer did not write is dropped; the installer's level is kept") {
