@@ -522,7 +522,7 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 | `0x2f5df0` | List stat value, thunk, slot `0x3e2a208` | `FF 25 ?? ?? ?? ?? 90 90 90 90 57 48 83 EC 20 41 0F B7 F1 41 8B D8 48 8B FA 48 85 D2 75 ?? 33 C0` | call |
 | `0x2f5020` | Unit stat `(unit, stat, layer)`, thunk, slot `0x3e2a218` (already in section 3) | `FF 25 ?? ?? ?? ?? 90 90 90 90 48 89 74 24 20 57 48 83 EC 20 41 0F B7 E8 8B FA` | call |
 | `0x2f7d10` | SetUnitStat, thunk, slot `0x3e2a248` | `FF 25 ?? ?? ?? ?? 90 90 90 90 56 57 41 54` | call |
-| `0x2f5b80` | Find a list `(unit, state, flags)` on the owner's chain (`+0x90`, or `+0x98` with flags bit 13; next `+0x68`; match `(list+0x1c & flags & 0xffffdfff) != 0`) | `48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??` | call |
+| `0x2f5b80` | Find a list `(unit, state, flags)` on the owner's chain (`+0x90`, or `+0x98` with flags bit 13, both on the unit's owner list `[unit+0x88]` and not on the unit (live, section 7; static: `0x2f5bb2 call 0x34b870`, `0x34b870 mov rax,[rcx+0x88]`, and the remove path `0x2f7920` -> `0x2f6e50` reads the same list through `[list+0x78]`); next `+0x68`; match `(list+0x1c & flags & 0xffffdfff) != 0`) | `48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??` | call |
 | `0x2f5940` | Unit state list lookup `(unit, state)` | `48 89 5C 24 10 57 48 83 EC 20 8B DA 48 8B F9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CF` | call |
 | `0x3354c0` | SetStateBit `(unit, state, on)` | `48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1` | call |
 | `0x3355a0` | SetStateGfxFlag | `48 89 5C 24 10 55 56 41 56 48 83 EC 30 41 8B E8` | call |
@@ -647,7 +647,7 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 
 ## 7. Map stats parts (issue #80)
 
-**Status:** written and unit tested; player half off by default (`PlayerStats`); signatures checked statically on the build 93847 dump (`check_portal_signatures.py`); **not run in a game**. Applies the section 6 recipe: monster stats from a hook on the monster setup `0x494a60`, player stats from the existing PlayerTick hook (section 3). Code: `plugins/cartographer/src/engine/stat_apply.cpp`; pure plan and tracking logic in `src/statplan/`.
+**Status:** written and unit tested; player half off by default (`PlayerStats`); signatures checked statically on the build 93847 dump (`check_portal_signatures.py`); checked live on 2026-11-12 (Game checks of 2026-11-12 below; one fix, the chain offsets). Applies the section 6 recipe: monster stats from a hook on the monster setup `0x494a60`, player stats from the existing PlayerTick hook (section 3). Code: `plugins/cartographer/src/engine/stat_apply.cpp`; pure plan and tracking logic in `src/statplan/`.
 
 | Field | Record |
 |---|---|
@@ -655,18 +655,18 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 | Consumer | Cartographer map stats (`src/engine/stat_apply.cpp`) |
 | Module | `D2R.exe` (SetListStat and AttachStatList are D2RLoader thunks into `D2RCore.dll`: call, never hook) |
 | Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the dump `D2RLoader_6ab3782c_dump.exe` |
-| Location | `NewStatList` `0x2f7300`, `SetListStat` `0x2f7c00` (thunk), `AttachStatList` `0x2f2cb0` (thunk), `DetachStatList` `0x2f7920`, `FreeStatList` `0x2f4180`, `MonsterSetup` `0x494a60` (hooked). `UnitRoom` `0x34b440`, `RoomLevelId` `0x2efc10`, `UnitStat` `0x2f5020` are the portal's parts, found again under the names `StatUnitRoom`, `StatRoomLevelId`, `StatUnitStat`. Unit fields read directly: type `+0x00` (0 player, 1 monster), id `+0x08`, data flag `+0x1bd` (a byte: the three short helpers `0x34b9d0`, `0x34a330`, `0x34a0e0` are exactly these loads behind a null check, read in this change), stat list chain head `+0x90` (second head `+0x98`), next `+0x68` (section 6). The hook's first argument is the spawn block: `+0` game, `+8` room, `+0x18` monstats id (read at `0x494a72` to `0x494a84` and the caller `0x4943ec`..`0x4943f2`) |
+| Location | `NewStatList` `0x2f7300`, `SetListStat` `0x2f7c00` (thunk), `AttachStatList` `0x2f2cb0` (thunk), `DetachStatList` `0x2f7920`, `FreeStatList` `0x2f4180`, `MonsterSetup` `0x494a60` (hooked). `UnitRoom` `0x34b440`, `RoomLevelId` `0x2efc10`, `UnitStat` `0x2f5020` are the portal's parts, found again under the names `StatUnitRoom`, `StatRoomLevelId`, `StatUnitStat`. Unit fields read directly: type `+0x00` (0 player, 1 monster), id `+0x08`, data flag `+0x1bd` (a byte: the three short helpers `0x34b9d0`, `0x34a330`, `0x34a0e0` are exactly these loads behind a null check, read in this change), stat owner list `+0x88` (the engine's `0x34b870`), on which the chain head is `+0x90` (second head `+0x98`) and next is `+0x68` (live, see Game checks of 2026-11-12 below; the first version read the heads off the unit and faulted). The hook's first argument is the spawn block: `+0` game, `+8` room, `+0x18` monstats id (read at `0x494a72` to `0x494a84` and the caller `0x4943ec`..`0x4943f2`) |
 | Guard | Signatures in `src/core/part_signatures.h` (`NewStatList`, `SetListStat`, `AttachStatList`, `DetachStatList`, `FreeStatList`, `MonsterSetup`). Each matched exactly once. `MonsterSetup` is 21 bytes with no `??`; the hook cuts the first 14 (whole instructions: `mov [rsp+18],rbx; mov [rsp+20],rbp; push rsi; push rdi; push r15`), which D2RLoader re-checks at the entry. The first relative operand is the `call 0x976e0` at `+0x2b`. Where a part does not match once, the part is logged and left off |
 | Contract | Monster: after the game's own setup returns, if a plan is active and the room's level is the slot level, `NewStatList(0, 0, 1, unitId)`, `SetListStat(dataFlag, list, stat, value, 0)` for each monster entry, `AttachStatList(monster, list, 1)`. The list is never tracked or freed (it goes with the unit; inference). Player: from the tick, when the player's room level is the slot level, the same with type 0, and the list address is kept per unit id; on leaving the level (or the map closing) it is removed only if it is still on the unit's chain: `DetachStatList(unit, list)`, `FreeStatList(dataFlag, list)`. No state is set and no state bit is changed (the engine's own lists use a state, but a state id that does not exist in the game's states table would write outside the bit set; the plugin keeps the list address instead). Game thread only; the tables are read under a lock. On `GameLeft` the plugin forgets its state and touches no game memory |
 | Evidence | `dump_dis.py ... dis 0x494a60 16` (prologue, args), `dis 0x4943d0 14` (the call and that its result is unused), `dis 0x34a0e0 / 0x34a330 / 0x34b9d0` (field loads), `dis 0x2f7920`, `dis 0x2f4180` (detach computes its own data flag; free does nothing for a list with a negative flags word), `pat "<signature>"` for uniqueness; `check_portal_signatures.py` for all of them |
-| Validation | Unit tests (`statplan_tests`: the draw to plan, stat id lookup, player apply and remove decisions, the tracking table), signature check on the dump. **Not run in a game** |
+| Validation | Unit tests (`statplan_tests`: the draw to plan, stat id lookup, player apply and remove decisions, the tracking table), signature check on the dump, and the live checks below |
 | Failure mode | Each half is off when any part it needs is missing or its guard fails; the other half still works. Nothing is replaced by a guess. A map opens either way |
 | Coexistence | The monster hook is a new hook on `0x494a60`, which nothing else here hooks; it calls the original first. The player half rides the portal's PlayerTick hook (also Better Auras' neighbour `0x42e600`). The D2RCore spawn hook (flag `0x40`) runs after `0x494a60` and is untouched |
 
 ### Needs game (the section 6 stats checks, settled by the `statprobe:` log lines)
 
 1. **Percent stat on a monster, and the order against `0x49dd70`.** For the first six monsters of a map the log has `statprobe: monster #n ... stat 12 (level) was L at the hook, maxhp A -> B, totals [..] -> [..]`. A level of 0 at the hook means `0x49dd70` runs later; a nonzero level means earlier. Totals that change by the listed value show the list counts; maxhp A -> B shows whether `item_maxhp_percent` reaches a monster's life (if not, pd2's direct `SetUnitStat` on maxhp is the fallback). Then check the monster's life in play, and whether a later level write resets it.
-2. **List on the chain.** The same lines end `list on chain: yes/NO (n lists)`. `NO` means the chain offsets (`+0x90`, `+0x98`, `+0x68`) are wrong for an attached list; removal then never runs (it only frees a list it finds), and this is the one to fix first.
+2. **List on the chain.** The same lines end `list on chain: yes/NO (n lists)`. `NO` means the chain offsets are wrong for an attached list; removal then never runs (it only frees a list it finds). Result: the chain hangs on the unit's owner list `[unit+0x88]`, not on the unit; fixed, and now `yes`.
 3. **Client replication.** The probe is server side. In play: the monster's life bar and damage as the client sees them, the player's resistances on the character sheet, and the game's own stat text (the client builder `0x2dc4b0`).
 4. **Stats without a state.** If totals do not change at all, the list needs a state; add one (a state id read from `states.txt`) and re-test.
 5. **Player list and saves.** `statprobe: player ... entered the map` and `left the map` show the stat totals and chain length before and after. Save and exit inside the map, reload, and read `statprobe: first player unit ... holds N stat lists` against a game that never opened a map; a higher count means a list survived the save.
@@ -675,9 +675,32 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 8. **Monster list free or leak.** Monster lists are never tracked or freed; that the game frees a unit's lists with the unit is inference (section 6). Heap count (or process private bytes) before and after several map runs with many monsters; steady growth per monster means the lists leak and each needs a detach and free on the monster's death or removal.
 9. **Level stat on monsters.** `level` is refused on `Monsters` rows (the game's own level write at `0x49dd70` runs in or after the same setup and would interact with it); nothing here tests that write, so a `level` row is not offered until it has been checked.
 
+### Game checks of 2026-11-12
+
+Slot 11, D2RToolsTest mod, test save `cartos` (Barbarian level 1), D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta, Normal difficulty. Test tables: map `StatsMap` (level 138, `Properties` 6, `PlayerStats` 1) and a `mapstats.txt` of `item_maxhp_percent` 100, `fireresist` 50, `level` 5 and `hitpoints` 50 (monsters), `strength` 40, `coldresist` 30, `gold` 500, `state` 1 and `nonexistent_stat` (players). Monsters from `cheat mspawn zombie1,3`; the map was opened with `cartographer open StatsMap`. `core-maps` was moved out for the run. Levels: live = seen in the running game; not done = not tried. Screenshots are in `D2RTestSlots\runs\carto-stats-checks\screenshots` (not committed).
+
+| Check | Level | Result |
+|---|---|---|
+| Parts found, hook installs | live | The stat parts and `MonsterSetup` matched once at load; the hook on `0x494a60` installed. |
+| Fault in the first build | live | The first Play crashed: the crash guard logged a read of `0x69` in `cartographer.dll`, in the chain walk. Cause: the walk started at the unit (`+0x90`) instead of the unit's owner list. Fixed in this change: the walk starts at `[unit+0x88]`, every pointer is checked readable first, and the probe logs the owner list and heads. |
+| Chain offsets | live | After the fix the first player unit holds 2 lists in a fresh game (`+0x90` set, `+0x98` null; the 2 -> 3 step before the map is not explained, probably a list the game attaches after the first tick, not checked); entering the map makes 4 (`list on chain: yes`, 3 -> 4 at the first probe) and leaving makes 3 again (`list removed (chain 4 -> 3 lists)`). |
+| Monster stats in the slot level | live | Three zombies spawned in the map level: `statprobe: monster #n ... totals [39=0 76=0] -> [39=50 76=100], list on chain: yes (3 lists)`, `maxhp 1792 -> 3584`, `2560 -> 5120`, `2048 -> 4096`. The level stat was 1 at the hook, so the game's level write at `0x49dd70` runs later (and `level` stays refused). The overlay (`inmap2.png`) shows a zombie with Life 16/16 and Fire Resist 50%. `item_maxhp_percent` does reach a monster's maxhp. |
+| Not applied elsewhere | live | Zombies spawned in town (before the map and in a new game after it) got no `statprobe: monster` line; the count stayed at the map's 3. |
+| Player stats apply | live | `entered the map: totals [0=30 43=0] -> [0=70 43=30]` (strength 30 to 70, cold resist 0 to 30) on the server. |
+| Player stats on the character sheet | live, **fails** | The character screen inside the map still shows Strength 30 and Cold Resistance 0% (`char_map.png` against `char_town_before.png`). The list is applied on the server only and does not reach the client's sheet in this single-player game. Filed as a sub-issue of #80. |
+| Removed on leaving the map | live | Town portal out: `left the map: list removed (chain 4 -> 3 lists)`; a second entry applied again and removed again. |
+| Removed on leaving the game | live | `left the game: 3 monster(s) and 1 player(s) were given the map's stats` (and `0 monster(s) and 2 player(s)` in the game that was left inside the map). A new game: the first player unit holds 2 lists, the same as the first game's baseline; the character screen shows Strength 30 and Cold Resistance 0% (`char_reload.png`). |
+| Save and Exit inside the map | live | Save and Exit with the list attached rewrote `cartos.d2s` (timestamp changed). Its character stats section: strength 30, dexterity 20, vitality 25, energy 10, no +40. Reload: 2 lists, Strength 30. Section 7 check 5 passes for strength; resistances are not in the saved base stats at all. One test character, one exit; an autosave inside the map was not separately tried. |
+| Refused stats | live | The log names each refusal at load and again when the map draws them: `level` and `hitpoints` on monsters, `gold` and `state` on players (`... skipped: ... is refused ...`). |
+| Guards fail open | not done | No part could be made to mismatch in the live game (no altered binary). Static: a part that does not match once is logged and its half left off (unit tested). The crash guard logged the one fault above with its cause. |
+| Natural spawns | not done | `cheat mspawn` goes through the same `0x494a60` setup call; the map's own population was not walked (rooms were populated but no monster was set up in them in the second run, so the cheat spawns carried the check). |
+| Life bar and damage, heap growth | not done | Only totals, maxhp (server) and the overlay were read; no heap measurement (check 8). |
+
+Correction to section 6: the list chain is on the owner list `[unit+0x88]` (`+0x90`, `+0x98`, next `+0x68`), not on the unit. `PlayerStats` stays `0` by default: the character sheet does not show the stats, so the feature does nothing a player can see, although a Save and Exit with it on left a test character clean.
+
 ### Player stats are off by default (review of issue #80, fix cycle 1)
 
-- **`PlayerStats` in `cartographer.txt` is 0 by default.** While it is 0 nothing is attached to the player: the plan carries no player entries and the tick does not apply. Reason: the list is on the unit's chain until the next tick outside the map level, so a Save and Exit inside the map, or an autosave there, may write the character while it is attached. Whether the save writer reads base stats only is inference (equipped items' lists sit on the same chain and are not saved) and needs check 5 above. Use `1` on a test slot only until check 5 has passed. Removal when the map closes or the player leaves the level is unchanged.
+- **`PlayerStats` in `cartographer.txt` is 0 by default.** While it is 0 nothing is attached to the player: the plan carries no player entries and the tick does not apply. Reason: the list is on the unit's chain until the next tick outside the map level, so a Save and Exit inside the map, or an autosave there, may write the character while it is attached. Whether the save writer reads base stats only is inference (equipped items' lists sit on the same chain and are not saved) and needs check 5 above. Check 5 has passed for one Save and Exit (strength, section 7); an autosave inside the map was not tried, so use `1` on a test slot only. Removal when the map closes or the player leaves the level is unchanged.
 - **Refused stats.** `buildPlan` refuses these on `Players` rows, because the game reads them as a total (`UnitStat`: base plus lists) and writes the result back as the base value: `statpts` (4), `newskills` (5), `hitpoints` (6), `mana` (8), `stamina` (10), `level` (12), `experience` (13), `gold` (14), `goldbank` (15). Matched by name or id. The other stats of the vanilla itemstatcost with no item bit (`lastexp` 29 and `nextexp` 30) are level-table look-ups and are not written back; `maxhp`, `maxmana`, `maxstamina` and the attributes are item stats and allowed. No further stat with this behaviour was found by reading vanilla `itemstatcost.txt`; this is a static reading of the table's save columns, not of the game's writers. `level` is also refused on `Monsters`, and so are `hitpoints`, `mana` and `stamina` (6, 8, 10): the mechanism above also runs for a monster on every hit and on regeneration, so a `+X` list would be given back each time base is rewritten (inferred; the damage writer was not traced in the dump). Param stats are refused on both targets: the 17 rows of the vanilla 3.3.0 `itemstatcost.txt` with a Save Param Bits value (static reading of that column; ids 83 `item_addclassskills`, 97 `item_nonclassskill`, 98 `state`, 107 `item_singleskill`, 126 `item_elemskill`, 151 `item_aura`, 155 `item_reanimate`, 179 `attack_vs_montype`, 180 `damage_vs_montype`, 188 `item_addskill_tab`, 195-199 and 201 `item_skillonattack`/`onkill`/`ondeath`/`onhit`/`onlevelup`/`ongethit`, 204 `item_charged_skill`), matched by name or id, because the list entry is set with layer 0, which would name skill or state 0. Stat ids are the itemstatcost row numbers, not the `*ID` column (vanilla row 212 says 213). `check` and the report name each refused row.
 - **Generation counter.** A counter bumped under the lock on `GameLeft` is read with the plan on each tick and checked under the lock before a made list is recorded; if the game was left meanwhile the list is not recorded or touched (it belongs to the old game's unit). So a list pointer from an earlier game is never used, whichever thread delivers `GameLeft`.
 
@@ -1113,38 +1136,210 @@ Everything below follows the recommendation of Q4; the items under "Needs game" 
 8. The log lines to read for items 1 to 7: `spawn names: data flag N, table revision R: monstats from the game's table on/OFF (SDK bank ..), superuniques by the game's name map on/OFF; <why>`; `spawn '..': monstats row N from the game's table` and `superuniques row N from the game's table, class monstats row M`. A round trip that fails logs `N of M monstats Ids did not map back` and the superuniques route stays off (a mod with an odd `Id` row, for example, would do that).
 9. Does the `DataTablesLoaded` listener run before the first map open (the revision is non-zero), so the cache is used? With revision 0 the check simply repeats at every map open.
 
+## 12. Multiplayer map sync engine checks (issue #98)
+
+Desk research for phase 7 (multiplayer): four questions about syncing a drawn map to a TCP/IP or open-game client. Read from the build 93847 dump
+with `dump_dis.py` (Capstone) and from the pinned SDK (`third_party/PluginSDK` at 717f727); nothing was run in a game and no code changed. Each claim is
+marked **static** (read from dump bytes or tables), **SDK** (read from the pinned headers), **inference** (follows from those, not observed) or
+**needs game** (with the check). `D2RCore.dll` is not in the dump, so anything the loader or core does on the wire is not covered. Battle.net and the
+outdoor builder are out of scope.
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer phase 7 (multiplayer map sync); no code exists yet |
+| Module | `D2R.exe`, D2R 3.3 build 93847, stamp `0x6ab3782c`, under D2RLoader 1.3.1 |
+| Location | The table below. Final addresses are found by byte signature |
+| Guard | Every prefix in the table below was re-run with an overlapping search over the dump's executable sections (`??` is a relative operand) and matches exactly once. The first draft's `0x86bc0` prefix matched 4 times and `0x490300` 3 times; both are now the longer unique forms. `0x4475c0` is not a hook target here (see Q4) |
+| Evidence | `dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]` and `pat "<hex>"`; callers found by scanning `E8`/`E9` targets. SDK headers `network.h`, `lifecycle.h`, `lifecycle_events.h`, `threads.h` and `examples/network-ping` |
+| Validation | None in a game. Static and SDK reading only |
+| Failure mode | If a check below fails, multiplayer stays off for Cartographer: the plugin refuses to open a map for a remote client and logs why |
+| Coexistence | The packet table entries that are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150) are not touched. `NetworkService` is the loader's own route and needs no hook. `0x44db20` is already hooked by Monster Count and Better Auras, so any Q4 fallback hook there must chain, not replace |
+
+| RVA | Role | Prefix |
+|---|---|---|
+| `0x58f680` | Portal operate (object operate slot 15, server side) | `48 89 4C 24 08 55 53 56 57 41 56 41 57` |
+| `0x592c40` | Object operate dispatcher (table `0x23a51c0`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 50 48 8B F1` |
+| `0x129930` | Client packet `0x03` (LoadAct) handler | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 8B 79 02` |
+| `0x129b80` | Client packet `0x07` handler (lazy room build trigger) | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 56 48 83 EC 30 0F B7 69 01` |
+| `0x86bc0` | Client act load (`isClient = 1`, seed from the packet) | `48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 81 EC A0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 98 00 00 00 44 8B A4 24 00 01 00 00` |
+| `0x86e20` | Client unit placement (second lazy room build trigger) | `48 89 5C 24 18 55 57 41 54 41 56 41 57 48 83 EC 40 48 8B D9` |
+| `0x2ef1c0` | Act creation (runs the DRLG for the act) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 44 0F B6 F1` |
+| `0x48aa50` | Server act creation (`isClient = 0`, seed from `game + 0x12c`) | `48 89 5C 24 18 48 89 6C 24 20 56 57 41 56 48 83 EC 60 0F B6 EA` |
+| `0x2ef320` | World room lookup stub, tail-jumps to `0x328680` (callers `0x86ebe`, `0x86f98`, `0x129bf1`) | `48 8B 44 24 30 48 85 C0 ?? ?? 48 8B 40 18 48 8B 52 70 48 89 44 24 30 ?? ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08` |
+| `0x4817f0` | Server send `(clientCtx, buf, len)` | `40 55 56 57 48 83 EC 40 49 8B E8 48 8B F2` |
+| `0x44db20` | Unit death (`D2Game\src\Unit\SUnitDmg.cpp`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 50 48 8B E9` |
+| `0x4475c0` | `(game, info, flag)`, called from the death path and 46 other places; returns 0 unless the unit at `[info + 8]` (the victim) has type 1 (a monster; a player is 0) | `40 53 55 56 41 55 48 83 EC 38 48 8B 5A 08` |
+| `0x490300` | Missile owner resolver | `48 89 74 24 18 57 48 83 EC 20 48 8B FA 48 8B F1 48 85 D2 75 20 48 8D 4C 24 38 88 54 24 38 E8 ?? ?? ?? ?? 84 C0 74 1F CC` (the longer form recorded in [dps-counter.md](dps-counter.md)) |
+
+Already recorded elsewhere and relied on here: maze level build `0x3271c0` and room lookup `0x327400` (section 5), spawn calls `0x492cf0` and `0x499ba0` and the room
+populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game + 0x1d8` (section 6).
+
+### Q1. How can a plugin send a small message host to client and back?
+
+- **SDK (primary route).** `NetworkService` (`network.h`) is the supported route for private plugin messages. A plugin registers a channel with a 64-bit
+  compatibility token, connects to the host (`connectToHost`), sends to the host (`sendToHost`) or to one client peer (`sendToClient`), and receives on host and
+  client callbacks. A payload is at most 224 bytes. `getPeerPlayer` maps a peer to a player and must be called on the game thread. The `network-ping` example is
+  the pattern to copy. No engine address or hook is needed for it.
+- **SDK limits.** Not available on Battle.net (out of scope). Plugin roles are Client, Server or Shared; Cartographer is Shared with native hooks, and Shared
+  plugins must match between host and client. `runOnGameThread` returns Unavailable on a remote TCP/IP client (`threads.h`: a remote client has no local
+  authoritative game thread), so client side work has to run from a hook or a tick the plugin already owns, not from a hop the SDK cannot give. `connectToHost` is called only after entering a game and may return `Busy` on a TCP client until the host's transport packet has arrived, so the client retries; the plan cannot reach the client earlier than that. Per the SDK README, Shared plugins must match in TCP/IP before a client can join at all, so a client without the plugin never gets as far as a map (this mostly answers Q3.3; the rest is the match check itself, **SDK**).
+- **Static (fallback, the game's own packet path).** The client packet handler table is at RVA `0x22bbc40`, stride `0x18`, entries `{handler, size, third}`,
+  index = classic packet id. Most entries have the handler first and a zero third field, but ids 12 to 16, 23, 36, 76, 77, 103 to 111, 113 and 114 hold the stub `0x78d20` in the first field and the real handler in the third; ids 110 and 111 (size 1) have the stub in the third field too, so they have no real handler (**static**). Seven entries are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150); the loader's own transport packet id was not
+  located (D2RCore is not in the dump). The server sends with `0x4817f0(clientCtx, buf, len)`. A plugin-made packet would need a free packet id, a handler table
+  entry and a size, which collides with the loader's thunks and with other plugins. **Not recommended**; consider it only if the SDK route fails a check below.
+- **Needs game.**
+  1. A Shared plugin with a channel on a host and one remote TCP/IP client: does the connection complete, and how many `Busy` retries does `connectToHost` take on a TCP client, and what does the connection event say when the client
+     has a different compatibility token (reject reason)? (A client without the plugin is expected to be refused at join by the SDK's Shared rule; confirm.)
+  2. A host to client message of 224 bytes: is it delivered intact, and on which thread does the client callback run?
+  3. Does the host see the client's reply on its server thread, and can `getPeerPlayer` be called there?
+- **Recommended route.** `NetworkService`, one channel, a token derived from the plugin's wire version. The host sends the map plan (seed, map id, a few bytes)
+  before the client builds the level; the client acks. Fall back to "map off" for a client whose connection is rejected.
+
+### Q2. Where does a TCP/IP or open-game client build the slot level, and do the maze hooks run on the client, the server, or both?
+
+- **Static: both sides run their own DRLG.** Each act is created by `0x2ef1c0`. The server calls it from `0x48aa50` with `isClient = 0` and the seed at `game + 0x12c`.
+  The client calls it from the packet `0x03` handler `0x129930` through `0x86bc0` with `isClient = 1` and the seed taken from the packet. Level seeds are
+  deterministic from the act seed: `drlg + 0x860 + level id` through `0x367110`. The same level id and act seed give the same layout on both sides, which is the
+  property the plan cache in `maze_hooks.cpp` ("per game, so the server's build and the client's build get the same plan") relies on.
+- **Static: client rooms are built lazily.** On the client a room is built through `0x2ef320` -> `0x328680` -> `0x327400` -> `0x3271c0` when the client needs it. Two
+  triggers were found: the packet `0x07` handler `0x129b80` and the unit placement function `0x86e20` (the stub's callers are `0x129bf1`, `0x86ebe`, `0x86f98`).
+  `0x3271c0` itself has exactly 5 direct callers (`0x32705e`, `0x327525`, `0x3609cf`, `0x3da6c3`, `0x3dd5f6`; E8/E9 scan, **static**). Which of them can run on a client was not worked out beyond the two
+  triggers above, so "other triggers" is bounded by those 5 plus any indirect call; classify the other three before relying on "plan before the first lazy build".
+- **Static consequence.** `LevelBuild` (`0x3271c0`) and the maze hooks run on **both** the server and the client, each against its own DRLG instance. In single player
+  both DRLGs live in one process, so the hook runs twice for one level (already true today). In a TCP/IP game it runs once per DRLG: the host has both, a remote client
+  has only the client DRLG. A remote client therefore has the plan only if the plugin put it there before the first lazy build, i.e. before the packet `0x03` / `0x07`
+  handlers or the unit placement run for the slot level.
+- **Not located.** The server side sender of packet `0x03` (LoadAct) and of packet `0x07`: callers of `0x4817f0` with those ids were not found (only unrelated ids
+  `0x21` and `0x1d` to `0x1f`); they may go through D2RCore or a table. The receiving handlers are static, so the answer above stands, but the exact host moment at
+  which a client is told to load the act is unknown, which matters for when the plan message must be sent.
+- **Inference.** The host must send the plan for the destination map when a client is about to enter a map portal (Q3 gives the moment), and the client's plan cache
+  must be keyed like the host's. The host's own build is unchanged.
+- **Needs game.**
+  1. Log `0x3271c0` entry (level id, thread) on a host and on a remote client while the client enters the slot level; expect host server DRLG, host client DRLG and remote
+     client DRLG.
+  2. Does the remote client reach `0x3271c0` for the slot level before or after the plugin message arrives? If before, it builds the stock slot layout.
+  3. Does the lazy build ever run on a thread other than the client main thread?
+  4. Log `0x4817f0` ids when a client enters an act and when it enters the slot level, to find the LoadAct sender.
+  5. Log which of the 5 callers of `0x3271c0` fire on a remote client for the slot level.
+
+### Q3. How can the portal entry be held until a client confirms?
+
+- **Static: the gate point is the server portal operate.** Objects 59 and 60 (the red portal) use OperateFn 15, slot 15 of the table at `0x23a51c0`, which is the
+  server function `0x58f680`, reached through the dispatcher `0x592c40`. It runs where the object is operated (the host). It takes one pointer, the operate context the
+  dispatcher builds on its stack (`lea rcx, [rsp+0x20]; call rdi` at `0x592cbf`): `[ctx + 8]` is the object (its `[unit + 0xc]`, read through `0x34ab60`, must be 2, `0x58f69c`)
+  and `[ctx + 0x10]` is the operating player (`0x34b9d0` must return 0, a player, `0x58f6b5`; that check is an assert, an `int3` at `0x58f6cf` when the type is not a player and `0x592580` is true, not a refusal). Only the object check (`[unit + 0xc]` not 2, `0x58f6a7`) takes the refusal path at `0x58fcd4`, which calls `0x491960(player, 0x14, player)` (the third argument is also the player) and
+  returns 0 (`r15d`), the existing way the game declines an operate; that call is probably what the client sees (**inference**, callee unread).
+- **Inference (route).** Hook `0x58f680` (the 13-byte prefix above is unique). For the red portal and a client the plugin has not marked as synced: send the plan over
+  `NetworkService` (Q1), return 0, and when the client acks, mark it synced and let the next click through (or call the original). Hooking the dispatcher `0x592c40`
+  also works but sees every object operate.
+- **Route: player to peer.** The gate sees a player unit, but `sendToClient` needs a `PeerHandle`, and `getPeerPlayer` resolves peer to player only from a scheduled host
+  game-thread callback (**SDK**). So on each Connected event the host queues `getPeerPlayer` and keeps a player id to peer map; a player with no entry is treated as not synced
+  (the gate refuses, or the host's own player skips it).
+- **Needs game.**
+  1. The context layout above (object `[ctx + 8]`, player `[ctx + 0x10]`) is **static**; confirm in a game by logging both at the hook.
+  2. Does a refused operate (the `0x491960(player, 0x14)` call) show the player anything, and does the client retry or must the player click again? A "waiting for client" line through section 9's chat
+     path (`0x477a30`) is the likely feedback.
+  3. A client that never acks (not running the plugin): timeout, then stock behaviour or refusal? A Shared plugin must match to join (Q1), so this is
+     mostly a client that connected but never acks (version skew or a lost message).
+  4. The host's own player can skip the wait (same process, the plan is already there).
+- **Recommended route.** Gate at `0x58f680` with an ack from `NetworkService`, one pending entry per portal and client, with a timeout.
+
+### Q4. What does kill credit need for monsters spawned by map events in multiplayer?
+
+Result: mostly **needs game**. The death path was read far enough to say which unit is which, not far enough to say who is credited.
+
+- **Static: the death function.** `0x44db20(game, victim, killer, flag)` (`rbp = game`, `rbx = victim`, `rdi = killer`, `r14d = flag`). In the block `0x44dc01` to `0x44dd01`:
+  `0x34ab60(victim)` returns `[unit + 0xc]`, which is not the unit type (probably the mode); the block is skipped when it is 0 or 0x11 (`0x44dc09`, `0x44dc19`). Then
+  `0x588b00(killer, victim, game)` when the killer is non-null, and a check that `0x34b9d0(victim)` returns 1 (`0x44dc3d`; `0x34b9d0` returns `[unit + 0]`, the unit type, and
+  type 0 is a player, type 1 a monster, as `0x58f680` requires a type 0 operator). So the rest of the block runs for **monster victims only**.
+- **Static: the death info record.** `0x4471e0(victim, 0, &out)` fills `out` (`dword +0 = 0`, `qword +8 = victim`, written at `0x447276`); `[rsp + 0x30]` (`out + 0x10`) is set to the
+  killer at `0x44dcf4`. The killer owner fields (`[killer + 0x38]`, `0x341a30`, `0x341a20`, `0x349b70`, `0x34ae80`, `0x341950`) are resolved just before.
+  The call at `0x44dcfc` is `0x4475c0(game, &out, 1)`, where the first argument is the game, not a player.
+- **Static: `0x4475c0`.** It loads the unit at `[info + 8]` (the victim) and returns 0 unless its type is 1 (a monster) (`0x4475df`, `0x447600`); the rest of the body (stat `0x36` is read at `0x447630`)
+  was not read, and it has 47 direct call sites, so it is a general routine, not something specific to this path. It is **not** shown to select a player, and nothing here says
+  who is credited with experience or drops. The earlier "find the player the kill counts for" reading did not follow from the bytes and is withdrawn.
+- **SDK.** The `MonsterDeath` listener (server thread) gives the killer identity only, with no owner resolution (a missile or minion shows as itself), so it is not a credit
+  mechanism.
+- **Static: spawn path.** The map events spawn through `0x492cf0` / `0x499ba0` (section 9). The victim is an ordinary server monster made by the game's spawn core; nothing in
+  the death block was found that checks how it was spawned.
+- **Static: bosses.** The superunique spawn is gated by the once-per-game bitmap at `game + 0x1d8` (per game, not per player), so one superunique can be spawned once per game: a
+  design limit for several maps in one game, not a credit item.
+- **Inference (unverified).** Monsters spawned on the host are real server units and replicate through the normal unit packets, so credit, experience, drops and quest flags are probably decided
+  server side and need no plugin message. What is open is display: the plugin's monster stats (section 7) are applied on the server unit, and whether a client shows them depends
+  on whether those stats replicate.
+- **Needs game.**
+  1. Kill a map event monster as a non-host client, directly, with a minion and with a missile: experience, kill count and drop owner (this is the only way to settle credit).
+  2. Do the monster stats from section 7 reach a remote client's display (health bar, hover text), or only the server's numbers?
+  3. Does the monster level override (section 6) change the experience award for a client far from the monster?
+- **Recommended route.** Spawn on the host only through the section 9 calls and leave credit to the engine, verified by the three checks. If credit is wrong for minions or
+  missiles, read the rest of `0x4475c0` and the owner chain of the block above (and `0x490300` for missiles) before touching anything; a hook on `0x44db20` is the fallback and must chain with Monster Count and Better Auras.
+
+### Needs game (summary)
+
+1. Q1: channel connect and reject behaviour with a remote TCP/IP client; 224 byte delivery; callback threads.
+2. Q2: `0x3271c0` hit order on host and remote client for the slot level; does the plan arrive before the remote client's first lazy build; the LoadAct sender.
+3. Q3: `0x58f680` context fields (confirm `[ctx + 8]` and `[ctx + 0x10]`); refusal feedback and retry; a client that never acks; the host's own player; the player to peer map.
+4. Q4: credit and drops for a remote client (own attack, minion, missile); stat replication to clients' displays; range effects.
+5. Ack content: the client solves the layout from its own tables, so its ack should carry a hash of the solved plan and the host can refuse a client whose `maps.txt` or pieces differ (the phase 7 done check, two clients show the same layout).
+6. A client that joins, or rejoins, after the map was opened.
+7. The client's plan cache surviving the level rebuild on a later visit (plan section 1, pd2-resurrected#930).
+8. Which of the 5 callers of `0x3271c0` run on a remote client.
+
+### Recommended route (all four)
+
+`NetworkService` for the plan message (Q1); keep the maze hooks as they are on both sides (Q2) with the plan in the per-game cache before the client's first build; gate the
+portal entry at `0x58f680` until the client acks (Q3); spawn events on the host only and leave credit to the engine, verified by the Q4 checks. The unlocated pieces (LoadAct sender,
+retry behaviour, stat replication) are needs-game items and do not block writing the plugin code.
+
 ## 13. Ambush, Treasure and Shrine events: static checks (issue #102)
 
-Desk research for phase 6b. Section 12 is left open for PR #101. Build 93847, `D2RLoader.exe` stamp `0x6ab3782c`
+Desk research for phase 6b (section 12 is the multiplayer research, PR #101). Build 93847, `D2RLoader.exe` stamp `0x6ab3782c`
 (`C:\ghidra-work\D2RLoader_6ab3782c_dump.exe`), read with `tools/dump_dis.py` and a private disassembly script. **Nothing here
 was run in a game.** Evidence levels: **dump** (read from the disassembly), **SDK** (read from the pinned headers),
-**inference** (reasoned, not shown), **needs-game**. Every address is an RVA; its byte prefix matches exactly once in the dump's
-code sections (`??` is a masked rel32).
+**inference** (reasoned, not shown), **needs-game**. Every address is an RVA; its byte prefix is masked (`??` is a rel32 or
+RIP-relative displacement) and matches exactly once in the dump's executable sections (overlapping search, re-run after the last edit of this section), except `0x402f50` (see the table).
 
-| RVA | What (level) | Unique byte prefix |
-|---|---|---|
-| `0x50acf0` | room populator, already hooked in `event_apply.cpp` | `4c 8b dc 53 56 48 81 ec b8 00 00 00 48 8b 05 c5` |
-| `0x4022a0` | debug `ospawn` handler: the object spawn recipe (dump) | `40 55 41 56 41 57 48 83 ec 60 4c` |
-| `0x402f50` | free-spot search near a point (dump: call shape only, body unread) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 5d` |
-| `0x490410` | object create used by `ospawn` (dump: arguments only) | `40 55 53 57 48 8d ac 24 70 fc ff ff 48 81 ec 90 04 00 00` |
-| `0x38fc70` | `(dataFlag)` returns the objects row count `*(dt+0x1530)` (dump) | `48 83 ec 28 e8 ?? ?? ?? ?? 8b 80 30 15 00 00` |
-| `0x4a2690` | AI set-mode `(game, monster, [monData+0x30], idx)` (dump) | `48 85 c9 0f 84 8a 02 00 00 55` |
-| `0x596d40` | AI mode 11 ("scaredy cat") setup (dump) | `48 89 5c 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 ec 40 4c 8b f9` |
-| `0x5cd060` | AI function gated on state 56 (dump) | `48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 54 41 56 41 57 48 83 ec 40 49 8b 68 10` |
-| `0x48b890` | AI event 2 scheduling (dump) | `40 53 56 41 54 41 56 41 57 48 83 ec 20 45` |
-| `0x48b720` | AI event 2 scheduling (dump) | `48 83 ec 48 8b 84 24 80` |
-| `0x447b80` | monster death drop, calls `0x441300` (dump) | `48 8b c4 44 89 40 18 53 55` |
-| `0x441300` | drop roller for a monster unit (dump) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 ad 9f` |
-| `0x4404f0` | generic TC roller (dump) | `4c 8b dc 55 53 49 8d ab 08 f7` |
-| `0x397290` | `(dataFlag, tcIndex u16, level)` TC lookup (dump) | `48 89 5c 24 08 55 56 57 48 83 ec 30 41` |
-| `0x5930b0` | chest TC pick by act, difficulty, area-level tier (dump) | `40 55 56 57 41 56 48 8d 6c 24 c1 48 81 ec d8` |
-| `0x396430` | `(dataFlag, difficulty, act, tier)` chest TC lookup (dump: shape only) | `48 89 5c 24 08 48 89 6c 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 ec 40 45` |
-| `0x58e2f0` | chest operate handler, slot 4 of table `0x23a51c0` (dump) | `48 89 4c 24 08 55 48 8b ec 48 81` |
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer phase 6b: Ambush waves, Treasure flee and `Drop`, Shrine placement, boss `Drop`; no code exists yet |
+| Module | `D2R.exe`, D2R 3.3 build 93847, under D2RLoader 1.3.1 |
+| Build identity | Image stamp `0x6ab3782c` |
+| Location | The table below. Final addresses are found by byte signature |
+| Guard | Every prefix in the table matches once (`0x402f50` has none, see its row). Hook candidates are rated with the section 6 rule (whole instructions, at least 14 bytes, no relative operand in them): `0x447b80` (15 bytes), `0x58e2f0` (16), `0x5930b0` (18) and `0x592c40` (23) pass; `0x441300` and `0x50acf0` have a RIP-relative operand early (`+0x14`, `+0xf`) and stay call-only or use the long masked prefix |
+| Contract | Per row of the table and Q1 to Q4 below |
+| Evidence | `dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]` and `pat "<hex>"`; callers by scanning `E8`/`E9` targets; SDK `MonsterDeathListener`, `TreasureClasses` rows, `ItemService` (`item.h`) |
+| Validation | None in a game. Dump and SDK reading only |
+| Failure mode | A part whose prefix does not match is left off and logged; the others keep working. Ambush: with no `MonsterDeathListener` the first wave spawns and later waves are skipped (no clear detection). Treasure: no `0x597030` match, the monster does not flee; no `0x441300`/`0x4404f0`/`0x397290` match, no extra drop. Shrine: no `0x490410`/`0x402f50` match, no object. Boss `Drop`: no `0x447b80` match, no extra drop; the stock drop is untouched |
+| Coexistence | Nothing else in this repo hooks `0x447b80`, `0x58e2f0`, `0x5930b0`, `0x592c40`, `0x597030` or `0x4a2690`. `0x50acf0` is already hooked by Cartographer. A hook on the death or drop path must chain, as Monster Count and Better Auras do for `0x44db20` |
 
-**Toolkit discrepancy (dump).** `d2rAI-toolkit` lists the unit field at `+8` as the class id. In the dump `0x349860`
-(`48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 49`) returns `[unit+4]` and `0x34a330`
-(`48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 39 ca`) returns `[unit+8]`, and the plugin already uses `+8` as the
-unit id (validated in game). Treat `+4` as the class and `+8` as the id.
+| RVA | What (level) | Masked unique prefix | Use |
+|---|---|---|---|
+| `0x50acf0` | room populator, already hooked in `event_apply.cpp` | `4c 8b dc 53 56 48 81 ec b8 00 00 00 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 84 24 80 00 00 00 83 3d ?? ?? ?? ?? 00` (as section 6) | hooked |
+| `0x4022a0` | handler registered under the command string `SpawnObject` (lea at `0x400e6b`, string at `0x1d13628`): the object spawn recipe (dump) | `40 55 41 56 41 57 48 83 ec 60 4c 8b f1` | call-only |
+| `0x402f50` | free-spot search near a point (dump: call shape only, body unread); two direct callers, `0x401ecc` and `0x40239f` (in `0x4022a0`) | none: it is byte-identical to `0x418d00` for 452 bytes, differing only in rel32 operands, so no masked prefix is unique. Find it as the call target at `0x40239f`. The unmasked 24-byte form `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 5d` is unique today but moves with the code | call-only |
+| `0x490410` | object create used by `SpawnObject` (dump: arguments only) | `40 55 53 57 48 8d ac 24 70 fc ff ff` | call-only |
+| `0x38fc70` | `(dataFlag)` returns the objects row count `*(dt+0x1530)` (dump) | `48 83 ec 28 e8 ?? ?? ?? ?? 8b 80 30 15 00 00` | call-only |
+| `0x4a2690` | AI set-mode `(game, monster, [monData+0x30], mode)`; `r9` is the mode, range-checked `< 0x12`; returns early when stat `0x36` is set on the monster (dump) | `48 85 c9 0f 84 ?? ?? ?? ?? 55 53 56` | call-only |
+| `0x597030` | **flee setup**: sets state 56 through a record and calls `0x4a2690` with mode `0xb`; 3 callers (dump) | `48 89 5c 24 10 48 89 74 24 18 57 48 81 ec 80 00 00 00 48 8b f1` | call-only |
+| `0x596d40` | **not** the flee setup (an earlier draft said so): a spot and room search (`0x509cc0`, `0x38dfb0` twice, `0x491ca0`), ends at `0x59702e`; 4 callers (dump) | `48 89 5c 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 ec 40 4c 8b f9` | not used |
+| `0x5cd060` | AI step that returns a monster to mode 0 once state 56 is gone (dump) | `48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 54 41 56 41 57 48 83 ec 40 49 8b 68 10` | not used |
+| `0x48b890` / `0x48b720` | AI event 2 scheduling (dump) | `40 53 56 41 54 41 56 41 57 48 83 ec 20 45 8b f1` / `48 83 ec 48 8b 84 24 80 00 00 00` | not used |
+| `0x34c2c0` / `0x34c730` | the two target checks `0x597030` bails on: `0x34c2c0(unit)` nonzero, or `0x34c730(unit, 0, 1, 1)` zero (dump: shapes only) | `48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 ?? ?? ?? ?? 84 c0 74 4d` / `48 89 5c 24 10 48 89 6c 24 18 48 89 74 24 20 57 41 56 41 57 48 83 ec 20 45 0f b6 f1` | call-only |
+| `0x447b80` | monster death drop `(game, victim, arg3, info)`; reaches `0x441300` at `0x447e17`; 2 direct callers (dump) | `48 8b c4 44 89 40 18 53 55 56 57 41 54 41 56` (as section 6) | hookable by the rule (15 bytes) |
+| `0x441300` | drop roller for a monster unit (dump) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 ?? ?? ?? ?? 48 33 c4 48 89 84 24 88 00 00 00 4c 8b bc 24 18 01 00 00` (as section 6) | call-only here |
+| `0x4404f0` | generic TC roller, 2 callers (`0x44148c` in `0x441300`, `0x59333d`); contract in Q2 (dump) | `4c 8b dc 55 53 49 8d ab 08 f7 ff ff` | call |
+| `0x397290` | `(dataFlag, tcIndex u16, level)` TC lookup, returns the compiled TC pointer (dump) | `48 89 5c 24 08 55 56 57 48 83 ec 30 41 8b d8` | call |
+| `0x5930b0` | chest TC pick by act, difficulty, area-level tier; **28 direct callers**, 3 of them inside `0x592c40` (dump) | `40 55 56 57 41 56 48 8d 6c 24 c1 48 81 ec d8 00 00 00` | hookable by the rule (18 bytes), but too broad |
+| `0x396430` | `(dataFlag, difficulty, act, tier)` chest TC lookup, returns a compiled TC pointer (dump: shape only) | `48 89 5c 24 08 48 89 6c 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 ec 40 45 8b f9` | call |
+| `0x58e2f0` | chest operate handler, slot 4 of table `0x23a51c0` (entry `0x23a51e0`; no direct caller) (dump) | `48 89 4c 24 08 55 48 8b ec 48 81 ec 80 00 00 00` | hookable by the rule (16 bytes) |
+| `0x592c40` | object operate dispatcher (section 6) | `48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 57 48 83 ec 50 48 8b f1` | hookable (section 6) |
+| `0x349860` / `0x34a330` | unit class `[unit+4]` / unit id `[unit+8]` getters (witnesses; dump) | `48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 ?? ?? ?? ?? 84 c0 74 01 cc b8 ff ff ff ff 48 83 c4 28 c3 8b 41 04` / the same ending `8b 41 08` | call-only |
+
+**Unit fields.** The toolkit lists `+8` as the class id. The dump says `+4` is the class and `+8` the unit id (witnesses above), as already
+recorded in [quick-npc.md](quick-npc.md#6-unit-layout) and the registry's unit `+0` / `+4` / `+8` row; nothing new here. The toolkit
+is also inconsistent with itself: its RVA table lists `0x349860` as the class and `0x34a330` as unit `+8`, which agrees with the dump and not with its Units table.
 
 ### Q1. Ambush: detect arrival, spawn `Waves` waves, tell when a wave is cleared
 
@@ -1154,74 +1349,89 @@ unit id (validated in game). Treat `+4` as the class and `+8` as the id.
   room is the event room (or its rect, `+0x80..+0x8c`, contains the player). **Recommended**, one-shot per event, remembered
   in the plugin state next to `spawned`.
 - **Spawn (existing code).** Each wave is `Count` calls of `SpawnOne` (`SpawnMonster(game, room, x, y, row, 1, 0xa, 0)`) at
-  spots from the event rect, one wave after the previous one is cleared.
-- **Wave cleared (SDK + inference).** Remember the ids of the spawned units. The SDK `MonsterDeathListener` reports id, class
+  spots from the event rect, one wave after the previous one is cleared. **New call context:** the later waves move
+  `SpawnMonster` (`0x492cf0`) from the populator context (`0x50acf0`) into the `PlayerTick` (`0x42e350`) context. Nothing in the dump
+  says the spawn core cares, but it has never been called from there (needs-game).
+- **Wave cleared (SDK + inference).** Remember the units the spawns return. `SpawnOne` currently discards the returned unit; the id is the unit's `+8`
+  ([unit layout](quick-npc.md#6-unit-layout)). The SDK `MonsterDeathListener` reports id, class
   and level id after the normal drop, on the server thread, with no unit pointer: count tracked ids as they die; the wave is
-  cleared when all are accounted for. A monster that leaves the game without dying never reports, so add a time-out per wave.
+  cleared when all are accounted for. A monster that leaves the game without dying never reports, so add a time-out per wave (the value is open).
   The alternative, looking units up by id each tick, needs a server unit lookup by `(type, id)` that is **not resolved** here.
-- **Evidence:** SDK for the listener, inference for the rest. **Needs game:** the listener's id equals the id the spawn returns
-  (`+8`); the room test fires on walking in; a wave does not trip the room's monster cap.
+- **Evidence:** SDK for the listener, inference for the rest. **Needs game:** the listener's id equals the id at `+8` of the unit the spawn returns;
+  the room test fires on walking in; a wave does not trip the room's monster cap; `SpawnMonster` works from the tick context.
 
 ### Q2. Treasure: flee, drop from a named TC, chest that drops from `Drop`
 
-- **Flee (dump for the mechanism, needs-game for the effect).** The engine's scared behaviour is AI mode 11, set with
-  `0x4a2690(game, monster, [monData+0x30], idx)` and set up in `0x596d40`; the AI function `0x5cd060` is gated on stat state 56
-  (`0x38`). So "flee" is a mode plus a timed state, the state set by the stat-list recipe in section 6 Q1. Not shown: the right
-  `idx`, the duration, and whether a monster whose monstats AI does not flee actually runs. Call these, do not hook them.
+- **Flee (dump for the mechanism, needs-game for the effect).** Recommended route: **call `0x597030`** on the spawned monster. It
+  is the engine's scare setup `(game, source, target monster, r9, arg5, arg6)`; its 3 callers are `0x45e971`, `0x45fb1b` and `0x583dcf`. In order:
+  1. it bails out if `0x34c2c0(target)` is nonzero (`0x597055`) or `0x34c730(target, 0, 1, 1)` returns 0 (`0x597073`);
+  2. it fills a record on its stack (`+0x48` source, `+0x50` target, `+0x58 = 0x4d`, `+0x5c = 1`, `+0x60 = arg6`, `+0x64 = -1`, `+0x6c = 0x38`) and calls `0x433d20`, an `FF 25` D2RCore thunk (call-only, body not readable here); `0x38` is state 56, so the engine sets the state itself, with `arg6` as a duration-like value;
+  3. it calls `0x4a2690(game, target, [[target+0x10]+0x30], r9 = 0xb)` at `0x597155`: the AI mode is **11**, and `r9` of `0x4a2690` is the mode;
+  4. it schedules AI event 2 with `0x48b890` and `0x48b720`.
+
+  `0x5cd060` is the other half: when state 56 is **absent** (`0x3351b0(unit, 0x38) == 0`) it calls `0x4a2690(game, unit, ..., 0)` (mode 0) and reschedules. So the flee ends by itself when the state expires. Building state 56 by hand with the section 6 stat-list recipe is neither needed nor the engine's way (it would have no expiry). `0x596d40`, which an earlier draft named the mode 11 setup, is a spot and room search and is not used.
+  `r9` and `arg5` are not read by `0x597030` (`r9b` is overwritten at `0x59705b`, no read of the `arg5` slot); only `arg6` is. Callers pass `0x3b5160` skill-calc results for `arg5` and `arg6` (`0x45e971`) or `0x14, 0x14` (`0x583dcf`, with `r9 = 0x82`).
+  **Needs game for the flee:** what the two bail-outs reject (`0x34c730` reads stat `0x36`, a monstats flag byte at `+0xf0` and, since its last arguments are 1, a bit of the row at `+0x3c`; Terror-like effects classically skip bosses and uniques, which matters if a Treasure `Spawn` is a superunique); the meaning and unit of `arg6` (frames or ticks); whether `source = NULL` is accepted; whether a monster whose monstats AI does not flee actually runs.
 - **Drop on death (dump + SDK).** `MonsterDeathListener` has no unit pointer, so it can only observe the death. To drop a TC at
   the monster use the engine: `0x441300` rolls a drop for a monster unit from a TC index; `0x447b80` is the death caller. The TC
-  name goes to the `u16` index through the name map at `*(dt+0xd70)` (compiled rows at `dt+0xd78`, `0x150` bytes each, count at
-  `dt+0xd80`); that the lookup is the one section 11 uses (`0xa121f0`) is **inference**. SDK: `TreasureClasses` (76) rows are
-  reachable by row index only (`findRowById`), so a name needs the map anyway.
+  name goes to the `u16` index through the name map at `*(dt+0xd70)` (**dump**): both `0x3a79c1` and `0x3a94ed` do `mov rcx, [dt+0xd70]; call 0xa121f0` (the lookup section 11 uses) and use the result as an
+  index into the `dt+0xd78` vector (`0x150`-byte rows, count at `dt+0xd80`), the same vector `0x397290` indexes (`0x3972aa`, `0x3972dd`). Section 6's "pd2-sourced: inference" for this route is settled here.
+  SDK: `TreasureClasses` (76) rows are reachable by row index only (`findRowById`), so a name needs the map anyway.
+- **Roller contract (dump).** `0x4404f0(game, a, b, tcPtr, 6 stack args)`: `rcx` game, `rdx` and `r8` the two units (the monster and `[arg+0x10]` on the monster path, `[rdi+8]` and `[rdi+0x10]` on the chest path), **`r9` the compiled TC pointer**, not an index. The pointer comes from
+  `0x397290(dataFlag, tcIndex, level)` (monster path, `0x441438`) or `0x396430` (chest path, `0x5932ca`); a null pointer skips the roll. The chest path passes `[rsp+0x48] = 6` (`0x5932fb`) and out buffers through `[rsp+0x38]`/`[rsp+0x40]`, then reads `[rbp-0x11]`. A `Drop` route therefore needs `0x397290` first, then `0x4404f0`, or `0x441300` which does both.
 - **Chest `Drop` (dump).** A chest does **not** take its TC from its objects row: `0x5930b0` picks it by act, difficulty and
   area-level tier through `0x396430`, then rolls with `0x4404f0`. A stock chest cannot be told a TC. Route: place a chest, track
-  its id, and on open roll the `Drop` TC with `0x4404f0` in addition (hook the operate slot `0x58e2f0` or `0x5930b0` for tracked
-  ids). Not shown which of the two is cleaner.
-- **Evidence:** dump for the flee mechanism, the drop call and the chest pick; inference for the name map use. **Needs game:**
-  flee works with the chosen `idx` and for how long; `0x441300` with a `Drop` TC from a hook drops at the right place; the
+  its id, and on open roll the `Drop` TC in addition. **Which hook:** section 6 Q3 already recommends recognising a placed object by unit id in a `0x592c40` hook. `0x5930b0` is not a good choice: it has 28 direct callers
+  (3 inside `0x592c40`, 10 between `0x58e51f` and `0x58e7b9` in or next to the chest handler, the rest elsewhere), so it is the shared object-loot path and a hook there sees far more than chests. Adopt **`0x592c40`** (one hook for chest and any later shrine or well reward), with `0x58e2f0` as the narrower alternative if the dispatcher hook proves too broad.
+  Which return value of the dispatcher means "opened" is not read (needs-game).
+- **Fallback (SDK).** `ItemService::createItem` with `ItemContainer::Ground` and `Placement::Exact` (`item.h`) places a chosen item at a ground coordinate for a given player. It rolls no TC, but it needs no engine call: combine it with the SDK `TreasureClasses` rows and the tracked spawn spot (`MonsterDeathEvent` has no position). Use it as the `Drop` fallback if the `0x441300` route fails.
+- **Evidence:** dump for the flee mechanism, the name map, the roller contract and the chest pick; SDK for the fallback. **Needs game:** flee works with `0x597030` and the chosen args and for how long; `0x441300` with a `Drop` TC from a hook drops at the right place; the
   chest open path reaches the hook with the tracked id.
 
 ### Q3. Shrine: place an object by objects row at a free spot; resolve a name
 
-- **Place (dump).** The debug handler `0x4022a0` is the recipe: find a free spot with `0x402f50` (the unit's room from
-  `0x34b440`, a pointer to an `(x, y)` pair, radius 5, flag mask `0x3e01`, a pointer for the room it lands in), check the row
+- **Place (dump).** The handler `0x4022a0` is the recipe (it is registered under the command string `SpawnObject`; an earlier draft called it `ospawn`): find a free spot with `0x402f50` (the unit's room from
+  `0x34b440`, a pointer to an `(x, y)` pair at `[rsp+0x90]`/`[rsp+0x94]`, radius 5, flag mask `0x3e01`, a pointer for the room it lands in), check the row
   index against the count from `0x38fc70(dataFlag)`, then create with `0x490410(2, rowIndex, x, y, game, room, ...)` (call site
-  `0x402423`). Argument order was read at the call sites; the body of `0x402f50` and the meaning of the mask were not.
+  `0x402423`). The create reads the same `[rsp+0x90]`/`[rsp+0x94]` as `x` and `y`, so `0x402f50` takes the pair in and writes the found spot back (inference).
+  Argument order was read at the call sites; the body of `0x402f50` and the meaning of the mask were not.
 - **Name to row (not settled).** In the handler the name argument goes through `0x12da3a4` and then a bound check, which looks
   like a plain number parse (the cheat takes an index), **not** a name map. No objects name map was found. Fallback
   (inference): row index equals the line order in `objects.txt` (parse as in section 9), guarded by the line count equal to
   `*(dt+0x1530)`. SDK: `Objects` (54) and `Shrines` (73) exist and are game-thread only; their row layout and `Id` offset were
   not examined, so a name scan through the SDK is not shown.
+- **Duplicate names (rule).** `objects.txt` names repeat (many chests and shrines share one), so a name is a valid `Spawn` only when exactly one line has it. With two or more matching lines the line-order fallback does not guess: skip that spawn and log the name and the row indexes, and let the event give a numeric row instead (what the debug handler takes). The same rule and the same name route apply to Treasure's "if `Spawn` is an object" test and to the Treasure chest.
 - **Evidence:** dump for the placement recipe; **needs-game** for the name route.
 - **Needs game:** the `0x402f50` result is clear of walls and objects; the object works (a shrine can be used, a well heals);
   `.txt` order equals the row index; which `Shrines` row a shrine object uses.
 
 ### Q4. Boss `Drop`: extra loot from a TC on the boss's death
 
-- **Route (dump, inference).** The same pair as Q2: hook `0x447b80` after the original for a tracked boss id and call
-  `0x441300` once more with the `Drop` TC index, copying the argument set the original call inside `0x447b80` uses (three
-  register arguments, the `u16` TC index, six stack arguments). How `0x447b80` picks the TC for a superunique (through a
-  `D2RCore` thunk, `0x3e2b45a`) was not resolved, which decides whether to add to it or replace it. Without a unit pointer the
-  SDK listener cannot do this.
+- **Route (dump, inference).** The same pair as Q2: hook `0x447b80` after the original for a tracked boss id (hookable by the rule, see the table) and call
+  `0x441300` once more with the `Drop` TC index. The inner call at `0x447e17` passes, from `0x447b80(game, victim, arg3, info)`:
+  `rcx` game, `rdx` victim, `r8 = [info + 0x10]`, `r9` the `u16` TC index (a D2RCore thunk result, `0x3e2b45a`, kept in `r12w`), and on the stack `+0x20 = 0`, `+0x28` a **local** (the result of `0x43e8a0(victim, level id)`, written at `0x447c68`),
+  `+0x30 = arg3` (its slot `[rsp+0xc0]`) and `+0x38`, `+0x40`, `+0x48 = 0`. So only `game`, `victim`, `r8` and `arg3` come from the arguments; the TC index and the `+0x28` local are computed inside, and a hook has to compute or choose them itself (inference).
+  How `0x447b80` picks the TC for a superunique (through `0x3e2b45a`) was not resolved, which decides whether to add to it or replace it. Without a unit pointer the SDK listener cannot do this.
 - **Evidence:** dump for the call shape, inference for the hook. **Needs game:** extra items drop once at the boss with the
-  boss's level and no double drop.
+  boss's level and no double drop; whether `0x441300` early-outs on a monster that has already dropped.
 
 ### Summary
 
 | Q | Answered | Level |
 |---|---|---|
 | 1 Ambush | yes: per-tick room test, waves tracked by `MonsterDeathListener` ids plus a time-out | SDK + inference |
-| 2 Treasure | mechanisms found (mode 11 plus state 56, `0x441300`, chest TC pick); effect and chest route unproven | dump + needs-game |
-| 3 Shrine | placement recipe found; name to row route open | dump + needs-game |
-| 4 Boss `Drop` | route chosen, superunique TC pick unresolved | dump + inference |
+| 2 Treasure | flee found: call `0x597030` (mode 11, state 56 set by the engine); `0x441300` and the roller contract found; chest route through `0x592c40`; effect unproven | dump + needs-game |
+| 3 Shrine | placement recipe found; name to row route open, duplicate rule set | dump + needs-game |
+| 4 Boss `Drop` | route chosen, args split, superunique TC pick unresolved | dump + inference |
 
 ### Needs game
 
-1. Does the player-in-room test fire on walking into the event room, and does the listener id match the spawned id?
-2. Does AI mode 11 plus state 56 make a spawned monster run, with which `idx` and for how long?
-3. Does a second `0x441300` call with a `Drop` TC drop at the right place and level, once, for a boss and a Treasure monster?
-4. Does a chest open reach `0x58e2f0` / `0x5930b0` for a tracked chest, and can a second TC roll be added there?
+1. Does the player-in-room test fire on walking into the event room, does the listener id match the spawned unit's `+8`, and does `SpawnMonster` work from the `PlayerTick` context?
+2. Does `0x597030` make a spawned monster run: what do its two bail-outs reject (uniques and bosses), what is `arg6` (the duration unit), and is `source = NULL` accepted?
+3. Does a second `0x441300` call with a `Drop` TC drop at the right place and level, once, for a boss and a Treasure monster, and does it early-out on a monster that has already dropped?
+4. Does a chest open reach a `0x592c40` hook (or `0x58e2f0`) for a tracked chest, which return value means "opened", and can a second TC roll be added there?
 5. Is the `0x402f50` spot safe, and does `0x490410` create a working shrine, well and chest?
 6. Does `objects.txt` line order equal the row index, and does the count match `*(dt+0x1530)`?
 7. What is the objects row layout (the `Id` offset) for an SDK scan, and which `Shrines` row does a shrine object use?
 8. Is the thread that runs the tick the one the SDK treats as the game thread?
+9. The per-wave time-out value.
