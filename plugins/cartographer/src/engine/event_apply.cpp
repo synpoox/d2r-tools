@@ -839,8 +839,9 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 		}
 		void* room = Call<UnitRoomFn>(EvUnitRoom)(unit);
 		// Phase 6b: starts the next Ambush wave when the player is in the event room. True once, when the first wave spawned: the Ambush counts as placed then.
-		const bool ambushStarted = Event6bAmbushTick(rawGame, room, &ReadServerRect, &SpawnAmbushUnit);
+		// The room must also be on the event's level: the level id is checked as well as the server rect.
 		const bool inMap = room != nullptr && Call<RoomLevelFn>(EvRoomLevelId)(room) == state->level;
+		const bool ambushStarted = Event6bAmbushTick(rawGame, inMap ? room : nullptr, &ReadServerRect, &SpawnAmbushUnit);
 		std::vector<std::string> lines;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
@@ -860,7 +861,6 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			} else {
 				return;
 			}
-			lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
 		}
 		ShowEntryMessage(lines);
 	} catch (...) {
