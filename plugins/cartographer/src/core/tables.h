@@ -6,6 +6,9 @@
 // Pure C++ (no Windows, no SDK): tests/tables_test.cpp runs it on any machine.
 #pragma once
 
+#include "events.h"
+#include "layout.h"
+#include "mapstats.h"
 #include "report.h"
 
 #include <cstdint>
@@ -18,6 +21,9 @@ namespace carto {
 inline constexpr const char* MapsFile = "maps.txt";
 inline constexpr const char* SettingsFile = "cartographer.txt";
 inline constexpr const char* SlotsFile = "slots.txt";
+inline constexpr const char* ShapesFile = "shapes.txt";
+inline constexpr const char* MapStatsFile = "mapstats.txt";
+inline constexpr const char* MapEventsFile = "mapevents.txt";
 
 inline constexpr int DefaultMonsterLevel = 85;
 inline constexpr int DefaultProperties = 6;
@@ -70,7 +76,18 @@ auto TilesetNames() -> std::vector<std::string>;
 auto ReadyTilesetNames() -> std::vector<std::string>;
 
 // maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> std::vector<MapDef>;
+// `shapes` (from LoadShapes) lets the Shape cell name a shapes.txt row as well as a built-in shape; null means built-ins only.
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr) -> std::vector<MapDef>;
+
+// shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
+auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;
+
+// mapstats.txt (optional): the pool of random properties. A bad row is left out; an empty result means the built-in pool.
+// Stat names are not checked against the game's tables yet (they are used when properties are applied).
+auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartographer::stats::PoolRow>;
+
+// mapevents.txt (optional): the events a map can roll. A bad row is left out. Spawn names are not resolved yet.
+auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row>;
 
 // cartographer.txt (Setting, Value). Every setting has a default; a bad value keeps it.
 auto LoadSettings(std::string_view text, Report& report) -> Settings;

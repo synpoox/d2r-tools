@@ -416,56 +416,120 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(settings.town == "Harrogath");
 }
 
-TEST_CASE("the example pack's mapstats.txt and mapevents.txt pass the real stats and events checks") {
-	// The plugin does not read these two tables yet; the pack is run through the same checks the later phases use.
-	const Tsv stats = ParseTsv(ExampleFile("mapstats.txt"));
-	REQUIRE(stats.header == std::vector<std::string>{"Target", "Stat", "Min", "Max", "Weight"});
-	std::vector<cartographer::stats::PoolRow> pool;
-	for (const TsvRow& row : stats.rows) {
-		const std::string target = stats.Cell(row, 0);
-		CHECK((EqualsNoCase(target, "Players") || EqualsNoCase(target, "Monsters")));
-		cartographer::stats::PoolRow p;
-		p.target = EqualsNoCase(target, "Players") ? cartographer::stats::Target::Players : cartographer::stats::Target::Monsters;
-		p.stat = stats.Cell(row, 1);
-		p.min = std::atoi(stats.Cell(row, 2).c_str());
-		p.max = std::atoi(stats.Cell(row, 3).c_str());
-		p.weight = std::atoi(stats.Cell(row, 4).c_str());
-		pool.push_back(p);
-	}
-	CHECK(pool.size() == 4);
-	for (const auto& issue : cartographer::stats::checkPool(pool)) {
-		FAIL_CHECK(issue.message);
-	}
+TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats and mapevents") {
+	Report report;
+	const cartographer::layout::ShapeTable shapes = LoadShapes(ExampleFile("shapes.txt"), report);
+	const auto pool = LoadMapStats(ExampleFile("mapstats.txt"), report);
+	const auto events = LoadMapEvents(ExampleFile("mapevents.txt"), report);
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes);
+	CHECK_MESSAGE(report.problems.empty(), Joined(report));
+	REQUIRE(shapes.shapes.size() == 1);
+	CHECK(shapes.shapes[0].name == "Snake");
+	REQUIRE(pool.size() == 4);
+	CHECK(pool[2].target == cartographer::stats::Target::Players);
+	CHECK(pool[2].min == -25);
+	REQUIRE(events.size() == 3);
+	CHECK(events[0].name == "The Drowned King");
+	CHECK(events[0].kind == cartographer::events::Kind::Boss);
+	CHECK(events[0].count == 6);
+	CHECK(events[0].weight == 2);
+	CHECK(events[1].drop.empty());
+	CHECK(events[2].drop == "Act 5 (H) Super C");
+	CHECK(maps.size() == 2);
+}
 
-	const Tsv events = ParseTsv(ExampleFile("mapevents.txt"));
-	REQUIRE(events.header == std::vector<std::string>{"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"});
-	std::vector<cartographer::events::Row> rows;
-	for (const TsvRow& r : events.rows) {
-		cartographer::events::Row row;
-		row.name = events.Cell(r, 0);
-		row.kindText = events.Cell(r, 1);
-		if (const auto kind = cartographer::events::parseKindName(row.kindText)) {
-			row.kind = *kind;
-		}
-		row.spawn = events.Cell(r, 2);
-		if (!events.Cell(r, 3).empty()) {
-			row.count = std::atoi(events.Cell(r, 3).c_str());
-		}
-		if (!events.Cell(r, 4).empty()) {
-			row.waves = std::atoi(events.Cell(r, 4).c_str());
-		}
-		row.drop = events.Cell(r, 5);
-		row.message = events.Cell(r, 6);
-		if (!events.Cell(r, 7).empty()) {
-			row.weight = std::atoi(events.Cell(r, 7).c_str());
-		}
-		rows.push_back(row);
-	}
-	CHECK(rows.size() == 3);
-	for (const std::string& problem : cartographer::events::validateRows(rows)) {
-		FAIL_CHECK(problem);
-	}
-	for (const std::string& note : cartographer::events::warnRows(rows)) {
-		FAIL_CHECK(note);
-	}
+TEST_CASE("shapes.txt: a good row loads, a bad row is reported with its line and skipped") {
+	Report report;
+	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\nSnake\tWinding\t12\t16\nBroken\tWinding\tmany\t16\nCorridor\n", report);
+	REQUIRE(shapes.shapes.size() == 1);
+	CHECK(shapes.shapes[0].name == "Snake");
+	REQUIRE(report.problems.size() == 2);  // the built-in name Corridor is refused too
+	CHECK(report.problems[0].file == "shapes.txt");
+	CHECK(report.problems[0].line == 3);
+	CHECK_MESSAGE(Report::Line(report.problems[0]).find("shapes.txt row 3: MinPath must be a whole number") == 0, Report::Line(report.problems[0]));
+	Report empty;
+	CHECK(LoadShapes("", empty).shapes.empty());
+	CHECK(empty.problems.empty());
+}
+
+TEST_CASE("maps.txt Shape may name a shapes.txt row, ignoring case; an unknown name is an error") {
+	Report report;
+	const auto shapes = LoadShapes("Name\tBase\nSnake\tWinding\n", report);
+	REQUIRE(report.problems.empty());
+	const std::string text = std::string(Header) +
+	                         "Eel\tPreset\tsnake\t\t\tt20\n"
+	                         "Worm\tPreset\tSerpent\t\t\tt21\n"
+	                         "Plain\tPreset\tLoop\t\t\tt22\n";
+	Report maps;
+	const auto loaded = LoadMaps(text, Names(), maps, &shapes);
+	REQUIRE(loaded.size() == 2);
+	CHECK(loaded[0].shape == "Snake");
+	CHECK(loaded[1].shape == "Loop");
+	REQUIRE(maps.Errors() == 1);
+	CHECK(maps.problems[0].line == 3);
+	CHECK(maps.problems[0].text.find("shape 'Serpent' is not known.") == 0);
+	CHECK(maps.problems[0].text.find("'Snake'") != std::string::npos);
+	// Without a shapes.txt the same name is an error.
+	Report without;
+	CHECK(LoadMaps(text, Names(), without).size() == 1);
+	CHECK(without.Errors() == 2);
+}
+
+TEST_CASE("mapstats.txt: rows load; bad rows are skipped and the rest are checked") {
+	Report report;
+	const auto pool = LoadMapStats(
+	    "Target\tStat\tMin\tMax\tWeight\n"
+	    "Monsters\tfireresist\t10\t40\t2\n"
+	    "Monster\tfireresist\t1\t2\t1\n"   // not a Target
+	    "Players\thpregen\tabc\t5\t1\n"    // not a number
+	    "Players\t\t1\t5\t1\n"             // no Stat
+	    "Players\tcoldresist\t1\t5\t-1\n"  // negative Weight
+	    "Players\tlightresist\t9\t3\t\n",  // Max below Min: loads, with a note
+	    report);
+	REQUIRE(pool.size() == 2);
+	CHECK(pool[0].stat == "fireresist");
+	CHECK(pool[1].stat == "lightresist");
+	CHECK(pool[1].weight == 1);  // blank means the default
+	CHECK(report.Errors() == 4);
+	REQUIRE(report.problems.size() == 5);
+	CHECK(report.problems[0].line == 3);
+	CHECK(report.problems[0].text.find("Target 'Monster' is not known. Did you mean 'Monsters'?") == 0);
+	CHECK(report.problems[3].line == 6);
+	CHECK_MESSAGE(report.problems[3].text.find("coldresist: Weight is below 0") == 0, report.problems[3].text);
+	CHECK(report.problems[4].severity == Severity::Note);
+	CHECK(report.problems[4].line == 7);
+
+	Report noColumns;
+	CHECK(LoadMapStats("Stat\tMin\nfireresist\t1\n", noColumns).empty());
+	REQUIRE(noColumns.Errors() == 1);
+	CHECK(noColumns.problems[0].text.find("no 'Target' column") != std::string::npos);
+	Report none;
+	CHECK(LoadMapStats("", none).empty());
+}
+
+TEST_CASE("mapevents.txt: rows load; bad rows are skipped with the row's line") {
+	Report report;
+	const auto events = LoadMapEvents(
+	    "Name\tKind\tSpawn\tCount\tWaves\tDrop\tMessage\tWeight\n"
+	    "Ambush A\tAmbush\tzombie1\t5\t4\t\t\t1\n"
+	    "Bad kind\tAmbsh\tzombie1\t\t\t\t\t\n"
+	    "Bad count\tHorde\tzombie1\tlots\t\t\t\t\n"
+	    "No spawn\tBoss\t\t\t\t\t\t\n"
+	    "Hoard\tTreasure\tchest\t\t\t\t\t\n",
+	    report);
+	REQUIRE(events.size() == 2);
+	CHECK(events[0].waves == 4);
+	CHECK(events[1].name == "Hoard");
+	CHECK(report.Errors() == 3);
+	REQUIRE(report.problems.size() == 4);
+	CHECK(report.problems[0].line == 3);
+	CHECK_MESSAGE(report.problems[0].text.find("'Bad kind' has Kind 'Ambsh', which is not a Kind. Did you mean Ambush?") == 0, report.problems[0].text);
+	CHECK(report.problems[1].line == 4);
+	CHECK(report.problems[1].text.find("Count 'lots'") != std::string::npos);
+	CHECK(report.problems[2].line == 5);
+	CHECK(report.problems[3].severity == Severity::Note);  // a Treasure with no Drop
+	CHECK(report.problems[3].line == 6);
+
+	Report none;
+	CHECK(LoadMapEvents("", none).empty());
 }

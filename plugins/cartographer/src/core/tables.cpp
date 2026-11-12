@@ -4,7 +4,9 @@
 #include "tsv.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
+#include <optional>
 
 namespace carto {
 
@@ -92,7 +94,7 @@ auto ReadyTilesetNames() -> std::vector<std::string> {
 	return out;
 }
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -119,6 +121,13 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 	const int cBoss = table.Column("Boss"), cMonsters = table.Column("Monsters"), cDifficulty = table.Column("Difficulty");
 	const int cMinChar = table.Column("MinCharLevel"), cProps = table.Column("Properties"), cEvent = table.Column("EventChance");
 	const int cDensity = table.Column("Density"), cChampions = table.Column("Champions"), cUniques = table.Column("Uniques");
+
+	std::vector<std::string> customShapes;
+	if (shapes != nullptr) {
+		for (const cartographer::layout::ShapeDef& def : shapes->shapes) {
+			customShapes.push_back(def.name);
+		}
+	}
 
 	for (const TsvRow& row : table.rows) {
 		MapDef map;
@@ -166,8 +175,12 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 		const std::string shape = table.Cell(row, cShape);
 		if (const std::string* known = Canonical(Shapes, shape)) {
 			map.shape = *known;
+		} else if (const std::string* custom = Canonical(customShapes, shape)) {
+			map.shape = *custom;
 		} else {
-			fail("shape '" + shape + "' is not known." + DidYouMean(shape, Shapes) + " Use " + OneOf(Shapes) + ".");
+			std::vector<std::string> all = Shapes;
+			all.insert(all.end(), customShapes.begin(), customShapes.end());
+			fail("shape '" + shape + "' is not known." + DidYouMean(shape, all) + " Use " + OneOf(all) + (customShapes.empty() ? "" : " (the last ones are from shapes.txt)") + ".");
 		}
 
 		const std::string size = table.Cell(row, cSize);
@@ -257,6 +270,190 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 		}
 	}
 	return maps;
+}
+
+namespace {
+
+// Notes for header cells no column uses, with a spelling suggestion.
+void NoteUnusedColumns(const char* file, const Tsv& table, const std::vector<std::string>& used, Report& report) {
+	for (const std::string& column : table.header) {
+		if (!column.empty() && Canonical(used, column) == nullptr) {
+			report.Note(file, 1, "the column '" + column + "' is not used and is ignored." + DidYouMean(column, used));
+		}
+	}
+}
+
+// A required column that is missing makes the whole file unusable.
+auto RequireColumns(const char* file, const Tsv& table, const std::vector<std::string>& required, Report& report) -> bool {
+	if (table.header.empty()) {
+		report.Error(file, 0, "the file is empty. It needs a header row with " + OneOf(required) + ", then one row per entry.");
+		return false;
+	}
+	bool ok = true;
+	for (const std::string& column : required) {
+		if (table.Column(column) < 0) {
+			report.Error(file, 1, "there is no '" + column + "' column in the header row. The file is not used.");
+			ok = false;
+		}
+	}
+	return ok;
+}
+
+// "shapes.txt line 3: text" or "shapes.txt: text" from a core's message, split into row and text for the report.
+void ReportCoreMessage(Report& report, bool error, const char* file, const std::string& message) {
+	std::string rest = message;
+	int line = 0;
+	const std::string prefix = file;
+	if (rest.rfind(prefix, 0) == 0) {
+		rest.erase(0, prefix.size());
+		if (rest.rfind(" line ", 0) == 0) {
+			line = std::atoi(rest.c_str() + 6);
+			const size_t colon = rest.find(": ");
+			rest.erase(0, colon == std::string::npos ? 0 : colon);
+		}
+		if (rest.rfind(": ", 0) == 0) {
+			rest.erase(0, 2);
+		}
+	}
+	if (error) {
+		report.Error(file, line, rest);
+	} else {
+		report.Note(file, line, rest);
+	}
+}
+
+}  // namespace
+
+auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable {
+	cartographer::layout::ParseResult parsed = cartographer::layout::parseShapesTxt(text, ShapesFile);
+	for (const std::string& error : parsed.errors) {
+		ReportCoreMessage(report, true, ShapesFile, error);
+	}
+	return std::move(parsed.table);
+}
+
+auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartographer::stats::PoolRow> {
+	using cartographer::stats::PoolRow;
+	std::vector<PoolRow> pool;
+	std::vector<int> lines;
+	const Tsv table = ParseTsv(text);
+	if (!RequireColumns(MapStatsFile, table, {"Target", "Stat"}, report)) {
+		return pool;
+	}
+	NoteUnusedColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max", "Weight"}, report);
+	const int cTarget = table.Column("Target"), cStat = table.Column("Stat"), cMin = table.Column("Min");
+	const int cMax = table.Column("Max"), cWeight = table.Column("Weight");
+	const std::vector<std::string> targets = {"Monsters", "Players"};
+	for (const TsvRow& row : table.rows) {
+		PoolRow entry;
+		bool ok = true;
+		const auto fail = [&](const std::string& message) {
+			report.Error(MapStatsFile, row.line, message + " This row is skipped.");
+			ok = false;
+		};
+		const std::string target = table.Cell(row, cTarget);
+		if (const std::string* known = Canonical(targets, target)) {
+			entry.target = *known == "Players" ? cartographer::stats::Target::Players : cartographer::stats::Target::Monsters;
+		} else {
+			fail("Target '" + target + "' is not known." + DidYouMean(target, targets) + " Use 'Monsters' or 'Players'.");
+		}
+		entry.stat = table.Cell(row, cStat);
+		if (entry.stat.empty()) {
+			fail("Stat is empty. Name a stat from the game's itemstatcost.txt.");
+		}
+		const struct {
+			int column;
+			const char* name;
+			int* value;
+		} numbers[] = {{cMin, "Min", &entry.min}, {cMax, "Max", &entry.max}, {cWeight, "Weight", &entry.weight}};
+		for (const auto& n : numbers) {
+			const std::string cell = table.Cell(row, n.column);
+			if (!cell.empty() && !ParseInt(cell, INT32_MIN, INT32_MAX, n.value)) {
+				fail(std::string(n.name) + " '" + cell + "' is not a whole number.");
+			}
+		}
+		if (ok) {
+			pool.push_back(entry);
+			lines.push_back(row.line);
+		}
+	}
+	// The core's own checks. A negative Weight is an error there and the row is dropped; the rest are notes.
+	std::vector<bool> drop(pool.size(), false);
+	for (const cartographer::stats::PoolIssue& issue : cartographer::stats::checkPool(pool)) {
+		const std::string lead = "row " + std::to_string(issue.row + 1) + " (" + pool[issue.row].stat + "): ";
+		const std::string message = issue.message.rfind(lead, 0) == 0 ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
+		if (issue.error) {
+			report.Error(MapStatsFile, lines[issue.row], message);
+			drop[issue.row] = true;
+		} else {
+			report.Note(MapStatsFile, lines[issue.row], message);
+		}
+	}
+	std::vector<PoolRow> kept;
+	for (size_t i = 0; i < pool.size(); ++i) {
+		if (!drop[i]) {
+			kept.push_back(pool[i]);
+		}
+	}
+	return kept;
+}
+
+auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row> {
+	using cartographer::events::Row;
+	std::vector<Row> rows;
+	const Tsv table = ParseTsv(text);
+	if (!RequireColumns(MapEventsFile, table, {"Name", "Kind", "Spawn"}, report)) {
+		return rows;
+	}
+	NoteUnusedColumns(MapEventsFile, table, {"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"}, report);
+	const int cName = table.Column("Name"), cKind = table.Column("Kind"), cSpawn = table.Column("Spawn");
+	const int cCount = table.Column("Count"), cWaves = table.Column("Waves"), cDrop = table.Column("Drop");
+	const int cMessage = table.Column("Message"), cWeight = table.Column("Weight");
+	for (const TsvRow& r : table.rows) {
+		Row row;
+		bool ok = true;
+		row.line = r.line;
+		row.name = table.Cell(r, cName);
+		row.kindText = table.Cell(r, cKind);
+		if (const auto kind = cartographer::events::parseKindName(row.kindText)) {
+			row.kind = *kind;
+		}
+		row.spawn = table.Cell(r, cSpawn);
+		row.drop = table.Cell(r, cDrop);
+		row.message = table.Cell(r, cMessage);
+		const struct {
+			int column;
+			const char* name;
+			std::optional<int>* value;
+		} numbers[] = {{cCount, "Count", &row.count}, {cWaves, "Waves", &row.waves}, {cWeight, "Weight", &row.weight}};
+		for (const auto& n : numbers) {
+			const std::string cell = table.Cell(r, n.column);
+			int v = 0;
+			if (cell.empty()) {
+				continue;
+			}
+			if (ParseInt(cell, INT32_MIN, INT32_MAX, &v)) {
+				*n.value = v;
+			} else {
+				report.Error(MapEventsFile, r.line, "'" + (row.name.empty() ? std::string("this event") : row.name) + "' has " + n.name + " '" + cell + "', which is not a whole number. This row is skipped.");
+				ok = false;
+			}
+		}
+		if (!ok) {
+			continue;
+		}
+		const std::string error = cartographer::events::validateRow(row, r.line);
+		if (!error.empty()) {
+			ReportCoreMessage(report, true, MapEventsFile, error + " This row is skipped.");
+			continue;
+		}
+		const std::string warning = cartographer::events::warnRow(row, r.line);
+		if (!warning.empty()) {
+			ReportCoreMessage(report, false, MapEventsFile, warning);
+		}
+		rows.push_back(std::move(row));
+	}
+	return rows;
 }
 
 auto LoadSettings(std::string_view text, Report& report) -> Settings {
