@@ -1,4 +1,6 @@
-# Cartographer: your first map in 5 minutes
+# Cartographer: feature tour (draft)
+
+> What works today is in [first-map.md](first-map.md) (the step-by-step guide) and [tables.md](tables.md) (every column). This page is the longer, planned feature tour.
 
 > **Draft.** Cartographer is being built in phases. Most of what is described here does not work yet. The words and columns are the plan. Each feature is marked with the phase it lands in.
 

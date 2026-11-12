@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
 - Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
 - Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.
 - A map's item opens a red portal to that map from Harrogath in Hell, once per game.

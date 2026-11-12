@@ -8,7 +8,12 @@
 #include "core/sig.h"
 #include "core/tables.h"
 #include "core/tsv.h"
+#include "events.h"
+#include "mapstats.h"
 
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 using namespace carto;
@@ -362,4 +367,105 @@ TEST_CASE("long words get no suggestion, and a report stops listing after 200 pr
 	Report other;
 	other.Error("cartographer.txt", 1, "bad");
 	CHECK(other.Errors() == 1);
+}
+
+// --- The example pack (examples/first-map) is what docs/cartographer/tables.md and the README show. -------------------
+
+namespace {
+
+auto ExampleFile(const char* name) -> std::string {
+	std::ifstream in(std::string(CARTOGRAPHER_EXAMPLE_DIR) + "/" + name, std::ios::binary);
+	REQUIRE_MESSAGE(in.good(), name);
+	std::ostringstream text;
+	text << in.rdbuf();
+	return text.str();
+}
+
+auto ExampleNames() -> GameNames {
+	GameNames n = Names();
+	n.monsters.push_back("quillrat1");
+	n.superUniques.push_back("Bishibosh");
+	n.haveItemSpells = true;
+	n.itemSpells = {{"t20", 16}, {"t21", 16}};
+	return n;
+}
+
+}  // namespace
+
+TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problems") {
+	Report report;
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report);
+	CHECK_MESSAGE(report.problems.empty(), Joined(report));
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].name == "Shorelines");
+	CHECK(maps[0].item == "t20");
+	CHECK(maps[0].size == "Large");
+	CHECK(maps[0].level == 90);
+	CHECK(maps[0].monsters.size() == 2);
+	CHECK(maps[0].minCharLevel == 80);
+	CHECK(maps[0].properties == 4);
+	CHECK(maps[1].shape == "Loop");
+	CHECK(maps[1].level == 85);  // blank cells keep the defaults
+
+	Report settingsReport;
+	const Settings settings = LoadSettings(ExampleFile("cartographer.txt"), settingsReport);
+	CHECK_MESSAGE(settingsReport.problems.empty(), Joined(settingsReport));
+	CHECK(settings.properties == 6);
+	CHECK(settings.eventChance == 20);
+	CHECK(settings.itemStats == 0);
+	CHECK(settings.town == "Harrogath");
+}
+
+TEST_CASE("the example pack's mapstats.txt and mapevents.txt pass the real stats and events checks") {
+	// The plugin does not read these two tables yet; the pack is run through the same checks the later phases use.
+	const Tsv stats = ParseTsv(ExampleFile("mapstats.txt"));
+	REQUIRE(stats.header == std::vector<std::string>{"Target", "Stat", "Min", "Max", "Weight"});
+	std::vector<cartographer::stats::PoolRow> pool;
+	for (const TsvRow& row : stats.rows) {
+		const std::string target = stats.Cell(row, 0);
+		CHECK((EqualsNoCase(target, "Players") || EqualsNoCase(target, "Monsters")));
+		cartographer::stats::PoolRow p;
+		p.target = EqualsNoCase(target, "Players") ? cartographer::stats::Target::Players : cartographer::stats::Target::Monsters;
+		p.stat = stats.Cell(row, 1);
+		p.min = std::atoi(stats.Cell(row, 2).c_str());
+		p.max = std::atoi(stats.Cell(row, 3).c_str());
+		p.weight = std::atoi(stats.Cell(row, 4).c_str());
+		pool.push_back(p);
+	}
+	CHECK(pool.size() == 4);
+	for (const auto& issue : cartographer::stats::checkPool(pool)) {
+		FAIL_CHECK(issue.message);
+	}
+
+	const Tsv events = ParseTsv(ExampleFile("mapevents.txt"));
+	REQUIRE(events.header == std::vector<std::string>{"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"});
+	std::vector<cartographer::events::Row> rows;
+	for (const TsvRow& r : events.rows) {
+		cartographer::events::Row row;
+		row.name = events.Cell(r, 0);
+		row.kindText = events.Cell(r, 1);
+		if (const auto kind = cartographer::events::parseKindName(row.kindText)) {
+			row.kind = *kind;
+		}
+		row.spawn = events.Cell(r, 2);
+		if (!events.Cell(r, 3).empty()) {
+			row.count = std::atoi(events.Cell(r, 3).c_str());
+		}
+		if (!events.Cell(r, 4).empty()) {
+			row.waves = std::atoi(events.Cell(r, 4).c_str());
+		}
+		row.drop = events.Cell(r, 5);
+		row.message = events.Cell(r, 6);
+		if (!events.Cell(r, 7).empty()) {
+			row.weight = std::atoi(events.Cell(r, 7).c_str());
+		}
+		rows.push_back(row);
+	}
+	CHECK(rows.size() == 3);
+	for (const std::string& problem : cartographer::events::validateRows(rows)) {
+		FAIL_CHECK(problem);
+	}
+	for (const std::string& note : cartographer::events::warnRows(rows)) {
+		FAIL_CHECK(note);
+	}
 }
