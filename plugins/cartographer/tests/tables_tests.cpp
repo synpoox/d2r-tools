@@ -356,13 +356,17 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
-	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::ArrivalFlagTest, sig::DataTablesBase, sig::NameToRow};
+	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);
 		CHECK(ParsePattern(text, &p));
 		CHECK(p.size >= 24);  // a lower bound only: uniqueness in the game is shown by tools/check_portal_signatures.py
 	}
+	// The flag test is a 9-byte function (`mov eax,[rcx+0x50]; and eax,0x30000; ret`); its signature stops at the `ret`, so it is short.
+	Pattern flag{};
+	CHECK(ParsePattern(sig::ArrivalFlagTest, &flag));
+	CHECK(flag.size == 9);
 }
 
 TEST_CASE("signatures: every map stats part signature parses; the hooked one pins the 14 bytes it cuts") {

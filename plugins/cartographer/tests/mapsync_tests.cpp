@@ -247,3 +247,116 @@ TEST_CASE("a finished schedule makes no more attempts") {
 	CHECK(!s.done);
 	CHECK(step(s, kFirstDelayMs) == Step::Try);
 }
+
+namespace {
+
+ApplyFacts goodFacts() {
+	ApplyFacts f;
+	f.slotLevelMatches = true;
+	f.clientMazeMap = true;
+	f.namesSetting = true;
+	f.mazeSteeringLive = true;
+	f.tilesetFits = true;
+	f.slotBuilt = false;
+	return f;
+}
+
+}  // namespace
+
+TEST_CASE("a good maze identity applies both halves") {
+	const ApplyPlan p = decideApply(sample(), goodFacts());
+	CHECK(p.names);
+	CHECK(p.maze);
+	CHECK(p.namesWhy == Skip::None);
+	CHECK(p.mazeWhy == Skip::None);
+}
+
+TEST_CASE("a preset identity applies the name only") {
+	MapIdentity id = sample();
+	id.maze = false;
+	id.seed = 0;
+	ApplyFacts f = goodFacts();
+	f.clientMazeMap = false;
+	const ApplyPlan p = decideApply(id, f);
+	CHECK(p.names);
+	CHECK(!p.maze);
+	CHECK(p.mazeWhy == Skip::NotMaze);
+}
+
+TEST_CASE("a slot level or map kind that differs skips both halves") {
+	ApplyFacts f = goodFacts();
+	f.slotLevelMatches = false;
+	ApplyPlan p = decideApply(sample(), f);
+	CHECK(!p.names);
+	CHECK(!p.maze);
+	CHECK(p.namesWhy == Skip::SlotMismatch);
+	CHECK(p.mazeWhy == Skip::SlotMismatch);
+
+	f = goodFacts();
+	f.clientMazeMap = false;  // the host says maze, this client's row is a preset map
+	p = decideApply(sample(), f);
+	CHECK(!p.names);
+	CHECK(!p.maze);
+	CHECK(p.namesWhy == Skip::KindMismatch);
+
+	MapIdentity preset = sample();
+	preset.maze = false;
+	preset.seed = 0;
+	p = decideApply(preset, goodFacts());  // the host says preset, this client's row is a maze map
+	CHECK(!p.names);
+	CHECK(p.mazeWhy == Skip::KindMismatch);
+}
+
+TEST_CASE("the maze half has its own refusals and the name half does not depend on them") {
+	ApplyFacts f = goodFacts();
+	f.mazeSteeringLive = false;
+	ApplyPlan p = decideApply(sample(), f);
+	CHECK(p.names);
+	CHECK(!p.maze);
+	CHECK(p.mazeWhy == Skip::SteeringOff);
+
+	f = goodFacts();
+	f.tilesetFits = false;
+	p = decideApply(sample(), f);
+	CHECK(p.names);
+	CHECK(p.mazeWhy == Skip::TilesetMismatch);
+
+	f = goodFacts();
+	f.slotBuilt = true;  // the identity arrived after the slot level was built: logged, not rebuilt, the name still applies
+	p = decideApply(sample(), f);
+	CHECK(p.names);
+	CHECK(!p.maze);
+	CHECK(p.mazeWhy == Skip::AlreadyBuilt);
+
+	MapIdentity noSeed = sample();
+	noSeed.seed = 0;
+	p = decideApply(noSeed, goodFacts());
+	CHECK(p.names);
+	CHECK(p.mazeWhy == Skip::NoSeed);
+}
+
+TEST_CASE("MapNames off on the client skips the name only") {
+	ApplyFacts f = goodFacts();
+	f.namesSetting = false;
+	const ApplyPlan p = decideApply(sample(), f);
+	CHECK(!p.names);
+	CHECK(p.namesWhy == Skip::SettingOff);
+	CHECK(p.maze);
+}
+
+TEST_CASE("every skip reason has a sentence") {
+	for (const Skip s : {Skip::None, Skip::SlotMismatch, Skip::KindMismatch, Skip::SettingOff, Skip::NotMaze, Skip::NoSeed, Skip::SteeringOff, Skip::TilesetMismatch, Skip::AlreadyBuilt}) {
+		CHECK(std::strlen(describe(s)) > 3);
+		CHECK(std::strcmp(describe(s), "?") != 0);
+	}
+}
+
+TEST_CASE("an opening is applied once; a resend or an older one is not") {
+	AppliedOpening a;
+	CHECK(a.take(1));
+	CHECK(!a.take(1));
+	CHECK(a.take(2));
+	CHECK(!a.take(1));
+	a.clear();  // a new game
+	CHECK(a.take(1));
+}

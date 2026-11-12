@@ -47,10 +47,12 @@ inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 4
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
 // The arrival room (cartographer.md section 5, "Arrival room"). All three are only checked, never called or hooked: the level-entry
 // finder, its first-room-with-flags helper, and the flag test (room +0x50 and 0x30000). They guard the hook that gives the
-// planned entrance cell's room those flags; if one is not found the arrival is left to the game.
-inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ??";
+// planned entrance cell's room those flags; if one is not found the arrival is left to the game. The finder's signature runs on
+// through its "levels.txt Position == 0" branch (the call of the room finder at 0x3da718), so a build that changes that branch
+// is refused. The flag test's signature ends at its own `ret`; the code after it is another function.
+inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ?? 4C 8B AC 24 80 00 00 00 44 8B C3 4C 8B B4 24 88 00 00 00 48 8B D7 41 0F B6 CC 48 8B E8 41 C7 45 00 FF FF FF FF 41 C7 06 FF FF FF FF E8 ?? ?? ?? ?? 4C 8B F8 48 83 78 10 00 75 0C 48 8B D0 41 0F B6 CC E8 ?? ?? ?? ?? 83 BD 90 00 00 00 00 49 8B D7 41 0F B6 CC 74 ?? 83 FE 0D 75 0D 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ?? EB 10 4D 8B CD 4C 89 74 24 20 44 8B C6 E8 ?? ?? ?? ?? 48 8B D0 41 0F B6 CC 48 8B D8 E8 ?? ?? ?? ?? 48 8B 43 58 E9 ?? ?? ?? ?? 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ??";
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
-inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3 CC CC CC CC CC CC CC 4C 8B DC 56 57 41 56 48 83 EC 30";
+inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
 
 // Map events (cartographer.md section 9). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
 // room, from both activation paths, so the original is called first and the event spawns after the room is populated.
@@ -83,6 +85,10 @@ inline constexpr const char* DropRoller = "40 53 55 56 57 41 54 41 55 41 56 41 5
 inline constexpr const char* DropLevel = "48 89 5C 24 08 57 48 83 EC 20 8B FA 48 8B D9 E8 ?? ?? ?? ?? 83 F8 01 75 ?? 45 33 C0 8D 50 0B";
 inline constexpr const char* SpawnObject = "40 55 41 56 41 57 48 83 EC 60 4C 8B F1 41 BF 01 00 00 00 41 8B CF 8B EA E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ??";
 inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF 48 81 EC 90 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48";
+
+// The map's own Name on the tooltip, the automap title and the entry banner (cartographer.md section 10). LevelsRow (dataFlag, levelId)
+// is the game's levels row getter, only called; its first 46 bytes are shared by three sibling getters, so the signature runs to 82.
+inline constexpr const char* LevelsRow = "48 89 5C 24 08 55 56 57 48 83 EC 30 48 63 DA 0F B6 F1 E8 ?? ?? ?? ?? 48 8B E8 85 DB 7E 34 40 0F B6 CE E8 ?? ?? ?? ?? 48 8B B8 68 14 00 00 4C 63 C7 4C 3B C7 75 04 85 FF 79 14 48 8D 4C 24 58 C6 44 24 58 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 3B DF 7C 18";
 
 // Phase 6b second half: Ambush and Treasure (cartographer.md section 13). OperateObject (game, activator, object) is hooked (the hook cuts
 // the first 16 bytes: four whole instructions, no relative operand; the signature runs to 23 so no sibling matches). The rest are only

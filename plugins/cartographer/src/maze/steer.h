@@ -53,17 +53,22 @@ public:
 	void end(bool hadJob)
 	{
 		if (hadJob) built_ = true;
+		ran_ = true;
 		--building_;
 	}
 	bool blocked() const { return built_.load() || building_.load() > 0; }
+	// A build ran or is running, with a map open or not. A client that learns the host's map after this has the stock layout and takes no plan.
+	bool ranAny() const { return ran_.load() || building_.load() > 0; }
 	void clear()
 	{
 		built_ = false;
+		ran_ = false;
 		building_ = 0;
 	}
 
 private:
 	std::atomic<bool> built_{false};
+	std::atomic<bool> ran_{false};
 	std::atomic<int> building_{0};
 };
 

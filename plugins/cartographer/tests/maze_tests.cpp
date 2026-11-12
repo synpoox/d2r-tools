@@ -895,6 +895,19 @@ TEST_CASE("slot build state: only a build with a map open uses the slot up, and 
 	CHECK(!st.blocked());
 }
 
+TEST_CASE("slot build state: ranAny sees a build with no map open, which blocked() does not")
+{
+	SlotBuildState st;
+	CHECK(!st.ranAny());
+	st.begin();
+	CHECK(st.ranAny());  // running
+	st.end(false);
+	CHECK(st.ranAny());
+	CHECK(!st.blocked());
+	st.clear();
+	CHECK(!st.ranAny());
+}
+
 TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English")
 {
 	Tileset cave, crypt;
@@ -914,7 +927,7 @@ TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English
 
 namespace {
 
-// The rooms the game builds from a plan: every cell is 3 x 3 engine rooms of unit / 3 tiles, listed in reverse so the first
+// The rooms the game builds from a plan: every Cave cell is 3 x 3 engine rooms of unit / 3 tiles, every Crypt cell one room, listed in reverse so the first
 // room of the list is nowhere near the entrance. `flagged` gets kArrivalFlags the way the DS1 loader's pieces would.
 std::vector<RoomRect> builtRects(const Plan &plan, int unit, int baseX, int baseY, int flagged = -1)
 {
@@ -924,10 +937,11 @@ std::vector<RoomRect> builtRects(const Plan &plan, int unit, int baseX, int base
 		minY = std::min(minY, r.dy);
 	}
 	std::vector<RoomRect> out;
+	const int per = unit >= 24 ? 3 : 1;  // a Cave cell is 3 x 3 engine rooms, a Crypt cell is one room
 	for (const Room &r : plan.rooms) {
-		for (int j = 0; j < 3; ++j) {
-			for (int i = 0; i < 3; ++i) {
-				out.push_back({baseX + (r.dx - minX) * unit + i * unit / 3, baseY + (r.dy - minY) * unit + j * unit / 3, unit / 3, unit / 3, 0});
+		for (int j = 0; j < per; ++j) {
+			for (int i = 0; i < per; ++i) {
+				out.push_back({baseX + (r.dx - minX) * unit + i * unit / per, baseY + (r.dy - minY) * unit + j * unit / per, unit / per, unit / per, 0});
 			}
 		}
 	}
@@ -943,8 +957,10 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 	const Tileset tiles[] = {caveTileset(), cryptTileset()};
 	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
 	int marked = 0;
+	int perShape[4] = {0, 0, 0, 0};
 	for (const Tileset &ts : tiles) {
-		for (const layout::Shape shape : shapes) {
+		for (size_t si = 0; si < 4; ++si) {
+			const layout::Shape shape = shapes[si];
 			for (int seed = 1; seed <= 60; ++seed) {
 				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), static_cast<uint64_t>(seed));
 				if (!sp.plan.steer) continue;
@@ -953,6 +969,15 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 				INFO(ts.name << " seed " << seed);
 				REQUIRE(m.mark);
 				++marked;
+				++perShape[si];
+				// The pre-flagged room (seed % 7) loses its mark unless it is the chosen room.
+				const int flagged = seed % 7;
+				if (flagged == m.room) {
+					CHECK(m.clear.empty());
+				} else {
+					REQUIRE(m.clear.size() == 1);
+					CHECK(m.clear[0] == flagged);
+				}
 				const RoomRect &r = rects[static_cast<size_t>(m.room)];
 				const Room &e = sp.plan.rooms[static_cast<size_t>(sp.plan.entrance.room)];
 				int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
@@ -960,7 +985,7 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 					minX = std::min(minX, o.dx);
 					minY = std::min(minY, o.dy);
 				}
-				const int third = ts.roomTiles / 3;
+				const int third = ts.roomTiles >= 24 ? ts.roomTiles / 3 : 0;  // the middle room of a Cave cell; a Crypt cell is one room
 				CHECK(r.x == 1000 + (e.dx - minX) * ts.roomTiles + third);  // the middle room of the 3 x 3
 				CHECK(r.y == 2000 + (e.dy - minY) * ts.roomTiles + third);
 				CHECK(m.originX == 1000 + (e.dx - minX) * ts.roomTiles);
@@ -973,6 +998,7 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 		}
 	}
 	CHECK(marked > 200);
+	for (const int n : perShape) CHECK(n > 50);  // Corridor, Winding, Branching and Loop all reach planArrival
 }
 
 TEST_CASE("arrival: a room that already carries the mark is cleared, and the marked room is never in the clear list")
@@ -984,6 +1010,7 @@ TEST_CASE("arrival: a room that already carries the mark is cleared, and the mar
 	const ArrivalMark first = planArrival(sp.plan, 24, rects);
 	REQUIRE(first.mark);
 	CHECK(first.clear.empty());
+	CHECK(first.why.empty());
 	rects[0].flags = kArrivalFlags;
 	rects[1].flags = 0x10000;
 	rects[static_cast<size_t>(first.room)].flags = 0x20000 | 0x4;
@@ -1019,12 +1046,24 @@ TEST_CASE("arrival: the level is left to the game, with a reason, when nothing c
 	CHECK(!m.mark);
 	CHECK(m.why.find("span the plan's box") != std::string::npos);
 
-	// The entrance cell holds no room.
+	// The entrance cell holds no room. The cell must be inside the box, or taking its rooms away changes the box instead.
+	SeedPlan inner;
+	for (const layout::Shape shape : {layout::Shape::Loop, layout::Shape::Branching, layout::Shape::Winding}) {
+		for (int seed = 1; seed <= 200 && !inner.plan.steer; ++seed) {
+			const SeedPlan c = planForSeed(cave, layout::presetRules(shape, layout::Size::Large), static_cast<uint64_t>(seed));
+			if (!c.plan.steer) continue;
+			const ArrivalMark m0 = planArrival(c.plan, 24, builtRects(c.plan, 24, 0, 0));
+			if (m0.mark && m0.cellX > 0 && m0.cellY > 0 && m0.cellX < c.plan.widthRooms - 1 && m0.cellY < c.plan.heightRooms - 1) inner = c;
+		}
+	}
+	REQUIRE(inner.plan.steer);
+	const std::vector<RoomRect> full = builtRects(inner.plan, 24, 0, 0);
 	std::vector<RoomRect> hole;
-	const ArrivalMark ok = planArrival(sp.plan, 24, good);
-	for (const RoomRect &r : good) {
+	const ArrivalMark ok = planArrival(inner.plan, 24, full);
+	for (const RoomRect &r : full) {
 		if (r.x < ok.originX || r.x >= ok.originX + 24 || r.y < ok.originY || r.y >= ok.originY + 24) hole.push_back(r);
 	}
-	const ArrivalMark none = planArrival(sp.plan, 24, hole);
+	const ArrivalMark none = planArrival(inner.plan, 24, hole);
 	CHECK(!none.mark);
+	CHECK(none.why.find("holds no room") != std::string::npos);
 }

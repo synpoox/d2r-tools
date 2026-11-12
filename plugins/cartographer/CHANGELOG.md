@@ -2,8 +2,10 @@
 
 ## Unreleased
 
-- In a Cave or Crypt maze you now arrive in the planned entrance room, loop mazes included (#127; written and unit tested, not verified in game).
+- In a Cave or Crypt maze you now arrive in the planned entrance room, loop mazes included; that room gets no random chests or shrines (#127; written and unit tested, not verified in game).
+- `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
 - When a host opens a map, joined TCP/IP clients are told which map it is; they check it against their own `maps.txt` and log it (nothing else uses it yet; written and unit tested, not verified in game).
+- A TCP/IP client now shows the host's map name (with `MapNames=1`) and builds the host's maze layout, where its own tables fit (#130; written and unit tested, not verified in game).
 - Small preset maps now get their event, in the first room far enough from where you arrive, and the banner names an event only after it has spawned (#115, #121; written, not verified in game).
 - Shrine events place an object from `objects.txt` and a Boss `Drop` rolls an extra treasure class when the boss dies (written and unit tested; not yet verified in game).
 - Ambush events spawn their waves when you reach the event room, and Treasure events spawn a fleeing monster or a chest that rolls `Drop` (written and unit tested; not yet verified in game).
@@ -11,6 +13,7 @@
 - When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (spawns checked in game; the banner text was not seen on screen).
 - When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters, event-spawned ones included (checked in game on cheat-spawned and event-spawned monsters).
 - Player stats from a map are off by default; `PlayerStats=1` in `cartographer.txt` turns them on, for a test character only; they are sent through an unused game state so the character sheet can show them (written and unit tested; not verified in game), and an autosave inside the map is untested.
+- Player stats now look for an unused game state with the empty values the game's compiled table really uses; `cartographer check` and the log say which state is picked or why none is (written and unit tested; not verified in game, #104).
 - `mapstats.txt` rows for `gold`, `hitpoints`, `level` and similar stats the game saves are refused on players, `hitpoints`, `mana` and `stamina` also on monsters, stats that need a skill, state or monster type number on both, and `cartographer check` names them.
 - `cartographer check` reports a `Stat` in `mapstats.txt` that is not in `itemstatcost.txt`, with a suggestion.
 - Map portal tooltip shows "Colossal Summit" instead of "Missing String"; run `tools\install.ps1` again to fix an older install (checked in game).

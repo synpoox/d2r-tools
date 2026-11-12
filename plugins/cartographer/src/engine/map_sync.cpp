@@ -2,6 +2,8 @@
 #include "map_sync.h"
 
 #include "log.h"
+#include "map_names.h"
+#include "maze_hooks.h"
 #include "portal.h"
 
 #include <windows.h>
@@ -40,6 +42,9 @@ uint32_t g_generation = 0;  // changes at every game entered and left: a queued 
 bool g_clientActive = false;  // the connect loop of this game is running or done; this process asked to connect
 bool g_helloSent = false;
 std::string g_clientNote;  // why a client stopped, for cartographer check; empty while connecting or connected
+std::shared_ptr<const Tables> g_tables;  // the client's own tables, to place the host's map
+ms::AppliedOpening g_applied;            // the opening the client applied last in this game
+std::string g_applyNote;                 // what the last apply did, for cartographer check
 
 auto NowMs() noexcept -> uint64_t {
 	return GetTickCount64();
@@ -172,6 +177,87 @@ void __cdecl OnHostMessage(const D2RL::PluginContext* context, net::ChannelHandl
 	}
 }
 
+// Client, UI thread: applies the host's map once per opening (phase 7 part 2). The map's name goes into this client's own copy of the slot
+// level's row (MapNames), and the host's layout seed becomes the maze job of the next slot build. Each half is checked against this
+// client's own tables and skipped, with the reason logged, when it does not fit; nothing here ever blocks or changes the game otherwise.
+void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
+	try {
+		if (!g_on.load() || ServerTickSeen()) {
+			return;  // a host or single player process applies nothing from a message
+		}
+		const auto generation = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(userData));
+		ms::MapIdentity id;
+		std::shared_ptr<const Tables> tables;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			if (generation != g_generation || !g_clientMap.current()) {
+				return;
+			}
+			id = *g_clientMap.current();
+			if (!g_applied.take(id.opening)) {
+				return;
+			}
+			tables = g_tables;
+		}
+		if (tables == nullptr || id.mapIndex >= tables->maps.size() || ms::nameHash(tables->maps[id.mapIndex].name) != id.nameHash) {
+			plog::Warn("map sync: the host's map (row %u, opening %u) is not in this client's tables any more; nothing applied", static_cast<unsigned>(id.mapIndex), static_cast<unsigned>(id.opening));
+			return;
+		}
+		const MapDef& map = tables->maps[id.mapIndex];
+		const bool maze = MapIsMaze(map);
+		const int slotLevel = SlotLevel(tables->slots, maze ? MazeSlot : PresetSlot);
+		ms::ApplyFacts facts;
+		facts.slotLevelMatches = slotLevel > 0 && slotLevel == static_cast<int>(id.slotLevel);
+		facts.clientMazeMap = maze;
+		facts.namesSetting = tables->settings.mapNames != 0;
+		facts.mazeSteeringLive = MazeSteeringLive();
+		facts.tilesetFits = !maze || MazeTilesetProblem(map, *tables).empty();
+		facts.slotBuilt = MazeSlotRanAny();
+		const ms::ApplyPlan plan = ms::decideApply(id, facts);
+		std::string note;
+		if (plan.names) {
+			const int flag = MazeLevelDataFlag();
+			if (flag < 0 && !facts.mazeSteeringLive) {
+				note += "name skipped: the data flag is not available because the LevelBuild hook is off (not all maze parts are hooked); ";
+				plog::Warn("map sync: '%s' keeps the slot level's name: the data flag is not available because the LevelBuild hook is off (not all maze parts are hooked)", map.name.c_str());
+			} else if (flag < 0) {
+				note += "name skipped: no level build has been seen here yet, so the data flag of this client's tables is unknown; ";
+				plog::Warn("map sync: '%s' keeps the slot level's name: no level build has been seen yet, so the data flag is unknown", map.name.c_str());
+			} else if (MapNamesBeforeOpen(map, *tables, slotLevel, static_cast<uint32_t>(flag))) {
+				note += "name applied; ";
+				plog::Info("map sync: the host's map '%s': its name is set on this client's slot level %d (data flag %d)", map.name.c_str(), slotLevel, flag);
+			} else {
+				note += "name not applied (see the map names lines); ";
+			}
+		} else {
+			note += std::string("name skipped: ") + ms::describe(plan.namesWhy) + "; ";
+			plog::Info("map sync: the host's map '%s': name not applied here: %s", map.name.c_str(), ms::describe(plan.namesWhy));
+		}
+		if (plan.maze) {
+			if (MazeRemoteMapOpened(map, *tables, id.seed)) {
+				note += "layout seed applied";
+				plog::Info("map sync: the host's map '%s': the next build of the Maze slot level here uses the host's layout seed", map.name.c_str());
+			} else {
+				note += "layout skipped: the slot level was built here first";
+				plog::Warn("map sync: the host's map '%s': the layout seed was not applied (a slot level build had already started here)", map.name.c_str());
+			}
+		} else {
+			note += std::string("layout skipped: ") + ms::describe(plan.mazeWhy);
+			if (plan.mazeWhy == ms::Skip::NotMaze) {
+				plog::Info("map sync: the host's map '%s' is a preset map: no layout to apply", map.name.c_str());
+			} else {
+				plog::Warn("map sync: the host's map '%s': the layout is not applied here: %s", map.name.c_str(), ms::describe(plan.mazeWhy));
+			}
+		}
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (generation == g_generation) {
+			g_applyNote = note;
+		}
+	} catch (...) {
+		plog::Error("map sync: applying the host's map failed");
+	}
+}
+
 void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uint16_t messageId, const void* data, uint32_t size, void*) noexcept {
 	try {
 		if (!g_on.load()) {
@@ -194,9 +280,11 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 		}
 		ms::Verdict verdict;
 		std::string name;
+		uint32_t generation;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			verdict = g_clientMap.offer(id, g_hashes);
+			generation = g_generation;
 			if (id.mapIndex < g_names.size()) {
 				name = g_names[id.mapIndex];
 			}
@@ -205,6 +293,13 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 			plog::Info("map sync: the host's open map: %s (%s)", Describe(id, name).c_str(), ms::describe(verdict));
 		} else {
 			plog::Warn("map sync: the host's open map (row %u, opening %u) was not kept: %s", static_cast<unsigned>(id.mapIndex), static_cast<unsigned>(id.opening), ms::describe(verdict));
+		}
+		if (verdict == ms::Verdict::Accepted) {
+			// Applied on the UI thread, which a remote client has (runOnGameThread is Unavailable there). The step reads the kept identity.
+			if (g_threads == nullptr || g_ctx == nullptr ||
+			    g_threads->runOnUiThread(g_ctx, ApplyStep, reinterpret_cast<void*>(static_cast<uintptr_t>(generation))) != D2RL::Threads::Result::Success) {
+				plog::Warn("map sync: could not queue applying the host's map; its name and layout are not applied");
+			}
 		}
 	} catch (...) {
 		plog::Error("map sync: handling the host's map message failed");
@@ -408,6 +503,7 @@ void MapSyncSetTables(const std::shared_ptr<const Tables>& tables) {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_hashes.clear();
 	g_names.clear();
+	g_tables = tables;
 	if (tables == nullptr) {
 		return;
 	}
@@ -463,6 +559,8 @@ void MapSyncGameEntered() {
 			g_clientMap.clear();
 			g_clientActive = false;
 			g_clientNote.clear();
+			g_applied.clear();
+			g_applyNote.clear();
 			g_helloSent = false;
 			ms::begin(g_schedule, NowMs());
 		}
@@ -481,6 +579,8 @@ void MapSyncGameLeft() {
 		g_peers.clear();
 		g_hostMap.reset();
 		g_clientMap.clear();
+		g_applied.clear();
+		g_applyNote.clear();
 		g_clientActive = false;
 		g_helloSent = false;
 		ms::finish(g_schedule);
@@ -532,6 +632,9 @@ auto MapSyncSummary() -> std::string {
 	if (g_clientMap.current()) {
 		const ms::MapIdentity& id = *g_clientMap.current();
 		text += "; client: the host's map is " + Describe(id, id.mapIndex < g_names.size() ? g_names[id.mapIndex] : std::string("?"));
+		if (!g_applyNote.empty()) {
+			text += " (" + g_applyNote + ")";
+		}
 	} else if (g_clientActive) {
 		text += "; client: connecting to the host, no map told yet";
 	} else if (!g_clientNote.empty()) {

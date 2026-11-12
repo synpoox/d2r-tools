@@ -224,10 +224,10 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 		maxX = std::max<int64_t>(maxX, static_cast<int64_t>(r.x) + r.w);
 		maxY = std::max<int64_t>(maxY, static_cast<int64_t>(r.y) + r.h);
 	}
-	// The built box must be the plan's box (in cells), or the cell numbers mean nothing.
+	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
+	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
 	const int64_t w = maxX - minX, h = maxY - minY;
-	if (w <= static_cast<int64_t>(plan.widthRooms - 1) * unit || w > static_cast<int64_t>(plan.widthRooms) * unit ||
-	    h <= static_cast<int64_t>(plan.heightRooms - 1) * unit || h > static_cast<int64_t>(plan.heightRooms) * unit) {
+	if (w != static_cast<int64_t>(plan.widthRooms) * unit || h != static_cast<int64_t>(plan.heightRooms) * unit) {
 		return refuse("the built rooms do not span the plan's box");
 	}
 	out.minX = static_cast<int32_t>(minX);

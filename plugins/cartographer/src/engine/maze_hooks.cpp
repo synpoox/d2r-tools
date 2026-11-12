@@ -88,6 +88,7 @@ RingFn g_ringOriginal = nullptr;
 
 std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevel{-1};
+std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
 cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
 
@@ -378,7 +379,8 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 // section 5, "Arrival room: why the player arrives elsewhere"). Give the room in the middle of the planned entrance cell those
 // bits and take them off every other room. Does nothing, and says why, when a guard part is missing or the rooms do not match the
 // plan; the game then arrives as it always did.
-void MarkArrival(const void* level, const cm::Plan& plan, int unit) noexcept {
+// Not noexcept: it allocates, and a bad_alloc must reach the catch in LevelBuildHook instead of calling std::terminate.
+void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 	static const char* const names[] = {"ArrivalFinder", "ArrivalRoomFinder", "ArrivalFlagTest"};
 	for (int i = ArrivalFinder; i <= ArrivalFlagTest; ++i) {
 		if (!g_parts[i].status.on) {
@@ -648,6 +650,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	if (g_levelOriginal == nullptr) {
 		return 0;  // the loader gave no way back (logged at install): every level build is skipped until a restart
 	}
+	g_dataFlag = dataFlag;  // read by the map sync's client apply (MazeLevelDataFlag); the game's behaviour is unchanged
 	if (!g_live.load() || !IsSlotLevel(level)) {
 		return g_levelOriginal(dataFlag, level);  // every other level runs the game's own build, untouched
 	}
@@ -667,6 +670,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
 			std::lock_guard<std::mutex> lock(g_lock);
 			hadJob = g_job != nullptr;
+			// Marked as running in the same hold that reads the job, so a remote apply (MazeRemoteMapOpened) sees this build or this build sees its job.
+			g_slotState.begin();
 			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
 			ctx.orig.sizeX = size.x;
 			ctx.orig.sizeY = size.y;
@@ -706,7 +711,6 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	}
 	BuildCtx* previous = t_ctx;
 	t_ctx = ctx.steer ? &ctx : nullptr;
-	g_slotState.begin();
 	const uint64_t result = g_levelOriginal(dataFlag, level);
 	g_slotState.end(hadJob);
 	t_ctx = previous;
@@ -755,7 +759,12 @@ void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
 	g_probe = tables != nullptr && tables->settings.mazeProbe != 0;
 }
 
-void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
+namespace {
+
+// Makes `map` the map the next slot build uses. `seedSalt` is mixed with the job id into the layout seed; when `fixedSeed` is non-zero it is
+// the seed as it is (a client takes the host's). With `requireNoBuild` the job is installed only if no slot build has started, tested under the
+// same lock hold as the install; returns whether it was installed.
+auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed, bool requireNoBuild) -> bool {
 	auto job = std::make_shared<Job>();
 	job->name = map.name;
 	job->tileset = map.tileset;
@@ -763,14 +772,40 @@ void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
 	job->size = map.size;
 	job->shapes = tables.shapes;
 	std::lock_guard<std::mutex> lock(g_lock);
+	if (requireNoBuild && g_slotState.ranAny()) {
+		return false;
+	}
 	job->id = g_nextJobId++;
-	job->seed = cm::mixSeed(seedSalt, job->id);
+	job->seed = fixedSeed != 0 ? fixedSeed : cm::mixSeed(seedSalt, job->id);
 	g_job = job;
 	g_cache = {};
 	g_entrance = {};
 	g_eventRoom = {};
 	g_arrivalLogged = false;
-	plog::Info("maze map '%s' (%s, %s, %s) opened with seed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), static_cast<unsigned long long>(job->seed));
+	plog::Info("maze map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
+	           static_cast<unsigned long long>(job->seed));
+	return true;
+}
+
+}  // namespace
+
+void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
+	SetJob(map, tables, seedSalt, 0, false);
+}
+
+auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostSeed) -> bool {
+	if (hostSeed == 0 || !g_live.load()) {
+		return false;  // no plan to take, or steering off
+	}
+	return SetJob(map, tables, 0, hostSeed, true);  // false when the slot level exists already: it is not rebuilt
+}
+
+auto MazeSlotRanAny() -> bool {
+	return g_slotState.ranAny();
+}
+
+auto MazeLevelDataFlag() -> int {
+	return g_dataFlag.load();
 }
 
 auto MazeOpenSeed() -> uint64_t {
@@ -785,6 +820,7 @@ void MazeMapCancelled() {
 }
 
 void MazeGameLeft() {
+	g_dataFlag = -1;
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();
 	g_cache = {};
@@ -832,6 +868,11 @@ auto MazeSlotBuilt() -> bool {
 
 auto MazeArrivalPending() -> bool {
 	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && g_slotLevel.load(std::memory_order_relaxed) > 0;
+}
+
+auto MapIsMaze(const MapDef& map) -> bool {
+	cm::Tileset ts;
+	return cm::builtinTileset(map.tileset, ts);
 }
 
 auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string {
