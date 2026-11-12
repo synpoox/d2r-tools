@@ -112,6 +112,7 @@ struct Entrance {
 	int32_t x = 0, y = 0, levelId = 0;
 };
 Entrance g_entrance;  // guarded by g_lock
+MazeEventRect g_eventRoom;  // guarded by g_lock
 
 // One build of the slot level, on the thread that runs it. The walk, special-room and ring hooks read it; they only act
 // while it is set and the level is the one being built.
@@ -248,6 +249,21 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 	           Read<int32_t>(level, LvlRoomCount), static_cast<int>(plan.rooms.size()), minX, minY, maxX, maxY, maxX - minX, maxY - minY, entrances, entX, entY);
 	plog::Info("[maze probe] %s: level rect now origin (%d,%d) size (%d,%d); the plan asked for %d x %d", when, Read<int32_t>(level, LvlOriginX), Read<int32_t>(level, LvlOriginY),
 	           Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY), plan.levelTilesX, plan.levelTilesY);
+}
+
+// The plan's event room: the rect of its DRLG room, which the event spawn compares with the room the game populates.
+void RecordEventRoom(const void* level, const std::vector<void*>& rooms, const cm::Plan& plan) noexcept {
+	MazeEventRect rect;
+	const int idx = plan.eventRoom;
+	if (idx >= 0 && static_cast<size_t>(idx) < rooms.size() && rooms[static_cast<size_t>(idx)] != nullptr && Readable(rooms[static_cast<size_t>(idx)], 0x98)) {
+		const void* room = rooms[static_cast<size_t>(idx)];
+		rect = {true, Read<int32_t>(level, LvlId), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)};
+		plog::Info("eventprobe: maze event room (plan room %d) is DRLG room %p, level %d, rect (%d,%d) %d x %d", idx, room, rect.levelId, rect.x, rect.y, rect.w, rect.h);
+	} else {
+		plog::Info("eventprobe: the maze plan has no event room I can read (plan room %d of %zu)", idx, rooms.size());
+	}
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_eventRoom = rect;
 }
 
 // --- The plan --------------------------------------------------------------------------------------------------------
@@ -543,6 +559,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 				plog::Info("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
 			}
 			ProbeRooms(level, ctx.prep.plan->tileset, plan, "after the slot build");
+			RecordEventRoom(level, ctx.rooms, plan);
 		} catch (...) {
 		}
 	}
@@ -585,6 +602,7 @@ void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
 	g_job = job;
 	g_cache = {};
 	g_entrance = {};
+	g_eventRoom = {};
 	g_arrivalLogged = false;
 	plog::Info("maze map '%s' (%s, %s, %s) opened with seed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), static_cast<unsigned long long>(job->seed));
 }
@@ -603,7 +621,13 @@ void MazeGameLeft() {
 	g_ownRows.clear();
 	g_slotState.clear();
 	g_entrance = {};
+	g_eventRoom = {};
 	g_arrivalLogged = false;
+}
+
+auto MazeEventRoom() -> MazeEventRect {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_eventRoom;
 }
 
 auto MazeSlotBuilt() -> bool {
