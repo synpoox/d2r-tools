@@ -29,11 +29,13 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <cwchar>
+#include <string>
 
 namespace {
 
 constexpr const char* PluginName = "cartographer-outdoor-spike";
-constexpr const char* PluginVersion = "0.0.2";
+constexpr const char* PluginVersion = "0.0.3";
 
 // --- Signatures (build 93847; docs/reverse-engineering/cartographer.md). `??` = any byte. ---------------------------
 // Each is the function's entry up to its first relative operand. `hook` is the instruction-boundary length the hook
@@ -343,8 +345,8 @@ void BuildSlot(uint8_t dataFlag, void* level) noexcept {
 	uint8_t* drlg = F<uint8_t*>(level, LevelDrlg);
 	g_slotBuilds.fetch_add(1);
 	const int act = g_actLookup != nullptr ? g_actLookup(dataFlag, id) : -99;
-	plog::Info("[%s] BUILD slot level %d (dataFlag %u, drlg %p, level type %d, drlg type %d, rect on entry (%d,%d %dx%d)): D2RCore act lookup says %d",
-	           Side(level), id, dataFlag, static_cast<void*>(drlg), F<int32_t>(level, LevelTileset), F<int32_t>(level, LevelDrlgType),
+	plog::Info("[%s] BUILD slot level %d at %p (dataFlag %u, drlg %p, level type %d, drlg type %d, rect on entry (%d,%d %dx%d)): D2RCore act lookup says %d",
+	           Side(level), id, level, dataFlag, static_cast<void*>(drlg), F<int32_t>(level, LevelTileset), F<int32_t>(level, LevelDrlgType),
 	           F<int32_t>(level, LevelX), F<int32_t>(level, LevelY), F<int32_t>(level, LevelW), F<int32_t>(level, LevelH), act);
 
 	// The level rectangle: act start-up places outdoor levels, never a slot, so +0x24..+0x30 are 0 here unless the engine
@@ -456,11 +458,172 @@ void DescribeAddress(const D2RL::PluginContext* ctx, uint64_t addr) noexcept {
 	}
 }
 
-auto ProbeCommand(D2R::Game::Client*, const D2RL::ConsoleCommandContext* command, void*) noexcept -> D2RL::ConsoleCommandResult {
+
+// --- S1 follow-up (walk, collision, automap): position readout, memory peek, collision dump -----------------------------------
+// Console only; none of this changes the game. Offsets and RVAs are build 93847 (multispec / monster-count docs).
+constexpr uint64_t RvaControlUnit = 0x484c90;  // (client, 0) -> the client's player unit
+constexpr uint64_t RvaCollide = 0x350a20;      // (unit, x, y, mask) -> nonzero blocked
+constexpr int UnitPathPtr = 0x38;              // dynamic path: x +0x2, y +0x6 (uint16 subtiles)
+using ControlUnitFn = void* (*)(void*, int32_t) noexcept;
+using CollideFn = int64_t (*)(void*, int32_t, int32_t, uint32_t) noexcept;
+ControlUnitFn g_controlUnit = nullptr;
+CollideFn g_collide = nullptr;
+std::atomic<void*> g_trackUnit{nullptr};
+std::atomic<bool> g_trackOn{false};
+std::atomic<int> g_trackMs{250};
+std::atomic<int> g_minX{1 << 30}, g_maxX{-1}, g_minY{1 << 30}, g_maxY{-1};
+
+auto ReadPos(void* unit, int* sx, int* sy) noexcept -> bool {
+	uint8_t* path = nullptr;
+	uint16_t x = 0, y = 0;
+	if (unit == nullptr || !ReadBytes(static_cast<uint8_t*>(unit) + UnitPathPtr, &path, sizeof(path)) || path == nullptr) return false;
+	if (!ReadBytes(path + 2, &x, 2) || !ReadBytes(path + 6, &y, 2)) return false;
+	*sx = x;
+	*sy = y;
+	return true;
+}
+
+DWORD WINAPI TrackThread(void*) {
+	int lastX = -1, lastY = -1;
+	while (g_trackOn.load()) {
+		int x, y;
+		void* unit = g_trackUnit.load();
+		if (unit != nullptr && ReadPos(unit, &x, &y)) {
+			if (x != lastX || y != lastY) {
+				plog::Info("pos subtile (%d,%d) = tile (%d,%d); level-relative tile (%d,%d)", x, y, x / 5, y / 5, x / 5 - g_config.offsetX, y / 5 - g_config.offsetY);
+				lastX = x;
+				lastY = y;
+			}
+			if (x > 0 && y > 0) {
+				if (x < g_minX) g_minX = x;
+				if (x > g_maxX) g_maxX = x;
+				if (y < g_minY) g_minY = y;
+				if (y > g_maxY) g_maxY = y;
+			}
+		}
+		Sleep(static_cast<DWORD>(g_trackMs.load()));
+	}
+	return 0;
+}
+
+void HexDump(const D2RL::PluginContext* ctx, uint64_t addr, int len) noexcept {
+	for (int off = 0; off < len; off += 16) {
+		uint8_t b[16] = {};
+		const int n = len - off < 16 ? len - off : 16;
+		char line[160];
+		int used = std::snprintf(line, sizeof(line), "%016llx:", static_cast<unsigned long long>(addr + static_cast<uint64_t>(off)));
+		if (!ReadBytes(reinterpret_cast<void*>(addr + static_cast<uint64_t>(off)), b, static_cast<size_t>(n))) {
+			std::snprintf(line + used, sizeof(line) - static_cast<size_t>(used), " <unreadable>");
+		} else {
+			for (int i = 0; i < n; i++) used += std::snprintf(line + used, sizeof(line) - static_cast<size_t>(used), " %02x", b[i]);
+		}
+		Say(ctx, "%s", line);
+	}
+}
+
+// Collision dump of the slot level: one char per subtile (800 x 160 for the 5-block line), '.' open, '#' blocked by `mask`.
+// Written to d2rloader\logs\cartographer-collision-<mask>.txt next to the game executable, rows top to bottom (y up = south).
+void CollisionDump(const D2RL::PluginContext* ctx, void* unit, uint32_t mask) noexcept {
+	if (g_collide == nullptr) {
+		Say(ctx, "collide function not bound");
+		return;
+	}
+	const int x0 = g_config.offsetX * 5, y0 = g_config.offsetY * 5;
+	const int w = g_blocks * 32 * 5, h = 32 * 5;
+	wchar_t exe[MAX_PATH];
+	GetModuleFileNameW(nullptr, exe, MAX_PATH);
+	std::wstring dir(exe);
+	dir = dir.substr(0, dir.find_last_of(L"\\/") + 1) + L"d2rloader\\logs\\";
+	wchar_t name[64];
+	std::swprintf(name, 64, L"cartographer-collision-%x.txt", mask);
+	FILE* f = _wfopen((dir + name).c_str(), L"w");
+	if (f == nullptr) {
+		Say(ctx, "cannot open the collision file");
+		return;
+	}
+	std::fprintf(f, "# origin subtile (%d,%d) size %dx%d mask 0x%x; '.' open '#' blocked; one row per y, x runs left to right\n", x0, y0, w, h, mask);
+	int blocked = 0;
+	for (int y = 0; y < h; y++) {
+		std::string row(static_cast<size_t>(w), '.');
+		for (int x = 0; x < w; x++) {
+			if (g_collide(unit, x0 + x, y0 + y, mask) != 0) {
+				row[static_cast<size_t>(x)] = '#';
+				blocked++;
+			}
+		}
+		std::fprintf(f, "%s\n", row.c_str());
+	}
+	std::fclose(f);
+	Say(ctx, "collision dump mask 0x%x: %d of %d subtiles blocked", mask, blocked, w * h);
+}
+
+auto ProbeCommand2(D2R::Game::Client* client, const D2RL::PluginContext* ctx, const char* args) noexcept -> bool {
+	if (std::strncmp(args, "pos", 3) == 0 || std::strncmp(args, "track", 5) == 0 || std::strncmp(args, "coll", 4) == 0) {
+		void* unit = g_controlUnit != nullptr ? g_controlUnit(client, 0) : nullptr;
+		int x = 0, y = 0;
+		if (unit == nullptr || !ReadPos(unit, &x, &y)) {
+			Say(ctx, "no player unit / position (client %p, unit %p)", static_cast<void*>(client), unit);
+			return true;
+		}
+		if (std::strncmp(args, "pos", 3) == 0) {
+			Say(ctx, "unit %p subtile (%d,%d) tile (%d,%d) level-relative tile (%d,%d)", unit, x, y, x / 5, y / 5, x / 5 - g_config.offsetX, y / 5 - g_config.offsetY);
+		} else if (std::strncmp(args, "track", 5) == 0) {
+			const char* a = args + 5;
+			while (*a == ' ') a++;
+			if (std::strncmp(a, "off", 3) == 0) {
+				g_trackOn = false;
+				Say(ctx, "track off; reached x %d..%d y %d..%d (subtiles)", g_minX.load(), g_maxX.load(), g_minY.load(), g_maxY.load());
+			} else if (std::strncmp(a, "reset", 5) == 0) {
+				g_minX = 1 << 30; g_maxX = -1; g_minY = 1 << 30; g_maxY = -1;
+				Say(ctx, "track extents reset");
+			} else {
+				g_trackUnit = unit;
+				if (!g_trackOn.exchange(true)) CreateThread(nullptr, 0, TrackThread, nullptr, 0, nullptr);
+				Say(ctx, "track on (unit %p)", unit);
+			}
+		} else {
+			unsigned mask = 0x1c09;
+			std::sscanf(args + 4, " %x", &mask);
+			Say(ctx, "player at subtile (%d,%d): blocked(self, mask 0x%x) = %lld", x, y, mask,
+			    static_cast<long long>(g_collide != nullptr ? g_collide(unit, x, y, mask) : -1));
+			if (std::strstr(args, "dump") != nullptr) CollisionDump(ctx, unit, mask);
+		}
+		return true;
+	}
+	if (std::strncmp(args, "peek", 4) == 0) {
+		unsigned long long addr = 0;
+		int len = 64;
+		std::sscanf(args + 4, " %llx %d", &addr, &len);
+		if (len > 1024) len = 1024;
+		HexDump(ctx, addr, len);
+		return true;
+	}
+	if (std::strncmp(args, "rooms", 5) == 0) {
+		const char* a = args + 5;
+		while (*a == ' ') a++;
+		unsigned long long lv = 0;
+		std::sscanf(a, "%llx", &lv);
+		if (lv == 0) {
+			Say(ctx, "usage: cartographer rooms <level pointer> (see the BUILD log line)");
+			return true;
+		}
+		const void* level = reinterpret_cast<void*>(lv);
+		int n = 0;
+		for (void* r = F<void*>(level, LevelFirstRoom); r != nullptr && n < 3; r = F<void*>(r, RoomNext), n++) {
+			Say(ctx, "room %p:", r);
+			HexDump(ctx, reinterpret_cast<uint64_t>(r), 0x100);
+		}
+		return true;
+	}
+	return false;
+}
+
+auto ProbeCommand(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* command, void*) noexcept -> D2RL::ConsoleCommandResult {
 	if (command == nullptr || command->plugin == nullptr) return D2RL::ConsoleCommandResult::Failed;
 	const D2RL::PluginContext* ctx = command->plugin;
 	const char* args = command->args != nullptr ? command->args : "";
 	while (*args == ' ') args++;
+	if (ProbeCommand2(client, ctx, args)) return D2RL::ConsoleCommandResult::Handled;
 	if (std::strncmp(args, "reset", 5) == 0) {
 		for (LevelCount& c : g_levels) {
 			c.id = -1;
@@ -565,6 +728,19 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		           static_cast<unsigned long long>(Parts[i].expectRva));
 		if (g_preState[i] != 0) all = false;
 	}
+	g_controlUnit = reinterpret_cast<ControlUnitFn>(context->exeBase + RvaControlUnit);
+	g_collide = reinterpret_cast<CollideFn>(context->exeBase + RvaCollide);
+	{
+		static const uint8_t expectControl[] = {0x48, 0x89, 0x5C, 0x24, 0x10, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x8B, 0xFA, 0x48, 0x8B, 0xD9};
+		uint8_t got[sizeof(expectControl)] = {};
+		uint8_t h[16] = {};
+		const bool ok = ReadBytes(reinterpret_cast<void*>(g_controlUnit), got, sizeof(got)) && std::memcmp(got, expectControl, sizeof(got)) == 0;
+		ReadBytes(reinterpret_cast<void*>(g_collide), h, sizeof(h));
+		plog::Info("control unit 0x%llx byte check %s; collide 0x350a20 head %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+		           static_cast<unsigned long long>(RvaControlUnit), ok ? "PASS" : "FAIL", h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8], h[9], h[10],
+		           h[11], h[12], h[13], h[14], h[15]);
+		if (!ok) g_controlUnit = nullptr;
+	}
 	if (all) {
 		g_stamp = reinterpret_cast<StampFn>(const_cast<uint8_t*>(g_addr[Stamp]));
 		g_gridRead = reinterpret_cast<GridReadFn>(const_cast<uint8_t*>(g_addr[GridRead]));
@@ -606,5 +782,6 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	g_trackOn = false;
 	crash_guard::Remove();
 }
