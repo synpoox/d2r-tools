@@ -160,6 +160,31 @@ auto StringsJson(const std::vector<std::string>& names) -> std::string {
 	return out;
 }
 
+auto BossLocalKey(const std::string& name) -> std::string {
+	return "boss_" + name;
+}
+
+auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::string {
+	return RowKey(pluginId, BossLocalKey(name));
+}
+
+auto BossStringsJson(const std::vector<std::string>& names) -> std::string {
+	std::string out = "[";
+	std::vector<std::string> seen;
+	for (const std::string& name : names) {
+		if (std::find(seen.begin(), seen.end(), name) != seen.end()) {
+			continue;
+		}
+		if (!seen.empty()) {
+			out += ',';
+		}
+		seen.push_back(name);
+		AppendRecord(out, BossLocalKey(name), DisplayName(name));
+	}
+	out += "]";
+	return out;
+}
+
 auto WriteKey(uint8_t* field, const std::string& key) -> bool {
 	if (field == nullptr || !KeyFits(key)) {
 		return false;
