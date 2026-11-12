@@ -137,6 +137,16 @@ does not add the Maze level; add it by hand:
 
 Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. The player did not arrive in the planned entrance cell in the 5 games with an arrival line; the build now marks the planned entrance cell as the level entry; that room gets none of the level's random objects (chests, shrines and the like), which is accepted (written and unit tested, not verified in game; #127). Not run in game: Nightmare and Hell, and a second map in the same game on the Crypt slot.
 
+## Outdoor slot (Jungle maps, not built yet)
+
+Outdoor maps (the `Jungle` tileset first) are planned to open through a third level, the `Outdoor` slot: a `levels.txt` level
+with `DrlgType` 3 and `LevelType` 21 (jungle), listed in `slots.txt` as an `Outdoor` row. What exists today is the groundwork
+only, none of it verified in game: `slots.txt` accepts the row, the plugin reads that level's `DrlgType` and `LevelType` and
+can say when they do not fit a map's tileset, the piece picker and the stamp plan (a layout turned into the list of jungle
+pieces to place, the level size and the void cells) are written and unit tested, and the engine parts the builder will use
+are byte-signed and checked. Nothing hooks the game for it and no map opens through the slot: `Jungle` and `Snow` maps are
+still refused. Adding the row now changes nothing in game.
+
 ## Tested
 
 - Unit tests of the table loader, the gates and the signature scanner (`tools\build.ps1 -Plugin cartographer -Test`).

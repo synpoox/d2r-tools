@@ -1073,6 +1073,19 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 7. Q11: a tile set from a different act than the slot's.
 8. Q12: the file path actually opened for a jungle DS1.
 
+### Signed for the outdoor slot (desk work, 2026-11-12)
+
+Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; nothing in the plugin uses them yet (no hook, no call), so they are checked, not run.
+
+| Part | RVA | Signature source | Hook length | Evidence |
+|---|---|---|---|---|
+| `OutdoorEntry` | `0x3ee320` | section 4 S0 table, same bytes | 19 in the spike; not re-derived | static: unique, resolves to the RVA, guard holds (checker run on the 93847 dump, stamp `0x6ab3782c`); the spike's live match is section 4 |
+| `OutdoorAct5Builder` | `0x3fe2e0` | section 4 S0 table | 16 in the spike | same |
+| `PieceStamp` | `0x3ecfc0` | section 4 S0 table | called only | same |
+| `VoidCell` | `0x3ede00` | the masked prefix of the section 8 table, cut to 62 bytes so its twin `0x3edda0` (last constant `0x100` against zero) cannot match | called only (hookable by the 14-byte rule) | static, same checker; never run in a game |
+
+The checker rows carry max patch 999 ("only checked"): whoever adds a hook re-derives the patch length and the row. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 

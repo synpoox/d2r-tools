@@ -13,6 +13,7 @@
 #include "layout.h"
 #include "outdoor.h"
 #include "rng.h"
+#include "stamp.h"
 
 using namespace cartographer;
 using namespace cartographer::outdoor;
@@ -30,6 +31,13 @@ const std::string GOLDEN_HASHES =
 	"64ece3af063ed751 fd3e0fc0f6d54272 26b1a6ce1f6541c2 68068c76a2578772 ce4981cb9a1e643a 2c762be1dbd7e208 c79697c5b4021c65 "
 	"1215a7942077a2ae 19fecd3b91d093a6 2c520c8edae359ff a5e29bd842850fc3 901fab347c753ae8 763e37c95d92c752 08e5bbf643a10c8c "
 	"74b3fce4810fad1e ";
+
+const std::string GOLDEN_STAMP_LINE =
+	"224x256 0,0=535 4,0=530 0,4=541 0,8=541 0,12=541 0,16=541 24,16=598 0,20=543 4,20=530 24,20=541 0,24=541 24,24=541 0,28=583 4,28=532 "
+	"8,28=532 12,28=532 16,28=532 20,28=532 24,28=538 ";
+const std::string GOLDEN_STAMP_HASHES =
+	"1a4771abad5cde3d 2c9bfd4b0c19b20c 0ea6ab53f22982a7 da62d59a94796e97 5575e6746fb2e8b8 8f2979a836716794 485a1e0bb7e9ba70 "
+	"26c18868df38eaa1 51585abd796d49ea f65c9d35dda89b61 c77ebfdc7deca837 eddf55fdbabafa69 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 ";
 
 // The fixtures sit beside this file, so the test needs no build-time path or working directory.
 std::string fixturePath(const char *name)
@@ -335,4 +343,252 @@ TEST_CASE("check column: bad rows are skipped with a warning, variants rows get 
 	const PickResult r = pickPieces(s1Line(), cat.catalogue, "T", 3);
 	REQUIRE(r.ok());
 	CHECK(r.at(1, 0).ds1Variant == -1);
+}
+
+// --- The stamp plan (phase 5, part 1) ---------------------------------------------------------------------------------
+
+namespace {
+
+std::string stampLine(const StampPlan &p)
+{
+	std::string out = std::to_string(p.tilesW) + "x" + std::to_string(p.tilesH) + " ";
+	for (const Stamp &s : p.stamps) out += std::to_string(s.cx) + "," + std::to_string(s.cy) + "=" + std::to_string(s.lvlPrest) + " ";
+	return out;
+}
+
+} // namespace
+
+TEST_CASE("the S1 line becomes five stamps 4 grid cells apart, a 160 x 32 level, no void")
+{
+	const LoadResult cat = loadJungle();
+	const Layout l = s1Line();
+	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 7);
+	REQUIRE(r.ok());
+	StampOptions o;
+	o.originX = 6000;
+	o.originY = 3000;
+	const StampPlan p = planStamps(l, r, o);
+	REQUIRE(p.ok());
+	CHECK(p.tilesW == 160);
+	CHECK(p.tilesH == 32);
+	CHECK(p.cellsW == 20);
+	CHECK(p.cellsH == 4);
+	REQUIRE(p.stamps.size() == 5);
+	for (int i = 0; i < 5; ++i) {
+		CHECK(p.stamps[i].cx == i * 4);
+		CHECK(p.stamps[i].cy == 0);
+		CHECK(p.stamps[i].file == -1); // the engine draws it, as in the S1 spike
+	}
+	CHECK(p.stamps[0].lvlPrest == 531);
+	CHECK(p.voidCells.empty());
+	CHECK(p.entrance.known);
+	CHECK(p.entrance.x == 6000);
+	CHECK(p.entrance.centreX() == 6016);
+	CHECK(p.entrance.centreY() == 3016);
+	CHECK(p.event.x == 6000 + 2 * 32);
+	CHECK(p.boss.x == 6000 + 4 * 32);
+	CHECK(checkStampPlan(l, r, o, p).empty());
+}
+
+TEST_CASE("the jungle edge rule: a mask piece is 0x211 + mask, and mask 0 and 529 are never emitted")
+{
+	CHECK(jungleLvlPrest(layout::kWest) == 530);
+	CHECK(jungleLvlPrest(layout::kEast | layout::kWest) == 532);
+	CHECK(jungleLvlPrest(15) == 544);
+	CHECK(jungleLvlPrest(0) == -1);
+	CHECK(jungleLvlPrest(16) == -1);
+
+	// A pick whose jungle piece does not match the cell's mask is an error, not a stamp.
+	const LoadResult cat = loadJungle();
+	const Layout l = s1Line();
+	PickResult r = pickPieces(l, cat.catalogue, "Jungle", 7);
+	REQUIRE(r.ok());
+	r.cells[1].lvlPrest = 533; // Jungle S on an EW cell
+	const StampPlan p = planStamps(l, r, StampOptions{});
+	CHECK(!p.ok());
+	CHECK(p.stamps.empty());
+	REQUIRE(!p.errors.empty());
+	CHECK(p.errors[0].find("jungle edge rule") != std::string::npos);
+}
+
+TEST_CASE("an L-shape is cropped to its box and the empty macro-cell becomes void grid cells")
+{
+	const LoadResult cat = loadJungle();
+	Layout l;
+	l.width = 4;
+	l.height = 4;
+	l.cells.resize(16);
+	// (1,1) E | (2,1) SW | (2,2) N: an L in a 4 x 4 grid, so the box is 2 x 2 blocks and (1,2) is empty.
+	l.at(1, 1) = {layout::kEast, Role::Entrance};
+	l.at(2, 1) = {static_cast<uint8_t>(layout::kWest | layout::kSouth), Role::Path};
+	l.at(2, 2) = {layout::kNorth, Role::Boss};
+	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 3);
+	REQUIRE(r.ok());
+	StampOptions o;
+	const StampPlan p = planStamps(l, r, o);
+	REQUIRE(p.ok());
+	CHECK(p.macroMinX == 1);
+	CHECK(p.macroMinY == 1);
+	CHECK(p.tilesW == 64);
+	CHECK(p.tilesH == 64);
+	REQUIRE(p.stamps.size() == 3);
+	CHECK(p.stamps[0].cx == 0);
+	CHECK(p.stamps[1].cx == 4);
+	CHECK(p.stamps[2].cx == 4);
+	CHECK(p.stamps[2].cy == 4);
+	CHECK(p.voidCells.size() == 16); // the empty bottom-left block, 4 x 4 grid cells
+	CHECK(p.voidCells.front() == layout::Point{0, 4});
+	CHECK(p.voidCells.back() == layout::Point{3, 7});
+	CHECK(p.event.known == false);
+	CHECK(p.boss.x == 32);
+	CHECK(p.boss.y == 32);
+	CHECK(stampPlanAscii(p) == "########\n########\n########\n########\n....####\n....####\n....####\n....####\n");
+	CHECK(checkStampPlan(l, r, o, p).empty());
+
+	o.listVoid = false;
+	const StampPlan quiet = planStamps(l, r, o);
+	REQUIRE(quiet.ok());
+	CHECK(quiet.voidCells.empty());
+	CHECK(checkStampPlan(l, r, o, quiet).empty());
+}
+
+TEST_CASE("size limits and bad inputs give plain-English errors and no stamps")
+{
+	const LoadResult cat = loadJungle();
+	const Layout l = s1Line();
+	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 7);
+	REQUIRE(r.ok());
+
+	StampOptions narrow;
+	narrow.maxMacroCells = 4; // the line is 5 blocks long
+	StampPlan p = planStamps(l, r, narrow);
+	CHECK(!p.ok());
+	CHECK(p.stamps.empty());
+	CHECK(p.errors[0].find("5 x 1 blocks") != std::string::npos);
+
+	StampOptions small;
+	small.maxTilesX = 128;
+	small.maxTilesY = 32;
+	p = planStamps(l, r, small);
+	CHECK(!p.ok());
+	CHECK(p.errors[0].find("160 x 32 tiles") != std::string::npos);
+
+	StampOptions odd;
+	odd.macroTiles = 30;
+	CHECK(!planStamps(l, r, odd).ok());
+
+	PickResult bad = r;
+	bad.errors.push_back("no piece for the boss");
+	CHECK(!planStamps(l, bad, StampOptions{}).ok());
+
+	Layout two = l;
+	two.at(3, 0).role = Role::Entrance;
+	p = planStamps(two, r, StampOptions{});
+	CHECK(!p.ok());
+	CHECK(p.stamps.empty());
+	REQUIRE(!p.errors.empty());
+	CHECK(p.errors[0].find("more than one entrance") != std::string::npos);
+
+	Layout empty;
+	empty.width = 3;
+	empty.height = 3;
+	empty.cells.resize(9);
+	PickResult none;
+	none.width = 3;
+	none.height = 3;
+	none.cells.resize(9);
+	CHECK(!planStamps(empty, none, StampOptions{}).ok());
+}
+
+TEST_CASE("pinFiles passes the picked DS1 variant as the file index")
+{
+	const LoadResult cat = loadJungle();
+	const Layout l = s1Line();
+	bool sawVariant = false;
+	for (uint64_t seed = 1; seed <= 40; ++seed) {
+		const PickResult r = pickPieces(l, cat.catalogue, "Jungle", seed);
+		REQUIRE(r.ok());
+		StampOptions o;
+		o.pinFiles = true;
+		const StampPlan p = planStamps(l, r, o);
+		REQUIRE(p.ok());
+		REQUIRE(p.stamps.size() == 5);
+		for (size_t i = 0; i < p.stamps.size(); ++i) {
+			CHECK(p.stamps[i].file == r.at(p.stamps[i].macroX, p.stamps[i].macroY).ds1Variant);
+			sawVariant = sawVariant || p.stamps[i].file > 0;
+		}
+		CHECK(checkStampPlan(l, r, o, p).empty());
+	}
+	CHECK(sawVariant);
+}
+
+TEST_CASE("10k seeds of every shape preset on Jungle: the stamp plan is complete and passes its own check")
+{
+	const LoadResult cat = loadJungle();
+	REQUIRE(cat.ok());
+	for (int s = 0; s < layout::kShapeCount; ++s)
+		for (int z = 0; z < layout::kSizeCount; ++z) {
+			const layout::Shape shape = static_cast<layout::Shape>(s);
+			const layout::Size size = static_cast<layout::Size>(z);
+			const layout::Rules rules = layout::presetRules(shape, size);
+			int failures = 0, tooBig = 0;
+			for (int i = 0; i < kSeeds; ++i) {
+				const uint64_t seed = layout::splitmix64(static_cast<uint64_t>(i) + 0x3000);
+				const Layout l = layout::generate(rules, seed);
+				const PickResult r = pickPieces(l, cat.catalogue, "Jungle", seed);
+				if (!r.ok()) {
+					++failures;
+					continue;
+				}
+				StampOptions o;
+				o.originX = 6000;
+				o.originY = 3000;
+				o.pinFiles = (i % 2) == 1;
+				o.maxMacroCells = 64; // this test is about the plan; the 12 x 12 cap has its own test
+				const StampPlan p = planStamps(l, r, o);
+				const std::vector<std::string> problems = p.ok() ? checkStampPlan(l, r, o, p) : p.errors;
+				if (!problems.empty()) {
+					if (failures++ < 3)
+						MESSAGE(layout::shapeName(shape) << " " << layout::sizeName(size) << " seed " << seed << ": " << problems[0] << "\n" << layout::toAscii(l));
+					continue;
+				}
+				if (p.macroW > 12 || p.macroH > 12) ++tooBig;
+				CHECK(p.entrance.known);
+				CHECK(p.tilesW % 8 == 0);
+			}
+			INFO(layout::shapeName(shape) << " " << layout::sizeName(size));
+			CHECK(failures == 0);
+			if (std::getenv("CARTOGRAPHER_STATS"))
+				std::printf("stamp %-9s %-6s seeds %d  failures %d  over 12x12 %d\n", layout::shapeName(shape), layout::sizeName(size), kSeeds, failures, tooBig);
+		}
+}
+
+TEST_CASE("stamp plans are stable: same inputs give the same plan, and the goldens do not move")
+{
+	const LoadResult cat = loadJungle();
+	const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Medium, 1);
+	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 1);
+	REQUIRE(r.ok());
+	const StampPlan a = planStamps(l, r, StampOptions{}), b = planStamps(l, r, StampOptions{});
+	REQUIRE(a.ok());
+	CHECK(stampPlanHash(a) == stampPlanHash(b));
+	StampOptions pinned;
+	pinned.pinFiles = true;
+	CHECK(stampPlanHash(a) != stampPlanHash(planStamps(l, r, pinned)));
+
+	if (std::getenv("CARTOGRAPHER_GOLDEN")) std::printf("GOLDEN_STAMP_LINE %s\n", stampLine(a).c_str());
+	CHECK(stampLine(a) == GOLDEN_STAMP_LINE);
+
+	std::string hashes;
+	for (int s = 0; s < layout::kShapeCount; ++s)
+		for (int z = 0; z < layout::kSizeCount; ++z) {
+			const Layout g = layout::generate(static_cast<layout::Shape>(s), static_cast<layout::Size>(z), 12345);
+			StampOptions o;
+			o.maxMacroCells = 64;
+			char buf[32];
+			std::snprintf(buf, sizeof buf, "%016llx ", static_cast<unsigned long long>(stampPlanHash(planStamps(g, pickPieces(g, cat.catalogue, "Jungle", 12345), o))));
+			hashes += buf;
+		}
+	if (std::getenv("CARTOGRAPHER_GOLDEN")) std::printf("GOLDEN_STAMP_HASHES %s\n", hashes.c_str());
+	CHECK(hashes == GOLDEN_STAMP_HASHES);
 }
