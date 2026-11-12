@@ -652,7 +652,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		g_parts[PopulateRoom].status.on = false;
 		g_parts[PopulateRoom].status.detail = "off: not hooked, because a part it needs was not found";
 	}
-	InstallEvent6b(context, overrides);  // phase 6b: the Shrine object and the Boss Drop (its own parts and hook)
+	InstallEvent6b(context, overrides, g_parts[DataTablesBase], g_parts[NameToRow], g_spawnOn.load());  // phase 6b: the Shrine object and the Boss Drop (its own parts and hook)
 	// The entry message follows the portal's tick part and needs the room parts.
 	bool tickOn = false;
 	for (const PartStatus& s : PartStatuses()) {
@@ -696,6 +696,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 }
 
 void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player) {
+	Event6bMapOpened();  // phase 6b: the previous map's boss Drop and Shrine end here
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
@@ -712,8 +713,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	} else {
 		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
-		bool decided = false;
-		if (player != nullptr && g_dataTables != nullptr) {
+		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
+		const bool monsterSpawn = event->kind != ev::Kind::Shrine;
+		bool decided = !monsterSpawn;
+		if (monsterSpawn && player != nullptr && g_dataTables != nullptr) {
 			const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
 			const ep::RouteVerdict route = RouteFor(dataFlag);
 			if (route.monsters) {
@@ -738,7 +741,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
 		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
-		const ep::SpawnPlan check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
+		ep::SpawnPlan check;
+		if (monsterSpawn) {
+			check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
+		}
 		std::string shrineWhy;
 		if (event->kind == ev::Kind::Shrine) {
 			// Phase 6b: a Shrine's Spawn is an objects row, not a monster; it is announced only when it resolves to exactly one row.

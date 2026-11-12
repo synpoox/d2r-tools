@@ -13,6 +13,7 @@
 #pragma once
 
 #include "engine/portal.h"
+#include "engine/scan.h"
 
 #include <D2RLPlugin/api.h>
 
@@ -25,8 +26,12 @@
 
 namespace carto {
 
-// Finds the parts and installs the death hook (at load only, chained through the loader). Call after InstallEventApply's parts.
-void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides);
+// Finds the parts and installs the death hook (at load only, chained through the loader). `dataTables` and `nameToRow` are the parts
+// event_apply.cpp already resolved (shared, not scanned for twice); `populatorOn` is whether its room populator hook is in.
+void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const Part& dataTables, const Part& nameToRow, bool populatorOn);
+
+// A map was opened: forget the previous map's Boss Drop and Shrine, whatever the new map's event is. Game thread.
+void Event6bMapOpened() noexcept;
 
 auto Event6bPartStatuses() -> std::vector<PartStatus>;
 
