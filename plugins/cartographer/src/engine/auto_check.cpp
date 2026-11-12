@@ -319,22 +319,21 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 		return;
 	}
 	case Phase::ArrivalRead: {
-		if (!MapIsMaze(g_run.map)) {
-			SettleNotApplicable(ac::Item::Arrival, MapIsOutdoor(g_run.map) ? "an outdoor map's arrival is only logged ('[outdoor probe] arrival'), not read back here; the player is in the portal level"
-			                                                       : "a " + g_run.map.tileset + " map has no maze entrance cell to compare; the player is in the portal level");
+		const bool outdoor = MapIsOutdoor(g_run.map);
+		if (!outdoor && !MapIsMaze(g_run.map)) {
+			SettleNotApplicable(ac::Item::Arrival, "a " + g_run.map.tileset + " map has no maze entrance cell to compare; the player is in the portal level");
 			Enter(Phase::MoveToBoss);
 			return;
 		}
-		const int result = Outside(lock, [&] { return MazeArrivalResult(); });
+		const int result = Outside(lock, [&] { return outdoor ? OutdoorArrivalResult() : MazeArrivalResult(); });
 		if (g_gen != gen) {
 			return;
 		}
-		if (result == 1) {
-			Settle(ac::Item::Arrival, true, "ARRIVAL IS IN THE ENTRANCE CELL");
-		} else if (result == 2) {
-			Settle(ac::Item::Arrival, false, "arrival is NOT in the entrance cell");
-		} else if (result == 3 || ac::timedOut(g_run.phaseStartMs, NowMs(), ArrivalReadMs)) {
-			Settle(ac::Item::Arrival, false, "the arrival room could not be read (see the '[maze probe] arrival' line)");
+		const ac::ArrivalVerdict verdict = ac::arrivalVerdict(result, outdoor);
+		if (verdict.settled) {
+			Settle(ac::Item::Arrival, verdict.pass, verdict.detail);
+		} else if (ac::timedOut(g_run.phaseStartMs, NowMs(), ArrivalReadMs)) {
+			Settle(ac::Item::Arrival, false, ac::arrivalVerdict(3, outdoor).detail);
 		} else {
 			return;  // the arrival probe has not run yet
 		}

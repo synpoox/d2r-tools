@@ -27,6 +27,7 @@
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
 - The map Boss and events are placed in the right room of a maze map.
+- Outdoor map events and Boss minions get their full count, not just four.
 - Hosts and players need the same version of Cartographer to share a map; older versions no longer connect for map sync.
 - Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (needs `OutdoorBuild=1`, not checked in game).
 - Outdoor maps (off, not checked in game): you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
