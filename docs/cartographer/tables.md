@@ -104,9 +104,18 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 Adds a new shape defined with numbers. Use its name in the `Shape` column.
 
-The plan names these rules: path length, straightness, turns, branches, branch length, loops, bounds and boss room. The exact column names are not set yet.
+Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column.
 
 | Column | What to put | Default | Example |
 |---|---|---|---|
 | `Name` | The name to use in `maps.txt` | none (required) | Snake |
-| path length, straightness, turns, branches, branch length, loops, bounds, boss room | Numbers for each rule | to be set in phase 2 | to be set in phase 2 |
+| `Base` | A built-in shape, or the `Name` of an earlier row, to start from | `Winding` | Branching |
+| `MinPath`, `MaxPath` | Cells in the main path, entrance and boss room included. At least 4; a `Loop` needs an even number in range and at most half of `Width` x `Height` | the base shape's | 12, 16 |
+| `Straight` | Percent chance to keep going straight at each step (0 to 100) | the base shape's | 30 |
+| `MinTurns`, `MaxTurns` | Direction changes along the main path | the base shape's | 8, 99 |
+| `MinBranches`, `MaxBranches` | Dead-end side rooms (at most half of `Width` x `Height`) | the base shape's | 2, 4 |
+| `MinBranchLen`, `MaxBranchLen` | Cells in one side room (at least 1) | the base shape's | 1, 3 |
+| `Loop` | `1` for a ring that returns to the entrance, `0` for a path | the base shape's | 1 |
+| `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
+| `Width`, `Height` | Grid size in cells, 2 to 32 each | the `Size`'s grid | 9, 9 |
+| `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |
