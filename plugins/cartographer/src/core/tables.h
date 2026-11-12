@@ -35,6 +35,8 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 inline constexpr int MapItemSpell = 16;
 // The slot (in slots.txt) of the maze level every map opens through (levels.txt DrlgType 1, plan section 3.6).
 inline constexpr const char* MazeSlot = "Maze";
+// The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
+inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). Recognised
 // and checked here; no map opens through it yet, because the outdoor builder is not wired in (those tilesets are still refused).
 inline constexpr const char* OutdoorSlot = "Outdoor";

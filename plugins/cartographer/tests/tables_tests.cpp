@@ -231,13 +231,27 @@ TEST_CASE("the Preset tileset is refused: every map is generated") {
 	Report report;
 	CHECK(Load("Old\tPreset\tLoop\t\t\tt20\n", report).empty());
 	const std::string text = Joined(report);
-	CHECK(text.find("tileset 'Preset' is not known") != std::string::npos);
-	CHECK(text.find("Cave") != std::string::npos);
+	CHECK(text.find("Preset maps are gone: use Cave or Crypt.") != std::string::npos);
+	CHECK(text.find("is not known") == std::string::npos);
 }
 
 namespace {
 const char* const SlotLevels =
-    "Name\tId\tLevelType\nTown\t109\t1\nCave\t45\t3\nMaze Level\t138\t3\nOther\t139\t4\n";
+    "Name\tId\tLevelType\nTown\t109\t1\nCave\t45\t3\nCartographer Maze\t138\t3\nCartographer Maze\t139\t4\n";
+}
+
+TEST_CASE("a Maze slot on a level the installer did not write is dropped") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t140\n", report);
+	ValidateSlots(slots, "Name\tId\tLevelType\nCartographer Maze\t138\t3\nSomeone's Level\t140\t3\n", report);
+	CHECK(slots.empty());
+	CHECK(SlotLevel(slots, MazeSlot) == -1);
+	CHECK(Joined(report).find("not the level the installer wrote") != std::string::npos);
+	CHECK(report.Errors() == 1);
+	Report nameless;
+	auto noName = LoadSlots("Slot\tLevel\nMaze\t138\n", nameless);
+	ValidateSlots(noName, "Id\tLevelType\n138\t3\n", nameless);  // no Name column: it cannot be told, so the slot stays off
+	CHECK(noName.empty());
 }
 
 TEST_CASE("a slot on a good installed level is kept") {

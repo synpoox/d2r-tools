@@ -170,8 +170,9 @@ Every map is a generated maze, built on the `Maze` level that `tools\install.ps1
 tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second map in the
 same game is refused. Without the level, no map opens.
 
-The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a game Cave (or Crypt) level, with its
-`lvlmaze.txt` row and the `Maze` row of `slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
+The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a plain game Cave (or Crypt) level and
+set apart from the game's levels (no quest, no level group), with its `lvlmaze.txt` row and the `Maze` row of
+`slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Status
@@ -180,8 +181,8 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, the portal tooltip reading "Colossal Summit", and `MapNames=1` (a map's own name
-  seen on its portal, automap and banner in single player), and arriving in the planned maze entrance room.
+  Boss, Horde and Ambush events, `MapNames=1` (a map's own name seen on its portal, automap and banner in single
+  player), and arriving in the planned maze entrance room.
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
   banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare and Hell
   difficulty for mazes, opening a map in Hell (only the Normal refusal was seen), and a second Crypt map in one game.

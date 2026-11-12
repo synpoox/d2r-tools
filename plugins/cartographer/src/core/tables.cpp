@@ -235,6 +235,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const std::string tileset = table.Cell(row, cTileset);
 		if (tileset.empty()) {
 			fail("the Tileset cell is empty. Use " + OneOf(ReadyTilesetNames()) + ".");
+		} else if (EqualsNoCase(tileset, "Preset")) {
+			fail("Preset maps are gone: use Cave or Crypt.");
 		} else {
 			const std::vector<std::string> all = TilesetNames();
 			const std::string* known = Canonical(all, tileset);
@@ -653,13 +655,15 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 	constexpr int LastOriginalLevel = 137;  // 3.3: the levels the original game ships
 	constexpr int Towns[] = {1, 40, 75, 103, 109};
 	const Tsv levels = ParseTsv(levelsText);
-	const int cId = levels.Column("Id");
+	const int cId = levels.Column("Id"), cName = levels.Column("Name");
 	std::vector<int> ids;
+	std::vector<std::string> names;  // the levels.txt Name of each id above
 	if (cId >= 0) {
 		for (const TsvRow& row : levels.rows) {
 			int id = 0;
 			if (ParseInt(levels.Cell(row, cId), 0, 65535, &id)) {
 				ids.push_back(id);
+				names.push_back(cName >= 0 ? std::string(levels.Cell(row, cName)) : std::string());
 			}
 		}
 	}
@@ -677,6 +681,9 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 			drop("a level of the original game. Run the installer again (tools\\install.ps1)");
 		} else if (std::find(ids.begin(), ids.end(), slot.level) == ids.end()) {
 			drop(cId < 0 ? "but levels.txt could not be read" : "which has no row in levels.txt. Run the installer again (tools\\install.ps1)");
+		} else if (EqualsNoCase(slot.name, MazeSlot) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
+			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
 		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return k.level == slot.level; })) {
 			drop("which another slot already uses");
 		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return EqualsNoCase(k.name, slot.name); })) {

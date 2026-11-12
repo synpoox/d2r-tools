@@ -219,8 +219,7 @@ auto SlotNameFor(const MapDef&) noexcept -> const char* {
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).
 auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::string {
 	if (level <= 0) {
-		return IsMazeMap(map) ? "Cartographer: the Maze slot is not installed. Add it to slots.txt and levels.txt (see the Cartographer README), then restart the game."
-		                      : "Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.";
+		return "Cartographer: the Maze slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";

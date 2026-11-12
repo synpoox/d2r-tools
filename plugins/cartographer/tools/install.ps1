@@ -5,8 +5,9 @@
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
-                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a game maze level of that type, so its
-                    LevelName keeps a string
+                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
+                    so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
+                    the game's level groups. A row from an older install (copied from the Den of Evil) is repaired the same way.
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
     It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
     any other row is kept.
@@ -44,6 +45,7 @@ $OldLevelName = 'Cartographer Preset'
 $LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelType: 3 Cave, 4 Crypt
 $MazeSize = '360'  # SizeX and SizeY in every difficulty: the largest plan is 360 tiles on a side
 $ActFive = '4'     # levels.txt Act is zero-based
+$NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -133,15 +135,30 @@ if ($existing -ge 0) {
     if ($haveType -ne $LevelType) {
         Write-Host "levels.txt: note: level $levelId has LevelType $haveType, not $LevelType ($Tileset). One Maze level serves one tileset; change its LevelType by hand to switch."
     }
+    # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
+    $cells = Cells $levels $levels.Lines[$existing]
+    $before = $cells -join "`t"
+    Set-CellIf $levels $cells 'Quest' '0'
+    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+    Set-CellIf $levels $cells 'LevelEntry' ''
+    Set-CellIf $levels $cells 'LevelWarp' ''
+    if (($cells -join "`t") -ne $before) {
+        $levels.Lines[$existing] = $cells -join "`t"
+        Save-Table $levels
+        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text), so it counts toward none of the game's levels."
+    }
 } else {
-    # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below).
+    # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),
+    # and not a quest level (the Den of Evil is the only one).
     $drlgCol = Column $levels 'DrlgType'
-    $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, $idCol))
+    $questCol = [array]::IndexOf($levels.Header, 'Quest')
+    $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, [Math]::Max($idCol, $questCol)))
     $templateRow = -1
     for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
         $cells = $levels.Lines[$i] -split "`t"
         $parsed = 0
         if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $LevelType -and
+            ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
             [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
     }
     if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $LevelType ($Tileset) to copy." }
@@ -173,6 +190,11 @@ if ($existing -ge 0) {
     }
     if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
     Set-Cell $levels $cells 'Waypoint' '255'
+    # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
+    Set-CellIf $levels $cells 'Quest' '0'
+    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+    Set-CellIf $levels $cells 'LevelEntry' ''
+    Set-CellIf $levels $cells 'LevelWarp' ''
     # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
     $levels.Lines.Add($cells -join "`t")
     Save-Table $levels

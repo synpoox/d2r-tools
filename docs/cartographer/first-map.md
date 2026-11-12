@@ -10,11 +10,11 @@ Every column is explained in [tables.md](tables.md).
 
 ## What works today
 
-Today a map only **opens a portal**. These columns take effect in game: `Name` (the message "Cartographer: <Name> is open."
-and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
-to the log). Everything else (`Size`, `Level`, `Boss`, `Monsters`, `Properties`, `EventChance`, `Density`, `Champions`,
-`Uniques`, and the settings in `cartographer.txt`) is checked and reported but **not applied yet**: every map is generated on the
-Maze level the installer adds. Bosses and the rest come in later phases.
+A map opens a portal to a generated maze on the Maze level the installer adds. These columns take effect in game: `Name`
+(the message "Cartographer: <Name> is open." and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it,
+and when), `Tileset` (Cave or Crypt), `Shape` and `Size` (the maze layout), `Boss` (placed in the far room), `Properties`
+and `EventChance`. `Level`, `Monsters`, `Density`, `Champions` and `Uniques` are checked and reported but **not applied
+yet**.
 
 ## Prerequisites
 
@@ -68,8 +68,8 @@ Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel
 Shorelines	Cave	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	80
 ```
 
-In game today only `Item` and `MinCharLevel` change what happens here; `Size`, `Level`, `Boss` and
-`Monsters` are accepted and checked, then ignored, so this map opens the same level as the plain row above.
+In game today `Size`, `Boss` and the other applied columns change the map; `Level` and `Monsters` are accepted and
+checked, then ignored.
 
 Upper and lower case do not matter for Cartographer's own words (`Cave`, `Large`) or for item codes. Names
 from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
@@ -98,12 +98,12 @@ not in town, character level too low, a map already open this game, no free spot
 
 ## Where to go next
 
-- Add more maps: one row and one item each. Each row's `Item` and `MinCharLevel` work now.
-- Plan a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required) are checked now
-  and will apply once layouts are generated (later phases).
+- Add more maps: one row and one item each (all use the installed tileset, Cave or Crypt).
+- Plan a boss, a shape or a size: the optional columns in [tables.md](tables.md#mapstxt-required) apply now; `Level`,
+  `Monsters` and the density columns are checked only.
 - Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same
-  folder). The plugin reads and checks them now, and `cartographer check` reports bad rows, but nothing applies them yet.
-- The defaults for every map: `cartographer.txt`. Its settings are checked, not applied yet.
+  folder) are applied; `cartographer check` reports bad rows.
+- The defaults for every map: `cartographer.txt`. Its settings are applied.
 
 ## When something does not work
 
