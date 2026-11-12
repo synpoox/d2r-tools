@@ -42,6 +42,11 @@ foreach ($n in $names) {
     if (-not $dlls) { throw "${n}: no DLL produced" }
     $dlls | Copy-Item -Destination $out -Force
     $dlls | ForEach-Object { Write-Host "  built: $($_.Name)" }
+    # A companion folder (d2rl-<id>\, the plugin's own game files such as strings) ships beside the DLL.
+    foreach ($c in Get-ChildItem $dir -Directory -Filter 'd2rl-*' -ErrorAction SilentlyContinue) {
+        Copy-Item $c.FullName -Destination $out -Recurse -Force
+        Write-Host "  companion: $($c.Name)\"
+    }
 
     if ($Test) {
         $ran = $false

@@ -42,9 +42,19 @@ There is no text column. The text comes from the game's own stat description.
 |---|---|---|---|
 | `Target` | `Monsters` or `Players` | none (required) | Monsters |
 | `Stat` | A stat name from the game's stat table | none (required) | `item_maxhp_percent` |
-| `Min` | Lowest rolled value | none (required) | 10 |
-| `Max` | Highest rolled value | none (required) | 20 |
-| `Weight` | How often it is drawn compared with the others | 1 | 3 |
+| `Min` | Lowest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 10 |
+| `Max` | Highest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 20 |
+| `Weight` | How often it is drawn compared with the others. 0 switches the row off. Limit 1,000,000 | 1 | 3 |
+
+Rules and limits:
+
+- `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
+- `Min` and `Max` beyond 500,000,000 (or below -500,000,000) are cut to that, and `check` warns.
+- If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
+- Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
+- If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
+- A negative `Properties` in `maps.txt` counts as empty (the setting is used); a negative `Properties` in `cartographer.txt` counts as 0.
+- With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. If the item has no stats, a normal draw is made instead.
 
 ## mapevents.txt (optional)
 
@@ -55,11 +65,19 @@ What events exist. A map has `EventChance` percent chance of one event. One row 
 | `Name` | Shown to the player when the event starts | none (required) | The Drowned King |
 | `Kind` | `Boss`, `Ambush`, `Horde`, `Treasure` or `Shrine` | none (required) | Boss |
 | `Spawn` | A monster `Id`, a unique monster name or an object name | none (required) | `Bishibosh` |
-| `Count` | Minions (Boss), wave size (Ambush) or horde size (Horde) | 1 | 6 |
-| `Waves` | Number of waves (Ambush only) | 3 | 4 |
+| `Count` | Minions (Boss), wave size (Ambush) or horde size (Horde). 1 to 200 | 1 | 6 |
+| `Waves` | Number of waves (Ambush only; ignored on other kinds). 1 to 50 | 3 | 4 |
 | `Drop` | A treasure class name. For Treasure, the drop. For Boss, extra loot | none | Act 5 (H) Super C |
 | `Message` | Extra text shown when the event starts | none | The water churns... |
-| `Weight` | How often it is drawn compared with the others | 1 | 2 |
+| `Weight` | How often it is drawn compared with the others. 0 switches the row off. Limit 1,000,000 | 1 | 2 |
+
+Rules and limits:
+
+- `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
+- `Count` must be 1 to 200 and `Waves` 1 to 50; a value outside that is an error and the row is skipped. `Waves` is only looked at on `Ambush` rows.
+- A `Kind` that is not one of the five is an error, and `check` suggests the closest one ("Did you mean Boss?").
+- A `Treasure` with no `Drop` still works but drops nothing special, so `check` warns.
+- Errors name the line of the row in the file.
 
 The kinds:
 
@@ -96,9 +114,18 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 Adds a new shape defined with numbers. Use its name in the `Shape` column.
 
-The plan names these rules: path length, straightness, turns, branches, branch length, loops, bounds and boss room. The exact column names are not set yet.
+Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column. The generator gives each layout a fixed amount of work (about 20 ms at most on a desktop), so a row that is too tight to build is reported as too tight right away instead of making the game wait. A row parses with at most 48 tries of that size, about a second at the very worst.
 
 | Column | What to put | Default | Example |
 |---|---|---|---|
 | `Name` | The name to use in `maps.txt` | none (required) | Snake |
-| path length, straightness, turns, branches, branch length, loops, bounds, boss room | Numbers for each rule | to be set in phase 2 | to be set in phase 2 |
+| `Base` | A built-in shape, or the `Name` of an earlier row, to start from | `Winding` | Branching |
+| `MinPath`, `MaxPath` | Cells in the main path, entrance and boss room included. At least 4; a `Loop` needs an even number in range and at most 200 (and at most half of `Width` x `Height`) | the base shape's | 12, 16 |
+| `Straight` | Percent chance to keep going straight at each step (0 to 100) | the base shape's | 30 |
+| `MinTurns`, `MaxTurns` | Direction changes along the main path | the base shape's | 8, 99 |
+| `MinBranches`, `MaxBranches` | Dead-end side rooms (at most half of `Width` x `Height`) | the base shape's | 2, 4 |
+| `MinBranchLen`, `MaxBranchLen` | Cells in one side room (at least 1; `MaxBranchLen` at most half of `Width` x `Height`). `MinBranches` x `MinBranchLen`, plus 2 cells per `MinLoops`, must fit in the grid beside the main path | the base shape's | 1, 3 |
+| `Loop` | `1` for a ring that returns to the entrance, `0` for a path | the base shape's | 1 |
+| `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
+| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against every `Size`'s grid (6, 9 and 12), so a row has to fit the smallest | the `Size`'s grid | 9, 9 |
+| `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |
