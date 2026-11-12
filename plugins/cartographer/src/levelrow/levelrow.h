@@ -44,6 +44,7 @@ inline constexpr int RecUMinOffset = 0x2bc;                // byte: MonUMin of t
 inline constexpr int RecUMaxOffset = 0x2bd;                // byte: MonUMax of the game's difficulty
 inline constexpr size_t RecSpan = 0x2c0;                   // the bytes from the record start the plugin reads
 
+inline constexpr int MaxWeightSum = 255;                   // the group weight sum is one byte in the record
 inline constexpr int MaxMonsters = 10;                     // maps.txt Monsters: at most 10 entries
 inline constexpr int LastVanillaLevel = 137;               // Colossal Summit, the last vanilla 3.3.0 level; the slots start above it
 
@@ -127,8 +128,12 @@ auto CheckRecord(const RecordSnapshot& record, const Snapshot& row, int difficul
 // The row field writes for `request` (Level), only those whose value would change.
 auto PlanRow(const Request& request, const Snapshot& snapshot, bool level) -> std::vector<Field>;
 // The record field writes for `request` for the parts in `allowed`. Scaling uses the record's original values. Monsters: empty when
-// the list is empty, longer than MaxMonsters, holds a row outside 0..MaxRow or lacks a weight (0..255) per row.
+// the list is empty, longer than MaxMonsters, holds a row outside 0..MaxRow or lacks a weight (0..255) per row, or the weights sum to 0 or above MaxWeightSum (MonstersRefusal).
 auto PlanRecord(const Request& request, const RecordSnapshot& snapshot, const Parts& allowed) -> std::vector<Field>;
+
+// Why the Monsters list of `request` is not written (empty when it is fine or the list is empty): too many entries, a row outside
+// 0..MaxRow, a missing or out-of-range weight, weights that are all 0 or add up to more than MaxWeightSum.
+auto MonstersRefusal(const Request& request) -> std::string;
 
 // Reads and writes one field of a buffer (little-endian).
 auto Load(const uint8_t* buffer, int offset, int size) -> uint32_t;

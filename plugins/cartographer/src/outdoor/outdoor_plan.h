@@ -90,14 +90,6 @@ struct LevelRect {
 };
 LevelRect levelRectOf(const StampPlan &plan);
 
-// The seed the engine's own level build leaves in the level record: int32(drlg seed base) + level id, and the second word the
-// reseed stores (0x29a). Kept here so the unit tests pin the arithmetic.
-struct LevelSeed {
-	int32_t first = 0;
-	int32_t second = 0x29a;
-};
-LevelSeed levelSeedFor(uint32_t drlgSeedBase, int32_t levelId);
-
 // What the grid probe counts in the built level's flag grid: cells with a piece, covered cells (0x200) and void cells (0x100).
 struct GridCounts {
 	int cells = 0;
@@ -114,5 +106,35 @@ struct GridSample {
 	std::vector<uint64_t> flags;
 };
 std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &grid, GridCounts *counts = nullptr);
+
+// --- Rooms of the built level: the entry, event and boss rooms --------------------------------------------------------
+
+// A cell of the plan is 32 x 32 tiles and the engine builds it as rooms of 8 x 8 tiles. The map's Boss and event need one exact room (the
+// event tracker compares the room's rect), and the arrival needs one room to carry the level-entry mark, so each cell is reduced to the one
+// room nearest its centre. Rooms are the built level's, in absolute tiles, in the game's room list order.
+struct BuiltRoom {
+	int32_t x = 0;
+	int32_t y = 0;
+	int32_t w = 0;
+	int32_t h = 0;
+	uint32_t flags = 0; // room +0x50
+};
+
+// The bits the game's level-entry finder (0x3da650) looks for in a room's flags: bits 16 and 17.
+constexpr uint32_t kArrivalFlags = 0x30000;
+
+// The index of the room that lies wholly inside `cell` and whose centre is nearest the cell's centre (squared straight distance, then the
+// smaller y, then the smaller x), or -1 when the cell is not known or holds no room.
+int chooseCellRoom(const TileRect &cell, const std::vector<BuiltRoom> &rooms);
+
+struct ArrivalMark {
+	bool mark = false;       // false: change nothing, `why` says why (the game keeps its own arrival)
+	std::string why;
+	int room = -1;           // index into the rooms: the room to give kArrivalFlags
+	std::vector<int> clear;  // indexes of the other rooms that carry any of kArrivalFlags
+};
+// The room that becomes the level entry: the room of the plan's entrance cell (chooseCellRoom). Refuses, with the reason, when the plan has no
+// entrance, a room lies outside the plan's level rectangle (the build is not the plan) or the entrance cell holds no room.
+ArrivalMark planArrival(const StampPlan &plan, const std::vector<BuiltRoom> &rooms);
 
 } // namespace cartographer::outdoor

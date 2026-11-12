@@ -207,7 +207,7 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		}
 		const MapDef& map = tables->maps[id.mapIndex];
 		const bool maze = MapIsMaze(map);
-		const bool outdoor = !maze && cartographer::outdoor::outdoorTilesetKnown(map.tileset);
+		const bool outdoor = !maze && MapIsOutdoor(map);
 		const int slotLevel = SlotLevel(tables->slots, outdoor ? OutdoorSlot : MazeSlot);
 		ms::ApplyFacts facts;
 		facts.slotLevelMatches = slotLevel > 0 && slotLevel == static_cast<int>(id.slotLevel);

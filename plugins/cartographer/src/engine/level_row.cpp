@@ -165,7 +165,7 @@ auto ListText(const std::vector<int>& rows) -> std::string {
 
 // The slot level's region record of this game, or null with `why`. The array and the record are checked for memory only; whether
 // the record belongs to the level is decided by lr::CheckRecord against the row.
-auto RecordOf(const void* game, int level, std::string* why) noexcept -> uint8_t* {
+auto RecordOf(const void* game, int level, int64_t levelCount, std::string* why) noexcept -> uint8_t* {
 	const uint8_t* g = static_cast<const uint8_t*>(game);
 	if (g == nullptr) {
 		*why = "no game";
@@ -177,8 +177,8 @@ auto RecordOf(const void* game, int level, std::string* why) noexcept -> uint8_t
 	}
 	const uint8_t* array = nullptr;
 	std::memcpy(&array, g + GameRegionsOffset, sizeof(array));
-	if (array == nullptr || level <= 0 || !Readable(array + static_cast<size_t>(level) * sizeof(void*), sizeof(void*))) {
-		*why = "the game's region array has no entry for the level";
+	if (array == nullptr || level <= 0 || level >= levelCount || !Readable(array + static_cast<size_t>(level) * sizeof(void*), sizeof(void*))) {
+		*why = "the game's region array has no entry for the level (past the levels count or not readable)";
 		return nullptr;
 	}
 	uint8_t* record = nullptr;
@@ -224,7 +224,11 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			monsterWeights.clear();
 		}
 		std::string recordWhy;
-		uint8_t* record = RecordOf(game, level, &recordWhy);
+		int64_t levelCount = 0;
+		uint8_t* record = nullptr;
+		if (GameLevelCount(dataFlag, &levelCount, &recordWhy)) {
+			record = RecordOf(game, level, levelCount, &recordWhy);
+		}
 		const int difficulty = game == nullptr || !Readable(static_cast<const uint8_t*>(game) + GameDifficultyOffset, 1) ? -1 : static_cast<const uint8_t*>(game)[GameDifficultyOffset];
 
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -240,6 +244,11 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 		request.monsterWeights = monsterWeights;
 		request.density = map.density;
 		request.uniques = map.uniques;
+		if (const std::string refusal = lr::MonstersRefusal(request); !refusal.empty()) {
+			plog::Warn("map monsters: '%s' keeps the slot level's own monster list: %s", map.name.c_str(), refusal.c_str());
+			request.monsterRows.clear();
+			request.monsterWeights.clear();
+		}
 		if (map.champions > 0) {
 			plog::Info("map monsters: '%s': Champions %d%% is not applied (the game has no field for it)", map.name.c_str(), map.champions);
 		}

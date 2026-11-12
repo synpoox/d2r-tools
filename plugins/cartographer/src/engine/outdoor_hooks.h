@@ -6,10 +6,11 @@
 //
 // OFF by default (OutdoorBuild = 0 in cartographer.txt) until the game checks of issue #89 and #142 confirm the void marker and the
 // entry room. Fail open: a missing part, a plan that cannot be made or a level that is not as expected leaves that build to the game,
-// with the reason in the log. Nothing opens an outdoor map yet (issue #144); OutdoorMapOpened is the call it will make.
+// with the reason in the log. A Jungle map opens through portal.cpp (issue #144), which calls OutdoorMapOpened.
 // Notes and evidence: docs/reverse-engineering/cartographer.md section 8a.
 #pragma once
 
+#include "maze_hooks.h"
 #include "portal.h"
 #include "scan.h"
 
@@ -37,7 +38,7 @@ auto OutdoorBuildLive() -> bool;
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables);
 
 // An outdoor map is about to be opened through the Outdoor slot: the next build of that level uses it. `seedSalt` is mixed with a job id into the
-// layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's). Nothing calls this yet (issue #144).
+// layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's).
 void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed = 0);
 
 // True once the Outdoor slot level's build has started in this game (with or without a map open). A client then keeps the layout it has: the
@@ -47,6 +48,14 @@ auto OutdoorSlotRanAny() -> bool;
 // The seed of the open outdoor map (what map sync sends the clients), or 0.
 auto OutdoorOpenSeed() -> uint64_t;
 
+// Empty when the map just handed to OutdoorMapOpened can be planned on the Outdoor slot (the same cached plan the build uses); otherwise the
+// player-facing reason. Call right after OutdoorMapOpened, before the portal opens.
+auto OutdoorPlanProblem() -> std::string;
+
+// True when the Outdoor slot level was built with a map open (or is being built) in this game: it holds that layout for the game, so another
+// outdoor map cannot be opened until the game is left.
+auto OutdoorSlotBuilt() -> bool;
+
 // The portal did not open after all: forget the map.
 void OutdoorMapCancelled();
 
@@ -55,6 +64,16 @@ void OutdoorGameLeft();
 
 // The Outdoor slot level id, or -1.
 auto OutdoorSlotLevelId() -> int;
+
+// The rooms of the built Outdoor slot level at the centres of the plan's event and boss cells (the exact DRLG rect of one room each, which the
+// map events compare with the room the game populates), in the maze's form. Known once the slot build ran as planned; cleared when the game is
+// left. Not known when the layout has no such cell. Any thread.
+auto OutdoorEventRoom() -> MazeEventRect;
+auto OutdoorBossRoom() -> MazeEventRect;
+
+// OutdoorProbe: where the local player first stands in the Outdoor slot level, compared with the entrance cell (as MazeProbeArrival). Game thread.
+auto OutdoorArrivalPending() -> bool;
+void OutdoorProbeArrival(void* room, int32_t levelId);
 
 // Called by the level-build hook for every level. Returns true, with the game's result in *result, when it built the Outdoor slot level (the
 // caller returns *result); false when it left the build alone (not the slot, the setting is off, a part or the plan is missing, or the level is

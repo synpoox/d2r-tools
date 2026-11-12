@@ -205,25 +205,60 @@ void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tabl
 // The map is open: tells the clients that have said hello which map it is (map_sync.cpp). Never lets a failure reach the game.
 void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game, int level, bool maze) noexcept {
 	try {
-		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : 0);
+		const bool outdoor = MapIsOutdoor(map);
+		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor);
 	} catch (...) {
 		plog::Error("telling the clients about '%s' failed", map.name.c_str());
 	}
 }
 
-// Every map (Cave or Crypt) opens through the Maze slot and is built by the maze steering hooks.
+// A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
 	return MapIsMaze(map);
 }
 
-auto SlotNameFor(const MapDef&) noexcept -> const char* {
-	return MazeSlot;
+// A Jungle map opens through the Outdoor slot and is built by the outdoor build hook.
+auto IsOutdoorMap(const MapDef& map) noexcept -> bool {
+	return MapIsOutdoor(map);
+}
+
+auto SlotNameFor(const MapDef& map) noexcept -> const char* {
+	return MapSlotName(map);
+}
+
+// What stops an outdoor map from opening, or empty: OutdoorBuild is 0 (the hooks are then not installed), a part or hook is missing, the Outdoor slot row is
+// refused (a vanilla level, not Act 5) or has another LevelType or DrlgType than the tileset needs.
+auto OutdoorProblem(const MapDef& map, const Tables& tables) -> std::string {
+	if (tables.settings.outdoorBuild == 0) {
+		return "Cartographer: " + map.tileset + " maps need OutdoorBuild = 1 in cartographer.txt (it is 0, so the outdoor build is off). Set it and restart the game.";
+	}
+	if (!OutdoorBuildLive()) {
+		return "Cartographer: the outdoor build is not running, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
+	}
+	for (const Slot& slot : tables.slots) {
+		if (EqualsNoCase(slot.name, OutdoorSlot)) {
+			if (const std::string refusal = OutdoorSlotRefusal(slot); !refusal.empty()) {
+				return "Cartographer: " + refusal + ", so " + map.tileset + " maps cannot be built. Run tools\\install.ps1 and restart the game.";
+			}
+		}
+	}
+	const std::string problem = OutdoorSlotProblem(map, tables.slots);
+	return problem.empty() ? problem : "Cartographer: " + problem;
 }
 
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).
 auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::string {
 	if (level <= 0) {
-		return "Cartographer: the Maze slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
+		return std::string("Cartographer: the ") + SlotNameFor(map) + " slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
+	}
+	if (IsOutdoorMap(map)) {
+		if (const std::string problem = OutdoorProblem(map, tables); !problem.empty()) {
+			return problem;
+		}
+		if (OutdoorSlotBuilt()) {
+			return "Cartographer: the Outdoor level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+		}
+		return {};
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
@@ -240,10 +275,21 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 }
 
 // Opens `map` through its slot. A maze map hands its plan to the maze hooks first; if the game then opens no portal, the plan is dropped.
-auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level, bool* shapedOut = nullptr) noexcept -> int32_t {
+// `refusal` is set, with the portal not opened, when an outdoor map's plan cannot be made.
+auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level, std::string* refusal, bool* shapedOut = nullptr) noexcept -> int32_t {
 	const bool maze = IsMazeMap(map);
+	const bool outdoor = IsOutdoorMap(map);
 	if (maze) {
 		MazeMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
+	}
+	if (outdoor) {
+		OutdoorMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
+		// The plan is made now (and cached for the build), so a map that cannot be planned is refused before a portal exists.
+		*refusal = OutdoorPlanProblem();
+		if (!refusal->empty()) {
+			OutdoorMapCancelled();
+			return 0;
+		}
 	}
 	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
@@ -262,6 +308,9 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
+	}
+	if (outdoor && opened == 0) {
+		OutdoorMapCancelled();
 	}
 	return opened;
 }
@@ -383,7 +432,12 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 			itemStats.clear();
 		}
 	}
-	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level);
+	std::string refusal;
+	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level, &refusal);
+	if (!refusal.empty()) {
+		Tell(refusal);
+		return;
+	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, player, itemStats);
@@ -421,7 +475,13 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 		return out;
 	}
 	plog::Info("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
-	out.opened = OpenMapPortal(game, player, *map, *tables, level, &out.shaped) != 0;
+	std::string refusal;
+	out.opened = OpenMapPortal(game, player, *map, *tables, level, &refusal, &out.shaped) != 0;
+	if (!out.opened && !refusal.empty()) {
+		out.refused = true;
+		out.why = refusal;
+		return out;
+	}
 	if (!out.opened) {
 		out.why = "the game would not open a portal for " + map->name;
 		return out;
@@ -517,16 +577,23 @@ namespace {
 
 // MazeProbe: once per game, where the local player stands when it is in the Maze slot level (compared with the entrance room).
 void MazeArrivalCheck(Unit* unit) noexcept {
-	if (!MazeArrivalPending()) {
-		return;  // the common case: MazeProbe is off, or the arrival was logged
+	const bool maze = MazeArrivalPending(), outdoor = OutdoorArrivalPending();
+	if (!maze && !outdoor) {
+		return;  // the common case: the probes are off, or the arrivals were logged
 	}
-	const int slot = MazeSlotLevelId();
-	if (slot <= 0 || g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
+	if (g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
 		return;
 	}
 	void* room = Call<UnitRoomFn>(UnitRoom)(unit);
-	if (room != nullptr && Call<RoomLevelFn>(RoomLevelId)(room) == slot) {
-		MazeProbeArrival(room, slot);
+	if (room == nullptr) {
+		return;
+	}
+	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
+	if (maze && level == MazeSlotLevelId() && level > 0) {
+		MazeProbeArrival(room, level);
+	}
+	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {
+		OutdoorProbeArrival(room, level);
 	}
 }
 
@@ -546,7 +613,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		g_firstLogged = true;  // once per game, and only once the player id is known: settles whether LocalPlayerReady.playerId is the unit id
 		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), known);
 	}
-	if (known != NoPlayer && MazeSteeringLive() && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+	if (known != NoPlayer && (MazeSteeringLive() || OutdoorBuildLive()) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MazeArrivalCheck(unit);
 	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {

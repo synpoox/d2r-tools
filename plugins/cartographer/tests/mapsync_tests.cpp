@@ -85,6 +85,9 @@ TEST_CASE("decode refuses a bad message") {
 	bad[0] = kWireVersion + 1;
 	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadVersion);
 	std::memcpy(bad, buf, sizeof(bad));
+	bad[0] = 1;  // a literal v1 message (before the outdoor flag) is refused by version before any field is read
+	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadVersion);
+	std::memcpy(bad, buf, sizeof(bad));
 	bad[1] = 0x04;
 	CHECK(decodeMapOpen(bad, sizeof(bad), &out) == DecodeError::BadFlags);
 	std::memcpy(bad, buf, sizeof(bad));

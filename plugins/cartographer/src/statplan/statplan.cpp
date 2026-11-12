@@ -167,6 +167,10 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 			skip("it rolled 0, which changes nothing");
 			continue;
 		}
+		if (p.target == Target::Players && plan.players.size() >= kMaxPlayerStats) {
+			skip("the game sends at most " + std::to_string(kMaxPlayerStats) + " stats of a list to the character sheet");
+			continue;
+		}
 		Entry e{p.stat, id, p.value};
 		(p.target == Target::Monsters ? plan.monsters : plan.players).push_back(e);
 	}

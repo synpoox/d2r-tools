@@ -3,7 +3,9 @@
 #include "core/part_signatures.h"
 #include "engine/auto_check.h"
 #include "engine/event_6b.h"
+#include "engine/game_memory.h"
 #include "engine/maze_hooks.h"
+#include "engine/outdoor_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "hookguard.h"
@@ -45,6 +47,8 @@ constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte st
 constexpr uint32_t DataFlagLimit = 4;       // the base accessor takes a data flag below 4 (anything else is a trap in the engine)
 constexpr int DtMonRowsOffset = 0xf58;      // monstats row vector pointer; the 64-bit count is at +0xf60
 constexpr int DtMonCountOffset = 0xf60;
+constexpr int DtLevelCountOffset = 0x1468;  // 64-bit count of the levels rows (the region builder 0x508750 loops to it)
+constexpr int MonStatsSpawnFlagOffset = 0x3c;  // byte in a monstats row: the group builder 0x509940 keeps a row only when bit 0 is set
 constexpr int MonStatsWeightOffset = 0x64;  // uint8 in a monstats row: what the region builder (0x509c2c) takes as the group's weight
 constexpr int DtMonMapOffset = 0xf70;      // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
 constexpr int DtSuperRowsOffset = 0x1078;   // superuniques row vector pointer; the 64-bit count is at +0x1080
@@ -645,7 +649,13 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		if (!state->tracker) {
 			std::optional<ep::Rect> plan;
-			if (state->maze) {
+			const bool outdoor = !state->maze && state->level == OutdoorSlotLevelId();  // the Outdoor slot level: its plan's rooms (issue #145)
+			if (outdoor) {
+				const MazeEventRect m = OutdoorEventRoom();
+				if (m.known && m.levelId == state->level) {
+					plan = ep::Rect{m.x, m.y, m.w, m.h};
+				}
+			} else if (state->maze) {
 				const MazeEventRect m = MazeEventRoom();
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
@@ -655,11 +665,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			// The map's own Boss goes in the plan's boss room (the maze's far cell), apart from the event room. No plan rect, no map Boss.
-			// Outdoor (issue #145): the stamp plan's boss rectangle is read here instead, and the same tracker and spawn follow.
 			if (state->bossArmed) {
 				std::optional<ep::Rect> bossPlan;
-				if (state->maze) {
-					const MazeEventRect b = MazeBossRoom();
+				if (outdoor || state->maze) {
+					const MazeEventRect b = outdoor ? OutdoorBossRoom() : MazeBossRoom();
 					if (b.known && b.levelId == state->level) {
 						bossPlan = ep::Rect{b.x, b.y, b.w, b.h};
 					}
@@ -668,7 +677,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze plan)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze or outdoor plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {
@@ -846,14 +855,41 @@ auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std
 				weights->clear();
 				return false;
 			}
+			// The game's group builder (0x509940) drops a monster whose monstats +0x3c lacks bit 0 (the mask at 0x1d996d0 is 1).
+			if ((At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsSpawnFlagOffset) & 1) == 0) {
+				plog::Warn("map monsters: '%s' (monstats row %d) is left out: the game does not put it in a level's monster groups", id.c_str(), row);
+				continue;
+			}
 			rows->push_back(row);
 			weights->push_back(At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsWeightOffset));
+		}
+		if (rows->empty() && !ids.empty()) {
+			*why = "the game keeps none of the listed monsters in a level's monster groups";
+			return false;
 		}
 		return true;
 	} catch (...) {
 		rows->clear();
 		weights->clear();
 		*why = "the lookup failed";
+		return false;
+	}
+}
+
+auto GameLevelCount(uint32_t dataFlag, int64_t* count, std::string* why) noexcept -> bool {
+	try {
+		const uint8_t* dt = TablesBase(dataFlag, why);
+		if (dt == nullptr) {
+			return false;
+		}
+		if (!Readable(dt + DtLevelCountOffset, sizeof(int64_t))) {
+			*why = "the levels count cannot be read";
+			return false;
+		}
+		*count = At<int64_t>(dt, DtLevelCountOffset);
+		return true;
+	} catch (...) {
+		*why = "the levels count lookup failed";
 		return false;
 	}
 }
