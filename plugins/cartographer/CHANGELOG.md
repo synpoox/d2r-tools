@@ -2,13 +2,16 @@
 
 ## Unreleased
 
+- `cartographer check` and the report now say when `core-maps` is loaded too; use one or the other.
+- Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, reports bad rows, and lets a map's `Shape` name a `shapes.txt` row (read and checked only; not applied in game yet). An empty optional file gives a note, `mapstats.txt` needs `Min` and `Max` on every row, and a column named twice is reported.
 - New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
 - Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
 - Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.
 - A map's item opens a red portal to that map from Harrogath in Hell, once per game.
 - `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map without its item.
 - `tools\install.ps1` adds the map level to your mod's tables (no items), checks every table first and keeps a `.bak` copy (safe to run twice).
+- Reads the tables from the mod folder that D2RLoader 1.3.1 passes (before, no maps were found with that version).
 - Without a mod, no tables are read and there are no maps; only the default settings apply.
 - A `signatures.txt` entry that cannot be checked (wildcards where the game is patched, or not at the start of a function) is refused and logged.
-- Finds the engine parts the portal needs by byte signature (checked against game build 93847 only, not yet in game); the portal stays off if any part is not found exactly once.
+- Finds the engine parts the portal needs by byte signature (checked in game on build 93847); the portal stays off if any part is not found exactly once.
 - `cartographer check` looks again for the engine parts the game calls and turns the portal on if all are now found; a part the plugin hooks has to be found at load, or the game must be restarted.

@@ -5,6 +5,7 @@
 // Console command "cartographer": "check" re-reads the tables and prints what is wrong; "open <Name>" opens a map without an item.
 #include <D2RLPlugin/api.h>
 
+#include "core/coexist.h"
 #include "core/tables.h"
 #include "core/text.h"
 #include "core/tsv.h"
@@ -28,7 +29,7 @@ constexpr const char* PluginName = "cartographer";
 constexpr const char* PluginVersion = "0.1.0";  // PluginInfo::version too; CHANGELOG.md
 
 const D2RL::PluginContext* g_context = nullptr;
-std::wstring g_tableDir;   // <mod>\<Mod>.mpq\data\global\excel\d2rloader\cartographer
+std::wstring g_tableDir;   // <Mod>.mpq\data\global\excel\d2rloader\cartographer
 std::wstring g_excelDir;   // ...\excel: the game's own tables, for the name checks
 std::wstring g_reportPath;
 std::vector<carto::SignatureOverride> g_overrides;
@@ -48,6 +49,11 @@ auto Narrow(const std::wstring& s) -> std::string {
 		out.push_back(c < 0x80 ? static_cast<char>(c) : '?');
 	}
 	return out;
+}
+
+// core-maps and Cartographer are one-or-the-other (ADR-0001). Detected by module name; nothing is changed either way.
+auto CoreMapsNotice() -> std::string {
+	return carto::CoreMapsNotice(GetModuleHandleW(L"core-maps.dll") != nullptr);
 }
 
 auto ReadFile(const std::wstring& path, std::string* text) -> bool {
@@ -125,7 +131,8 @@ struct Loaded {
 	std::shared_ptr<carto::Tables> tables = std::make_shared<carto::Tables>();
 };
 
-// Reads all three tables. A missing maps.txt or cartographer.txt is fine: there are no maps, and the defaults apply.
+// Reads the tables. A missing maps.txt or cartographer.txt is fine: there are no maps, and the defaults apply.
+// shapes.txt, mapstats.txt and mapevents.txt are optional too.
 auto LoadAll() -> Loaded {
 	Loaded loaded;
 	if (g_tableDir.empty()) {
@@ -141,9 +148,22 @@ auto LoadAll() -> Loaded {
 		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
 	}
 	std::string text;
+	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt, mapstats.txt and mapevents.txt are all optional.
+	if (ReadFile(g_tableDir + L"\\" + Widen(carto::ShapesFile), &text)) {
+		loaded.tables->shapes = carto::LoadShapes(text, loaded.report);
+	}
+	text.clear();
+	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapStatsFile), &text)) {
+		loaded.tables->pool = carto::LoadMapStats(text, loaded.report);
+	}
+	text.clear();
+	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapEventsFile), &text)) {
+		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
+	}
+	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
-		fromFile = carto::LoadMaps(text, names, loaded.report);
+		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes);
 	}
 	loaded.tables->maps = std::move(fromFile);
 	text.clear();
@@ -185,7 +205,12 @@ void WriteReport(const Loaded& loaded) {
 		return;
 	}
 	out << "Cartographer " << PluginVersion << " report\r\n";
-	out << loaded.tables->maps.size() << " map(s) loaded, " << loaded.report.Errors() << " problem(s).\r\n\r\n";
+	out << loaded.tables->maps.size() << " map(s) loaded, " << loaded.report.Errors() << " problem(s).\r\n";
+	const std::string coreMaps = CoreMapsNotice();
+	if (!coreMaps.empty()) {
+		out << "WARNING: " << coreMaps << "\r\n";
+	}
+	out << loaded.tables->shapes.shapes.size() << " shape(s), " << loaded.tables->pool.size() << " property row(s) and " << loaded.tables->events.size() << " event(s) loaded (read and checked; not applied in game yet).\r\n\r\n";
 	for (const carto::Problem& p : loaded.report.problems) {
 		out << carto::Report::Line(p) << "\r\n";
 	}
@@ -202,7 +227,20 @@ auto Reload() -> Loaded {
 	for (const carto::Problem& p : loaded.report.problems) {
 		plog::Warn("%s", carto::Report::Line(p).c_str());
 	}
+	if (const std::string coreMaps = CoreMapsNotice(); !coreMaps.empty()) {
+		plog::Warn("%s", coreMaps.c_str());
+	}
 	return loaded;
+}
+
+// core-maps may load after Cartographer, so the load-time check can miss it. The first game start re-checks, once.
+void OnFirstGameStart() noexcept {
+	try {
+		if (!CoreMapsNotice().empty()) {
+			(void)Reload();
+		}
+	} catch (...) {
+	}
 }
 
 void Say(const D2RL::ConsoleCommandContext* command, const std::string& line) {
@@ -226,6 +264,9 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			(void)carto::RescanPortal();
 			Say(command, std::string("Cartographer ") + PluginVersion + ": " + std::to_string(loaded.tables->maps.size()) + " map(s), " +
 			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : g_loadFailed ? "off; loading failed, see the plugin log." : carto::NeedsRestart() ? "off; a part it hooks was missing at load, so a restart is needed once it is fixed." : "off."));
+			if (const std::string coreMaps = CoreMapsNotice(); !coreMaps.empty()) {
+				Say(command, "WARNING: " + coreMaps);
+			}
 			int shown = 0;
 			for (const carto::Problem& p : loaded.report.problems) {
 				if (++shown > 10) {
@@ -301,9 +342,15 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "none", image);
 	try {
-		if (context->modDirectory != nullptr && context->activeMod != nullptr) {
+		if (context->modDirectory != nullptr && context->modDirectory[0] != L'\0' && context->activeMod != nullptr) {
+			// Older loaders pass the mod folder, which holds <Mod>.mpq; D2RLoader 1.3.1 passes the <Mod>.mpq folder itself.
+			// <Mod>.mpq is probed first: the 1.3.1 folder does not hold a nested <Mod>.mpq, so neither layout picks the other's path.
 			g_excelDir = std::wstring(context->modDirectory) + L"\\" + Widen(context->activeMod) + L".mpq\\data\\global\\excel";
+			if (GetFileAttributesW(g_excelDir.c_str()) == INVALID_FILE_ATTRIBUTES) {
+				g_excelDir = std::wstring(context->modDirectory) + L"\\data\\global\\excel";
+			}
 			g_tableDir = g_excelDir + L"\\d2rloader\\cartographer";
+			plog::Info("mod folder %s, tables read from %s", Narrow(context->modDirectory).c_str(), Narrow(g_tableDir).c_str());
 		}
 		std::wstring logDir = context->pluginLogPath != nullptr ? context->pluginLogPath : L"";
 		const size_t slash = logDir.find_last_of(L"\\/");
@@ -316,6 +363,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		std::vector<carto::PartStatus> parts;
+		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);
 	} catch (...) {
 		g_loadFailed = true;

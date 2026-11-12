@@ -13,7 +13,8 @@ What the plugin reads, and what takes effect in game today:
 | `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
 | `cartographer.txt` | Yes, checked the same way. | No. The settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
-| `mapstats.txt`, `mapevents.txt`, `shapes.txt`, `tilesets.txt` | Not yet. | No. The rules below are what the code behind them follows, but nothing in the plugin draws, rolls or builds from these files yet (generated layouts, properties and events come in later phases). A file you add now is ignored. |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | No. They are read and checked, but nothing draws properties, rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
+| `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
 happens in game.
@@ -39,19 +40,19 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. Names from `shapes.txt` are not accepted yet. A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
-| `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
+| `Size` | no | `Small`, `Medium` or `Large` (checked only; not applied yet) | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (checked only; not applied yet) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
 | `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
-| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match) | the tileset's own monsters | `quillrat1,zombie1` |
+| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; checked only, not applied yet) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
-| `Properties` | no | Random properties for this map, 0 to 20 | the `cartographer.txt` value (6) | 4 |
-| `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
-| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 | 0 | 50 |
-| `Champions` | no | Percent more champion packs, 0 to 1000 | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 to 1000 | 0 | 25 |
+| `Properties` | no | Random properties for this map, 0 to 20 (checked only; not applied yet) | the `cartographer.txt` value (6) | 4 |
+| `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
+| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
+| `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
+| `Uniques` | no | Percent more unique packs, 0 to 1000 (checked only; not applied yet) | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -85,7 +86,10 @@ There is no text column. The text comes from the game's own stat description.
 Rules and limits:
 
 - `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
-- `Min` and `Max` beyond 500,000,000 (or below -500,000,000) are cut to that, and `check` warns.
+- `Min` and `Max` need a column and a number on every row; a blank cell is an error and the row is skipped.
+- `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
+- An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
+- A column named twice in the header is an error; only the first one is used.
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
@@ -148,7 +152,7 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 ## shapes.txt (optional, advanced)
 
-Adds a new shape defined with numbers. Use its name in the `Shape` column once the loader accepts it (it does not yet). Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
+Adds a new shape defined with numbers. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
 
 Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column. The generator gives each layout a fixed amount of work (about 25 ms at most on a desktop), so a row that is too tight to build is reported as too tight right away instead of making the game wait. A row parses with at most 48 tries of that size, about a second at the very worst.
 
