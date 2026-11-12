@@ -13,7 +13,7 @@ What the plugin reads, and what takes effect in game today:
 | `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
 | `cartographer.txt` | Yes, checked the same way. | No. The settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | No. They are read and checked, but nothing draws properties, rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters and to the player (written and unit tested; **not yet verified in game**). `shapes.txt` and `mapevents.txt`: no, they are read and checked, but nothing rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
@@ -48,7 +48,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; checked only, not applied yet) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
-| `Properties` | no | Random properties for this map, 0 to 20 (checked only; not applied yet) | the `cartographer.txt` value (6) | 4 |
+| `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
@@ -90,6 +90,8 @@ Rules and limits:
 - `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
 - An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
 - A column named twice in the header is an error; only the first one is used.
+- `Stat` must be a `Stat` name in the game's `itemstatcost.txt` (exact spelling). `check` reports a name it does not find, with a suggestion. A row with a wrong name is still in the pool; if it is drawn it is skipped and the plugin log says so. A value that rolls 0 is skipped, as it changes nothing.
+- When a map opens, `Monsters` rows are applied to every monster that spawns in the map level, and `Players` rows to the player while the player is in the map level. Neither has been seen working in a game yet; the plugin log (`statprobe:` lines) records what happened.
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.

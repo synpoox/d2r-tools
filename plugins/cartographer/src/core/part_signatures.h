@@ -25,4 +25,15 @@ inline constexpr const char* FindFreeSpot = "48 89 5C 24 08 55 56 57 41 54 41 55
 // prologue into the body so no other function matches by register allocation alone; the hook cuts the first 14 bytes.
 inline constexpr const char* PlayerTick = "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??";
 
+// Map stats (cartographer.md section 6). The stat list functions are only called. SetListStat and AttachStatList are
+// D2RLoader thunks (jmp [rip+x], then the dead original body): call the thunk, never hook it.
+inline constexpr const char* NewStatList = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 89 4C 24 08 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC B0 00 00 00";
+inline constexpr const char* SetListStat = "FF 25 ?? ?? ?? ?? 90 90 90 90 66 89 44 24 28";
+inline constexpr const char* AttachStatList = "FF 25 ?? ?? ?? ?? 90 90 90 90 90 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 A0 00 00 00";
+inline constexpr const char* DetachStatList = "40 53 48 83 EC 20 48 8B DA E8 ?? ?? ?? ?? 0F B6 C8 48 8B D3 48 83 C4 20 5B E9 ?? ?? ?? ??";
+inline constexpr const char* FreeStatList = "48 85 D2 74 ?? 83 7A 1C 00 0F 8D ?? ?? ?? ?? C3 FF 25";
+// The monster setup (params, monster) called once from the spawn core after the unit exists and is in its room. The
+// 14-byte prefix alone matches 11 sites, so the signature runs on to 21 bytes; the hook cuts the first 14.
+inline constexpr const char* MonsterSetup = "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57 48 83 EC 30 8B 69 18";
+
 }  // namespace carto::sig

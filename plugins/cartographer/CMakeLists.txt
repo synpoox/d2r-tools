@@ -63,6 +63,7 @@ target_link_libraries(cartographer_core PUBLIC cartographer_layout cartographer_
 add_library(cartographer SHARED
 	src/plugin.cpp
 	src/engine/portal.cpp
+	src/engine/stat_apply.cpp
 	src/log.cpp
 	src/cartographer.rc
 )

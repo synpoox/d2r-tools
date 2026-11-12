@@ -17,6 +17,13 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   item spell 16 (`pSpell` in `misc.txt`); `cartographer check` names a map whose item is missing, unknown, shared or lacks it.
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
+- **Map properties** (written, **not yet verified in game**): when a map opens, `Properties` random properties are drawn
+  from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
+  monster that spawns in the map level, `Players` rows to the player while the player is in the map level. They are removed
+  when the player leaves the map level or the game. Each part is found by byte signature at load; a part that is not found
+  once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
+  (`Level`, `Density`, ...), `ItemStats`, the panel and events are not applied yet. The plugin log gets `statprobe:` lines
+  that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
 - **Console open**: `cartographer open <Name>` opens the named map's portal itself, with no item, through the same gates. It needs
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
   refuses and says so. Not tried in a game yet.
@@ -68,7 +75,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
 | Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
-| Properties, EventChance, Density, Champions, Uniques | Numbers, kept for later phases | cartographer.txt |
+| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (not yet verified in game), the rest are kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0) and
 `Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
@@ -94,6 +101,10 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
   - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
     (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);
   - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
+- Map properties: unit tests of the draw and the apply plan (`statplan_tests`), and the six stat parts' signatures, each
+  unique and resolving to its recorded address in a dump of build 93847 (`check_portal_signatures.py`). **Not run in a game**:
+  that the stats take effect, show the game's text, reach the client and are removed again are the checks in
+  `docs/reverse-engineering/cartographer.md` section 7.
 - Not exercised in game: a Hell-difficulty open that succeeds, the character level gate, the "no free spot" gate, an ordinary
   spell-16 item that no map names compared with vanilla, and the spell-16 use with no matching check (below).
 - Seen in game, cause not known: a town portal scroll used on the map level itself did nothing. No comparison without

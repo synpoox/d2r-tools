@@ -328,6 +328,22 @@ TEST_CASE("signatures: every recorded part signature parses and has at least 24 
 	}
 }
 
+TEST_CASE("signatures: every map stats part signature parses; the hooked one pins the 14 bytes it cuts") {
+	const char* const all[] = {sig::NewStatList, sig::SetListStat, sig::AttachStatList, sig::DetachStatList, sig::FreeStatList, sig::MonsterSetup};
+	for (const char* text : all) {
+		Pattern p{};
+		INFO(text);
+		CHECK(ParsePattern(text, &p));
+		CHECK(p.size >= 15);
+	}
+	Pattern hook{};
+	REQUIRE(ParsePattern(sig::MonsterSetup, &hook));
+	CHECK(hook.size == 21);
+	for (size_t i = 0; i < 14; ++i) {
+		CHECK_FALSE(hook.wild[i]);  // the guard is the exact entry bytes
+	}
+}
+
 TEST_CASE("an open request is served once, in time, and expires when the game never serves it") {
 	OpenRequest request;
 	CHECK(request.Take(0, 5000).state == OpenRequest::State::None);
