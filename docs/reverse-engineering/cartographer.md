@@ -491,6 +491,36 @@ See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Ite
 3. A slot id built with its second `0x3eb850` call suppressed: clean build, arrival and walk (Q3).
 4. Optional: sizing the level to the layout span instead of the centred capacity (Q1 lopsided check).
 
+### Game checks of 2026-11-12 (second run, issue #99)
+
+Run in a test slot (D2R build 93847, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty, `MazeProbe 1`), after the arrival probe was rewritten (see "Arrival room" above). The mod's tables were vanilla plus the installer's `levels.txt`, `lvlprest.txt`, `lvlmaze.txt` and `misc.txt`, and one hand-added level 139 (DrlgType 1, LevelType 3 for Cave or 4 for Crypt, 360 x 360, OffsetX 6000, `Warp0..7` -1), `slots.txt` `Maze 139`. Per game: a new game, `cartographer open <Name>`, enter the portal, read the `[maze probe]` lines. **live** = seen in the running game.
+
+| # | Check | Level | Result |
+|---|---|---|---|
+| 1 | Cave maps built, planned grid equal, arrival against the entrance cell | live | 6 Cave games (Corridor 2, Winding 2, Loop 2): all "built as planned", built grid equal to the plan, 0 crash files. Arrival: see the next table |
+| 2 | Crypt maps built | live | `CryptBranching` (26 rooms), `CryptCorridor` (10), `CryptLoop` (31): all "built as planned", grid equal to the plan, 0 crashes |
+| 3 | Reverse tileset check | live | `CaveWinding` on the Crypt slot: refused when opened ("the Maze slot level is a Crypt level (LevelType 4), so it cannot build the Cave map ... needs LevelType 3"), no portal, no crash |
+| 4 | Nightmare and Hell | not run | The test save is locked to Normal; the save was not edited |
+
+Arrival against the entrance cell (`[maze probe] arrival` lines: the player's DRLG room on the first tick in the level, by plan cell, against the cell of the engine room with the Prev piece):
+
+| Game | Arrival (plan cell) | Entrance cell | Verdict |
+|---|---|---|---|
+| Cave Corridor | (6048,72) | (6048,0) | not in the entrance |
+| Cave Winding | (6120,72) | (6192,144) | not in the entrance |
+| Cave Winding | (6048,48) | (6000,192) | not in the entrance |
+| Crypt Branching | (6024,40) | (6048,0) | not in the entrance |
+| Crypt Corridor | (6016,24) | (6032,24) | not in the entrance |
+| Cave Loop (2), Crypt Loop (1) | (6096,96), (6096,72), (6040,40) | unknown | no verdict: 0 entrance cells ("entrance an ordinary room"), the probe prints "the entrance cell is unknown" |
+
+In all 5 samples with a known entrance the player arrived in another room. Suspected cause (not proven): the level-entry finder `0x3da650` (section 5 Q3: first room with flag `0x30000`, then the warp rooms, then the centre, then a seeded random room) does not pick the plugin's cell. The Loop maps have no entrance cell by design, so there is nothing to compare. Tracked in a separate issue; no code was changed in this run. One further Cave Corridor game logged no arrival line.
+
+Crash met while setting the slot up: a crash at image `+0x66259d` on arrival in level 139 came from a hand-made `levels.txt` row with `Warp0..7` = 0. With -1, as `tools\install.ps1` writes, it does not happen. Not a plugin fault.
+
+Games toward the 50-games check: this run, 9 clean built games (6 Cave, 3 Crypt) and 1 clean refusal game, none with a crash file; with the 46 Cave games of the first run that is 55 clean built games. They were run in separate sessions on separate table states, not in one session.
+
+Not run: Nightmare and Hell, a TCP/IP client, a second map in the same game on the Crypt slot, a slot with an engine-side Fixed flag.
+
 ## 6. Map stats and events engine checks (issue #72)
 
 Answers four static questions for plan phases 5 and 6 (applying map stats, density and level, events, entry text). Everything is read from the build 93847 dump (Capstone disassembly; Ghidra decompiles were a reading aid only). Nothing was run in a game. Each claim carries a level: **static** (read from the dump), **inference** (follows from static facts, not seen running) or **needs game** (with the exact check). "Left for the game" at the end lists what stays open.

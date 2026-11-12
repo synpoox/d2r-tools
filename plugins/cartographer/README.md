@@ -164,7 +164,8 @@ Run in game for Cave maps (see Tested): the plan, the steered build, the tileset
   - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;
   - a slot too small for the plan (60 x 60) logs the reason and the game's own maze is built, no crash;
   - entering the slot with no map opened builds the game's own maze;
-  - not checked: which room the player arrives in (the probe cannot tell), a Crypt slot, Nightmare and Hell.
+  - (second run, 2026-11-12) 3 Crypt maps (`Branching`, `Corridor`, `Loop`) built as planned with no crash, and a Cave map on a Crypt slot is refused; in 5 samples the player did not arrive in the planned entrance cell (tracked in an issue, not fixed);
+  - not checked: Nightmare and Hell.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
