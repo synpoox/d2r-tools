@@ -17,7 +17,7 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`. The installer reads it, so do this first.
 3. Run the installer from the repository's `plugins\cartographer` folder (it is not in the release zip):
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`
-4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row and a `superuniques.txt` row per boss (each table backed
+4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row, the `cmap` item type to `itemtypes.txt` and a `superuniques.txt` row per boss (each table backed
    up once as `.bak`), and writes `slots.txt`. It is safe to run twice. Expect lines like:
 
    ```
