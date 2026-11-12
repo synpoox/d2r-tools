@@ -305,6 +305,14 @@ TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
 	}
 }
 
+TEST_CASE("boss keys of UTF-8 names with different case match the installer's") {
+	// Same keys tools/install.ps1 wrote for these names on a scratch copy of the vanilla tables (A-Z folded only, U+00A0 kept).
+	CHECK(BossKey("Ren\xC3\xA9 Lost") == "cartoboss:Ren_C3_A9_20Lost");
+	CHECK(BossKey("REN\xC3\x89 LOST") == "cartoboss:REN_C3_89_20LOST");
+	CHECK(BossKey("Nbsp\xC2\xA0") == "cartoboss:Nbsp_C2_A0");
+	CHECK(BossKey("\xC2\xA0Lead") == "cartoboss:_C2_A0Lead");
+}
+
 TEST_CASE("a map's Boss resolves to a bosses.txt entry only") {
 	const auto bosses = Bosses();
 	Report report;
