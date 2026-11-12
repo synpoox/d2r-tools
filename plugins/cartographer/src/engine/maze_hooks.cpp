@@ -721,6 +721,11 @@ void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
 	plog::Info("maze map '%s' (%s, %s, %s) opened with seed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), static_cast<unsigned long long>(job->seed));
 }
 
+auto MazeOpenSeed() -> uint64_t {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->seed : 0;
+}
+
 void MazeMapCancelled() {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();

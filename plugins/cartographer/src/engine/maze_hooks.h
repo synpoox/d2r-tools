@@ -29,6 +29,9 @@ void SetMazeTables(const std::shared_ptr<const Tables>& tables);
 // A maze map is about to be opened through the Maze slot: the next build of that level uses it. Call before the portal opens.
 void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt);
 
+// The layout seed of the map opened last (the seed MazeMapOpened chose), or 0 when none is open. For the map sync (host to client).
+auto MazeOpenSeed() -> uint64_t;
+
 // The portal did not open after all: forget the map.
 void MazeMapCancelled();
 
