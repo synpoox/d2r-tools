@@ -31,6 +31,18 @@ void SetMazeTables(const std::shared_ptr<const Tables>& tables);
 // A maze map is about to be opened through the Maze slot: the next build of that level uses it. Call before the portal opens.
 void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt);
 
+// A TCP/IP client was told the host's map (map sync, phase 7 part 2): the next slot build on this client uses the host's layout seed with this
+// client's own row of maps.txt. False, and nothing changed, when the seed is 0, the maze steering is off, or the slot level was already built
+// here (with or without a map open): it is not rebuilt. Never call it on a host or in single player.
+auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostSeed) -> bool;
+
+// True once the Maze slot level was built, or is being built, in this game, whether or not a map was open then.
+auto MazeSlotRanAny() -> bool;
+
+// The data flag the game last called the level build with in this game, or -1 before any build. On a remote client every build is the
+// client's own, so this is the flag its tables are looked up with. The map sync's client apply reads it for the levels row.
+auto MazeLevelDataFlag() -> int;
+
 // The layout seed of the map opened last (the seed MazeMapOpened chose), or 0 when none is open. For the map sync (host to client).
 auto MazeOpenSeed() -> uint64_t;
 
@@ -49,6 +61,9 @@ auto MazeSlotBuilt() -> bool;
 
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.
 auto MazeArrivalPending() -> bool;
+
+// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot, not the Preset slot.
+auto MapIsMaze(const MapDef& map) -> bool;
 
 // Empty, or why the Maze slot level cannot build `map` (a Cave level cannot build a Crypt map, and the other way round).
 auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string;
