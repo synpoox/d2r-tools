@@ -107,6 +107,9 @@ TEST_CASE("autocheck: the arrival result reads as pass, fail, unreadable or not 
 	CHECK_FALSE(arrivalVerdict(3, true).pass);
 	CHECK(arrivalVerdict(3, true).detail.find("[outdoor probe] arrival") != std::string::npos);
 	CHECK(arrivalVerdict(3, false).detail.find("[maze probe] arrival") != std::string::npos);
+	CHECK(arrivalVerdict(4, true).settled);
+	CHECK_FALSE(arrivalVerdict(4, true).pass);
+	CHECK(arrivalVerdict(4, true).detail.find("left to the game") != std::string::npos);
 }
 
 TEST_CASE("autocheck: an item that does not apply is written N/A and counted apart from pass") {
