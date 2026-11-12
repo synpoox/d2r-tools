@@ -272,6 +272,30 @@ TEST_CASE("table text: a UTF-8 byte order mark is dropped, invalid UTF-8 takes t
 	CHECK(NormalizeTableText("\xA0", &fromLatin1) == "\xC2\xA0");  // a lone Latin-1 non-breaking space
 }
 
+TEST_CASE("UTF-8 validator boundaries: invalid first bytes, overlong, surrogate and out-of-range forms are rejected, the edges are kept") {
+	// Bytes that can never start a sequence (C0 C1 are always overlong, F5 and above are past U+10FFFF).
+	for (const char* bad : {"\xC0\x80", "\xC1\xBF", "\xF5\x80\x80\x80", "\xFF"}) {
+		CHECK_FALSE(IsValidUtf8(bad));
+	}
+	// Second byte outside the range its lead byte allows: overlong E0/F0, surrogates ED A0..BF, F0 below U+10000, F4 above U+10FFFF.
+	for (const char* bad : {"\xE0\x9F\xBF", "\xE0\x80\x80", "\xED\xA0\x80", "\xED\xBF\xBF", "\xF0\x8F\xBF\xBF", "\xF0\x80\x80\x80",
+	                        "\xF4\x90\x80\x80"}) {
+		CHECK_FALSE(IsValidUtf8(bad));
+	}
+	// The first and last code point of each length class.
+	for (const char* good : {"\xC2\x80", "\xDF\xBF", "\xE0\xA0\x80", "\xED\x9F\xBF", "\xEE\x80\x80", "\xEF\xBF\xBF", "\xF0\x90\x80\x80",
+	                         "\xF4\x8F\xBF\xBF"}) {
+		CHECK(IsValidUtf8(good));
+	}
+	// A Latin-1 string that happens to be valid UTF-8 is kept as UTF-8 (C3 A9 reads as one character, not as two Latin-1 ones).
+	bool fromLatin1 = true;
+	CHECK(NormalizeTableText("\xC3\xA9", &fromLatin1) == "\xC3\xA9");
+	CHECK_FALSE(fromLatin1);
+	// The same kind of bytes with a boundary violation fall back to Latin-1 and are converted.
+	CHECK(NormalizeTableText("\xED\xA0\x80", &fromLatin1) == "\xC3\xAD\xC2\xA0\xC2\x80");
+	CHECK(fromLatin1);
+}
+
 TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
 	CHECK(BossKey("The Drowned King") == "cartoboss:The_20Drowned_20King");
 	CHECK(BossKey("King: a_b \"x\" Ren\xE9") == "cartoboss:King_3A_20a_5Fb_20_22x_22_20Ren_E9");  // ASCII only, one-to-one
