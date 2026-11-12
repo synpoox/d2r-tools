@@ -4,7 +4,7 @@
 // (map sync). The plan already depends on (tileset, shape, size, seed, origin, limits, options) only. The one other input of the
 // level build is the level RNG, which draws each piece's DS1 file when the plan leaves it to the engine (pinFiles = false). The
 // game's own seed for it is int32(drlg seed base) + level id, which comes from the act seed; this derives it from the map's seed
-// instead, so the built level depends on nothing the client could not know. Evidence: docs/reverse-engineering/cartographer.md section 8a.
+// instead, so the built level depends on nothing the client could not know. Evidence: docs/reverse-engineering/cartographer/08a-outdoor-build-hook.md.
 #pragma once
 #include <cstdint>
 

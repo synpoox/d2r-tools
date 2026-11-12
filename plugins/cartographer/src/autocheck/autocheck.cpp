@@ -161,6 +161,19 @@ auto noBossRoomReason(bool outdoor) -> std::string {
 	               : "no boss room to go to: the plan has none I can read (only Cave and Crypt maps with BossRoom on have one)";
 }
 
+auto arrivalVerdict(int result, bool outdoor) -> ArrivalVerdict {
+	switch (result) {
+	case 1:
+		return {true, true, "ARRIVAL IS IN THE ENTRANCE CELL"};
+	case 2:
+		return {true, false, "arrival is NOT in the entrance cell"};
+	case 3:
+		return {true, false, outdoor ? "the arrival room could not be read (see the '[outdoor probe] arrival' line)" : "the arrival room could not be read (see the '[maze probe] arrival' line)"};
+	default:
+		return {};
+	}
+}
+
 auto bossStandPoint(int tileX, int tileY, int tileW, int tileH) -> Point {
 	const int offsetX = std::max(1, tileW / 4);
 	const int offsetY = std::max(1, tileH / 2);

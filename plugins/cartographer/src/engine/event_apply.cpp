@@ -29,7 +29,7 @@ namespace {
 namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
-// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 9.
+// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/09-map-events.md.
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
@@ -210,7 +210,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no overlay", lines.size());
 }
 
-// --- Spawn names from the game's loaded tables (cartographer.md section 11) -----------------------------------------------
+// --- Spawn names from the game's loaded tables (cartographer/11-spawn-names.md) -----------------------------------------------
 // Monstats `Id`: the SDK table, scanned. Superuniques: the game's own name map, called (never cached), only after a self-check
 // has shown that the SDK views are the game's tables for the unit's data flag and that the monstats map maps every Id back to its
 // row. A route that fails its check is off for that (table view revision, data flag) and the mod's .txt files are used instead.
@@ -568,6 +568,10 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		plog::Warn("event '%s' not spawned: %s", state.event->name.c_str(), plan.problem.c_str());
 		return false;
 	}
+	if (static_cast<int>(plan.spawns.size()) < plan.requested) {
+		plog::Warn("event '%s' (%s): the event room %s has room for %zu of the %d monsters asked for", state.event->name.c_str(), ev::kindName(state.event->kind),
+		           Describe(rects.server).c_str(), plan.spawns.size(), plan.requested);
+	}
 	if (state.event->kind == ev::Kind::Ambush) {
 		if (!g_tickOn.load()) {
 			plog::Warn("event '%s' (Ambush) not armed: the PlayerTick or room parts are off, so no wave could start", state.event->name.c_str());
@@ -591,8 +595,8 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 			++failed;
 		}
 	}
-	plog::Info("event '%s' (%s): spawned %d of %zu in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
-	           ev::kindName(state.event->kind), made, plan.spawns.size(), Describe(rects.server).c_str(), supers, failed);
+	plog::Info("event '%s' (%s): spawned %d of %d in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
+	           ev::kindName(state.event->kind), made, plan.requested, Describe(rects.server).c_str(), supers, failed);
 	return made > 0;
 }
 
@@ -713,7 +717,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze or outdoor plan)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {

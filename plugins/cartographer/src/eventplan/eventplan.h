@@ -37,7 +37,7 @@ struct Resolved {
 // both tables is the monster. Not found: kind Unresolved.
 Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn);
 
-// --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer.md section 11) ---------------------
+// --- Spawn names from the game's loaded tables (docs/reverse-engineering/cartographer/11-spawn-names.md) ---------------------
 
 // The compiled monstats row is 0x1fc bytes with the `Id` inline at +2 (47 bytes, NUL-terminated; the u16 at +0 is the row's own
 // index, seen in game); a superuniques row is 0x3c.
@@ -130,12 +130,16 @@ struct Spot {
 	int x = 0, y = 0;
 };
 
-// Up to `n` distinct spots inside `room`, kept kEdgeInset clear of its edge where the room is big enough: the centre
-// first, then a grid around it, kSpotGap apart. Same inputs, same spots. Fewer than `n` when the room is too small.
+// Up to `n` distinct spots inside `room`: the centre first, then a grid around it, kSpotGap apart and kEdgeInset clear of the edge where the room is
+// big enough. Only when that holds fewer than `n` is the whole layout redone at kTightInset/kTightGap (a Horde of 6 in an 8 x 8 tile room
+// becomes a 3 x 3 block around the centre, not 4 spread out plus 2 extra). Same inputs, same spots. Fewer than `n` when the room is too small.
 // kEdgeInset and kSpotGap are in tiles; `scale` is how many of the room's own units make a tile (1 for a rect in tiles,
 // 5 for the server room's rect), so the spacing stays the same on the ground.
 constexpr int kEdgeInset = 2;
 constexpr int kSpotGap = 2;
+// When the room cannot hold `n` spots at that spacing (an outdoor event room is one 8 x 8 tile room), the spots are packed one tile apart.
+constexpr int kTightInset = 1;
+constexpr int kTightGap = 1;
 std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale = 1);
 
 // Where the map Boss may be tried (issue #183): the centre first, then the tiles of the room one tile clear of its edge (where the room
@@ -202,6 +206,7 @@ struct Spawn {
 struct SpawnPlan {
 	std::vector<Spawn> spawns;
 	std::string problem;  // empty when usable
+	int requested = 0;    // how many monsters the event asked for (Count, 1 + Minions, wave size); spawns.size() is less when the room has no more spots
 };
 
 // A Boss: the named boss at the room centre, plus `minions` of its class around it. A Horde: `hordeSize` of the named

@@ -194,7 +194,7 @@ left out and named in `cartographer-report.txt`; maps then do not open. An old `
 #### signatures.txt
 
 For a game build the plugin does not know: replaces how Cartographer finds one of the game's functions, without a
-rebuild. You will not normally need it. See [the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md).
+rebuild. You will not normally need it. See [the reverse-engineering notes](../../docs/reverse-engineering/cartographer.md) (an index, one file per section).
 
 | Column | Meaning | Default |
 |---|---|---|
@@ -230,7 +230,7 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
-is Small, Medium or Large. A Snow map has no boss room yet.
+is Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does (not checked in game).
 
 Not verified in game. In multiplayer (TCP/IP, experimental) the host sends the outdoor layout to clients; that has not been run in a game either.
 

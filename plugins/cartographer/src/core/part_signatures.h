@@ -1,6 +1,6 @@
 // The byte signature of each engine part (D2R 3.3 build 93847). Each starts at the function's first byte; "??" masks a
 // relative branch or call target, a RIP-relative or table offset, or a record size. Recorded with their guard, max patch
-// length and evidence in docs/reverse-engineering/cartographer.md section 3; re-checked by tools/check_portal_signatures.py.
+// length and evidence in docs/reverse-engineering/cartographer/03-phase1-parts.md; re-checked by tools/check_portal_signatures.py.
 // signatures.txt (beside maps.txt) can replace any of them without a rebuild. Pure text, so the tests can parse them.
 #pragma once
 
@@ -25,7 +25,7 @@ inline constexpr const char* FindFreeSpot = "48 89 5C 24 08 55 56 57 41 54 41 55
 // prologue into the body so no other function matches by register allocation alone; the hook cuts the first 14 bytes.
 inline constexpr const char* PlayerTick = "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??";
 
-// Map stats (cartographer.md section 6). The stat list functions are only called. SetListStat and AttachStatList are
+// Map stats (cartographer/06-stats-events-checks.md). The stat list functions are only called. SetListStat and AttachStatList are
 // D2RLoader thunks (jmp [rip+x], then the dead original body): call the thunk, never hook it.
 inline constexpr const char* NewStatList = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 89 4C 24 08 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC B0 00 00 00";
 inline constexpr const char* SetListStat = "FF 25 ?? ?? ?? ?? 90 90 90 90 66 89 44 24 28";
@@ -36,7 +36,7 @@ inline constexpr const char* FreeStatList = "48 85 D2 74 ?? 83 7A 1C 00 0F 8D ??
 // 14-byte prefix alone matches 11 sites, so the signature runs on to 21 bytes; the hook cuts the first 14.
 inline constexpr const char* MonsterSetup = "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57 48 83 EC 30 8B 69 18";
 
-// The maze steering parts (build 93847; docs/reverse-engineering/cartographer.md section 1a), re-checked by tools/check_maze_signatures.py.
+// The maze steering parts (build 93847; docs/reverse-engineering/cartographer/01a-maze-signatures.md), re-checked by tools/check_maze_signatures.py.
 // The first four are hooked (the hook cuts the first 14, 18, 17 and 14 bytes: whole instructions, all exact); the last three are only called.
 inline constexpr const char* LevelBuild = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2";
 inline constexpr const char* MazeWalk = "48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18";
@@ -45,7 +45,7 @@ inline constexpr const char* MazeRingGrower = "89 54 24 10 55 53 56 57 41 54 41 
 inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 48 63 EA 48 8B F9 48 8B 89 90 00 00 00";
 inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
-// The arrival room (cartographer.md section 5, "Arrival room"). All three are only checked, never called or hooked: the level-entry
+// The arrival room (cartographer/05-maze-slot.md, "Arrival room"). All three are only checked, never called or hooked: the level-entry
 // finder, its first-room-with-flags helper, and the flag test (room +0x50 and 0x30000). They guard the hook that gives the
 // planned entrance cell's room those flags; if one is not found the arrival is left to the game. The finder's signature runs on
 // through its "levels.txt Position == 0" branch (the call of the room finder at 0x3da718), so a build that changes that branch
@@ -54,7 +54,7 @@ inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 8
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
 inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
 
-// The outdoor slot parts (build 93847; cartographer.md sections 4 and 8), re-checked by tools/check_maze_signatures.py. src/engine/outdoor_hooks.cpp
+// The outdoor slot parts (build 93847; cartographer/04-outdoor-spike.md and 08-outdoor-builder.md), re-checked by tools/check_maze_signatures.py. src/engine/outdoor_hooks.cpp
 // hooks OutdoorAct5Builder (16 bytes) and, when the maze hook does not, LevelBuild (14 bytes); it only calls OutdoorEntry, PieceStamp and VoidCell.
 // The hook lengths are derived in section 8a (capstone, no relative operand inside a patch) and pinned in tools/check_maze_signatures.py.
 inline constexpr const char* OutdoorEntry = "48 89 54 24 10 53 55 56 57 41 54 41 56 41 57 48 83 EC 50 4C 8B 7A 18 33 C0 4C 8B F2 44 0F B6 E1 49 89 87 A8 00 00 00 49 8D 4F 08 8B 42 2C 99 83";
@@ -63,7 +63,7 @@ inline constexpr const char* PieceStamp = "48 89 5C 24 08 44 89 4C 24 20 44 89 4
 // (level, x, y): sets a grid cell void (piece id 0, flag 0x100). Its twin 0x3edda0 has the same bytes up to the last argument: this signature ends with `41 B9 00 01 00 00` (mov r9d, 0x100), where the twin has `45 33 C9` (xor r9d, r9d), so only 0x3ede00 matches.
 inline constexpr const char* VoidCell = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00";
 
-// Map events (cartographer.md section 9). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
+// Map events (cartographer/09-map-events.md). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
 // room, from both activation paths, so the original is called first and the event spawns after the room is populated.
 // The 12-byte prefix alone matches 3 sites, so the signature runs on to 43 bytes; the hook cuts the first 12.
 inline constexpr const char* PopulateRoom = "4C 8B DC 53 56 48 81 EC B8 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 80 00 00 00 83 3D ?? ?? ?? ?? 00 48 8B F2 48 8B D9";
@@ -71,13 +71,13 @@ inline constexpr const char* PopulateRoom = "4C 8B DC 53 56 48 81 EC B8 00 00 00
 inline constexpr const char* SpawnMonster = "4C 8B DC 48 83 EC 68 8B 84 24 90 00 00 00 45 33 D2 4D 89 53 F0 45 89 53 D8 89 44 24 38 8B 84 24 98 00 00 00 89 44 24 3C 8B 84 24 A0 00 00 00 49 89 53 C0 89 44 24 4C";
 inline constexpr const char* SpawnSuperUnique = "40 55 53 56 57 41 56 41 57 48 8D AC 24 48 FF FF FF 48 81 EC B8 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4";
 
-// Event Spawn names from the game's loaded tables (cartographer.md section 11); both only called. DataTablesBase (dataFlag) returns the
+// Event Spawn names from the game's loaded tables (cartographer/11-spawn-names.md); both only called. DataTablesBase (dataFlag) returns the
 // data tables base, three sibling accessors share its first 40 bytes so the signature runs to the tail. NameToRow (map, name, logOnMiss)
 // returns the row, exactly -1 on a miss.
 inline constexpr const char* DataTablesBase = "48 83 EC 28 0F B6 C1 48 89 44 24 38 48 83 F8 04 72 19 48 8D 44 24 38 48 8D 4C 24 40 48 89 44 24 40 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 44 24 38 48 8D 0D ?? ?? ?? ?? 48 03 C0 48 8B 04 C1 48 83 C4 28 C3";
 inline constexpr const char* NameToRow = "40 55 56 57 41 54 48 8B EC 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E8 44 89 45 AC";
 
-// Client sync of player stats (cartographer.md section 7); all only called. FindStateList (unit, state) returns the first stat list
+// Client sync of player stats (cartographer/07-map-stats-parts.md); all only called. FindStateList (unit, state) returns the first stat list
 // of the unit whose state is `state`, or null. SetListState (list, state) writes the list's state; it is a 9-byte leaf, so the
 // signature is the whole function. SetStateBit (unit, state, on) turns the state on or off, which is what makes the game send it.
 // StateOn (unit, state) is nonzero while the state is on.
@@ -85,12 +85,12 @@ inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B D
 inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
-// The map item's own stats (ItemStats=1, cartographer.md section 14); both only called. ItemListFind (unit, state, flags) is the list
+// The map item's own stats (ItemStats=1, cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
 // finder (with state 0 it matches a list on the unit's chain by flags). ItemListCopy (list, out, max) is D2RLoader's thunk (jmp [rip+x],
 // then the dead original body) into D2RLoader's replacement of up to `max` {stat << 16 | layer, value} pairs; call the thunk, never hook it.
 inline constexpr const char* ItemListFind = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??";
 inline constexpr const char* ItemListCopy = "FF 25 ?? ?? ?? ?? 90 90 90 90 57 48 83 EC 20 49 63 F8 48 8B DA 48 8B F1";
-// Phase 6b: the Shrine object and the Boss Drop (cartographer.md section 13). DeathDrop (game, victim, arg3, info) is hooked
+// Phase 6b: the Shrine object and the Boss Drop (cartographer/13-ambush-treasure-shrine.md). DeathDrop (game, victim, arg3, info) is hooked
 // (the hook cuts the first 15 bytes: whole instructions, no relative operand); the rest are only called. SpawnObject is the
 // handler of the debug command `SpawnObject`: it is only read, to find the free-spot search (0x402f50), which has no signature of
 // its own: it is byte-identical to a sibling for 452 bytes, so it is the target of the call at SpawnObject + 0xff.
@@ -100,11 +100,11 @@ inline constexpr const char* DropLevel = "48 89 5C 24 08 57 48 83 EC 20 8B FA 48
 inline constexpr const char* SpawnObject = "40 55 41 56 41 57 48 83 EC 60 4C 8B F1 41 BF 01 00 00 00 41 8B CF 8B EA E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ??";
 inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF 48 81 EC 90 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48";
 
-// The map's own Name on the tooltip, the automap title and the entry banner (cartographer.md section 10). LevelsRow (dataFlag, levelId)
+// The map's own Name on the tooltip, the automap title and the entry banner (cartographer/10-portal-tooltip.md). LevelsRow (dataFlag, levelId)
 // is the game's levels row getter, only called; its first 46 bytes are shared by three sibling getters, so the signature runs to 82.
 inline constexpr const char* LevelsRow = "48 89 5C 24 08 55 56 57 48 83 EC 30 48 63 DA 0F B6 F1 E8 ?? ?? ?? ?? 48 8B E8 85 DB 7E 34 40 0F B6 CE E8 ?? ?? ?? ?? 48 8B B8 68 14 00 00 4C 63 C7 4C 3B C7 75 04 85 FF 79 14 48 8D 4C 24 58 C6 44 24 58 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 3B DF 7C 18";
 
-// Phase 6b second half: Ambush and Treasure (cartographer.md section 13). OperateObject (game, activator, object) is hooked (the hook cuts
+// Phase 6b second half: Ambush and Treasure (cartographer/13-ambush-treasure-shrine.md). OperateObject (game, activator, object) is hooked (the hook cuts
 // the first 16 bytes: four whole instructions, no relative operand; the signature runs to 23 so no sibling matches). The rest are only
 // called: FleeSetup is the engine's scare setup; FleeBlock and FleeTarget are the two checks it makes first (called only to log what they
 // say); TcLookup gives the compiled treasure class for an index and TcRoller rolls it.
@@ -115,7 +115,7 @@ inline constexpr const char* FleeTarget = "48 89 5C 24 10 48 89 6C 24 18 48 89 7
 inline constexpr const char* TcLookup = "48 89 5C 24 08 55 56 57 48 83 EC 30 41 8B D8";
 inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 
-// AutoCheck (issue #173; cartographer.md section 17). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
+// AutoCheck (issue #173; cartographer/17-autocheck.md). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
 // level it is in (a null room is only looked up among the unit's own room and its neighbours, so the check passes the boss room); only called.
 // RoomAtTile (dataFlag, act, tileX, tileY) is the engine's tile-to-room lookup over one act (a thunk: it loads act+0x70 and jumps on; it can find or build a level, so it is called once, on the slot's act), and
 // RoomBringUp (game, room) brings a room up (builds and populates it): the two the console command 'goto' uses to reach x,y. Only called.
