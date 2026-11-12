@@ -1112,3 +1112,116 @@ Everything below follows the recommendation of Q4; the items under "Needs game" 
 7. Does a stock monster `Id` resolve with a lower-case and an upper-case query alike (proves D2RCore inserts lower-cased keys)?
 8. The log lines to read for items 1 to 7: `spawn names: data flag N, table revision R: monstats from the game's table on/OFF (SDK bank ..), superuniques by the game's name map on/OFF; <why>`; `spawn '..': monstats row N from the game's table` and `superuniques row N from the game's table, class monstats row M`. A round trip that fails logs `N of M monstats Ids did not map back` and the superuniques route stays off (a mod with an odd `Id` row, for example, would do that).
 9. Does the `DataTablesLoaded` listener run before the first map open (the revision is non-zero), so the cache is used? With revision 0 the check simply repeats at every map open.
+
+## 13. Ambush, Treasure and Shrine events: static checks (issue #102)
+
+Desk research for phase 6b. Section 12 is left open for PR #101. Build 93847, `D2RLoader.exe` stamp `0x6ab3782c`
+(`C:\ghidra-work\D2RLoader_6ab3782c_dump.exe`), read with `tools/dump_dis.py` and a private disassembly script. **Nothing here
+was run in a game.** Evidence levels: **dump** (read from the disassembly), **SDK** (read from the pinned headers),
+**inference** (reasoned, not shown), **needs-game**. Every address is an RVA; its byte prefix matches exactly once in the dump's
+code sections (`??` is a masked rel32).
+
+| RVA | What (level) | Unique byte prefix |
+|---|---|---|
+| `0x50acf0` | room populator, already hooked in `event_apply.cpp` | `4c 8b dc 53 56 48 81 ec b8 00 00 00 48 8b 05 c5` |
+| `0x4022a0` | debug `ospawn` handler: the object spawn recipe (dump) | `40 55 41 56 41 57 48 83 ec 60 4c` |
+| `0x402f50` | free-spot search near a point (dump: call shape only, body unread) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 5d` |
+| `0x490410` | object create used by `ospawn` (dump: arguments only) | `40 55 53 57 48 8d ac 24 70 fc ff ff 48 81 ec 90 04 00 00` |
+| `0x38fc70` | `(dataFlag)` returns the objects row count `*(dt+0x1530)` (dump) | `48 83 ec 28 e8 ?? ?? ?? ?? 8b 80 30 15 00 00` |
+| `0x4a2690` | AI set-mode `(game, monster, [monData+0x30], idx)` (dump) | `48 85 c9 0f 84 8a 02 00 00 55` |
+| `0x596d40` | AI mode 11 ("scaredy cat") setup (dump) | `48 89 5c 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 ec 40 4c 8b f9` |
+| `0x5cd060` | AI function gated on state 56 (dump) | `48 89 5c 24 08 48 89 6c 24 10 48 89 74 24 18 48 89 7c 24 20 41 54 41 56 41 57 48 83 ec 40 49 8b 68 10` |
+| `0x48b890` | AI event 2 scheduling (dump) | `40 53 56 41 54 41 56 41 57 48 83 ec 20 45` |
+| `0x48b720` | AI event 2 scheduling (dump) | `48 83 ec 48 8b 84 24 80` |
+| `0x447b80` | monster death drop, calls `0x441300` (dump) | `48 8b c4 44 89 40 18 53 55` |
+| `0x441300` | drop roller for a monster unit (dump) | `40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 ec 98 00 00 00 48 8b 05 ad 9f` |
+| `0x4404f0` | generic TC roller (dump) | `4c 8b dc 55 53 49 8d ab 08 f7` |
+| `0x397290` | `(dataFlag, tcIndex u16, level)` TC lookup (dump) | `48 89 5c 24 08 55 56 57 48 83 ec 30 41` |
+| `0x5930b0` | chest TC pick by act, difficulty, area-level tier (dump) | `40 55 56 57 41 56 48 8d 6c 24 c1 48 81 ec d8` |
+| `0x396430` | `(dataFlag, difficulty, act, tier)` chest TC lookup (dump: shape only) | `48 89 5c 24 08 48 89 6c 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 ec 40 45` |
+| `0x58e2f0` | chest operate handler, slot 4 of table `0x23a51c0` (dump) | `48 89 4c 24 08 55 48 8b ec 48 81` |
+
+**Toolkit discrepancy (dump).** `d2rAI-toolkit` lists the unit field at `+8` as the class id. In the dump `0x349860`
+(`48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 49`) returns `[unit+4]` and `0x34a330`
+(`48 83 ec 28 48 85 c9 75 1d 88 4c 24 30 48 8d 4c 24 30 e8 39 ca`) returns `[unit+8]`, and the plugin already uses `+8` as the
+unit id (validated in game). Treat `+4` as the class and `+8` as the id.
+
+### Q1. Ambush: detect arrival, spawn `Waves` waves, tell when a wave is cleared
+
+- **Arrival (inference, from dump and plugin code).** The populator hook `0x50acf0` runs when a room is populated for a
+  player, which is when a player is *near* the room, not inside it: fine for placing, too early for "reached the room". The
+  per-tick check in `EventsPlayerTick` already finds the player's room for the entry message; fire when the player's server
+  room is the event room (or its rect, `+0x80..+0x8c`, contains the player). **Recommended**, one-shot per event, remembered
+  in the plugin state next to `spawned`.
+- **Spawn (existing code).** Each wave is `Count` calls of `SpawnOne` (`SpawnMonster(game, room, x, y, row, 1, 0xa, 0)`) at
+  spots from the event rect, one wave after the previous one is cleared.
+- **Wave cleared (SDK + inference).** Remember the ids of the spawned units. The SDK `MonsterDeathListener` reports id, class
+  and level id after the normal drop, on the server thread, with no unit pointer: count tracked ids as they die; the wave is
+  cleared when all are accounted for. A monster that leaves the game without dying never reports, so add a time-out per wave.
+  The alternative, looking units up by id each tick, needs a server unit lookup by `(type, id)` that is **not resolved** here.
+- **Evidence:** SDK for the listener, inference for the rest. **Needs game:** the listener's id equals the id the spawn returns
+  (`+8`); the room test fires on walking in; a wave does not trip the room's monster cap.
+
+### Q2. Treasure: flee, drop from a named TC, chest that drops from `Drop`
+
+- **Flee (dump for the mechanism, needs-game for the effect).** The engine's scared behaviour is AI mode 11, set with
+  `0x4a2690(game, monster, [monData+0x30], idx)` and set up in `0x596d40`; the AI function `0x5cd060` is gated on stat state 56
+  (`0x38`). So "flee" is a mode plus a timed state, the state set by the stat-list recipe in section 6 Q1. Not shown: the right
+  `idx`, the duration, and whether a monster whose monstats AI does not flee actually runs. Call these, do not hook them.
+- **Drop on death (dump + SDK).** `MonsterDeathListener` has no unit pointer, so it can only observe the death. To drop a TC at
+  the monster use the engine: `0x441300` rolls a drop for a monster unit from a TC index; `0x447b80` is the death caller. The TC
+  name goes to the `u16` index through the name map at `*(dt+0xd70)` (compiled rows at `dt+0xd78`, `0x150` bytes each, count at
+  `dt+0xd80`); that the lookup is the one section 11 uses (`0xa121f0`) is **inference**. SDK: `TreasureClasses` (76) rows are
+  reachable by row index only (`findRowById`), so a name needs the map anyway.
+- **Chest `Drop` (dump).** A chest does **not** take its TC from its objects row: `0x5930b0` picks it by act, difficulty and
+  area-level tier through `0x396430`, then rolls with `0x4404f0`. A stock chest cannot be told a TC. Route: place a chest, track
+  its id, and on open roll the `Drop` TC with `0x4404f0` in addition (hook the operate slot `0x58e2f0` or `0x5930b0` for tracked
+  ids). Not shown which of the two is cleaner.
+- **Evidence:** dump for the flee mechanism, the drop call and the chest pick; inference for the name map use. **Needs game:**
+  flee works with the chosen `idx` and for how long; `0x441300` with a `Drop` TC from a hook drops at the right place; the
+  chest open path reaches the hook with the tracked id.
+
+### Q3. Shrine: place an object by objects row at a free spot; resolve a name
+
+- **Place (dump).** The debug handler `0x4022a0` is the recipe: find a free spot with `0x402f50` (the unit's room from
+  `0x34b440`, a pointer to an `(x, y)` pair, radius 5, flag mask `0x3e01`, a pointer for the room it lands in), check the row
+  index against the count from `0x38fc70(dataFlag)`, then create with `0x490410(2, rowIndex, x, y, game, room, ...)` (call site
+  `0x402423`). Argument order was read at the call sites; the body of `0x402f50` and the meaning of the mask were not.
+- **Name to row (not settled).** In the handler the name argument goes through `0x12da3a4` and then a bound check, which looks
+  like a plain number parse (the cheat takes an index), **not** a name map. No objects name map was found. Fallback
+  (inference): row index equals the line order in `objects.txt` (parse as in section 9), guarded by the line count equal to
+  `*(dt+0x1530)`. SDK: `Objects` (54) and `Shrines` (73) exist and are game-thread only; their row layout and `Id` offset were
+  not examined, so a name scan through the SDK is not shown.
+- **Evidence:** dump for the placement recipe; **needs-game** for the name route.
+- **Needs game:** the `0x402f50` result is clear of walls and objects; the object works (a shrine can be used, a well heals);
+  `.txt` order equals the row index; which `Shrines` row a shrine object uses.
+
+### Q4. Boss `Drop`: extra loot from a TC on the boss's death
+
+- **Route (dump, inference).** The same pair as Q2: hook `0x447b80` after the original for a tracked boss id and call
+  `0x441300` once more with the `Drop` TC index, copying the argument set the original call inside `0x447b80` uses (three
+  register arguments, the `u16` TC index, six stack arguments). How `0x447b80` picks the TC for a superunique (through a
+  `D2RCore` thunk, `0x3e2b45a`) was not resolved, which decides whether to add to it or replace it. Without a unit pointer the
+  SDK listener cannot do this.
+- **Evidence:** dump for the call shape, inference for the hook. **Needs game:** extra items drop once at the boss with the
+  boss's level and no double drop.
+
+### Summary
+
+| Q | Answered | Level |
+|---|---|---|
+| 1 Ambush | yes: per-tick room test, waves tracked by `MonsterDeathListener` ids plus a time-out | SDK + inference |
+| 2 Treasure | mechanisms found (mode 11 plus state 56, `0x441300`, chest TC pick); effect and chest route unproven | dump + needs-game |
+| 3 Shrine | placement recipe found; name to row route open | dump + needs-game |
+| 4 Boss `Drop` | route chosen, superunique TC pick unresolved | dump + inference |
+
+### Needs game
+
+1. Does the player-in-room test fire on walking into the event room, and does the listener id match the spawned id?
+2. Does AI mode 11 plus state 56 make a spawned monster run, with which `idx` and for how long?
+3. Does a second `0x441300` call with a `Drop` TC drop at the right place and level, once, for a boss and a Treasure monster?
+4. Does a chest open reach `0x58e2f0` / `0x5930b0` for a tracked chest, and can a second TC roll be added there?
+5. Is the `0x402f50` spot safe, and does `0x490410` create a working shrine, well and chest?
+6. Does `objects.txt` line order equal the row index, and does the count match `*(dt+0x1530)`?
+7. What is the objects row layout (the `Id` offset) for an SDK scan, and which `Shrines` row does a shrine object use?
+8. Is the thread that runs the tick the one the SDK treats as the game thread?
