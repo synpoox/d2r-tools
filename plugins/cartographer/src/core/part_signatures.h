@@ -117,7 +117,7 @@ inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 
 // AutoCheck (issue #173; cartographer.md section 16). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
 // level it is in (a null room is only looked up among the unit's own room and its neighbours, so the check passes the boss room); only called.
-// RoomAtTile (dataFlag, act, tileX, tileY) is the engine's tile-to-room lookup over a whole act (a thunk: it loads act+0x70 and jumps on), and
+// RoomAtTile (dataFlag, act, tileX, tileY) is the engine's tile-to-room lookup over one act (a thunk: it loads act+0x70 and jumps on; it can find or build a level, so it is called once, on the slot's act), and
 // RoomBringUp (game, room) brings a room up (builds and populates it): the two the console command 'goto' uses to reach x,y. Only called.
 // The first RIP-relative operand is the security cookie load at +25; the signature runs on to the first `test rdx, rdx`.
 inline constexpr const char* UnitMove = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11";

@@ -38,7 +38,7 @@ using Game = void;
 using Unit = void;
 // (game, unit, room, x, y, 0, 0): puts the unit at a subtile position in `room` (cartographer.md section 16). 0 when it could not.
 using UnitMoveFn = int32_t (*)(Game*, Unit*, void* room, int32_t x, int32_t y, int32_t a6, int32_t a7) noexcept;
-// (dataFlag, act, tileX, tileY): the room holding that tile of the act's levels, or null.
+// (dataFlag, act, tileX, tileY): the room holding that tile of the act's levels. Not read-only: it can find or build a level of that act.
 using RoomAtTileFn = void* (*)(uint32_t dataFlag, void* act, int32_t tileX, int32_t tileY) noexcept;
 // (game, room): builds and populates the room if it is not up yet.
 using RoomBringUpFn = void (*)(Game*, void* room) noexcept;
@@ -63,6 +63,7 @@ struct Run {
 	MapDef map;
 	CheckOpen opened;
 	uint64_t phaseStartMs = 0;
+	void* game = nullptr;     // the game of the first tick; ticks from another game are ignored
 	bool moved = false;       // the player was put in the boss room by UnitMove
 	bool bossNoted = false;   // event_apply reported the map Boss
 	bool bossSpawned = false;
@@ -189,8 +190,14 @@ void SettleBossFromNote() noexcept {
 	}
 }
 
-// The room holding the stand point, found the way the console command 'goto' finds it: the tile lookup over each act, kept only when the room is in `level`.
-auto FindRoomAt(Game* game, int level, int subtileX, int subtileY, std::string* why) noexcept -> void* {
+// The room holding the stand point, found the way the console command 'goto' finds it: the act comes from levels.txt (the slot's Act, the value the
+// engine's own lookup returns) and indexes the game's act list, and the tile lookup runs once on that act. RoomAtTile can find or build a level, so
+// it is never run on another act; the room is still kept only when it is in `level`.
+auto FindRoomAt(Game* game, int act, int level, int subtileX, int subtileY, std::string* why) noexcept -> void* {
+	if (act < 0) {
+		*why = "the slot level's act is not known (levels.txt Act)";
+		return nullptr;
+	}
 	const uint8_t* g = static_cast<const uint8_t*>(game);
 	if (!Readable(g + GameActsOffset, 16)) {
 		*why = "the game's act list could not be read";
@@ -202,18 +209,21 @@ auto FindRoomAt(Game* game, int level, int subtileX, int subtileY, std::string* 
 		*why = "the game's act list looks wrong (" + std::to_string(count) + " acts)";
 		return nullptr;
 	}
+	if (static_cast<uint64_t>(act) >= count) {
+		*why = "act " + std::to_string(act) + " is outside the game's " + std::to_string(count) + " acts";
+		return nullptr;
+	}
+	if (acts[act] == nullptr || !Readable(static_cast<const uint8_t*>(acts[act]) + 0x70, sizeof(void*))) {
+		*why = "act " + std::to_string(act) + " is not loaded or could not be read";
+		return nullptr;
+	}
 	const auto roomAt = reinterpret_cast<RoomAtTileFn>(const_cast<uint8_t*>(g_parts[RoomAtPart].address));
 	const uint32_t dataFlag = At<uint8_t>(game, GameDataFlagOffset);
-	for (uint64_t i = 0; i < count; ++i) {
-		if (acts[i] == nullptr || !Readable(static_cast<const uint8_t*>(acts[i]) + 0x70, sizeof(void*))) {
-			continue;
-		}
-		void* room = roomAt(dataFlag, acts[i], subtileX / ac::SubtilesPerTile, subtileY / ac::SubtilesPerTile);
-		if (room != nullptr && RoomLevelOf(room) == level) {
-			return room;
-		}
+	void* room = roomAt(dataFlag, acts[act], subtileX / ac::SubtilesPerTile, subtileY / ac::SubtilesPerTile);
+	if (room != nullptr && RoomLevelOf(room) == level) {
+		return room;
 	}
-	*why = "no room of level " + std::to_string(level) + " holds tile (" + std::to_string(subtileX / ac::SubtilesPerTile) + "," + std::to_string(subtileY / ac::SubtilesPerTile) + ")";
+	*why = "no room of level " + std::to_string(level) + " holds tile (" + std::to_string(subtileX / ac::SubtilesPerTile) + "," + std::to_string(subtileY / ac::SubtilesPerTile) + ") in act " + std::to_string(act);
 	return nullptr;
 }
 
@@ -225,7 +235,7 @@ struct MoveResult {
 
 // Engine calls, lock released. First re-checks the player is in the slot level of a Hell game (the guard that keeps this off vanilla levels), then
 // the 'goto' route: find the room, bring it up, UnitMove into it. Fails with the reason instead of moving anything it cannot place.
-auto MovePlayerToBoss(Game* game, Unit* unit, int level, ac::Point stand) noexcept -> MoveResult {
+auto MovePlayerToBoss(Game* game, Unit* unit, int level, int act, ac::Point stand) noexcept -> MoveResult {
 	MoveResult out;
 	if (PlayerLevelOf(unit) != level || GameDifficultyOf(game) != HellDifficulty) {
 		out.kind = MoveKind::Left;
@@ -236,7 +246,7 @@ auto MovePlayerToBoss(Game* game, Unit* unit, int level, ac::Point stand) noexce
 		out.why = "a part the move needs was not found";
 		return out;
 	}
-	void* room = FindRoomAt(game, level, stand.x, stand.y, &out.why);
+	void* room = FindRoomAt(game, act, level, stand.x, stand.y, &out.why);
 	if (room == nullptr) {
 		return out;
 	}
@@ -348,7 +358,16 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 		const ac::Point stand = ac::bossStandPoint(room.x, room.y, room.w, room.h);
 		const std::string where = "tiles " + std::to_string(room.x) + "," + std::to_string(room.y) + ", " + std::to_string(room.w) + " x " + std::to_string(room.h);
 		Line("AUTOCHECK boss: moving the player to subtile (" + std::to_string(stand.x) + "," + std::to_string(stand.y) + ") in the boss room (" + where + ")");
-		const MoveResult moved = Outside(lock, [&] { return MovePlayerToBoss(game, unit, level, stand); });
+		int act = -1;  // the slot's levels.txt Act, read under the lock
+		if (g_tables != nullptr) {
+			for (const Slot& slot : g_tables->slots) {
+				if (slot.level == level) {
+					act = slot.act;
+					break;
+				}
+			}
+		}
+		const MoveResult moved = Outside(lock, [&] { return MovePlayerToBoss(game, unit, level, act, stand); });
 		if (g_gen != gen) {
 			return;
 		}
@@ -401,6 +420,9 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 }  // namespace
 
 void InstallAutoCheck(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
+	if (!g_on.load()) {
+		return;  // AutoCheck=0: nothing is scanned
+	}
 	try {
 		for (Part& part : g_parts) {
 			ResolvePart(context, overrides, ranges, count, part);
@@ -460,6 +482,11 @@ void AutoCheckTick(void* game, void* unit, uint32_t localPlayer) noexcept {
 	}
 	std::unique_lock<std::mutex> lock(g_lock);
 	if (g_run.phase == Phase::Idle || g_run.phase == Phase::Done) {
+		return;
+	}
+	if (g_run.game == nullptr) {
+		g_run.game = game;
+	} else if (g_run.game != game) {
 		return;
 	}
 	const uint64_t gen = g_gen;
