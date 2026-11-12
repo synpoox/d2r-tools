@@ -32,6 +32,12 @@ The root `README.md` table lists released plugins only. An unreleased plugin has
 3. Actions > **release** > Run workflow (leave the tag empty for `release-<today UTC>.N`, or give one). It runs the same
    script, then creates the GitHub Release marked Latest with the zips, the bundle, `SHA256SUMS.txt` and the notes.
 
+Each plugin zip holds the DLL, the `d2rl-*` folders, `README.md` and `CHANGELOG.md`. A plugin that must ship more (an
+installer script, example files) lists them in `plugins/<name>/release-files.txt`: one path per line, relative to the
+plugin folder, files or folders, `#` for comments. They keep their relative path in the zip, so
+`tools/install.ps1` lands at `tools\install.ps1`. List only what players need, not test or developer tools. A listed path
+that does not exist stops the script.
+
 The script refuses to run if a plugin's `<plugin>/vX.Y.Z` tag is missing on origin or its changelog has no dated
 `## X.Y.Z - YYYY-MM-DD` section.
 

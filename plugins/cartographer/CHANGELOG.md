@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The release zip now includes `toolsinstall.ps1` and the `examplesirst-map` tables.
 - Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.

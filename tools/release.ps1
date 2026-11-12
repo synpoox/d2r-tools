@@ -54,6 +54,18 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     $dlls | Copy-Item -Destination $stage
     Get-ChildItem $dist -Directory -Filter 'd2rl-*' -ErrorAction SilentlyContinue | Copy-Item -Destination $stage -Recurse
     Copy-Item (Join-Path $dir 'README.md'), (Join-Path $dir 'CHANGELOG.md') -Destination $stage
+    $extra = Join-Path $dir 'release-files.txt'   # optional: extra files or folders to ship, one path per line, relative to the plugin
+    if (Test-Path $extra) {
+        foreach ($line in [IO.File]::ReadAllLines($extra)) {
+            $rel = $line.Trim()
+            if (-not $rel -or $rel.StartsWith('#')) { continue }
+            $src = [IO.Path]::GetFullPath((Join-Path $dir $rel))
+            if (-not $src.StartsWith($dir.TrimEnd('') + '') -or -not (Test-Path $src)) { throw "$name`: release-files.txt names '$rel', which is not a file or folder inside the plugin" }
+            $to = Join-Path $stage $rel
+            New-Item -ItemType Directory -Force (Split-Path $to -Parent) | Out-Null
+            Copy-Item $src -Destination $to -Recurse
+        }
+    }
     $zip = Join-Path $out "$name-$ver.zip"
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
     New-Item -ItemType Directory -Force (Join-Path $bundle $name) | Out-Null
