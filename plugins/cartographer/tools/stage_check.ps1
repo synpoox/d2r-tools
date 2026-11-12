@@ -35,6 +35,10 @@
     item-names.json the slot already had are taken out again (the manifest records their exact text). install.ps1 changes inside tables that already
     existed in the slot (not placed by this script) stay.
 
+    test-harness.dll (the d2r-test-harness build, for the game_ctl click and console commands) is copied into the slot's plugins
+    folder when the slot has none, from -HarnessDll, and recorded in the manifest so -Restore removes it. A harness DLL the slot
+    already has is left alone and not recorded. The owner's game install is never a source.
+
     Other plugins in the slot's global plugins folder are parked: every .dll there except the staged DLL and test-harness.dll
     moves to plugins-off\staged-<owner>\ (the manifest records each move; -Restore moves it back when its place is empty).
     A PD2 core-rules / core-maps / core-ui left in a test slot made every character save fail ("Character save failed ...
@@ -49,6 +53,9 @@
     Lock owner and run id (MODKIT_RUN), for example the name of your lane.
 .PARAMETER Dll
     The built cartographer.dll to place in the slot's global plugins folder (ignored by -Restore, which uses the manifest).
+.PARAMETER HarnessDll
+    The built test-harness.dll to stage when the slot has none. Default: ..\d2r-test-harness\build\Release\test-harness.dll next to the repo.
+    When it is missing, one line says so and staging goes on without it.
 .PARAMETER Tables
     Folder with maps.txt, cartographer.txt, bosses.txt (any *.txt) copied to excel\d2rloader\cartographer.
 .PARAMETER Saves
@@ -98,6 +105,7 @@ param(
     [Parameter(Mandatory)][int]$Slot,
     [Parameter(Mandatory)][string]$Owner,
     [string]$Dll,
+    [string]$HarnessDll,
     [string]$Tables,
     [string]$Saves,
     [string]$AutoCheckMap,
@@ -440,6 +448,25 @@ function Copy-IfChanged([string]$from, [string]$to, [byte[]]$bytes, [switch]$noM
     }
 }
 
+# Stage test-harness.dll only when the slot has none (a slot's own copy is left alone and not recorded; -Restore removes ours).
+function Stage-Harness([string]$pluginsDir, [string]$source) {
+    $to = Join-Path $pluginsDir 'test-harness.dll'
+    $ours = $placed.Contains($to)
+    if ((Test-Path -PathType Leaf $to) -and -not $ours) { Say '  test-harness.dll: the slot already has one, left alone'; return }
+    if (-not $source) {
+        # Default: ..\d2r-test-harness\build\Release next to the repo; in a worktree also next to the main checkout (git's common dir).
+        $rel = 'd2r-test-harness\build\Release\test-harness.dll'
+        $repo = Split-Path (Split-Path (Split-Path $here -Parent) -Parent) -Parent
+        $roots = @((Split-Path $repo -Parent))
+        $common = & git -C $repo rev-parse --path-format=absolute --git-common-dir 2>$null
+        if ($LASTEXITCODE -eq 0 -and $common) { $roots += (Split-Path (Split-Path ([string]$common) -Parent) -Parent) }
+        $source = Join-Path $roots[0] $rel
+        foreach ($r in $roots) { $c = Join-Path $r $rel; if (Test-Path -PathType Leaf $c) { $source = $c; break } }
+    }
+    if (-not (Test-Path -PathType Leaf $source)) { Say "  test-harness.dll not staged: no build at $source (pass -HarnessDll)"; return }
+    Copy-IfChanged $source $to $null
+}
+
 try {
     # 3. Stage the test mod: modinfo with the slot's own savepath, and the vanilla tables install.ps1 needs (copies; only files the slot lacks).
     $info = "{`n  `"name`": `"$modName`",`n  `"savepath`": `"$($p.saveName)/`"`n}`n"
@@ -515,6 +542,7 @@ try {
     # 4. The DLL, the tables, the saves: only what changed.
     Say 'DLL:'
     Copy-IfChanged $Dll (Join-Path $p.plugins (Split-Path $Dll -Leaf)) $null
+    Stage-Harness $p.plugins $HarnessDll
 
     if ($Tables) {
         Say 'Tables:'
