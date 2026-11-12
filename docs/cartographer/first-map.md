@@ -12,8 +12,9 @@ Every column is explained in [tables.md](tables.md).
 
 Today a map only **opens a portal**. These columns take effect in game: `Name` (the message "Cartographer: <Name> is open."
 and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
-to the log). Everything else (`Size`, `Level`, `Boss`, `Monsters`, `Properties`, `EventChance`, `Density`, `Champions`,
-`Uniques`, and the settings in `cartographer.txt`) is checked and reported but **not applied yet**: every map opens the same
+to the log). `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens (experimental, not
+verified in game). Everything else (`Size`, `Boss`, `Properties`, `EventChance`, `Champions`, and the settings in
+`cartographer.txt`) is checked and reported but **not applied yet**: every map opens the same
 level, the one preset level the installer adds. Generated layouts, bosses and properties come in later phases.
 
 ## Prerequisites

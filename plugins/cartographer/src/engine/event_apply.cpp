@@ -44,7 +44,8 @@ constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte st
 constexpr uint32_t DataFlagLimit = 4;       // the base accessor takes a data flag below 4 (anything else is a trap in the engine)
 constexpr int DtMonRowsOffset = 0xf58;      // monstats row vector pointer; the 64-bit count is at +0xf60
 constexpr int DtMonCountOffset = 0xf60;
-constexpr int DtMonMapOffset = 0xf70;       // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
+constexpr int MonStatsWeightOffset = 0x64;  // uint8 in a monstats row: what the region builder (0x509c2c) takes as the group's weight
+constexpr int DtMonMapOffset = 0xf70;      // monstats Id -> row map pointer (re-read on every use: a table load makes a new map)
 constexpr int DtSuperRowsOffset = 0x1078;   // superuniques row vector pointer; the 64-bit count is at +0x1080
 constexpr int DtSuperCountOffset = 0x1080;
 constexpr int DtSuperMapOffset = 0x1090;    // superuniques name -> row map pointer (re-read on every use)
@@ -783,6 +784,48 @@ auto SummaryNow() -> std::string {
 }
 
 }  // namespace
+
+auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::vector<int>* weights, std::string* why) noexcept -> bool {
+	try {
+		rows->clear();
+		weights->clear();
+		if (g_dataTables == nullptr) {
+			*why = "no DataTable service";
+			return false;
+		}
+		const ep::RouteVerdict route = RouteFor(dataFlag);
+		if (!route.monsters) {
+			*why = route.why.empty() ? "the game's monstats table did not pass its check" : route.why;
+			return false;
+		}
+		std::string tablesWhy;
+		const uint8_t* dt = TablesBase(dataFlag, &tablesWhy);
+		ep::TableFacts mon;
+		bool busy = false;
+		if (dt == nullptr || !TableFactsOf(static_cast<D2RL::DataTables::Bank>(route.bank), D2RL::DataTables::TableId::MonStats, dt, DtMonRowsOffset, DtMonCountOffset, &mon, &busy) ||
+		    !ep::checkTable(mon, ep::kMonStatsRowSize).empty()) {
+			*why = "the game's monstats table could not be read now";
+			return false;
+		}
+		for (const std::string& id : ids) {
+			const int row = GameMonsterRow(route, dataFlag, id);
+			if (row < 0 || static_cast<uint32_t>(row) >= mon.viewCount) {
+				*why = "'" + id + "' is not in the game's monstats table";
+				rows->clear();
+				weights->clear();
+				return false;
+			}
+			rows->push_back(row);
+			weights->push_back(At<uint8_t>(mon.viewRows, row * static_cast<int>(mon.viewRowSize) + MonStatsWeightOffset));
+		}
+		return true;
+	} catch (...) {
+		rows->clear();
+		weights->clear();
+		*why = "the lookup failed";
+		return false;
+	}
+}
 
 auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	g_context = context;

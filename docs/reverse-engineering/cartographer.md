@@ -1183,7 +1183,7 @@ Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the m
 - **Where:** a Cave or Crypt maze: the plan's boss room, the far cell of the main path (`Plan::bossRoom`, `Role::Boss`). `maze_hooks.cpp` records its DRLG rect after the slot build next to the event room (`MazeBossRoom()`, log `eventprobe: maze boss room ...`) and the populate hook fires an `EventRoomTracker` on that rect. A layout with `BossRoom` off has no boss room: the map Boss is left off, with a warning. There is no Preset code, since Preset is being removed.
 - **Boss and Boss event together:** both are kept. The event goes in the event room (partway along the main path), the map Boss in the boss room (the far end); they are different cells of the plan. A superunique that both name spawns once per game, then as its Class.
 - **Outdoor:** waits on issue #145. The hook point is in `OnPopulated` (`event_apply.cpp`), where `bossPlan` is read from `MazeBossRoom()` for a maze; an outdoor map reads its stamp plan's boss rectangle there, and the tracker and `SpawnMapBoss` are unchanged.
-- **`Monsters`:** not part of this change. The monster pool is written into the slot level's levels row with Level, Density, Champions and Uniques, in issue #156.
+- **`Monsters`:** not part of this change. The monster pool is written into the slot level's region record, with Density and Uniques (and Level in the levels row), in issue #156 (section 15).
 - **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
 
 ## 10. Red portal tooltip and area name (issue #90)
@@ -1967,3 +1967,63 @@ Build 93847, stamp `0x6ab3782c`, static (dump); not run in a game. With `ItemSta
 - **Fail open:** a part off, no list, an empty list or no matching stat leaves a normal draw. Correction to section 6 C: the entries are 8 bytes (`{key, value}`), not 16; the plugin never reads the list's memory itself.
 - **Mapping (unit tested):** each item stat is matched by id to the first `mapstats.txt` row (built-in pool when there is no file) whose `Stat` has that id in `itemstatcost.txt`; that row gives the target. Stats with a layer, a value of 0 or no row are dropped and logged. Values are used as they are (the game's raw units, as for `SetListStat`).
 - **Needs game:** a map item with known affixes (for example `item_maxhp_percent` 30 and `fireresist` -20, both in `mapstats.txt`) opens with exactly those properties in the log line `ItemStats: 2 item stat(s) read, 2 used`; an item with no stats draws as usual; the item is still intact at the read (the read is before `OpenRedPortal`); an item with 16 and one with 17 or more stats (the note fires only above 16); that the returned list is the affix list and not a state list.
+
+## 15. Map monster columns in the slot level's row and region record (issue #156)
+
+Build 93847, stamp `0x6ab3782c`, static (dump); nothing here was run in a game. Code: `plugins/cartographer/src/engine/level_row.cpp` (game glue), `src/levelrow/` (pure: layout, guards, plan, ledger, undo; `tests/levelrow_tests.cpp`). The first route wrote every column into the levels row only; the review showed the spawn code reads a per-game copy, so the route is now two spaces: the row for `Level`, the slot level's region record for `Density`, `Uniques` and `Monsters`.
+
+### The row (`Level` only)
+
+The levels.txt loader (`0x32eac0`..`0x33061a`) builds one descriptor per column, `0x20` bytes each (`+0` name, `+8` type, `+0x10` row offset). `Id` is at `+0x04` (2 bytes); `MonLvl`, `MonLvl(N)`, `MonLvl(H)` at `0x18`, `0x1a`, `0x1c` and `MonLvlEx`, `MonLvlEx(N)`, `MonLvlEx(H)` at `0x1e`, `0x20`, `0x22` (2 bytes each). `Level` writes these six. It works because `0x32c700` reads the row's `MonLvl` live on each call (static). The scan of `.text` for displacements `0x2dc` and `0x2e0` shows the record's own MonLvl copy is only written at `0x508973` / `0x508987`, which is why the spawn-time level comes from the row.
+
+### The region record (`Density`, `Uniques`, `Monsters`)
+
+The record array is built once per game: `0x5098b0` (called from nowhere else) calls `0x508750` for every level `1..count-1` and stores the records in the array at `*(game + 0x1d0)`; `0x508740(array, level)` returns `array[level]` (also used at `0x508d5f` and `0x50ad3a`). A record is `0x9f0` bytes.
+
+| Field | Record offset | Size | Evidence |
+|---|---|---|---|
+| copy of row `+0x0d` | `+0x00` | 1 | `0x508750` copies it; the plugin compares it with the row (the difficulty check) |
+| group count | `+0x10` | 1 | `0x509c24`..`0x509c43` (`0x509940`) |
+| group weight sum | `+0x11` | 1 | same; sum of the byte weights |
+| group count 2 | `+0x12` | 1 | same |
+| groups | `+0x14 + 0x34*i` | `0x34` each | word monstats row at +0, byte weight (monstats `+0x64`) at +2, byte at +3 (member count by `0x4195e0`, inferred); 13 groups end exactly at `+0x2b8` |
+| `MonDen` | `+0x2b8` | 4 | write `0x508921` |
+| `MonUMin` | `+0x2bc` | 1 | write `0x50892d`, read `0x419d47` |
+| `MonUMax` | `+0x2bd` | 1 | write `0x508939`, read `0x419d3f` |
+
+Readers: `0x419e80` picks the monster kind from `+0x10`, `+0x11` and `+0x14`; `0x419d20` reads `+0x2bc` / `+0x2bd`; `0x50acf0` reads `+0x2b8`. In Normal difficulty only, `0x419e80` also reads the row's umon list (`+0x3d`); maps open in Hell only, so that read is not reached.
+
+### What is written
+
+| Map column | Where | Value |
+|---|---|---|
+| `Level` | row, six `MonLvl*` fields | the level, 1 to 255 |
+| `Density` | record `+0x2b8` | the record's value plus `Density` percent, rounded half up |
+| `Uniques` | record `+0x2bc`, `+0x2bd` | the record's value plus `Uniques` percent, each at most 255; no averaging |
+| `Monsters` | record `+0x10`, `+0x11`, `+0x12` and the first groups | counts = the number of ids, per entry the monstats row, its weight (monstats `+0x64`, from the SDK view) and 0 members; the sum is stored as a byte |
+
+`Champions` has no field: the champion roll is fixed in `0x419d20` (`0x419e12`..`0x419e2c`), so it is read and checked but not applied. This replaces the earlier sentence that one pair served all special packs and was averaged; `Uniques` now scales the pair alone. Written at map open, on the game thread, just before `OpenRedPortal`.
+
+### Guards (runtime, per part, fail open)
+
+- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze or Preset) (`SlotAllowed`). Local, independent of `ValidateSlots`.
+- Row: readable, `Id` equals the slot level; `Level` off when a `MonLvl*` field is outside 0..255.
+- Record: pointer from `game + 0x1d0` and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- A part whose check fails is switched off with a log line; the others still apply. A write that fails stops the open and the undo restores what was written.
+
+### Restore
+
+The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), writing a field back only while it still holds the plugin's value. The record is undone on a failed open but only forgotten (ledger cleared, no write) on `GameLeft` and unload: the array belongs to the game that is being destroyed or is gone, so a write there is not safe. A new game builds fresh records.
+
+### Risks, and what needs the game
+
+- Needs game: that `Density`, `Uniques` and `Monsters` written to the record change the spawns (static reading says so, nothing was observed), and that `Level` shows in monster levels.
+- Inference: entry `+3` is a member count (`0x4195e0`) and 0 is a safe value; the plugin writes 0.
+- Normal difficulty also reads the row's umon list; not reached, as maps open in Hell only (#159).
+- The array bound is not checked beyond `Readable` and the level id.
+- One record per slot: a second map through the same slot in one game overwrites the first map's values for rooms that populate later.
+- Client side: a TCP/IP client writes none of this; the host spawns the monsters.
+
+### Game check (listed for later)
+
+A map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; the log shows the row and record writes; read a monster's level and kinds. Then `Density` 100 and `Uniques` 100 on a slot with a nonzero base and count packs. Leave the game and check the log reports the row put back.

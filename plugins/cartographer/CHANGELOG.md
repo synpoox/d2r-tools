@@ -15,6 +15,7 @@
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
+- A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
 - The map portal tooltip reads "Colossal Summit" instead of "Missing String"; run `tools\install.ps1` again on an older install.

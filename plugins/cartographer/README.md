@@ -67,7 +67,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Boss, Monsters | A monster id or superunique name; up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Champions, Uniques | Read and checked; not applied yet | cartographer.txt |
+| Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
+| Champions | Read and checked; not applied yet | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
 
