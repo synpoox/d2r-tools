@@ -67,14 +67,20 @@ using FreeSpotFn = uint64_t (*)(void* room, int32_t* xy, int32_t radius, uint32_
 using CreateObjectFn = void* (*)(int32_t unitType, int32_t row, int32_t x, int32_t y, Game* game, void* room, uint16_t flag, int32_t a8, int32_t a9, uint64_t a10) noexcept;
 using DataTablesBaseFn = uint8_t* (*)(uint32_t dataFlag) noexcept;
 using NameToRowFn = int32_t (*)(void* map, const char* name, int32_t logOnMiss) noexcept;
-using OperateFn = int32_t (*)(Game*, Unit* activator, Unit* object) noexcept;
+// The chest handler (objects OperateFn 4) takes the operate context the engine builds on its stack: [0] game, [8] object, [0x10] the operating player.
+struct OperateContext {
+	Game* game;
+	Unit* object;
+	Unit* activator;
+};
+using OperateFn = int32_t (*)(OperateContext*) noexcept;
 using FleeSetupFn = void (*)(Game*, Unit* source, Unit* target, int32_t r9, int32_t arg5, int32_t arg6) noexcept;
 using FleeBlockFn = int32_t (*)(Unit*) noexcept;
 using FleeTargetFn = uint8_t (*)(Unit*, uint8_t, uint8_t, uint8_t, uint8_t) noexcept;
 using TcLookupFn = const void* (*)(uint32_t dataFlag, uint16_t tcIndex, int32_t level) noexcept;
 using TcRollerFn = uint64_t (*)(Game*, Unit* a, Unit* b, const void* tc, int32_t s20, int32_t s28, int32_t s30, void* out, int32_t* s40, int32_t s48) noexcept;
 
-enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, OperateObject, FleeSetup, FleeBlock, FleeTarget, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
+enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, FleeSetup, FleeBlock, FleeTarget, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
 
 Part g_parts[PartCount] = {
 	{"DeathDrop", sig::DeathDrop, 15, false, nullptr, {}, {}},
@@ -83,7 +89,7 @@ Part g_parts[PartCount] = {
 	{"SpawnObject", sig::SpawnObject, 0, false, nullptr, {}, {}},
 	{"FreeSpot", nullptr, 0, false, nullptr, {}, {}},  // no signature: the call target inside SpawnObject
 	{"CreateObject", sig::CreateObject, 0, false, nullptr, {}, {}},
-	{"OperateObject", sig::OperateObject, 16, false, nullptr, {}, {}},
+	{"ChestOperate", sig::ChestOperate, 16, false, nullptr, {}, {}},
 	{"FleeSetup", sig::FleeSetup, 0, false, nullptr, {}, {}},
 	{"FleeBlock", sig::FleeBlock, 0, false, nullptr, {}, {}},
 	{"FleeTarget", sig::FleeTarget, 0, false, nullptr, {}, {}},
@@ -275,13 +281,16 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 	plog::Info("eventprobe: treasure chest: the roll returned %llu (tier %d, forced quality %d, at most %d items)", static_cast<unsigned long long>(rolled), ChestRollTier, ChestSelector, ChestMaxItems);
 }
 
-auto OperateHook(Game* game, Unit* activator, Unit* object) noexcept -> int32_t {
+auto OperateHook(OperateContext* ctx) noexcept -> int32_t {
 	if (g_operateOriginal == nullptr) {
 		return 0;  // reachable only if the loader gave no original (the install logs it and marks the part off)
 	}
-	if (!g_chestArmed.load(std::memory_order_relaxed) || object == nullptr || game == nullptr) {
-		return g_operateOriginal(game, activator, object);
+	if (!g_chestArmed.load(std::memory_order_relaxed) || ctx == nullptr || ctx->object == nullptr || ctx->game == nullptr) {
+		return g_operateOriginal(ctx);
 	}
+	Game* const game = ctx->game;
+	Unit* const object = ctx->object;
+	Unit* const activator = ctx->activator;
 	bool candidate = false;
 	int32_t before = 0;
 	try {
@@ -294,7 +303,7 @@ auto OperateHook(Game* game, Unit* activator, Unit* object) noexcept -> int32_t 
 	} catch (...) {
 		candidate = false;
 	}
-	const int32_t result = g_operateOriginal(game, activator, object);
+	const int32_t result = g_operateOriginal(ctx);
 	if (candidate) {
 		try {
 			OnChestUsed(game, activator, object, before, result);
@@ -434,15 +443,15 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		g_parts[DeathDrop].status.detail = "off: not hooked, because a part it needs was not found";
 	}
 	// The operate hook, for a Treasure chest's Drop: likewise only when everything the roll calls was found.
-	if (On(OperateObject) && On(TcLookup) && On(TcRoller) && On(DropLevel) && On(DataTables) && On(NameToRow)) {
-		Part& part = g_parts[OperateObject];
+	if (On(ChestOperate) && On(TcLookup) && On(TcRoller) && On(DropLevel) && On(DataTables) && On(NameToRow)) {
+		Part& part = g_parts[ChestOperate];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&OperateHook), reinterpret_cast<void**>(&g_operateOriginal));
 		const bool ok = HookOutcome(part, hooked, g_operateOriginal != nullptr);
 		g_chestHook = ok;
-	} else if (On(OperateObject)) {
-		g_parts[OperateObject].status.on = false;
-		g_parts[OperateObject].status.detail = "off: not hooked, because a part it needs was not found";
+	} else if (On(ChestOperate)) {
+		g_parts[ChestOperate].status.on = false;
+		g_parts[ChestOperate].status.detail = "off: not hooked, because a part it needs was not found";
 	}
 	// The Ambush counts kills through the SDK's monster death listener; without it an Ambush runs one wave and ends on its time-out.
 	const D2RL::LifecycleService* lifecycle = nullptr;

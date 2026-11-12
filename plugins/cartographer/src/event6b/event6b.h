@@ -189,7 +189,7 @@ private:
 
 // --- Treasure chest ---------------------------------------------------------------------------------------------------
 
-// The operate hook (0x592c40) sees every object use. The chest rolls its Drop once, when its mode changed during the call.
+// The operate hook (the chest handler 0x58e2f0) sees every chest use. The chest rolls its Drop once, when its mode changed during the call.
 enum class ChestReason : uint8_t { Rolled, NotArmed, NotTracked, NotObject, AlreadyRolled, NotOpened };
 struct ChestInput {
 	bool armed = false;    // a Treasure chest with a resolved Drop is armed
