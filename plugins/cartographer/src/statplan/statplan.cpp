@@ -173,6 +173,39 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 	return plan;
 }
 
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids)
+{
+	ItemProperties out;
+	for (const ItemStat &s : stats) {
+		const std::string label = "item stat " + std::to_string(s.stat) + (s.layer != 0 ? " (layer " + std::to_string(s.layer) + ")" : "");
+		if (!ids.loaded) {
+			out.dropped.push_back(label + ": the game's itemstatcost.txt could not be read");
+			continue;
+		}
+		if (s.stat < 0 || s.layer != 0) {
+			out.dropped.push_back(label + ": a stat with a layer cannot be a map property");
+			continue;
+		}
+		if (s.value == 0) {
+			out.dropped.push_back(label + ": its value is 0");
+			continue;
+		}
+		const PoolRow *row = nullptr;
+		for (const PoolRow &r : pool) {
+			if (ids.find(r.stat) == s.stat) {
+				row = &r;
+				break;
+			}
+		}
+		if (row == nullptr) {
+			out.dropped.push_back(label + ": no mapstats.txt row has this stat");
+			continue;
+		}
+		out.properties.push_back({row->target, row->stat, s.value});
+	}
+	return out;
+}
+
 std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids)
 {
 	std::vector<PoolIssue> out;

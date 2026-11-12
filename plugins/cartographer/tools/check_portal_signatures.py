@@ -61,6 +61,9 @@ PARTS = [
     ("SetListState", 0x2F72F0, 3, "74", 0),
     ("SetStateBit", 0x3354C0, 30, "78", 0),
     ("StateOn", 0x3351B0, 20, "E8", 0),
+    # The map item's own stats (cartographer.md section 14); both only called.
+    ("ItemListFind", 0x2F5B80, 26, "75", 0),
+    ("ItemListCopy", 0x2F64E0, 0, "FF 25", 0),
     # Shrine and Boss Drop (cartographer.md section 13). DeathDrop is hooked (15 bytes); its first relative operand (jne) is at +33.
     ("DeathDrop", 0x447B80, 33, None, 15),
     ("DropRoller", 0x441300, 20, "48 8B 05", 0),

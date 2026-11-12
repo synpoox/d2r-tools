@@ -34,7 +34,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
-  (`Level`, `Density`, ...), `ItemStats` and the panel are not applied yet. The plugin log gets `statprobe:` lines
+  (`Level`, `Density`, ...) and the panel are not applied yet. `ItemStats=1` (the item's own stats, unit tested, not run in a game) is read at use time. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
 - **Map events** (Boss and Horde spawns and the game-table names checked in game, with the event distance lowered to 12 in a scratch build for the small test map, the scaled distance itself not yet run in game; the on-screen banner text was not seen; see Tested): when a map opens, `EventChance` and `mapevents.txt` decide whether it has an event
   (the row is drawn by `Weight`). On arrival in the map level a banner shows the map's `Name` and, for an event that will

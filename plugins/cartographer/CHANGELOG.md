@@ -10,6 +10,7 @@
 - `tools\install.ps1` adds the map level to your mod's tables (no items), keeps a `.bak` copy and is safe to run twice.
 - Cave and Crypt maps are built from their layout through a manual `Maze` slot; one slot serves one tileset.
 - Random map properties from `mapstats.txt` apply to the map's monsters; `PlayerStats=1` adds player properties (off by default, test characters only, experimental).
+- `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Small maps get their event in a room far enough from where you arrive.

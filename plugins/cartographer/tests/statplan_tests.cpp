@@ -565,6 +565,47 @@ TEST_CASE("checkTableView accepts only the game's own table")
 	CHECK_FALSE(checkTableView(nullptr, 0, kStateRowSize, nullptr, 0, kStateRowSize).empty());
 }
 
+TEST_CASE("itemStatsToProperties: item stats become properties in the item's order, the pool row gives the target")
+{
+	using cartographer::stats::PoolRow;
+	using cartographer::stats::Target;
+	const StatIds ids = testIds();
+	const std::vector<PoolRow> pool = {
+		{Target::Players, "fireresist", -30, -10, 1},
+		{Target::Monsters, "item_maxhp_percent", 10, 50, 1},
+		{Target::Monsters, "strength", 1, 5, 1},
+		{Target::Players, "strength", 1, 5, 1}, // a second row for the same stat: the first one wins
+	};
+	const auto r = itemStatsToProperties({{ids.find("item_maxhp_percent"), 0, 30}, {ids.find("fireresist"), 0, -20}, {ids.find("strength"), 0, 7}}, pool, ids);
+	REQUIRE(r.properties.size() == 3);
+	CHECK(r.dropped.empty());
+	CHECK(r.properties[0] == cartographer::stats::Property{Target::Monsters, "item_maxhp_percent", 30});
+	CHECK(r.properties[1] == cartographer::stats::Property{Target::Players, "fireresist", -20});
+	CHECK(r.properties[2] == cartographer::stats::Property{Target::Monsters, "strength", 7});
+}
+
+TEST_CASE("itemStatsToProperties: a layer, a zero value and a stat no pool row names are dropped with a line each")
+{
+	using cartographer::stats::PoolRow;
+	using cartographer::stats::Target;
+	const StatIds ids = testIds();
+	const std::vector<PoolRow> pool = {{Target::Players, "fireresist", -30, -10, 1}};
+	const auto r = itemStatsToProperties({{ids.find("fireresist"), 3, -20}, {ids.find("fireresist"), 0, 0}, {ids.find("hpregen"), 0, 5}, {9999, 0, 1}, {ids.find("fireresist"), 0, -5}}, pool, ids);
+	REQUIRE(r.properties.size() == 1);
+	CHECK(r.properties[0].value == -5);
+	CHECK(r.dropped.size() == 4);
+	CHECK(itemStatsToProperties({}, pool, ids).properties.empty());
+	// Fail open: with no stat table nothing matches, and drawMapStats then draws as usual.
+	const auto none = itemStatsToProperties({{2, 0, -20}}, pool, StatIds{});
+	CHECK(none.properties.empty());
+	CHECK(none.dropped.size() == 1);
+	Settings s;
+	s.properties = 1;
+	s.itemStats = true;
+	CHECK(drawMapStats(1, MapRow{}, s, pool, none.properties).size() == 1);
+	CHECK(drawMapStats(1, MapRow{}, s, pool, r.properties) == r.properties);
+}
+
 TEST_CASE("isStaticState lists the fixed ids")
 {
 	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));
