@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
+- Reaching a map level with no map open (for example by a console warp) gives a small map instead of stopping the game (not checked in game yet).
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.

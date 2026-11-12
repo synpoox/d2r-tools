@@ -1,6 +1,7 @@
 #include "outdoor_plan.h"
 
 #include <optional>
+#include <string_view>
 #include <utility>
 
 #include "outdoor_tilesets.h"
@@ -44,6 +45,15 @@ std::string planCacheKey(const MapRequest &request) {
 	key += o.pinFiles ? ",pin" : ",free";
 	key += o.listVoid ? ",void" : ",fill";
 	return key;
+}
+
+MapRequest idleRequest(std::string_view tileset) {
+	MapRequest r;
+	r.tileset = std::string(tileset);
+	r.shape = "Winding";
+	r.size = "Small";
+	r.seed = 1;
+	return r;
 }
 
 MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {

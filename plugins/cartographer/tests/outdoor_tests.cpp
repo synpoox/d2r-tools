@@ -1195,3 +1195,21 @@ TEST_CASE("pickFarthestCell with no anchors or no candidates picks nothing and d
 	CHECK(pickFarthestCell(cells, {{0, 0}}, rng, out));
 	CHECK(out == GridCell{2, 0});
 }
+
+TEST_CASE("a slot level entered with no map open gets a small plan of its own, for every outdoor tileset (issue #250)")
+{
+	for (const OutdoorTileset &t : OutdoorTilesets) {
+		MapRequest r = idleRequest(t.name);
+		r.options.originX = 6000;
+		r.options.originY = 3000;
+		r.options.maxTilesX = 384;
+		r.options.maxTilesY = 384;
+		const MapPlan plan = planOutdoorMap(r, builtinJungleCatalogue());
+		INFO(t.name << ": " << plan.reason);
+		CHECK(plan.ok);
+		CHECK_FALSE(plan.stamps.stamps.empty());
+		CHECK(plan.stamps.tilesW <= 384);
+		CHECK(plan.stamps.tilesH <= 384);
+		CHECK(planOutdoorMap(r, builtinJungleCatalogue()).hash == plan.hash);  // the same request is the same plan
+	}
+}

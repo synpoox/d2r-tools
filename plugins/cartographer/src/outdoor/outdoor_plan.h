@@ -59,6 +59,11 @@ struct MapPlan {
 // of the others). Never throws for bad input; allocation failures propagate.
 MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue);
 
+// The request for a slot level that is entered with no map open (a warp, portal or cheat the plugin did not open): the smallest map of the
+// tileset, a fixed seed, the default shape. The game cannot build a slot level from its row (issue #250), so the hook builds this instead.
+// Origin and limits are the slot row's, filled by the caller.
+MapRequest idleRequest(std::string_view tileset);
+
 // The cache key of a request: seed, lower-cased tileset, shape and size, origin, limits and options. shapes.txt is not part of
 // it, so the owner clears the cache when the tables are reloaded.
 std::string planCacheKey(const MapRequest &request);

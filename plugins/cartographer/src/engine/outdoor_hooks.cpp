@@ -307,7 +307,27 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		}
 	}
 	if (job == nullptr) {
-		*why = "no outdoor map was opened in this game";
+		// No map is open: a warp, a portal or a cheat reached the slot level anyway. The game cannot build it from its row (issue #250), so build the
+		// smallest map of this slot's tileset. Fails open: when that plan cannot be made either, the game builds its own level as before.
+		const int levelId = Read<int32_t>(level, LvlId);
+		for (int i = 0; i < SlotCount && job == nullptr; ++i) {
+			if (levelId > 0 && g_slotLevels[i].load() == levelId) {
+				auto idle = std::make_shared<Job>();
+				idle->name = "(no map open)";
+				idle->tileset = co::OutdoorTilesets[i].name;
+				const co::MapRequest request = co::idleRequest(idle->tileset);
+				idle->shape = request.shape;
+				idle->size = request.size;
+				idle->seed = request.seed;
+				job = idle;
+				geometry = g_geometry[i];
+				refusal = g_slotRefusal[i];
+				plog::Warn("outdoor slot level %d entered with no map open: building a small %s map of its own instead of the game's level", levelId, idle->tileset.c_str());
+			}
+		}
+	}
+	if (job == nullptr) {
+		*why = "this level is not an outdoor slot level";
 		return nullptr;
 	}
 	if (Read<int32_t>(level, LvlId) != g_slotLevels[SlotIndexFor(job->tileset)].load()) {

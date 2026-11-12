@@ -73,3 +73,23 @@ Decision: the stamps' file draws depend on nothing else. The level build still r
 - The host's call is in `portal.cpp` (`NoteMapOpenedForClients`): `MapSyncMapOpened(..., maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor)`, with `outdoor = MapIsOutdoor(map)`. The client classifies a map with the same `MapIsOutdoor`, so both agree (a Jungle map's name still syncs).
 
 Needs a game (deferred by the owner until the plugin is complete): a TCP/IP host and a remote client with identical tables open one Jungle map. Confirm (1) both logs show the same `outdoor slot level N: planned ... plan <hash>` line and `built as planned`; (2) the room lists (count and rect of each room, `OutdoorProbe = 1`) are equal; (3) the client log shows `the next build of the Outdoor slot level here uses the host's layout seed` before its first build of the slot level, and, if the client builds first, the skip line and the stock layout instead; (4) in a single-process host both DRLGs print one plan line (cached).
+
+### Entering an outdoor slot level with no map open (issue #250)
+
+Seen in the slot-11 check ([2026-11-12-slot11-check.md](../../cartographer/checks/2026-11-12-slot11-check.md)): `cheat goto 141` into the Outdoor slot level with no map open stopped the game ("outdoor dimensions are too small to contain the map border"). With no job, `PrepareSlot` used to return null and the game built the level from its slot row, which it cannot do (the row is 384 x 384 tiles at (6000, 3000), copied from level 111, and carries no piece data).
+
+Fix (desk; the plan is unit tested, the hook has not run in a game): with no map open, `PrepareSlot` plans `idleRequest(tileset)` instead (Winding, Small, seed 1, the slot row's origin and limits) for the tileset whose slot is the level being built. It still fails open: when that plan or any other precondition fails, the game builds its own level as before. The idle build counts as "ran, no job" in `SlotBuildState`, so (as before) it does not refuse a later map open, and a map opened afterwards in the same game finds the level already built.
+
+Every way into a slot level with no map open, from the code and the installer's `levels.txt` row (`Vis0..7` 0, `Warp0..7` -1, `Waypoint` 255, `Quest` 0, no `LevelEntry`/`LevelWarp`, `LevelGroup` Null, `Depend` 0):
+
+| Path | What happens |
+|---|---|
+| Waypoint | `Waypoint` 255 is "none": no waypoint panel entry and no waypoint object; not reachable (table reading, not seen in game) |
+| Level warp | No other level's `Vis`/`Warp` names the slot (the installer writes only its own rows) and the slot's own Warp is -1; not reachable. A different mod linking a level to a slot id would reach it, and the idle build then applies |
+| Red portal, map open | The normal path. `g_job` stays set until the game is left (`OutdoorMapCancelled` only runs when no portal opened), so a rebuild of the level has the same job, seed and plan |
+| Town portal back after the map is "closed" | There is no map close; the job stays for the game, so the blue portal leads to the same level (or a rebuild with the same plan) |
+| Stale red portal after Save and Exit or rejoin | Portals are not saved; `OutdoorGameLeft` clears the job and slot state and a new game has no red portal. Where a character saved inside the slot level resumes (the act's town, as the slot row is Act 5) is not seen in game |
+| Party member's portal (multiplayer, not in scope) | A client builds with the host's map after map sync; a client that builds before the sync (`decideApply` skip) now gets the idle plan instead of a crash, but a layout that differs from the host's |
+| Console cheats (`cheat goto <level>`) | The crash found by the slot-11 check. Now the idle build when the outdoor hooks are live; with them off (a part missing, no Outdoor slot) the game builds its own level as before and a cheat can still stop it |
+
+Game check pending: in a Hell test game with no map opened, `cheat goto <Outdoor slot level id>` and `<OutdoorSnow slot level id>`; the log should show `entered with no map open` and `built as planned`, the game must not stop and the player arrives on a small map. Also Save and Exit inside a slot level, rejoin, and note the level the character is in.
