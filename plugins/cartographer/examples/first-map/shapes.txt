@@ -1,0 +1,2 @@
+Name	Base	MinPath	MaxPath	Straight	MinBranches	MaxBranches	Loop
+Snake	Winding	12	16	30	2	4	0

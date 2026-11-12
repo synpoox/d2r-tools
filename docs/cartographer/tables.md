@@ -1,36 +1,72 @@
 # Cartographer table reference
 
-> **Draft.** Features land in later phases. See [README.md](README.md) for a walk-through.
+> Every column of every table, with its default and an example. New here? Start with [first-map.md](first-map.md).
+> A working copy of each table is in [`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/).
 
-All tables are tab-separated `.txt` files with a header row. They live in the mod's `data/global/excel/d2rloader/cartographer/` folder.
+All tables are tab-separated `.txt` files with a header row (save from a spreadsheet as "Text (Tab delimited)", or edit in
+any text editor). They live in the mod's `<Mod>.mpq\data\global\excel\d2rloader\cartographer\` folder.
 
-- Words that are Cartographer's own (tileset, shape, size, target, kind) ignore case.
-- Names from the game's own tables (monster `Id`, stat names) must match exactly; item codes ignore case. The check suggests the right spelling.
+What the plugin reads, and what takes effect in game today:
+
+| File | Read today? | Applied in game today? |
+|---|---|---|
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
+| `cartographer.txt` | Yes, checked the same way. | No. The settings are checked and reported but nothing uses them yet. |
+| `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
+| `mapstats.txt`, `mapevents.txt`, `shapes.txt`, `tilesets.txt` | Not yet. | No. The rules below are what the code behind them follows, but nothing in the plugin draws, rolls or builds from these files yet (generated layouts, properties and events come in later phases). A file you add now is ignored. |
+
+Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
+happens in game.
+
+Nothing in this plugin has been run in a game yet. This page is checked against the code and the unit tests only.
+
+General rules for every table:
+
+- Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt` says so in the report).
+- Blank lines are skipped. A leading byte order mark (what some editors add) is fine.
+- Each cell is trimmed of spaces at both ends.
+
+- Words that are Cartographer's own (tileset, shape, size, difficulty, target, kind) ignore case.
+- Names from the game's own tables (monster `Id`, superunique name, stat names) must match exactly, capital letters included. Item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
+- A bad row is skipped and named in `cartographer-report.txt` (and by `cartographer check`); the other rows still load.
 
 ## maps.txt (required)
 
-One row per map.
+One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`; without one of them the whole file is refused.
 
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
-| `Name` | yes | The map's name, shown on entry | none | Shorelines |
-| `Tileset` | yes | A tileset name (see README) | none | Jungle |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl`, or a name from `shapes.txt` | none | Corridor |
+| `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
+| `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. Names from `shapes.txt` are not accepted yet. A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
-| `Level` | no | Monster level in the map | 85 | 90 |
-| `Item` | yes | Item code that opens this map, and only this map. Unique across maps. The item needs item spell 16 (`pSpell` in `misc.txt`); the mod provides it | none | `t20` |
-| `Boss` | no | A monster `Id` or unique monster name placed at the end of the path (case must match) | no boss | `fallenshaman1` |
-| `Monsters` | no | Up to 10 monster `Id`s, separated by commas | the tileset's own monsters | `quillrat1,zombie3` |
+| `Level` | no | Monster level in the map, 1 to 255 (checked only; not applied yet) | 85 | 90 |
+| `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
+| `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
+| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
-| `MinCharLevel` | no | Character level needed | 1 | 80 |
-| `Properties` | no | Random properties for this map | the `cartographer.txt` value (6) | 4 |
-| `EventChance` | no | Percent chance of an event | the `cartographer.txt` value (20) | 25 |
-| `Density` | no | Percent more monsters than the tileset's normal | 0 | 50 |
-| `Champions` | no | Percent more champion packs | 0 | 50 |
-| `Uniques` | no | Percent more unique packs | 0 | 25 |
+| `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
+| `Properties` | no | Random properties for this map, 0 to 20 | the `cartographer.txt` value (6) | 4 |
+| `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
+| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 | 0 | 50 |
+| `Champions` | no | Percent more champion packs, 0 to 1000 | 0 | 50 |
+| `Uniques` | no | Percent more unique packs, 0 to 1000 | 0 | 25 |
 
-Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in. A row with no `Item`, an unknown item code, an item without item spell 16, or an item another map already uses is refused with a message, and the row is skipped.
+Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
+
+A row is refused with a message, and skipped, when:
+
+- `Name` is empty or already used;
+- `Tileset` is empty, unknown or not built yet;
+- `Shape`, `Size` or `Difficulty` is not one of the words above;
+- a number is not a whole number in its range;
+- `Item` is empty, longer than 4 characters, not an item in `misc.txt`, `weapons.txt` or `armor.txt`, an item without item spell 16, or an item another map already uses;
+- `Boss` or a `Monsters` entry is not in the game's tables, or `Monsters` has more than 10 entries.
+
+Each name check is skipped only when the game table it needs cannot be read, and the report says so: `Boss` needs both `monstats` and `superuniques`, `Monsters` needs `monstats`, and `Item` needs the item tables. The spell-16 check needs `misc.txt` with a `pSpell` column; without it the check is skipped, and an item without spell 16 simply never opens its map.
+
+A map opens only in the `Difficulty` it names (Hell unless you say otherwise), in Harrogath, for a character of at least `MinCharLevel`, once per game. This is what acts in game today. A refused map stays in the inventory and a sentence says why. Planned, not built yet: a maze map has an entrance and no exit, the player arrives through the portal, and the boss and the event room are at the far end of the path.
 
 ## mapstats.txt (optional)
 
@@ -53,7 +89,7 @@ Rules and limits:
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
-- A negative `Properties` in `maps.txt` counts as empty (the setting is used); a negative `Properties` in `cartographer.txt` counts as 0.
+- `Properties` in `maps.txt` and in `cartographer.txt` is 0 to 20. A negative value is refused (the map row is skipped; the setting keeps its default).
 - With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. If the item has no stats, a normal draw is made instead.
 
 ## mapevents.txt (optional)
@@ -91,18 +127,18 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings. Two columns, `Setting` and `Value`.
+Global settings. Checked and reported today, not applied yet. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
-| `Properties` | Random properties per map | 6 | 4 |
-| `EventChance` | Percent chance of an event per map | 20 | 30 |
-| `ItemStats` | 1 means a map item's own stats are used in place of a draw | 0 | 1 |
-| `Town` | The town the portal opens from | Harrogath | Harrogath |
+| `Properties` | Random properties per map, 0 to 20 | 6 | 4 |
+| `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
+| `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
+| `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 
 ## tilesets.txt (optional, advanced)
 
-Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your rooms are used only by Cartographer maps.
+Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your rooms are used only by Cartographer maps. Not read by the plugin yet (see the table at the top).
 
 | Column | What to put | Default | Example |
 |---|---|---|---|
@@ -112,7 +148,7 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 ## shapes.txt (optional, advanced)
 
-Adds a new shape defined with numbers. Use its name in the `Shape` column.
+Adds a new shape defined with numbers. Use its name in the `Shape` column once the loader accepts it (it does not yet). Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
 
 Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column. The generator gives each layout a fixed amount of work (about 25 ms at most on a desktop), so a row that is too tight to build is reported as too tight right away instead of making the game wait. A row parses with at most 48 tries of that size, about a second at the very worst.
 
