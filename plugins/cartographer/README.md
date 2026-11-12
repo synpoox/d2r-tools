@@ -111,9 +111,10 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, and the portal tooltip reading "Colossal Summit".
+  Boss, Horde and Ambush events, the portal tooltip reading "Colossal Summit", and `MapNames=1` (a map's own name
+  seen on its portal, automap and banner in single player).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
-  banner text (not seen on screen), `PlayerStats`, `MapNames`, multiplayer sync, arriving in the planned maze entrance
+  banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, arriving in the planned maze entrance
   room, Nightmare and Hell difficulty for mazes, and a second Crypt map in one game.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

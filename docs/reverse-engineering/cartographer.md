@@ -862,7 +862,7 @@ Correction to section 6: the list chain is on the owner list `[unit+0x88]` (`+0x
 
 ### Game check 2026-11-12 (second): player stats on the character sheet (issue #104)
 
-Run after PR #131 (the pick uses the compiled empty values). Cartographer was built from origin/main at or just after 08274e0 (#131) with `toolsuild.ps1` and the DLL copied into the slot's plugins folder; the run's notes do not record the exact commit. Slot 11, test mod `D2RToolsTest`, test save `cartos` (Barbarian level 1, Normal), D2R 3.3 build 93847, D2RLoader 1.3.1-beta, `core-maps` moved out, vanilla `itemstatcost.txt` in the test mod, `PlayerStats=1`, one map `StatsMap` with Players rows `strength` +40 and `coldresist` +30. One run, single player. Levels: live game (this check); the unit tests and clean build of the same code ran before it.
+Run after PR #131 (the pick uses the compiled empty values). Cartographer was built from origin/main at or just after 08274e0 (#131) with `tools\build.ps1` and the DLL copied into the slot's plugins folder; the run's notes do not record the exact commit. Slot 11, test mod `D2RToolsTest`, test save `cartos` (Barbarian level 1, Normal), D2R 3.3 build 93847, D2RLoader 1.3.1-beta, `core-maps` moved out, vanilla `itemstatcost.txt` in the test mod, `PlayerStats=1`, one map `StatsMap` with Players rows `strength` +40 and `coldresist` +30. One run, single player. Levels: live game (this check); the unit tests and clean build of the same code ran before it.
 
 | Check | Level | Result |
 |---|---|---|
@@ -1338,6 +1338,24 @@ headers and guides, not run), **needs game** (not shown). Nothing here was run i
 - **Data flag, inference:** the plugin picks the levels bank with the server's data flag (`game + 0x106`). The readers pick theirs by themselves; the tooltip uses the object unit's flag (`0x34a0e0`, `unit + 0x1bd`, at `0xc185d` and `0xc188a`). That both give the same bank in single player is inference, not shown. If they differed, the write would land in a bank nobody reads (the slot keeps its name).
 - Restore by saved row pointer: if the game freed its levels table and left the heap untouched, bytes that still hold our key would be written into freed memory. `Readable` and the exact 40-byte key match make a stray write very unlikely, and the game loads the table once and tears it down at exit, so this is accepted.
 - Restore on `GameLeft` assumes the event fires on a thread that may touch the table; one copy of the table was found in the earlier check, a second data bank was not (the plugin uses the game's own data flag).
+
+#### Game check 2026-11-12 (MapNames)
+
+Live check of `MapNames=1` (PR #124, off by default) on D2R 3.3 build 93847, D2RLoader 1.3.1-beta, slot 11 (test mod `D2RToolsTest`), test save `cartos` (Barbarian level 1, Normal), single player. `core-maps` moved out, the mod's own `levels.txt` plus the installer's "Cartographer Preset" (level 139), vanilla `lvlprest.txt`, `lvlmaze.txt`, `itemstatcost.txt` and a `misc.txt` with the `cm0` item, one map `Shorelines` (Preset, Corridor, Normal, no event, no stats), `MapNames=1`. Two games, same process.
+
+**Result: the one unproven link holds.** (live game) The key lookup resolves `cartographer:N0` and `cartographer:E0` written into the slot row after the tables loaded.
+
+- Log, at load: `map names: registered 1 map name(s) as strings`; `cartographer check` reports `Map names: on (written, not verified in game)` and `part LevelsRow: found by signature`.
+- The log lines quoted below (and the `put back` restore line) were read during the run but were not kept as evidence; no log file or screenshot is stored with this PR.
+- Log, on `cartographer open Shorelines`: `map names: level 139 row 0000000125941524: writing 'cartographer:N0' and 'cartographer:E0'`. On leaving: `map names: level 139 text put back`. The same pair appeared in the second game.
+- The `getStringByKey` self-check logs nothing when it passes (it logs only on failure), so this run shows it passed by the absence of the failure line and by the write that followed.
+- Portal tooltip (hover in town): `SHORELINES`. Not "Missing String", not "Colossal Summit".
+- Entry banner on arrival: `Entering Shorelines` (red text, first screenshot after the load).
+- Automap title inside the map, top right: `SHORELINES`, above the difficulty and mod lines.
+- Second game in the same process: the tooltip read `SHORELINES` again after the row had been put back and written anew.
+- No crash file, no error or warning line from the plugin.
+
+Levels kept apart: unit tests and a clean build (`tools\build.ps1 -Plugin cartographer -Test`, 12 of 12) were earlier runs, not part of this PR, and were not re-run for it; live game, one map name, one language (English), one character, two games. Not checked: the stock name before a map is opened (no screen shows the slot level then; the `put back` line is the only evidence of the restore), a long map name on the banner, TCP/IP (the host's name on a client, #130), a second map in the same game (the one-row-per-slot limit above), other languages, the levels bank of the data flag (the write landed in the bank the tooltip and automap read, which settles that inference for single player), Steam build 94995.
 
 ## 11. Event Spawn names from the game's compiled tables (issue #95)
 
