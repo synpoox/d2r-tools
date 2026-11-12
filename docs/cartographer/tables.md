@@ -10,10 +10,10 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss`, `Properties` and `EventChance` act; every map opens the installed Maze level. `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level when it opens (experimental, not verified in game); `Champions` is checked, then ignored. |
-| `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss`, `Properties` and `EventChance` act; a Cave or Crypt map opens the installed Maze level, a Jungle or Snow map the Outdoor or OutdoorSnow level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
+| `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
 | `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze` row); you do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player unless `PlayerStats` is 0 (monsters and the player checked in game, single player, one test character). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: no, it is read and checked, but nothing rolls events from it yet (later phase). |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player unless `PlayerStats` is 0 (monsters and the player checked in game, single player, one test character). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
@@ -46,16 +46,16 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (the Maze level is one of them: see the installer's `-Tileset`), and `Jungle` and `Snow` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
-| `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental, not verified in game) | 85 | 90 |
+| `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
-| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; experimental, not verified in game) | the tileset's own monsters | `quillrat1,zombie1` |
+| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; the listed monsters filled the map in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
-| `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
+| `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; checked in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
-| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (scales the level's own density; experimental, not verified in game; adds nothing on a level whose density is 0) | 0 | 50 |
-| `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 to 1000 (scales the level's own unique pack count; experimental, not verified in game; adds nothing on a level whose count is 0) | 0 | 25 |
+| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
+| `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; never applied, the game has no setting for it) | 0 | 50 |
+| `Uniques` | no | Percent more unique packs, 0 to 1000 (scales the level's own unique pack count; experimental; adds nothing on a level whose count is 0) | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -113,7 +113,7 @@ Rules and limits:
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
 - `Properties` in `maps.txt` and in `cartographer.txt` is 0 to 20. A negative value is refused (the map row is skipped; the setting keeps its default).
-- With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. Each item stat is matched to the first `mapstats.txt` row with the same `Stat`, which says whether it goes on monsters or players; a stat with no such row (or a layer, or a value of 0) is left out and the log says so. If the item has no usable stats, a normal draw is made instead. Not checked in a game yet; at most the first 16 stats are read.
+- With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. Each item stat is matched to the first `mapstats.txt` row with the same `Stat`, which says whether it goes on monsters or players; a stat with no such row (or a layer, or a value of 0) is left out and the log says so. If the item has no usable stats, a normal draw is made instead (seen in game: a player stat from the item went onto the character; monster stats from an item were not checked). At most the first 16 stats are read.
 - `Players` rows are applied unless `PlayerStats` is `0` in `cartographer.txt` (default `1`; `Monsters` rows are applied either way). The player's stats sit on the character while it is in the map and are removed on leaving it. In the Hell check (single player, one test character, 2026-11-12) a Save and Exit inside the map and a reload left the character as before the map. An autosave inside the map, multiplayer, death and curses were not checked.
 - Some stats cannot be used. The game reads them as a total and writes the result back as the saved value, so the map's value would stay in the character: `statpts`, `newskills`, `gold`, `goldbank`, `hitpoints`, `mana`, `stamina`, `level` and `experience`. Such a `Players` row is skipped when drawn, and `cartographer check` and the report name it. `level` is also skipped on `Monsters`, because the game sets the monster's level itself, and so are `hitpoints`, `mana` and `stamina`, because the game rewrites them on every hit and regeneration (use `maxhp`, `maxmana`, `maxstamina`). Stats that need a skill, state or monster type number (`item_addclassskills`, `item_nonclassskill`, `state`, `item_singleskill`, `item_elemskill`, `item_aura`, `item_reanimate`, `attack_vs_montype`, `damage_vs_montype`, `item_addskill_tab`, `item_skillonattack`, `item_skillonkill`, `item_skillondeath`, `item_skillonhit`, `item_skillonlevelup`, `item_skillongethit` and `item_charged_skill`; the stats with a Save Param Bits value in the vanilla 3.3.0 `itemstatcost.txt`) are skipped on both, because a map row cannot name the skill, state or monster type yet. The maxima (`maxhp`, `maxmana`, `maxstamina`) and the attributes are fine.
 
@@ -157,12 +157,12 @@ The kinds:
 | `Boss` | A boss waits in the event room with `Count` minions |
 | `Ambush` | When a player reaches the event room, `Waves` waves of `Count` of `Spawn` attack |
 | `Horde` | The event room is packed with `Count` of `Spawn` |
-| `Treasure` | A treasure monster flees and drops from `Drop` when killed. If `Spawn` is an object, a chest that drops from `Drop` is placed |
+| `Treasure` | A treasure monster flees and drops from `Drop` when killed. If `Spawn` is an object, a chest that drops from `Drop` is placed; it is always unlocked (its loot is not confirmed in game) |
 | `Shrine` | An object (shrine, well or chest) is placed in the event room |
 
 ## cartographer.txt (optional)
 
-Global settings. `Properties` and `PlayerStats` are used when a map opens (checked in game, single player); the others are checked and reported only. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings, read when the game starts; `Properties` and `PlayerStats` are checked in game (single player). Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
@@ -173,6 +173,9 @@ Global settings. `Properties` and `PlayerStats` are used when a map opens (check
 | `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the entry banner (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
+| `OutdoorProbe` | `1` logs what the game builds for an outdoor map, for debugging; `0` or `1` | 0 | 0 |
+| `AutoCheck` | `1` runs a game check by itself in a Hell game, for test slots only; `0` or `1` | 0 | 0 |
+| `AutoCheckMap` | The `Name` of the map `AutoCheck` opens, for test slots only | none | Shorelines |
 
 ## tilesets.txt (optional, advanced)
 
