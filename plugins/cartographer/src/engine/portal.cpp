@@ -250,7 +250,13 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 		return std::string("Cartographer: the ") + SlotNameFor(map) + " slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
 	}
 	if (IsOutdoorMap(map)) {
-		return OutdoorProblem(map, tables);
+		if (const std::string problem = OutdoorProblem(map, tables); !problem.empty()) {
+			return problem;
+		}
+		if (OutdoorSlotBuilt()) {
+			return "Cartographer: the Outdoor level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+		}
+		return {};
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
@@ -267,7 +273,8 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 }
 
 // Opens `map` through its slot. A maze map hands its plan to the maze hooks first; if the game then opens no portal, the plan is dropped.
-auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level) noexcept -> int32_t {
+// `refusal` is set, with the portal not opened, when an outdoor map's plan cannot be made.
+auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level, std::string* refusal) noexcept -> int32_t {
 	const bool maze = IsMazeMap(map);
 	const bool outdoor = IsOutdoorMap(map);
 	if (maze) {
@@ -275,6 +282,12 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	if (outdoor) {
 		OutdoorMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
+		// The plan is made now (and cached for the build), so a map that cannot be planned is refused before a portal exists.
+		*refusal = OutdoorPlanProblem();
+		if (!refusal->empty()) {
+			OutdoorMapCancelled();
+			return 0;
+		}
 	}
 	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
@@ -414,7 +427,12 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 			itemStats.clear();
 		}
 	}
-	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level);
+	std::string refusal;
+	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level, &refusal);
+	if (!refusal.empty()) {
+		Tell(refusal);
+		return;
+	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, player, itemStats);
@@ -478,7 +496,12 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d from the console", map->name.c_str(), map->tileset.c_str(), level);
-	const int32_t opened = OpenMapPortal(game, unit, *map, *tables, level);
+	std::string refusal;
+	const int32_t opened = OpenMapPortal(game, unit, *map, *tables, level, &refusal);
+	if (!refusal.empty()) {
+		Tell(refusal);
+		return;
+	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, unit);

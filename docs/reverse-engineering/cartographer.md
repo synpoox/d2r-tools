@@ -1166,15 +1166,14 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 
 - The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142; the S2 spike (section 16) saw the void edge as acceptable in game (dark rock, no hole). The whole feature stays off until the builder itself is checked in game.
 - The entry room: whether the plan's entrance cell is where the player arrives is also #142 (section 16: a portal arrival landed in the entry cell, with a room flag the spike set).
-- Nothing opens an outdoor map yet (#144), so `OutdoorMapOpened` has no caller.
+- A Jungle map opens through `portal.cpp` (#144, see "Opening an outdoor map" below); that path has not run in a game.
 - `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
 - Nothing here has run in a game.
 
-
-
 ### Opening an outdoor map (issue #144)
 
-A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). It needs `OutdoorBuild = 1` (the hooks are not installed otherwise). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 14). Desk work only; the open path has not run in a game. Multiplayer: the host seed is not sent to clients for outdoor maps yet (section 12 carries the maze seed only).
+A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). It needs `OutdoorBuild = 1` (the hooks are not installed otherwise). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 16). Desk work only; the open path has not run in a game. Multiplayer: the host seed is not sent to clients for outdoor maps yet (section 12 carries the maze seed only; left to PR #182). The installer sets `SubType` and `SubTheme` to -1 on the row, so the Siege sub-level set of level 111 is not carried over. Before the portal opens, `OpenMapPortal` makes the plan (`OutdoorPlanProblem`, the same cached plan the build uses) and refuses with its reason if it fails, so the game's own Act 5 builder never runs on a Jungle-typed slot. After the slot level has been built with a map open (`OutdoorSlotBuilt`, a `SlotBuildState` like the maze's, cleared on leaving the game), or while it is being built, a second outdoor open is refused with a message. The installer's repair path for an existing "Cartographer Outdoor" row still fixes only Quest, LevelGroup, Entry, Warp and Vis (Act, DrlgType, LevelType, size and offsets are refused by the plugin at open instead).
+
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 
 **Status:** written and unit tested; signatures checked statically on the build 93847 dump (`check_portal_signatures.py`); **not run in a game**. Code: `plugins/cartographer/src/engine/event_apply.cpp`; pure logic (spawn name lookup, placement, event room choice, spawn plan, entry lines, banner timing) in `src/eventplan/`, the decision in `src/events/`.

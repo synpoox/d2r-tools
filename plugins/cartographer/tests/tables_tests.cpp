@@ -767,7 +767,7 @@ auto ExampleNames() -> GameNames {
 	n.monsters.push_back("quillrat1");
 	n.superUniques.push_back("Bishibosh");
 	n.haveItemSpells = true;
-	n.itemSpells = {{"t20", 16}, {"t21", 16}};
+	n.itemSpells = {{"t20", 16}, {"t21", 16}, {"t22", 16}};
 	return n;
 }
 
@@ -779,7 +779,7 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, nullptr, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
 	REQUIRE(bosses.size() == 1);
-	REQUIRE(maps.size() == 2);
+	REQUIRE(maps.size() == 3);
 	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
@@ -820,7 +820,7 @@ TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats a
 	CHECK(events[0].weight == 2);
 	CHECK(events[1].drop.empty());
 	CHECK(events[2].drop == "Act 5 (H) Super C");
-	CHECK(maps.size() == 2);
+	CHECK(maps.size() == 3);
 }
 
 TEST_CASE("shapes.txt: a good row loads, a bad row is reported with its line and skipped") {

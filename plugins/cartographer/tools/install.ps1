@@ -208,6 +208,8 @@ if ($existing -ge 0) {
     Set-Cell $levels $cells 'OffsetX' '6000'
     Set-Cell $levels $cells 'OffsetY' '0'
     Set-CellIf $levels $cells 'Position' '0'
+    Set-CellIf $levels $cells 'SubType' '-1'    # the template's Siege sub-level set does not belong on a Jungle level
+    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) {
         Set-Cell $levels $cells "Vis$n" '0'
         Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
