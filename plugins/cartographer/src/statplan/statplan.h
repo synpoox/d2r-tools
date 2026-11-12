@@ -71,6 +71,24 @@ std::string refusedReason(Target target, std::string_view stat, int id);
 // is skipped. With `playerStats` false every player property is skipped (the PlayerStats setting is off).
 Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats = true);
 
+// One stat read off the map item (ItemStats=1): the game's stat id, layer and value.
+struct ItemStat {
+	int stat = 0;
+	int layer = 0;
+	int value = 0;
+};
+
+struct ItemProperties {
+	std::vector<Property> properties; // in the item's order
+	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out
+};
+
+// Turns the map item's stats into the map's properties, in the item's order. Each stat is matched by id to the first
+// `pool` row whose Stat has that id in `ids`; that row gives the target (monsters or players), so the pool says which
+// item stats a map may carry. A stat with a layer, a value of 0, or no pool row is dropped and listed in `dropped`.
+// With `ids.loaded` false nothing can be matched: every stat is dropped.
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids);
+
 // Warnings for pool rows whose Stat is not in itemstatcost, or that buildPlan would refuse (row is the 0-based index
 // into the pool). Empty when the table was not read (fail open: unchecked, not wrong).
 std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids);

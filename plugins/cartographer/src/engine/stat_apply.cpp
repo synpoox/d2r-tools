@@ -526,7 +526,8 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	return g_monstersOn.load() || g_playersOn.load();
 }
 
-void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings) {
+void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
+                        const std::vector<cartographer::statplan::ItemStat>& itemStats) {
 	if (tables == nullptr || (!g_monstersOn.load() && !g_playersOn.load())) {
 		return;
 	}
@@ -534,13 +535,19 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);
 	cartographer::stats::Settings settings;
 	settings.properties = tables->settings.properties;
-	settings.itemStats = false;  // the ItemStats mode is not applied yet
-	if (tables->settings.itemStats != 0) {
-		plog::Warn("ItemStats is set, but the map item's own stats are not applied yet: the properties are drawn as usual");
+	settings.itemStats = tables->settings.itemStats != 0;
+	std::vector<cartographer::stats::Property> fromItem;
+	if (settings.itemStats) {
+		const auto mapped = sp::itemStatsToProperties(itemStats, tables->pool.empty() ? cartographer::stats::builtInPool() : tables->pool, tables->statIds);
+		for (const std::string& line : mapped.dropped) {
+			plog::Warn("ItemStats: %s", line.c_str());
+		}
+		fromItem = mapped.properties;
+		plog::Info("ItemStats: %zu item stat(s) read, %zu used%s", itemStats.size(), fromItem.size(), fromItem.empty() ? "; drawing as usual" : "");
 	}
 	cartographer::stats::MapRow row;
 	row.properties = map.properties;
-	const auto drawn = cartographer::stats::drawMapStats(seed, row, settings, tables->pool);
+	const auto drawn = cartographer::stats::drawMapStats(seed, row, settings, tables->pool, fromItem);
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
 	plog::Info("map stats for '%s' (seed %llu, slot level %d): %zu drawn, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,

@@ -21,7 +21,7 @@ using namespace carto;
 
 namespace {
 
-const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tDifficulty\tMinCharLevel\tProperties\tEventChance\n";
+const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tMinCharLevel\tProperties\tEventChance\n";
 
 auto Names() -> GameNames {
 	GameNames n;
@@ -64,14 +64,13 @@ TEST_CASE("a four-cell map loads with every default") {
 	CHECK(maps[0].item == "t20");
 	CHECK(maps[0].size == "Medium");
 	CHECK(maps[0].level == 85);
-	CHECK(maps[0].difficulty == Hell);
 	CHECK(maps[0].properties == -1);
 	CHECK(maps[0].eventChance == -1);
 }
 
 TEST_CASE("our own words ignore case, the game's names do not") {
 	Report report;
-	const auto maps = Load("a\tPRESET\tcorridor\tsmall\t\tt20\t\t\thell\n", report);
+	const auto maps = Load("a\tPRESET\tcorridor\tsmall\t\tt20\t\t\n", report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].tileset == "Preset");
 	CHECK(maps[0].shape == "Corridor");
@@ -339,6 +338,9 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	GateState s = ok;
 	s.difficulty = Nightmare;
 	CHECK(CheckGates(map, s) == Gate::Difficulty);
+	s.difficulty = Normal;
+	CHECK(CheckGates(map, s) == Gate::Difficulty);
+	CHECK(RefusalText(Gate::Difficulty, map, s) == "Cartographer: Test can only be opened in Hell.");
 	s = ok;
 	s.areaId = 40;
 	CHECK(CheckGates(map, s) == Gate::NotInTown);
@@ -356,6 +358,23 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	CHECK(CheckGates(high, s) == Gate::CharLevel);
 	CHECK(RefusalText(Gate::CharLevel, high, s).find("needs character level 80 (you are 70)") != std::string::npos);
 	CHECK(RefusalText(Gate::AlreadyOpen, map, s).find("already been opened in this game") != std::string::npos);
+}
+
+TEST_CASE("an old Difficulty column is ignored with a note, not an error") {
+	Report report;
+	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tDifficulty\nOld\tPreset\tCorridor\tt20\tNormal\nBad\tPreset\tLoop\tt21\tSoon\n", Names(), report);
+	CHECK(maps.size() == 2);
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].severity == Severity::Note);
+	CHECK(Joined(report).find("the column 'Difficulty' is ignored: maps can only be opened in Hell.") != std::string::npos);
+	GateState state;
+	state.difficulty = Normal;
+	state.charLevel = 90;
+	state.areaId = state.townId = 109;
+	CHECK(CheckGates(maps[0], state) == Gate::Difficulty);
+	state.difficulty = Hell;
+	CHECK(CheckGates(maps[0], state) == Gate::Open);
 }
 
 TEST_CASE("the second open is refused after the first counts") {

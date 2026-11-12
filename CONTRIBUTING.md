@@ -52,6 +52,11 @@ Add player-visible or compatibility changes to the plugin's `CHANGELOG.md` under
 under `## X.Y.Z - YYYY-MM-DD` (release date), as in [docs/RELEASING.md](docs/RELEASING.md). The release notes quote that
 section, so write it for players. Update the root `README.md` plugin table (version, description) when either changes; it lists released plugins only.
 
+`.gitattributes` sets `merge=union` on `plugins/*/CHANGELOG.md` and `plugins/*/README.md`, so a local merge keeps both
+sides' added lines instead of stopping on a conflict. GitHub's own mergeability check ignores merge drivers, so a PR can
+still show as conflicting; run `git merge origin/main` locally, which resolves it automatically, and push. Read the
+result before pushing: union keeps both versions of an edited line, so remove the stale one.
+
 ## Review
 
 Keep the commit or PR description to the real scope and honest about validation. Do not commit game files, saves,
