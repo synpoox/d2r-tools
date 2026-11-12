@@ -27,3 +27,4 @@
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
 - The map Boss and events are placed in the right rooms, and a Boss whose room centre is blocked is tried on nearby spots.
+- A map gives you at most 16 stats, the most the character sheet can show (experimental).
