@@ -156,6 +156,34 @@ int minEventDistance(int levelW, int levelH) {
 	return std::clamp(side / 3, 1, kMinEventDistance);
 }
 
+std::optional<Rect> farthestRoom(const Rect &entry, const std::vector<Rect> &rooms) {
+	std::optional<Rect> best;
+	long long bestCheb = -1, bestSq = -1;
+	for (const Rect &r : rooms) {
+		if (r.w <= 0 || r.h <= 0 || (r.x == entry.x && r.y == entry.y && r.w == entry.w && r.h == entry.h)) {
+			continue;
+		}
+		const long long dx = std::abs(centreX(r) - centreX(entry)), dy = std::abs(centreY(r) - centreY(entry));
+		const long long cheb = std::max(dx, dy), sq = dx * dx + dy * dy;
+		if (cheb > bestCheb || (cheb == bestCheb && sq > bestSq)) {
+			best = r;
+			bestCheb = cheb;
+			bestSq = sq;
+		}
+	}
+	return best;
+}
+
+int presetEventDistance(int levelW, int levelH, const Rect &entry, const std::vector<Rect> &rooms) {
+	const int distance = minEventDistance(levelW, levelH);
+	const std::optional<Rect> far = farthestRoom(entry, rooms);
+	if (!far) {
+		return distance;
+	}
+	const int cheb = std::max(std::abs(centreX(*far) - centreX(entry)), std::abs(centreY(*far) - centreY(entry)));
+	return std::min(distance, cheb);
+}
+
 EventRoomTracker::EventRoomTracker(std::optional<Rect> planned, int minDistance) : planned_(planned), minDistance_(minDistance) {}
 
 bool EventRoomTracker::onPopulated(const Rect &room) {
