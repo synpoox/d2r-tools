@@ -18,3 +18,13 @@ if(Python3_Interpreter_FOUND)
 else()
 	message(STATUS "Python not found: skipping catalogue tool tests")
 endif()
+
+# Host tests for the maze steering core (phase 3a).
+add_executable(maze_tests maze_tests.cpp ../src/maze/maze.cpp ../src/layout/layout.cpp)
+target_include_directories(maze_tests PRIVATE ../src/maze ../src/layout ../third_party/doctest)
+if(MSVC)
+	target_compile_options(maze_tests PRIVATE /W4 /permissive- /utf-8)
+else()
+	target_compile_options(maze_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME maze_tests COMMAND maze_tests)

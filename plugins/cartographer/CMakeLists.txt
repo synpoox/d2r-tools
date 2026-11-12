@@ -20,6 +20,17 @@ else()
 	target_compile_options(cartographer_layout PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
+# The maze steering core (phase 3a): pure C++, no engine headers. Built on the layout generator.
+add_library(cartographer_maze SHARED src/maze/maze.cpp src/maze/maze.h)
+target_include_directories(cartographer_maze PUBLIC src/maze)
+target_link_libraries(cartographer_maze PUBLIC cartographer_layout)
+set_target_properties(cartographer_maze PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+if(MSVC)
+	target_compile_options(cartographer_maze PRIVATE /W4 /permissive- /utf-8)
+else()
+	target_compile_options(cartographer_maze PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
