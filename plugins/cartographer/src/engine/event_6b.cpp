@@ -753,23 +753,36 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 			plog::Warn("shrine not placed: objects row %d is not below the game's row count%s%s", row, dt == nullptr ? ": " : "", dt == nullptr ? why.c_str() : "");
 			return false;
 		}
-		const std::vector<ep::Spot> spots = ep::placements(serverRect, 1, seed, scale);
-		if (spots.empty()) {
+		// The engine's search takes the first clear footprint in a growing square, which can be in the next room (game check of
+		// 2026-11-12). Try several start points and smaller footprints and keep only a spot inside the event room's rect.
+		const e6::SpotBox box{serverRect.x, serverRect.y, serverRect.w, serverRect.h};
+		const std::vector<e6::SpotAttempt> attempts = e6::freeSpotAttempts(box, FreeSpotRadius);
+		if (attempts.empty()) {
 			plog::Warn("shrine not placed: the event room is too small to place anything");
 			return false;
 		}
-		int32_t xy[2] = {spots[0].x, spots[0].y};
+		(void)scale;
+		(void)seed;
+		int32_t xy[2] = {0, 0};
 		void* landed = nullptr;
-		plog::Info("eventprobe: shrine: objects row %d, free spot near (%d,%d) from room %p (radius %d, mask 0x%x)", row, xy[0], xy[1], room, FreeSpotRadius, FreeSpotMask);
-		Call<FreeSpotFn>(FreeSpot)(room, xy, FreeSpotRadius, FreeSpotMask, &landed);
-		if (landed == nullptr) {
-			plog::Warn("shrine not placed: the game found no free spot near (%d,%d) in the event room", spots[0].x, spots[0].y);
-			return false;
+		bool found = false;
+		int tried = 0;
+		for (const e6::SpotAttempt& attempt : attempts) {
+			xy[0] = attempt.x;
+			xy[1] = attempt.y;
+			landed = nullptr;
+			++tried;
+			Call<FreeSpotFn>(FreeSpot)(room, xy, attempt.radius, FreeSpotMask, &landed);
+			const bool inside = landed == room && e6::spotInBox(box, xy[0], xy[1]);
+			plog::Info("eventprobe: shrine: objects row %d, free spot try %d: near (%d,%d) radius %d (mask 0x%x) gave %s (%d,%d) room %p (%s the event room)", row, tried, attempt.x, attempt.y, attempt.radius, FreeSpotMask, landed == nullptr ? "nothing" : "a spot", xy[0], xy[1], landed, inside ? "in" : "NOT in");
+			if (inside) {
+				found = true;
+				break;
+			}
 		}
-		plog::Info("eventprobe: shrine: free spot (%d,%d) in room %p (%s the event room)", xy[0], xy[1], landed, landed == room ? "in" : "NOT in");
-		if (landed != room) {
+		if (!found) {
 			// The neighbouring room may not be populated yet; refuse rather than create an object there.
-			plog::Warn("shrine not placed: the free spot (%d,%d) is outside the event room (room %p, not %p)", xy[0], xy[1], landed, room);
+			plog::Warn("shrine not placed: none of %d free-spot tries gave a spot inside the event room (%d,%d) %d x %d", tried, box.x, box.y, box.w, box.h);
 			return false;
 		}
 		void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);

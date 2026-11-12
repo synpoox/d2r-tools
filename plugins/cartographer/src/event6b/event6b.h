@@ -39,11 +39,36 @@ struct ObjectLookup {
 // count. Exact (case-sensitive) matches are counted first; with none, ASCII case-insensitive ones.
 ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_view spawn, uint64_t gameRows);
 
+// The Name of every objects.txt line that becomes a compiled row. `classes` and `names` are the Class and Name cells of each data
+// line in order (extra cells of the longer one are ignored). A line whose Class is `Expansion` (any case) is the marker the table
+// compiler skips (the stock file has 588 data lines and the game 587), so it takes no row and is left out; every other line, an
+// empty Name included, keeps its place.
+std::vector<std::string> objectRowNames(const std::vector<std::string> &classes, const std::vector<std::string> &names);
+
 // One plain-English line for the log: why `spawn` was or was not accepted.
 std::string describeObjectLookup(const ObjectLookup &lookup, std::string_view spawn, size_t fileLines, uint64_t gameRows);
 
 // True when the whole text is a decimal number (no sign, no space), at most 9 digits.
 bool isRowNumber(std::string_view text, int *value);
+
+// --- Free spot for an object -------------------------------------------------------------------------------------------
+
+// The engine's free-spot search (0x402f50) grows a square around the start point (up to 100 subtiles) and takes the first spot whose
+// footprint (radius + 2 subtiles a side, through 0x364b20) is clear, in this or a neighbouring room. In a small event room the first
+// hit can lie in the next room, so placement tries several start points and smaller footprints and keeps a spot only when it is
+// inside the event room's rect. Plain values, in the rect's own units.
+struct SpotBox {
+	int x = 0, y = 0, w = 0, h = 0;
+};
+struct SpotAttempt {
+	int x = 0, y = 0;
+	int radius = 0;
+};
+// Radius-major: for each radius (`maxRadius`, then 2 and 0 where they are smaller) the room centre first, then the four points a
+// quarter of the way in from the edges. Empty for a room without size. Same input, same list, no repeats.
+std::vector<SpotAttempt> freeSpotAttempts(const SpotBox &room, int maxRadius);
+// True when (x, y) lies inside `room` (the low edge in, the far edge out).
+bool spotInBox(const SpotBox &room, int x, int y);
 
 // --- Treasure class names ---------------------------------------------------------------------------------------------
 

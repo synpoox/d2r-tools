@@ -91,6 +91,46 @@ ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_vi
 	return out;
 }
 
+std::vector<std::string> objectRowNames(const std::vector<std::string> &classes, const std::vector<std::string> &names) {
+	std::vector<std::string> out;
+	const size_t n = classes.size() < names.size() ? classes.size() : names.size();
+	for (size_t i = 0; i < n; ++i) {
+		if (!equalsNoCase(classes[i], "Expansion")) {
+			out.push_back(names[i]);
+		}
+	}
+	return out;
+}
+
+bool spotInBox(const SpotBox &room, int x, int y) { return x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h; }
+
+std::vector<SpotAttempt> freeSpotAttempts(const SpotBox &room, int maxRadius) {
+	std::vector<SpotAttempt> out;
+	if (room.w <= 0 || room.h <= 0) {
+		return out;
+	}
+	std::vector<int> radii;
+	for (int r : {maxRadius, 2, 0}) {
+		if (r <= maxRadius && (radii.empty() || radii.back() > r)) {
+			radii.push_back(r);
+		}
+	}
+	const int xs[] = {room.x + room.w / 2, room.x + room.w / 4, room.x + room.w * 3 / 4};
+	const int ys[] = {room.y + room.h / 2, room.y + room.h / 4, room.y + room.h * 3 / 4};
+	std::vector<SpotAttempt> starts = {{xs[0], ys[0], 0}};
+	for (int i = 1; i < 3; ++i) {
+		for (int j = 1; j < 3; ++j) {
+			starts.push_back({xs[i], ys[j], 0});
+		}
+	}
+	for (int r : radii) {
+		for (const SpotAttempt &s : starts) {
+			out.push_back({s.x, s.y, r});
+		}
+	}
+	return out;
+}
+
 std::string describeObjectLookup(const ObjectLookup &lookup, std::string_view spawn, size_t fileLines, uint64_t gameRows) {
 	const std::string name(spawn);
 	switch (lookup.result) {

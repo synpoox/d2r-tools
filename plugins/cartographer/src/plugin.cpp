@@ -9,6 +9,7 @@
 #include "core/tables.h"
 #include "core/text.h"
 #include "core/tsv.h"
+#include "event6b.h"
 #include "crash_guard.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
@@ -220,8 +221,14 @@ auto LoadAll() -> Loaded {
 	loaded.tables->spawnNames = ReadSpawnNames();
 	// objects.txt Name by row, for a Shrine. ParseTsv drops blank lines, so a file with one fails the line-count check against the
 	// game's row count (engine/event_6b.cpp) and its Shrine is then given by row number instead.
-	if (g_excelDir.empty() || !ReadColumnRows(g_excelDir + L"\\objects.txt", "Name", &loaded.tables->objectNames)) {
-		loaded.tables->objectNames.clear();
+	// The `Expansion` marker line has no compiled row (588 lines, 587 rows in the stock file), so it is dropped here (issue #135).
+	{
+		std::vector<std::string> classes, names;
+		if (!g_excelDir.empty() && ReadColumnRows(g_excelDir + L"\\objects.txt", "Class", &classes) && ReadColumnRows(g_excelDir + L"\\objects.txt", "Name", &names)) {
+			loaded.tables->objectNames = cartographer::event6b::objectRowNames(classes, names);
+		} else {
+			loaded.tables->objectNames.clear();
+		}
 	}
 	// Boss and Horde names are looked up in the game's loaded tables at map open; these two files are only the fallback for when that
 	// route is off (checked then, not here). Without monstats.txt that fallback has nothing; without superuniques.txt it has no superunique.

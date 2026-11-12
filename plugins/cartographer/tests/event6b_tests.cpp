@@ -332,3 +332,66 @@ TEST_CASE("describeFleeChecks: says which check would stop the flee") {
 	CHECK(describeFleeChecks(-1, -1).find("not fully probed") != std::string::npos);
 	CHECK(describeFleeChecks(-1, 0).find("will return without") != std::string::npos);
 }
+
+TEST_CASE("objectRowNames: the Expansion marker line takes no row") {
+	// The stock file: ..., `Expansion` (no compiled row), then the next line takes the next row.
+	const std::vector<std::string> classes = {"Null", "Casket5", "Expansion", "ClothChestR", "ShrineWildernessExp1"};
+	const std::vector<std::string> names = {"Test Data", "Casket", "", "Chest", "Shrine"};
+	const std::vector<std::string> rows = objectRowNames(classes, names);
+	REQUIRE(rows.size() == 4);
+	CHECK(rows[2] == "Chest");
+	CHECK(resolveObject(rows, "Shrine", 4).row == 3);
+	// A real mismatch is still refused.
+	CHECK(resolveObject(names, "Shrine", 4).result == ObjectResult::CountMismatch);
+	CHECK(resolveObject(rows, "Shrine", 5).result == ObjectResult::CountMismatch);
+}
+
+TEST_CASE("objectRowNames: any case of Expansion, other empty cells keep their row") {
+	const std::vector<std::string> rows = objectRowNames({"a", "EXPANSION", "b", "", "expansion"}, {"A", "", "B", "", ""});
+	REQUIRE(rows.size() == 3);
+	CHECK(rows[1] == "B");
+	CHECK(rows[2].empty());
+	CHECK(objectRowNames({}, {"x"}).empty());
+	CHECK(objectRowNames({"Expansion"}, {}).empty());
+}
+
+TEST_CASE("freeSpotAttempts: start points stay inside the room, radius by radius") {
+	const SpotBox room{25000, 10120, 40, 20};
+	const std::vector<SpotAttempt> a = freeSpotAttempts(room, 5);
+	REQUIRE(a.size() == 15);  // 5 starts x radii 5, 2, 0
+	CHECK(a[0].x == 25020);
+	CHECK(a[0].y == 10130);
+	CHECK(a[0].radius == 5);
+	CHECK(a[5].radius == 2);
+	CHECK(a[10].radius == 0);
+	for (const SpotAttempt &s : a) {
+		CHECK(spotInBox(room, s.x, s.y));
+	}
+	for (size_t i = 0; i < 5; ++i) {
+		for (size_t j = i + 1; j < 5; ++j) {
+			CHECK((a[i].x != a[j].x || a[i].y != a[j].y));
+		}
+	}
+	const std::vector<SpotAttempt> b = freeSpotAttempts(room, 5);
+	REQUIRE(b.size() == a.size());
+	CHECK(b[7].x == a[7].x);
+	CHECK(b[7].y == a[7].y);
+}
+
+TEST_CASE("freeSpotAttempts: small radius limits, empty room") {
+	CHECK(freeSpotAttempts({0, 0, 40, 20}, 1).size() == 10);  // radii 1, 0
+	CHECK(freeSpotAttempts({0, 0, 40, 20}, 0).size() == 5);
+	CHECK(freeSpotAttempts({0, 0, 0, 20}, 5).empty());
+	CHECK(freeSpotAttempts({0, 0, 40, -1}, 5).empty());
+	for (const SpotAttempt &s : freeSpotAttempts({100, 200, 2, 2}, 5)) {
+		CHECK(spotInBox({100, 200, 2, 2}, s.x, s.y));
+	}
+}
+
+TEST_CASE("spotInBox: low edge in, far edge out") {
+	const SpotBox room{25000, 10120, 40, 20};
+	CHECK(spotInBox(room, 25000, 10120));
+	CHECK(spotInBox(room, 25039, 10139));
+	CHECK_FALSE(spotInBox(room, 25040, 10130));
+	CHECK_FALSE(spotInBox(room, 25026, 10114));  // the free spot the game gave from the centre
+}
