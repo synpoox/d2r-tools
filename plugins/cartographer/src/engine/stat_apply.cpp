@@ -662,6 +662,29 @@ auto StatApplyPartStatuses() -> std::vector<PartStatus> {
 	return out;
 }
 
+auto StatApplyCountsNow() -> StatApplyCounts {
+	StatApplyCounts out;
+	std::shared_ptr<const sp::Plan> plan;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		plan = g_plan;
+	}
+	if (plan != nullptr) {
+		out.drawnMonster = static_cast<int>(plan->monsters.size());
+		out.drawnPlayer = static_cast<int>(plan->players.size());
+		for (const sp::Entry& e : plan->monsters) {
+			out.drawnText += (out.drawnText.empty() ? "" : ", ") + std::string("monsters ") + e.name + " " + std::to_string(e.value);
+		}
+		for (const sp::Entry& e : plan->players) {
+			out.drawnText += (out.drawnText.empty() ? "" : ", ") + std::string("players ") + e.name + " " + std::to_string(e.value);
+		}
+	}
+	out.monstersChanged = g_monsterCount.load();
+	out.monstersFailed = g_monsterFailed.load();
+	out.playersChanged = g_playerCount.load();
+	return out;
+}
+
 auto StatApplySummary() -> std::string {
 	return "map stats: " + SummaryNow();
 }

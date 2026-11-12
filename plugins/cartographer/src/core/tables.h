@@ -96,6 +96,8 @@ struct Settings {
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
 	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
 	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
+	int autoCheck = 0;  // AutoCheck: 1 runs the issue #173 game check by itself in a Hell game (test slots only)
+	std::string autoCheckMap;  // AutoCheckMap: the map's Name in maps.txt that AutoCheck opens
 	std::string town = "Harrogath";
 };
 
