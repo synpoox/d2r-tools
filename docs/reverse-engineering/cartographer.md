@@ -1235,6 +1235,17 @@ Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the m
 - **`Monsters`:** not part of this change. The monster pool is written into the slot level's region record, with Density and Uniques (and Level in the levels row), in issue #156 (section 15).
 - **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
 
+### Plan rooms and the map Boss spot (issues #184 and #183, written and unit tested, not run in game)
+
+- **#184**: `rooms[plan.eventRoom]` / `rooms[plan.bossRoom]` indexed the walk's own room list by a plan room number; in 4 of 8 Hell
+  games (build 93847) that gave `(1,0) 0 x 0`. The rooms are now found as the arrival room is: the engine room with area whose
+  corner is in the plan room's cell and whose centre is nearest the cell's centre (`planCellRoom`). When none matches, the event or
+  Boss is left off with a logged reason. No engine address is involved.
+- **#183**: the Boss spot was the exact room centre, which a Cave room can make rock (the game returns no unit). The spawn now tries
+  the centre, then every tile of the room one tile clear of its edge, nearest the centre first (up to 36 spots), logging each refusal.
+  The engine's own free-spot search (`0x402f50`, section 3, used by the Shrine) was not used for the Boss, so no new part or guard.
+  Needs a game to confirm that a spot is accepted.
+
 ## 10. Red portal tooltip and area name (issue #90)
 
 Static answers for issue #90: show each map's own `Name` on the red portal tooltip and as the area name inside the map, instead of the slot

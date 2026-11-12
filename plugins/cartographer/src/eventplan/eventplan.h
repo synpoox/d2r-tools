@@ -138,6 +138,11 @@ constexpr int kEdgeInset = 2;
 constexpr int kSpotGap = 2;
 std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale = 1);
 
+// Where the map Boss may be tried (issue #183): the centre first, then every tile of the room one tile clear of its edge (where the room
+// is big enough), nearest the centre first, at most kBossSpots. A Cave room's centre can be rock, and the game refuses a spawn there.
+constexpr int kBossSpots = 36;
+std::vector<Spot> bossSpots(const Rect &room, int scale = 1);
+
 // How many of the server room's units make one DRLG tile: server.w / drlg.w when the server rect is a whole multiple of the
 // DRLG rect in both directions (5 for subtiles), else 1.
 int spotScale(const Rect &server, const Rect &drlg);

@@ -604,9 +604,22 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
 		return;
 	}
+	// The centre first, then spots around it: a Cave room's centre can be rock and the game refuses a spawn there (issue #183).
 	bool asSuper = false;
 	void* unit = nullptr;
-	const bool made = SpawnOne(game, room, plan.spawns.front(), &asSuper, &unit);
+	bool made = false;
+	size_t tried = 0;
+	for (const ep::Spawn& spawn : plan.spawns) {
+		++tried;
+		made = SpawnOne(game, room, spawn, &asSuper, &unit);
+		if (made) {
+			if (tried > 1) {
+				plog::Info("map Boss '%s': accepted at (%d,%d), spot %zu of %zu (the room centre was refused)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, plan.spawns.size());
+			}
+			break;
+		}
+		plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%zu of %zu)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, plan.spawns.size());
+	}
 	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
 	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));

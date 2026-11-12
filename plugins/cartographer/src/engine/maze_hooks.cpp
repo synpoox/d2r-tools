@@ -418,27 +418,35 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, mark.cellX, mark.cellY, static_cast<int>(mark.clear.size()));
 }
 
-// The plan's event room: the rect of its DRLG room, which the event spawn compares with the room the game populates.
-void RecordEventRoom(const void* level, const std::vector<void*>& rooms, const cm::Plan& plan) noexcept {
-	MazeEventRect rect;
-	const int idx = plan.eventRoom;
-	if (idx >= 0 && static_cast<size_t>(idx) < rooms.size() && rooms[static_cast<size_t>(idx)] != nullptr && Readable(rooms[static_cast<size_t>(idx)], 0x98)) {
-		const void* room = rooms[static_cast<size_t>(idx)];
-		rect = {true, Read<int32_t>(level, LvlId), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)};
-		plog::Info("eventprobe: maze event room (plan room %d) is DRLG room %p, level %d, rect (%d,%d) %d x %d", idx, room, rect.levelId, rect.x, rect.y, rect.w, rect.h);
-	} else {
-		plog::Info("eventprobe: the maze plan has no event room I can read (plan room %d of %zu)", idx, rooms.size());
+// The plan's event room and boss room: the rect of the built DRLG room in each plan cell, which the event spawn compares with the room the
+// game populates. The plan's room numbers are not positions in the engine's list (a cell is 3 x 3 engine rooms and the walk's own list
+// is not the level's), so each is matched by rect against its plan cell (issue #184), as the arrival is. A room that cannot be found is
+// refused here, with the reason, and the event or Boss is left off.
+void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
+	std::vector<cm::RoomRect> rects;
+	for (const void* room = Read<const void*>(level, LvlFirstRoom); room != nullptr && rects.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98);
+	     room = Read<const void*>(room, RoomNext)) {
+		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH), 0});
 	}
-	// The plan's boss room (the far end of the main path), read the same way; the map's own Boss (maps.txt) stands there.
-	MazeEventRect boss;
-	const int bossIdx = plan.bossRoom;
-	if (bossIdx >= 0 && static_cast<size_t>(bossIdx) < rooms.size() && rooms[static_cast<size_t>(bossIdx)] != nullptr && Readable(rooms[static_cast<size_t>(bossIdx)], 0x98)) {
-		const void* room = rooms[static_cast<size_t>(bossIdx)];
-		boss = {true, Read<int32_t>(level, LvlId), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)};
-		plog::Info("eventprobe: maze boss room (plan room %d) is DRLG room %p, level %d, rect (%d,%d) %d x %d", bossIdx, room, boss.levelId, boss.x, boss.y, boss.w, boss.h);
-	} else {
-		plog::Info("eventprobe: the maze plan has no boss room I can read (plan room %d of %zu)", bossIdx, rooms.size());
-	}
+	const auto find = [&](int planRoom, const char* what) {
+		MazeEventRect out;
+		if (planRoom < 0) {
+			plog::Info("eventprobe: the maze plan has no %s room", what);
+			return out;
+		}
+		const cm::CellRoom c = cm::planCellRoom(plan, unit, planRoom, rects);
+		if (c.room < 0) {
+			plog::Warn("eventprobe: the maze plan's %s room (plan room %d) is left off: %s", what, planRoom, c.why.c_str());
+			return out;
+		}
+		const cm::RoomRect& r = rects[static_cast<size_t>(c.room)];
+		out = {true, Read<int32_t>(level, LvlId), r.x, r.y, r.w, r.h};
+		plog::Info("eventprobe: maze %s room (plan room %d, cell %d,%d) is the DRLG room at list index %d, level %d, rect (%d,%d) %d x %d", what, planRoom, c.cellX, c.cellY, c.room,
+		           out.levelId, out.x, out.y, out.w, out.h);
+		return out;
+	};
+	const MazeEventRect rect = find(plan.eventRoom, "event");
+	const MazeEventRect boss = find(plan.bossRoom, "boss");
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_eventRoom = rect;
 	g_bossRoom = boss;
@@ -751,7 +759,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else {
 				plog::Info("maze arrival: left to the game, because the build is not the plan");
 			}
-			RecordEventRoom(level, ctx.rooms, plan);
+			RecordEventRoom(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
 		} catch (...) {
 		}
 	}

@@ -197,15 +197,15 @@ bool fixAfterWalk(const Plan &plan, int roomIndex)
 	return plan.rooms[static_cast<size_t>(roomIndex)].fix == Room::Fix::AfterWalk;
 }
 
-ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects)
+CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects)
 {
-	ArrivalMark out;
+	CellRoom out;
 	const auto refuse = [&out](const char *why) {
 		out.why = why;
 		return out;
 	};
 	if (!plan.steer || plan.rooms.empty()) return refuse("the plan places no rooms");
-	if (plan.entrance.room < 0 || static_cast<size_t>(plan.entrance.room) >= plan.rooms.size()) return refuse("the plan has no entrance cell");
+	if (planRoom < 0 || static_cast<size_t>(planRoom) >= plan.rooms.size()) return refuse("the plan has no such room");
 	if (unit <= 0) return refuse("the plan cell size is unknown");
 	if (rects.empty()) return refuse("the level has no rooms");
 	int pMinX = plan.rooms[0].dx, pMinY = plan.rooms[0].dy;
@@ -213,9 +213,9 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 		pMinX = std::min(pMinX, r.dx);
 		pMinY = std::min(pMinY, r.dy);
 	}
-	const Room &entrance = plan.rooms[static_cast<size_t>(plan.entrance.room)];
-	out.cellX = entrance.dx - pMinX;
-	out.cellY = entrance.dy - pMinY;
+	const Room &cell = plan.rooms[static_cast<size_t>(planRoom)];
+	out.cellX = cell.dx - pMinX;
+	out.cellY = cell.dy - pMinY;
 	int64_t minX = rects[0].x, minY = rects[0].y;
 	int64_t maxX = minX + rects[0].w, maxY = minY + rects[0].h;
 	for (const RoomRect &r : rects) {
@@ -239,6 +239,7 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 	int64_t best = -1;
 	for (size_t i = 0; i < rects.size(); ++i) {
 		const RoomRect &r = rects[i];
+		if (r.w <= 0 || r.h <= 0) continue;  // a room with no area is not a room of the cell
 		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unit) continue;
 		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - (2 * static_cast<int64_t>(out.originX) + unit);
 		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unit);
@@ -253,7 +254,33 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 			out.room = static_cast<int>(i);
 		}
 	}
-	if (out.room < 0) return refuse("the entrance cell holds no room");
+	if (out.room < 0) return refuse("the cell holds no room");
+	return out;
+}
+
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects)
+{
+	ArrivalMark out;
+	if (!plan.steer || plan.rooms.empty()) {
+		out.why = "the plan places no rooms";
+		return out;
+	}
+	if (plan.entrance.room < 0 || static_cast<size_t>(plan.entrance.room) >= plan.rooms.size()) {
+		out.why = "the plan has no entrance cell";
+		return out;
+	}
+	const CellRoom c = planCellRoom(plan, unit, plan.entrance.room, rects);
+	if (c.room < 0) {
+		out.why = c.why == "the cell holds no room" ? "the entrance cell holds no room" : c.why;
+		return out;
+	}
+	out.room = c.room;
+	out.cellX = c.cellX;
+	out.cellY = c.cellY;
+	out.originX = c.originX;
+	out.originY = c.originY;
+	out.minX = c.minX;
+	out.minY = c.minY;
 	for (size_t i = 0; i < rects.size(); ++i) {
 		if (static_cast<int>(i) != out.room && (rects[i].flags & kArrivalFlags) != 0) out.clear.push_back(static_cast<int>(i));
 	}
