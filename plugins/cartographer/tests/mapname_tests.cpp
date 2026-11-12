@@ -329,3 +329,40 @@ TEST_CASE("row saver: a failed second open puts the previous keys back, so the r
 	CHECK(std::memcmp(rowEntry, originalEntry, FieldSize) == 0);
 	CHECK_FALSE(saver.SetKeys(139, keyA, keyAEntry));  // not remembered
 }
+
+TEST_CASE("boss name keys: stable, in the plugin's namespace, one record per name in every language") {
+	CHECK(BossLocalKey("The Drowned King") == "boss_The_20Drowned_20King");
+	CHECK(BossRowKey("cartographer", "The Drowned King") == "cartographer:boss_The_20Drowned_20King");
+	CHECK(BossRowKey("cartographer", "A") != BossRowKey("cartographer", "a"));  // keys are case-sensitive, like the loader's
+
+	CHECK(BossStringsJson({}) == "[]");
+	const std::string json = BossStringsJson({"The Drowned King", "Mord \"the\" Red", "The Drowned King"});
+	CHECK(json.front() == '[');
+	CHECK(json.back() == ']');
+	CHECK(json.find("\"Key\":\"boss_The_20Drowned_20King\"") != std::string::npos);
+	CHECK(json.find("\"Key\":\"boss_Mord_20_22the_22_20Red\"") != std::string::npos);
+	size_t records = 0;
+	for (size_t at = json.find("\"Key\""); at != std::string::npos; at = json.find("\"Key\"", at + 1)) {
+		++records;
+	}
+	CHECK(records == 2);  // the repeated name is written once
+	for (const char* language : Languages) {
+		CHECK(json.find(std::string("\"") + language + "\":\"The Drowned King\"") != std::string::npos);
+	}
+	// A bad byte cannot spoil the file: the same text rules as the map names.
+	CHECK(BossStringsJson({"Bad\xff"}).find("\xef\xbf\xbd") != std::string::npos);
+	// The key is ASCII only and one-to-one: space, colon, '_', quote and a byte of 0x80 and above all become '_' and two hex digits.
+	CHECK(BossLocalKey("Shoreline Warden") == "boss_Shoreline_20Warden");
+	CHECK(BossLocalKey("King: a_b \"x\" Ren\xE9") == "boss_King_3A_20a_5Fb_20_22x_22_20Ren_E9");
+	CHECK(BossLocalKey("a_b") != BossLocalKey("a b"));
+	const std::string hostile = BossStringsJson({"Ren\xE9 the Lost", "Bad\xff:\"_"});
+	for (size_t at = hostile.find("\"Key\":\""); at != std::string::npos; at = hostile.find("\"Key\":\"", at + 1)) {
+		for (size_t i = at + 7; hostile[i] != '"'; ++i) {
+			const auto byte = static_cast<unsigned char>(hostile[i]);
+			CHECK(byte < 0x80);
+			CHECK(byte != ' ');
+			CHECK(byte != ':');
+		}
+	}
+	CHECK(hostile.find("\"Key\":\"boss_Ren_E9_20the_20Lost\"") != std::string::npos);
+}

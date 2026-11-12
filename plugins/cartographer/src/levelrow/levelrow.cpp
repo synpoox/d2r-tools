@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 namespace cartographer::levelrow {
 
@@ -158,18 +159,46 @@ auto PlanRow(const Request& r, const Snapshot& s, bool level) -> std::vector<Fie
 	return out;
 }
 
+auto MonstersRefusal(const Request& r) -> std::string {
+	const size_t n = r.monsterRows.size();
+	if (n == 0) {
+		return "";
+	}
+	if (n > static_cast<size_t>(MaxMonsters)) {
+		return "more than " + std::to_string(MaxMonsters) + " monsters";
+	}
+	if (r.monsterWeights.size() != n) {
+		return "a monster has no weight";
+	}
+	if (!std::all_of(r.monsterRows.begin(), r.monsterRows.end(), [](int row) { return row >= 0 && row <= MaxRow; })) {
+		return "a monster row is outside 0 to " + std::to_string(MaxRow);
+	}
+	if (!std::all_of(r.monsterWeights.begin(), r.monsterWeights.end(), [](int w) { return w >= 0 && w <= 255; })) {
+		return "a monster weight is outside 0 to 255";
+	}
+	int sum = 0;
+	for (const int w : r.monsterWeights) {
+		sum += w;
+	}
+	if (sum == 0) {
+		return "the monsters' weights are all 0, so the game would pick none";
+	}
+	if (sum > MaxWeightSum) {
+		return "the monsters' weights add up to " + std::to_string(sum) + ", above " + std::to_string(MaxWeightSum) + " (the game keeps the sum in a byte)";
+	}
+	return "";
+}
+
 auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed) -> std::vector<Field> {
 	std::vector<Field> out;
 	const size_t n = r.monsterRows.size();
-	if (allowed.monsters && n > 0 && n <= static_cast<size_t>(MaxMonsters) && r.monsterWeights.size() == n &&
-	    std::all_of(r.monsterRows.begin(), r.monsterRows.end(), [](int row) { return row >= 0 && row <= MaxRow; }) &&
-	    std::all_of(r.monsterWeights.begin(), r.monsterWeights.end(), [](int w) { return w >= 0 && w <= 255; })) {
+	if (allowed.monsters && n > 0 && MonstersRefusal(r).empty()) {
 		uint32_t sum = 0;
 		for (const int w : r.monsterWeights) {
 			sum += static_cast<uint32_t>(w);
 		}
 		AddAlways(out, RecGroupCountOffset, 1, static_cast<uint32_t>(n));
-		AddAlways(out, RecGroupWeightOffset, 1, sum);  // a byte, as the game keeps it
+		AddAlways(out, RecGroupWeightOffset, 1, sum);
 		AddAlways(out, RecGroupCount2Offset, 1, static_cast<uint32_t>(n));
 		for (size_t i = 0; i < n; ++i) {
 			const int base = RecGroupsOffset + RecGroupStride * static_cast<int>(i);
