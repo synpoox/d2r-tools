@@ -76,7 +76,7 @@ The LvlPrest ids and sizes quoted are checked against vanilla `lvlprest.txt` (93
 
 ### 1.7 Monsters
 
-D2Game populates the rooms from the slot's levels.txt row, plus each DS1's own preset units [K: the regen spike saw fresh monsters]. Cartographer may write the slot row's mon columns when the map opens. D2Game's population places no superuniques; a `Boss` superunique is spawned by Cartographer, not by D2Game. [V] Jungle blocks have `Populate` 1 [K, checked in lvlprest.txt].
+D2Game populates the rooms from the slot's levels.txt row, plus each DS1's own preset units [K: the regen spike saw fresh monsters]. Cartographer may write the slot row's mon columns when the map opens. [A] For the slot level, D2Game's population places no superuniques; a `Boss` superunique is spawned by Cartographer, not by D2Game. Jungle blocks have `Populate` 1 [K, checked in lvlprest.txt].
 
 ## 2. Integration with D2RLoader's D2RCore
 

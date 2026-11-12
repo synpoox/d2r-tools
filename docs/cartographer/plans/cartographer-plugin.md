@@ -55,7 +55,7 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 - **One required file.** `maps.txt`, one row per map. Everything else is optional and has a sensible default.
 - **Plain words only.** No numeric ids, flags, bitmasks, hex or formulas. Tilesets, shapes and sizes are names from a short built-in list. Monsters, items and stats use the names modders already see in D2's own tables.
 - **Blank means default.** A missing optional column or a blank cell takes the default. A map row needs only 3 filled cells.
-- **No vanilla table edits.** Authors never edit levels.txt, lvlmaze.txt, lvlprest.txt or misc.txt for Cartographer (§3.4). The one exception is the advanced option C (§3.6), where an expert adds `LvlPrest` rows for their own room pieces. The installer (§3.4) adds rows to the mod's levels.txt and misc.txt, not the author. Open (plan owner): whether option C stays an `LvlPrest` edit.
+- **No vanilla table edits.** Authors never edit levels.txt, lvlmaze.txt, lvlprest.txt or misc.txt for Cartographer (§3.4). The one exception is the advanced option C (§3.6), where an expert adds `LvlPrest` rows for their own room pieces. If an installer ships (§3.4), it adds rows to the mod's levels.txt and misc.txt, not the author. Research found no D2RLoader row injection for vanilla tables, so the installer is the current plan. Open (plan owner): whether option C stays an `LvlPrest` edit.
 - **Plain-English errors.**
   - **Where they appear:** at load, every problem is written to `cartographer-report.txt`, and the in-game console command `cartographer check` shows them too. `cartographer open <Name>` opens a map's portal on the spot, for testing, without needing the item. An example: "maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"
   - **What happens to a bad row:** it is skipped, and the other maps still work. A bad row never crashes the game.
@@ -169,7 +169,7 @@ Two columns, `Setting` and `Value`. Every setting has a default.
 
 Release 1 gives each tileset a plain name for its D2R LevelType:
 
-- **Indoor:** `Cave`, `Crypt`, `Lava`, then `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` as each passes its game check.
+- **Indoor:** `Cave`, `Crypt`, `Lava` (Act 4 Lava; Act 5 Lava follows under its own name, not yet set), then `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` as each passes its game check.
 - **Outdoor:** `Jungle` first, then `Snow`.
 
 A tileset that isn't ready is refused at load, with a message that says so.
