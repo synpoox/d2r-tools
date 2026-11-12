@@ -229,14 +229,39 @@ TEST_CASE("monsters fill the group count, weight sum and entries of the record, 
 	CHECK(FindField(PlanRecord(r, s, RecordOnly(true, false, false)), RecGroupsOffset)->value == static_cast<uint32_t>(MaxRow));
 }
 
-TEST_CASE("the group weight sum is a byte, as the game keeps it") {
+TEST_CASE("the group weight sum is a byte: 255 is written, more is refused with a reason") {
 	const Record rec = SampleRecord();
+	const RecordSnapshot snap = RecordSnapshotOf(rec.data());
 	Request r;
+	r.monsterRows = {3, 4, 5};
+	r.monsterWeights = {100, 100, 55};  // 255
+	CHECK(MonstersRefusal(r).empty());
+	std::vector<Field> plan = PlanRecord(r, snap, RecordOnly(true, false, false));
+	CHECK(FindField(plan, RecGroupWeightOffset)->value == 255);
+	CHECK(FindField(plan, RecGroupWeightOffset)->size == 1);
+	r.monsterWeights = {100, 100, 56};  // 256 would wrap to 0
+	CHECK(!MonstersRefusal(r).empty());
+	CHECK(PlanRecord(r, snap, RecordOnly(true, false, false)).empty());
 	r.monsterRows = std::vector<int>(MaxMonsters, 3);
 	r.monsterWeights = std::vector<int>(MaxMonsters, 100);  // 1000
-	const std::vector<Field> plan = PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(true, false, false));
-	CHECK(FindField(plan, RecGroupWeightOffset)->value == (1000 & 0xff));
-	CHECK(FindField(plan, RecGroupWeightOffset)->size == 1);
+	CHECK(!MonstersRefusal(r).empty());
+	CHECK(PlanRecord(r, snap, RecordOnly(true, false, false)).empty());
+}
+
+TEST_CASE("a Monsters list whose weights are all 0 is refused, one nonzero weight is enough") {
+	const Record rec = SampleRecord();
+	const RecordSnapshot snap = RecordSnapshotOf(rec.data());
+	Request r;
+	r.monsterRows = {3, 4};
+	r.monsterWeights = {0, 0};
+	CHECK(!MonstersRefusal(r).empty());
+	CHECK(PlanRecord(r, snap, RecordOnly(true, false, false)).empty());
+	r.monsterWeights = {0, 1};
+	CHECK(MonstersRefusal(r).empty());
+	CHECK(FindField(PlanRecord(r, snap, RecordOnly(true, false, false)), RecGroupWeightOffset)->value == 1);
+	r.monsterRows = {};
+	r.monsterWeights = {};
+	CHECK(MonstersRefusal(r).empty());  // no list is not a refusal
 }
 
 TEST_CASE("density scales the record's MonDen and leaves a zero alone") {
@@ -437,7 +462,7 @@ TEST_CASE("a second map keeps the first original and reverts a field it does not
 	Row row = SampleRow();
 	Memory memory(row.data(), row.size());
 	Ledger ledger;
-	const uint16_t a = MonLvlOffsets[0], b = MonLvlOffsets[1];
+	const auto a = static_cast<uint16_t>(MonLvlOffsets[0]), b = static_cast<uint16_t>(MonLvlOffsets[1]);
 	// first map sets a and b
 	std::vector<Op> done1;
 	Prepared p1 = Prepare(ledger, 138, memory.bytes.data(), {Field{a, 2, 90}, Field{b, 2, 91}});
@@ -471,7 +496,7 @@ TEST_CASE("undoing a failed open puts the memory and the ledger back, reverts in
 	Row row = SampleRow();
 	Memory memory(row.data(), row.size());
 	Ledger ledger;
-	const uint16_t a = MonLvlOffsets[0], b = MonLvlOffsets[1];
+	const auto a = static_cast<uint16_t>(MonLvlOffsets[0]), b = static_cast<uint16_t>(MonLvlOffsets[1]);
 	std::vector<Op> done1;
 	Prepared p1 = Prepare(ledger, 138, memory.bytes.data(), {Field{a, 2, 90}, Field{b, 2, 91}});
 	REQUIRE(Apply(ledger, 138, p1, memory.Writer(), &done1));
@@ -499,7 +524,7 @@ TEST_CASE("a write that fails stops the open, and the undo restores what was wri
 	Row row = SampleRow();
 	Memory memory(row.data(), row.size());
 	Ledger ledger;
-	const uint16_t a = MonLvlOffsets[0], b = MonLvlOffsets[1];
+	const auto a = static_cast<uint16_t>(MonLvlOffsets[0]), b = static_cast<uint16_t>(MonLvlOffsets[1]);
 	memory.failAfter = 1;  // the first write works, the second fails
 	std::vector<Op> done;
 	Prepared p = Prepare(ledger, 138, memory.bytes.data(), {Field{a, 2, 90}, Field{b, 2, 91}});
@@ -528,7 +553,7 @@ TEST_CASE("restore leaves a field someone else changed, and counts a failed writ
 	Row row = SampleRow();
 	Memory memory(row.data(), row.size());
 	Ledger ledger;
-	const uint16_t a = MonLvlOffsets[0], b = MonLvlOffsets[1], c = MonLvlOffsets[2];
+	const auto a = static_cast<uint16_t>(MonLvlOffsets[0]), b = static_cast<uint16_t>(MonLvlOffsets[1]), c = static_cast<uint16_t>(MonLvlOffsets[2]);
 	std::vector<Op> done;
 	Prepared p = Prepare(ledger, 138, memory.bytes.data(), {Field{a, 2, 90}, Field{b, 2, 91}, Field{c, 2, 92}});
 	REQUIRE(Apply(ledger, 138, p, memory.Writer(), &done));

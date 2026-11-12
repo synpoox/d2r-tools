@@ -13,12 +13,14 @@
 - Random map properties from `mapstats.txt` apply to monsters; `PlayerStats=1` also gives them to you (experimental).
 - `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
+- A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default).
+- `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
