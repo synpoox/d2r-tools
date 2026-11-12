@@ -14,8 +14,8 @@ an ambush, a shrine or a treasure). MIT licensed.
   `cartographer-report.txt`; the rest load.
 - **Cave and Crypt mazes**: every map is generated (Cave or Crypt) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
-- **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are off by
-  default (`PlayerStats`, test characters only, experimental).
+- **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are on by
+  default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Outdoor map rooms** (`OutdoorBuild`, off, not checked in game): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
@@ -113,7 +113,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
-| PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
+| PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
 | MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
@@ -273,9 +273,9 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
+  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character), and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
-  banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare
+  banner text (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync, Nightmare
   difficulty for mazes, and a second Crypt map in one game.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

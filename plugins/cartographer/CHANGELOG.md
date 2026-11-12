@@ -10,7 +10,7 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Random map properties from `mapstats.txt` apply to monsters; `PlayerStats=1` also gives them to you (experimental).
+- Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
 - `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.

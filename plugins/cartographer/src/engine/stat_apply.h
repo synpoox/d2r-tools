@@ -28,9 +28,9 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats = {});
 
-// The PlayerStats setting of cartographer.txt (off by default). While off, nothing is ever attached to the player: the
-// player's list sits on the unit and a Save and Exit or an autosave inside the map may happen before it comes off. Only
-// for a test slot until the save check in docs/reverse-engineering/cartographer/07-map-stats-parts.md has passed.
+// The PlayerStats setting of cartographer.txt (on by default). While off, nothing is ever attached to the player. While on, the
+// player's list sits on the unit until the next tick outside the map; the save writer was seen to write base stats only
+// (one Save and Exit, docs/reverse-engineering/cartographer/07-map-stats-parts.md); an autosave in the map is untested.
 void StatApplySetPlayerStats(bool on) noexcept;
 
 // Called from the portal's player tick hook (game thread), after the game's own tick. `game` and `unit` are the tick's.
