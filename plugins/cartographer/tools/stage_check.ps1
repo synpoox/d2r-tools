@@ -118,7 +118,7 @@ $AllowedSlots = @(5, 6, 7, 11)
 $SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
 # core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
 # game asserts at startup without the file. Cartographer adds no such level type, so a header-only file is seeded (no rows).
-$defaultModRx = '(?m)^([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
+$defaultModRx = '(?m)^\uFEFF?([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
 $CoreUiAutomapHeader ="LevelType`tTileType`tStyle`tStartSequence`tEndSequence`tCelCount`tCel1`tCel2`tCel3`tCel4"
 
 function Say([string]$text) { Write-Host $text }
@@ -301,11 +301,13 @@ if ($Restore) {
     if ($man.defaultMod -and (Test-Path -PathType Leaf $man.defaultMod.file)) {
         $tt = [System.Text.UTF8Encoding]::new($false).GetString([System.IO.File]::ReadAllBytes($man.defaultMod.file))
         $tm = [regex]::Match($tt, $defaultModRx)
-        if ($tm.Success -and $tm.Groups[2].Value -ne "$($man.defaultMod.original)") {
+        if ($tm.Success -and $tm.Groups[2].Value -eq $modName) {
             Set-ItemProperty -LiteralPath $man.defaultMod.file -Name IsReadOnly -Value $false
             $out = $tt.Substring(0, $tm.Groups[2].Index) + $man.defaultMod.original + $tt.Substring($tm.Groups[2].Index + $tm.Groups[2].Length)
             [System.IO.File]::WriteAllBytes($man.defaultMod.file, [System.Text.UTF8Encoding]::new($false).GetBytes($out))
             Say "  default_mod in $($man.defaultMod.file) set back to `"$($man.defaultMod.original)`""
+        } elseif ($tm.Success) {
+            Write-Warning "default_mod in $($man.defaultMod.file) is now `"$($tm.Groups[2].Value)`", not the test mod $modName; left as it is (it was `"$($man.defaultMod.original)`" before staging)."
         }
     }
     Remove-Item -LiteralPath $manifestPath -Force
@@ -472,6 +474,7 @@ try {
         foreach ($f in Get-ChildItem $Tables -File -Filter '*.txt') {
             if ($f.Name -ieq 'cartographer.txt' -and $AutoCheckMap) { continue }  # written with the settings below
             if ($f.Name -ieq 'map-items.txt') { continue }  # the -MapItems overrides, not a game table: -MapItems reads it from the plugin folder
+            if ($f.Name -ieq 'misc.txt') { Write-Warning "$($f.FullName): misc.txt is not a Cartographer table (-MapItems adds its rows to the test mod's misc.txt); skipped."; continue }
             Copy-IfChanged $f.FullName (Join-Path $cartoTables $f.Name) $null
         }
     }
