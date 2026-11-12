@@ -18,6 +18,15 @@ else()
 	target_compile_options(cartographer_layout PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
+# The map stats draw core (phase 5a): pure C++, no engine headers. It includes ../layout/rng.h.
+add_library(cartographer_stats STATIC src/stats/mapstats.cpp src/stats/mapstats.h)
+target_include_directories(cartographer_stats PUBLIC src/stats)
+if(MSVC)
+	target_compile_options(cartographer_stats PRIVATE /W4 /permissive- /utf-8)
+else()
+	target_compile_options(cartographer_stats PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
