@@ -149,6 +149,24 @@ TEST_CASE("EventRoomTracker: the distance is between centres, either axis") {
 	CHECK(t.onPopulated({-10, 0, 4, 4}));
 }
 
+TEST_CASE("minEventDistance: a third of the larger side, 1 to 24, 24 when the size is unknown") {
+	CHECK(minEventDistance(20, 28) == 9);
+	CHECK(minEventDistance(28, 20) == 9);
+	CHECK(minEventDistance(60, 40) == 20);
+	CHECK(minEventDistance(200, 200) == kMinEventDistance);
+	CHECK(minEventDistance(2, 1) == 1);
+	CHECK(minEventDistance(0, 0) == kMinEventDistance);
+	CHECK(minEventDistance(-5, 0) == kMinEventDistance);
+}
+
+TEST_CASE("EventRoomTracker: a 20 x 28 map fires at the scaled distance, not at 24") {
+	CHECK_FALSE(EventRoomTracker(std::nullopt, kMinEventDistance).onPopulated({0, 0, 8, 4}));
+	EventRoomTracker t(std::nullopt, minEventDistance(20, 28));
+	CHECK_FALSE(t.onPopulated({0, 0, 8, 4}));
+	CHECK_FALSE(t.onPopulated({4, 0, 8, 4}));  // 4 away
+	CHECK(t.onPopulated({12, 0, 8, 4}));       // 12 away
+}
+
 TEST_CASE("planEvent: a Boss is the lead plus minions, centre first") {
 	const Rect room{0, 0, 20, 20};
 	ev::Event e = event(ev::Kind::Boss, "Bishibosh");
@@ -212,6 +230,15 @@ TEST_CASE("entryLines: the map name, then the event name and message") {
 	e.message.clear();
 	CHECK(entryLines("Crypt of Bones", &e).size() == 2);
 	CHECK(entryLines("", nullptr).empty());
+}
+
+TEST_CASE("bannerLines: the event only once announced, no map name in a late banner") {
+	ev::Event e = event(ev::Kind::Boss, "andariel");
+	CHECK(bannerLines("Crypt", &e, false, false) == std::vector<std::string>{"Crypt"});
+	CHECK(bannerLines("Crypt", &e, true, false) == std::vector<std::string>{"Crypt", "The Drowned King", "Something stirs."});
+	CHECK(bannerLines("Crypt", &e, true, true) == std::vector<std::string>{"The Drowned King", "Something stirs."});
+	CHECK(bannerLines("Crypt", &e, false, true).empty());
+	CHECK(bannerLines("Crypt", nullptr, true, true).empty());
 }
 
 TEST_CASE("EntryTracker fires once per arrival") {

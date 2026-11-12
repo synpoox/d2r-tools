@@ -373,13 +373,13 @@ void Event6bBossSpawned(void* unit) noexcept {
 	}
 }
 
-void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
+bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
 	try {
 		int row = -1;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (!g_state.shrineReady || g_state.shrinePlaced) {
-				return;
+				return false;
 			}
 			g_state.shrinePlaced = true;
 			row = g_state.shrineRow;
@@ -387,19 +387,19 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 		auto* game = static_cast<Game*>(rawGame);
 		if (game == nullptr || room == nullptr || !On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
 			plog::Warn("shrine not placed: %s", game == nullptr || room == nullptr ? "no game or room" : "a part is off");
-			return;
+			return false;
 		}
 		// The row is checked again against the game's count now: a table load since map open would make it stale.
 		std::string why;
 		const uint8_t* dt = TablesBase(At<uint8_t>(game, GameDataFlagOffset), &why);
 		if (dt == nullptr || row < 0 || static_cast<uint64_t>(row) >= At<uint32_t>(dt, DtObjectCountOffset)) {
 			plog::Warn("shrine not placed: objects row %d is not below the game's row count%s%s", row, dt == nullptr ? ": " : "", dt == nullptr ? why.c_str() : "");
-			return;
+			return false;
 		}
 		const std::vector<ep::Spot> spots = ep::placements(serverRect, 1, seed, scale);
 		if (spots.empty()) {
 			plog::Warn("shrine not placed: the event room is too small to place anything");
-			return;
+			return false;
 		}
 		int32_t xy[2] = {spots[0].x, spots[0].y};
 		void* landed = nullptr;
@@ -407,22 +407,24 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 		Call<FreeSpotFn>(FreeSpot)(room, xy, FreeSpotRadius, FreeSpotMask, &landed);
 		if (landed == nullptr) {
 			plog::Warn("shrine not placed: the game found no free spot near (%d,%d) in the event room", spots[0].x, spots[0].y);
-			return;
+			return false;
 		}
 		plog::Info("eventprobe: shrine: free spot (%d,%d) in room %p (%s the event room)", xy[0], xy[1], landed, landed == room ? "in" : "NOT in");
 		if (landed != room) {
 			// The neighbouring room may not be populated yet; refuse rather than create an object there.
 			plog::Warn("shrine not placed: the free spot (%d,%d) is outside the event room (room %p, not %p)", xy[0], xy[1], landed, room);
-			return;
+			return false;
 		}
 		void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);
 		if (unit == nullptr) {
 			plog::Warn("shrine not placed: the game refused to create objects row %d at (%d,%d)", row, xy[0], xy[1]);
-			return;
+			return false;
 		}
 		plog::Info("eventprobe: shrine: created objects row %d: unit %p (type %d, id %u) at (%d,%d)", row, unit, At<int32_t>(unit, UnitTypeOffset), At<uint32_t>(unit, UnitIdOffset), xy[0], xy[1]);
+		return true;
 	} catch (...) {
 		plog::Error("shrine: placing the object failed");
+		return false;
 	}
 }
 
