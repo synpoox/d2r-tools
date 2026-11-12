@@ -21,7 +21,7 @@
 
 namespace carto {
 
-// Finds the one native part AutoCheck calls (the unit mover) by signature. Never throws. Call after InstallPortal's parts are resolved.
+// Finds the native parts AutoCheck calls (the unit mover and the two room parts) by signature. Never throws. Call after InstallPortal's parts are resolved.
 void InstallAutoCheck(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count);
 
 // The tables (settings and maps). Any thread, any time.

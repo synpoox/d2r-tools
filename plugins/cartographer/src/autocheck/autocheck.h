@@ -20,8 +20,8 @@ auto itemName(Item item) -> const char *;
 struct Result {
 	Item item = Item::Open;
 	bool pass = false;
+	std::string detail;  // one short line of why; may be empty
 	bool notApplicable = false;  // the check does not apply to this map: settled as a pass, but counted apart (n/a=, not pass=)
-	std::string detail;          // one short line of why; may be empty
 };
 
 // What has been settled so far. Each item is settled once: a second record for the same item is ignored.

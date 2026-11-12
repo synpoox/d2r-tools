@@ -55,7 +55,7 @@ void Checklist::record(Item item, bool pass, const std::string &detail) {
 		return;
 	}
 	done_[i] = true;
-	result_[i] = Result{item, pass, false, detail};
+	result_[i] = Result{item, pass, detail, false};
 }
 
 void Checklist::recordNotApplicable(Item item, const std::string &detail) {
@@ -64,7 +64,7 @@ void Checklist::recordNotApplicable(Item item, const std::string &detail) {
 		return;
 	}
 	done_[i] = true;
-	result_[i] = Result{item, true, true, detail};
+	result_[i] = Result{item, true, detail, true};
 }
 
 void Checklist::failRest(const std::string &reason) {
