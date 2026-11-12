@@ -9,6 +9,9 @@
 #include "core/tables.h"
 #include "core/tsv.h"
 
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 using namespace carto;
@@ -362,4 +365,84 @@ TEST_CASE("long words get no suggestion, and a report stops listing after 200 pr
 	Report other;
 	other.Error("cartographer.txt", 1, "bad");
 	CHECK(other.Errors() == 1);
+}
+
+// --- The example pack (examples/first-map) is what docs/cartographer/tables.md and the README show. -------------------
+
+namespace {
+
+auto ExampleFile(const char* name) -> std::string {
+	std::ifstream in(std::string(CARTOGRAPHER_EXAMPLE_DIR) + "/" + name, std::ios::binary);
+	REQUIRE_MESSAGE(in.good(), name);
+	std::ostringstream text;
+	text << in.rdbuf();
+	return text.str();
+}
+
+auto ExampleNames() -> GameNames {
+	GameNames n = Names();
+	n.monsters.push_back("quillrat1");
+	n.superUniques.push_back("Bishibosh");
+	n.haveItemSpells = true;
+	n.itemSpells = {{"t20", 16}, {"t21", 16}};
+	return n;
+}
+
+}  // namespace
+
+TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problems") {
+	Report report;
+	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report);
+	CHECK_MESSAGE(report.problems.empty(), Joined(report));
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].name == "Shorelines");
+	CHECK(maps[0].item == "t20");
+	CHECK(maps[0].size == "Large");
+	CHECK(maps[0].level == 90);
+	CHECK(maps[0].monsters.size() == 2);
+	CHECK(maps[0].minCharLevel == 80);
+	CHECK(maps[0].properties == 4);
+	CHECK(maps[1].shape == "Loop");
+	CHECK(maps[1].level == 85);  // blank cells keep the defaults
+
+	Report settingsReport;
+	const Settings settings = LoadSettings(ExampleFile("cartographer.txt"), settingsReport);
+	CHECK_MESSAGE(settingsReport.problems.empty(), Joined(settingsReport));
+	CHECK(settings.properties == 6);
+	CHECK(settings.eventChance == 20);
+	CHECK(settings.itemStats == 0);
+	CHECK(settings.town == "Harrogath");
+}
+
+TEST_CASE("the example pack's mapstats.txt and mapevents.txt follow the documented columns and limits") {
+	// The plugin does not read these two tables yet; this checks the pack against the rules in tables.md.
+	const Tsv stats = ParseTsv(ExampleFile("mapstats.txt"));
+	REQUIRE(stats.header == std::vector<std::string>{"Target", "Stat", "Min", "Max", "Weight"});
+	CHECK(stats.rows.size() == 4);
+	for (const TsvRow& row : stats.rows) {
+		const std::string target = stats.Cell(row, 0);
+		CHECK((EqualsNoCase(target, "Monsters") || EqualsNoCase(target, "Players")));
+		CHECK(!stats.Cell(row, 1).empty());
+		const int min = std::atoi(stats.Cell(row, 2).c_str()), max = std::atoi(stats.Cell(row, 3).c_str());
+		CHECK(min <= max);
+		CHECK(std::atoi(stats.Cell(row, 4).c_str()) >= 0);
+	}
+	const Tsv events = ParseTsv(ExampleFile("mapevents.txt"));
+	REQUIRE(events.header == std::vector<std::string>{"Name", "Kind", "Spawn", "Count", "Waves", "Drop", "Message", "Weight"});
+	CHECK(events.rows.size() == 3);
+	for (const TsvRow& row : events.rows) {
+		const std::string kind = events.Cell(row, 1);
+		CHECK((EqualsNoCase(kind, "Boss") || EqualsNoCase(kind, "Ambush") || EqualsNoCase(kind, "Horde") ||
+		       EqualsNoCase(kind, "Treasure") || EqualsNoCase(kind, "Shrine")));
+		CHECK(!events.Cell(row, 0).empty());
+		CHECK(!events.Cell(row, 2).empty());
+		if (!events.Cell(row, 3).empty()) {
+			const int count = std::atoi(events.Cell(row, 3).c_str());
+			CHECK((count >= 1 && count <= 200));
+		}
+		if (!events.Cell(row, 4).empty()) {
+			const int waves = std::atoi(events.Cell(row, 4).c_str());
+			CHECK((waves >= 1 && waves <= 50));
+		}
+	}
 }

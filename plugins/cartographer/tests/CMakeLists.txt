@@ -18,6 +18,7 @@ foreach(test_source IN LISTS cartographer_core_tests)
 		target_compile_options(${test_name} PRIVATE -Wall -Wextra -Wpedantic -Werror)
 	endif()
 	add_test(NAME ${test_name} COMMAND ${test_name})
+	target_compile_definitions(${test_name} PRIVATE CARTOGRAPHER_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../examples/first-map")
 endforeach()
 
 # Catalogue tool tests (Python). Kept separate so it survives PR #42's CMake restructure.
@@ -34,6 +35,7 @@ endif()
 # Host tests for the table loader, the gates and the signature scanner.
 add_executable(tables_tests tables_tests.cpp ../src/core/tables.cpp)
 target_include_directories(tables_tests PRIVATE ../src ../third_party/doctest)
+target_compile_definitions(tables_tests PRIVATE CARTOGRAPHER_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../examples/first-map")
 if(MSVC)
 	target_compile_options(tables_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
 else()
