@@ -1152,6 +1152,16 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 - The plan is cached by (seed, tileset, shape, size, origin, limits, options), four entries, so the host's and a client's builds of one map share one computation. Failed plans are cached.
 - `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. Both settings default to 0.
 
+### After our build, and what is not hooked when the setting is off
+
+- **Second reseed.** The original's prologue (`0x3271e2..0x3271f0`) reseeds the level RNG again after our build returns control to it, so the level RNG ends at the fresh seed, not where a generator left it. The tail does not read it (section 8 Q5); the last fallback of `0x3da650` does. It is the same on the host and on a client.
+- **`OutdoorBuild = 0` installs nothing.** `InstallOutdoorHooks` finds the parts (for `cartographer check`) but hooks neither `0x3fe2e0` nor, when the maze steering did not take it, `0x3271c0`, when the setting is 0 or slots.txt has no Outdoor slot (one log line says so). The game then runs as without the outdoor code; the setting is read at load, so a restart turns it on.
+- **Act 5 only.** `PrepareSlot` refuses, before any write or engine call, unless the Outdoor slot row in levels.txt has `Act` = 4 (Act 5) and an id above 137 (a vanilla level or a town is never rebuilt). Otherwise `0x3ee320` would dispatch to a vanilla Act 1-4 builder (`0x3ee484..0x3ee4db`) on our level and rectangle. A missing `Act` column also refuses. The game then builds the level itself.
+
+### Slot row requirements (found by the outdoor spike, PR #168)
+
+- The Outdoor slot's levels.txt row needs `Vis0` to `Vis7` = 0. With `-1` the game crashes at image `+0x3268fb`. The installer writes the row (issue #144) and is not changed here; this is recorded for that change.
+
 ### Open
 
 - The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142, and it needs the S2 spike (#89). The whole feature stays off until a game check settles it.

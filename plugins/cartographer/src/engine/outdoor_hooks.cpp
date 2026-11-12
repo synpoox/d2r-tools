@@ -93,6 +93,7 @@ struct SlotGeometry {
 std::mutex g_lock;
 std::shared_ptr<const Job> g_job;
 SlotGeometry g_geometry;
+std::string g_slotRefusal;  // OutdoorSlotRefusal of the Outdoor slot row; empty when the slot may be built
 uint64_t g_nextJobId = 1;
 co::PlanCache g_cache(4);
 
@@ -245,13 +246,19 @@ void ProbeRooms(const void* level, int originX, int originY) noexcept {
 auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	std::shared_ptr<const Job> job;
 	SlotGeometry geometry;
+	std::string refusal;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		job = g_job;
 		geometry = g_geometry;
+		refusal = g_slotRefusal;
 	}
 	if (job == nullptr) {
 		*why = "no outdoor map was opened in this game";
+		return nullptr;
+	}
+	if (!refusal.empty()) {
+		*why = refusal;  // before any write or engine call: the game builds the level itself
 		return nullptr;
 	}
 	if (!geometry.known) {
@@ -469,6 +476,7 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_geometry = {};
+		g_slotRefusal = slot != nullptr ? OutdoorSlotRefusal(*slot) : std::string();
 		if (slot != nullptr && slot->haveGeometry) {
 			g_geometry = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY};
 		}
@@ -508,8 +516,21 @@ void OutdoorGameLeft() {
 }
 
 void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
+	// The parts are found either way (for 'cartographer check'), but nothing is hooked unless the build is wanted: with OutdoorBuild = 0, or with no
+	// Outdoor slot, the game runs exactly as without this code (no hook on the Act 5 builder, none added to the level build).
 	for (int i = 0; i < OutdoorNeededParts; ++i) {
 		ResolvePart(context, overrides, ranges, count, g_parts[i]);
+	}
+	if (!g_enabled.load() || g_slotLevel.load() <= 0) {
+		for (Part& part : g_parts) {
+			if (part.status.on) {
+				part.status.on = false;
+				part.status.detail = "found, not hooked: the outdoor build is off";
+			}
+		}
+		plog::Info(g_slotLevel.load() > 0 ? "outdoor build off (OutdoorBuild = 0); no outdoor hook installed. Restart the game to turn it on"
+		                                 : "no Outdoor slot (slots.txt); no outdoor hook installed");
+		return;
 	}
 	bool allOn = true;
 	for (int i = 0; i < OutdoorNeededParts; ++i) {

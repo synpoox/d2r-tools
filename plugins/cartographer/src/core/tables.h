@@ -81,6 +81,7 @@ struct Slot {
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 	int drlgType = -1;  // levels.txt DrlgType of that level (1 maze, 2 preset, 3 outdoor); -1 when unknown
+	int act = -1;       // levels.txt Act of that level (0 based: 4 is Act 5); -1 when unknown
 	// levels.txt OffsetX, OffsetY, SizeX and SizeY of that level, in tiles. haveGeometry is true only when all four columns exist and parse; the
 	// outdoor build needs them because the level record's rectangle is still zero when the level build starts.
 	bool haveGeometry = false;
@@ -111,9 +112,14 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// Fills in each slot's levelType and drlgType from the mod's levels.txt (columns Id, LevelType and DrlgType; each is read when its column
+// Fills in each slot's levelType, drlgType and act from the mod's levels.txt (columns Id, LevelType, DrlgType and Act; each is read when its column
 // exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
+
+// Empty, or why the Outdoor slot level must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
+// say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level
+// and calls the game, so it runs only for a level it has seen to be in Act 5.
+auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
 // The levels.txt LevelType an outdoor tileset's slot level must have (Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
 auto OutdoorLevelType(std::string_view tileset) -> int;

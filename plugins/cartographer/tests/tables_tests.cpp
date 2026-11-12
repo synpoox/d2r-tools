@@ -227,6 +227,26 @@ TEST_CASE("slot level types are read from levels.txt") {
 	CHECK(slots[1].levelType == 3);
 }
 
+TEST_CASE("the Outdoor slot is refused unless it is a new level that levels.txt puts in Act 5") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t140\nTown\t109\nLow\t137\n", report);
+	ReadSlotLevelTypes(slots, "Id\tAct\n140\t4\n109\t4\n137\t4\n");
+	CHECK(slots[0].act == 4);
+	CHECK(OutdoorSlotRefusal(slots[0]).empty());
+	CHECK(OutdoorSlotRefusal(slots[1]).find("vanilla") != std::string::npos);  // a town is a vanilla level
+	CHECK(OutdoorSlotRefusal(slots[2]).find("vanilla") != std::string::npos);  // 137 is the last vanilla id
+
+	ReadSlotLevelTypes(slots, "Id\tAct\n140\t2\n");  // another act: the game's own builder for that act would run on the slot
+	CHECK(slots[0].act == 2);
+	CHECK(OutdoorSlotRefusal(slots[0]).find("not read as Act 5") != std::string::npos);
+
+	auto unread = LoadSlots("Slot\tLevel\nOutdoor\t140\n", report);
+	CHECK(unread[0].act == -1);
+	CHECK(OutdoorSlotRefusal(unread[0]).find("unknown") != std::string::npos);  // no Act column: refused, not guessed
+	ReadSlotLevelTypes(unread, "Id\tDrlgType\n140\t3\n");
+	CHECK(!OutdoorSlotRefusal(unread[0]).empty());
+}
+
 TEST_CASE("the outdoor settings default to off and take 0 or 1") {
 	Report report;
 	CHECK(LoadSettings("", report).outdoorBuild == 0);
