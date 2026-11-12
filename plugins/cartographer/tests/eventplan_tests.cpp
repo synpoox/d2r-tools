@@ -132,7 +132,7 @@ TEST_CASE("EventRoomTracker: a planned room fires only on that rect, once") {
 	CHECK(t.populated() == 4);
 }
 
-TEST_CASE("EventRoomTracker: with no plan the first room is the entry and a far enough later room fires") {
+TEST_CASE("EventRoomTracker: with no plan the first room is the entry and a farthest enough later room fires") {
 	EventRoomTracker t(std::nullopt, 24);
 	CHECK_FALSE(t.planned());
 	CHECK_FALSE(t.onPopulated({0, 0, 8, 8}));    // entry
@@ -165,6 +165,26 @@ TEST_CASE("EventRoomTracker: a 20 x 28 map fires at the scaled distance, not at 
 	CHECK_FALSE(t.onPopulated({0, 0, 8, 4}));
 	CHECK_FALSE(t.onPopulated({4, 0, 8, 4}));  // 4 away
 	CHECK(t.onPopulated({12, 0, 8, 4}));       // 12 away
+}
+
+TEST_CASE("farthestRoom: the room farthest from the entry room, so a small map always has one") {
+	const Rect entry{8, 8, 8, 4};
+	const std::vector<Rect> rooms{{8, 8, 8, 4}, {0, 8, 8, 4}, {16, 8, 8, 4}, {8, 24, 8, 4}, {8, 16, 8, 4}};
+	const auto farthest = farthestRoom(entry, rooms);
+	REQUIRE(farthest.has_value());
+	CHECK(farthest->y == 24);
+	CHECK_FALSE(farthestRoom(entry, {}).has_value());
+	CHECK_FALSE(farthestRoom(entry, {entry}).has_value());
+	CHECK_FALSE(farthestRoom(entry, {{40, 40, 0, 4}}).has_value());  // no size
+	// a tie on the Chebyshev distance goes to the longer straight line, then to the earlier room
+	const auto t = farthestRoom({0, 0, 2, 2}, {{10, 0, 2, 2}, {10, 6, 2, 2}, {10, 6, 2, 2}});
+	REQUIRE(t.has_value());
+	CHECK(t->y == 6);
+	// fired by the tracker as the planned room, even though the full distance (24) never would be reached in this map
+	EventRoomTracker tr(farthest);
+	CHECK_FALSE(tr.onPopulated(entry));
+	CHECK_FALSE(tr.onPopulated({0, 8, 8, 4}));
+	CHECK(tr.onPopulated(*farthest));
 }
 
 TEST_CASE("planEvent: a Boss is the lead plus minions, centre first") {

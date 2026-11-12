@@ -98,6 +98,7 @@ struct State {
 	uint64_t seed = 0;
 	std::optional<ep::EventRoomTracker> tracker;  // made at the first room of the level, when the plan's event room is known
 	ep::EntryTracker entry;
+	bool farthestRoom = false;  // the tracker's room is the farthest one of the level's list (a preset map), not a maze plan's
 	bool spawned = false;
 	bool announced = false;  // the event room was chosen and something spawned: the banner may name the event
 	int probes = 0;
@@ -472,6 +473,7 @@ struct RoomRects {
 	ep::Rect drlg;    // tiles
 	ep::Rect server;  // the spawn code's units (subtiles, by static reading)
 	int levelW = 0, levelH = 0;  // the level's size in tiles; 0 when it cannot be read
+	void* level = nullptr;       // the DRLG level record, for the room list walk
 };
 
 auto ReadRects(void* serverRoom) noexcept -> RoomRects {
@@ -483,6 +485,7 @@ auto ReadRects(void* serverRoom) noexcept -> RoomRects {
 	out.drlg = {At<int32_t>(drlg, DrlgRectOffset), At<int32_t>(drlg, DrlgRectOffset + 4), At<int32_t>(drlg, DrlgRectOffset + 8), At<int32_t>(drlg, DrlgRectOffset + 12)};
 	out.server = {At<int32_t>(serverRoom, ServerRectOffset), At<int32_t>(serverRoom, ServerRectOffset + 4), At<int32_t>(serverRoom, ServerRectOffset + 8), At<int32_t>(serverRoom, ServerRectOffset + 12)};
 	void* level = At<void*>(drlg, DrlgLevelOffset);
+	out.level = level;
 	if (level != nullptr) {
 		out.levelW = At<int32_t>(level, LevelSizeOffset);
 		out.levelH = At<int32_t>(level, LevelSizeOffset + 4);
@@ -573,6 +576,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	const RoomRects rects = ReadRects(room);
 	bool fire = false;
 	bool planned = false;
+	bool farthest = false;
 	int number = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -593,14 +597,30 @@ void OnPopulated(Game* game, void* room) noexcept {
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
-					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (the first room a third of the level's larger side, at most %d tiles, from the first populated one)", ep::kMinEventDistance);
+					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (the farthest room of the level from the first populated one; by distance, a third of the level's larger side and at most %d tiles, if the room list cannot be read)", ep::kMinEventDistance);
 				}
 			}
 			const int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			if (!plan) {
-				plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+				// A preset map: this is the first populated room, the entry room. The farthest room of the level's list is the event room.
+				std::vector<ep::Rect> all;
+				if (LevelRoomRects(rects.level, &all)) {
+					plan = ep::farthestRoom(rects.drlg, all);
+					if (plan) {
+						farthest = true;
+						plog::Info("eventprobe: level %d has %zu room(s); the event room is the one farthest from the entry room %s: %s", state->level, all.size(), Describe(rects.drlg).c_str(), Describe(*plan).c_str());
+					} else {
+						plog::Warn("eventprobe: level %d has no room besides the entry room in its list; the event room is chosen by distance instead", state->level);
+					}
+				} else {
+					plog::Warn("eventprobe: the room list of level %d could not be read; the event room is chosen by distance instead", state->level);
+				}
+				if (!plan) {
+					plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+				}
 			}
 			state->tracker.emplace(plan, distance);
+			state->farthestRoom = farthest;
 		}
 		planned = state->tracker->planned();
 		fire = !state->spawned && state->tracker->onPopulated(rects.drlg);
@@ -613,7 +633,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	if (number <= MaxPopulateProbes) {
 		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
 		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg), ep::scaleKindName(ep::scaleKind(rects.server, rects.drlg)),
-		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
+		           planned ? (state->farthestRoom ? "event room is the farthest room" : "event room from the plan") : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
 	if (fire && SpawnEvent(game, room, *state, rects, ep::eventSeed(state->seed))) {
 		// The banner names the event only now that it has spawned. If the player is already in the map it follows at once,

@@ -739,6 +739,28 @@ void MazeGameLeft() {
 	g_arrivalLogged = false;
 }
 
+auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool {
+	out->clear();
+	const void* room = Read<const void*>(level, LvlFirstRoom);
+	if (level == nullptr || room == nullptr) {
+		return false;
+	}
+	try {
+		int count = 0;
+		for (; room != nullptr; room = Read<const void*>(room, RoomNext), ++count) {
+			if (count >= MaxRooms || !Readable(room, 0x98)) {
+				out->clear();
+				return false;
+			}
+			out->push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)});
+		}
+	} catch (...) {
+		out->clear();
+		return false;
+	}
+	return !out->empty();
+}
+
 auto MazeEventRoom() -> MazeEventRect {
 	std::lock_guard<std::mutex> lock(g_lock);
 	return g_eventRoom;

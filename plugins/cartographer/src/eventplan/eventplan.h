@@ -157,6 +157,10 @@ constexpr int kMinEventDistance = 24;
 // The distance for a level of `levelW` x `levelH` tiles: a third of the larger side, from 1 up to kMinEventDistance, so a small
 // map still has a room that qualifies. A size that is not known (no side above 0) gives kMinEventDistance.
 int minEventDistance(int levelW, int levelH);
+// The room of `rooms` (the level's whole room list, DRLG rects in tiles) whose centre is farthest from `entry`'s centre: the largest
+// Chebyshev distance, then the largest squared straight distance, then the earlier in the list. A room with the entry's own rect, and
+// a room with no size, are skipped. Empty when no other room exists. Same inputs, same room.
+std::optional<Rect> farthestRoom(const Rect &entry, const std::vector<Rect> &rooms);
 class EventRoomTracker {
 public:
 	explicit EventRoomTracker(std::optional<Rect> planned = std::nullopt, int minDistance = kMinEventDistance);
