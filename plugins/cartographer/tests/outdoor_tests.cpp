@@ -797,11 +797,11 @@ TEST_CASE("a Jungle map plans: layout, picks and stamps agree, the rect is the s
 TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")
 {
 	const Catalogue &cat = builtinJungleCatalogue();
-	MapRequest snow = jungleRequest(1);
-	snow.tileset = "Snow";
-	const MapPlan s = planOutdoorMap(snow, cat);
+	MapRequest lava = jungleRequest(1);
+	lava.tileset = "Lava";
+	const MapPlan s = planOutdoorMap(lava, cat);
 	CHECK(!s.ok);
-	CHECK(s.reason.find("Snow") != std::string::npos);
+	CHECK(s.reason.find("Lava") != std::string::npos);
 	CHECK(s.stamps.stamps.empty());
 
 	MapRequest size = jungleRequest(1);
@@ -890,7 +890,7 @@ TEST_CASE("the plan cache keys by seed and options, shares plans, drops the olde
 	CHECK(built);
 
 	MapRequest bad = jungleRequest(3);
-	bad.tileset = "Snow";
+	bad.tileset = "Lava";
 	const auto f = cache.get(bad, cat, &built);
 	CHECK(built);
 	CHECK(!f->ok);
@@ -1043,4 +1043,71 @@ TEST_CASE("the arrival mark moves: other marked rooms are cleared, and a build t
 	// Nearest the centre wins; a tie goes to the smaller y, then the smaller x.
 	CHECK(chooseCellRoom(cell, {{0, 0, 8, 8, 0}, {12, 12, 8, 8, 0}}) == 1);
 	CHECK(chooseCellRoom(cell, {{16, 16, 8, 8, 0}, {8, 8, 8, 8, 0}, {16, 8, 8, 8, 0}, {8, 16, 8, 8, 0}}) == 1);
+}
+
+TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16-tile grid, and the grid comparison agrees")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	CHECK(outdoorTilesetKnown("snow"));
+	CHECK(outdoorTilesetKnown("Jungle"));
+	CHECK_FALSE(outdoorTilesetKnown("Lava"));
+	MapRequest r;
+	r.tileset = "Snow";
+	r.shape = "Winding";  // ignored: Snow has no shapes
+	r.size = "";          // Medium: 8 x 5 cells of 16 tiles
+	r.seed = 4242;
+	r.options.originX = 6000;
+	r.options.originY = 3600;
+	r.options.maxTilesX = 192;
+	r.options.maxTilesY = 192;
+	const MapPlan plan = planOutdoorMap(r, cat);
+	REQUIRE_MESSAGE(plan.ok, plan.reason);
+	CHECK(plan.layout.cells.empty());
+	CHECK(plan.picks.cells.empty());
+	CHECK(plan.stamps.stamps.size() == 40);
+	CHECK(plan.stamps.tilesW == 128);
+	CHECK(plan.stamps.tilesH == 80);
+	CHECK(plan.stamps.originX == 6000);
+	CHECK(plan.stamps.originY == 3600);
+	CHECK(plan.stamps.entrance.known);
+	for (const Stamp &st : plan.stamps.stamps) {
+		CHECK(st.lvlPrest >= 987);
+		CHECK(st.lvlPrest <= 1002);
+	}
+	GridSample g = gridOf(plan.stamps);
+	CHECK(compareGrid(plan.stamps, g).empty());
+	const LevelRect rect = levelRectOf(plan.stamps);
+	CHECK(rect.w == 128);
+	CHECK(rect.h == 80);
+
+	const MapPlan again = planOutdoorMap(r, cat);
+	CHECK(again.hash == plan.hash);
+	MapRequest other = r;
+	other.seed = 4243;
+	CHECK(planOutdoorMap(other, cat).hash != plan.hash);
+
+	MapRequest big = r;
+	big.size = "Large";  // 160 x 112 tiles
+	big.options.maxTilesY = 100;
+	const MapPlan tooBig = planOutdoorMap(big, cat);
+	CHECK_FALSE(tooBig.ok);
+	CHECK(tooBig.reason.find("112") != std::string::npos);
+	big.options.maxTilesY = 192;
+	CHECK(planOutdoorMap(big, cat).ok);
+
+	MapRequest huge = r;
+	huge.size = "Huge";
+	CHECK(planOutdoorMap(huge, cat).reason.find("Huge") != std::string::npos);
+
+	PlanCache cache(4);
+	bool built = false;
+	const auto first = cache.get(r, cat, &built);
+	CHECK(built);
+	CHECK(first->ok);
+	const auto second = cache.get(r, cat, &built);
+	CHECK_FALSE(built);
+	CHECK(second == first);
+	MapRequest jungle = jungleRequest(4242);
+	CHECK(cache.get(jungle, cat, &built)->hash != first->hash);  // Jungle and Snow never share a cache entry
+	CHECK(built);
 }

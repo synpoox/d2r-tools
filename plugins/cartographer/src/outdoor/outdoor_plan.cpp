@@ -4,6 +4,8 @@
 #include <optional>
 #include <utility>
 
+#include "snow_plan.h"
+
 namespace cartographer::outdoor {
 
 namespace {
@@ -36,7 +38,8 @@ const Catalogue &builtinJungleCatalogue() {
 }
 
 bool outdoorTilesetKnown(std::string_view tileset) {
-	return lower(tileset) == "jungle";
+	const std::string name = lower(tileset);
+	return name == "jungle" || name == "snow";
 }
 
 std::string planCacheKey(const MapRequest &request) {
@@ -59,7 +62,31 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		return out;
 	};
 	if (!outdoorTilesetKnown(request.tileset)) {
-		return fail("Cartographer has no outdoor pieces for the tileset '" + request.tileset + "'. Use Jungle.");
+		return fail("Cartographer has no outdoor pieces for the tileset '" + request.tileset + "'. Use Jungle or Snow.");
+	}
+	if (lower(request.tileset) == "snow") {
+		// Snow is lines of fence pieces, not a layout of exit-mask pieces: only the stamps reach the hook and the grid comparison.
+		int cellsW = 0, cellsH = 0;
+		if (!snow::snowSizeCells(request.size, &cellsW, &cellsH)) {
+			return fail("The size '" + request.size + "' is not Small, Medium or Large.");
+		}
+		snow::SnowRequest snowRequest;
+		snowRequest.seed = request.seed;
+		snowRequest.cellsW = cellsW;
+		snowRequest.cellsH = cellsH;
+		snowRequest.options.originX = request.options.originX;
+		snowRequest.options.originY = request.options.originY;
+		snowRequest.options.maxTilesX = request.options.maxTilesX;
+		snowRequest.options.maxTilesY = request.options.maxTilesY;
+		snowRequest.options.pinFiles = request.options.pinFiles;
+		snow::SnowPlan snowPlan = snow::planSnowMap(snowRequest);
+		if (!snowPlan.ok) {
+			return fail("Cartographer could not plan the Snow map: " + snowPlan.reason);
+		}
+		out.stamps = std::move(snowPlan.stamps);
+		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
+		out.ok = true;
+		return out;
 	}
 	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Medium") : std::string_view(request.size));
 	if (!size) {
