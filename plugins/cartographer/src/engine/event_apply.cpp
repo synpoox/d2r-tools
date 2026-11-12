@@ -690,6 +690,35 @@ auto SummaryNow() -> std::string {
 
 }  // namespace
 
+auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::string* why) noexcept -> bool {
+	try {
+		rows->clear();
+		if (g_dataTables == nullptr) {
+			*why = "no DataTable service";
+			return false;
+		}
+		const ep::RouteVerdict route = RouteFor(dataFlag);
+		if (!route.monsters) {
+			*why = route.why.empty() ? "the game's monstats table did not pass its check" : route.why;
+			return false;
+		}
+		for (const std::string& id : ids) {
+			const int row = GameMonsterRow(route, dataFlag, id);
+			if (row < 0) {
+				*why = "'" + id + "' is not in the game's monstats table";
+				rows->clear();
+				return false;
+			}
+			rows->push_back(row);
+		}
+		return true;
+	} catch (...) {
+		rows->clear();
+		*why = "the lookup failed";
+		return false;
+	}
+}
+
 auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	g_context = context;
 	CodeRange ranges[8];

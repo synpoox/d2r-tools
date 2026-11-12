@@ -1914,3 +1914,58 @@ Two causes found by the game check above; both fixed in the plugin, neither seen
 **Fix.** `event6b::freeSpotAttempts` (pure) gives the tries: for radius 5 (the engine's own), then 2, then 1 (a 3 x 3 footprint; 0 is only 2 x 2 and would leave one cell of a 3-wide `Chest3` untested), the room centre and the four points a quarter in from the edges. The engine takes the first try whose result is in the event room (`outRoom` is the event room and `spotInBox` holds for the rect, in the rect's own units); the "NOT in the event room" refusal stays, now after the last try. Nothing new is called, so no new signature. Log lines: `shrine: objects row N, free spot try K: near (x,y) radius R ... gave a spot (x,y) room P (in / NOT in the event room)`. Unit tests: `objectRowNames`, `freeSpotAttempts`, `spotInBox` (`event6b_tests`). `check_portal_signatures.py` and `check_maze_signatures.py`: all signatures ok.
 
 **Needs game:** a stock `objects.txt` Class (`ShrineHealth`) resolves and the row logged matches what the game creates; a spot is found inside the event room (and at which try and radius); the created object works (a shrine can be used, a chest opens and its `Drop` rolls); a chest of 3 x 1 does not sit inside a wall at radius 1.
+
+## 14. Map monster columns in the slot level's row (issue #156)
+
+The first route tried for `Level`, `Monsters`, `Density`, `Champions` and `Uniques`: at map open, on the game thread and just before `OpenRedPortal`, write the values into the slot level's own row of the levels table (the row the `LevelsRow` part finds, section 10) and put the originals back on `GameLeft`, on unload and when the portal does not open. Code: `plugins/cartographer/src/engine/level_row.cpp` (game glue, ledger of written fields), `src/levelrow/` (pure: layout, mapping, ledger; `tests/levelrow_tests.cpp`). Evidence level: **dump** (static, build 93847, stamp `0x6ab3782c`); nothing here was run in a game.
+
+### Field offsets (proven by the loader, and by the engine's own readers)
+
+The levels.txt loader (function `0x32eac0`..`0x33061a`) builds one column descriptor per column on the stack, `0x20` bytes each: `+0` name, `+8` type (`2` = 4-byte integer, `3` = 2-byte integer, `4` = 1-byte, `1` = text of the size at `+0xc`, `0x16` = 2-byte row reference), `+0x10` offset in the row. Read with `python -I` and capstone over the dump (every `mov [rbp+x]` store of the function, names resolved from the `lea` string operands). The region builder `0x508750` (section 6, Q2) reads the same offsets from a levels row independently (`+0x24 + diff*4`, `+0x30 + diff`, `+0x33 + diff`, `+0x18` / `+0x1e`), which matches.
+
+| Column | type | row offset | size |
+|---|---|---|---|
+| `Id` | 3 | `0x04` | 2 (the guard: it must equal the slot level) |
+| `MonLvl`, `MonLvl(N)`, `MonLvl(H)` | 3 | `0x18`, `0x1a`, `0x1c` | 2 each |
+| `MonLvlEx`, `MonLvlEx(N)`, `MonLvlEx(H)` | 3 | `0x1e`, `0x20`, `0x22` | 2 each |
+| `MonDen`, `MonDen(N)`, `MonDen(H)` | 2 | `0x24`, `0x28`, `0x2c` | 4 each |
+| `MonUMin`, `MonUMin(N)`, `MonUMin(H)` | 4 | `0x30`, `0x31`, `0x32` | 1 each |
+| `MonUMax`, `MonUMax(N)`, `MonUMax(H)` | 4 | `0x33`, `0x34`, `0x35` | 1 each |
+| `NumMon` | 4 | `0x3a` | 1 |
+| `mon1`..`mon25` | `0x16` | `0x3e` + 2 per entry | 2 each |
+| `nmon1`..`nmon25` | `0x16` | `0x70` + 2 per entry | 2 each |
+| `umon1`..`umon25` | `0x16` | `0xa2` + 2 per entry | 2 each |
+
+`LevelName` `0xfd` and `LevelEntry` `0x14d` are in section 10. Not written: `cmon1`..`cmon4` (`0xd4`), `cpct*`, `camt*`, `MonWndr`, `MonSpcWalk`, `rangedspawn`.
+
+### What is written
+
+| Map column | Fields | Value |
+|---|---|---|
+| `Level` | all six `MonLvl*` | the level, 1 to 255 (all three difficulties, base and expansion field) |
+| `Monsters` | `NumMon`, the first entries of `mon*`, `nmon*` and `umon*` | `NumMon` = the number of ids, each list entry = the monstats row of the id. The row comes from the game's own monstats table by the route of section 11 (`GameMonsterRows`); an id the table does not have, or a table that fails its check, leaves the lists alone. Blank `Monsters`: the slot's own lists |
+| `Density` | the three `MonDen*` | the slot row's value plus `Density` percent, rounded half up, at most 2147483647; a value of 0 stays 0 |
+| `Champions`, `Uniques` | the three `MonUMin*` and `MonUMax*` | the slot row's value plus (`Champions` + `Uniques`) / 2 percent (rounded up), at most 255 |
+
+There is no separate field for the champion and unique split: the levels table has **one** pair `MonUMin` / `MonUMax` for all special packs (champion, unique, possessed, ghostly), and the pack kind is rolled by the game (`0x419d20`, section 6). The two percents are therefore averaged into one. The scaling base is always the slot row's own original value (the first value the plugin saw, kept in the ledger), so a second map through the same slot does not compound. A field a previous map set that the next map does not set goes back to its original at that open.
+
+Base for "percent more than the tileset's normal": the slot level is a copy of Act 5 Colossal Summit (installer), whose row has `MonDen` 0 and empty `MonUMin` / `MonUMax` in vanilla 3.3.0, so `Density`, `Champions` and `Uniques` add nothing on that slot until the owner's `levels.txt` gives the slot level a density (the plugin logs "adds nothing" when it sees that). `Level` and `Monsters` do not depend on the base. `cartographer.txt` has no Density, Champions or Uniques settings, so there are no globals to apply.
+
+### Guards (runtime, per part, fail open)
+
+- The row must be readable for `0xd4` bytes and its `Id` (`+4`, 2 bytes) must equal the slot level, else nothing is written (not the slot's row, or the layout differs).
+- Each part is checked against the row's original values and switched off with a log line if they look wrong: `Level` when a `MonLvl*` field is outside 0..255, `Monsters` when `NumMon` is above 25, `Density` when a `MonDen*` is outside 0..100000 (vanilla 3.3.0 tops out at 2200), `Champions` / `Uniques` when a `MonUMin*` / `MonUMax*` is above 100 (vanilla tops out at 15). A moved offset would read other columns of the row and fail these.
+- Only the slot level's row is written (`level` is the slot from `slots.txt`); a vanilla row is never touched. Memory is checked before every write (`VirtualQuery`), and the restore goes through the saved row pointer and writes a field back only while it still holds the value the plugin wrote.
+- A failed restore stops further writes for the process (`map monsters: ... no further map is written`).
+
+### Risks, and what is still needed from the game
+
+- **needs game, the main one:** whether the game reads these fields from the row at map open, or has already copied them. Section 6 Q2 records that the region builder `0x508750` copies `MonDen`, `MonUMin`, `MonUMax` and (through `0x509940`) the group lists from the levels row into a per-game region array, and that `0x5098b0` has no direct caller, so the array is probably built once per game, before any map opens (inference). If so, `Density`, `Champions`, `Uniques` and `Monsters` written into the row at map open change nothing, while `Level` works because `0x32c700` reads the row's `MonLvl` field on each call (static). The fallback is the slot's own region record (`0x508740` with `game + 0x1d0`: `+0x2b8` density, `+0x2bc` / `+0x2bd` pack counts, groups `+0x10` / `+0x14`), written before the first room activates (Q2 above). Not built.
+- needs game: that a monster list entry holds the monstats row index (the loader's type `0x16` column resolves the name through the monstats lookup; the value is the row index by inference, the same index the event spawns use).
+- needs game: that the data flag read from `game + 0x106` picks the levels bank the monster code reads (the same inference as the map names, section 10; single player was confirmed there for the names).
+- Known limit, one row per slot: a second map opened through the same slot in one game rewrites the slot's row, so rooms of the first map that populate after that use the second map's values.
+- Client side: a TCP/IP client does not write these fields (the host spawns the monsters); only the map name is applied there.
+
+### Game check (listed for later)
+
+With a spare slot: a map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; the log shows `map monsters: level 138 row ...: 'X' sets N field(s)`; kill a monster and read its level, and check the monster kinds. Then `Density` 100 on a slot whose row has a `MonDen` above 0, and count packs. Leave the game and check `map monsters: level 138: N field(s) put back`. If `Level` works and the rest does not, build the region fallback above.

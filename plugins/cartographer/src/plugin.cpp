@@ -12,6 +12,7 @@
 #include "event6b.h"
 #include "crash_guard.h"
 #include "engine/event_apply.h"
+#include "engine/level_row.h"
 #include "engine/map_names.h"
 #include "engine/map_sync.h"
 #include "engine/maze_hooks.h"
@@ -391,6 +392,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::MapNamesPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
@@ -496,6 +498,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
 	carto::MapNamesUnload();  // the slot level's own text back in the game's table
+	carto::LevelRowUnload();  // ... and its own monster fields
 	carto::UnloadMapSync();
 	crash_guard::Remove();
 	g_context = nullptr;

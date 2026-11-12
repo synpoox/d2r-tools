@@ -44,17 +44,17 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Tileset` | yes | A tileset name. Only `Preset` is built today. `Cave`, `Crypt`, `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`, `Jungle` and `Snow` are known names that are refused with a message until they are built | none | Preset |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). A `Preset` map does not use the shape, but the cell must still hold one of these | none | Corridor |
 | `Size` | no | `Small`, `Medium` or `Large` (checked only; not applied yet) | Medium | Large |
-| `Level` | no | Monster level in the map, 1 to 255 (checked only; not applied yet) | 85 | 90 |
+| `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental, not verified in game) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`): the plugin ships no items | none | `t20` |
 | `Boss` | no | A monstats `Id` or a superuniques name for the end of the path (case must match; checked only, no boss is placed yet) | no boss | `Bishibosh` |
-| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; checked only, not applied yet) | the tileset's own monsters | `quillrat1,zombie1` |
+| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; experimental, not verified in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
 | `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
-| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
-| `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 to 1000 (checked only; not applied yet) | 0 | 25 |
+| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (scales the level's own density; experimental, not verified in game; adds nothing on a level whose density is 0) | 0 | 50 |
+| `Champions` | no | Percent more champion packs, 0 to 1000 (averaged with `Uniques`, as the game has one pack count for both; experimental, not verified in game) | 0 | 50 |
+| `Uniques` | no | Percent more unique packs, 0 to 1000 (averaged with `Champions`; experimental, not verified in game) | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 

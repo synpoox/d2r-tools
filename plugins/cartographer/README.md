@@ -67,7 +67,10 @@ in [`examples/first-map/`](examples/first-map/).
 | Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Champions, Uniques | Read and checked; not applied yet | cartographer.txt |
+| Density, Champions, Uniques | Percent more monsters and packs than the level's own (experimental) | 0 |
+
+Level, Monsters, Density, Champions and Uniques are written into the map level's row when a map opens and put back when you
+leave the game (experimental, not verified in game; whether the game uses all of them is still to be checked).
 
 `cartographer.txt` has the columns `Setting` and `Value`:
 

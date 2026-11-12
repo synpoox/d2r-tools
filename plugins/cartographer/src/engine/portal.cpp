@@ -11,6 +11,7 @@
 #include "engine/stat_apply.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
+#include "engine/level_row.h"
 #include "log.h"
 #include "steer.h"
 
@@ -243,9 +244,14 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
+	// The map's monster columns go into the same row, for the same reason.
+	const bool shaped = LevelRowBeforeOpen(map, level, At<uint8_t>(game, GameDataFlagOffset));
 	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
 	if (named && opened == 0) {
 		MapNamesOpenFailed(level);
+	}
+	if (shaped && opened == 0) {
+		LevelRowOpenFailed(level);
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
@@ -493,6 +499,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		StatApplyGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
+		LevelRowRestore();
 		MapSyncGameLeft();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
