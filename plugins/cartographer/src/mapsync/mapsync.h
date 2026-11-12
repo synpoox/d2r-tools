@@ -108,7 +108,7 @@ struct ApplyFacts {
 	bool slotBuilt = false;         // the client's slot level was already built (with or without a map open) in this game
 	// The outdoor half, the client's own side. For an outdoor identity `slotLevelMatches` is about the client's Outdoor slot level.
 	bool clientOutdoorMap = false;  // the client's own maps.txt row is an outdoor (Jungle) map
-	bool outdoorBuildLive = false;  // OutdoorBuild = 1 here, every outdoor part is on and the hooks are in
+	bool outdoorBuildLive = false;  // every outdoor part is on and the hooks are in
 	bool outdoorSlotBuilt = false;  // the client's Outdoor slot level was already built (with or without a map open) in this game
 };
 

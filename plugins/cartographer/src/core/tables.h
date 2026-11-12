@@ -42,7 +42,7 @@ inline constexpr const char* MazeSlot = "Maze";
 inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // Each outdoor tileset (Jungle, Snow) opens through a slot level of its own (levels.txt DrlgType 3, outdoor builder plan section 1.1), because a
 // level has one LevelType and the tilesets need different ones. The tileset's slot name, level name and LevelType are one row of the table in
-// outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook (OutdoorBuild = 1 in cartographer.txt) builds it.
+// outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook builds it.
 inline constexpr int OutdoorDrlgType = 3;
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
@@ -94,7 +94,6 @@ struct Settings {
 	int playerStats = 1;  // PlayerStats: 1 puts the map's player stats on the player while in the map (removed on leaving and on Save and Exit)
 	int mapNames = 1;   // MapNames: 0 turns off a map's own Name on the portal tooltip, the automap title and the entry banner (on by default; seen in game in single player, multiplayer unverified)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
-	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
 	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
 	int autoCheck = 0;  // AutoCheck: 1 runs the issue #173 game check by itself in a Hell game (test slots only)
 	std::string autoCheckMap;  // AutoCheckMap: the map's Name in maps.txt that AutoCheck opens

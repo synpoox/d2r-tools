@@ -17,7 +17,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are on by
   default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
-- **Outdoor map rooms** (`OutdoorBuild`, off, not checked in game): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
+- **Outdoor map rooms** (Jungle and Snow, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
   placement are experimental).
 - **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
@@ -117,7 +117,6 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
 | MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
-| OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
@@ -257,16 +256,16 @@ game. The installer adds that level next to the Maze level: Act 5, outdoor (Drlg
 (`-1` crashes the game). It needs no `lvlprest.txt` or `lvlmaze.txt` row. Running it again changes nothing, and the
 game's own rows are never edited. Restart the game afterwards.
 
-An outdoor map opens only while `OutdoorBuild` is `1` in `cartographer.txt` (default 0, so the game runs as without the
-outdoor code). With it at 0, a Jungle map's item says so and nothing opens. If the Outdoor slot is missing, not the level the
+Outdoor maps are always built, like maze maps; there is no setting for them (an old `OutdoorBuild` line in `cartographer.txt`
+is ignored and noted in the report). If the Outdoor slot is missing, not the level the
 installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
-is Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does (not checked in game).
+is Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 
-Not verified in game. In multiplayer (TCP/IP, experimental) the host sends the outdoor layout to clients; that has not been run in a game either.
+Checked in single player: opening, arriving in the entrance clearing, the Boss, events, map stats and the entry banner. Not checked: the edges and void cells (issue #142) and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
 ## Status
 
@@ -275,6 +274,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
   Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character), and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
+- **Outdoor maps (Jungle and Snow)**: opening, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142) and multiplayer were not checked.
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
   banner text (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync, Nightmare
   difficulty for mazes, and a second Crypt map in one game.

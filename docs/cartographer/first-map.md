@@ -5,7 +5,7 @@ Every file used here is in [`plugins/cartographer/examples/first-map/`](../../pl
 Every column is explained in [tables.md](tables.md).
 
 > **Not tried in a game yet.** The steps match what the plugin checks today (unit tested), but nobody has opened a
-> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` and `Snow` when `OutdoorBuild = 1`; the other tilesets are known names
+> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` and `Snow`; the other tilesets are known names
 > that are refused with a message until they are ready.
 
 ## What works today
@@ -53,8 +53,8 @@ or the item has no icon.
 
 The example pack's `maps.txt` has three maps, using items `t20`, `t21` and a Jungle map that uses `t22`; make a row for
 each. [`examples/first-map/map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists the values
-for those three (the columns above, by name). The Jungle map also needs `OutdoorBuild = 1` in `cartographer.txt`; until
-then it is refused when you use its item.
+for those three (the columns above, by name). The Jungle map needs the `Outdoor` level from the
+installer (run `tools\install.ps1`); without it the map is refused when you use its item.
 
 Cartographer adds no items of its own, so decide how players get it (a drop, a shop or a cube recipe in your mod). To test
 only, spawn it with the console: `debug_mode`, then `cheat spawn t20,inv 0`. In a Cartographer test slot,

@@ -4,8 +4,7 @@
 // hook and stamps the plan's pieces with the game's own piece stamper (0x3ecfc0) and marks the unused cells void (0x3ede00), then lets
 // the game's native tail run. Only the Outdoor slot level is ever touched; every other level, in every act, runs the game's own code.
 //
-// OFF by default (OutdoorBuild = 0 in cartographer.txt) until the game checks of issue #89 and #142 confirm the void marker and the
-// entry room. Fail open: a missing part, a plan that cannot be made or a level that is not as expected leaves that build to the game,
+// Always on (no setting). Fail open: a missing part, a plan that cannot be made or a level that is not as expected leaves that build to the game,
 // with the reason in the log. A Jungle map opens through portal.cpp (issue #144), which calls OutdoorMapOpened.
 // Notes and evidence: docs/reverse-engineering/cartographer/08a-outdoor-build-hook.md.
 #pragma once
@@ -30,10 +29,10 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 // The outdoor parts and what became of them (for 'cartographer check').
 auto OutdoorPartStatuses() -> std::vector<PartStatus>;
 
-// True when every outdoor part is on and the hooks are in (the setting may still be off).
+// True when every outdoor part is on and the hooks are in.
 auto OutdoorBuildLive() -> bool;
 
-// The tables the hooks use: the Outdoor slot level (id, origin, declared size), the OutdoorBuild and OutdoorProbe switches, and the shapes.
+// The tables the hooks use: the Outdoor slot level (id, origin, declared size), the OutdoorProbe switch, and the shapes.
 // Forgets the cached plans. Any thread, any time.
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables);
 
