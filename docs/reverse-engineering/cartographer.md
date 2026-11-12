@@ -5,8 +5,9 @@
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
 [cartographer-outdoor-builder.md](../cartographer/plans/cartographer-outdoor-builder.md).
-**Module:** `D2R.exe`, D2R 3.3 build 93847, under D2RLoader. Values are RVAs (image base `0x140000000` + RVA), except
-the D2RCore thunk entry below.
+**Module:** `D2R.exe`, D2R 3.3 build 93847, under D2RLoader. Values are D2R.exe RVAs (image base `0x140000000` + RVA); final addresses will be found by
+byte signature, not fixed RVAs. The `0x3e2b5ce` / `[0x3e2ac38]` row is a D2RLoader stub in D2R.exe whose jump target is
+expected in D2RCore (to be logged in S0). `0x3e2b5c8` (6 bytes before it) is probably another such stub; unproven.
 **Evidence source:** the pd2-resurrected research and spikes, not re-checked here:
 - `docs/research/drlg-steering.md` on pd2-resurrected branch `docs/drlg-steering-spike` (pull 929);
 - `docs/research/level-regeneration.md` on pd2-resurrected branch `claude/level-regen-spike-117061` (pull 930);

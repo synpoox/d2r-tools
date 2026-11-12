@@ -1,0 +1,2 @@
+# Hand-written catalogue cells (win over the name and the DS1). Tab separated; first non-comment line is the header:
+# lvlprest<TAB>column ...   e.g. lvlprest<TAB>role<TAB>weight. No overrides yet.
