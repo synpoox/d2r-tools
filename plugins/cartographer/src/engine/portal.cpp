@@ -1,5 +1,6 @@
 #include "portal.h"
 
+#include "core/request.h"
 #include "core/sig.h"
 #include "core/text.h"
 #include "log.h"
@@ -26,6 +27,10 @@ constexpr uint32_t OpenKey = 0x4d415053;     // 'MAPS': the game counter that al
 constexpr int32_t StatLevel = 12;
 constexpr int32_t HarrogathId = 109;
 constexpr int32_t CantDoThat = 0x15;
+constexpr int UnitTypeOffset = 0x00;        // int32: 0 for a player
+constexpr int UnitIdOffset = 0x08;          // uint32: the unit id (quick-npc.md section 6)
+constexpr uint32_t NoPlayer = 0xffffffffu;  // no local player known
+constexpr uint64_t RequestLifeMs = 10000;   // a console request not served within this long is dropped
 
 struct Game;
 struct Unit;
@@ -42,6 +47,7 @@ using GameCounterFn = int32_t* (*)(uint8_t* counters, uint32_t* key) noexcept;
 using UnitStatFn = int32_t (*)(Unit*, int32_t stat, int32_t index) noexcept;
 using UnitCoordsFn = void (*)(Unit*, int32_t* xy) noexcept;
 using FindFreeSpotFn = void (*)(Game*, void* room, int32_t* xy, uint32_t, uint32_t, void** found, uint64_t, int32_t) noexcept;
+using PlayerTickFn = uint64_t (*)(Game*, Unit*) noexcept;
 
 template <typename T>
 auto At(const void* base, int offset) noexcept -> T {
@@ -63,7 +69,7 @@ struct Part {
 	uint8_t guard[32];  // the signature's own first hookSize bytes: what D2RLoader re-checks at the entry
 };
 
-enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PartCount };
+enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PlayerTick, PartCount };
 
 Part g_parts[PartCount] = {
 	{"ItemSpellCheck", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18", 15, true, nullptr, {}, {}},
@@ -78,6 +84,9 @@ Part g_parts[PartCount] = {
 	{"UnitStat", nullptr, 0, true, nullptr, {}, {}},
 	{"UnitCoords", nullptr, 0, false, nullptr, {}, {}},
 	{"FindFreeSpot", nullptr, 0, false, nullptr, {}, {}},
+	// Not needed by the map item: only the console command waits on it. Build 93847: the player mana step
+	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer.md section 3).
+	{"PlayerTick", "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9", 14, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
@@ -94,6 +103,15 @@ std::atomic<uint32_t> g_roll{0x9e3779b9u};
 const D2RL::PluginContext* g_context = nullptr;
 CheckFn g_checkOriginal = nullptr;
 UseFn g_useOriginal = nullptr;
+PlayerTickFn g_tickOriginal = nullptr;
+OpenRequest g_request;                     // the console's request; guarded by g_lock
+std::atomic<bool> g_requested{false};      // g_request has something to serve: the per-frame hook reads only this
+std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
+std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
+
+auto NowMs() noexcept -> uint64_t {
+	return GetTickCount64();
+}
 
 template <typename Fn>
 auto Call(PartId id) noexcept -> Fn {
@@ -218,6 +236,18 @@ auto SpotFree(Game* game, Unit* player) noexcept -> bool {
 	return found != nullptr;
 }
 
+// What the gates look at, read from the game for this player. Game thread only.
+auto GateStateOf(Game* game, Unit* player) noexcept -> GateState {
+	GateState state;
+	state.difficulty = At<uint8_t>(game, GameDifficultyOffset);
+	state.charLevel = Call<UnitStatFn>(UnitStat)(player, StatLevel, 0);
+	state.areaId = PlayerLevelId(player);
+	state.townId = HarrogathId;
+	state.openings = Openings(game);
+	state.spotFree = SpotFree(game, player);
+	return state;
+}
+
 void Tell(const std::string& text) noexcept {
 	plog::Info("%s", text.c_str());
 	if (g_context != nullptr) {
@@ -279,13 +309,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 	if (level <= 0) {
 		return refuse("Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.");
 	}
-	GateState state;
-	state.difficulty = At<uint8_t>(game, GameDifficultyOffset);
-	state.charLevel = Call<UnitStatFn>(UnitStat)(player, StatLevel, 0);
-	state.areaId = PlayerLevelId(player);
-	state.townId = HarrogathId;
-	state.openings = Openings(game);
-	state.spotFree = SpotFree(game, player);
+	const GateState state = GateStateOf(game, player);
 	const Gate gate = CheckGates(*map, state);
 	if (gate != Gate::Open) {
 		return refuse(RefusalText(gate, *map, state));
@@ -332,7 +356,146 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 }
 
+// --- The console path ------------------------------------------------------------------------------------------------
+// 'cartographer open <Name>' runs on the UI thread and has no game or player. It posts a request; the player tick
+// (game thread, once per frame per player, with the game and the player) serves it for the local player, through the
+// same gates as the item. No game or player pointer is kept between frames.
+
+void ServeRequest(Game* game, Unit* unit) noexcept {
+	if (At<int32_t>(unit, UnitTypeOffset) != 0) {
+		return;
+	}
+	const uint32_t local = g_localPlayer.load();
+	const uint32_t unitId = At<uint32_t>(unit, UnitIdOffset);
+	std::shared_ptr<const Tables> tables;
+	OpenRequest::Taken taken;
+	bool stale = false;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+		if (unitId == local) {
+			taken = g_request.Take(NowMs(), RequestLifeMs);
+			g_requested = false;
+		} else if (g_request.Stale(NowMs(), RequestLifeMs)) {
+			g_request.Clear();
+			g_requested = false;
+			stale = true;
+		}
+	}
+	if (stale) {
+		plog::Warn("open request dropped: no player with unit id %u was seen (this tick: %u)", local, unitId);
+		Tell("Cartographer: could not find your character in the game. Try again, and see the plugin log.");
+		return;
+	}
+	if (taken.state == OpenRequest::State::None) {
+		return;
+	}
+	if (taken.state == OpenRequest::State::Expired) {
+		Tell("Cartographer: the request waited too long. Run the command again.");
+		return;
+	}
+	const MapDef* map = tables != nullptr ? FindMap(tables->maps, taken.map) : nullptr;
+	if (map == nullptr) {
+		Tell("Cartographer: there is no map called '" + taken.map + "'. Run 'cartographer check'.");
+		return;
+	}
+	const int level = SlotLevel(tables->slots, PresetSlot);
+	if (level <= 0) {
+		Tell("Cartographer: the map slot is not installed. Run tools\\install.ps1 and restart the game.");
+		return;
+	}
+	const GateState state = GateStateOf(game, unit);
+	const Gate gate = CheckGates(*map, state);
+	if (gate != Gate::Open) {
+		Tell(RefusalText(gate, *map, state));
+		return;
+	}
+	plog::Info("opening '%s' (%s) through level %d from the console", map->name.c_str(), map->tileset.c_str(), level);
+	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, unit, OpenKey, level, 1);
+	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
+}
+
+auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
+	const uint64_t result = g_tickOriginal(game, unit);
+	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
+		ServeRequest(game, unit);
+	}
+	return result;
+}
+
+void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::GameplayEvent* event, void*) noexcept {
+	if (!D2RL::Lifecycle::HasGameplayEventField(event, D2RL::Lifecycle::GameplayEventRequiredSize)) {
+		return;
+	}
+	if (event->kind == D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady) {
+		plog::Info("local player ready (unit id %u)", event->playerId);
+		g_localPlayer = event->playerId;
+	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
+		g_localPlayer = NoPlayer;
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_request.Clear();
+		g_requested = false;
+	}
+}
+
+// Listens for the local player and, when the tick part is on, hooks it. Best effort: failure leaves 'cartographer open'
+// arming the map for the next item instead.
+void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
+	Part& part = g_parts[PlayerTick];
+	const D2RL::LifecycleService* lifecycle = nullptr;
+	if (part.address == nullptr) {
+		return;
+	}
+	if (!g_live) {
+		part.status.on = false;
+		part.status.detail = "off: the map item's parts are not all on";
+		return;
+	}
+	if (context->QueryService(&lifecycle) != D2RL::ServiceQueryResult::Success || lifecycle == nullptr ||
+	    !D2RL::HasLifecycleServiceField(lifecycle, D2RL::LifecycleServiceRequiredSize)) {
+		part.status.on = false;
+		part.status.detail = "off: D2RLoader has no Lifecycle service of the expected version";
+		return;
+	}
+	for (const D2RL::Lifecycle::GameplayEventKind kind : {D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady, D2RL::Lifecycle::GameplayEventKind::GameLeft}) {
+		D2RL::Lifecycle::GameplayEventListener listener{};
+		listener.structSize = D2RL::Lifecycle::GameplayEventListenerSize;
+		listener.kind = kind;
+		listener.callback = &OnGameplayEvent;
+		D2RL::Lifecycle::ListenerHandle handle = D2RL::Lifecycle::InvalidHandle;
+		if (lifecycle->registerGameplayEventListener(context, &listener, &handle) != D2RL::Lifecycle::Result::Success) {
+			part.status.on = false;
+			part.status.detail = "off: D2RLoader refused a gameplay event listener";
+			return;
+		}
+	}
+	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+	const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PlayerTickHook), reinterpret_cast<void**>(&g_tickOriginal)) &&
+	                g_tickOriginal != nullptr;
+	part.status.on = ok;
+	part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
+	g_consoleLive = ok;
+}
+
 }  // namespace
+
+auto RequestOpen(const std::string& name) -> OpenStart {
+	std::lock_guard<std::mutex> lock(g_lock);
+	const MapDef* map = g_tables != nullptr ? FindMap(g_tables->maps, name) : nullptr;
+	if (map == nullptr) {
+		return OpenStart::NoSuchMap;
+	}
+	if (!g_consoleLive.load()) {
+		g_armed = map->name;
+		return OpenStart::Armed;
+	}
+	if (g_localPlayer.load() == NoPlayer) {
+		return OpenStart::NotInGame;
+	}
+	g_request.Post(map->name, NowMs());
+	g_requested = true;
+	return OpenStart::Posted;
+}
 
 void SetTables(std::shared_ptr<const Tables> tables) {
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -430,6 +593,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		g_live = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal)) &&
 		         install(ItemSpellCheck, reinterpret_cast<void*>(&SpellCheckHook), reinterpret_cast<void**>(&g_checkOriginal));
 	}
+	InstallConsolePath(context);
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}

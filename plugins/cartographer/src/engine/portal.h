@@ -41,6 +41,16 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 // The map named `name` opens on the next use of a map item. Returns false when there is no such map.
 auto ArmMap(const std::string& name) -> bool;
 
+enum class OpenStart {
+	Posted,      // the game thread opens it, through the gates, on the next frame
+	Armed,       // the console path is off: the next map item opens it instead
+	NoSuchMap,
+	NotInGame,   // no local player yet
+};
+
+// 'cartographer open <Name>': asks the game to open the map for the local player without an item. Safe from any thread.
+auto RequestOpen(const std::string& name) -> OpenStart;
+
 auto PortalLive() -> bool;
 auto PartStatuses() -> std::vector<PartStatus>;
 

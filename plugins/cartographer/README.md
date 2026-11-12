@@ -14,6 +14,9 @@ recorded: until they are, the plugin loads, reads and checks your tables, and th
   `cartographer-report.txt` ("maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"); the rest load.
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
+- **Console open**: `cartographer open <Name>` opens the portal itself, with no map item, through the same gates. It needs
+  the `PlayerTick` part (`cartographer check` shows it); without it the command only picks the map the next item opens.
+  Not tried in a game yet.
 - **Built-in preset map**: a map called `Preset` always exists, so a three-cell `maps.txt` row
   (`Name`, `Tileset` = `Preset`, `Shape`) works from the start.
 
