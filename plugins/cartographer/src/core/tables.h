@@ -24,6 +24,9 @@ inline constexpr const char* SlotsFile = "slots.txt";
 inline constexpr const char* ShapesFile = "shapes.txt";
 inline constexpr const char* MapStatsFile = "mapstats.txt";
 inline constexpr const char* MapEventsFile = "mapevents.txt";
+inline constexpr const char* BossesFile = "bosses.txt";
+// The superuniques.txt key (Superunique column) of a boss entry. The prefix is on every key, so it can never equal a vanilla row; tools/install.ps1 writes the same.
+inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
 inline constexpr int DefaultProperties = 6;
@@ -52,6 +55,18 @@ struct GameNames {
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
 };
+
+// One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
+struct BossDef {
+	int line = 0;  // row in bosses.txt
+	std::string name;           // shown in game; maps.txt Boss names it
+	std::string base;           // monstats.txt Id the boss is made from
+	std::vector<int> mods;      // up to 3 monster mods (monumod.txt ids)
+	int minions = 0;            // 0 to 10; the game's own group size for the superunique row
+};
+
+// The superuniques.txt key of the entry called `name`.
+auto BossKey(std::string_view name) -> std::string;
 
 struct MapDef {
 	int line = 0;  // row in maps.txt
@@ -85,9 +100,21 @@ struct Slot {
 auto TilesetNames() -> std::vector<std::string>;
 auto ReadyTilesetNames() -> std::vector<std::string>;
 
+// bosses.txt (optional): a bad row is left out and described in `report`. A Name that is a vanilla superunique or monstats Id is refused.
+auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -> std::vector<BossDef>;
+
+// The entry a maps.txt Boss value names (ignoring case), or nullptr with `problem` saying why: vanilla boss, or not an entry.
+auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef*;
+
+// Which way the map Boss is spawned. `rowFound`: the game has the entry's superuniques row (the installer ran). `baseFound`: its base monster resolves.
+// A superunique row is used when there is one; the game returning no unit falls back to a plain monster of the base id (the engine does that at spawn).
+enum class BossPath { Superunique, PlainMonster, None };
+auto PickBossPath(bool rowFound, bool baseFound) -> BossPath;
+
 // maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
+// `bosses` (from LoadBosses) is what a Boss cell may name; null means none. A Boss that is not an entry is refused with a message but the map loads without it.
 // `shapes` (from LoadShapes) lets the Shape cell name a shapes.txt row as well as a built-in shape; null means built-ins only.
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr) -> std::vector<MapDef>;
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr, const std::vector<BossDef>* bosses = nullptr) -> std::vector<MapDef>;
 
 // shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;

@@ -247,9 +247,13 @@ auto LoadAll() -> Loaded {
 		}
 	}
 	text.clear();
+	if (ReadFile(g_tableDir + L"\\" + Widen(carto::BossesFile), &text)) {
+		loaded.tables->bosses = carto::LoadBosses(text, names, loaded.report);
+	}
+	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
-		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes);
+		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses);
 	}
 	loaded.tables->maps = std::move(fromFile);
 	text.clear();

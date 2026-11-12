@@ -601,8 +601,9 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	bool asSuper = false;
 	void* unit = nullptr;
 	const bool made = SpawnOne(game, room, plan.spawns.front(), &asSuper, &unit);
+	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
-	           asSuper ? "as a superunique" : "as a plain monster");
+	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -766,14 +767,39 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		plog::Warn("map Boss '%s' will not be spawned: the spawn parts are off", map.boss.c_str());
 		return;
 	}
-	state.bossSpawn = ResolveName(map.boss, tables.spawnNames, player);
+	// The Boss is a bosses.txt entry (checked at load). Its own superuniques row is tried first; without that row (the installer was not run) its
+	// base monster is spawned plain. A vanilla superunique is never looked up here.
+	const BossDef* entry = nullptr;
+	for (const BossDef& def : tables.bosses) {
+		if (def.name == map.boss) {
+			entry = &def;
+		}
+	}
+	if (entry == nullptr) {
+		plog::Warn("map Boss '%s' will not be spawned: it is not an entry in bosses.txt", map.boss.c_str());
+		return;
+	}
+	const std::string key = BossKey(entry->name);
+	state.bossSpawn = ResolveName(key, tables.spawnNames, player);
+	const bool rowFound = state.bossSpawn.kind == ev::NameKind::Unique;
+	if (!rowFound) {
+		state.bossSpawn = ResolveName(entry->base, tables.spawnNames, player);
+	}
+	const BossPath path = PickBossPath(rowFound, state.bossSpawn.kind == ev::NameKind::Monster);
+	if (path == BossPath::None) {
+		plog::Warn("map Boss '%s' will not be spawned: no superuniques row '%s' and its base monster '%s' is not in monstats", map.boss.c_str(), key.c_str(), entry->base.c_str());
+		return;
+	}
+	if (path == BossPath::PlainMonster) {
+		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
+	}
 	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24}, state.seed);  // a stand-in room
 	if (!check.problem.empty()) {
 		plog::Warn("map Boss '%s' will not be spawned: %s", map.boss.c_str(), check.problem.c_str());
 		return;
 	}
 	state.bossArmed = true;
-	plog::Info("map Boss for '%s': %s", map.name.c_str(), state.bossSpawn.kind == ev::NameKind::Unique ? "a superunique" : "a monster");
+	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }
 
 auto SummaryNow() -> std::string {

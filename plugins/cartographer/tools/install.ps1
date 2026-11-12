@@ -6,6 +6,7 @@
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
       lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
+      superuniques.txt  one row per entry of d2rloader\cartographer\bosses.txt, keyed 'cartoboss:<Name>' (never a vanilla row; vanilla rows are copied from, not edited)
     It also adds or updates the Preset row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
     any other row (such as a hand-added Maze row) is kept.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
@@ -168,6 +169,81 @@ if ((Find-Row $presets 'LevelId' "$levelId") -ge 0) {
     $presets.Lines.Add($cells -join "`t")
     Save-Table $presets
     Write-Host "lvlprest.txt: added the preset row for level $levelId (Def $($maxDef + 1))."
+}
+
+# --- superuniques.txt: one row per bosses.txt entry -------------------------------------------------------------------
+# A map's Boss names a bosses.txt entry (d2rloader\cartographer\bosses.txt: Name, Base, Mods, Minions). Each entry gets its own
+# superuniques.txt row, keyed 'cartoboss:<Name>' so it can never be a vanilla row. Vanilla rows are copied from, never edited. Only
+# rows with that key are added or repaired, so running this again changes nothing once they are right.
+$BossKeyPrefix = 'cartoboss:'
+$bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
+if (Test-Path $bossPath) {
+    $bossText = $bytes.GetString([System.IO.File]::ReadAllBytes($bossPath))
+    $bossLines = @($bossText -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
+    $bossHeader = if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
+    $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
+    $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
+    if ($bossLines.Count -lt 2) {
+        Write-Host 'bosses.txt: no entries, nothing to add to superuniques.txt.'
+    } elseif ($nameAt -lt 0 -or $baseAt -lt 0) {
+        Write-Host "bosses.txt: needs 'Name' and 'Base' columns; superuniques.txt was not touched."
+    } elseif (-not (Test-Path (Join-Path $ExcelDir 'superuniques.txt'))) {
+        Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
+    } else {
+        $supers = Read-Table (Join-Path $ExcelDir 'superuniques.txt')
+        $hcCol = Column $supers 'hcIdx'
+        $changed = $false
+        $maxHc = 0
+        for ($i = 1; $i -lt $supers.Lines.Count; $i++) {
+            $parsed = 0
+            $c = $supers.Lines[$i] -split "`t"
+            if ($c.Count -gt $hcCol -and [int]::TryParse($c[$hcCol], [ref]$parsed) -and $parsed -gt $maxHc) { $maxHc = $parsed }
+        }
+        $seen = @{}
+        for ($b = 1; $b -lt $bossLines.Count; $b++) {
+            $bc = $bossLines[$b] -split "`t"
+            $bossName = if ($bc.Count -gt $nameAt) { $bc[$nameAt].Trim() } else { '' }
+            $bossBase = if ($bc.Count -gt $baseAt) { $bc[$baseAt].Trim() } else { '' }
+            if ($bossName -eq '' -or $bossBase -eq '' -or $seen.ContainsKey($bossName.ToLowerInvariant())) { continue }
+            $seen[$bossName.ToLowerInvariant()] = $true
+            $mods = @()
+            if ($modsAt -ge 0 -and $bc.Count -gt $modsAt -and $bc[$modsAt].Trim() -ne '') {
+                foreach ($m in ($bc[$modsAt] -split ',')) { $v = 0; if ([int]::TryParse($m.Trim(), [ref]$v) -and $v -ge 1 -and $v -le 255 -and $mods.Count -lt 3) { $mods += $v } }
+            }
+            $minions = 0
+            if ($minionsAt -ge 0 -and $bc.Count -gt $minionsAt) { $v = 0; if ([int]::TryParse($bc[$minionsAt].Trim(), [ref]$v) -and $v -ge 0 -and $v -le 10) { $minions = $v } }
+            $key = $BossKeyPrefix + $bossName
+            $row = Find-Row $supers 'Superunique' $key
+            if ($row -ge 0) {
+                $cells = Cells $supers $supers.Lines[$row]
+            } else {
+                # A copy of a vanilla row (read only); every cell that matters is set below.
+                $template = Find-Row $supers 'Superunique' 'Bishibosh'
+                if ($template -lt 0) { $template = 1 }
+                $cells = Cells $supers $supers.Lines[$template]
+                $maxHc++
+                Set-Cell $supers $cells 'hcIdx' "$maxHc"
+            }
+            Set-Cell $supers $cells 'Superunique' $key
+            Set-Cell $supers $cells 'Name' $bossName
+            Set-Cell $supers $cells 'Class' $bossBase
+            for ($n = 0; $n -lt 3; $n++) { Set-Cell $supers $cells "Mod$($n + 1)" $(if ($n -lt $mods.Count) { "$($mods[$n])" } else { '0' }) }
+            Set-Cell $supers $cells 'MinGrp' "$minions"
+            Set-Cell $supers $cells 'MaxGrp' "$minions"
+            foreach ($pair in @(@('TC', 'Act 5 Super C'), @('TC(N)', 'Act 5 (N) Super C'), @('TC(H)', 'Act 5 (H) Super C'), @('TC Desecrated', ''), @('TC(N) Desecrated', ''), @('TC(H) Desecrated', 'Act 5 (H) Super C Desecrated'))) {
+                if ($supers.Header -contains $pair[0]) { Set-Cell $supers $cells $pair[0] $pair[1] }
+            }
+            $line = $cells -join "`t"
+            if ($row -lt 0) {
+                $supers.Lines.Add($line); $changed = $true
+                Write-Host "superuniques.txt: added '$key' (Class $bossBase, $minions minions)."
+            } elseif ($supers.Lines[$row] -ne $line) {
+                $supers.Lines[$row] = $line; $changed = $true
+                Write-Host "superuniques.txt: updated '$key'."
+            }
+        }
+        if ($changed) { Save-Table $supers } else { Write-Host 'superuniques.txt: boss rows already up to date.' }
+    }
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------

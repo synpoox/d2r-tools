@@ -24,6 +24,7 @@ struct Tables {
 	cartographer::layout::ShapeTable shapes;
 	std::vector<cartographer::stats::PoolRow> pool;  // empty: the built-in pool
 	std::vector<cartographer::events::Row> events;
+	std::vector<BossDef> bosses;  // bosses.txt: the only things a map's Boss may name
 	cartographer::statplan::StatIds statIds;  // itemstatcost.txt: stat name -> id, for the map stats
 	cartographer::eventplan::SpawnTable spawnNames;  // monstats.txt Id and superuniques.txt Superunique/Class by row, for the event spawns
 	std::vector<std::string> objectClasses;  // objects.txt Class by row (tried before Name)

@@ -1,0 +1,2 @@
+Name	Base	Mods	Minions
+Shoreline Warden	zombie1	5,6	2
