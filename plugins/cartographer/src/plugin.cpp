@@ -10,6 +10,7 @@
 #include "core/text.h"
 #include "core/tsv.h"
 #include "crash_guard.h"
+#include "engine/maze_hooks.h"
 #include "engine/portal.h"
 #include "engine/stat_apply.h"
 #include "log.h"
@@ -192,6 +193,18 @@ auto LoadAll() -> Loaded {
 	} else {
 		loaded.report.Error(carto::SlotsFile, 0, "the file is missing, so the map item has no level to open. Run tools\\install.ps1 and restart the game.");
 	}
+	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build.
+	text.clear();
+	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0) {
+		if (ReadFile(g_excelDir + L"\\levels.txt", &text)) {
+			carto::ReadSlotLevelTypes(loaded.tables->slots, text);
+		}
+		for (const carto::MapDef& map : loaded.tables->maps) {
+			if (const std::string problem = carto::MazeTilesetProblem(map, *loaded.tables); !problem.empty()) {
+				loaded.report.Error(carto::MapsFile, map.line, problem.substr(problem.rfind("Cartographer: ") == 0 ? 14 : 0));
+			}
+		}
+	}
 	return loaded;
 }
 
@@ -360,9 +373,9 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	crash_guard::Install(PluginVersion, context->exeBase);
 	char image[200];
 	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
-	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "none", image);
+	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr && context->activeMod[0] != '\0' ? context->activeMod : "none", image);
 	try {
-		if (context->modDirectory != nullptr && context->modDirectory[0] != L'\0' && context->activeMod != nullptr) {
+		if (context->modDirectory != nullptr && context->modDirectory[0] != L'\0' && context->activeMod != nullptr && context->activeMod[0] != '\0') {
 			// Older loaders pass the mod folder, which holds <Mod>.mpq; D2RLoader 1.3.1 passes the <Mod>.mpq folder itself.
 			// <Mod>.mpq is probed first: the 1.3.1 folder does not hold a nested <Mod>.mpq, so neither layout picks the other's path.
 			g_excelDir = std::wstring(context->modDirectory) + L"\\" + Widen(context->activeMod) + L".mpq\\data\\global\\excel";

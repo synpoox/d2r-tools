@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released).** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, the hooks are built only and have not run in game.** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -15,8 +15,9 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **One item, one map**: a map is opened only by the item named in its `Item` cell (for example `t20` opens Shorelines). There
   is no generic map item and no random map; an item no map names is an ordinary item. The item belongs to your mod and needs
   item spell 16 (`pSpell` in `misc.txt`); `cartographer check` names a map whose item is missing, unknown, shared or lacks it.
-- **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
-  meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
+- **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map
+  stays in your inventory; the reason is in the log and the console, and on screen you see "I can't use this yet." Both
+  opening in Hell and a refusal (level gate) were seen in a game.
 - **Map properties** (written, **not yet verified in game**): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
   monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
@@ -25,13 +26,13 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   player leaves the map level, but a Save and Exit inside the map, or an autosave there, may save the character while they
   are still on it. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
-  (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill or state number are refused on both); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
+  (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
   (`Level`, `Density`, ...), `ItemStats`, the panel and events are not applied yet. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
 - **Console open**: `cartographer open <Name>` opens the named map's portal itself, with no item, through the same gates. It needs
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
-  refuses and says so. Not tried in a game yet.
+  refuses and says so. Opening in town was seen in a game; the TCP/IP refusal was not.
 
 ## Your first map
 
@@ -55,7 +56,7 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
    ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `levels.txt` and `lvlprest.txt`
-   (backing each up once as `.bak`), and writes `slots.txt`. It adds no items. Running
+   (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no items. Running
    it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
@@ -72,7 +73,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset` for now; the other tileset names are accepted but refused until they are built | required |
+| Tileset | `Preset`, `Cave` or `Crypt` (maze, needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet). Not used by `Preset`. | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
@@ -82,12 +83,44 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (not yet verified in game), the rest are kept for later phases | cartographer.txt |
 
-`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test
-slot only, see above) and `Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
-map in `maps.txt` opens through the one map level (`Preset` slot); nothing opens without a mod and a `maps.txt`.
+`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above) and
+`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
+`Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
+
+## Maze slot (Cave and Crypt, manual setup)
+
+A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, and the plugin builds that level from the map's layout
+instead of the game's random maze. **One Maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
+or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
+try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
+refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1`
+does not add the Maze level; add it by hand:
+
+- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer creates
+  it). It is tab separated with the header `Slot` and `Level`, one row per slot, the level being the `Id` in `levels.txt`:
+
+  ```
+  Slot	Level
+  Preset	138
+  Maze	139
+  ```
+
+  Add the `Maze` row yourself with your new level's id. Running `tools\install.ps1` again keeps it: the installer only adds or
+  updates the `Preset` row and leaves every other row alone.
+- `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
+  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row. Cartographer
+  reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave and Crypt maps are refused.
+- Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
+  plan cannot be built or the engine refuses a step, the game's own walk finishes that maze (with the slot's own size and
+  `lvlmaze.txt` row restored first) and the reason is logged.
+- The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
+  start a new one").
+
+Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build.
 
 ## Tested
 
@@ -105,18 +138,23 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
   - `cartographer open <Name>` opens the portal with no item in town, and refuses outside town ("only be opened in town");
   - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
     (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);
-  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
+  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded;
+  - (Hell game) a map open in Hell, `Gated` (character level 20): refused at level 1 (log "needs character level 20 (you are 1)", item kept),
+    opened at level 25;
+  - (Hell game) an item with spell 16 that no map names does nothing and is kept, as with Cartographer unloaded;
+  - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
+  - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
+  - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+- Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
+  succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
+  forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
 - Map properties: unit tests of the draw and the apply plan (`statplan_tests`), and the six stat parts' signatures, each
   unique and resolving to its recorded address in a dump of build 93847 (`check_portal_signatures.py`). **Not run in a game**:
   that the stats take effect, show the game's text, reach the client and are removed again are the checks in
   `docs/reverse-engineering/cartographer.md` section 7.
-- Not exercised in game: a Hell-difficulty open that succeeds, the character level gate, the "no free spot" gate, an ordinary
-  spell-16 item that no map names compared with vanilla, and the spell-16 use with no matching check (below).
-- Seen in game, cause not known: a town portal scroll used on the map level itself did nothing. No comparison without
-  Cartographer was made (vanilla has no red portal to reach that level), so it is not known whether Cartographer is involved.
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
-  dropped (it opens nothing and is not passed to the game).
-- Not yet in game for `cartographer open <Name>`: leaving the game with the portal still open; repeating with
-  Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.
+  dropped (it opens nothing and is not passed to the game). The game's only direct caller of the use handler runs it only
+  after the check passed (static reading), so this case is defensive and no in-game test is planned.
+- Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.

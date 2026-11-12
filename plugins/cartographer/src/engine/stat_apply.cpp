@@ -50,35 +50,19 @@ using UnitRoomFn = void* (*)(Unit*) noexcept;
 using RoomLevelFn = int32_t (*)(void* room) noexcept;
 using UnitStatFn = int32_t (*)(Unit*, int32_t stat, int32_t layer) noexcept;
 
-template <typename T>
-auto At(const void* base, int offset) noexcept -> T {
-	T value{};
-	std::memcpy(&value, static_cast<const uint8_t*>(base) + offset, sizeof(T));
-	return value;
-}
-
-struct Part {
-	const char* name;
-	const char* signature;
-	uint32_t hookSize;  // entry bytes copied for an inline hook; 0: only called
-	const uint8_t* address;
-	PartStatus status;
-	uint8_t guard[32];  // the signature's own first hookSize bytes
-};
-
 enum PartId { NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, MonsterSetup, UnitRoom, RoomLevelId, UnitStat, PartCount };
 
 // UnitRoom, RoomLevelId and UnitStat are the portal's parts, found again here so this half stands alone.
 Part g_parts[PartCount] = {
-	{"NewStatList", sig::NewStatList, 0, nullptr, {}, {}},
-	{"SetListStat", sig::SetListStat, 0, nullptr, {}, {}},
-	{"AttachStatList", sig::AttachStatList, 0, nullptr, {}, {}},
-	{"DetachStatList", sig::DetachStatList, 0, nullptr, {}, {}},
-	{"FreeStatList", sig::FreeStatList, 0, nullptr, {}, {}},
-	{"MonsterSetup", sig::MonsterSetup, 14, nullptr, {}, {}},
-	{"StatUnitRoom", sig::UnitRoom, 0, nullptr, {}, {}},
-	{"StatRoomLevelId", sig::RoomLevelId, 0, nullptr, {}, {}},
-	{"StatUnitStat", sig::UnitStat, 0, nullptr, {}, {}},
+	{"NewStatList", sig::NewStatList, 0, false, nullptr, {}, {}},
+	{"SetListStat", sig::SetListStat, 0, false, nullptr, {}, {}},
+	{"AttachStatList", sig::AttachStatList, 0, false, nullptr, {}, {}},
+	{"DetachStatList", sig::DetachStatList, 0, false, nullptr, {}, {}},
+	{"FreeStatList", sig::FreeStatList, 0, false, nullptr, {}, {}},
+	{"MonsterSetup", sig::MonsterSetup, 14, false, nullptr, {}, {}},
+	{"StatUnitRoom", sig::UnitRoom, 0, false, nullptr, {}, {}},
+	{"StatRoomLevelId", sig::RoomLevelId, 0, false, nullptr, {}, {}},
+	{"StatUnitStat", sig::UnitStat, 0, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
@@ -300,59 +284,6 @@ auto SummaryNow() -> std::string {
 	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + player + " (not yet verified in game)";
 }
 
-// Finds one part by its signature (or the one from signatures.txt) and checks its guard.
-void ResolvePart(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const scan::CodeRange* ranges, int count, Part& part) {
-	part.status = {part.name, false, ""};
-	part.address = nullptr;
-	const char* signature = part.signature;
-	std::string overridden;
-	bool isOverride = false;
-	for (const SignatureOverride& o : overrides) {
-		if (EqualsNoCase(o.part, part.name)) {
-			overridden = o.signature;
-			signature = overridden.c_str();
-			isOverride = true;
-		}
-	}
-	std::string why;
-	Pattern pattern{};
-	if (count == 0) {
-		why = "the game image could not be read";
-	} else {
-		part.address = scan::FindUnique(ranges, count, signature, pattern, &why);
-	}
-	if (part.address != nullptr && part.hookSize > 0) {
-		// The signature must pin every byte the hook cuts: they are the guard D2RLoader re-checks at the entry.
-		bool concrete = pattern.size >= part.hookSize && part.hookSize <= sizeof(part.guard);
-		for (uint32_t i = 0; concrete && i < part.hookSize; ++i) {
-			concrete = !pattern.wild[i];
-		}
-		if (!concrete) {
-			why = "the signature must give at least " + std::to_string(part.hookSize) + " exact bytes (no ??) at the entry, because the hook cuts them";
-			part.address = nullptr;
-		} else {
-			std::memcpy(part.guard, pattern.bytes, part.hookSize);
-		}
-	}
-	if (part.address != nullptr && isOverride && part.hookSize > 0) {
-		// A signatures.txt line is untrusted: it must keep the built-in entry bytes and start at a function.
-		Pattern builtIn{};
-		if (!ParsePattern(part.signature, &builtIn) || builtIn.size < part.hookSize || std::memcmp(builtIn.bytes, pattern.bytes, part.hookSize) != 0) {
-			why = "the signature from signatures.txt does not start with the built-in entry bytes this hook is written for";
-			part.address = nullptr;
-		} else {
-			bool known = false;
-			if (!scan::IsFunctionEntry(context->exeBase, part.address, &known)) {
-				why = known ? "the signature from signatures.txt does not match at the start of a function"
-				            : "the game's exception directory is missing, so the signature from signatures.txt cannot be checked";
-				part.address = nullptr;
-			}
-		}
-	}
-	part.status.on = part.address != nullptr;
-	part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
-}
-
 auto AllOn(std::initializer_list<PartId> ids) noexcept -> bool {
 	for (const PartId id : ids) {
 		if (!On(id)) {
@@ -365,8 +296,8 @@ auto AllOn(std::initializer_list<PartId> ids) noexcept -> bool {
 }  // namespace
 
 auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
-	scan::CodeRange ranges[8];
-	const int count = scan::CodeRanges(context->exeBase, ranges, 8);
+	CodeRange ranges[8];
+	const int count = CodeRanges(context->exeBase, ranges, 8);
 	for (Part& part : g_parts) {
 		ResolvePart(context, overrides, ranges, count, part);
 	}

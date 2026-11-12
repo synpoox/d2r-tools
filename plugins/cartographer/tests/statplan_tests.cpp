@@ -257,17 +257,32 @@ TEST_CASE("on monsters level and the current values are refused, the rest is fin
 
 TEST_CASE("stats that need a skill or state number are refused on both targets")
 {
+	// The Save Param Bits rows of the vanilla 3.3.0 itemstatcost.txt: name and row id.
+	const struct { const char *name; int id; } param[] = {
+		{"item_addclassskills", 83}, {"item_nonclassskill", 97}, {"state", 98}, {"item_singleskill", 107}, {"item_elemskill", 126},
+		{"item_aura", 151}, {"item_reanimate", 155}, {"attack_vs_montype", 179}, {"damage_vs_montype", 180}, {"item_addskill_tab", 188},
+		{"item_skillonattack", 195}, {"item_skillonkill", 196}, {"item_skillondeath", 197}, {"item_skillonhit", 198},
+		{"item_skillonlevelup", 199}, {"item_skillongethit", 201}, {"item_charged_skill", 204}};
 	StatIds ids;
 	ids.loaded = true;
-	ids.byName = {{"state", 100}, {"item_aura", 101}, {"item_charged_skill", 102}, {"item_skillonhit", 103}, {"item_skillondeath", 104}, {"fireresist", 39}};
 	std::vector<Property> props;
-	for (const Target t : {Target::Monsters, Target::Players})
-		for (const char *n : {"state", "item_aura", "item_charged_skill", "item_skillonhit", "item_skillondeath", "fireresist"}) props.push_back({t, n, 5});
+	for (const auto &e : param) ids.byName.emplace_back(e.name, e.id);
+	ids.byName.emplace_back("fireresist", 39);
+	for (const Target t : {Target::Monsters, Target::Players}) {
+		for (const auto &e : param) props.push_back({t, e.name, 5});
+		props.push_back({t, "fireresist", 5});
+	}
 	const Plan plan = buildPlan(props, ids);
 	CHECK(plan.monsters.size() == 1);
 	CHECK(plan.players.size() == 1);
-	REQUIRE(plan.skipped.size() == 10);
+	REQUIRE(plan.skipped.size() == 2 * (sizeof(param) / sizeof(param[0])));
 	for (const Skipped &s : plan.skipped) CHECK(s.why.find("skill or state number") != std::string::npos);
+	for (const auto &e : param) {
+		CHECK_FALSE(refusedReason(Target::Monsters, e.name, e.id).empty());
+		CHECK_FALSE(refusedReason(Target::Players, "renamed_by_a_mod", e.id).empty()); // by id alone
+	}
+	CHECK(refusedReason(Target::Players, "fireresist", 39).empty());
+	CHECK(refusedReason(Target::Monsters, "item_skillonxyz", 200).empty()); // the list is exact: no prefix match
 }
 
 TEST_CASE("checkPoolStats names each refused row")

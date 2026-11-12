@@ -35,6 +35,8 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 inline constexpr int MapItemSpell = 16;
 // The slot (in slots.txt) of the map level every map opens through. Later phases add slots for built layouts.
 inline constexpr const char* PresetSlot = "Preset";
+// The slot of the maze level a Cave or Crypt map opens through (levels.txt DrlgType 1, plan section 3.6).
+inline constexpr const char* MazeSlot = "Maze";
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
 // those cells are then not checked (fail open) and the report says so.
@@ -64,12 +66,14 @@ struct Settings {
 	int eventChance = DefaultEventChance;
 	int itemStats = 0;
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
+	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
 	std::string town = "Harrogath";
 };
 
 struct Slot {
 	std::string name;
-	int level = 0;  // levels.txt Id
+	int level = 0;      // levels.txt Id
+	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
 };
 
 // Tilesets, shapes, sizes and difficulties as the author writes them.
@@ -95,6 +99,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
+
+// Fills in each slot's levelType from the mod's levels.txt (columns Id and LevelType). A slot with no row keeps -1.
+void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;

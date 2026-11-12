@@ -18,10 +18,11 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Only Preset is buildable in phase 1; the others are accepted names that the loader refuses with a
+// Plan section 3.5. Preset, Cave and Crypt are buildable (Cave and Crypt through the maze steering hooks, which need the
+// Maze slot); the others are accepted names that the loader refuses with a
 // message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Preset", true},  {"Cave", false},   {"Crypt", false},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
+	{"Preset", true},  {"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", false},    {"Snow", false},
 };
@@ -592,7 +593,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "Town"};
+	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "Town", "MazeProbe"};
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
 		const std::string* name = Canonical(known, key);
@@ -623,6 +624,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "ItemStats") {
 			hi = 1;
 			target = &settings.itemStats;
+		} else if (*name == "MazeProbe") {
+			hi = 1;
+			target = &settings.mazeProbe;
 		}
 		if (!ParseInt(value, lo, hi, target)) {
 			fail(*name + " '" + value + "' is not a whole number " + Range(lo, hi) + ".");
@@ -649,6 +653,25 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 		slots.push_back(std::move(slot));
 	}
 	return slots;
+}
+
+void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
+	const Tsv table = ParseTsv(levelsText);
+	const int cId = table.Column("Id"), cType = table.Column("LevelType");
+	if (cId < 0 || cType < 0) {
+		return;
+	}
+	for (const TsvRow& row : table.rows) {
+		int id = 0, type = 0;
+		if (!ParseInt(table.Cell(row, cId), 0, 65535, &id) || !ParseInt(table.Cell(row, cType), 0, 255, &type)) {
+			continue;
+		}
+		for (Slot& slot : slots) {
+			if (slot.level == id) {
+				slot.levelType = type;
+			}
+		}
+	}
 }
 
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {

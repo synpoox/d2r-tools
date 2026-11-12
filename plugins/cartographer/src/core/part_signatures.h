@@ -36,4 +36,14 @@ inline constexpr const char* FreeStatList = "48 85 D2 74 ?? 83 7A 1C 00 0F 8D ??
 // 14-byte prefix alone matches 11 sites, so the signature runs on to 21 bytes; the hook cuts the first 14.
 inline constexpr const char* MonsterSetup = "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57 48 83 EC 30 8B 69 18";
 
+// The maze steering parts (build 93847; docs/reverse-engineering/cartographer.md section 1a), re-checked by tools/check_maze_signatures.py.
+// The first four are hooked (the hook cuts the first 14, 18, 17 and 14 bytes: whole instructions, all exact); the last three are only called.
+inline constexpr const char* LevelBuild = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2";
+inline constexpr const char* MazeWalk = "48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18";
+inline constexpr const char* MazeEntranceExit = "41 56 48 83 EC 30 44 8B 0A 4D 8B F0 48 89 5C 24 40 4C 8B D2 48 8B 59 10";
+inline constexpr const char* MazeRingGrower = "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 48 48 8B 49 10";
+inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 48 63 EA 48 8B F9 48 8B 89 90 00 00 00";
+inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
+inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
+
 }  // namespace carto::sig

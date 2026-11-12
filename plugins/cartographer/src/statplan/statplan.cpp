@@ -97,14 +97,20 @@ StatIds parseItemStatCost(std::string_view text)
 	return out;
 }
 
-// Stats whose value needs a skill or state number (the stat's layer). The map table has no way to give one yet, and
-// the plugin sets layer 0, which would name skill or state 0.
-static bool needsParam(std::string_view stat)
+// Stats whose value needs a skill, state or monster type number (the stat's layer): the rows of the vanilla 3.3.0
+// itemstatcost.txt that have a Save Param Bits value. The map table has no way to give one yet, and the plugin sets
+// layer 0, which would name skill, state or type 0. Matched by name or by row id, like the other refusals.
+static bool needsParam(std::string_view stat, int id)
 {
-	static const char *const kNames[] = {"state", "item_aura", "item_charged_skill", "item_singleskill", "item_nonclassskill", "item_addskill_tab"};
+	static const char *const kNames[] = {"item_addclassskills", "item_nonclassskill", "state", "item_singleskill", "item_elemskill", "item_aura", "item_reanimate",
+	                                     "attack_vs_montype", "damage_vs_montype", "item_addskill_tab", "item_skillonattack", "item_skillonkill", "item_skillondeath",
+	                                     "item_skillonhit", "item_skillonlevelup", "item_skillongethit", "item_charged_skill"};
+	static const int kIds[] = {83, 97, 98, 107, 126, 151, 155, 179, 180, 188, 195, 196, 197, 198, 199, 201, 204};
 	for (const char *n : kNames)
 		if (stat == n) return true;
-	return stat.substr(0, 11) == "item_skillo"; // item_skillonattack, item_skillonkill, item_skillondeath, ...
+	for (const int i : kIds)
+		if (id == i) return true;
+	return false;
 }
 
 std::string refusedReason(Target target, std::string_view stat, int id)
@@ -114,7 +120,7 @@ std::string refusedReason(Target target, std::string_view stat, int id)
 	bool listed = false;
 	for (const char *n : kNames) listed = listed || stat == n;
 	for (const int i : kIds) listed = listed || id == i;
-	if (needsParam(stat))
+	if (needsParam(stat, id))
 		return "'" + std::string(stat) + "' is refused: it needs a skill or state number, and a map stat cannot give one yet.";
 	if (!listed) return "";
 	const bool isLevel = stat == "level" || id == 12;
