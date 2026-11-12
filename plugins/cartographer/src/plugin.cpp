@@ -124,9 +124,9 @@ auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 	if (g_excelDir.empty()) {
 		return out;
 	}
-	std::vector<std::string> supers, classes;
-	if (!ReadColumnRows(g_excelDir + L"\\monstats.txt", "Id", &out.monsters)) {
-		out.monsters.clear();
+	std::vector<std::string> supers, classes, ids;
+	if (ReadColumnRows(g_excelDir + L"\\monstats.txt", "Id", &ids)) {
+		out.monsters = cartographer::event6b::dropMarkerLines(ids, ids);
 	}
 	if (ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Superunique", &supers) && ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Class", &classes)) {
 		classes.resize(supers.size());
