@@ -53,9 +53,9 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 ### 3.0 Rules for the author's side
 
 - **One required file.** `maps.txt`, one row per map. Everything else is optional and has a sensible default.
-- **Plain words only.** No ids, flags, bitmasks, hex or formulas. Tilesets, shapes and sizes are names from a short built-in list. Monsters, items and stats use the names modders already see in D2's own tables.
+- **Plain words only.** No numeric ids, flags, bitmasks, hex or formulas. Tilesets, shapes and sizes are names from a short built-in list. Monsters, items and stats use the names modders already see in D2's own tables.
 - **Blank means default.** A missing optional column or a blank cell takes the default. A map row needs only 3 filled cells.
-- **No vanilla table edits.** Authors never edit levels.txt, lvlmaze.txt, lvlprest.txt or misc.txt for Cartographer (§3.4).
+- **No vanilla table edits.** Authors never edit levels.txt, lvlmaze.txt, lvlprest.txt or misc.txt for Cartographer (§3.4). The one exception is the advanced option C (§3.6), where an expert adds `LvlPrest` rows for their own room pieces. The installer (§3.4) adds rows to the mod's levels.txt and misc.txt, not the author. Open (plan owner): whether option C stays an `LvlPrest` edit.
 - **Plain-English errors.**
   - **Where they appear:** at load, every problem is written to `cartographer-report.txt`, and the in-game console command `cartographer check` shows them too. `cartographer open <Name>` opens a map's portal on the spot, for testing, without needing the item. An example: "maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"
   - **What happens to a bad row:** it is skipped, and the other maps still work. A bad row never crashes the game.
@@ -67,11 +67,11 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 |---|---|---|---|
 | `Name` | yes | The map's name, shown on entry | Shorelines |
 | `Tileset` | yes | A name from the tileset list (§3.5) | Jungle |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | Corridor |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or a name from `shapes.txt` (§3.4) | Corridor |
 | `Size` | no | `Small`, `Medium` (default) or `Large` | Large |
 | `Level` | no | Monster level in the map (default 85) | 90 |
 | `Item` | no | Item code of the map item. Blank: the map can drop from Cartographer's own map item | `shm1` |
-| `Boss` | no | A monstats `Id` or superuniques `Name` placed at the end of the path. Blank: no boss | `fallenshaman` |
+| `Boss` | no | A monstats `Id` or superuniques `Name` placed at the end of the path. Blank: no boss | `fallenshaman1` |
 | `Monsters` | no | Up to 10 monstats `Id`s, comma-separated. Blank: the tileset's own monsters | `quillrat1,zombie3` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` (default) | |
 | `MinCharLevel` | no | Character level needed (default 1) | 80 |
@@ -103,7 +103,7 @@ This file is **one shared pool of random properties**. Every map that opens draw
 | Column | What to put | Example |
 |---|---|---|
 | `Target` | `Monsters` or `Players` | Monsters |
-| `Stat` | An itemstatcost `Stat` name | `maxhp%` |
+| `Stat` | An itemstatcost `Stat` name | `item_maxhp_percent` |
 | `Min`, `Max` | The rolled value range | 10, 20 |
 | `Weight` | How often it's drawn compared with the others (default 1) | 3 |
 
@@ -178,8 +178,8 @@ A tileset that isn't ready is refused at load, with a message that says so.
 
 | Group | Tilesets | What it takes |
 |---|---|---|
-| Maze, ready | Cave, Crypt, Act 4 Lava | Nothing more ([pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929)) |
-| Maze, one extra hook | Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Ice, Harem, Basement, Spider, Temple, Act 5 Lava | A no-op ring-grower hook plus a game check for each |
+| Maze, ready | Cave, Crypt, Act 4 Lava (`Lava` in the README) | Nothing more ([pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929)) |
+| Maze, one extra hook | Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Ice, Harem, Basement, Spider, Temple, Act 5 Lava (own name, not yet set) | A no-op ring-grower hook plus a game check for each |
 | Maze, own growers | Arcane, Catacombs, Tombs, Act 2 Sewer | A spike and a hook for each grower |
 | Outdoor, connectable pieces | Jungle, Snow/Barricade, Siege, Kurast | The outdoor builder, Jungle first |
 | Outdoor, open fields | Act 1 Wilderness, Act 2 Desert, Act 4 Mesa | An outline-polygon method (outdoor plan phase 8 spike) |
