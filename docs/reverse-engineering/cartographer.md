@@ -1238,6 +1238,8 @@ Needs a game (deferred by the owner until the plugin is complete): a TCP/IP host
 7. **Leaving the game.** After `GameLeft` and a new game there is no banner and no event from the old map, and no spawn in a level that was not opened.
 8. **Row index of the `.txt` fallback.** When the game's tables are not used, the `monstats.txt` / `superuniques.txt` row index is the parsed row count; check it against the game's row for a mod whose file has a blank line (the `spawn '..': monstats row N from the game's table` line gives the game's own row to compare with).
 
+Settled in game on 2026-11-12 for items 2 and 3 (map Boss and Treasure rooms and spawns) and the #174 boss name plates: see [Hell check 3](../cartographer/checks/2026-11-12-hell-check-3.md) (the #183 refusal/retry path was not exercised).
+
 ### Game checks of 2026-11-12 (issue #92)
 
 Live, slot 11 (test mod D2RToolsTest, save `cartos`), build 93847, D2RLoader 1.3.1-beta; one operator run on the Barbarian in `cheat god` after one death. The map was the slot level 138 (a copy of Colossal Summit, 20 x 28 tiles), opened with `cartographer open`. The event chance was 100 percent, so the rate (item 6) was not checked. Not checked on Steam build 94995. Item numbers are those of "Needs game" above.
