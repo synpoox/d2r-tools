@@ -38,11 +38,6 @@ void setRect(const layout::Layout &layout, const StampPlan &plan, const StampOpt
 	}
 }
 
-std::string where(int x, int y)
-{
-	return "cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
-}
-
 } // namespace
 
 int jungleLvlPrest(uint8_t mask)
@@ -114,23 +109,23 @@ StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, cons
 			if (cell.mask == 0) continue;
 			const PickedCell &pick = picks.at(x, y);
 			if (pick.lvlPrest < 0) {
-				fail(where(x, y) + " has no piece.");
+				fail(cellName(x, y) + " has no piece.");
 				continue;
 			}
 			if (cell.mask > 15) {
-				fail(where(x, y) + " has an exit mask over 15.");
+				fail(cellName(x, y) + " has an exit mask over 15.");
 				continue;
 			}
 			if (pick.lvlPrest == 529) {
-				fail(where(x, y) + " has piece 529, the Act 3 town, which must never be stamped.");
+				fail(cellName(x, y) + " has piece 529, the Act 3 town, which must never be stamped.");
 				continue;
 			}
 			if (o.pinFiles && pick.ds1Variant > 15) {
-				fail(where(x, y) + " has DS1 variant " + std::to_string(pick.ds1Variant) + ", which the 4-bit file index cannot hold.");
+				fail(cellName(x, y) + " has DS1 variant " + std::to_string(pick.ds1Variant) + ", which the 4-bit file index cannot hold.");
 				continue;
 			}
 			if (inJungleMaskRange(pick.lvlPrest) && pick.lvlPrest != jungleLvlPrest(cell.mask)) {
-				fail(where(x, y) + " has exits " + maskName(cell.mask) + " but piece " + std::to_string(pick.lvlPrest) + ", which breaks the jungle edge rule.");
+				fail(cellName(x, y) + " has exits " + maskName(cell.mask) + " but piece " + std::to_string(pick.lvlPrest) + ", which breaks the jungle edge rule.");
 				continue;
 			}
 			Stamp s;
@@ -197,14 +192,14 @@ std::vector<std::string> checkStampPlan(const layout::Layout &layout, const Pick
 			if (layout.at(x, y).mask != 0) {
 				++used;
 				if (x < plan.macroMinX || y < plan.macroMinY || x >= plan.macroMinX + plan.macroW || y >= plan.macroMinY + plan.macroH)
-					bad.push_back(where(x, y) + " lies outside the cropped box");
+					bad.push_back(cellName(x, y) + " lies outside the cropped box");
 			}
 	if (static_cast<int>(plan.stamps.size()) != used) bad.push_back("the plan has " + std::to_string(plan.stamps.size()) + " stamps for " + std::to_string(used) + " used cells");
 
 	std::vector<int> owner(static_cast<size_t>(plan.cellsW) * plan.cellsH, 0);
 	int lastRow = -1, lastCol = -1;
 	for (const Stamp &s : plan.stamps) {
-		const std::string at = where(s.macroX, s.macroY);
+		const std::string at = cellName(s.macroX, s.macroY);
 		if (!layout.inside(s.macroX, s.macroY) || layout.at(s.macroX, s.macroY).mask == 0) {
 			bad.push_back("a stamp is for " + at + ", which is empty or outside the layout");
 			continue;
@@ -256,7 +251,7 @@ std::vector<std::string> checkStampPlan(const layout::Layout &layout, const Pick
 				++count;
 				const TileRect want = macroRect(plan, o, x, y);
 				if (!w.rect->known || w.rect->x != want.x || w.rect->y != want.y || w.rect->w != want.w || w.rect->h != want.h)
-					bad.push_back(std::string("the ") + w.name + " rectangle is not on " + where(x, y));
+					bad.push_back(std::string("the ") + w.name + " rectangle is not on " + cellName(x, y));
 			}
 		if (count == 0 && w.rect->known) bad.push_back(std::string("the plan has an ") + w.name + " rectangle but the layout has no such cell");
 	}
