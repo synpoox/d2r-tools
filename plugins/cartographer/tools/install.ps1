@@ -66,11 +66,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).
-foreach ($p in @(@('Maze', 360), @('Outdoor', 384), @('Snow', 192))) {
-    $x = Get-Variable -Name "$($p[0])OffsetX" -ValueOnly; $y = Get-Variable -Name "$($p[0])OffsetY" -ValueOnly
-    if ($x -lt 0 -or $y -lt 0 -or $x + $p[1] -gt 13107 -or $y + $p[1] -gt 13107) { throw "-$($p[0])OffsetX and -$($p[0])OffsetY must be 0 or more and leave room for the $($p[1])-tile level below 13107 (got $x, $y)." }
-}
 $LevelName = 'Cartographer Maze'
 $OldLevelName = 'Cartographer Preset'
 $LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelType: 3 Cave, 4 Crypt
@@ -86,6 +81,12 @@ $OutdoorTilesets = @(
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 }
 )
+# Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).
+foreach ($p in @(@(@{ Param = 'Maze'; Size = [int]$MazeSize }) + @($OutdoorTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size } }))) {
+    $x = Get-Variable -Name "$($p.Param)OffsetX" -ValueOnly; $y = Get-Variable -Name "$($p.Param)OffsetY" -ValueOnly
+    if ($x -lt 0 -or $y -lt 0 -or $x + $p.Size -gt 13107 -or $y + $p.Size -gt 13107) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY must be 0 or more and leave room for the $($p.Size)-tile level (offset plus size at most 13107) (got $x, $y)." }
+}
+
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -160,7 +161,7 @@ function Set-CellIf($t, $cells, [string]$column, [string]$value) {
 }
 
 # The origin of a level row: its OffsetX/OffsetY plus, when Depend names another level, that level's origin (the game adds them; vanilla does
-# this for 26/27 and 32/33). A broken chain (missing level, a loop, a non-number) counts from where it stops.
+# this for 26/27 and 32/33). A broken chain (missing level, a loop, a non-number) adds up the offsets of the levels reached before the break (a missing or looping parent adds nothing).
 function Get-LevelOrigin($t, $c, [int]$depth = 0) {
     $ox = 0; $oy = 0
     [void][int]::TryParse($c[(Column $t 'OffsetX')], [ref]$ox); [void][int]::TryParse($c[(Column $t 'OffsetY')], [ref]$oy)
