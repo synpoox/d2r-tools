@@ -374,7 +374,8 @@ TEST_CASE("planEvent: problems are said, not guessed") {
 	const Rect room{0, 0, 20, 20};
 	CHECK(planEvent(event(ev::Kind::Boss, "nothing"), resolveSpawn(table(), "nothing"), room, 1).problem.find("not a monstats Id") != std::string::npos);
 	CHECK(planEvent(event(ev::Kind::Boss, "Lost"), resolveSpawn(table(), "Lost"), room, 1).problem.find("Class") != std::string::npos);
-	CHECK(planEvent(event(ev::Kind::Shrine, "andariel"), resolveSpawn(table(), "andariel"), room, 1).problem.find("unknown kind") != std::string::npos);
+	CHECK(planEvent(event(ev::Kind::Shrine, "andariel"), resolveSpawn(table(), "andariel"), room, 1).problem.find("no monster spawn plan") != std::string::npos);
+	CHECK(planEvent(event(ev::Kind::Invalid, "andariel"), resolveSpawn(table(), "andariel"), room, 1).problem.find("unknown kind") != std::string::npos);
 	CHECK(!planEvent(event(ev::Kind::Boss, "andariel"), resolveSpawn(table(), "andariel"), {0, 0, 0, 0}, 1).problem.empty());
 }
 

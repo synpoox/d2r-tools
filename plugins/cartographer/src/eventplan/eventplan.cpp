@@ -215,7 +215,11 @@ bool EventRoomTracker::onPopulated(const Rect &room) {
 
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
-	if (event.kind == events::Kind::Shrine || event.kind == events::Kind::Invalid) {
+	if (event.kind == events::Kind::Shrine) {
+		plan.problem = "Shrine events: no monster spawn plan (placed as an object)";
+		return plan;
+	}
+	if (event.kind == events::Kind::Invalid) {
 		plan.problem = std::string(events::kindName(event.kind)) + " events: unknown kind";
 		return plan;
 	}

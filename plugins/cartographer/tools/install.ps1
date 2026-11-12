@@ -87,7 +87,6 @@ foreach ($p in @(@(@{ Param = 'Maze'; Size = [int]$MazeSize }) + @($OutdoorTiles
     if ($x -lt 0 -or $y -lt 0 -or $x + $p.Size -gt 13107 -or $y + $p.Size -gt 13107) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY must be 0 or more and leave room for the $($p.Size)-tile level (offset plus size at most 13107) (got $x, $y)." }
 }
 
-
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
     $mod = Split-Path $ModDirectory -Leaf
