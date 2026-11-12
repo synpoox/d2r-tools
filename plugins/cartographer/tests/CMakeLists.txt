@@ -7,3 +7,14 @@ else()
 	target_compile_options(layout_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 add_test(NAME layout_tests COMMAND layout_tests)
+
+# Catalogue tool tests (Python). Kept separate so it survives PR #42's CMake restructure.
+# CARTOGRAPHER_NO_DATA=1: CI has no game data.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+	add_test(NAME catalogue_tool_tests
+		COMMAND ${Python3_EXECUTABLE} -I -m unittest discover -s ${CMAKE_CURRENT_SOURCE_DIR}/../tools)
+	set_tests_properties(catalogue_tool_tests PROPERTIES ENVIRONMENT "CARTOGRAPHER_NO_DATA=1")
+else()
+	message(STATUS "Python not found: skipping catalogue tool tests")
+endif()
