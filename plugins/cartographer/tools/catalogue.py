@@ -10,7 +10,7 @@ Input: vanilla D2R's lvlprest.txt, the DS1s and DT1s of the same build (the `dat
 $D2R_DATA, or the d2rAI-toolkit's `d2r-data/93847/data` beside this repo; read only), and overrides.tsv. One row per
 piece, with the columns of COLUMNS. A data folder that was asked for (--data, $D2R_DATA) but is not there is an
 error; only when nothing was asked for and the toolkit is not found is there "no data" (the committed output is then
-all there is). CARTOGRAPHER_NO_DATA=1 says so explicitly (the tests use it to skip the regeneration test).
+all there is). CARTOGRAPHER_NO_DATA=1 (or true) says so explicitly (the tests use it to skip the regeneration test).
 
 How a row is made, in the order the later step wins:
 
@@ -66,6 +66,8 @@ BUILD = "93847"
 
 class CatalogueError(Exception):
     """A problem with the input that the user can fix: main() prints it and exits 2, with no traceback."""
+
+
 COLUMNS = ["tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgeN", "edgeE", "edgeS", "edgeW",
            "role", "weight", "tags", "source", "check", "ds1", "hd"]
 TILESET_COLUMNS = ["tileset", "builder", "leveltype", "group", "cell", "pieces", "ready"]
@@ -145,8 +147,8 @@ def checked_data(d: Path, what: str) -> Path:
 
 def data_root() -> Path | None:
     """The extracted vanilla `data` folder. None only when none was asked for and the toolkit's is not found (the
-    committed output is then all there is), or CARTOGRAPHER_NO_DATA is set. A wrong $D2R_DATA is an error."""
-    if os.environ.get("CARTOGRAPHER_NO_DATA"):
+    committed output is then all there is), or CARTOGRAPHER_NO_DATA is 1 or true. A wrong $D2R_DATA is an error."""
+    if os.environ.get("CARTOGRAPHER_NO_DATA", "").strip().lower() in ("1", "true"):
         return None
     if os.environ.get("D2R_DATA"):
         return checked_data(Path(os.environ["D2R_DATA"]), "$D2R_DATA")
@@ -235,9 +237,19 @@ class Reader:
             return None
         data = f.read_bytes()
         try:
-            return layout(data, self.dt1.of(header_dt1s(data)))
+            paths = header_dt1s(data)
         except (struct.error, ValueError, IndexError) as e:
-            raise CatalogueError(f"{f}: not a readable DS1 or DT1 ({e})") from e
+            raise CatalogueError(f"{f}: not a readable DS1 ({e})") from e
+        dt1s = {}
+        for p in paths:
+            try:
+                dt1s[p] = self.dt1[p]
+            except (struct.error, ValueError, IndexError) as e:
+                raise CatalogueError(f"{self.tiles_root / p}: not a readable DT1 ({e}), listed by {f}") from e
+        try:
+            return layout(data, dt1s)
+        except (struct.error, ValueError, IndexError) as e:
+            raise CatalogueError(f"{f}: not a readable DS1 ({e})") from e
 
 
 # ---- the rows ---------------------------------------------------------------------------------------------------
@@ -330,9 +342,11 @@ def make_row(spec: Spec, p: Piece, m: re.Match, letters: str, role: str, extra: 
                 row["check"] = row["check"] or "no-ds1"
             else:
                 got = sum(BITS[s] for s in "NESW" if ds1_edges[s] == "p")
-                if got != mask:
+                if row["check"]:
+                    pass  # "variants" wins over ds1=
+                elif got != mask:
                     row["check"] = f"ds1={letters_of(got) or '-'}"
-                elif not row["check"]:
+                else:
                     row["check"] = "ok"
         tags.append(shape_tag(mask))
         tags.append(f"exits={len(letters)}")
@@ -425,10 +439,12 @@ def report(rows: list[dict]) -> str:
     lines.append(f"{len(miss)} missing HD presets:")
     lines += [f"  {i:>5} {n}: {h[8:]}" for i, n, h in miss]
     jun = [r for r in rows if r["tileset"] == "Jungle" and 530 <= r["lvlprest"] <= 604]
-    ok = sum(1 for r in jun if r["check"] == "ok")
-    named = sum(1 for r in jun if r["source"] == "name")
-    lines.append(f"LvlPrest 530-604: {len(jun)} rows, {named} with a mask in the name, "
-                 f"{ok} of them where the DS1 mask equals it")
+    named = [r for r in jun if r["source"] == "name"]
+    trans = [r for r in jun if r["source"] != "name"]
+    ok = lambda rs: sum(1 for r in rs if r["check"] == "ok")  # noqa: E731
+    lines.append(f"LvlPrest 530-604: {len(jun)} rows; {len(named)} with a mask in the name, {ok(named)} of them "
+                 f"where the DS1 mask equals it; {len(trans)} others (transitions), {ok(trans)} of them where the DS1 "
+                 f"mask equals the name's")
     return "\n".join(lines) + "\n"
 
 

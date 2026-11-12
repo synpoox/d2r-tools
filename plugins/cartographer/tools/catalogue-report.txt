@@ -5,4 +5,4 @@
 2 missing HD presets:
     916 Act 5 - Barricade 2: hd/env/preset/expansion/siege/newbarrbb2.json
     919 Act 5 - Barricade 5: hd/env/preset/expansion/siege/newbarrab2.json
-LvlPrest 530-604: 75 rows, 45 with a mask in the name, 73 of them where the DS1 mask equals it
+LvlPrest 530-604: 75 rows; 45 with a mask in the name, 45 of them where the DS1 mask equals it; 30 others (transitions), 28 of them where the DS1 mask equals the name's

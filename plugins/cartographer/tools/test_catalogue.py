@@ -56,6 +56,11 @@ OPEN, BLOCKED = bytes(25), bytes([1] * 25)
 FLOOR_OPEN, FLOOR_BLOCKED = 1 << 20, 2 << 20  # main index 1 and 2
 
 
+def jungle_row(spec, fragment):
+    """The spec row whose pattern contains `fragment` (with {m} written as in the source)."""
+    return next(r for r in spec.rows if fragment in r[0])
+
+
 class Readers(unittest.TestCase):
     def test_dt1_tiles(self):
         t = rd.dt1_tiles(dt1({(0, 1, 0): OPEN, (0, 2, 0): BLOCKED}))
@@ -82,6 +87,19 @@ class BadInput(unittest.TestCase):
         d = tempfile.TemporaryDirectory()
         self.addCleanup(d.cleanup)
         return Path(d.name)
+
+    def test_a_corrupt_dt1_is_named(self):
+        d = self.tmp()
+        tiles = d / "global" / "tiles"
+        tiles.mkdir(parents=True)
+        (tiles / "a.ds1").write_bytes(b"")
+        r = cat.Reader(d)
+        with mock.patch.object(cat, "header_dt1s", return_value=["bad.dt1"]):
+            (tiles / "bad.dt1").write_bytes(b"")
+            with self.assertRaises(cat.CatalogueError) as e:
+                r.layout("a.ds1")
+        self.assertIn("bad.dt1", str(e.exception))
+        self.assertIn("DT1", str(e.exception))
 
     def test_missing_data_folder_names_the_path(self):
         d = self.tmp() / "nowhere"
@@ -161,7 +179,7 @@ class Classifier(unittest.TestCase):
     def test_row_from_name_alone(self):
         p = cat.Piece(536, "Act 3 - Jungle SEW", 32, 32, ("act3/jungle/rivsew.ds1",))
         spec = next(s for s in cat.TILESETS if s.name == "Jungle")
-        pattern, role, extra = spec.rows[0]
+        pattern, role, extra = jungle_row(spec, "Jungle {m}")
         m, letters = cat.named_mask(pattern, p.name)
         row = cat.make_row(spec, p, m, letters, role, extra, None, lambda _p: True)
         self.assertEqual((row["edgeN"], row["edgeE"], row["edgeS"], row["edgeW"]), ("x", "p", "p", "p"))
@@ -203,11 +221,36 @@ class Classifier(unittest.TestCase):
                 return rd.layout(ds1(6, 3, floor), {"x.dt1": {(0, 1, 0): OPEN, (0, 2, 0): BLOCKED}})
         p = cat.Piece(573, "Act 3 - Jungle Head", 6, 3, ("act3/jungle/a.ds1", "act3/jungle/b.ds1"))
         spec = next(s for s in cat.TILESETS if s.name == "Jungle")._replace(cell=3)
-        pattern, role, extra = spec.rows[3]
+        pattern, role, extra = jungle_row(spec, "Head|Tail")
         m, letters = cat.named_mask(pattern, p.name)
         row = cat.make_row(spec, p, m, letters, role, extra, Two(), lambda _p: True)
         self.assertEqual(row["check"], "variants")
         self.assertEqual(row["source"], "ds1")
+
+    def test_variants_win_over_ds1_in_a_named_piece(self):
+        class Two:  # two DS1 files; the first has every side open, the second blocks the north side
+            def layout(self, f):
+                blocked = {(x, 0) for x in range(3)} if f.endswith("b.ds1") else set()
+                floor = {(x, y): FLOOR_BLOCKED if (x, y) in blocked else FLOOR_OPEN
+                         for x in range(3) for y in range(3)}
+                return rd.layout(ds1(3, 3, floor), {"x.dt1": {(0, 1, 0): OPEN, (0, 2, 0): BLOCKED}})
+        p = cat.Piece(1, "Act 3 - Jungle S", 3, 3, ("act3/jungle/a.ds1", "act3/jungle/b.ds1"))
+        spec = next(s for s in cat.TILESETS if s.name == "Jungle")._replace(cell=3)
+        pattern, role, extra = jungle_row(spec, "Jungle {m}")
+        m, letters = cat.named_mask(pattern, p.name)
+        row = cat.make_row(spec, p, m, letters, role, extra, Two(), lambda _p: True)
+        self.assertEqual(row["check"], "variants")
+
+    def test_no_data_accepts_only_1_or_true(self):
+        for v, skipped in (("1", True), ("true", True), ("0", False), ("", False)):
+            with mock.patch.dict(os.environ, {"CARTOGRAPHER_NO_DATA": v, "D2R_DATA": ""}):
+                if skipped:
+                    self.assertIsNone(cat.data_root(), v)
+                else:
+                    try:
+                        cat.data_root()
+                    except cat.CatalogueError:
+                        pass  # asked for no data folder found: an error, not a skip
 
     def test_transition_name_is_checked_against_the_ds1(self):
         class One:  # every side open
@@ -215,7 +258,7 @@ class Classifier(unittest.TestCase):
                 return rd.layout(ds1(3, 3, {(x, y): FLOOR_OPEN for x in range(3) for y in range(3)}),
                                  {"x.dt1": {(0, 1, 0): OPEN}})
         spec = next(s for s in cat.TILESETS if s.name == "Jungle")._replace(cell=3)
-        pattern, role, extra = spec.rows[2]
+        pattern, role, extra = jungle_row(spec, "(?P<to>")
         for name, check in (("Act 3 - Jungle NSEW N", "ok"), ("Act 3 - Jungle EW S", "name=SEW")):
             p = cat.Piece(1, name, 3, 3, ("act3/jungle/a.ds1",))
             m, letters = cat.named_mask(pattern, p.name)
