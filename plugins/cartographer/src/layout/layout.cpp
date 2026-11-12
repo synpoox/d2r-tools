@@ -401,7 +401,8 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 	const int ox = rng.range(0, w - rw);
 	std::vector<Point> ring = rectRing(ox, oy, rw, rh);
 	std::vector<int> scratch;
-	// rectRing is valid except for a grid only two cells wide or high; then each trial is judged on the whole ring.
+	// rectRing is valid unless the grid is only two cells wide or high. generate() never gets there (validateRules asks
+	// a Loop grid for at least 3x3, so local is always true); only rules that skip validateRules take the full-ring path.
 	work.charge(static_cast<int64_t>(w) * h + 4 * static_cast<int64_t>(ring.size()));
 	const bool local = ringValid(ring, w, h, scratch);
 	RingCells cells(w, h, ring);
