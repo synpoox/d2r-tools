@@ -7,7 +7,7 @@
       levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
                     360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
-                    the game's level groups. A row from an older install (copied from the Den of Evil) is repaired the same way.
+                    the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way.
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
     It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
     any other row is kept.
@@ -142,10 +142,11 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelGroup' $NoGroup
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
+    for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
     if (($cells -join "`t") -ne $before) {
         $levels.Lines[$existing] = $cells -join "`t"
         Save-Table $levels
-        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text), so it counts toward none of the game's levels."
+        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0), so it counts toward none of the game's levels."
     }
 } else {
     # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),

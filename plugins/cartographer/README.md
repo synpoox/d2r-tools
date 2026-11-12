@@ -171,7 +171,7 @@ tileset (Cave or Crypt); a map of the other tileset is refused. The maze is buil
 same game is refused. Without the level, no map opens.
 
 The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a plain game Cave (or Crypt) level and
-set apart from the game's levels (no quest, no level group), with its `lvlmaze.txt` row and the `Maze` row of
+set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with its `lvlmaze.txt` row and the `Maze` row of
 `slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
