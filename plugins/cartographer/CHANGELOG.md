@@ -24,3 +24,4 @@
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
+- Hosts and players need the same version of Cartographer to share a map; older versions no longer connect for map sync.

@@ -1170,6 +1170,26 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 - `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
 - Nothing here has run in a game.
 
+### Multiplayer layout sync (issue #146)
+
+Question: what does a remote TCP/IP client know when it builds the outdoor slot level, and can the plan be a pure function of that? Static, build 93847 (stamp `0x6ab3782c`), dump `D2RLoader_6ab3782c_dump.exe`. Not run in a game.
+
+| Fact | Evidence | Level |
+|---|---|---|
+| The level reseed `0x367110` is `mov [rcx], edx; mov [rcx+4], 0x29a; ret`: the level RNG pair is only what the caller passes, with no time, thread or server read | capstone on the dump, `0x367110..0x367119` | static |
+| Act creation `0x2ef1c0` seeds the act RNG (`lea rcx,[r14+0xa0]`, `call 0x367110` at `0x2ef3b3`) from the stack argument `[rsp+0x60]`; the server passes `game + 0x12c`, the client the packet `0x03` seed (section 12, Q2) | capstone at `0x2ef38c..0x2ef3b8`; section 12 | static. The original level reseed (`drlg[0x860] + level id`) is built on the act seed; that `drlg+0x860` holds the same value on both sides was not re-traced here |
+| `LevelBuild` runs on the host's server DRLG, the host's client DRLG and a remote client's DRLG, each against its own level record | section 12, Q2 | static |
+| A remote client therefore has, when it builds the level: its own tables and the map sync message (maps row, slot level, opening, layout seed). It does not have the host's job id (`g_nextJobId`), the host's `seedSalt` (tick, player id, opening count) or any other host process state | `OutdoorMapOpened`, `MapSyncMapOpened` | code |
+
+Decision: the build depends on nothing else.
+
+- The plan is a function of `MapRequest` = (tileset, shape, size, seed, origin, size limits, options, shapes.txt) and the built-in catalogue. Origin and limits are the slot row's `levels.txt` values and the rest the map's `maps.txt` row, so host and client agree when their tables agree (the same condition as the maze half). The job id and the salt only produce the seed on the host (`mixSeed(salt, id)`); a client takes the host's seed as it is (`OutdoorMapOpened(..., fixedSeed)`).
+- The one other input was the level RNG seed, `int32(drlg[0x860]) + level id`, which draws each stamp's DS1 file when `pinFiles` is off. It now comes from the plan's hash (itself a function of the request) and the level id through `src/outdoor/outdoor_seed.*` (`slotRngSeedFor`), so it does not rely on the act seed being equal on the two sides. The second word stays `0x29a`. Section 8a "Second reseed" still holds.
+- Wire: map sync wire version 2 adds the flag `kFlagOutdoor` (2), never together with the maze flag; the seed is the open outdoor map's seed (`OutdoorOpenSeed()`). The client applies it with `OutdoorMapOpened(map, tables, 0, seed)` from its own `maps.txt` row, and skips, logging the reason, when: the slot level or the map kind differs, the outdoor build is off or not live, the host sent seed 0, or the Outdoor slot level already started to build here (`OutdoorSlotRanAny`; no rebuild). Pure decision in `src/mapsync/mapsync.cpp` `decideApply`, unit tested.
+- The host's call `MapSyncMapOpened(..., outdoor = true, OutdoorOpenSeed())` belongs to the portal that opens outdoor maps (issue #144); until it exists nothing sends an outdoor identity.
+
+Needs a game (deferred by the owner until the plugin is complete): a TCP/IP host and a remote client with identical tables open one Jungle map. Confirm (1) both logs show the same `outdoor slot level N: planned ... plan <hash>` line and `built as planned`; (2) the room lists (count and rect of each room, `OutdoorProbe = 1`) are equal; (3) the client log shows `the next build of the Outdoor slot level here uses the host's layout seed` before its first build of the slot level, and, if the client builds first, the skip line and the stock layout instead; (4) in a single-process host both DRLGs print one plan line (cached).
+
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 
