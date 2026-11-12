@@ -95,6 +95,31 @@ TEST_CASE("placements: centre first, distinct, inside, deterministic, capped by 
 	}
 }
 
+TEST_CASE("spotScale: server units per DRLG tile") {
+	CHECK(spotScale({0, 0, 100, 80}, {0, 0, 20, 16}) == 5);
+	CHECK(spotScale({0, 0, 20, 16}, {0, 0, 20, 16}) == 1);
+	CHECK(spotScale({0, 0, 100, 40}, {0, 0, 20, 16}) == 1);  // not one factor in both directions
+	CHECK(spotScale({0, 0, 101, 80}, {0, 0, 20, 16}) == 1);
+	CHECK(spotScale({0, 0, 10, 10}, {0, 0, 20, 16}) == 1);
+	CHECK(spotScale({0, 0, 10, 10}, {0, 0, 0, 0}) == 1);
+}
+
+TEST_CASE("placements: a scaled (server) rect keeps the same spacing on the ground, in its own units") {
+	const Rect tiles{100, 200, 20, 16}, sub{500, 1000, 100, 80};
+	const std::vector<Spot> a = placements(tiles, 12, 7, 1), b = placements(sub, 12, 7, 5);
+	REQUIRE(a.size() == b.size());
+	CHECK(b[0].x == 550);
+	CHECK(b[0].y == 1040);
+	for (const Spot &s : b) {
+		CHECK(inside(s, sub));
+	}
+	for (size_t i = 0; i < b.size(); ++i) {
+		for (size_t j = i + 1; j < b.size(); ++j) {
+			CHECK(std::max(std::abs(b[i].x - b[j].x), std::abs(b[i].y - b[j].y)) >= kSpotGap * 5);
+		}
+	}
+}
+
 TEST_CASE("EventRoomTracker: a planned room fires only on that rect, once") {
 	EventRoomTracker t(Rect{10, 20, 8, 8});
 	CHECK(t.planned());

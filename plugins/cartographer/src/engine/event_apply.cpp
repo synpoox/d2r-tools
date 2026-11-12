@@ -25,10 +25,9 @@ namespace ev = cartographer::events;
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
-constexpr int ServerRectOffset = 0x80;      // a server room's x, y, w, h (int32 each); units unknown, logged next to the DRLG rect
+constexpr int ServerRectOffset = 0x80;      // a server room's x, y, w, h (int32 each): the rect the spawn search and the point-in-room test use
 constexpr int DrlgRectOffset = 0x60;        // a DRLG room's x, y, w, h (int32 each), in tiles
 constexpr int GameSuperBitmapOffset = 0x1d8;  // the game's once-per-game superunique bitmap
-constexpr int SubtilesPerTile = 5;
 constexpr int32_t SpawnMode = 1;            // what the superunique code passes to the monster spawn
 constexpr int32_t SpawnParam = 0xa;         // the same caller's seventh argument
 constexpr uint16_t SpawnFlags = 0;          // 0: the game's normal path, so the map's stats reach event monsters too
@@ -182,7 +181,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 struct RoomRects {
 	bool ok = false;
 	ep::Rect drlg;    // tiles
-	ep::Rect server;  // units unknown
+	ep::Rect server;  // the spawn code's units (subtiles, by static reading)
 };
 
 auto ReadRects(void* serverRoom) noexcept -> RoomRects {
@@ -203,10 +202,10 @@ auto Describe(const ep::Rect& r) -> std::string {
 	return text;
 }
 
-// One monster at a world position (subtiles). Returns whether the game gave a unit.
+// One monster at a position in the server rect's units. Returns whether the game gave a unit.
 auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper) noexcept -> bool {
 	*asSuper = false;
-	const int32_t x = s.spot.x * SubtilesPerTile + SubtilesPerTile / 2, y = s.spot.y * SubtilesPerTile + SubtilesPerTile / 2;
+	const int32_t x = s.spot.x, y = s.spot.y;
 	if (s.superUnique && On(SpawnSuperUnique)) {
 		const uint8_t* bitmap = reinterpret_cast<const uint8_t*>(game) + GameSuperBitmapOffset;
 		if (!ep::superSeen(bitmap, s.row)) {
@@ -230,7 +229,8 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper) noexcep
 }
 
 void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
-	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.drlg, seed);
+	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
+	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("event '%s' not spawned: %s", state.event->name.c_str(), plan.problem.c_str());
 		return;
@@ -246,7 +246,7 @@ void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		}
 	}
 	plog::Info("event '%s' (%s): spawned %d of %zu in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
-	           ev::kindName(state.event->kind), made, plan.spawns.size(), Describe(rects.drlg).c_str(), supers, failed);
+	           ev::kindName(state.event->kind), made, plan.spawns.size(), Describe(rects.server).c_str(), supers, failed);
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -300,9 +300,8 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 	}
 	if (number <= MaxPopulateProbes) {
-		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (server w %s the DRLG w, so the server rect is %s), %s%s", number, state->level,
-		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), rects.server.w == rects.drlg.w ? "equals" : rects.server.w == rects.drlg.w * SubtilesPerTile ? "is 5x" : "differs from",
-		           rects.server.w == rects.drlg.w ? "in tiles" : rects.server.w == rects.drlg.w * SubtilesPerTile ? "in subtiles" : "in unknown units",
+		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile), %s%s", number, state->level,
+		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg),
 		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
 	if (fire) {

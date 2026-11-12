@@ -47,9 +47,15 @@ struct Spot {
 
 // Up to `n` distinct spots inside `room`, kept kEdgeInset clear of its edge where the room is big enough: the centre
 // first, then a grid around it, kSpotGap apart. Same inputs, same spots. Fewer than `n` when the room is too small.
+// kEdgeInset and kSpotGap are in tiles; `scale` is how many of the room's own units make a tile (1 for a rect in tiles,
+// 5 for the server room's rect), so the spacing stays the same on the ground.
 constexpr int kEdgeInset = 2;
 constexpr int kSpotGap = 2;
-std::vector<Spot> placements(const Rect &room, int n, uint64_t seed);
+std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale = 1);
+
+// How many of the server room's units make one DRLG tile: server.w / drlg.w when the server rect is a whole multiple of the
+// DRLG rect in both directions (5 for subtiles), else 1.
+int spotScale(const Rect &server, const Rect &drlg);
 
 // --- The event room ------------------------------------------------------------------------------------------------
 
@@ -91,7 +97,8 @@ struct SpawnPlan {
 
 // A Boss: the named boss at the room centre, plus `minions` of its class around it. A Horde: `hordeSize` of the named
 // monster (a superunique spawns as its class: it can only exist once per game). Other kinds give a problem (phase 6b).
-SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed);
+// `room` is the rect the spots are placed in (the server room's, which is what the spawn code takes), `scale` its units per tile.
+SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale = 1);
 
 // The game keeps one bit per superuniques row that says it was spawned in this game: bit (row & 7) of byte (row >> 3).
 constexpr int kMaxSuperRow = 0xFFFF;

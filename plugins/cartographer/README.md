@@ -36,7 +36,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   spawns its `Spawn` (a `monstats.txt` `Id` or a `superuniques.txt` name) at the centre of the event room with `Count`
   minions of its class; a `Horde` spawns `Count` of it. In a Cave or Crypt map the event room is the layout's reserved
   event cell; in other maps it is the first room the game fills that is at least 24 tiles from the first one. A superunique
-  can only exist once per game, so a second one spawns as its plain class. `Drop` is not applied yet, and `Ambush`,
+  can only exist once per game, so a second one spawns as its plain class. Boss and Horde events need the active mod to ship `monstats.txt` and `superuniques.txt` in its excel folder (the plugin looks the `Spawn` row up there; it cannot read the game's own tables by name yet): without them those events are not spawned or announced, and `cartographer check` and the report say so. `Drop` is not applied yet, and `Ambush`,
   `Treasure` and `Shrine` events are decided but not applied (no spawn, no message). The room populator and the two spawn
   functions are found by byte signature at load; a part that is not found once turns the spawns off (`cartographer check`
   says which) while the map and its entry message still work. The log gets `eventprobe:` lines for the checks in

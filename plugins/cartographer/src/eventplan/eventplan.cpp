@@ -71,23 +71,25 @@ Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn) {
 	return out;
 }
 
-std::vector<Spot> placements(const Rect &room, int n, uint64_t seed) {
+std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) {
+	scale = std::max(1, scale);
+	const int inset = kEdgeInset * scale, gap = kSpotGap * scale;
 	std::vector<Spot> out;
 	if (n <= 0 || room.w <= 0 || room.h <= 0) {
 		return out;
 	}
 	Rect in = room;
-	if (room.w > 2 * kEdgeInset + 1 && room.h > 2 * kEdgeInset + 1) {
-		in = {room.x + kEdgeInset, room.y + kEdgeInset, room.w - 2 * kEdgeInset, room.h - 2 * kEdgeInset};
+	if (room.w > 2 * inset + 1 && room.h > 2 * inset + 1) {
+		in = {room.x + inset, room.y + inset, room.w - 2 * inset, room.h - 2 * inset};
 	}
 	const int cx = centreX(room), cy = centreY(room);
-	// A grid kSpotGap apart, nearest the centre first; the seed orders the cells that are equally near.
+	// A grid gap apart, nearest the centre first; the seed orders the cells that are equally near.
 	struct Cand {
 		int x, y, d, tie;
 	};
 	std::vector<Cand> cands;
-	for (int y = in.y; y < in.y + in.h; y += kSpotGap) {
-		for (int x = in.x; x < in.x + in.w; x += kSpotGap) {
+	for (int y = in.y; y < in.y + in.h; y += gap) {
+		for (int x = in.x; x < in.x + in.w; x += gap) {
 			const int d = std::max(std::abs(x - cx), std::abs(y - cy));
 			const uint64_t h = (static_cast<uint64_t>(x) * 73856093u) ^ (static_cast<uint64_t>(y) * 19349663u) ^ seed;
 			cands.push_back({x, y, d, static_cast<int>((h ^ (h >> 17)) & 0xFFFF)});
@@ -103,7 +105,7 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed) {
 		}
 		bool apart = true;
 		for (const Spot &s : out) {
-			if (std::max(std::abs(s.x - c.x), std::abs(s.y - c.y)) < kSpotGap) {
+			if (std::max(std::abs(s.x - c.x), std::abs(s.y - c.y)) < gap) {
 				apart = false;
 				break;
 			}
@@ -141,7 +143,7 @@ bool EventRoomTracker::onPopulated(const Rect &room) {
 	return false;
 }
 
-SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed) {
+SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
 	if (event.kind != events::Kind::Boss && event.kind != events::Kind::Horde) {
 		plan.problem = std::string(events::kindName(event.kind)) + " events are not applied yet";
@@ -156,7 +158,7 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 		return plan;
 	}
 	const int total = event.kind == events::Kind::Boss ? 1 + std::max(0, event.minions) : std::max(0, event.hordeSize);
-	const std::vector<Spot> spots = placements(room, total, seed);
+	const std::vector<Spot> spots = placements(room, total, seed, scale);
 	for (size_t i = 0; i < spots.size(); ++i) {
 		Spawn s;
 		s.spot = spots[i];
@@ -173,6 +175,14 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 		plan.problem = "the event room is too small to place anything";
 	}
 	return plan;
+}
+
+int spotScale(const Rect &server, const Rect &drlg) {
+	if (drlg.w <= 0 || drlg.h <= 0 || server.w < drlg.w || server.h < drlg.h || server.w % drlg.w != 0 || server.h % drlg.h != 0) {
+		return 1;
+	}
+	const int k = server.w / drlg.w;
+	return k == server.h / drlg.h ? k : 1;
 }
 
 bool superSeen(const uint8_t *bitmap, int row) {

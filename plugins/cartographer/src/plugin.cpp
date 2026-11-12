@@ -111,7 +111,8 @@ auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<st
 	return true;
 }
 
-// monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns. Empty when a table is missing.
+// monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder
+// (the game's compiled tables carry no name the plugin can use yet). Empty when a table is missing.
 auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 	cartographer::eventplan::SpawnTable out;
 	if (g_excelDir.empty()) {
@@ -213,6 +214,11 @@ auto LoadAll() -> Loaded {
 		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
 	}
 	loaded.tables->spawnNames = ReadSpawnNames();
+	// The spawn rows come from the mod's own monstats.txt and superuniques.txt; the plugin cannot read the game's compiled
+	// tables by name yet, so without them Boss and Horde events are refused (see the README).
+	if (!loaded.tables->events.empty() && (!loaded.tables->spawnNames.loaded() || loaded.tables->spawnNames.supers.empty())) {
+		loaded.report.Note("mapevents.txt", 0, "Boss and Horde events need the mod to ship monstats.txt and superuniques.txt in its excel folder, and one could not be read. Those events will not be spawned or announced.");
+	}
 	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
