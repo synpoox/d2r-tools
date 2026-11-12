@@ -176,6 +176,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
   - a slot too small for the plan (60 x 60) logs the reason and the game's own maze is built, no crash;
   - entering the slot with no map opened builds the game's own maze;
   - (second run, 2026-11-12) 3 Crypt maps (`Branching`, `Corridor`, `Loop`) built as planned with no crash, and a Cave map on a Crypt slot is refused; in 5 games with an arrival line the player did not arrive in the planned entrance cell; every game logged WARN lines that monster map stats were skipped (no `itemstatcost.txt` in the test mod) (tracked in an issue, not fixed);
+  - (arrival check, 2026-11-12, build 93847, D2RLoader 1.3.1-beta) in a Cave Corridor, a Cave Loop and a Crypt Branching game the player arrived in the planned entrance cell, and no chest or shrine was seen in that room (details in `docs/reverse-engineering/cartographer.md` section 5); Nightmare, Hell and clients were not run;
   - not checked: Nightmare and Hell, a second map in the same game on the Crypt slot.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
