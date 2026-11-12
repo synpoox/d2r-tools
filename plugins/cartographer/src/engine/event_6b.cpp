@@ -460,15 +460,19 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		plog::Warn("D2RLoader has no Lifecycle service of the expected version: an Ambush runs one wave only");
 	}
 	plog::Info("phase 6b: %s", SummaryNow(populatorOn).c_str());
-	for (const Part& part : g_parts) {
-		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
+	for (int i = 0; i < PartCount; ++i) {
+		if (i != DataTables && i != NameToRow) {  // logged once, by event_apply.cpp
+			plog::Info("part %s: %s", g_parts[i].name, g_parts[i].status.detail.c_str());
+		}
 	}
 }
 
 auto Event6bPartStatuses() -> std::vector<PartStatus> {
 	std::vector<PartStatus> out;
-	for (const Part& part : g_parts) {
-		out.push_back(part.status);
+	for (int i = 0; i < PartCount; ++i) {
+		if (i != DataTables && i != NameToRow) {  // listed once, by event_apply.cpp
+			out.push_back(g_parts[i].status);
+		}
 	}
 	return out;
 }
