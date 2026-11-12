@@ -140,8 +140,9 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale =
 
 // Where the map Boss may be tried (issue #183): the centre first, then the tiles of the room one tile clear of its edge (where the room
 // is big enough), nearest the centre first, at most kBossSpots. A fail-open backstop only: the game's own free-spot search (SpawnMonster
-// p7 = 0xa) already covers the whole room from any start, on a ring grid 3 subtiles apart, so starts 5 subtiles apart (9 in all: the
-// centre and its 8 neighbour tiles, every offset mod 3) reach every subtile. The refusals seen in #183 were the stale room of #184.
+// p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from any start, on a ring grid 3 subtiles apart, so starts 5 subtiles apart (9 in all: the
+// centre and its 8 neighbour tiles, every offset mod 3) together reach every subtile but the 9 starts themselves (for a ~40 x 40 maze
+// room; an outdoor clearing may be larger than the rings reach). The refusals seen in #183 were the stale room of #184.
 constexpr int kBossSpots = 9;
 std::vector<Spot> bossSpots(const Rect &room, int scale = 1);
 

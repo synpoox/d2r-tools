@@ -1264,12 +1264,13 @@ Evidence is static (dump `D2RLoader_6ab3782c_dump.exe`, build 93847, around `0x4
   map Boss is left off. No engine address is involved.
 - **#183 (the cause)**: the game never tries only the exact centre. `SpawnMonster` with p7 = `0xa` (and the superunique path) searches
   rings 3, 6, ... 30 subtiles from the start inside the room rect and takes the first free subtile (`0x493f13..0x493f34`, `0x49423e`,
-  collision test `0x364d50`; see "Position validity" in section 7). From a 40 x 40 room's centre that covers the whole room, so a
-  refusal means no free subtile in that room. Both refusals in the log, (6000,24) and (6048,48), were the cell's top-left 8 x 8 room,
+  collision test `0x364d50`; see "Position validity" in section 7). Each ring is walked in full, but only every third ring is
+  tried, so one search from the centre tests about a third of a ~40 x 40 maze room (outdoor clearings may be larger than the rings
+  reach); a refusal means no free subtile on any of its rings. Both refusals in the log, (6000,24) and (6048,48), were the cell's top-left 8 x 8 room,
   a corner of a Cave cell: the #184 stale record again. With #184 fixed the Boss goes to the cell's centre room, so #183 was most
   likely a consequence of #184. "The spot is not walkable" was only the `cheat goto` observation, not what the game logged.
 - **Spots as a backstop (fail open)**: the Boss is still tried at up to 9 starts, the centre and its 8 neighbour tiles (5 subtiles
-  apart, so every offset mod 3 of the ring grid), because starts shift the ring grid onto subtiles the first search skipped. The
+  apart, so every offset mod 3 of the ring grid: together they test every subtile but the 9 starts), because starts shift the ring grid onto subtiles the first search skipped. The
   superunique is tried at every start before the first plain spawn, so the Boss keeps its own row and minions whenever any start
   takes it. The engine's `0x402f50` (section 3, used by the Shrine) was not used: it is not clipped to the room and `SpawnMonster`
   would search again from what it returned. Needs a game to confirm.

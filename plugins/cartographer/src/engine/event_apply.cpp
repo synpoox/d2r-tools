@@ -605,9 +605,9 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
 		return;
 	}
-	// The game's own free-spot search (p7 = 0xa) covers the whole room from any start, so a refusal means no free subtile in the room
-	// (section 9, "Plan rooms and the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the search's
-	// ring grid onto subtiles the first start skipped. The superunique is tried at every spot before the first plain spawn, so the Boss
+	// The game's own free-spot search (p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from the start, so a refusal means no free subtile
+	// on any of those rings (about the whole room for a ~40 x 40 maze room; an outdoor clearing may be larger; section 9, "Plan rooms and
+	// the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the ring grid onto subtiles the first start skipped. The superunique is tried at every spot before the first plain spawn, so the Boss
 	// keeps its own row (and minions) whenever any spot takes it.
 	bool asSuper = false;
 	void* unit = nullptr;
@@ -616,17 +616,20 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	size_t tried = 0;
 	const auto attempt = [&](const ep::Spawn& spawn, const char* how) {
 		++tried;
+		const size_t inPass = (tried - 1) % total + 1;
 		made = SpawnOne(game, room, spawn, &asSuper, &unit);
 		if (made) {
 			if (tried > 1) {
-				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, how);
+				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, inPass, total, how);
 			}
 		} else {
-			plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, (tried - 1) % total + 1, total);
+			plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, inPass, total);
 		}
 		return made;
 	};
-	if (state.bossSpawn.kind == ev::NameKind::Unique) {
+	if (state.bossSpawn.kind == ev::NameKind::Unique && !On(SpawnSuperUnique)) {
+		plog::Info("map Boss '%s': the superunique spawn is off in this build, so it is spawned as a plain monster", state.bossName.c_str());
+	} else if (state.bossSpawn.kind == ev::NameKind::Unique) {
 		for (const ep::Spawn& spawn : plan.spawns) {
 			ep::Spawn superOnly = spawn;
 			superOnly.classRow = -1;  // SpawnOne then makes no plain spawn
