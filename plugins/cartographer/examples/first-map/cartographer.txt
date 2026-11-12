@@ -4,4 +4,4 @@ EventChance	20
 ItemStats	0
 PlayerStats	0
 Town	Harrogath
-MapNames	0
+MapNames	1
