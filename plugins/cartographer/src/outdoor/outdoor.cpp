@@ -139,14 +139,6 @@ bool socketsMatch(const Piece &p, uint8_t mask)
 
 } // namespace
 
-std::string lowerAscii(std::string_view s)
-{
-	std::string out(s);
-	for (char &c : out)
-		if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-	return out;
-}
-
 std::string cellName(int x, int y)
 {
 	return "cell (" + std::to_string(x) + "," + std::to_string(y) + ")";

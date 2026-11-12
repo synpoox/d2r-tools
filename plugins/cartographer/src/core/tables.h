@@ -40,16 +40,10 @@ inline constexpr int MapItemSpell = 16;
 inline constexpr const char* MazeSlot = "Maze";
 // The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
 inline constexpr const char* MazeLevelName = "Cartographer Maze";
-// The slot of the outdoor level a Jungle map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). A Jungle map's
-// item opens it; the outdoor build hook (OutdoorBuild = 1 in cartographer.txt) builds it. A Snow map needs LevelType 31 where this level has 21,
-// and one level cannot serve both, so Snow has its own slot below.
-inline constexpr const char* OutdoorSlot = "Outdoor";
-// The levels.txt Name of the Outdoor slot's level, as tools\install.ps1 writes it; an Outdoor slot on any other level is refused.
-inline constexpr const char* OutdoorLevelName = "Cartographer Outdoor";
+// Each outdoor tileset (Jungle, Snow) opens through a slot level of its own (levels.txt DrlgType 3, outdoor builder plan section 1.1), because a
+// level has one LevelType and the tilesets need different ones. The tileset's slot name, level name and LevelType are one row of the table in
+// outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook (OutdoorBuild = 1 in cartographer.txt) builds it.
 inline constexpr int OutdoorDrlgType = 3;
-// The slot of the second outdoor level, for Snow (Barricade) maps: levels.txt LevelType 31, otherwise the same kind of level as the Outdoor slot.
-inline constexpr const char* SnowSlot = "OutdoorSnow";
-inline constexpr const char* SnowLevelName = "Cartographer Snow";
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
 // those cells are then not checked (fail open) and the report says so.
@@ -168,18 +162,21 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 // exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
 
-// Empty, or why an outdoor slot level (Outdoor or OutdoorSnow) must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
+// Empty, or why an outdoor slot level (a slot row of the outdoor tileset table) must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
 // say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level
 // and calls the game, so it runs only for a level it has seen to be in Act 5.
 auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
-// True for the two outdoor slots (Outdoor and OutdoorSnow), by name.
+// True for an outdoor slot (a slot name in the outdoor tileset table), ignoring case.
 auto IsOutdoorSlotName(std::string_view slot) -> bool;
 
-// The levels.txt Name an outdoor slot's level must have ("Cartographer Outdoor" or "Cartographer Snow"), or "" for another slot name.
+// True when `slots` has a row for any outdoor tileset's slot, with a level id above zero.
+auto HasOutdoorSlot(const std::vector<Slot>& slots) -> bool;
+
+// The levels.txt Name an outdoor slot's level must have (the table's level name, e.g. "Cartographer Snow"), or "" for another slot name.
 auto OutdoorSlotLevelName(std::string_view slot) -> std::string;
 
-// The levels.txt LevelType an outdoor tileset's slot level must have (Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
+// The levels.txt LevelType an outdoor tileset's slot level must have (the tileset's table row: Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
 auto OutdoorLevelType(std::string_view tileset) -> int;
 
 // Empty, or why the outdoor slot of `map` (MapSlotName) cannot build it: the level has another LevelType than the tileset needs, or is not an outdoor (DrlgType 3)
@@ -190,10 +187,10 @@ auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> st
 // True for a map built on an outdoor slot (Jungle, Snow): its tileset has an outdoor LevelType. Every other map is a maze map.
 auto MapIsOutdoor(const MapDef& map) -> bool;
 
-// The slot a map opens through: "OutdoorSnow" for a Snow map, "Outdoor" for another outdoor map, otherwise "Maze".
+// The slot a map opens through: its tileset's slot in the outdoor table ("Outdoor" for Jungle, "OutdoorSnow" for Snow), otherwise "Maze".
 auto MapSlotName(const MapDef& map) -> const char*;
 
-// Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The two outdoor
+// Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The outdoor
 // slots (Jungle on Outdoor, Snow on OutdoorSnow) share one open-map job, so a second open on the other slot would leave the first portal's level unplanned.
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
 

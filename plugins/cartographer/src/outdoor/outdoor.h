@@ -22,12 +22,13 @@
 #include <string_view>
 #include <vector>
 
+#include "ascii.h"
 #include "layout.h"
 
 namespace cartographer::outdoor {
 
 // ASCII lower-casing and the "cell (x,y)" wording every tileset uses in plan checks and errors.
-std::string lowerAscii(std::string_view text);
+using layout::lowerAscii;
 std::string cellName(int x, int y);
 
 enum class PieceRole : uint8_t { Path, Clearing, Entry, Boss, Event, Filler, Border };

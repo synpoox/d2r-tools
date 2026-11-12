@@ -58,18 +58,15 @@ $LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelT
 $MazeSize = '360'  # SizeX and SizeY in every difficulty: the largest plan is 360 tiles on a side
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
-$OutdoorLevelName = 'Cartographer Outdoor'
-$OutdoorLevelType = '21'  # Jungle
-$OutdoorSize = '384'      # SizeX and SizeY in every difficulty: the largest outdoor plan is 12 x 12 blocks of 32 tiles
-$OutdoorOffsetX = '6000'  # clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360)
-$OutdoorOffsetY = '3000'
-$OutdoorTemplateId = 111  # Act 5 - Barricade 1: the outdoor level the spike (issue #89) copied; any other plain Act 5 DrlgType 3 row is the fallback
-$SnowLevelName = 'Cartographer Snow'
-$SnowLevelType = '31'     # Act 5 - Barricade (the level type of Frigid Highlands, Arreat Plateau and Frozen Tundra); the Jungle level's 21 cannot serve Snow maps
-$SnowSize = '192'         # SizeX and SizeY in every difficulty: the largest Snow plan is 12 x 12 cells of 16 tiles
-$SnowOffsetX = '6000'     # clear of every Act 5 level, of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384)
-$SnowOffsetY = '3600'
-$SnowTemplateId = 117     # Act 5 - Barricade Snow (Frozen Tundra), the snow level; any other plain Act 5 DrlgType 3 row is the fallback
+# One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
+# tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
+# tileset); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
+$OutdoorTilesets = @(
+    # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
+    @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; OffsetX = '6000'; OffsetY = '3000'; Template = 111 },
+    # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
+    @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; OffsetX = '6000'; OffsetY = '3600'; Template = 117 }
+)
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -320,9 +317,11 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [strin
     $newId
 }
 
-# --- levels.txt: the Outdoor level (Jungle) and the Snow level --------------------------------------------------------
-$outdoorId = Ensure-OutdoorLevel $OutdoorLevelName $OutdoorLevelType $OutdoorSize $OutdoorOffsetX $OutdoorOffsetY $OutdoorTemplateId 'Jungle'
-$snowId = Ensure-OutdoorLevel $SnowLevelName $SnowLevelType $SnowSize $SnowOffsetX $SnowOffsetY $SnowTemplateId 'Snow'
+# --- levels.txt: one level per outdoor tileset ------------------------------------------------------------------------
+$outdoorIds = @{}
+foreach ($t in $OutdoorTilesets) {
+    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $t.OffsetX $t.OffsetY $t.Template $t.Tileset
+}
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
 $mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
@@ -522,14 +521,16 @@ Write-Pending
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
-# Existing rows are kept (an older install's Preset row, for one): only the Maze, Outdoor and OutdoorSnow rows are added or updated.
+# Existing rows are kept (an older install's Preset row, for one): only the Maze row and one row per outdoor tileset (`$OutdoorTilesets) are added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
 if (Test-Path $slotPath) {
     foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
 }
 $slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
 if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
-    foreach ($row in @(@('Maze', $levelId), @('Outdoor', $outdoorId), @('OutdoorSnow', $snowId))) {
+    $slotRows = @(,@('Maze', $levelId))
+    foreach ($t in $OutdoorTilesets) { $slotRows += ,@($t.Slot, $outdoorIds[$t.Slot]) }
+    foreach ($row in $slotRows) {
         $at = -1
         for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq $row[0]) { $at = $i; break } }
         if ($at -lt 0) { $slotLines.Add("$($row[0])`t$($row[1])") }
@@ -537,7 +538,7 @@ if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -
     }
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
-    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId"); $slotLines.Add("Outdoor`t$outdoorId"); $slotLines.Add("OutdoorSnow`t$snowId")
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId"); foreach ($t in $OutdoorTilesets) { $slotLines.Add("$($t.Slot)`t$($outdoorIds[$t.Slot])") }
 }
 if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0) {
     Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
@@ -545,7 +546,7 @@ if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0
 $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host "slots.txt: Maze is level $levelId, Outdoor is level $outdoorId, OutdoorSnow is level $snowId (other rows kept)."
+    Write-Host ("slots.txt: Maze is level $levelId, " + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) is level $($outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
 } else {
     Write-Host 'slots.txt: already up to date.'
 }

@@ -6,10 +6,12 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <string_view>
 #include <sstream>
 #include <string>
 #include <vector>
 
+#include "ascii.h"
 #include "layout.h"
 #include "rng.h"
 
@@ -597,4 +599,18 @@ TEST_CASE("the example pack's shapes.txt loads and its shape builds at every siz
 		CHECK(resolveRules(parsed.table, "snake", size, rules, error));
 		CHECK(error.empty());
 	}
+}
+
+TEST_CASE("ascii.h lowers A-Z only and compares without regard to case")
+{
+	using namespace cartographer::layout;
+	CHECK(lowerAscii('Q') == 'q');
+	CHECK(lowerAscii('q') == 'q');
+	CHECK(lowerAscii('[') == '[');
+	CHECK(lowerAscii('\xC9') == '\xC9');  // a byte above 127 is left alone, whatever the C locale says
+	CHECK(lowerAscii(std::string_view("Mixed CASE 12")) == "mixed case 12");
+	CHECK(equalsNoCase("Jungle", "jUNGLE"));
+	CHECK_FALSE(equalsNoCase("Jungle", "Jungl"));
+	CHECK_FALSE(equalsNoCase("Snow", "Snox"));
+	CHECK(equalsNoCase("", ""));
 }

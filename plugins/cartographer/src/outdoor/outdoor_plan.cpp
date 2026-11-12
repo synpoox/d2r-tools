@@ -3,6 +3,7 @@
 #include <optional>
 #include <utility>
 
+#include "outdoor_tilesets.h"
 #include "snow_plan.h"
 
 namespace cartographer::outdoor {
@@ -31,8 +32,7 @@ const Catalogue &builtinJungleCatalogue() {
 }
 
 bool outdoorTilesetKnown(std::string_view tileset) {
-	const std::string name = lowerAscii(tileset);
-	return name == "jungle" || name == "snow";
+	return findOutdoorTileset(tileset) != nullptr;
 }
 
 std::string planCacheKey(const MapRequest &request) {
@@ -54,10 +54,11 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		out.reason = std::move(why);
 		return out;
 	};
-	if (!outdoorTilesetKnown(request.tileset)) {
-		return fail("Cartographer has no outdoor pieces for the tileset '" + request.tileset + "'. Use Jungle or Snow.");
+	const OutdoorTileset *tileset = findOutdoorTileset(request.tileset);
+	if (tileset == nullptr) {
+		return fail("Cartographer has no outdoor pieces for the tileset '" + request.tileset + "'. Use " + outdoorTilesetNames() + ".");
 	}
-	if (lowerAscii(request.tileset) == "snow") {
+	if (tileset->planner == Planner::Snow) {
 		// Snow is lines of fence pieces, not a layout of exit-mask pieces: only the stamps reach the hook and the grid comparison.
 		int cellsW = 0, cellsH = 0;
 		if (!snow::snowSizeCells(request.size, &cellsW, &cellsH)) {
@@ -92,12 +93,12 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + error);
 	}
 	out.layout = layout::generate(rules, request.seed);
-	out.picks = pickPieces(out.layout, catalogue, "Jungle", request.seed);
+	out.picks = pickPieces(out.layout, catalogue, tileset->name, request.seed);
 	if (!out.picks.ok()) {
-		return fail("Cartographer could not pick Jungle pieces for the layout: " + joinErrors(out.picks.errors));
+		return fail("Cartographer could not pick " + std::string(tileset->name) + " pieces for the layout: " + joinErrors(out.picks.errors));
 	}
-	if (const std::vector<std::string> bad = checkPicks(out.layout, catalogue, "Jungle", out.picks); !bad.empty()) {
-		return fail("The Jungle pieces picked do not fit the layout: " + joinErrors(bad));
+	if (const std::vector<std::string> bad = checkPicks(out.layout, catalogue, tileset->name, out.picks); !bad.empty()) {
+		return fail("The " + std::string(tileset->name) + " pieces picked do not fit the layout: " + joinErrors(bad));
 	}
 	out.stamps = planStamps(out.layout, out.picks, request.options);
 	if (!out.stamps.ok()) {
@@ -155,6 +156,7 @@ size_t PlanCache::size() const {
 }
 
 bool pickFarthestCell(const std::vector<GridCell> &candidates, const std::vector<GridCell> &anchors, layout::Pcg32 &rng, GridCell &out) {
+	if (anchors.empty()) return false;  // nothing to be far from: no draw from rng, `out` untouched
 	int top = -1, ties = 0;
 	bool found = false;
 	for (const GridCell &c : candidates) {

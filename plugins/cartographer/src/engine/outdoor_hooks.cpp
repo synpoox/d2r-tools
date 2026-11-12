@@ -7,6 +7,7 @@
 #include "steer.h"
 
 #include "outdoor_plan.h"
+#include "outdoor_tilesets.h"
 #include "outdoor_seed.h"
 
 #ifndef NOMINMAX
@@ -87,11 +88,22 @@ std::atomic<bool> g_live{false};     // every part is on and the hooks are in
 std::atomic<bool> g_enabled{false};  // OutdoorBuild = 1
 std::atomic<bool> g_probe{false};
 std::atomic<int> g_slotLevel{-1};  // the slot level of the open map (Jungle's until a map is opened); -1 with no outdoor slot
-// The two outdoor slots: index 0 is Outdoor (Jungle, LevelType 21), index 1 is OutdoorSnow (Snow, LevelType 31).
-constexpr int SlotCount = 2;
-std::atomic<int> g_slotLevels[SlotCount] = {-1, -1};
+// One outdoor slot per row of the tileset table (outdoor_tilesets.h); the index is the row's. An unknown tileset gets row 0.
+constexpr int SlotCount = static_cast<int>(co::OutdoorTilesetCount);
+struct SlotLevels {
+	std::atomic<int> level[SlotCount];
+	SlotLevels() {
+		for (std::atomic<int>& l : level) {
+			l = -1;
+		}
+	}
+	std::atomic<int>& operator[](int i) noexcept { return level[i]; }
+	std::atomic<int>* begin() noexcept { return level; }
+	std::atomic<int>* end() noexcept { return level + SlotCount; }
+};
+SlotLevels g_slotLevels;  // the slot level id of each row, -1 with no slot row
 auto SlotIndexFor(std::string_view tileset) noexcept -> int {
-	return EqualsNoCase(tileset, "Snow") ? 1 : 0;
+	return static_cast<int>(co::outdoorTilesetIndex(tileset));
 }
 
 struct Job {
@@ -279,7 +291,7 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 
 // The slot row name of an outdoor tileset, for messages.
 auto SlotNameOf(const std::string& tileset) -> const char* {
-	return SlotIndexFor(tileset) == 1 ? SnowSlot : OutdoorSlot;
+	return co::OutdoorTilesets[SlotIndexFor(tileset)].slot;
 }
 
 // The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
@@ -691,13 +703,14 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 }
 
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
-	const Slot* found[SlotCount] = {nullptr, nullptr};
+	const Slot* found[SlotCount] = {};
 	if (tables != nullptr) {
 		for (const Slot& s : tables->slots) {
-			if (EqualsNoCase(s.name, OutdoorSlot)) {
-				found[0] = &s;
-			} else if (EqualsNoCase(s.name, SnowSlot)) {
-				found[1] = &s;
+			for (int i = 0; i < SlotCount; ++i) {
+				if (EqualsNoCase(s.name, co::OutdoorTilesets[i].slot)) {
+					found[i] = &s;
+					break;
+				}
 			}
 		}
 	}
@@ -714,7 +727,11 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 		}
 	}
 	g_cache.clear();
-	g_slotLevel = found[0] != nullptr ? found[0]->level : (found[1] != nullptr ? found[1]->level : -1);
+	int firstLevel = -1;  // the first slot in table order that has a row
+	for (int i = 0; i < SlotCount && firstLevel < 0; ++i) {
+		firstLevel = found[i] != nullptr ? found[i]->level : -1;
+	}
+	g_slotLevel = firstLevel;
 	g_enabled = tables != nullptr && tables->settings.outdoorBuild != 0;
 	g_probe = tables != nullptr && (tables->settings.outdoorProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
