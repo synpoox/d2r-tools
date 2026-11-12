@@ -46,7 +46,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 
 `maps.txt` has one row per map, with a header row. Only `Name`, `Tileset`, `Shape` and `Item` are needed; a blank cell means the
 default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore case; names from the game's tables
-(monster ids, boss names, item codes) must match exactly.
+(monster ids, boss names) must match exactly; item codes ignore case.
 
 | Column | Meaning | Default |
 |---|---|---|

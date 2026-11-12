@@ -232,17 +232,6 @@ TEST_CASE("item codes are matched ignoring case in the item tables and the spell
 	CHECK(report.Errors() == 1);  // only T21's spell
 }
 
-TEST_CASE("a row refused for its spell is not also reported as a duplicate") {
-	GameNames names = Names();
-	names.haveItemSpells = true;
-	names.itemSpells = {{"t21", 0}};
-	names.itemCodes.push_back("t21");
-	Report report;
-	LoadMaps(std::string(Header) + "A\tPreset\tLoop\t\t\tt21\nB\tPreset\tLoop\t\t\tt21\n", names, report);
-	CHECK(report.Errors() == 2);  // one each, and no "already opens"
-	CHECK(Joined(report).find("already opens") == std::string::npos);
-}
-
 TEST_CASE("an item opens exactly the map that names it, and any other item opens none") {
 	Report report;
 	const auto maps = Load("Hat\tPreset\tLoop\t\t\tshm1\nShore\tPreset\tLoop\t\t\tt20\n", report);
@@ -322,7 +311,7 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
-	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot};
+	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);

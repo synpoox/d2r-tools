@@ -59,7 +59,7 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 - **Plain-English errors.**
   - **Where they appear:** at load, every problem is written to `cartographer-report.txt`, and the in-game console command `cartographer check` shows them too. `cartographer open <Name>` opens a map's portal on the spot, for testing, without needing the item. An example: "maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"
   - **What happens to a bad row:** it is skipped, and the other maps still work. A bad row never crashes the game.
-- **Familiar format.** Tab-separated `.txt` with a header row, like D2's own tables, so authors can edit it in the same spreadsheet tools. Our own words (tileset, shape, size, target) ignore case. Names from D2's tables (monstats `Id`, item codes) must match exactly, and the check suggests the right spelling and case.
+- **Familiar format.** Tab-separated `.txt` with a header row, like D2's own tables, so authors can edit it in the same spreadsheet tools. Our own words (tileset, shape, size, target) ignore case. Names from D2's tables (monstats `Id`) must match exactly, item codes ignore case, and the check suggests the right spelling and case.
 
 ### 3.1 `maps.txt` (required)
 
