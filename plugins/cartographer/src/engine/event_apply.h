@@ -39,6 +39,10 @@ void EventsPlayerTick(void* game, void* unit, uint32_t localPlayer) noexcept;
 // False, both empty and `why` set when the table cannot be read or an Id is not in it. Game thread, at map open.
 auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::vector<int>* weights, std::string* why) noexcept -> bool;
 
+// The number of rows in the game's levels table (the 64-bit count at tables + 0x1468, the bound the region builder uses) for `dataFlag`.
+// False, with `why`, when it cannot be read. Game thread.
+auto GameLevelCount(uint32_t dataFlag, int64_t* count, std::string* why) noexcept -> bool;
+
 // The game was left: forget the map and the event. Touches no game memory.
 void EventsGameLeft() noexcept;
 

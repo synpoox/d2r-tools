@@ -2059,9 +2059,10 @@ Readers: `0x419e80` picks the monster kind from `+0x10`, `+0x11` and `+0x14`; `0
 
 ### Guards (runtime, per part, fail open)
 
-- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze or Preset) (`SlotAllowed`). Local, independent of `ValidateSlots`.
+- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze) (`SlotAllowed`). Local, independent of `ValidateSlots`.
 - Row: readable, `Id` equals the slot level; `Level` off when a `MonLvl*` field is outside 0..255.
-- Record: pointer from `game + 0x1d0` and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- Record: pointer from `game + 0x1d0`, the level below the levels count (64-bit at `tables + 0x1468`, the bound `0x508750` loops to; the array holds levels 1 up to count - 1) and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- Monsters list: refused with a log line (the slot keeps its own list) when it has more than 10 entries, a weight outside 0..255, weights that are all 0 (the game's weighted pick would find none) or a sum above 255 (the record keeps the sum in a byte, `0x509940` adds the weights into `record + 0x11`). A monster whose monstats row has bit 0 clear at `+0x3c` is left out, as `0x509940` does (`test` against the byte at `0x1d996d0`, which is `1`, at `0x509940` line `(byte)DAT_141d996d0 & *(byte *)(row + 0x3c)`, the same test as `0x493280`); when none is kept the list is refused. Static only: the name of monstats `+0x3c` bit 0 is not known.
 - A part whose check fails is switched off with a log line; the others still apply. A write that fails stops the open and the undo restores what was written.
 
 ### Restore
@@ -2073,7 +2074,7 @@ The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), 
 - Needs game: that `Density`, `Uniques` and `Monsters` written to the record change the spawns (static reading says so, nothing was observed), and that `Level` shows in monster levels.
 - Inference: entry `+3` is a member count (`0x4195e0`) and 0 is a safe value; the plugin writes 0.
 - Normal difficulty also reads the row's umon list; not reached, as maps open in Hell only (#159).
-- The array bound is not checked beyond `Readable` and the level id.
+- The level is bounded by the levels count read at `tables + 0x1468` through the data tables base; when that cannot be read the record parts are off.
 - One record per slot: a second map through the same slot in one game overwrites the first map's values for rooms that populate later.
 - Client side: a TCP/IP client writes none of this; the host spawns the monsters.
 
