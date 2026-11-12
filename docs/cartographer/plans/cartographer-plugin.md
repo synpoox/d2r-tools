@@ -129,7 +129,7 @@ Each map has `EventChance` percent chance of one event: the per-map value, or el
 | `Boss` | A boss (a monstats `Id` or superuniques `Name`) with `Count` minions waits in the event room |
 | `Ambush` | When a player reaches the event room, `Waves` waves of `Count` × `Spawn` attack |
 | `Horde` | The event room is packed with `Count` × `Spawn` |
-| `Treasure` | A treasure monster flees and drops from `Drop` when killed. Or, if `Spawn` is an object, a chest is placed that drops from `Drop` |
+| `Treasure` | A treasure monster is spawned and drops from `Drop` when killed (it does not flee). Or, if `Spawn` is an object, a chest is placed that drops from `Drop` |
 | `Shrine` | An object (shrine, well, chest) is placed in the event room |
 
 | Column | What to put | Example |

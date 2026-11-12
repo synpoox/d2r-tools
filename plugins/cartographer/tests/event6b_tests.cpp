@@ -1,4 +1,4 @@
-// Host tests for the phase 6b core: event routing, the Ambush wave bookkeeping, the Treasure chest and flee decisions, the objects name rule, the treasure class index, the boss Drop decision and the call
+// Host tests for the phase 6b core: event routing, the Ambush wave bookkeeping, the Treasure chest decisions, the objects name rule, the treasure class index, the boss Drop decision and the call
 // target decoder. No game, no SDK.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
@@ -158,7 +158,7 @@ TEST_CASE("callTargetOffset: the rel32 of an E8 at the site") {
 	CHECK(callTargetOffset(before, sizeof(before), 0) == -11);
 }
 
-// --- Phase 6b second half: routing, Ambush waves, the Treasure chest and flee ------------------------------------------------
+// --- Phase 6b second half: routing, Ambush waves, the Treasure chest ------------------------------------------------
 
 namespace ev = cartographer::events;
 
@@ -335,15 +335,6 @@ TEST_CASE("unlockChest: clears only the locked bit") {
 	CHECK(unlockChest(0xff).value == 0x7f);
 	CHECK_FALSE(unlockChest(0x00).change);
 }
-
-TEST_CASE("describeFleeChecks: says which check would stop the flee") {
-	CHECK(describeFleeChecks(0, 1).find("should set the flee") != std::string::npos);
-	CHECK(describeFleeChecks(1, 1).find("will return without") != std::string::npos);
-	CHECK(describeFleeChecks(0, 0).find("will return without") != std::string::npos);
-	CHECK(describeFleeChecks(-1, -1).find("not fully probed") != std::string::npos);
-	CHECK(describeFleeChecks(-1, 0).find("will return without") != std::string::npos);
-}
-
 TEST_CASE("objectRowNames: the Expansion marker line takes no row") {
 	// The stock file: ..., `Expansion` (no compiled row), then the next line takes the next row.
 	const std::vector<std::string> classes = {"Null", "Casket5", "Expansion", "ClothChestR", "ShrineWildernessExp1"};

@@ -398,13 +398,4 @@ const char *chestReasonName(ChestReason reason) {
 	return "";
 }
 
-std::string describeFleeChecks(int blocked, int targetOk) {
-	std::string text = blocked < 0 ? "0x34c2c0 not run" : blocked != 0 ? "0x34c2c0 says the target is excluded (nonzero)" : "0x34c2c0 passes";
-	text += "; ";
-	text += targetOk < 0 ? "0x34c730 not run" : targetOk == 0 ? "0x34c730 says the target cannot be scared (zero)" : "0x34c730 passes";
-	const bool refused = (blocked > 0) || targetOk == 0;
-	text += refused ? ": 0x597030 will return without setting the flee" : blocked < 0 || targetOk < 0 ? ": not fully probed" : ": 0x597030 should set the flee";
-	return text;
-}
-
 } // namespace cartographer::event6b

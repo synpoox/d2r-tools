@@ -78,9 +78,6 @@ PARTS = [
     # The chest's lock (cartographer/19-chest-lock.md): the object flag getter and setter, only called.
     ("ObjectFlagsGet", 0x34AD40, 12, "75", 0),
     ("ObjectFlagsSet", 0x34E9D0, 19, "75", 0),
-    ("FleeSetup", 0x597030, 30, None, 0),
-    ("FleeBlock", 0x34C2C0, 18, "E8", 0),
-    ("FleeTarget", 0x34C730, 28, None, 0),
     ("TcLookup", 0x397290, 18, None, 0),
     ("TcRoller", 0x4404F0, 12, None, 0),
     # AutoCheck (cartographer/17-autocheck.md): the unit mover and the two room parts, only called.

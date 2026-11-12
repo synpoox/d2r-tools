@@ -129,7 +129,7 @@ enum class Route : uint8_t {
 	Boss,             // the named boss and its minions
 	Horde,            // Count of the named monster
 	Ambush,           // waves of Count x Spawn, started when the player reaches the event room
-	TreasureMonster,  // Treasure whose Spawn is a monster: it flees, and its death rolls Drop
+	TreasureMonster,  // Treasure whose Spawn is a monster: its death rolls Drop
 	TreasureChest,    // Treasure whose Spawn is not a monster (an objects.txt name): a chest that rolls Drop when opened
 	Shrine,           // an objects.txt row placed at a free spot
 };
@@ -209,11 +209,5 @@ struct ChestUnlock {
 	uint8_t value = 0;    // the byte to write back (the same bits with bit 7 cleared)
 };
 ChestUnlock unlockChest(uint8_t flags);
-
-// --- Treasure monster flee ----------------------------------------------------------------------------------------------
-
-// What the two checks 0x597030 makes first said about the target (-1: that check was not run). The flee setup returns at once when
-// `blocked` (0x34c2c0) is nonzero or `targetOk` (0x34c730) is zero.
-std::string describeFleeChecks(int blocked, int targetOk);
 
 }  // namespace cartographer::event6b

@@ -157,7 +157,7 @@ The kinds:
 | `Boss` | A boss waits in the event room with `Count` minions |
 | `Ambush` | When a player reaches the event room, `Waves` waves of `Count` of `Spawn` attack |
 | `Horde` | The event room is packed with `Count` of `Spawn` |
-| `Treasure` | A treasure monster flees and drops from `Drop` when killed. If `Spawn` is an object, a chest that drops from `Drop` is placed; it is always unlocked (its loot is not confirmed in game) |
+| `Treasure` | A treasure monster is spawned and drops from `Drop` when killed (it does not flee). If `Spawn` is an object, a chest that drops from `Drop` is placed; it is always unlocked (its loot is not confirmed in game) |
 | `Shrine` | An object (shrine, well or chest) is placed in the event room |
 
 ## cartographer.txt (optional)
