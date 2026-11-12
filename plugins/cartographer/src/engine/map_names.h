@@ -24,7 +24,8 @@ auto InstallMapNames(const D2RL::PluginContext* context, const std::vector<Signa
 auto MapNamesPartStatuses() -> std::vector<PartStatus>;
 auto MapNamesSummary() -> std::string;
 
-// The tables changed (load or reload): registers the strings again when the map names changed. Any thread.
+// The tables changed (load or reload): registers the strings again when the map names changed. Any thread. While a slot row
+// holds a key of the plugin, the change is kept pending and applied when the rows are back.
 void MapNamesSetTables(const std::shared_ptr<const Tables>& tables);
 
 // Called on the game thread just before the game opens the portal for `map` through slot level `level`. Writes the map's
@@ -32,8 +33,16 @@ void MapNamesSetTables(const std::shared_ptr<const Tables>& tables);
 // `dataFlag` is the game's data flag (the byte at game + 0x106). Returns whether the row was changed.
 auto MapNamesBeforeOpen(const MapDef& map, const Tables& tables, int level, uint32_t dataFlag) noexcept -> bool;
 
-// Puts the original LevelName and LevelEntry back in every row changed. Safe to call at any time, any number of times: on a
-// map that did not open, on GameLeft and on unload.
+// The portal for `level` did not open after MapNamesBeforeOpen wrote it: puts back only what that call wrote (the level's
+// original if it was the first write, else the previous map's keys). Then applies any table change that was waiting.
+void MapNamesOpenFailed(int level) noexcept;
+
+// Puts the original LevelName and LevelEntry back in every row changed, then applies any table change that was waiting for
+// that (a reload while a map was open). Safe to call at any time, any number of times: on GameLeft.
 void MapNamesRestore() noexcept;
+
+// The same restore for unload, without applying anything. It does not call the game: it writes through the row pointers
+// kept at write time, after checking the memory, and only into fields that still hold the plugin's keys.
+void MapNamesUnload() noexcept;
 
 }  // namespace carto

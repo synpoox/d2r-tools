@@ -236,7 +236,7 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
 	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
 	if (named && opened == 0) {
-		MapNamesRestore();
+		MapNamesOpenFailed(level);
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();

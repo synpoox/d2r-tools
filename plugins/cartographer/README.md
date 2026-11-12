@@ -95,9 +95,11 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (checked in game for monsters), the rest are kept for later phases | cartographer.txt |
 
-`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (0; 1 shows the map's own `Name` on the portal tooltip, the automap title and the entry banner; written, not verified in game, so off by default) and
+`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (0, see below) and
 `Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
 `Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
+
+`MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default and not verified in game. A second map opened in the same game shows its name on the first map's portal too.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.

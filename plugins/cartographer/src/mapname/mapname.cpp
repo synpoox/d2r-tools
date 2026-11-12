@@ -42,6 +42,57 @@ void AppendRecord(std::string& out, const std::string& key, const std::string& t
 	out += '}';
 }
 
+// Length of the valid UTF-8 character at text[i], or 0 when the bytes there are not one (overlong, surrogate, past U+10FFFF or cut off).
+auto ValidLength(const std::string& text, size_t i) -> size_t {
+	const auto b = [&](size_t k) { return static_cast<unsigned char>(text[k]); };
+	const unsigned char c = b(i);
+	size_t length = 0;
+	uint32_t code = 0;
+	if (c < 0x80) {
+		return 1;
+	} else if (c >= 0xC2 && c <= 0xDF) {
+		length = 2;
+		code = c & 0x1F;
+	} else if (c >= 0xE0 && c <= 0xEF) {
+		length = 3;
+		code = c & 0x0F;
+	} else if (c >= 0xF0 && c <= 0xF4) {
+		length = 4;
+		code = c & 0x07;
+	} else {
+		return 0;
+	}
+	if (i + length > text.size()) {
+		return 0;
+	}
+	for (size_t k = 1; k < length; ++k) {
+		if (!IsContinuation(b(i + k))) {
+			return 0;
+		}
+		code = (code << 6) | (b(i + k) & 0x3F);
+	}
+	const uint32_t minimum = length == 2 ? 0x80 : length == 3 ? 0x800 : 0x10000;
+	if (code < minimum || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF)) {
+		return 0;
+	}
+	return length;
+}
+
+auto ReplaceInvalid(const std::string& text) -> std::string {
+	std::string out;
+	for (size_t i = 0; i < text.size();) {
+		const size_t length = ValidLength(text, i);
+		if (length == 0) {
+			out += "\xEF\xBF\xBD";
+			++i;
+		} else {
+			out.append(text, i, length);
+			i += length;
+		}
+	}
+	return out;
+}
+
 }  // namespace
 
 auto DisplayName(const std::string& name) -> std::string {
@@ -50,6 +101,7 @@ auto DisplayName(const std::string& name) -> std::string {
 		const auto c = static_cast<unsigned char>(ch);
 		text += (c < 0x20 || c == 0x7f) ? ' ' : ch;
 	}
+	text = ReplaceInvalid(text);
 	const size_t first = text.find_first_not_of(' ');
 	if (first == std::string::npos) {
 		return "Map";
@@ -146,6 +198,49 @@ auto RowSaver::Remember(int level, const uint8_t* name, const uint8_t* entry) ->
 
 auto RowSaver::Has(int level) const -> bool {
 	return std::any_of(rows_.begin(), rows_.end(), [level](const SavedRow& r) { return r.level == level; });
+}
+
+auto IsOwnKey(const uint8_t* field, const std::string& pluginId) -> bool {
+	if (field == nullptr || pluginId.empty() || pluginId.size() + 1 >= FieldSize) {
+		return false;
+	}
+	return std::memcmp(field, pluginId.data(), pluginId.size()) == 0 && field[pluginId.size()] == ':';
+}
+
+auto RowSaver::Take(int level, SavedRow* out) -> bool {
+	for (auto it = rows_.begin(); it != rows_.end(); ++it) {
+		if (it->level == level) {
+			if (out != nullptr) {
+				*out = *it;
+			}
+			rows_.erase(it);
+			return true;
+		}
+	}
+	return false;
+}
+
+void RegistrationPlan::Want(bool wanted, std::vector<std::string> names) {
+	wantRegistered_ = wanted && !names.empty();
+	want_ = wantRegistered_ ? std::move(names) : std::vector<std::string>();
+}
+
+auto RegistrationPlan::Next(bool rowsHeld) const -> Step {
+	const bool same = wantRegistered_ ? (heldRegistered_ && held_ == want_) : !heldRegistered_;
+	if (same) {
+		return Step::Nothing;
+	}
+	return rowsHeld ? Step::Deferred : Step::Apply;
+}
+
+void RegistrationPlan::Dropped() {
+	heldRegistered_ = false;
+	held_.clear();
+}
+
+void RegistrationPlan::Applied() {
+	heldRegistered_ = wantRegistered_;
+	held_ = want_;
 }
 
 auto RowSaver::TakeAll() -> std::vector<SavedRow> {

@@ -148,3 +148,108 @@ TEST_CASE("row saver: the first copy is kept, restore hands everything back once
 	CHECK_FALSE(saver.Has(138));
 	CHECK_FALSE(saver.Remember(140, nullptr, entry));
 }
+
+TEST_CASE("display name: invalid UTF-8 becomes U+FFFD, valid characters stay") {
+	const std::string bad = std::string("ab\xFF") + "cd";
+	CHECK(DisplayName(bad) == "ab\xEF\xBF\xBD" "cd");
+	CHECK(DisplayName("x\xC3") == "x\xEF\xBF\xBD");                  // cut-off two-byte character
+	CHECK(DisplayName("x\xC0\xAF") == "x\xEF\xBF\xBD\xEF\xBF\xBD");   // overlong
+	CHECK(DisplayName("x\xED\xA0\x80") == "x\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD");  // surrogate
+	CHECK(DisplayName("caf\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x98\x80") == "caf\xC3\xA9 \xE2\x82\xAC \xF0\x9F\x98\x80");
+	// The result is the same bytes the JSON gets, and is still valid when cut.
+	const std::string json = StringsJson({DisplayName(bad)});
+	CHECK(json.find('\xFF') == std::string::npos);
+}
+
+TEST_CASE("own key: only a field that starts with the plugin namespace and a colon") {
+	uint8_t field[FieldSize] = {};
+	CHECK(WriteKey(field, "cartographer:N3"));
+	CHECK(IsOwnKey(field, "cartographer"));
+	CHECK_FALSE(IsOwnKey(field, "cartograph"));
+	WriteKey(field, "ExpansionTown");
+	CHECK_FALSE(IsOwnKey(field, "cartographer"));
+	CHECK_FALSE(IsOwnKey(nullptr, "cartographer"));
+}
+
+TEST_CASE("row saver: one level can be taken without touching the others") {
+	uint8_t a[FieldSize] = {}, b[FieldSize] = {};
+	WriteKey(a, "A");
+	WriteKey(b, "B");
+	RowSaver saver;
+	CHECK(saver.Remember(10, a, b));
+	CHECK(saver.Remember(139, b, a));
+	SavedRow row;
+	CHECK(saver.Take(139, &row));
+	CHECK(row.level == 139);
+	CHECK(std::memcmp(row.name, b, FieldSize) == 0);
+	CHECK_FALSE(saver.Take(139, &row));
+	CHECK(saver.Has(10));
+	CHECK(saver.Count() == 1);
+	// A second Remember for a level taken out starts from the new fields.
+	CHECK(saver.Remember(139, a, a));
+}
+
+TEST_CASE("registration plan: a change waits while a row holds a key, then applies") {
+	using Step = RegistrationPlan::Step;
+	RegistrationPlan plan;
+	CHECK(plan.Next(false) == Step::Nothing);  // nothing wanted, nothing held
+
+	plan.Want(true, {"One", "Two"});
+	CHECK(plan.Next(false) == Step::Apply);
+	plan.Dropped();
+	plan.Applied();
+	CHECK(plan.Registered());
+	CHECK(plan.Held() == std::vector<std::string>({"One", "Two"}));
+	CHECK(plan.Next(true) == Step::Nothing);
+
+	// Reload while a map is open: the names change, the old registration stays until the rows are back.
+	plan.Want(true, {"Zero", "One", "Two"});
+	CHECK(plan.Next(true) == Step::Deferred);
+	CHECK(plan.Held() == std::vector<std::string>({"One", "Two"}));
+	CHECK(plan.Registered());
+	CHECK(plan.Next(false) == Step::Apply);
+	plan.Dropped();
+	CHECK_FALSE(plan.Registered());
+	plan.Applied();
+	CHECK(plan.Held() == std::vector<std::string>({"Zero", "One", "Two"}));
+	CHECK(plan.Next(false) == Step::Nothing);
+}
+
+TEST_CASE("registration plan: MapNames=0 mid-game is deferred, a later change replaces the pending one") {
+	using Step = RegistrationPlan::Step;
+	RegistrationPlan plan;
+	plan.Want(true, {"One"});
+	plan.Dropped();
+	plan.Applied();
+
+	plan.Want(false, {"One"});
+	CHECK(plan.Next(true) == Step::Deferred);
+	CHECK(plan.Registered());
+	// Back to the registered list before the rows were restored: nothing left to do.
+	plan.Want(true, {"One"});
+	CHECK(plan.Next(true) == Step::Nothing);
+	CHECK(plan.Next(false) == Step::Nothing);
+
+	plan.Want(false, {"One"});
+	CHECK(plan.Next(false) == Step::Apply);
+	plan.Dropped();
+	plan.Applied();  // wants nothing: holds nothing
+	CHECK_FALSE(plan.Registered());
+	CHECK(plan.Held().empty());
+	CHECK(plan.Next(false) == Step::Nothing);
+
+	// An empty map list is "nothing registered" even with MapNames=1.
+	plan.Want(true, {});
+	CHECK_FALSE(plan.WantsRegistration());
+	CHECK(plan.Next(true) == Step::Nothing);
+}
+
+TEST_CASE("registration plan: a failed registration is tried again at the next chance") {
+	using Step = RegistrationPlan::Step;
+	RegistrationPlan plan;
+	plan.Want(true, {"One"});
+	CHECK(plan.Next(false) == Step::Apply);
+	plan.Dropped();  // the loader refused: Applied() is not called
+	CHECK_FALSE(plan.Registered());
+	CHECK(plan.Next(false) == Step::Apply);
+}
