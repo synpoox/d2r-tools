@@ -12,6 +12,7 @@
 #include "crash_guard.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
+#include "engine/stat_apply.h"
 #include "log.h"
 
 #include <windows.h>
@@ -157,6 +158,20 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapStatsFile), &text)) {
 		loaded.tables->pool = carto::LoadMapStats(text, loaded.report);
 	}
+	// The stat names are checked against itemstatcost.txt, which also gives the ids the game is asked for.
+	text.clear();
+	if (ReadFile(g_excelDir + L"\\itemstatcost.txt", &text)) {
+		loaded.tables->statIds = cartographer::statplan::parseItemStatCost(text);
+	}
+	if (!loaded.tables->statIds.loaded) {
+		loaded.report.Note(carto::MapStatsFile, 0, "itemstatcost.txt could not be read, so Stat names are not checked and no map stats can be applied.");
+	} else {
+		const bool builtIn = loaded.tables->pool.empty();
+		const auto& checked = builtIn ? cartographer::stats::builtInPool() : loaded.tables->pool;
+		for (const cartographer::stats::PoolIssue& issue : cartographer::statplan::checkPoolStats(checked, loaded.tables->statIds)) {
+			loaded.report.Error(carto::MapStatsFile, 0, (builtIn ? "built-in pool " : "") + issue.message);
+		}
+	}
 	text.clear();
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapEventsFile), &text)) {
 		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
@@ -171,6 +186,7 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SettingsFile), &text)) {
 		loaded.tables->settings = carto::LoadSettings(text, loaded.report);
 	}
+	carto::StatApplySetPlayerStats(loaded.tables->settings.playerStats != 0);
 	text.clear();
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SlotsFile), &text)) {
 		loaded.tables->slots = carto::LoadSlots(text, loaded.report);
@@ -223,7 +239,7 @@ void WriteReport(const Loaded& loaded) {
 	if (!coreMaps.empty()) {
 		out << "WARNING: " << coreMaps << "\r\n";
 	}
-	out << loaded.tables->shapes.shapes.size() << " shape(s), " << loaded.tables->pool.size() << " property row(s) and " << loaded.tables->events.size() << " event(s) loaded (read and checked; not applied in game yet).\r\n\r\n";
+	out << loaded.tables->shapes.shapes.size() << " shape(s), " << loaded.tables->pool.size() << " property row(s) and " << loaded.tables->events.size() << " event(s) loaded. Shapes and events are read and checked only; the properties are applied when a map opens (" << carto::StatApplySummary() << ").\r\n\r\n";
 	for (const carto::Problem& p : loaded.report.problems) {
 		out << carto::Report::Line(p) << "\r\n";
 	}
@@ -289,6 +305,10 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, carto::Report::Line(p));
 			}
 			for (const carto::PartStatus& part : carto::PartStatuses()) {
+				Say(command, "part " + part.name + ": " + part.detail);
+			}
+			Say(command, "Cartographer " + carto::StatApplySummary() + ". These parts are settled at load; fix and restart to change them.");
+			for (const carto::PartStatus& part : carto::StatApplyPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
 			Say(command, "Report: " + Narrow(g_reportPath));
@@ -378,6 +398,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		std::vector<carto::PartStatus> parts;
 		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);
+		std::vector<carto::PartStatus> statParts;
+		(void)carto::InstallStatApply(context, g_overrides, &statParts);
 	} catch (...) {
 		g_loadFailed = true;
 		plog::Error("loading failed; the plugin stays loaded with the portal off");
