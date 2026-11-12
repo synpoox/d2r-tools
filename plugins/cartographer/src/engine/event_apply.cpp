@@ -435,8 +435,10 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 		plog::Warn("spawn '%s': the superuniques lookup gave row %d whose Class %u is not a monstats row; the mod's .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls));
 		return false;
 	}
-	if (ep::checkSuperClass(txt, spawn, static_cast<int>(cls)) == ep::ClassCheck::Differs) {
-		plog::Warn("spawn '%s': the superuniques lookup gave row %d with class monstats row %u, which the mod's superuniques.txt does not agree with; the .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls));
+	const char* idChars = reinterpret_cast<const char*>(static_cast<const uint8_t*>(mon.viewRows) + static_cast<size_t>(cls) * mon.viewRowSize);
+	const std::string_view gameId(idChars, strnlen(idChars, ep::kMonStatsIdSize));
+	if (ep::checkSuperClass(txt, spawn, gameId) == ep::ClassCheck::Differs) {
+		plog::Warn("spawn '%s': the superuniques lookup gave row %d with class monstats row %u, (Id '%.*s'), which the mod's superuniques.txt does not agree with; the .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls), static_cast<int>(gameId.size()), gameId.data());
 		return false;
 	}
 	out->kind = ev::NameKind::Unique;
@@ -711,6 +713,9 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 						const std::string_view cls = ep::superClassOf(tables->spawnNames, state->spawn.row);
 						if (const int gameRow = cls.empty() ? -1 : GameMonsterRow(route, dataFlag, cls); gameRow >= 0) {
 							state->spawn.classRow = gameRow;
+						} else {
+							plog::Warn("spawn '%s': its Class '%.*s' (mod's superuniques.txt) is not in the game's monstats table; treated as not found", event->spawn.c_str(), static_cast<int>(cls.size()), cls.data());
+							state->spawn = ep::Resolved{};
 						}
 					}
 				}

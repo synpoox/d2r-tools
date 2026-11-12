@@ -90,10 +90,11 @@ int superRowFromLookup(int32_t result, uint64_t rowCount);
 // The monstats Id a superuniques row (the txt's) names as its Class, or empty when the row is out of range.
 std::string_view superClassOf(const SpawnTable &table, int superRow);
 
-// Does the Class the game's tables gave for the superunique `name` (`gameClassRow`, a monstats row) agree with the mod's txt?
-// `NoReference`: the txt does not have the name, or its Class is not in its monstats, so there is nothing to compare.
+// Does the Class the game's tables gave for the superunique `name` (`gameClassId`, the `Id` at the game's monstats row) agree with
+// the mod's txt `Class` name (case-insensitive)? Names are compared, never row numbers.
+// `NoReference`: the txt does not have the name, or it has no Class, or `gameClassId` is empty, so there is nothing to compare.
 enum class ClassCheck { NoReference, Agrees, Differs };
-ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, int gameClassRow);
+ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, std::string_view gameClassId);
 
 // What the self-check decided for one (table revision, data flag).
 struct RouteVerdict {

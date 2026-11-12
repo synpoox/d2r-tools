@@ -390,13 +390,14 @@ TEST_CASE("superClassOf and checkSuperClass: the game's Class is compared with t
 	CHECK(superClassOf(t, 0) == "fallen");
 	CHECK(superClassOf(t, -1).empty());
 	CHECK(superClassOf(t, 3).empty());
-	CHECK(checkSuperClass(t, "Bishibosh", 2) == ClassCheck::Agrees);
-	CHECK(checkSuperClass(t, "bishibosh", 2) == ClassCheck::Agrees);  // case-insensitive
-	CHECK(checkSuperClass(t, "Bishibosh", 0) == ClassCheck::Differs);
-	CHECK(checkSuperClass(t, "Rakanishu", 0) == ClassCheck::NoReference);   // its Class is not in the txt's monstats
-	CHECK(checkSuperClass(t, "Corpsefire", 0) == ClassCheck::NoReference);  // the txt does not have the name
-	CHECK(checkSuperClass(t, "", 0) == ClassCheck::NoReference);
-	CHECK(checkSuperClass(SpawnTable{}, "Bishibosh", 0) == ClassCheck::NoReference);
+	CHECK(checkSuperClass(t, "Bishibosh", "fallen") == ClassCheck::Agrees);
+	CHECK(checkSuperClass(t, "bishibosh", "FALLEN") == ClassCheck::Agrees);  // case-insensitive, both sides
+	CHECK(checkSuperClass(t, "Bishibosh", "zombie") == ClassCheck::Differs);
+	CHECK(checkSuperClass(t, "Rakanishu", "fallen") == ClassCheck::Differs);  // names, not rows: the txt's Class is not the game's
+	CHECK(checkSuperClass(t, "Corpsefire", "fallen") == ClassCheck::NoReference);  // the txt does not have the name
+	CHECK(checkSuperClass(t, "Bishibosh", "") == ClassCheck::NoReference);         // no game Id to compare
+	CHECK(checkSuperClass(t, "", "fallen") == ClassCheck::NoReference);
+	CHECK(checkSuperClass(SpawnTable{}, "Bishibosh", "fallen") == ClassCheck::NoReference);
 }
 
 TEST_CASE("scaleKind says why the spot scale is what it is") {

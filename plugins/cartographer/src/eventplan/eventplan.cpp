@@ -55,7 +55,7 @@ std::string_view superClassOf(const SpawnTable &table, int superRow) {
 	return table.supers[static_cast<size_t>(superRow)].cls;
 }
 
-ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, int gameClassRow) {
+ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, std::string_view gameClassId) {
 	if (name.empty()) {
 		return ClassCheck::NoReference;
 	}
@@ -67,14 +67,10 @@ ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, int g
 		return ClassCheck::NoReference;
 	}
 	const std::string_view cls = superClassOf(table, s);
-	int expected = findMonster(table, cls, true);
-	if (expected < 0) {
-		expected = findMonster(table, cls, false);
-	}
-	if (expected < 0) {
+	if (cls.empty() || gameClassId.empty()) {
 		return ClassCheck::NoReference;
 	}
-	return expected == gameClassRow ? ClassCheck::Agrees : ClassCheck::Differs;
+	return same(cls, gameClassId, false) ? ClassCheck::Agrees : ClassCheck::Differs;
 }
 
 bool idRowAccepted(const std::vector<int> &rowsWithId, int got) {
