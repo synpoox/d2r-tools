@@ -247,11 +247,45 @@ TEST_CASE("planEvent: a Horde is hordeSize of the monster, a superunique spawns 
 	CHECK(!planEvent(e, resolveSpawn(table(), "Bishibosh"), room, 5).problem.empty());
 }
 
+TEST_CASE("planEvent: an Ambush plans one wave, a Treasure monster plans the one monster") {
+	const Rect room{0, 0, 30, 30};
+	ev::Event e = event(ev::Kind::Ambush, "andariel");
+	e.waveSize = 4;
+	e.waves = 3;
+	SpawnPlan p = planEvent(e, resolveSpawn(table(), "andariel"), room, 5);
+	REQUIRE(p.problem.empty());
+	CHECK(p.spawns.size() == 4);  // one wave, not waves x waveSize
+	for (const Spawn &s : p.spawns) {
+		CHECK_FALSE(s.superUnique);
+		CHECK(s.row == 3);
+	}
+	// A superunique in an Ambush spawns as its class (it can only exist once per game).
+	p = planEvent(e, resolveSpawn(table(), "Bishibosh"), room, 5);
+	REQUIRE(p.problem.empty());
+	for (const Spawn &s : p.spawns) {
+		CHECK_FALSE(s.superUnique);
+		CHECK(s.row == 4);
+	}
+	e.kind = ev::Kind::Treasure;
+	p = planEvent(e, resolveSpawn(table(), "andariel"), room, 5);
+	REQUIRE(p.problem.empty());
+	CHECK(p.spawns.size() == 1);
+	CHECK_FALSE(p.spawns[0].superUnique);
+	p = planEvent(e, resolveSpawn(table(), "Bishibosh"), room, 5);
+	REQUIRE(p.spawns.size() == 1);
+	CHECK(p.spawns[0].superUnique);  // a named superunique is spawned as one, like a Boss
+	CHECK(p.spawns[0].classRow == 4);
+	// A Treasure whose Spawn is not a monster (a chest) is not planned here.
+	CHECK(planEvent(e, resolveSpawn(table(), "Casket"), room, 5).problem.find("not a monstats Id") != std::string::npos);
+	e.kind = ev::Kind::Ambush;
+	e.waveSize = 0;
+	CHECK(!planEvent(e, resolveSpawn(table(), "andariel"), room, 5).problem.empty());
+}
+
 TEST_CASE("planEvent: problems are said, not guessed") {
 	const Rect room{0, 0, 20, 20};
 	CHECK(planEvent(event(ev::Kind::Boss, "nothing"), resolveSpawn(table(), "nothing"), room, 1).problem.find("not a monstats Id") != std::string::npos);
 	CHECK(planEvent(event(ev::Kind::Boss, "Lost"), resolveSpawn(table(), "Lost"), room, 1).problem.find("Class") != std::string::npos);
-	CHECK(planEvent(event(ev::Kind::Ambush, "andariel"), resolveSpawn(table(), "andariel"), room, 1).problem.find("not applied yet") != std::string::npos);
 	CHECK(planEvent(event(ev::Kind::Shrine, "andariel"), resolveSpawn(table(), "andariel"), room, 1).problem.find("not applied yet") != std::string::npos);
 	CHECK(!planEvent(event(ev::Kind::Boss, "andariel"), resolveSpawn(table(), "andariel"), {0, 0, 0, 0}, 1).problem.empty());
 }
