@@ -207,11 +207,15 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 
 ## Staging a game check (`stage_check.ps1`)
 
-`plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>]`
-sets up one test slot for a check: it locks the slot (d2rAI-toolkit `game_slots.py lock`, never `--force`; slot 1 is refused), creates the slot's test mod once
-(copied from the Slot11 `D2RToolsTest` mod, with the slot's own `savepath`), copies the DLL, the Cartographer tables and the test saves,
-runs `install.ps1` on the test mod's excel folder and, with `-AutoCheckMap`, writes `AutoCheck=1` and `AutoCheckMap` into the slot's `cartographer.txt`
-(the settings of #176). Later runs copy only the files whose SHA-256 differs, so a repeat check re-stages just the DLL, tables or saves that changed.
-It prints the launch command and the log path (`<slot>\d2rloader\logs\cartographer.log`) and never starts the game. `-WhatIf` prints every action and
-changes nothing. `-Restore` runs the toolkit's `release_install.py restore` (a slot with no release install has nothing to restore) and unlocks the slot.
-It reads paths from the toolkit config (`MODKIT_TESTING_CONFIG`, default `C:\D2RTestSlots\modkit-testing.toml`) and refuses a slot or save folder that is the owner's own.
+`plugins\cartographer	ools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>]`
+sets up one test slot for a check. Only slots 5, 6, 7 and 11 are accepted (the ones approved for Cartographer checks); slot 1 and every other slot are refused.
+Before it locks anything it checks the inputs, `install.ps1`, the vanilla tables, that no game runs in the slot, that every write target is outside the owner's own install,
+and that `-Saves` is not inside the owner's real save folders (the vanilla `Saved Games\Diablo II Resurrected` root and every mod folder under it, junctions resolved): use a scratch folder of test saves.
+Then it locks the slot (d2rAI-toolkit `game_slots.py lock`, never `--force`), writes the slot's test mod `modinfo.json` (with the slot's own `savepath`) and seeds its excel folder
+with copies of the vanilla tables `install.ps1` needs (`levels`, `lvlmaze`, `superuniques`, `monstats`, `monumod`; `-VanillaExcel` names the source, which is only read),
+copies the DLL, the Cartographer tables and the test saves, runs `install.ps1` on the test mod's excel folder and, with `-AutoCheckMap`, writes `AutoCheck=1` and `AutoCheckMap` into the slot's `cartographer.txt`
+(the settings of #176). Later runs copy only the files whose SHA-256 differs.
+If a step fails after the lock, the error is printed with the exact `-Restore` command and a note that the slot is still locked.
+It prints the launch command and the log path (`<slot>\d2rloader\logs\cartographer.log`) and never starts the game. `-WhatIf` prints every action and changes nothing.
+`-Restore` runs the toolkit's `release_install.py restore` when the slot holds a release install, removes the Cartographer DLL and the `AutoCheck` rows it placed, and unlocks the slot.
+It reads paths from the toolkit config (`MODKIT_TESTING_CONFIG`, default `C:\D2RTestSlots\modkit-testing.toml`). Use a different `-Owner` per lane: a second run with the same owner counts as "already ours".
