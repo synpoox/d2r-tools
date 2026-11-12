@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -16,6 +17,11 @@ using namespace cartographer::layout;
 namespace {
 
 constexpr int kSeeds = 10000;
+
+int bitsIn(uint8_t m)
+{
+	return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1);
+}
 
 // Rule checks written here, apart from checkLayout(), so the generator's own checker is not the only judge.
 std::string independentCheck(const Layout &l, const Rules &r)
@@ -220,6 +226,57 @@ TEST_CASE("checkLayout catches broken layouts")
 	Rules stricter = r; // the same layout against tighter rules
 	stricter.pathMax = stricter.pathMin - 1 + 0;
 	CHECK_FALSE(checkLayout(good, stricter).empty());
+
+	// Two cells that touch without a link: clear the facing bits of one linked pair, leaving both cells in place.
+	Layout touching = good;
+	bool cut = false;
+	for (int y = 0; y < touching.height && !cut; ++y)
+		for (int x = 0; x < touching.width && !cut; ++x) {
+			Cell &a = touching.at(x, y);
+			if (a.role == Role::Empty || !(a.mask & kEast) || !(touching.at(x + 1, y).mask & kWest)) continue;
+			if (bitsIn(a.mask) < 2 || bitsIn(touching.at(x + 1, y).mask) < 2) continue;
+			a.mask = static_cast<uint8_t>(a.mask & ~kEast);
+			touching.at(x + 1, y).mask = static_cast<uint8_t>(touching.at(x + 1, y).mask & ~kWest);
+			cut = true;
+		}
+	REQUIRE(cut);
+	bool sawTouch = false;
+	for (const std::string &m : checkLayout(touching, r))
+		if (m.find("touch without a link") != std::string::npos) sawTouch = true;
+	CHECK(sawTouch);
+
+	// Broken connectivity: move the layout's last used cell far away is not possible, so cut a branch off at its root.
+	REQUIRE_FALSE(good.branches.empty());
+	Layout split = good;
+	{
+		const Branch &b = good.branches[0];
+		const Point c = b.cells[0];
+		const Point root = b.root;
+		const int dx = c.x - root.x, dy = c.y - root.y;
+		const uint8_t toChild = dx == 1 ? kEast : dx == -1 ? kWest : dy == 1 ? kSouth : kNorth;
+		const uint8_t toRoot = dx == 1 ? kWest : dx == -1 ? kEast : dy == 1 ? kNorth : kSouth;
+		split.at(root.x, root.y).mask = static_cast<uint8_t>(split.at(root.x, root.y).mask & ~toChild);
+		split.at(c.x, c.y).mask = static_cast<uint8_t>(split.at(c.x, c.y).mask & ~toRoot);
+	}
+	bool sawSplit = false;
+	for (const std::string &m : checkLayout(split, r))
+		if (m.find("not connected") != std::string::npos) sawSplit = true;
+	CHECK(sawSplit);
+
+	// A side room that is not a dead end: link a branch's last cell to a cell next to it that is not its own.
+	// Simplest stand-in: give the end of a branch a second exit by cutting it into the ring of rooms is layout-specific,
+	// so check the rule through the checker on a loop-branch relabelled as a plain branch.
+	Rules loopy = presetRules(Shape::Sprawl, Size::Large);
+	for (uint64_t seed = 1; seed <= 200; ++seed) {
+		Layout l = generate(loopy, seed);
+		REQUIRE(checkLayout(l, loopy).empty());
+		if (l.loops.empty()) continue;
+		l.branches.push_back(l.loops[0]);
+		l.branches.back().closes = false;
+		l.loops.erase(l.loops.begin());
+		CHECK_FALSE(checkLayout(l, loopy).empty());
+		break;
+	}
 }
 
 TEST_CASE("validateRules rejects impossible rules")
@@ -241,6 +298,29 @@ TEST_CASE("validateRules rejects impossible rules")
 	r.turnsMax = 30;
 	const Layout l = generate(r, 1);
 	CHECK(l.fallback);
+	CHECK_FALSE(l.rulesMet);
+}
+
+TEST_CASE("a huge count in shapes.txt is an error, not a hang")
+{
+	const auto start = std::chrono::steady_clock::now();
+	auto errorsOf = [](const std::string &text) { return parseShapesTxt(text, "shapes.txt").errors; };
+	const std::vector<std::string> branches = errorsOf("Name\tMinBranches\tMaxBranches\tMinLoops\tMaxLoops\nX\t999999\t999999\t5\t9\n");
+	REQUIRE(branches.size() == 1);
+	CHECK(branches[0].find("MaxBranches") != std::string::npos);
+	CHECK(errorsOf("Name\tMinLoops\tMaxLoops\nX\t1\t999999\n").size() == 1);
+	CHECK(errorsOf("Name\tLoop\tWidth\tHeight\tMinPath\tMaxPath\nX\t1\t32\t32\t500\t600\n").size() == 1);
+	CHECK(errorsOf("Name\tLoop\tWidth\tHeight\tMinPath\tMaxPath\nX\t1\t32\t32\t500\t512\n").size() == 1);
+	const std::vector<std::string> big = errorsOf("Name\tMinPath\nX\t99999999\n");
+	REQUIRE(big.size() == 1);
+	CHECK(big[0].find("too large") != std::string::npos);
+	CHECK(big[0].find("whole number") == std::string::npos);
+	CHECK(errorsOf("Name\tMinPath\nX\t-1000000\n").size() == 1);
+	const std::vector<std::string> bad = errorsOf("Name\tMinPath\nX\tfive\n");
+	REQUIRE(bad.size() == 1);
+	CHECK(bad[0].find("whole number") != std::string::npos);
+	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+	CHECK(ms < 5000);
 }
 
 TEST_CASE("shapes.txt: a valid table")

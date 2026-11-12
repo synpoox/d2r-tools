@@ -302,7 +302,11 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 	if (rw == 0) { rw = std::min(3, w); rh = std::min(3, h); }
 	if (2 * (rw + rh) - 4 > len) return false;
 
-	std::vector<Point> ring = rectRing(rng.range(0, w - rw), rng.range(0, h - rh), rw, rh);
+	// Two draws never share one expression: C++ leaves the order of arguments unspecified. y is drawn first, which is
+	// the order the golden layouts were made with.
+	const int oy = rng.range(0, h - rh);
+	const int ox = rng.range(0, w - rw);
+	std::vector<Point> ring = rectRing(ox, oy, rw, rh);
 	std::vector<int> scratch;
 	while (static_cast<int>(ring.size()) < len) {
 		// Push out the first segment that still fits, starting from a random one, so the ring only gets stuck when
@@ -380,7 +384,7 @@ bool addBranches(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 	for (int b = 0; b < want; ++b) {
 		for (int tries = 0; tries < 30; ++tries) {
 			const std::vector<Point> roots = eligibleRoots(g, d);
-			if (roots.empty()) break;
+			if (roots.empty()) return static_cast<int>(d.branches.size()) >= r.branchesMin; // nothing to hang a room on
 			const Point root = roots[rng.below(static_cast<uint32_t>(roots.size()))];
 			const int len = rng.range(r.branchLenMin, r.branchLenMax);
 			std::vector<Point> cells = growBranch(g, rng, root, len);
@@ -448,9 +452,11 @@ bool growLoop(Grid &g, Pcg32 &rng, Draft &d)
 bool addLoops(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 {
 	const int want = rng.range(r.loopsMin, r.loopsMax);
-	for (int l = 0; l < want; ++l)
-		for (int tries = 0; tries < 40; ++tries)
-			if (growLoop(g, rng, d)) break;
+	for (int l = 0; l < want; ++l) {
+		bool grown = false;
+		for (int tries = 0; tries < 40 && !grown; ++tries) grown = growLoop(g, rng, d);
+		if (!grown) break; // a whole round of tries failed: more loops won't fit either
+	}
 	return static_cast<int>(d.loops.size()) >= r.loopsMin;
 }
 
@@ -702,22 +708,30 @@ std::string validateRules(const Rules &r)
 {
 	if (r.width < 2 || r.height < 2 || r.width > 32 || r.height > 32)
 		return "Width and Height must each be between 2 and 32 cells.";
-	if (r.pathMin < 4) return "PathMin must be at least 4: the path needs an entrance, an event room, a boss room and one more.";
-	if (r.pathMin > r.pathMax) return "PathMin can't be more than PathMax.";
-	if (r.pathMax > r.width * r.height) return "PathMax is more cells than fit in the Width x Height grid.";
+	if (r.pathMin < 4) return "MinPath must be at least 4: the path needs an entrance, an event room, a boss room and one more.";
+	if (r.pathMin > r.pathMax) return "MinPath can't be more than MaxPath.";
+	if (r.pathMax > r.width * r.height) return "MaxPath is more cells than fit in the Width x Height grid.";
 	if (r.straightPct < 0 || r.straightPct > 100) return "Straight must be a percent between 0 and 100.";
 	if (r.turnsMin < 0) return "MinTurns can't be negative.";
 	if (r.turnsMin > r.turnsMax) return "MinTurns can't be more than MaxTurns.";
 	if (r.branchesMin < 0 || r.branchesMin > r.branchesMax) return "MinBranches can't be negative or more than MaxBranches.";
 	if (r.branchLenMin < 1 || r.branchLenMin > r.branchLenMax) return "MinBranchLen must be at least 1 and no more than MaxBranchLen.";
 	if (r.loopsMin < 0 || r.loopsMin > r.loopsMax) return "MinLoops can't be negative or more than MaxLoops.";
+	// Counts far beyond what the grid can hold only make the generator spin, so they are refused up front.
+	const int cellCap = r.width * r.height / 2;
+	if (r.branchesMax > cellCap) return "MaxBranches is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
+	if (r.loopsMax > cellCap) return "MaxLoops is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
+	if (r.branchLenMax > cellCap) return "MaxBranchLen is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
 	if (r.eventPct < 1 || r.eventPct > 99) return "The event room position must be between 1 and 99 percent.";
 	if (r.loop) {
 		bool evenFits = false;
 		for (int n = r.pathMin; n <= r.pathMax; ++n)
 			if ((n & 1) == 0) evenFits = true;
-		if (!evenFits) return "A Loop path needs an even number of cells: PathMin to PathMax holds none.";
+		if (!evenFits) return "A Loop path needs an even number of cells: MinPath to MaxPath holds none.";
 		if (r.width < 3 || r.height < 3) return "A Loop needs a grid at least 3 cells wide and 3 high.";
+		// Growing a long ring is slow (the time grows with the square of its length), so a ring is capped.
+		const int ringCap = std::min(cellCap, 200);
+		if (r.pathMax > ringCap) return "A Loop's MaxPath is too long: at most " + std::to_string(ringCap) + " cells for this grid.";
 	}
 	return std::string();
 }
@@ -1012,13 +1026,18 @@ std::vector<std::string_view> splitTabs(std::string_view line)
 	return out;
 }
 
-bool parseInt(std::string_view s, int &out)
+// tooLarge is set when the text is a whole number with too many digits to use.
+bool parseInt(std::string_view s, int &out, bool &tooLarge)
 {
-	if (s.empty() || s.size() > 6) return false;
+	tooLarge = false;
+	if (s.empty()) return false;
 	size_t i = 0;
 	bool neg = false;
 	if (s[0] == '-') { neg = true; i = 1; }
 	if (i >= s.size()) return false;
+	for (size_t k = i; k < s.size(); ++k)
+		if (s[k] < '0' || s[k] > '9') return false;
+	if (s.size() - i > 6) { tooLarge = true; return false; }
 	int v = 0;
 	for (; i < s.size(); ++i) {
 		if (s[i] < '0' || s[i] > '9') return false;
@@ -1038,8 +1057,8 @@ bool parseBool(std::string_view s, bool &out)
 enum Column { cName, cBase, cMinPath, cMaxPath, cStraight, cMinTurns, cMaxTurns, cMinBranches, cMaxBranches, cMinBranchLen,
 	cMaxBranchLen, cLoop, cMinLoops, cMaxLoops, cWidth, cHeight, cBossRoom, cColumnCount };
 
-// The column names of shapes.txt. The plan has not fixed them yet (tables.md: "to be set in phase 2"); these match the
-// names validateRules() uses in its messages.
+// The column names of shapes.txt (listed in docs/cartographer/tables.md); they match the names validateRules() uses in
+// its messages.
 const char *const kColumnNames[cColumnCount] = {"Name", "Base", "MinPath", "MaxPath", "Straight", "MinTurns", "MaxTurns",
 	"MinBranches", "MaxBranches", "MinBranchLen", "MaxBranchLen", "Loop", "MinLoops", "MaxLoops", "Width", "Height", "BossRoom"};
 
@@ -1160,7 +1179,12 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
 			const std::string_view v = cell(c);
 			if (v.empty()) return;
 			int n = 0;
-			if (!parseInt(v, n)) { err(lineNo, std::string(kColumnNames[c]) + " must be a whole number, not \"" + std::string(v) + "\"."); return; }
+			bool tooLarge = false;
+			if (!parseInt(v, n, tooLarge)) {
+				if (tooLarge) err(lineNo, std::string(kColumnNames[c]) + " is too large: \"" + std::string(v) + "\".");
+				else err(lineNo, std::string(kColumnNames[c]) + " must be a whole number, not \"" + std::string(v) + "\".");
+				return;
+			}
 			dst = n;
 		};
 		auto readBool = [&](int c, std::optional<bool> &dst) {
