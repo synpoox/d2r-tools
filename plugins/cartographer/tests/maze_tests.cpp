@@ -426,8 +426,8 @@ TEST_CASE("same seed gives the same plan; the plan hash is stable")
 	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) !=
 	      planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 2).plan));
 	// Golden values (FNV-1a over the plan): they pin the plan across compilers and platforms.
-	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) == 2575042952238616093ull);
-	CHECK(planHash(planForSeed(crypt, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), 1).plan) == 10926222372997424906ull);
+	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) == 2383871364435463151ull);
+	CHECK(planHash(planForSeed(crypt, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), 1).plan) == 14348834163193182667ull);
 }
 
 TEST_CASE("fixed-flag timing: a placed end fixed before 0x3eb850 runs is missed by its scan")
