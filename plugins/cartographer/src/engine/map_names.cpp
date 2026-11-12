@@ -321,18 +321,18 @@ auto MapNamesPartStatuses() -> std::vector<PartStatus> {
 auto MapNamesSummary() -> std::string {
 	std::lock_guard<std::mutex> lock(g_lock);
 	if (!g_plan.WantsRegistration() && !g_plan.Registered()) {
-		return "Map names: off (MapNames=0 in cartographer.txt, the default)";
+		return "Map names: off (MapNames=0 in cartographer.txt)";
 	}
 	if (!g_installed || !g_part.status.on || g_resources == nullptr || g_localization == nullptr) {
 		return "Map names: off (a game part or D2RLoader service was not found)";
 	}
 	if (g_plan.Next(RowsHeldLocked()) == mn::RegistrationPlan::Step::Deferred) {
 		if (g_saver.Stuck()) {
-			return "Map names: a change from the last reload waits until the game restarts (written, not verified in game)";
+			return "Map names: a change from the last reload waits until the game restarts (seen in single player, multiplayer unverified)";
 		}
-		return "Map names: a change from the last reload waits until you leave this game (written, not verified in game)";
+		return "Map names: a change from the last reload waits until you leave this game (seen in single player, multiplayer unverified)";
 	}
-	return g_plan.Registered() ? "Map names: on (written, not verified in game)" : "Map names: on, but the strings are not registered";
+	return g_plan.Registered() ? "Map names: on (seen in single player, multiplayer unverified)" : "Map names: on, but the strings are not registered";
 }
 
 void MapNamesSetTables(const std::shared_ptr<const Tables>& tables) {

@@ -20,7 +20,7 @@
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
-- A map's own name shows on its portal, automap and entry banner.
+- A map's own name shows on its portal, automap and entry banner by default (experimental; `MapNames=0` turns it off; multiplayer not checked yet).
 - `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
@@ -33,4 +33,3 @@
 - Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
 - Snow maps open from their item through a new `OutdoorSnow` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
-- Map names now show by default; set `MapNames=0` to turn them off.
