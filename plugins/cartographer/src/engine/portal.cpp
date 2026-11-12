@@ -1,5 +1,6 @@
 #include "portal.h"
 
+#include "core/part_signatures.h"
 #include "core/sig.h"
 #include "core/text.h"
 #include "log.h"
@@ -51,11 +52,11 @@ auto At(const void* base, int offset) noexcept -> T {
 }
 
 // One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte.
-// Only the two dispatchers' entry bytes are known so far (build 93847); the rest wait for a dump: the part table in
-// docs/reverse-engineering/cartographer.md says which, and signatures.txt can supply them without a rebuild.
+// The signatures are in core/part_signatures.h (build 93847); the part table in docs/reverse-engineering/cartographer.md
+// records each one, and signatures.txt can replace them without a rebuild.
 struct Part {
 	const char* name;
-	const char* signature;  // nullptr: none recorded yet
+	const char* signature;  // nullptr: none; only a signatures.txt line can then turn the part on
 	uint32_t hookSize;      // entry bytes copied for an inline hook; 0: only called
 	bool required;
 	const uint8_t* address;
@@ -65,18 +66,18 @@ struct Part {
 enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PartCount };
 
 Part g_parts[PartCount] = {
-	{"ItemSpellCheck", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18", 15, true, nullptr, {}},
-	{"ItemSpellUse", "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57", 14, true, nullptr, {}},
-	{"ItemRecord", nullptr, 0, true, nullptr, {}},
-	{"UnitClassOf", nullptr, 0, true, nullptr, {}},
-	{"UnitRoom", nullptr, 0, true, nullptr, {}},
-	{"RoomLevelId", nullptr, 0, true, nullptr, {}},
-	{"ClientMessage", nullptr, 0, true, nullptr, {}},
-	{"OpenRedPortal", nullptr, 0, true, nullptr, {}},
-	{"GameCounter", nullptr, 0, true, nullptr, {}},
-	{"UnitStat", nullptr, 0, true, nullptr, {}},
-	{"UnitCoords", nullptr, 0, false, nullptr, {}},
-	{"FindFreeSpot", nullptr, 0, false, nullptr, {}},
+	{"ItemSpellCheck", sig::ItemSpellCheck, 15, true, nullptr, {}},
+	{"ItemSpellUse", sig::ItemSpellUse, 14, true, nullptr, {}},
+	{"ItemRecord", sig::ItemRecord, 0, true, nullptr, {}},
+	{"UnitClassOf", sig::UnitClassOf, 0, true, nullptr, {}},
+	{"UnitRoom", sig::UnitRoom, 0, true, nullptr, {}},
+	{"RoomLevelId", sig::RoomLevelId, 0, true, nullptr, {}},
+	{"ClientMessage", sig::ClientMessage, 0, true, nullptr, {}},
+	{"OpenRedPortal", sig::OpenRedPortal, 0, true, nullptr, {}},
+	{"GameCounter", sig::GameCounter, 0, true, nullptr, {}},
+	{"UnitStat", sig::UnitStat, 0, true, nullptr, {}},
+	{"UnitCoords", sig::UnitCoords, 0, false, nullptr, {}},
+	{"FindFreeSpot", sig::FindFreeSpot, 0, false, nullptr, {}},
 };
 
 std::mutex g_lock;

@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include "core/part_signatures.h"
 #include "core/sig.h"
 #include "core/tables.h"
 #include "core/tsv.h"
@@ -253,6 +254,17 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 	Pattern none{};
 	REQUIRE(ParsePattern("DE AD", &none));
 	CHECK(FindPattern(data, sizeof(data), none, &at) == 0);
+}
+
+TEST_CASE("signatures: every recorded part signature parses and is long enough to be unique") {
+	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
+	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot};
+	for (const char* text : all) {
+		Pattern p{};
+		INFO(text);
+		CHECK(ParsePattern(text, &p));
+		CHECK(p.size >= 24);  // shorter prefixes match more than once in the game's code
+	}
 }
 
 TEST_CASE("spelling suggestions") {

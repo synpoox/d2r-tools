@@ -4,8 +4,9 @@ A D2RLoader plugin for Diablo II: Resurrected that opens a map from a map item: 
 leads to a level built from your `maps.txt`. MIT licensed.
 
 **Status: phase 1 (not released).** The table loader, the gates, the item and the red portal to one built-in preset map
-are written and unit tested. Nothing has been run in a game yet, and the engine addresses the portal needs are not all
-recorded: until they are, the plugin loads, reads and checks your tables, and the portal stays off
+are written and unit tested. Nothing has been run in a game yet. The engine parts the portal needs have byte signatures
+checked against a memory dump of build 93847 only; until they are checked in game, treat the portal as untested. If any
+part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
 
 ## Features
@@ -64,4 +65,6 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`.
 
 - Unit tests of the table loader, the gates and the signature scanner (`tools\build.ps1 -Plugin cartographer -Test`).
 - The installer on a copy of the vanilla 93847 tables, run twice.
+- The portal parts' byte signatures, each unique and resolving to its recorded address in a dump of build 93847
+  (`python -I plugins\cartographer\tools\check_portal_signatures.py <dump>`; static, no game).
 - Not yet: installed into a game, or opened in game.
