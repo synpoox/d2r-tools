@@ -1113,7 +1113,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 
 ### Signed for the outdoor slot (desk work, 2026-11-12)
 
-Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; nothing in the plugin uses them yet (no hook, no call), so they are checked, not run.
+Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; they were checked, not run, until section 8a (the hook lengths in the table below are the spike's; section 8a has the derived ones).
 
 | Part | RVA | Signature source | Hook length | Evidence |
 |---|---|---|---|---|
@@ -1124,7 +1124,51 @@ Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_s
 
 The outdoor slot itself (moved here from the plugin README, which is for players): outdoor maps (`Jungle` first) are planned to open through a third level, the `Outdoor` slot, a `levels.txt` level with `DrlgType` 3 and `LevelType` 21 listed in `slots.txt` as an `Outdoor` row. What exists is groundwork only, none of it verified in game and none of it called by the plugin: `slots.txt` accepts the row, the loader reads that level's `DrlgType` and `LevelType` (`ReadSlotLevelTypes`, the one part that runs), `OutdoorSlotProblem` can compare them with a map's tileset but nothing calls it yet, and the piece picker and stamp plan (`src/outdoor/`, unit tested) turn a layout into the pieces, level size and void cells. No hook exists and no map opens through the slot: `Jungle` and `Snow` maps are still refused, and an `Outdoor` row changes nothing in game. `planStamps` refuses every bad input itself (including piece 529 and a pinned file over 15); `checkStampPlan` is the independent second check.
 
-The checker rows carry max patch 999 ("only checked"): whoever adds a hook re-derives the patch length and the row. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+The checker rows carried max patch 999 ("only checked") until the outdoor build hook (section 8a) derived them. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+
+## 8a. Outdoor build hook (issue #141)
+
+Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks themselves have never run in a game.
+
+### Hook lengths (derived 2026-11-12)
+
+Method: disassemble the part's entry with capstone from the 93847 dump. A patch must end on an instruction boundary and hold no relative operand (call, jmp, jcc, RIP-relative), because the loader copies the bytes to a trampoline. The "max patch" is the offset of the first relative operand; `tools/check_maze_signatures.py` now holds it per part, checks that the signature's bytes stop at or before it where it is a number, and checks that the hook lengths below end on an instruction boundary and are not over it.
+
+| Part | RVA | Hook length | Max patch | First relative operand | Used as |
+|---|---|---|---|---|---|
+| `LevelBuild` | `0x3271c0` | 14 | 48 | `call 0x367110` | hooked once; shared with the maze hook (below) |
+| `OutdoorAct5Builder` | `0x3fe2e0` | 16 | 37 | `jne rel32` (`0F 85`) | hooked; stamps the plan |
+| `OutdoorEntry` | `0x3ee320` | not hooked (the spike hooked 19) | 90 | `call` | called |
+| `PieceStamp` | `0x3ecfc0` | not hooked | 61 | `call` | called, once per stamp |
+| `VoidCell` | `0x3ede00` | not hooked | 39 | `call 0x3faa50` | called, once per void cell |
+
+### How it works
+
+- One level build hook. `0x3271c0` is already hooked by the maze steering, so `LevelBuildHook` there calls `OutdoorLevelBuild` first. The outdoor build installs its own hook (14 bytes) only when the maze hook never tried (`MazeLevelBuildHookTried`); when the maze hook was tried and refused, the outdoor build stays off with a log line.
+- `OutdoorLevelBuild` touches the Outdoor slot level only (`IsSlotLevel`: slots.txt `Outdoor` level id). Any other level, in any act, runs the game's own build.
+- Preconditions, all read-only, otherwise the game builds its own level with the reason in the log: `OutdoorBuild = 1`, every part on, level type 3, drlg and the outdoor block (`level+0x18`) readable, no rooms yet, a map opened (`OutdoorMapOpened`), the slot row's OffsetX, OffsetY, SizeX, SizeY in `levels.txt`, `LevelType` equal to the tileset's (`OutdoorLevelType`), and a plan that passed `planStamps` and `checkStampPlan`.
+- Then: write the rectangle (origin from the slot row, size from the plan; both are 0 for a slot when the build starts, section 4 S1), reseed (`[level+0x1e4] = int32(drlg[0x860]) + levelId`, `[level+0x1e8] = 0x29a`), call `OutdoorEntry`. Its Act 5 branch reaches our `OutdoorAct5Builder` hook, which, only when the thread's build context names this level, calls `PieceStamp(dataFlag, level, cx, cy, lvlPrest, file, 0)` per stamp and `VoidCell(level, x, y)` per void cell. Then the level type is set to 0 (no branch of the dispatch matches, so only the native tail runs, section 4 S1), the original `LevelBuild` runs, and type 3 is restored.
+- Afterwards the built grid is read back (`+0x08` piece grid, `+0x58` flag grid through the row index) and compared with the plan (`compareGrid`); a difference is logged, not repaired. If the Act 5 branch was not taken (the slot level is not in Act 5 in `levels.txt`) the plan was not stamped, and the log says so.
+- The plan is cached by (seed, tileset, shape, size, origin, limits, options), four entries, so the host's and a client's builds of one map share one computation. Failed plans are cached.
+- `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. Both settings default to 0.
+
+### After our build, and what is not hooked when the setting is off
+
+- **Second reseed.** The original's prologue (`0x3271e2..0x3271f0`) reseeds the level RNG again after our build returns control to it, so the level RNG ends at the fresh seed, not where a generator left it. The tail does not read it (section 8 Q5); the last fallback of `0x3da650` does. It is the same on the host and on a client.
+- **`OutdoorBuild = 0` installs nothing.** `InstallOutdoorHooks` finds the parts (for `cartographer check`) but hooks neither `0x3fe2e0` nor, when the maze steering did not take it, `0x3271c0`, when the setting is 0 or slots.txt has no Outdoor slot (one log line says so). The game then runs as without the outdoor code; the setting is read at load, so a restart turns it on.
+- **Act 5 only.** `PrepareSlot` refuses, before any write or engine call, unless the Outdoor slot row in levels.txt has `Act` = 4 (Act 5) and an id above 137 (a vanilla level or a town is never rebuilt). Otherwise `0x3ee320` would dispatch to a vanilla Act 1-4 builder (`0x3ee484..0x3ee4db`) on our level and rectangle. A missing `Act` column also refuses. The game then builds the level itself.
+
+### Slot row requirements (found by the outdoor spike, PR #168)
+
+- The Outdoor slot's levels.txt row needs `Vis0` to `Vis7` = 0. With `-1` the game crashes at image `+0x3268fb`. The installer writes the row (issue #144) and is not changed here; this is recorded for that change.
+
+### Open
+
+- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142, and it needs the S2 spike (#89). The whole feature stays off until a game check settles it.
+- The entry room: whether the plan's entrance cell is where the player arrives is also #142.
+- Nothing opens an outdoor map yet (#144), so `OutdoorMapOpened` has no caller.
+- `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
+- Nothing here has run in a game.
 
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)

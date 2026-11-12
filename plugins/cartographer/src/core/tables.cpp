@@ -585,7 +585,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe"};
+	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorBuild", "OutdoorProbe"};
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
 		const std::string* name = Canonical(known, key);
@@ -622,6 +622,12 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "MazeProbe") {
 			hi = 1;
 			target = &settings.mazeProbe;
+		} else if (*name == "OutdoorBuild") {
+			hi = 1;
+			target = &settings.outdoorBuild;
+		} else if (*name == "OutdoorProbe") {
+			hi = 1;
+			target = &settings.outdoorProbe;
 		}
 		if (!ParseInt(value, lo, hi, target)) {
 			fail(*name + " '" + value + "' is not a whole number " + Range(lo, hi) + ".");
@@ -652,7 +658,6 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 }
 
 void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report& report) {
-	constexpr int LastOriginalLevel = 137;  // 3.3: the levels the original game ships
 	constexpr int Towns[] = {1, 40, 75, 103, 109};
 	const Tsv levels = ParseTsv(levelsText);
 	const int cId = levels.Column("Id"), cName = levels.Column("Name");
@@ -697,8 +702,10 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 	const Tsv table = ParseTsv(levelsText);
-	const int cId = table.Column("Id"), cType = table.Column("LevelType"), cDrlg = table.Column("DrlgType");
-	if (cId < 0 || (cType < 0 && cDrlg < 0)) {
+	const int cId = table.Column("Id"), cType = table.Column("LevelType"), cDrlg = table.Column("DrlgType"), cAct = table.Column("Act");
+	const int cOffX = table.Column("OffsetX"), cOffY = table.Column("OffsetY"), cSizeX = table.Column("SizeX"), cSizeY = table.Column("SizeY");
+	const bool geometryColumns = cOffX >= 0 && cOffY >= 0 && cSizeX >= 0 && cSizeY >= 0;
+	if (cId < 0 || (cType < 0 && cDrlg < 0 && cAct < 0 && !geometryColumns)) {
 		return;
 	}
 	for (const TsvRow& row : table.rows) {
@@ -708,17 +715,45 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 		}
 		const bool haveType = cType >= 0 && ParseInt(table.Cell(row, cType), 0, 255, &type);
 		const bool haveDrlg = cDrlg >= 0 && ParseInt(table.Cell(row, cDrlg), 0, 255, &drlg);
+		int act = 0;
+		const bool haveAct = cAct >= 0 && ParseInt(table.Cell(row, cAct), 0, 255, &act);
+		int offX = 0, offY = 0, sizeX = 0, sizeY = 0;
+		const bool haveGeometry = geometryColumns && ParseInt(table.Cell(row, cOffX), -1000000, 1000000, &offX) &&
+		                          ParseInt(table.Cell(row, cOffY), -1000000, 1000000, &offY) && ParseInt(table.Cell(row, cSizeX), 0, 1000000, &sizeX) &&
+		                          ParseInt(table.Cell(row, cSizeY), 0, 1000000, &sizeY);
 		for (Slot& slot : slots) {
 			if (slot.level == id) {
+				if (haveGeometry) {
+					slot.haveGeometry = true;
+					slot.offsetX = offX;
+					slot.offsetY = offY;
+					slot.sizeX = sizeX;
+					slot.sizeY = sizeY;
+				}
 				if (haveType) {
 					slot.levelType = type;
 				}
 				if (haveDrlg) {
 					slot.drlgType = drlg;
 				}
+				if (haveAct) {
+					slot.act = act;
+				}
 			}
 		}
 	}
+}
+
+auto OutdoorSlotRefusal(const Slot& slot) -> std::string {
+	const std::string id = std::to_string(slot.level);
+	if (slot.level <= LastOriginalLevel) {
+		return "the Outdoor slot level " + id + " is a vanilla level (the slot must be a level the installer added, above " + std::to_string(LastOriginalLevel) + ")";
+	}
+	if (slot.act != 4) {
+		return "the Outdoor slot level " + id + " is not read as Act 5 in levels.txt (Act is " + (slot.act < 0 ? std::string("unknown") : std::to_string(slot.act)) +
+		       ", Act 5 is 4)";
+	}
+	return {};
 }
 
 auto OutdoorLevelType(std::string_view tileset) -> int {

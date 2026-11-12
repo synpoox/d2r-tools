@@ -268,8 +268,9 @@ auto LoadAll() -> Loaded {
 	text.clear();
 	ReadFile(g_excelDir + L"\\levels.txt", &text);
 	carto::ValidateSlots(loaded.tables->slots, text, loaded.report);
-	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build.
-	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0) {
+	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build. An Outdoor slot's origin, declared size and
+	// act are read from the same file for the outdoor build hook.
+	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0 || carto::SlotLevel(loaded.tables->slots, carto::OutdoorSlot) > 0) {
 		carto::ReadSlotLevelTypes(loaded.tables->slots, text);
 		for (const carto::MapDef& map : loaded.tables->maps) {
 			if (const std::string problem = carto::MazeTilesetProblem(map, *loaded.tables); !problem.empty()) {
