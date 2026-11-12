@@ -5,6 +5,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -576,4 +578,23 @@ TEST_CASE("golden ASCII dumps (Medium, seed 1)")
 
 . . . . . . . . .
 )");
+}
+
+// The example pack (examples/first-map) is what docs/cartographer/tables.md shows; its shapes.txt must load cleanly.
+TEST_CASE("the example pack's shapes.txt loads and its shape builds at every size")
+{
+	std::ifstream in(std::string(CARTOGRAPHER_EXAMPLE_DIR) + "/shapes.txt", std::ios::binary);
+	REQUIRE(in.good());
+	std::ostringstream text;
+	text << in.rdbuf();
+	const ParseResult parsed = parseShapesTxt(text.str());
+	for (const std::string &e : parsed.errors) MESSAGE(e);
+	REQUIRE(parsed.ok());
+	REQUIRE(parsed.table.shapes.size() == 1);
+	for (Size size : {Size::Small, Size::Medium, Size::Large}) {
+		Rules rules;
+		std::string error;
+		CHECK(resolveRules(parsed.table, "snake", size, rules, error));
+		CHECK(error.empty());
+	}
 }

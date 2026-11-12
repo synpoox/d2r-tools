@@ -21,6 +21,12 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
   refuses and says so. Not tried in a game yet.
 
+## Your first map
+
+New to Cartographer? [Your first map in 5 minutes](../../docs/cartographer/first-map.md) walks through the item, the
+`maps.txt` row and the check. [tables.md](../../docs/cartographer/tables.md) lists every column of every table, and a working
+set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no game files).
+
 ## Requirements
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.

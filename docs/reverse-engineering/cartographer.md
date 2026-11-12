@@ -1,7 +1,7 @@
 # Cartographer native contracts (`cartographer`)
 
 **Status:** the nine maze rows in section 1a and the twelve phase 1 parts in section 3 have byte signatures, checked statically against a build 93847 dump (no game
-evidence; the portal hooks are written, not validated in game). The outdoor rows (section 4) have byte signatures that matched on build 93847 in a test slot, and the spike exercised the parts live at the levels shown per row. Every other row of sections 1 and 2 is still a stub, not validated in this repo.
+evidence; the portal hooks are written, not validated in game). Section 5 answers the maze slot's level size, origin and `0x3eb850` questions statically (issue #62), with the in-game checks still open. The outdoor rows (section 4) have byte signatures that matched on build 93847 in a test slot, and the spike exercised the parts live at the levels shown per row. Every other row of sections 1 and 2 is still a stub, not validated in this repo.
 **Date:** 2026-11-11 (carried over from pd2-resurrected research)
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
@@ -293,3 +293,79 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
   each 32-tile seam was not separated with trustworthy collision data, so this stays open, leaning river (visual: the automap line and the dark channel). It gets decided in S2 (an L-shape plus a branch, with a closed edge next to an occupied cell) or from the DS1 walk flags in the catalogue tool.
 - **Slot used:** 11 (`D2RToolsTest`). Game stopped, slot unlocked, the spike DLL removed and the slot's own plugins
   restored.
+
+## 5. Maze slot engine checks (issue #62)
+
+Answers the four static questions of plan section 3.6 [V] for the guided maze slot. Everything here is read from the build 93847 dump (Capstone
+disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a conclusion needs the game, the check is given as "needs game: set X, observe Y".
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer guided maze hook (plan section 5, phase 3b); no hook exists yet |
+| Module | `D2R.exe` |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the same memory-layout dump as section 1a (`D2RLoader_6ab3782c_dump.exe`) |
+| Location | RVAs in the table below. Offsets are the DRLG level record (one per level per act; list head at `drlg+0x868`, next at level `+0x1b8`): `+0x00` DRLG type (1 maze, 2 preset, 3 outdoor), `+0x08` room count, `+0x10` first room, `+0x18` LvlMaze row, `+0x24/+0x28` origin x/y (tiles), `+0x2c/+0x30` width/height (tiles), `+0x1f8` level id. Room: `+0x48` next, `+0x50` flags, `+0x60/+0x64` x/y, `+0x68/+0x6c` w/h |
+| Guard | The section 1a rows keep their signatures. The functions in the table below are unsigned, read-only evidence, except `0x3271c0`, which is already signed in sections 1 and 4 (its row is listed for the masked prefix only; do not record a second signature). The others were followed from signed functions or from the level build `0x3271c0`. The masked prefix shown for each matched exactly once across `.text`, `.maho`, `.koishi` and `.btext` of the dump (relative displacements and RIP-relative operands masked), so it can become a signature later; none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
+| Contract | See the answers below |
+| Evidence | Disassembly (Capstone) of the functions named, over the dump (the Ghidra decompile was only a reading aid and is not needed). Reproduce a listing with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]`, and a prefix match with `... pat "<hex with ??>"` (read-only; refuses a different stamp; needs `capstone`). Example: `dis 0x32751e 3` shows `mov rdx, rbx / movzx ecx, r12b / call 0x3271c0` |
+| Validation | Static only. No game, no hook. Not checked on Steam build 94995 |
+| Failure mode | Fail open: a hook built on this leaves the maze off if a signature or guard does not match, as in section 1a |
+| Coexistence | No new patch is proposed on this page |
+
+| RVA | Role found | Unique masked prefix (offset 0) |
+|---|---|---|
+| `0x3267c0` | Level getter and allocator for (drlg, level id) | `48 89 6C 24 10 48 89 74 24 18 57 48 81 EC 80 02 00 00 48 8B 82 68 08 00 00` |
+| `0x327650` | Writes the level rect, once, at allocation | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 48 8B EA 49 8B D8` |
+| `0x3e7760` | Maze level init (stores the LvlMaze row at `+0x18`, then calls `0x327650`) | `48 89 5C 24 08 57 48 83 EC 20 48 8B DA 0F B6 F9 8B 92 F8 01 00 00 E8 ?? ?? ?? ??` |
+| `0x3271c0` | Level build (reseed, then dispatch to maze, preset or outdoor) | `48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2` |
+| `0x3e69e0` | Maze builder (the Cave/Crypt case calls `0x3eb850`) | `40 55 53 56 57 41 55 41 56 48 8B EC 48 83 EC 28 48 8B DA 44 0F B6 E9 48 8B CB` |
+| `0x327880` | After-build normaliser (checks the span, then moves the rooms so their bounding box starts at the origin) | `48 89 4C 24 08 55 53 48 8B EC 48 83 EC 58 48 8B D9 48 85 C9 75 ?? 88 4D 20` |
+| `0x326580` | Bounding box of a level's rooms | `48 89 5C 24 08 48 8B 41 10 4D 8B D0 48 8B 5C 24 28 8B 48 60 89 0A 8B 48 64` |
+| `0x327400` | World-space room lookup (x, y) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B BC 24 80 00 00 00 4D 8B E9` |
+| `0x3605b0` | Point in rect (x in [r0, r0+r2), y in [r1, r1+r3)) | `44 8B 09 41 3B D1 7C ?? 44 8B 51 04 45 3B C2 7C ?? 44 03 49 08 41 3B D1 7D ??` |
+| `0x3da650` | Level-entry finder (arrival room) | `48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA` |
+| `0x3dad90` | Arrival helper: first room with `(room+0x50 & 0x30000)` (flag test in `0x3612d0`) | `48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8` |
+| `0x3275b0` | Arrival helper: room containing a point | `48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 83 7B 10 00` |
+
+### Q1. Largest level size the engine accepts
+
+- **Static answer:** no cap below int32 exists on the maze path. The size is two ints copied from the LevelDefs row by `0x327650` into `+0x2c` (SizeX, difficulty column at `+0xc + diff*4`) and `+0x30` (SizeY, `+0x18 + diff*4`), where `diff` is `drlg+0x830`. Room records (`0x1c0` bytes, general allocator `0x361140`) and level records (a pool) are not sized by the level size, and the per-room arrays (the `+0x258` int array, allocated as `roomCount*4` in the teardown `0x327c40`) are sized at run time.
+- **The only DRLG checks on the size:** (1) the add-room span check, `0x3e77a0` -> `0x360520` (signed, section 1a) -> bounding box `0x326580`: a candidate room is rejected when the merged bounding box of all rooms is wider than `+0x2c` or taller than `+0x30` (signed int compare of the span, not of the position; skipped for level ids `0x6b` and `0x1c`); (2) the assert in `0x327880` when the final span exceeds `+0x2c/+0x30`; (3) the world lookup (Q2).
+- **Hard bound:** dynamic unit positions are u16 subtiles (5 per tile, section 4 S1), so origin plus size must stay at or below 13107 tiles.
+- **The rule is the span, not a centred first room.** `0x3e69e0` puts the first room at `(+0x2c - roomW)/2 + +0x24`, but `0x327880` then moves all rooms so the bounding box starts at the origin. The test is span <= size per axis, so a layout with the first room near one end fits as well. The symmetric "k rooms each side" model in `plugins/cartographer/src/maze/maze.h` (`Capacity`) is stricter than the engine; that is safe. A plan could in principle size the level to its span (needs game, below).
+- **Room count:** nothing caps it by level size. A Crypt (8 tile rooms) at 360 x 360 is up to 45 x 45 = 2025 rooms; the overlap checks are O(n^2) in rooms, which is probably acceptable for the DRLG pass (inference from the complexity, not measured; needs game together with the `+0x258` arrays below).
+- **Evidence level:** static for the DRLG side. **Needs game** for the rest of the game accepting 360 (client room load, collision, automap, the `+0x258` arrays at 900 rooms or more). The only live size evidence is the S1 outdoor spike at 160 x 32 (section 4).
+- **Needs game, size:** slot row SizeX = SizeY = 360 in all three difficulty columns, Depend 0, Position 0, origin from Q2. Log level `+0x24..+0x30` at entry and exit of the `0x3271c0` hook; after the build log the room count and the min and max of room `+0x60/+0x64` (plus `+0x68/+0x6c`). Observe: no assert and no crash_guard entry, the bounding box starts at the origin and spans at most 360. Then walk to each end and open the automap.
+- **Needs game, lopsided layout:** force the first room to one end of a 15-room span and observe that `0x360520` does not reject and the build completes.
+
+### Q2. Level origin
+
+- **How it is set (static):** at allocation only, `0x3267c0` -> `0x3e7760` -> `0x327650`: `+0x24` = LevelDefs OffsetX (`+0x24`) plus the origin x of the Depend level (LevelDefs `+0x2c`, fetched through `0x3267c0`; Depend 0 means absolute), and the same for y with OffsetY (`+0x28`). The teardown `0x327c40` clears `+0x34..+0x1b3` only, so the rect `+0x24..+0x30` survives a rebuild, and a write made in a `0x3271c0` hook persists.
+- **What must be clear:** the declared rect, not the room bounding box. `0x327400` (world lookup) tries the hint room and its neighbours, then walks all levels of the act from the list head at `drlg+0x868` and takes the first level whose declared rect contains the point (`0x3605b0`). A declared rect that overlaps another level's rect in the same act can resolve rooms to the wrong level.
+- **Vanilla table (levels.txt of build 93847 in a test slot; numbers only):** maze levels are 200 x 200, stacked 300 apart in y, columns 500 apart in x. Non-outdoor, non-Depend envelopes per act: Act 1 x 0..5043, y 0..2896; Act 2 x 1000..5200, y 1000..3147; Act 3 x 1000..3700, y 1000..2380; Act 4 x 1000..1032, y 1000..1024 (Diablo, id 108, at 1500,1000 with 120 x 120); Act 5 x 1000..5043, y 1000..3084. A 360 rect cannot reuse a vanilla maze column (300 y-spacing is smaller than 360); it fits in a free column.
+- **Recommendation:** Depend 0, OffsetX past the act's envelope plus a margin (6000 for any act, as the S1 spike used in Act 5), any OffsetY, origin + 360 well under 13107. Outdoor rows (DrlgType 3) have Offset -1 or arbitrary values and their rects are set by act start-up (`0x3f0130` -> `0x3f1c60`), so their positions are not known statically.
+- **Lazy build in the lookup (static):** when the level that matched has no rooms yet (`+0x10 == 0`), `0x327400` itself calls `0x3271c0` (`0x32751e..0x327525`, via `mov rdx, rbx / movzx ecx, r12b / call`); if no rect matches it falls through to `0x3267c0(drlg, 0)` and builds that. So the slot's `0x3271c0` hook can run from a world lookup that matched on the allocation-time rect. Consequence: the hook must not move the origin away from the row's rect (write the size, or an origin equal to the row's), or the point that triggered the build may fall outside the level it just built. The row therefore carries the maximum size (Q4).
+- **Evidence level:** static for the mechanism and the table envelopes; the clear origin is an inference from the table plus the S1 precedent (6000/3000, size 160 x 32, worked live in Act 5). **Needs game:** with the new row in a test slot, log the rect (`+0x24..+0x30`) and level id of every level on the `drlg+0x868` list for the act, and the result of `0x327400` at the four corners of the slot's rect. Observe the slot's own id for each corner and that no other level's rect intersects.
+
+### Q3. `0x3eb850` out parameter and what the slot's later code expects
+
+- **The out parameter (static):** `0x3eb850(level, int entry[4] = {from, to, file, dir}, uint* rot)` returns void. `rot` is the maze builder's rotation counter, not a result: it may be NULL, and on every path, including "nothing placed", the epilogue stores `(*rot + 1) mod 4` (`0x3eb936..0x3eb94e`: NULL test, `inc`, `and 0x80000003`, sign fix, store). The Cave case in `0x3e69e0` uses that counter as the table index base: it calls `0x3eb850(level, table + rot*16, &rot)` for the entrance group, then `table + (rot+8)*16` (`+4` for level 8) for the Down/Next group; level 9 adds a third call (`+0xc`) and level 10 a last one (`+0x10`). A slot level id (not 8, 9 or 10) gets two calls.
+- **Consequence for the hook:** when it suppresses a call it must leave `*rot` in 0..3. Either leave it unchanged or store `(v + 1) & 3` as the original does. Any other value makes the next table index run outside the entry table. Nothing reads a return value.
+- **Later code and an exit room (static):** no code on the arrival or link path asserts on a missing exit. The level-entry finder `0x3da650` takes the first room with `(room+0x50 & 0x30000)` (`0x3dad90`), then rooms with warp bits (`0xff0`) against the Vis entries, then the room at the declared centre (`0x3275b0` at `+0x24 + w/2 - 2, +0x28 + h/2 - 2`), then a seeded random room of the level, and returns 0 only if the level has no rooms. The tail of `0x3271c0` records warp-room centres into level `+0x82..` (at most 9, only for flagged rooms). A warp tile comes from room data, so with no Down piece the slot simply has no warp tile. This was read for the paths named; it is not an exhaustive scan of every consumer of the level links.
+- **Evidence level:** static. **Needs game:** a Cave slot id with the second (+8 group) call suppressed and the first (Prev) call allowed. Observe: two `0x3eb850` calls in the log with the second answered by the hook, `rot` after each in 0..3, the build completes, the character arrives in the Prev room (the portal room) and walks, and no crash_guard entry appears.
+- **Note:** `Position` of the slot row must be 0. A non-zero Position makes the level pick an entry from the maze's preset list (the d2rAI-toolkit `engine-limits.md` records a crash when there is none).
+
+### Q4. Where to clamp and write
+
+- **Clamp (plan side):** `maxLevelTiles` is a plan limit, so clamp it in the core before any plan is made, to the smaller of 360 and the size the game checks of Q1 confirm. The engine does not clamp it.
+- **Write (static):** in the `0x3271c0` build hook, before calling the original, write the size `+0x2c/+0x30` of the slot's level; leave the origin `+0x24/+0x28` at the row's values (the world lookup can build the level from the allocation-time rect, Q2). The first room is positioned from `+0x2c/+0x30` in `0x3e69e0`, which runs after the hook, and the values survive a teardown. This matches the pd2-resurrected note "write per-level fields in the 0x3271c0 hook before the original runs".
+- **Also set the table row:** the declared rect is what the world lookup uses (Q2) and `0x327650` runs once, so give the slot row the maximum size in all three difficulty columns (and the chosen offsets) so the allocation-time rect already fits any plan; the hook never needs to move the origin. A rect that grows after allocation could newly overlap another level between lookups (needs game, Q2).
+- **Evidence level:** static. **Needs game:** the Q1 logs, plus the first room's x/y equal to `(size - roomW)/2 + origin` before `0x327880` and the final bounding box at the origin.
+
+### Left for the game
+
+1. The whole game accepting a 360 x 360 maze level (Q1, size and lopsided checks).
+2. The origin being clear of every other level's rect, including outdoor levels (Q2 log).
+3. A slot id built with its second `0x3eb850` call suppressed: clean build, arrival and walk (Q3).
+4. Optional: sizing the level to the layout span instead of the centred capacity (Q1 lopsided check).
