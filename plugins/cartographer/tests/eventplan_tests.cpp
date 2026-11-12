@@ -90,10 +90,42 @@ TEST_CASE("placements: centre first, distinct, inside, deterministic, capped by 
 	CHECK(placements(room, 0, 1).empty());
 	CHECK(placements({0, 0, 0, 5}, 3, 1).empty());
 	const std::vector<Spot> tiny = placements({10, 10, 3, 3}, 50, 1);
-	CHECK(tiny.size() <= 4);
+	CHECK(tiny.size() <= 9);
 	for (const Spot &s : tiny) {
 		CHECK(inside(s, {10, 10, 3, 3}));
 	}
+}
+
+TEST_CASE("placements: an outdoor 8 x 8 tile event room (40 x 40 units) holds 4 at the usual spacing and packs tighter for more") {
+	const Rect room{3000, 1500, 40, 40};
+	CHECK(placements(room, 4, 3, 5).size() == 4);
+	for (int n : {6, 8, 12}) {
+		const std::vector<Spot> p = placements(room, n, 3, 5);
+		CHECK(static_cast<int>(p.size()) == n);
+		std::set<std::pair<int, int>> seen;
+		for (const Spot &s : p) {
+			CHECK(inside(s, room));
+			CHECK(seen.insert({s.x, s.y}).second);
+		}
+		CHECK(p[0].x == 3020);
+		CHECK(p[0].y == 1520);
+	}
+	const Rect cell{3000, 1500, 160, 160};  // the 32 x 32 tile cell
+	CHECK(placements(cell, 6, 3, 5).size() == 6);
+	CHECK(placements(room, 100, 3, 5).size() < 100);  // never more than the room holds
+}
+
+TEST_CASE("planEvent: a Horde of 6 in an outdoor event room gets 6 spots and records the count asked for") {
+	ev::Event e = event(ev::Kind::Horde, "Bishibosh");
+	e.hordeSize = 6;
+	SpawnPlan p = planEvent(e, resolveSpawn(table(), "Bishibosh"), {3000, 1500, 40, 40}, 1, 5);
+	CHECK(p.problem.empty());
+	CHECK(p.requested == 6);
+	CHECK(p.spawns.size() == 6);
+	e.hordeSize = 5000;
+	p = planEvent(e, resolveSpawn(table(), "Bishibosh"), {3000, 1500, 40, 40}, 1, 5);
+	CHECK(p.requested == 5000);
+	CHECK(p.spawns.size() < 5000);
 }
 
 TEST_CASE("spotScale: server units per DRLG tile") {
