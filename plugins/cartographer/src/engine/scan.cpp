@@ -152,6 +152,7 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 static const char* HookConsequence(const char* name) noexcept {
 	const std::string_view n(name);
 	if (n == "LevelBuild") return "EVERY level build is skipped (not only the maze), so no level will load";
+	if (n == "OutdoorAct5Builder") return "the game's Act 5 outdoor builder is skipped";
 	if (n == "DeathDrop") return "the game's own monster drop is skipped for EVERY monster";
 	if (n == "OperateObject") return "the game's object use is skipped for EVERY object";
 	if (n == "PopulateRoom") return "the game's own room population is skipped for EVERY room";

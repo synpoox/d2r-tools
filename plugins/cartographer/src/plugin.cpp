@@ -13,6 +13,7 @@
 #include "crash_guard.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
+#include "engine/level_row.h"
 #include "engine/map_names.h"
 #include "engine/map_sync.h"
 #include "engine/maze_hooks.h"
@@ -160,6 +161,25 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 	return true;
 }
 
+// monstats.txt Ids whose boss column is 1. False when the table or either column is missing.
+auto ReadBossIds(const std::wstring& file, std::vector<std::string>* out) -> bool {
+	std::string text;
+	if (!ReadFile(file, &text)) {
+		return false;
+	}
+	const carto::Tsv table = carto::ParseTsv(text);
+	const int cId = table.Column("Id"), cBoss = table.Column("boss");
+	if (cId < 0 || cBoss < 0) {
+		return false;
+	}
+	for (const carto::TsvRow& row : table.rows) {
+		if (table.Cell(row, cBoss) == "1" && !table.Cell(row, cId).empty()) {
+			out->push_back(table.Cell(row, cId));
+		}
+	}
+	return true;
+}
+
 auto ReadGameNames() -> carto::GameNames {
 	carto::GameNames names;
 	if (g_excelDir.empty()) {
@@ -167,6 +187,18 @@ auto ReadGameNames() -> carto::GameNames {
 	}
 	names.haveMonsters = ReadColumn(g_excelDir + L"\\monstats.txt", "Id", &names.monsters);
 	names.haveSuperUniques = ReadColumn(g_excelDir + L"\\superuniques.txt", "Superunique", &names.superUniques);
+	names.haveBossFlags = ReadBossIds(g_excelDir + L"\\monstats.txt", &names.bossMonsters);
+	std::vector<std::string> modIds;
+	if (ReadColumn(g_excelDir + L"\\monumod.txt", "id", &modIds)) {
+		for (const std::string& id : modIds) {
+			char* end = nullptr;
+			const long v = std::strtol(id.c_str(), &end, 10);
+			if (end != id.c_str() && *end == '\0' && v >= 0 && v <= 255) {
+				names.monsterMods.push_back(static_cast<int>(v));
+			}
+		}
+		names.haveMods = !names.monsterMods.empty();
+	}
 	names.haveItems = true;
 	for (const wchar_t* file : {L"\\misc.txt", L"\\weapons.txt", L"\\armor.txt"}) {
 		names.haveItems = ReadColumn(g_excelDir + file, "code", &names.itemCodes) && names.haveItems;
@@ -267,12 +299,14 @@ auto LoadAll() -> Loaded {
 	} else {
 		loaded.report.Error(carto::SlotsFile, 0, "the file is missing, so the map item has no level to open. Run tools\\install.ps1 and restart the game.");
 	}
-	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build.
+	// A slot must be a level the installer added: drop the others (a vanilla level, a town, no row) before any hook sees them.
 	text.clear();
-	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0) {
-		if (ReadFile(g_excelDir + L"\\levels.txt", &text)) {
-			carto::ReadSlotLevelTypes(loaded.tables->slots, text);
-		}
+	ReadFile(g_excelDir + L"\\levels.txt", &text);
+	carto::ValidateSlots(loaded.tables->slots, text, loaded.report);
+	// A Maze slot is one LevelType (3 Cave or 4 Crypt): name each Cave/Crypt map it cannot build. An Outdoor slot's origin, declared size and
+	// act are read from the same file for the outdoor build hook.
+	if (carto::SlotLevel(loaded.tables->slots, carto::MazeSlot) > 0 || carto::SlotLevel(loaded.tables->slots, carto::OutdoorSlot) > 0) {
+		carto::ReadSlotLevelTypes(loaded.tables->slots, text);
 		for (const carto::MapDef& map : loaded.tables->maps) {
 			if (const std::string problem = carto::MazeTilesetProblem(map, *loaded.tables); !problem.empty()) {
 				loaded.report.Error(carto::MapsFile, map.line, problem.substr(problem.rfind("Cartographer: ") == 0 ? 14 : 0));
@@ -399,6 +433,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::MapNamesPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
@@ -506,6 +541,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
 	carto::MapNamesUnload();  // the slot level's own text back in the game's table
+	carto::LevelRowUnload();  // ... and its own monster fields
 	carto::UnloadMapSync();
 	crash_guard::Remove();
 	g_context = nullptr;

@@ -1113,7 +1113,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 
 ### Signed for the outdoor slot (desk work, 2026-11-12)
 
-Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; nothing in the plugin uses them yet (no hook, no call), so they are checked, not run.
+Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; they were checked, not run, until section 8a (the hook lengths in the table below are the spike's; section 8a has the derived ones).
 
 | Part | RVA | Signature source | Hook length | Evidence |
 |---|---|---|---|---|
@@ -1124,7 +1124,51 @@ Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_s
 
 The outdoor slot itself (moved here from the plugin README, which is for players): outdoor maps (`Jungle` first) are planned to open through a third level, the `Outdoor` slot, a `levels.txt` level with `DrlgType` 3 and `LevelType` 21 listed in `slots.txt` as an `Outdoor` row. What exists is groundwork only, none of it verified in game and none of it called by the plugin: `slots.txt` accepts the row, the loader reads that level's `DrlgType` and `LevelType` (`ReadSlotLevelTypes`, the one part that runs), `OutdoorSlotProblem` can compare them with a map's tileset but nothing calls it yet, and the piece picker and stamp plan (`src/outdoor/`, unit tested) turn a layout into the pieces, level size and void cells. No hook exists and no map opens through the slot: `Jungle` and `Snow` maps are still refused, and an `Outdoor` row changes nothing in game. `planStamps` refuses every bad input itself (including piece 529 and a pinned file over 15); `checkStampPlan` is the independent second check.
 
-The checker rows carry max patch 999 ("only checked"): whoever adds a hook re-derives the patch length and the row. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+The checker rows carried max patch 999 ("only checked") until the outdoor build hook (section 8a) derived them. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+
+## 8a. Outdoor build hook (issue #141)
+
+Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks themselves have never run in a game.
+
+### Hook lengths (derived 2026-11-12)
+
+Method: disassemble the part's entry with capstone from the 93847 dump. A patch must end on an instruction boundary and hold no relative operand (call, jmp, jcc, RIP-relative), because the loader copies the bytes to a trampoline. The "max patch" is the offset of the first relative operand; `tools/check_maze_signatures.py` now holds it per part, checks that the signature's bytes stop at or before it where it is a number, and checks that the hook lengths below end on an instruction boundary and are not over it.
+
+| Part | RVA | Hook length | Max patch | First relative operand | Used as |
+|---|---|---|---|---|---|
+| `LevelBuild` | `0x3271c0` | 14 | 48 | `call 0x367110` | hooked once; shared with the maze hook (below) |
+| `OutdoorAct5Builder` | `0x3fe2e0` | 16 | 37 | `jne rel32` (`0F 85`) | hooked; stamps the plan |
+| `OutdoorEntry` | `0x3ee320` | not hooked (the spike hooked 19) | 90 | `call` | called |
+| `PieceStamp` | `0x3ecfc0` | not hooked | 61 | `call` | called, once per stamp |
+| `VoidCell` | `0x3ede00` | not hooked | 39 | `call 0x3faa50` | called, once per void cell |
+
+### How it works
+
+- One level build hook. `0x3271c0` is already hooked by the maze steering, so `LevelBuildHook` there calls `OutdoorLevelBuild` first. The outdoor build installs its own hook (14 bytes) only when the maze hook never tried (`MazeLevelBuildHookTried`); when the maze hook was tried and refused, the outdoor build stays off with a log line.
+- `OutdoorLevelBuild` touches the Outdoor slot level only (`IsSlotLevel`: slots.txt `Outdoor` level id). Any other level, in any act, runs the game's own build.
+- Preconditions, all read-only, otherwise the game builds its own level with the reason in the log: `OutdoorBuild = 1`, every part on, level type 3, drlg and the outdoor block (`level+0x18`) readable, no rooms yet, a map opened (`OutdoorMapOpened`), the slot row's OffsetX, OffsetY, SizeX, SizeY in `levels.txt`, `LevelType` equal to the tileset's (`OutdoorLevelType`), and a plan that passed `planStamps` and `checkStampPlan`.
+- Then: write the rectangle (origin from the slot row, size from the plan; both are 0 for a slot when the build starts, section 4 S1), reseed (`[level+0x1e4] = int32(drlg[0x860]) + levelId`, `[level+0x1e8] = 0x29a`), call `OutdoorEntry`. Its Act 5 branch reaches our `OutdoorAct5Builder` hook, which, only when the thread's build context names this level, calls `PieceStamp(dataFlag, level, cx, cy, lvlPrest, file, 0)` per stamp and `VoidCell(level, x, y)` per void cell. Then the level type is set to 0 (no branch of the dispatch matches, so only the native tail runs, section 4 S1), the original `LevelBuild` runs, and type 3 is restored.
+- Afterwards the built grid is read back (`+0x08` piece grid, `+0x58` flag grid through the row index) and compared with the plan (`compareGrid`); a difference is logged, not repaired. If the Act 5 branch was not taken (the slot level is not in Act 5 in `levels.txt`) the plan was not stamped, and the log says so.
+- The plan is cached by (seed, tileset, shape, size, origin, limits, options), four entries, so the host's and a client's builds of one map share one computation. Failed plans are cached.
+- `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. Both settings default to 0.
+
+### After our build, and what is not hooked when the setting is off
+
+- **Second reseed.** The original's prologue (`0x3271e2..0x3271f0`) reseeds the level RNG again after our build returns control to it, so the level RNG ends at the fresh seed, not where a generator left it. The tail does not read it (section 8 Q5); the last fallback of `0x3da650` does. It is the same on the host and on a client.
+- **`OutdoorBuild = 0` installs nothing.** `InstallOutdoorHooks` finds the parts (for `cartographer check`) but hooks neither `0x3fe2e0` nor, when the maze steering did not take it, `0x3271c0`, when the setting is 0 or slots.txt has no Outdoor slot (one log line says so). The game then runs as without the outdoor code; the setting is read at load, so a restart turns it on.
+- **Act 5 only.** `PrepareSlot` refuses, before any write or engine call, unless the Outdoor slot row in levels.txt has `Act` = 4 (Act 5) and an id above 137 (a vanilla level or a town is never rebuilt). Otherwise `0x3ee320` would dispatch to a vanilla Act 1-4 builder (`0x3ee484..0x3ee4db`) on our level and rectangle. A missing `Act` column also refuses. The game then builds the level itself.
+
+### Slot row requirements (found by the outdoor spike, PR #168)
+
+- The Outdoor slot's levels.txt row needs `Vis0` to `Vis7` = 0. With `-1` the game crashes at image `+0x3268fb`. The installer writes the row (issue #144) and is not changed here; this is recorded for that change.
+
+### Open
+
+- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142, and it needs the S2 spike (#89). The whole feature stays off until a game check settles it.
+- The entry room: whether the plan's entrance cell is where the player arrives is also #142.
+- Nothing opens an outdoor map yet (#144), so `OutdoorMapOpened` has no caller.
+- `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
+- Nothing here has run in a game.
 
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
@@ -1182,9 +1226,9 @@ Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the m
 - **What:** the `Boss` column of `maps.txt` (a monstats `Id` or a superuniques name, resolved like an event's `Spawn`, section 11) is spawned once per map open: one monster at the centre of the boss room, no minions and no `Drop` (those belong to the Boss event). It is armed at map open whether or not an event was drawn. Flags 0, so the map's stats reach it.
 - **Where:** a Cave or Crypt maze: the plan's boss room, the far cell of the main path (`Plan::bossRoom`, `Role::Boss`). `maze_hooks.cpp` records its DRLG rect after the slot build next to the event room (`MazeBossRoom()`, log `eventprobe: maze boss room ...`) and the populate hook fires an `EventRoomTracker` on that rect. A layout with `BossRoom` off has no boss room: the map Boss is left off, with a warning. There is no Preset code, since Preset is being removed.
 - **Boss and Boss event together:** both are kept. The event goes in the event room (partway along the main path), the map Boss in the boss room (the far end); they are different cells of the plan. A superunique that both name spawns once per game, then as its Class.
-- **Dedicated boss entries (issue #170):** `Boss` no longer names a vanilla boss. It names a `bosses.txt` entry; `tools/install.ps1` adds one `superuniques.txt` row per entry keyed `cartoboss:<Name>` (Class = the entry's Base, Mod1-3, MinGrp/MaxGrp = Minions, TC copied from the Act 5 Super C classes), found through the same name map and spawned through the same `0x499ba0` path as before. No new address. If the name map has no such row the Base is spawned as a plain monster, and if `0x499ba0` returns null `SpawnOne` already spawns the row's Class plain; the log says which. Unit tested (`tables_tests`); the installer was run twice on a copy of the vanilla tables (second run changed nothing). **Needs game:** the row is found by the name map, the shown name, mods and minions, and that the spawn returns a unit.
+- **Dedicated boss entries (issue #170):** `Boss` no longer names a vanilla boss. It names a `bosses.txt` entry; `tools/install.ps1` adds one `superuniques.txt` row per entry keyed `cartoboss:<Name>` (Class = the entry's Base, Mod1-3, MinGrp/MaxGrp = Minions, TC copied from the Act 5 Super C classes), found through the same name map and spawned through the same `0x499ba0` path as before. No new address. If the name map has no such row the Base is spawned as a plain monster, and if `0x499ba0` returns null `SpawnOne` already spawns the row's Class plain; the log says which. Unit tested (`tables_tests`); the installer was run twice on a copy of the vanilla tables (second run changed nothing). **Needs game:** the row is found by the name map, the shown name, mods and minions, and that the spawn returns a unit. **Review follow-ups (fix cycle 1):** a `Base` whose monstats `boss` column is 1 is refused (plugin and installer); the installer checks `Base` against `monstats.txt` and `Mods` against `monumod.txt` before writing and rebuilds its `cartoboss:` rows each run. **Open (needs game or RE):** `0x499ba0` reads and sets the once-per-game bit at `[game + 0x1d8 + (row >> 3)]` (`0x499c6d` read, `0x499d97` write) with no bound except the table row count, and the dump does not show the bitmap's length. Vanilla needs 9 bytes (66 rows); a row numbered 66 and up writes past that. Classic D2 reconstructions use a 64-byte list (rows below 512), which is inference only. Until it is known, `bosses.txt` is capped at 16 entries (`MaxBosses` in `tables.h`, `$MaxBosses` in `install.ps1`; 16 rows is 2 more bytes, row 81 at most). **Open:** the boss `Name` (superuniques loader `0x3a1d20`, converter `0x308be0` to a string index at table load) probably shows the fallback text; a registered key from the installer is the follow-up.
 - **Outdoor:** waits on issue #145. The hook point is in `OnPopulated` (`event_apply.cpp`), where `bossPlan` is read from `MazeBossRoom()` for a maze; an outdoor map reads its stamp plan's boss rectangle there, and the tracker and `SpawnMapBoss` are unchanged.
-- **`Monsters`:** not part of this change. The monster pool is written into the slot level's levels row with Level, Density, Champions and Uniques, in issue #156.
+- **`Monsters`:** not part of this change. The monster pool is written into the slot level's region record, with Density and Uniques (and Level in the levels row), in issue #156 (section 15).
 - **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
 
 ## 10. Red portal tooltip and area name (issue #90)
@@ -1968,3 +2012,63 @@ Build 93847, stamp `0x6ab3782c`, static (dump); not run in a game. With `ItemSta
 - **Fail open:** a part off, no list, an empty list or no matching stat leaves a normal draw. Correction to section 6 C: the entries are 8 bytes (`{key, value}`), not 16; the plugin never reads the list's memory itself.
 - **Mapping (unit tested):** each item stat is matched by id to the first `mapstats.txt` row (built-in pool when there is no file) whose `Stat` has that id in `itemstatcost.txt`; that row gives the target. Stats with a layer, a value of 0 or no row are dropped and logged. Values are used as they are (the game's raw units, as for `SetListStat`).
 - **Needs game:** a map item with known affixes (for example `item_maxhp_percent` 30 and `fireresist` -20, both in `mapstats.txt`) opens with exactly those properties in the log line `ItemStats: 2 item stat(s) read, 2 used`; an item with no stats draws as usual; the item is still intact at the read (the read is before `OpenRedPortal`); an item with 16 and one with 17 or more stats (the note fires only above 16); that the returned list is the affix list and not a state list.
+
+## 15. Map monster columns in the slot level's row and region record (issue #156)
+
+Build 93847, stamp `0x6ab3782c`, static (dump); nothing here was run in a game. Code: `plugins/cartographer/src/engine/level_row.cpp` (game glue), `src/levelrow/` (pure: layout, guards, plan, ledger, undo; `tests/levelrow_tests.cpp`). The first route wrote every column into the levels row only; the review showed the spawn code reads a per-game copy, so the route is now two spaces: the row for `Level`, the slot level's region record for `Density`, `Uniques` and `Monsters`.
+
+### The row (`Level` only)
+
+The levels.txt loader (`0x32eac0`..`0x33061a`) builds one descriptor per column, `0x20` bytes each (`+0` name, `+8` type, `+0x10` row offset). `Id` is at `+0x04` (2 bytes); `MonLvl`, `MonLvl(N)`, `MonLvl(H)` at `0x18`, `0x1a`, `0x1c` and `MonLvlEx`, `MonLvlEx(N)`, `MonLvlEx(H)` at `0x1e`, `0x20`, `0x22` (2 bytes each). `Level` writes these six. It works because `0x32c700` reads the row's `MonLvl` live on each call (static). The scan of `.text` for displacements `0x2dc` and `0x2e0` shows the record's own MonLvl copy is only written at `0x508973` / `0x508987`, which is why the spawn-time level comes from the row.
+
+### The region record (`Density`, `Uniques`, `Monsters`)
+
+The record array is built once per game: `0x5098b0` (called from nowhere else) calls `0x508750` for every level `1..count-1` and stores the records in the array at `*(game + 0x1d0)`; `0x508740(array, level)` returns `array[level]` (also used at `0x508d5f` and `0x50ad3a`). A record is `0x9f0` bytes.
+
+| Field | Record offset | Size | Evidence |
+|---|---|---|---|
+| copy of row `+0x0d` | `+0x00` | 1 | `0x508750` copies it; the plugin compares it with the row (the difficulty check) |
+| group count | `+0x10` | 1 | `0x509c24`..`0x509c43` (`0x509940`) |
+| group weight sum | `+0x11` | 1 | same; sum of the byte weights |
+| group count 2 | `+0x12` | 1 | same |
+| groups | `+0x14 + 0x34*i` | `0x34` each | word monstats row at +0, byte weight (monstats `+0x64`) at +2, byte at +3 (member count by `0x4195e0`, inferred); 13 groups end exactly at `+0x2b8` |
+| `MonDen` | `+0x2b8` | 4 | write `0x508921` |
+| `MonUMin` | `+0x2bc` | 1 | write `0x50892d`, read `0x419d47` |
+| `MonUMax` | `+0x2bd` | 1 | write `0x508939`, read `0x419d3f` |
+
+Readers: `0x419e80` picks the monster kind from `+0x10`, `+0x11` and `+0x14`; `0x419d20` reads `+0x2bc` / `+0x2bd`; `0x50acf0` reads `+0x2b8`. In Normal difficulty only, `0x419e80` also reads the row's umon list (`+0x3d`); maps open in Hell only, so that read is not reached.
+
+### What is written
+
+| Map column | Where | Value |
+|---|---|---|
+| `Level` | row, six `MonLvl*` fields | the level, 1 to 255 |
+| `Density` | record `+0x2b8` | the record's value plus `Density` percent, rounded half up |
+| `Uniques` | record `+0x2bc`, `+0x2bd` | the record's value plus `Uniques` percent, each at most 255; no averaging |
+| `Monsters` | record `+0x10`, `+0x11`, `+0x12` and the first groups | counts = the number of ids, per entry the monstats row, its weight (monstats `+0x64`, from the SDK view) and 0 members; the sum is stored as a byte |
+
+`Champions` has no field: the champion roll is fixed in `0x419d20` (`0x419e12`..`0x419e2c`), so it is read and checked but not applied. This replaces the earlier sentence that one pair served all special packs and was averaged; `Uniques` now scales the pair alone. Written at map open, on the game thread, just before `OpenRedPortal`.
+
+### Guards (runtime, per part, fail open)
+
+- Slot guard: nothing is written when the slot level is 137 or less, or is not the checked slot of the map's own tileset (Maze or Preset) (`SlotAllowed`). Local, independent of `ValidateSlots`.
+- Row: readable, `Id` equals the slot level; `Level` off when a `MonLvl*` field is outside 0..255.
+- Record: pointer from `game + 0x1d0` and `array[level]` readable (`Readable`) for `0x2c0` bytes; `record+0` equals row `+0x0d` for the game's difficulty (`game + 0x104`); `Monsters` off when the group counts are above 13 or inconsistent, `Density` off when `MonDen` is outside 0..100000, `Uniques` off when `MonUMin` / `MonUMax` is above 100.
+- A part whose check fails is switched off with a log line; the others still apply. A write that fails stops the open and the undo restores what was written.
+
+### Restore
+
+The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), writing a field back only while it still holds the plugin's value. The record is undone on a failed open but only forgotten (ledger cleared, no write) on `GameLeft` and unload: the array belongs to the game that is being destroyed or is gone, so a write there is not safe. A new game builds fresh records.
+
+### Risks, and what needs the game
+
+- Needs game: that `Density`, `Uniques` and `Monsters` written to the record change the spawns (static reading says so, nothing was observed), and that `Level` shows in monster levels.
+- Inference: entry `+3` is a member count (`0x4195e0`) and 0 is a safe value; the plugin writes 0.
+- Normal difficulty also reads the row's umon list; not reached, as maps open in Hell only (#159).
+- The array bound is not checked beyond `Readable` and the level id.
+- One record per slot: a second map through the same slot in one game overwrites the first map's values for rooms that populate later.
+- Client side: a TCP/IP client writes none of this; the host spawns the monsters.
+
+### Game check (listed for later)
+
+A map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; the log shows the row and record writes; read a monster's level and kinds. Then `Density` 100 and `Uniques` 100 on a slot with a nonzero base and count packs. Leave the game and check the log reports the row put back.

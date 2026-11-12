@@ -12,8 +12,8 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Red portal**: one map per game, in Harrogath, in Hell. A refused map stays in your inventory and you see "I can't use this yet."
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt`; the rest load.
-- **Cave and Crypt mazes**: these maps are built from the map's layout (`Corridor`, `Winding`, `Branching`, `Loop`,
-  `Sprawl`) through a `Maze` slot you add by hand (see below).
+- **Cave and Crypt mazes**: every map is generated (Cave or Crypt) from the map's layout (`Corridor`, `Winding`,
+  `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are off by
   default (`PlayerStats`, test characters only, experimental).
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
@@ -42,8 +42,10 @@ in [`examples/first-map/`](examples/first-map/).
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the map level and the `Preset` slot to the mod's
-   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds no items. Running it again is safe. If the mod ships its own
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
+   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
+   no items. The level is a Cave by default; add
+   `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
    of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
@@ -59,8 +61,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset`, `Cave` or `Crypt`; other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` (not used by `Preset`) | required |
+| Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
@@ -68,7 +70,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Monsters | Up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Champions, Uniques | Read and checked; not applied yet | cartographer.txt |
+| Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
+| Champions | Read and checked; not applied yet | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
 
@@ -84,8 +87,9 @@ in [`examples/first-map/`](examples/first-map/).
 
 ### Optional files
 
-These files sit beside `maps.txt`, are tab separated with a header row, and can be left out. A bad row is skipped and
-named in `cartographer-report.txt`. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
+These files sit beside `maps.txt` and are tab separated with a header row. `slots.txt` is required, but the installer
+writes it; the others can be left out. A bad row is skipped and named in `cartographer-report.txt`, except in
+`signatures.txt`, where a bad row is skipped silently and shows only as that engine part being off. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
 
 #### mapstats.txt
 
@@ -106,19 +110,23 @@ The bosses a map can have. A map's `Boss` in `maps.txt` must name a row here by 
 these own entries, never a vanilla boss: a `Boss` that names a vanilla superunique (such as Bishibosh) or a vanilla
 monster, or a name that is not in this file, is refused at load (the report and the log say so) and that map opens
 without a Boss. Without this file no map has a Boss. `tools\install.ps1` writes one `superuniques.txt` row per entry,
-keyed `cartoboss:<Name>`, so it can never match a vanilla row; it only adds or repairs those rows and never edits a
-vanilla one. Run it again after you change this file, then restart the game. If the game does not have an entry's row,
-or the game returns no unit for it, the boss is spawned as a plain monster of its `Base` instead (without mods or
-minions) and the log says which path was taken.
+keyed `cartoboss:<Name>`, so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
+(the `Base` must be an ordinary monster in `monstats.txt`, never a vanilla boss such as `andariel`; each `Mods` id must
+be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
+rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
+keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row, or
+the game returns no unit for it, the boss is spawned as a plain monster of its `Base` instead (without mods or
+minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
+(two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Name | The boss's name, shown in game; unique, and not the name of a vanilla boss or monster | required |
+| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It may not show correctly in game yet (the game turns the name into a string once, when it loads the table; a follow-up is open) | required |
 | Base | A monster id from the game's `monstats.txt` that the boss is made from | required |
 | Mods | Up to 3 monster mod ids from `monumod.txt`, separated by commas (for example `5,6`: strong, fast) | none |
 | Minions | How many of the base monster come with the boss, 0 to 10 | 0 |
 
-Example row: `Shoreline Warden	zombie1	5,6	2` under the header `Name	Base	Mods	Minions`. The name shown in game, the mods
+Example row: `Shoreline Warden	zombie1	5,6	2` under the header `Name	Base	Mods	Minions`. The name, the mods
 and the minions come from the `superuniques.txt` row and have not been checked in game yet.
 
 #### mapevents.txt
@@ -163,13 +171,14 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 
 #### slots.txt
 
-Which level each slot opens. `tools\install.ps1` writes the `Preset` row; you add the `Maze` row yourself (see
-[Maze slot](#maze-slot-cave-and-crypt)).
+Which level the `Maze` slot opens. `tools\install.ps1` writes the row (see [Maze slot](#maze-slot-cave-and-crypt)). A slot
+that names a level of the original game, a town, a level with no row in `levels.txt`, a `Maze` level whose row is not named `Cartographer Maze`, or a level another slot uses is
+left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Preset` or `Maze` | required |
-| Level | The level id in the mod's `levels.txt`, 1 to 65535 | required |
+| Slot | `Maze` | required |
+| Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
 
@@ -185,22 +194,14 @@ A part found this way is checked before it is used; if the check fails the part 
 
 ## Maze slot (Cave and Crypt)
 
-A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, which you add by hand. One Maze slot serves one
-tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second Cave or
-Crypt map in the same game is refused. Without the slot, only Cave and Crypt maps are refused.
+Every map is a generated maze, built on the `Maze` level that `tools\install.ps1` adds. One Maze level serves one
+tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second map in the
+same game is refused. Without the level, no map opens.
 
-1. In the mod's `levels.txt`, add a level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and
-   `SizeY` up to 360 in all three difficulties, `Depend` 0, `Position` 0 and `OffsetX` about 6000, plus a matching
-   `lvlmaze.txt` row. Keep a `LevelName` that has a string.
-2. Add a `Maze` row to `slots.txt` (tab separated, header `Slot` and `Level`) with the new level's id:
-
-   ```
-   Slot	Level
-   Preset	138
-   Maze	139
-   ```
-
-3. Restart the game. If the plan cannot be built, the game builds its own maze and the log says why.
+The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a plain game Cave (or Crypt) level and
+set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with its `lvlmaze.txt` row and the `Maze` row of
+`slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
+Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Status
 
@@ -208,8 +209,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, the portal tooltip reading "Colossal Summit", and `MapNames=1` (a map's own name
-  seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
+  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
   banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare
   difficulty for mazes, and a second Crypt map in one game.
