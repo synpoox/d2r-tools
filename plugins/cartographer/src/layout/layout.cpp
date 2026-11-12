@@ -129,6 +129,12 @@ std::vector<Point> eligibleRoots(const Grid &g, const Draft &d)
 			const Point p{x, y};
 			if (g.used(p) && !isReserved(d, p) && g.degree(p) < 4) out.push_back(p);
 		}
+	// The last cell of a side room stays a dead end: nothing hangs from it or loops into it.
+	for (const Branch &b : d.branches) {
+		if (b.cells.empty()) continue;
+		const Point end = b.cells.back();
+		out.erase(std::remove(out.begin(), out.end(), end), out.end());
+	}
 	return out;
 }
 
@@ -242,16 +248,23 @@ std::vector<Point> rectRing(int ox, int oy, int w, int h)
 	return ring;
 }
 
-// Pushes the segment ring[i] -> ring[i+1] outward by one cell (the ring grows by two cells).
+// Pushes a straight run of three cells ring[i], ring[i+1], ring[i+2] sideways by one cell: the middle cell is replaced
+// by the detour a, b, c (the ring grows by two cells). The result starts at ring[i]. Returns an empty ring when the
+// three cells are not in a straight line. (A one-cell detour would leave its two ends touching, which is not allowed.)
 std::vector<Point> bumpRing(const std::vector<Point> &ring, size_t i, int side)
 {
 	const size_t n = ring.size();
-	const Point p = ring[i], q = ring[(i + 1) % n];
+	const Point p = ring[i], q = ring[(i + 1) % n], r = ring[(i + 2) % n];
 	const int dx = q.x - p.x, dy = q.y - p.y;
+	if (r.x - q.x != dx || r.y - q.y != dy) return {};
 	const int nx = side ? -dy : dy, ny = side ? dx : -dx;
-	std::vector<Point> out(ring);
-	const Point a{p.x + nx, p.y + ny}, b{q.x + nx, q.y + ny};
-	out.insert(out.begin() + static_cast<std::ptrdiff_t>(i + 1), {a, b});
+	std::vector<Point> out;
+	out.reserve(n + 2);
+	out.push_back(p);
+	out.push_back(Point{p.x + nx, p.y + ny});
+	out.push_back(Point{q.x + nx, q.y + ny});
+	out.push_back(Point{r.x + nx, r.y + ny});
+	for (size_t k = 2; k < n; ++k) out.push_back(ring[(i + k) % n]);
 	return out;
 }
 
@@ -291,10 +304,20 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 
 	std::vector<Point> ring = rectRing(rng.range(0, w - rw), rng.range(0, h - rh), rw, rh);
 	std::vector<int> scratch;
-	for (int tries = 0; static_cast<int>(ring.size()) < len && tries < 400; ++tries) {
-		const size_t i = rng.below(static_cast<uint32_t>(ring.size()));
-		std::vector<Point> trial = bumpRing(ring, i, static_cast<int>(rng.below(2)));
-		if (ringValid(trial, w, h, scratch)) ring.swap(trial);
+	while (static_cast<int>(ring.size()) < len) {
+		// Push out the first segment that still fits, starting from a random one, so the ring only gets stuck when
+		// no segment can grow at all.
+		const size_t count = ring.size();
+		const size_t start = rng.below(static_cast<uint32_t>(count));
+		const int sideFirst = static_cast<int>(rng.below(2));
+		bool grown = false;
+		for (size_t k = 0; k < count * 2 && !grown; ++k) {
+			const size_t i = (start + k / 2) % count;
+			const int side = (sideFirst + static_cast<int>(k & 1)) & 1;
+			std::vector<Point> trial = bumpRing(ring, i, side);
+			if (ringValid(trial, w, h, scratch)) { ring.swap(trial); grown = true; }
+		}
+		if (!grown) return false;
 	}
 	if (static_cast<int>(ring.size()) != len) return false;
 
@@ -701,21 +724,28 @@ std::string validateRules(const Rules &r)
 
 // --- generation ----------------------------------------------------------------------------------------------------
 
+constexpr int kRestarts = 4; // restarts inside one try when it gets stuck
+
 std::optional<Layout> generateAttempt(const Rules &r, uint64_t attemptSeed)
 {
+	// A walk or a side room can paint itself into a corner; a few quick restarts from the same stream are cheaper than
+	// spending one of the kRetries on it.
 	Pcg32 rng(attemptSeed);
-	Grid g(r.width, r.height);
-	Draft d;
-	if (r.loop) {
-		if (!buildRing(g, rng, r, d)) return std::nullopt;
-	} else {
-		if (!walkMain(g, rng, r, d)) return std::nullopt;
-		d.ring = false;
+	for (int restart = 0; restart < kRestarts; ++restart) {
+		Grid g(r.width, r.height);
+		Draft d;
+		if (r.loop) {
+			if (!buildRing(g, rng, r, d)) continue;
+		} else {
+			if (!walkMain(g, rng, r, d)) continue;
+			d.ring = false;
+		}
+		reserveRooms(r, d);
+		if (!addBranches(g, rng, r, d)) continue;
+		if (!addLoops(g, rng, r, d)) continue;
+		return assemble(g, d);
 	}
-	reserveRooms(r, d);
-	if (!addBranches(g, rng, r, d)) return std::nullopt;
-	if (!addLoops(g, rng, r, d)) return std::nullopt;
-	return assemble(g, d);
+	return std::nullopt;
 }
 
 Layout generateFallback(const Rules &r, uint64_t seed)
@@ -956,6 +986,227 @@ std::string toAscii(const Layout &l)
 		out += '\n';
 	}
 	return out;
+}
+
+// --- shapes.txt ----------------------------------------------------------------------------------------------------
+
+namespace {
+
+std::string_view trim(std::string_view s)
+{
+	while (!s.empty() && (s.front() == ' ' || s.front() == '\r')) s.remove_prefix(1);
+	while (!s.empty() && (s.back() == ' ' || s.back() == '\r')) s.remove_suffix(1);
+	return s;
+}
+
+std::vector<std::string_view> splitTabs(std::string_view line)
+{
+	std::vector<std::string_view> out;
+	size_t start = 0;
+	for (;;) {
+		const size_t t = line.find('\t', start);
+		if (t == std::string_view::npos) { out.push_back(trim(line.substr(start))); break; }
+		out.push_back(trim(line.substr(start, t - start)));
+		start = t + 1;
+	}
+	return out;
+}
+
+bool parseInt(std::string_view s, int &out)
+{
+	if (s.empty() || s.size() > 6) return false;
+	size_t i = 0;
+	bool neg = false;
+	if (s[0] == '-') { neg = true; i = 1; }
+	if (i >= s.size()) return false;
+	int v = 0;
+	for (; i < s.size(); ++i) {
+		if (s[i] < '0' || s[i] > '9') return false;
+		v = v * 10 + (s[i] - '0');
+	}
+	out = neg ? -v : v;
+	return true;
+}
+
+bool parseBool(std::string_view s, bool &out)
+{
+	if (equalsNoCase(s, "1") || equalsNoCase(s, "yes") || equalsNoCase(s, "true")) { out = true; return true; }
+	if (equalsNoCase(s, "0") || equalsNoCase(s, "no") || equalsNoCase(s, "false")) { out = false; return true; }
+	return false;
+}
+
+enum Column { cName, cBase, cMinPath, cMaxPath, cStraight, cMinTurns, cMaxTurns, cMinBranches, cMaxBranches, cMinBranchLen,
+	cMaxBranchLen, cLoop, cMinLoops, cMaxLoops, cWidth, cHeight, cBossRoom, cColumnCount };
+
+// The column names of shapes.txt. The plan has not fixed them yet (tables.md: "to be set in phase 2"); these match the
+// names validateRules() uses in its messages.
+const char *const kColumnNames[cColumnCount] = {"Name", "Base", "MinPath", "MaxPath", "Straight", "MinTurns", "MaxTurns",
+	"MinBranches", "MaxBranches", "MinBranchLen", "MaxBranchLen", "Loop", "MinLoops", "MaxLoops", "Width", "Height", "BossRoom"};
+
+const ShapeDef *findCustom(const ShapeTable &t, std::string_view name)
+{
+	for (const ShapeDef &d : t.shapes)
+		if (equalsNoCase(d.name, name)) return &d;
+	return nullptr;
+}
+
+void applyDef(const ShapeDef &d, Rules &r)
+{
+	auto set = [](const std::optional<int> &v, int &dst) { if (v) dst = *v; };
+	set(d.pathMin, r.pathMin);
+	set(d.pathMax, r.pathMax);
+	set(d.straightPct, r.straightPct);
+	set(d.turnsMin, r.turnsMin);
+	set(d.turnsMax, r.turnsMax);
+	set(d.branchesMin, r.branchesMin);
+	set(d.branchesMax, r.branchesMax);
+	set(d.branchLenMin, r.branchLenMin);
+	set(d.branchLenMax, r.branchLenMax);
+	set(d.loopsMin, r.loopsMin);
+	set(d.loopsMax, r.loopsMax);
+	set(d.width, r.width);
+	set(d.height, r.height);
+	if (d.loop) r.loop = *d.loop;
+	if (d.bossRoom) r.bossRoom = *d.bossRoom;
+}
+
+bool resolveDepth(const ShapeTable &table, std::string_view name, Size size, Rules &out, std::string &error, int depth)
+{
+	if (const std::optional<Shape> preset = parseShapeName(name)) {
+		out = presetRules(*preset, size);
+		return true;
+	}
+	const ShapeDef *def = findCustom(table, name);
+	if (!def) {
+		error = "There is no shape called \"" + std::string(name) + "\". Use Corridor, Winding, Branching, Loop, Sprawl, or a Name from shapes.txt.";
+		return false;
+	}
+	if (depth > 16) {
+		error = "Shape \"" + std::string(name) + "\" is based on itself.";
+		return false;
+	}
+	const std::string_view base = def->base.empty() ? std::string_view("Winding") : std::string_view(def->base);
+	if (!resolveDepth(table, base, size, out, error, depth + 1)) return false;
+	applyDef(*def, out);
+	return true;
+}
+
+} // namespace
+
+bool resolveRules(const ShapeTable &table, std::string_view name, Size size, Rules &out, std::string &error)
+{
+	if (!resolveDepth(table, name, size, out, error, 0)) return false;
+	error = validateRules(out);
+	if (!error.empty()) {
+		error = "Shape \"" + std::string(name) + "\" at size " + sizeName(size) + ": " + error;
+		return false;
+	}
+	return true;
+}
+
+ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
+{
+	ParseResult res;
+	auto err = [&](int line, const std::string &msg) {
+		res.errors.push_back(std::string(fileName) + (line > 0 ? " line " + std::to_string(line) : std::string()) + ": " + msg);
+	};
+
+	int col[cColumnCount];
+	for (int &c : col) c = -1;
+	bool haveHeader = false;
+	int lineNo = 0;
+	size_t pos = 0;
+	while (pos <= text.size()) {
+		size_t eol = text.find('\n', pos);
+		if (eol == std::string_view::npos) eol = text.size();
+		std::string_view line = text.substr(pos, eol - pos);
+		pos = eol + 1;
+		++lineNo;
+		if (lineNo == 1 && line.size() >= 3 && line.substr(0, 3) == "\xEF\xBB\xBF") line.remove_prefix(3);
+		if (trim(line).empty()) continue;
+
+		const std::vector<std::string_view> cells = splitTabs(line);
+		if (!haveHeader) {
+			haveHeader = true;
+			for (size_t i = 0; i < cells.size(); ++i) {
+				if (cells[i].empty()) continue;
+				int found = -1;
+				for (int c = 0; c < cColumnCount; ++c)
+					if (equalsNoCase(cells[i], kColumnNames[c])) found = c;
+				if (found < 0) { err(lineNo, "unknown column \"" + std::string(cells[i]) + "\"."); continue; }
+				if (col[found] >= 0) { err(lineNo, "column \"" + std::string(kColumnNames[found]) + "\" appears twice."); continue; }
+				col[found] = static_cast<int>(i);
+			}
+			if (col[cName] < 0) err(lineNo, "the header row needs a Name column.");
+			continue;
+		}
+		if (col[cName] < 0) break;
+
+		auto cell = [&](int c) -> std::string_view {
+			if (col[c] < 0 || static_cast<size_t>(col[c]) >= cells.size()) return std::string_view();
+			return cells[static_cast<size_t>(col[c])];
+		};
+		ShapeDef def;
+		def.name = std::string(cell(cName));
+		def.base = std::string(cell(cBase));
+		const size_t errorsBefore = res.errors.size();
+		if (def.name.empty()) { err(lineNo, "Name is empty."); continue; }
+		if (parseShapeName(def.name)) err(lineNo, "\"" + def.name + "\" is a built-in shape; pick another Name.");
+		if (findCustom(res.table, def.name)) err(lineNo, "Name \"" + def.name + "\" is used twice.");
+		if (!def.base.empty() && !parseShapeName(def.base) && !findCustom(res.table, def.base))
+			err(lineNo, "Base \"" + def.base + "\" is not a built-in shape or an earlier row.");
+
+		auto readInt = [&](int c, std::optional<int> &dst) {
+			const std::string_view v = cell(c);
+			if (v.empty()) return;
+			int n = 0;
+			if (!parseInt(v, n)) { err(lineNo, std::string(kColumnNames[c]) + " must be a whole number, not \"" + std::string(v) + "\"."); return; }
+			dst = n;
+		};
+		auto readBool = [&](int c, std::optional<bool> &dst) {
+			const std::string_view v = cell(c);
+			if (v.empty()) return;
+			bool b = false;
+			if (!parseBool(v, b)) { err(lineNo, std::string(kColumnNames[c]) + " must be 0 or 1 (or yes/no), not \"" + std::string(v) + "\"."); return; }
+			dst = b;
+		};
+		readInt(cMinPath, def.pathMin);
+		readInt(cMaxPath, def.pathMax);
+		readInt(cStraight, def.straightPct);
+		readInt(cMinTurns, def.turnsMin);
+		readInt(cMaxTurns, def.turnsMax);
+		readInt(cMinBranches, def.branchesMin);
+		readInt(cMaxBranches, def.branchesMax);
+		readInt(cMinBranchLen, def.branchLenMin);
+		readInt(cMaxBranchLen, def.branchLenMax);
+		readInt(cMinLoops, def.loopsMin);
+		readInt(cMaxLoops, def.loopsMax);
+		readInt(cWidth, def.width);
+		readInt(cHeight, def.height);
+		readBool(cLoop, def.loop);
+		readBool(cBossRoom, def.bossRoom);
+		if (res.errors.size() != errorsBefore) continue;
+
+		res.table.shapes.push_back(def);
+		// Every size must resolve to usable rules that the generator can build.
+		for (int s = 0; s < kSizeCount; ++s) {
+			Rules r;
+			std::string e;
+			if (!resolveRules(res.table, def.name, static_cast<Size>(s), r, e)) { err(lineNo, e); break; }
+			for (uint64_t seed = 1; seed <= 16; ++seed) {
+				if (!generate(r, seed).rulesMet) {
+					err(lineNo, "Shape \"" + def.name + "\" at size " + sizeName(static_cast<Size>(s)) +
+						" is too tight: the generator could not meet its rules for seed " + std::to_string(seed) +
+						". Loosen the numbers or enlarge Width and Height.");
+					break;
+				}
+			}
+			if (res.errors.size() != errorsBefore) break;
+		}
+		if (res.errors.size() != errorsBefore) res.table.shapes.pop_back();
+	}
+	if (!haveHeader && !trim(text).empty()) err(0, "no header row.");
+	return res;
 }
 
 } // namespace cartographer::layout
