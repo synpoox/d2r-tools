@@ -96,9 +96,14 @@ written from this page alone for the rows without a signature (AGENTS.md); the 1
 
 ## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
 
-**Date:** 2026-11-11. **Status:** code written and built; byte signatures for all twelve parts recorded and checked
-against a dump of the running image (static). Not installed into a game and not run in game; nothing here is validated at
-a game level.
+**Date:** 2026-11-11 (validated 2026-11-12). **Status:** validated in game on build 93847, image stamp `0x6ab3782c`
+(D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save, Normal difficulty): all thirteen parts
+found by signature at load, the three hooks installed, the item opened its own map's portal, the map loaded and returned,
+a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
+`LocalPlayerReady.playerId`. Not validated in game: a Hell-difficulty open, the level and free-spot gates, an ordinary
+spell-16 item that no map names compared with vanilla (the pass-through of the two item hooks), the spell-16 use with no
+matching check, leaving the game with the portal open, and the TCP/IP client refusal. Open, cause unknown: a town portal
+scroll used on the map level itself did nothing; no comparison without Cartographer was made.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
 sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
@@ -122,7 +127,7 @@ does not use them. The signatures are in `plugins/cartographer/src/core/part_sig
 | Guard | The whole signature compared under its mask at the resolved address; for a part that is only called, a unique match at the entry is the whole guard. For the two hooked parts the guard D2RLoader re-checks is the signature's own first bytes (15 and 14, no `??`), not bytes copied from the live entry at load. Max patch length (hooked parts only): the bytes from the entry before the first relative branch, call or RIP-relative instruction, so a patch must not split or overwrite one; both hooks copy fewer (15 of 44, 14 of 38). Called-only parts show `n/a (called)`: they are never patched, and the value would only invite it. The column reads signature length / max patch, as in section 1a |
 | Contract | Roles and signatures in the table. Wildcards (`??`) cover relative branch and call targets, RIP-relative displacements, struct-table offsets (`ItemRecord`: the table count offset `+0x15a8`) and the thunk's jump slot (`UnitStat`). One exception: `GameCounter` keeps one call displacement unmasked (below) |
 | Evidence | Disassembly of each entry (Capstone, over the dump). Each signature is the shortest whole-instruction prefix of at least 24 bytes that matches once, with masked bytes as wildcards, across all executable sections (`.text`, `.maho`, `.koishi`, `.btext`; each section's VirtualSize, as the plugin scans). Roles checked from the code: `OpenRedPortal` calls `UnitRoom`, a room check, `GameCounter` on `game + 0x1aac8` (read, and incremented after a successful opening), `UnitCoords` and `FindFreeSpot` (`3, 0x400, 5, 100` as recorded), a create call with object 60, and `ClientMessage(player, 0x15, player)` on a refusal; `UnitClassOf` returns `[unit + 4]`; `RoomLevelId` follows `[room + 0x18]` into a function reading `[[level + 0x90] + 0x1f8]`; `ItemRecord` is a bounds-checked `base + row * 0x1c0` over a vector at table `+0x15a0` |
-| Validation | Static only: `plugins/cartographer/tools/check_portal_signatures.py` on the 93847 image (with `--stamp 0x6ab3782c`), 13 of 13 (the twelve plus `PlayerTick`) unique and resolving to the recorded RVAs, and `GameCounter` confirmed as the target of two calls in `OpenRedPortal`; unit tests parse every signature and check each is at least 24 bytes (uniqueness is the checker's job). Not installed into a game, not run in game, not checked on Steam build 94995 |
+| Validation | Static, then in game: `plugins/cartographer/tools/check_portal_signatures.py` on the 93847 image (with `--stamp 0x6ab3782c`), 13 of 13 (the twelve plus `PlayerTick`) unique and resolving to the recorded RVAs, and `GameCounter` confirmed as the target of two calls in `OpenRedPortal`; unit tests parse every signature and check each is at least 24 bytes (uniqueness is the checker's job). Then run in game on build 93847 (see the status above); not checked on Steam build 94995 |
 | Failure mode | Fail open: a signature with no match or more than one match, or a guard mismatch, logs which part and leaves the portal off |
 | Coexistence | The dump is of a D2RLoader process, so detours already in place show in it. None of the hooked or called entries starts with `E9`; `UnitStat` starts with D2RLoader's own `FF 25` thunk (below). Another plugin detouring a part later fails that part's guard |
 
