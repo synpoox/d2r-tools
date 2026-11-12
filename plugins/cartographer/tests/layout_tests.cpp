@@ -372,7 +372,8 @@ TEST_CASE("a rule set that can't be built gives up on a budget and falls back")
 	const Layout l = generate(r, 1);
 	CHECK(l.fallback);
 	CHECK(l.attempt == kRetries);
-	// Pinned: the layout depends on the work charges, so a change to them shows up here.
+	// The fallback depends only on the rules, so this hash does not move with a work charge. A charge change shows up
+	// as a row moving between built and fallback (the checks above), not here.
 	CHECK(layoutHash(l) == 10216947217312690002ULL);
 }
 
