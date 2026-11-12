@@ -49,6 +49,10 @@ auto Narrow(const std::wstring& s) -> std::string {
 }
 
 auto ReadFile(const std::wstring& path, std::string* text) -> bool {
+	const bool drive = path.size() > 2 && path[1] == L':' && (path[2] == L'\\' || path[2] == L'/');
+	if (!drive && path.rfind(L"\\\\", 0) != 0) {
+		return false;  // only absolute paths: never relative to the current folder or the drive root
+	}
 	std::ifstream in(path, std::ios::binary);
 	if (!in) {
 		return false;
@@ -81,6 +85,9 @@ auto ReadColumn(const std::wstring& file, const char* column, std::vector<std::s
 
 auto ReadGameNames() -> carto::GameNames {
 	carto::GameNames names;
+	if (g_excelDir.empty()) {
+		return names;
+	}
 	names.haveMonsters = ReadColumn(g_excelDir + L"\\monstats.txt", "Id", &names.monsters);
 	names.haveSuperUniques = ReadColumn(g_excelDir + L"\\superuniques.txt", "Superunique", &names.superUniques);
 	names.haveItems = true;
@@ -98,6 +105,12 @@ struct Loaded {
 // Reads all three tables. A missing maps.txt or cartographer.txt is fine: the built-in map and the defaults apply.
 auto LoadAll() -> Loaded {
 	Loaded loaded;
+	if (g_tableDir.empty()) {
+		// No mod: no tables are read. The built-in map and the defaults apply, and the portal has no level to open.
+		loaded.report.Note("maps.txt", 0, "no mod is active, so no tables were read. Only the built-in Preset map and the default settings apply.");
+		loaded.tables->maps = carto::MergeWithBuiltin({});
+		return loaded;
+	}
 	const carto::GameNames names = ReadGameNames();
 	if (!names.haveMonsters || !names.haveSuperUniques || !names.haveItems) {
 		loaded.report.Note("maps.txt", 0, "some of the game's tables could not be read, so Monsters, Boss and Item names are not checked.");
@@ -125,7 +138,7 @@ auto LoadAll() -> Loaded {
 void LoadOverrides() {
 	g_overrides.clear();
 	std::string text;
-	if (!ReadFile(g_tableDir + L"\\signatures.txt", &text)) {
+	if (g_tableDir.empty() || !ReadFile(g_tableDir + L"\\signatures.txt", &text)) {
 		return;
 	}
 	const carto::Tsv table = carto::ParseTsv(text);
@@ -138,6 +151,9 @@ void LoadOverrides() {
 }
 
 void WriteReport(const Loaded& loaded) {
+	if (g_reportPath.empty()) {
+		return;
+	}
 	std::ofstream out(g_reportPath, std::ios::binary | std::ios::trunc);
 	if (!out) {
 		plog::Warn("could not write the report to %s", Narrow(g_reportPath).c_str());
@@ -224,7 +240,7 @@ constexpr D2RL::PluginInfo Info{
 	.id = "cartographer",
 	.name = "Cartographer",
 	.version = PluginVersion,
-	.author = "Synpoox",
+	.author = "Synpoo",
 	.description = "Opens a map from a map item in Harrogath: a red portal to a level made from maps.txt.",
 	.flags = D2RL::PluginFlags::Shared | D2RL::PluginFlags::NativeHooks,
 };
@@ -252,8 +268,11 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		}
 		std::wstring logDir = context->pluginLogPath != nullptr ? context->pluginLogPath : L"";
 		const size_t slash = logDir.find_last_of(L"\\/");
-		logDir = slash == std::wstring::npos ? g_tableDir : logDir.substr(0, slash);
-		g_reportPath = logDir + L"\\cartographer-report.txt";
+		if (slash != std::wstring::npos && slash > 0) {
+			g_reportPath = logDir.substr(0, slash) + L"\\cartographer-report.txt";
+		} else {
+			plog::Warn("no log folder, so no report file is written; use 'cartographer check'");
+		}
 		LoadOverrides();
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());

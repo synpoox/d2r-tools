@@ -60,23 +60,24 @@ struct Part {
 	bool required;
 	const uint8_t* address;
 	PartStatus status;
+	uint8_t guard[32];  // the signature's own first hookSize bytes: what D2RLoader re-checks at the entry
 };
 
 enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PartCount };
 
 Part g_parts[PartCount] = {
-	{"ItemSpellCheck", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18", 15, true, nullptr, {}},
-	{"ItemSpellUse", "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57", 14, true, nullptr, {}},
-	{"ItemRecord", nullptr, 0, true, nullptr, {}},
-	{"UnitClassOf", nullptr, 0, true, nullptr, {}},
-	{"UnitRoom", nullptr, 0, true, nullptr, {}},
-	{"RoomLevelId", nullptr, 0, true, nullptr, {}},
-	{"ClientMessage", nullptr, 0, true, nullptr, {}},
-	{"OpenRedPortal", nullptr, 0, true, nullptr, {}},
-	{"GameCounter", nullptr, 0, true, nullptr, {}},
-	{"UnitStat", nullptr, 0, true, nullptr, {}},
-	{"UnitCoords", nullptr, 0, false, nullptr, {}},
-	{"FindFreeSpot", nullptr, 0, false, nullptr, {}},
+	{"ItemSpellCheck", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18", 15, true, nullptr, {}, {}},
+	{"ItemSpellUse", "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57", 14, true, nullptr, {}, {}},
+	{"ItemRecord", nullptr, 0, true, nullptr, {}, {}},
+	{"UnitClassOf", nullptr, 0, true, nullptr, {}, {}},
+	{"UnitRoom", nullptr, 0, true, nullptr, {}, {}},
+	{"RoomLevelId", nullptr, 0, true, nullptr, {}, {}},
+	{"ClientMessage", nullptr, 0, true, nullptr, {}, {}},
+	{"OpenRedPortal", nullptr, 0, true, nullptr, {}, {}},
+	{"GameCounter", nullptr, 0, true, nullptr, {}, {}},
+	{"UnitStat", nullptr, 0, true, nullptr, {}, {}},
+	{"UnitCoords", nullptr, 0, false, nullptr, {}, {}},
+	{"FindFreeSpot", nullptr, 0, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
@@ -84,6 +85,10 @@ std::shared_ptr<const Tables> g_tables;
 std::string g_armed;
 const MapDef* g_pending = nullptr;  // chosen at the check, used at the use; kept alive by g_pendingTables
 std::shared_ptr<const Tables> g_pendingTables;
+const void* g_pendingGame = nullptr;    // the game, player and item the check passed for: the use must be the same
+const void* g_pendingPlayer = nullptr;
+const void* g_pendingItem = nullptr;
+const void* g_rollGame = nullptr;       // the game the map roll was seeded for
 std::atomic<bool> g_live{false};
 std::atomic<uint32_t> g_roll{0x9e3779b9u};
 const D2RL::PluginContext* g_context = nullptr;
@@ -120,8 +125,7 @@ auto CodeRanges(uintptr_t exeBase, CodeRange* out, int max) noexcept -> int {
 }
 
 // The one place `sig` matches in the game's code. Fails (with the reason) when it matches nowhere or more than once.
-auto FindUnique(const CodeRange* ranges, int count, const char* sig, std::string* why) noexcept -> const uint8_t* {
-	Pattern pattern{};
+auto FindUnique(const CodeRange* ranges, int count, const char* sig, Pattern& pattern, std::string* why) noexcept -> const uint8_t* {
 	if (!ParsePattern(sig, &pattern)) {
 		*why = "the signature is not valid (hex bytes and ?? separated by spaces, not starting with ??)";
 		return nullptr;
@@ -141,6 +145,37 @@ auto FindUnique(const CodeRange* ranges, int count, const char* sig, std::string
 		return nullptr;
 	}
 	return found;
+}
+
+// True when `address` is the first byte of a function in the exe's .pdata. *known: whether that could be checked.
+auto IsFunctionEntry(uintptr_t exeBase, const uint8_t* address, bool* known) noexcept -> bool {
+	*known = false;
+	const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(exeBase);
+	if (exeBase == 0 || dos->e_magic != IMAGE_DOS_SIGNATURE) {
+		return false;
+	}
+	const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(exeBase + static_cast<uintptr_t>(dos->e_lfanew));
+	const IMAGE_DATA_DIRECTORY& dir = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+	if (dir.VirtualAddress == 0 || dir.Size < sizeof(RUNTIME_FUNCTION)) {
+		return false;
+	}
+	*known = true;
+	const auto* table = reinterpret_cast<const RUNTIME_FUNCTION*>(exeBase + dir.VirtualAddress);
+	const size_t n = dir.Size / sizeof(RUNTIME_FUNCTION);
+	const auto rva = static_cast<DWORD>(reinterpret_cast<uintptr_t>(address) - exeBase);
+	size_t lo = 0, hi = n;
+	while (lo < hi) {
+		const size_t mid = lo + (hi - lo) / 2;
+		if (table[mid].BeginAddress == rva) {
+			return true;
+		}
+		if (table[mid].BeginAddress < rva) {
+			lo = mid + 1;
+		} else {
+			hi = mid;
+		}
+	}
+	return false;
 }
 
 // --- The game's own helpers ----------------------------------------------------------------------------------------
@@ -191,11 +226,18 @@ void Tell(const std::string& text) noexcept {
 }
 
 // The map this use opens: the armed one, else the one an item of this code opens.
-auto PickMap(const Tables& tables, const std::string& code, const std::string& armed) noexcept -> const MapDef* {
+auto PickMap(const Tables& tables, const std::string& code, const std::string& armed, const void* game) noexcept -> const MapDef* {
 	if (!armed.empty()) {
 		return FindMap(tables.maps, armed);
 	}
 	uint32_t roll = g_roll.load();
+	if (g_rollGame != game) {  // a new game: a new sequence of maps
+		LARGE_INTEGER counter{};
+		QueryPerformanceCounter(&counter);
+		roll = static_cast<uint32_t>(counter.QuadPart) ^ static_cast<uint32_t>(GetTickCount64()) ^ static_cast<uint32_t>(reinterpret_cast<uintptr_t>(game) >> 4);
+		roll = roll == 0 ? 0x9e3779b9u : roll;
+		g_rollGame = game;
+	}
 	roll ^= roll << 13;
 	roll ^= roll >> 17;
 	roll ^= roll << 5;
@@ -218,7 +260,13 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		tables = g_tables;
 		armed = g_armed;
 	}
-	const MapDef* map = tables != nullptr ? PickMap(*tables, code, armed) : nullptr;
+	{
+		// Any earlier pass is stale from here on: only a check that passes below sets it again.
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_pending = nullptr;
+		g_pendingTables.reset();
+	}
+	const MapDef* map = tables != nullptr ? PickMap(*tables, code, armed, game) : nullptr;
 	const int level = tables != nullptr ? SlotLevel(tables->slots, PresetSlot) : -1;
 	const auto refuse = [&](const std::string& text) -> uint64_t {
 		Tell(text);
@@ -246,6 +294,9 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_pendingTables = tables;
 		g_pending = map;
+		g_pendingGame = game;
+		g_pendingPlayer = player;
+		g_pendingItem = item;
 	}
 	return 1;
 }
@@ -264,13 +315,16 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		tables = g_pendingTables;
-		map = g_pending;
+		if (g_pendingGame == game && g_pendingPlayer == player && g_pendingItem == item) {
+			map = g_pending;
+		}
 		g_pending = nullptr;
 		g_pendingTables.reset();
+		g_pendingGame = g_pendingPlayer = g_pendingItem = nullptr;
 		g_armed.clear();
 	}
 	if (map == nullptr || tables == nullptr) {
-		return;  // the check refused (or did not run): nothing opens
+		return;  // the check refused (or did not run, or ran for another game, player or item): nothing opens
 	}
 	const int level = SlotLevel(tables->slots, PresetSlot);
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
@@ -316,22 +370,48 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		part.status = {part.name, false, ""};
 		const char* signature = part.signature;
 		std::string overridden;
+		bool isOverride = false;
 		for (const SignatureOverride& o : overrides) {
 			if (EqualsNoCase(o.part, part.name)) {
 				overridden = o.signature;
 				signature = overridden.c_str();
+				isOverride = true;
 			}
 		}
 		if (signature == nullptr) {
 			part.status.detail = "off: no signature recorded for this part yet";
 		} else {
 			std::string why;
-			part.address = count > 0 ? FindUnique(ranges, count, signature, &why) : nullptr;
+			Pattern pattern{};
+			part.address = nullptr;
 			if (count == 0) {
 				why = "the game image could not be read";
+			} else {
+				part.address = FindUnique(ranges, count, signature, pattern, &why);
+			}
+			// A hooked part's signature must pin every byte the hook cuts (they are the guard), and a signature from
+			// signatures.txt is untrusted: it must also start at a function.
+			if (part.address != nullptr && part.hookSize > 0) {
+				bool concrete = pattern.size >= part.hookSize && part.hookSize <= sizeof(part.guard);
+				for (uint32_t i = 0; concrete && i < part.hookSize; ++i) {
+					concrete = !pattern.wild[i];
+				}
+				if (!concrete) {
+					why = "the signature must give at least " + std::to_string(part.hookSize) + " exact bytes (no ??) at the entry, because the hook cuts them";
+					part.address = nullptr;
+				} else {
+					std::memcpy(part.guard, pattern.bytes, part.hookSize);
+				}
+			}
+			if (part.address != nullptr && isOverride) {
+				bool known = false;
+				if (!IsFunctionEntry(context->exeBase, part.address, &known) && known) {
+					why = "the signature from signatures.txt does not match at the start of a function";
+					part.address = nullptr;
+				}
 			}
 			part.status.on = part.address != nullptr;
-			part.status.detail = part.status.on ? "found by signature" : "off: " + why;
+			part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
 		}
 		if (part.required && !part.status.on) {
 			allRequired = false;
@@ -340,10 +420,8 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	if (allRequired) {
 		const auto install = [&](PartId id, void* target, void** original) {
 			Part& part = g_parts[id];
-			uint8_t entry[32];
-			std::memcpy(entry, part.address, part.hookSize);
 			const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
-			const bool ok = context->InstallInlineHook(rva, entry, part.hookSize, target, original) && *original != nullptr;
+			const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original) && *original != nullptr;
 			part.status.on = ok;
 			part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
 			return ok;

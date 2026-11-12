@@ -260,3 +260,16 @@ TEST_CASE("spelling suggestions") {
 	CHECK(Suggest("zzzzzz", TilesetNames()).empty());
 	CHECK(DidYouMean("lopp", {"Loop", "Winding"}) == " Did you mean 'Loop'?");
 }
+
+TEST_CASE("long words get no suggestion, and a report stops listing after 200 problems") {
+	CHECK(Suggest(std::string(5000, 'a'), {"aaaa"}).empty());
+	Report report;
+	for (int i = 1; i <= 500; ++i) {
+		report.Error("maps.txt", i, "bad");
+	}
+	CHECK(report.Errors() == 200);
+	CHECK(report.problems.size() == 201);
+	Report other;
+	other.Error("cartographer.txt", 1, "bad");
+	CHECK(other.Errors() == 1);
+}
