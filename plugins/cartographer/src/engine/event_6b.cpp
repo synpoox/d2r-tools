@@ -4,6 +4,7 @@
 #include "engine/scan.h"
 #include "event6b.h"
 #include "log.h"
+#include "hookguard.h"
 
 #include <windows.h>
 
@@ -426,12 +427,7 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		Part& part = g_parts[DeathDrop];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&DeathDropHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = hooked && g_original != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every monster's own drop is skipped until the game is restarted";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own monster drop is skipped for EVERY monster until the game is restarted; restart it after removing what conflicts", part.name);
-		}
+		const bool ok = HookOutcome(part, hooked, g_original != nullptr);
 		g_dropHook = ok;
 	} else if (On(DeathDrop)) {
 		g_parts[DeathDrop].status.on = false;
@@ -442,12 +438,7 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		Part& part = g_parts[OperateObject];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&OperateHook), reinterpret_cast<void**>(&g_operateOriginal));
-		const bool ok = hooked && g_operateOriginal != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every object use is skipped until the game is restarted";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's object use is skipped for EVERY object until the game is restarted; restart it after removing what conflicts", part.name);
-		}
+		const bool ok = HookOutcome(part, hooked, g_operateOriginal != nullptr);
 		g_chestHook = ok;
 	} else if (On(OperateObject)) {
 		g_parts[OperateObject].status.on = false;
