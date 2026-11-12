@@ -198,4 +198,57 @@ std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &gr
 	return problems;
 }
 
+int chooseCellRoom(const TileRect &cell, const std::vector<BuiltRoom> &rooms) {
+	if (!cell.known || cell.w <= 0 || cell.h <= 0) return -1;
+	// Twice the coordinates, so the centres are whole numbers.
+	const int64_t cx = 2 * static_cast<int64_t>(cell.x) + cell.w, cy = 2 * static_cast<int64_t>(cell.y) + cell.h;
+	int best = -1;
+	int64_t bestDist = 0;
+	for (size_t i = 0; i < rooms.size(); ++i) {
+		const BuiltRoom &r = rooms[i];
+		if (r.w <= 0 || r.h <= 0 || r.x < cell.x || r.y < cell.y || r.x + r.w > cell.x + cell.w || r.y + r.h > cell.y + cell.h) continue;
+		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - cx, dy = 2 * static_cast<int64_t>(r.y) + r.h - cy;
+		const int64_t d = dx * dx + dy * dy;
+		bool better = best < 0 || d < bestDist;
+		if (!better && d == bestDist) {
+			const BuiltRoom &b = rooms[static_cast<size_t>(best)];
+			better = r.y < b.y || (r.y == b.y && r.x < b.x);
+		}
+		if (better) {
+			best = static_cast<int>(i);
+			bestDist = d;
+		}
+	}
+	return best;
+}
+
+ArrivalMark planArrival(const StampPlan &plan, const std::vector<BuiltRoom> &rooms) {
+	ArrivalMark out;
+	if (!plan.entrance.known) {
+		out.why = "the plan has no entrance cell";
+		return out;
+	}
+	if (rooms.empty()) {
+		out.why = "the build made no rooms";
+		return out;
+	}
+	for (const BuiltRoom &r : rooms) {
+		if (r.x < plan.originX || r.y < plan.originY || r.x + r.w > plan.originX + plan.tilesW || r.y + r.h > plan.originY + plan.tilesH) {
+			out.why = "a room at (" + std::to_string(r.x) + "," + std::to_string(r.y) + ") lies outside the plan's level rectangle";
+			return out;
+		}
+	}
+	const int room = chooseCellRoom(plan.entrance, rooms);
+	if (room < 0) {
+		out.why = "the entrance cell holds no room";
+		return out;
+	}
+	out.mark = true;
+	out.room = room;
+	for (size_t i = 0; i < rooms.size(); ++i) {
+		if (static_cast<int>(i) != room && (rooms[i].flags & kArrivalFlags) != 0) out.clear.push_back(static_cast<int>(i));
+	}
+	return out;
+}
+
 } // namespace cartographer::outdoor
