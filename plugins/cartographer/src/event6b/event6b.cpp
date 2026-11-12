@@ -285,11 +285,26 @@ void WaveTracker::waveSpawned(const std::vector<uint32_t> &ids, uint64_t nowMs) 
 		return;
 	}
 	pending_ = ids;
+	for (const uint32_t dead : early_) {
+		for (size_t i = 0; i < pending_.size(); ++i) {
+			if (pending_[i] == dead) {
+				pending_.erase(pending_.begin() + static_cast<std::ptrdiff_t>(i));
+				break;
+			}
+		}
+	}
+	early_.clear();
 	deadline_ = nowMs + timeoutMs_;
 	phase_ = Phase::Fighting;
 }
 
 bool WaveTracker::onDeath(uint32_t id) {
+	if (phase_ == Phase::Spawning) {
+		if (early_.size() < 256) {
+			early_.push_back(id);
+		}
+		return false;
+	}
 	if (phase_ != Phase::Fighting) {
 		return false;
 	}

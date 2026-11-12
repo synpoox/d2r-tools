@@ -291,6 +291,18 @@ TEST_CASE("WaveTracker: one wave only, waves below 1 count as 1, arm starts over
 	CHECK(t.remaining() == 0);
 }
 
+TEST_CASE("WaveTracker: a unit that dies while the wave is being spawned is counted") {
+	WaveTracker t = armed(1);
+	REQUIRE(t.step(true, 100) == WaveTracker::Step::SpawnWave);
+	CHECK_FALSE(t.onDeath(7));  // died before waveSpawned()
+	CHECK_FALSE(t.onDeath(55));  // not in the wave: ignored later
+	t.waveSpawned({7, 8}, 100);
+	CHECK(t.remaining() == 1);
+	CHECK(t.onDeath(8));
+	CHECK(t.step(true, 200) == WaveTracker::Step::Finished);
+	CHECK(t.lastEnd() == WaveEnd::Cleared);
+}
+
 TEST_CASE("decideChest: roll once when the chest's mode changed during the call") {
 	ChestInput in;
 	in.armed = in.tracked = in.object = true;

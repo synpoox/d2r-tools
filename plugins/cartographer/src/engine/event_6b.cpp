@@ -41,10 +41,14 @@ constexpr size_t FreeSpotSite = 0xff;        // the call to 0x402f50 inside the 
 constexpr size_t FreeSpotReach = 0x200;      // how much of the handler is read to find it
 constexpr int UnitModeOffset = 0x0c;         // int32 on a unit: the mode (inference from the classic layout, not shown; the chest probe logs it)
 constexpr int32_t FleeDuration = 600;        // 0x597030's last argument. Its unit is not known (callers pass 0x14 and skill results); a guess, logged
-constexpr int32_t ChestSelector = 4;         // the chest roller's first stack argument as 0x5930b0 passes it (every call site passes 4)
-constexpr int32_t ChestRollTier = 0;         // its second one: the engine computes 0..2 from the area level; 0 here (needs-game)
-constexpr int32_t ChestRollFlag = 6;         // the last one, as 0x5930b0 passes it
-constexpr size_t ChestOutSize = 0x30;        // the out buffer 0x5930b0 zeroes for the roller
+// 0x4404f0's stack arg 5 is a forced item quality: 0 rolls the quality (0x4421b0, from the tier below), a nonzero value is used as the quality as it is
+// (0x440f9f). 0x5930b0 passes its own second argument there: the chest handler passes 0, 7 or a variable (0x58e5a6, 0x58e709, 0x58e51f); only 0x592cf0 passes 4.
+constexpr int32_t ChestSelector = 0;         // no forced quality: the roller rolls it, as a normal chest does
+// Arg 6, the tier for that quality roll. 0x5930b0 derives 0..2 from the area level and the act (0x593282..0x5932b1, after 0x34b440, 0x2efc10, 0x3e2b5c8,
+// 0x508f80 and 0x32c700); that chain is not reproduced, so the tier stays 0, the lowest (needs-game: does it feel right).
+constexpr int32_t ChestRollTier = 0;
+constexpr int32_t ChestMaxItems = 6;         // arg 10: the most items the roller writes to the out buffer (0x44114f..0x44115f); 6 pointers fill ChestOutSize
+constexpr size_t ChestOutSize = 0x30;        // the out buffer 0x5930b0 zeroes for the roller: 6 item pointers. A Drop that gives more than ChestMaxItems items is cut at 6
 constexpr int MaxUntrackedDeathProbes = 5;   // deaths during an Ambush that are not in its wave, logged
 
 // What is around the call (SpawnObject + 0xff) and at its target: the guard for a part that has no signature of its own.
@@ -136,8 +140,9 @@ struct State {
 	bool chestRolled = false;
 	// Ambush
 	bool ambushArmed = false;
+	bool firstWaveDone = false;  // the first wave made a unit (the event is announced then)
 	cartographer::event6b::WaveTracker waves;
-	void* ambushRoom = nullptr;  // the event room (compared with the player's room, never read)
+	ep::Rect ambushRect;         // the event room's server rect: the player's room is matched by it (a room pointer could be freed or reused between ticks)
 	std::vector<ep::Spawn> waveSpawns;
 	std::string ambushName;
 	int untrackedProbes = 0;
@@ -255,6 +260,7 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 		plog::Warn("treasure chest: Drop '%s' not rolled: the game's data flag %u is not below 4", name.c_str(), dataFlag);
 		return;
 	}
+	// For an object 0x43e8a0 ignores the level id and uses the area level of the object's own room (0x43e8dd..0x43e917); `level` only matters for a monster.
 	const int32_t levelValue = Call<DropLevelFn>(DropLevel)(object, level);
 	const void* compiled = Call<TcLookupFn>(TcLookup)(dataFlag, static_cast<uint16_t>(tc), levelValue);
 	plog::Info("eventprobe: treasure chest: Drop '%s' (treasure class %d): data flag %u, level value %d, compiled class %p", name.c_str(), tc, dataFlag, levelValue, compiled);
@@ -264,8 +270,8 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 	}
 	alignas(16) uint8_t out[ChestOutSize] = {};
 	int32_t extra = 0;
-	const uint64_t rolled = Call<TcRollerFn>(TcRoller)(game, object, activator, compiled, ChestSelector, ChestRollTier, 0, out, &extra, ChestRollFlag);
-	plog::Info("eventprobe: treasure chest: the roll returned %llu (tier %d, selector %d, flag %d)", static_cast<unsigned long long>(rolled), ChestRollTier, ChestSelector, ChestRollFlag);
+	const uint64_t rolled = Call<TcRollerFn>(TcRoller)(game, object, activator, compiled, ChestSelector, ChestRollTier, 0, out, &extra, ChestMaxItems);
+	plog::Info("eventprobe: treasure chest: the roll returned %llu (tier %d, forced quality %d, at most %d items)", static_cast<unsigned long long>(rolled), ChestRollTier, ChestSelector, ChestMaxItems);
 }
 
 auto OperateHook(Game* game, Unit* activator, Unit* object) noexcept -> int32_t {
@@ -646,14 +652,15 @@ void Event6bFirstSpawned(void* game, ev::Kind kind, void* unit) noexcept {
 	}
 }
 
-void Event6bArmAmbush(const ev::Event& event, const std::vector<ep::Spawn>& spawns, void* room) noexcept {
+void Event6bArmAmbush(const ev::Event& event, const std::vector<ep::Spawn>& spawns, const ep::Rect& serverRect, void* room) noexcept {
 	try {
 		std::lock_guard<std::mutex> lock(g_lock);
 		const int waves = g_deathListener ? (std::max)(1, event.waves) : 1;
 		g_state.waves.arm(waves);
 		g_state.ambushArmed = true;
 		g_state.waveSpawns = spawns;
-		g_state.ambushRoom = room;
+		g_state.ambushRect = serverRect;
+		g_state.firstWaveDone = false;
 		g_state.ambushName = event.name;
 		g_state.untrackedProbes = 0;
 		g_ambushActive = true;
@@ -664,18 +671,20 @@ void Event6bArmAmbush(const ev::Event& event, const std::vector<ep::Spawn>& spaw
 	}
 }
 
-void Event6bAmbushTick(void* game, void* playerRoom, AmbushSpawnFn spawn) noexcept {
-	if (!g_ambushActive.load(std::memory_order_relaxed) || spawn == nullptr) {
-		return;
+bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept {
+	if (!g_ambushActive.load(std::memory_order_relaxed) || spawn == nullptr || roomRect == nullptr || game == nullptr) {
+		return false;
 	}
 	try {
 		std::vector<ep::Spawn> spawns;
-		void* room = nullptr;
 		uint64_t epoch = 0;
 		int waveNumber = 0;
+		ep::Rect playerRect;
+		const bool rectOk = playerRoom != nullptr && roomRect(playerRoom, &playerRect);  // read before the lock: the engine's room, not ours
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			const bool inRoom = playerRoom != nullptr && playerRoom == g_state.ambushRoom;
+			const ep::Rect& want = g_state.ambushRect;
+			const bool inRoom = rectOk && playerRect.x == want.x && playerRect.y == want.y && playerRect.w == want.w && playerRect.h == want.h;
 			const auto before = g_state.waves.phase();
 			const e6::WaveTracker::Step step = g_state.waves.step(inRoom, GetTickCount64());
 			if (before == e6::WaveTracker::Phase::Fighting && g_state.waves.phase() != e6::WaveTracker::Phase::Fighting) {
@@ -684,46 +693,50 @@ void Event6bAmbushTick(void* game, void* playerRoom, AmbushSpawnFn spawn) noexce
 			if (step == e6::WaveTracker::Step::Finished) {
 				plog::Info("ambush '%s': finished after %d wave(s)", g_state.ambushName.c_str(), g_state.waves.wavesStarted());
 				g_ambushActive = false;
-				return;
+				return false;
 			}
 			if (step != e6::WaveTracker::Step::SpawnWave) {
-				return;
+				return false;
 			}
 			spawns = g_state.waveSpawns;
-			room = g_state.ambushRoom;
 			epoch = g_epoch.load();
 			waveNumber = g_state.waves.wavesStarted();
 		}
 		std::vector<uint32_t> ids;
 		for (const ep::Spawn& s : spawns) {
 			void* unit = nullptr;
-			if (spawn(game, room, s, &unit) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == UnitTypeMonster) {
+			if (spawn(game, playerRoom, s, &unit) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == UnitTypeMonster) {
 				ids.push_back(At<uint32_t>(unit, UnitIdOffset));
 			}
 		}
 		std::lock_guard<std::mutex> lock(g_lock);
 		if (epoch != g_epoch.load()) {
-			return;  // the map changed or the game was left while spawning; the state was reset
+			return false;  // the map changed or the game was left while spawning; the state was reset
 		}
 		g_state.waves.waveSpawned(ids, GetTickCount64());
-		plog::Info("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in room %p (game %p)", g_state.ambushName.c_str(), waveNumber, g_state.waves.wavesTotal(), ids.size(), spawns.size(), room, game);
+		plog::Info("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in the event room %p (game %p)", g_state.ambushName.c_str(), waveNumber, g_state.waves.wavesTotal(), ids.size(), spawns.size(), playerRoom, game);
 		if (!g_state.waves.active()) {
 			plog::Warn("ambush '%s' abandoned: %s", g_state.ambushName.c_str(), e6::waveEndName(g_state.waves.lastEnd()));
 			g_ambushActive = false;
+		}
+		if (!ids.empty() && !g_state.firstWaveDone) {
+			g_state.firstWaveDone = true;
+			return true;  // the first wave spawned: the event counts as placed (announced by the caller)
 		}
 	} catch (...) {
 		plog::Error("ambush: spawning a wave failed");
 		g_ambushActive = false;
 	}
+	return false;
 }
 
-void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
+bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
 	try {
 		int row = -1;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (!g_state.shrineReady || g_state.shrinePlaced) {
-				return;
+				return false;
 			}
 			g_state.shrinePlaced = true;
 			row = g_state.shrineRow;
@@ -731,19 +744,19 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 		auto* game = static_cast<Game*>(rawGame);
 		if (game == nullptr || room == nullptr || !On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
 			plog::Warn("shrine not placed: %s", game == nullptr || room == nullptr ? "no game or room" : "a part is off");
-			return;
+			return false;
 		}
 		// The row is checked again against the game's count now: a table load since map open would make it stale.
 		std::string why;
 		const uint8_t* dt = TablesBase(At<uint8_t>(game, GameDataFlagOffset), &why);
 		if (dt == nullptr || row < 0 || static_cast<uint64_t>(row) >= At<uint32_t>(dt, DtObjectCountOffset)) {
 			plog::Warn("shrine not placed: objects row %d is not below the game's row count%s%s", row, dt == nullptr ? ": " : "", dt == nullptr ? why.c_str() : "");
-			return;
+			return false;
 		}
 		const std::vector<ep::Spot> spots = ep::placements(serverRect, 1, seed, scale);
 		if (spots.empty()) {
 			plog::Warn("shrine not placed: the event room is too small to place anything");
-			return;
+			return false;
 		}
 		int32_t xy[2] = {spots[0].x, spots[0].y};
 		void* landed = nullptr;
@@ -751,18 +764,18 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 		Call<FreeSpotFn>(FreeSpot)(room, xy, FreeSpotRadius, FreeSpotMask, &landed);
 		if (landed == nullptr) {
 			plog::Warn("shrine not placed: the game found no free spot near (%d,%d) in the event room", spots[0].x, spots[0].y);
-			return;
+			return false;
 		}
 		plog::Info("eventprobe: shrine: free spot (%d,%d) in room %p (%s the event room)", xy[0], xy[1], landed, landed == room ? "in" : "NOT in");
 		if (landed != room) {
 			// The neighbouring room may not be populated yet; refuse rather than create an object there.
 			plog::Warn("shrine not placed: the free spot (%d,%d) is outside the event room (room %p, not %p)", xy[0], xy[1], landed, room);
-			return;
+			return false;
 		}
 		void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);
 		if (unit == nullptr) {
 			plog::Warn("shrine not placed: the game refused to create objects row %d at (%d,%d)", row, xy[0], xy[1]);
-			return;
+			return false;
 		}
 		plog::Info("eventprobe: shrine: created objects row %d: unit %p (type %d, id %u) at (%d,%d)", row, unit, At<int32_t>(unit, UnitTypeOffset), At<uint32_t>(unit, UnitIdOffset), xy[0], xy[1]);
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -772,8 +785,10 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 			g_state.chestRolled = false;
 			plog::Info("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, g_state.chestId, At<int32_t>(unit, UnitModeOffset), g_state.chestArmed ? "" : "; no armed Drop");
 		}
+		return true;
 	} catch (...) {
 		plog::Error("shrine: placing the object failed");
+		return false;
 	}
 }
 

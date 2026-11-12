@@ -154,6 +154,9 @@ const char *scaleKindName(ScaleKind kind);
 // room populated after it whose centre is at least `minDistance` away (Chebyshev, in the rect's own units: DRLG tiles).
 // It fires once.
 constexpr int kMinEventDistance = 24;
+// The distance for a level of `levelW` x `levelH` tiles: a third of the larger side, from 1 up to kMinEventDistance, so a small
+// map still has a room that qualifies. A size that is not known (no side above 0) gives kMinEventDistance.
+int minEventDistance(int levelW, int levelH);
 class EventRoomTracker {
 public:
 	explicit EventRoomTracker(std::optional<Rect> planned = std::nullopt, int minDistance = kMinEventDistance);
@@ -198,13 +201,19 @@ bool superSeen(const uint8_t *bitmap, int row);
 
 // --- Entry message -------------------------------------------------------------------------------------------------
 
-// The lines shown on arrival: the map's name, then the event's Name and Message when an event fired and is applied.
+// The lines shown on arrival: the map's name, then the event's Name and Message when an event is given. The caller gives the
+// event only once its room is chosen and something spawned, so a banner never announces an event that did not happen.
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event);
+
+// Which lines a banner shows. The event's lines only once `announced`. A `late` banner (the player is already inside, so the map's
+// name was shown on entry) leaves the map name out and so repeats nothing; an empty result shows nothing.
+std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late);
 
 // True once each time the player goes from outside the map's level to inside it (and again after leaving and coming back).
 class EntryTracker {
 public:
 	bool update(bool inMap);
+	bool inside() const { return inside_; }
 	void reset() { inside_ = false; }
 
 private:

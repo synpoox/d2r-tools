@@ -63,18 +63,23 @@ auto Event6bPrepareChest(const cartographer::events::Event& event, const std::ve
 // The first spawn of a Boss or Treasure event (`unit`, the spawn's return value): track it for the Drop; a Treasure monster also flees.
 void Event6bFirstSpawned(void* game, cartographer::events::Kind kind, void* unit) noexcept;
 
-// An Ambush event room was populated: remember one wave's spawns (`spawns`, planned for the room) and the server room. Spawns nothing yet.
-void Event6bArmAmbush(const cartographer::events::Event& event, const std::vector<cartographer::eventplan::Spawn>& spawns, void* room) noexcept;
+// An Ambush event room was populated: remember one wave's spawns (`spawns`, planned for the room) and the room's server rect, by which the
+// player's room is recognised later (no room pointer is kept; `room` is only logged). Spawns nothing yet.
+void Event6bArmAmbush(const cartographer::events::Event& event, const std::vector<cartographer::eventplan::Spawn>& spawns, const cartographer::eventplan::Rect& serverRect, void* room) noexcept;
 
 // Spawns one wave unit: true when the game gave a unit (returned in `unit`). Supplied by event_apply.cpp, which owns the spawn calls.
 using AmbushSpawnFn = bool (*)(void* game, void* room, const cartographer::eventplan::Spawn& spawn, void** unit) noexcept;
 
-// Each player tick: starts the next wave when the player (in `playerRoom`) is in the event room, and ends the Ambush when its waves are done.
-void Event6bAmbushTick(void* game, void* playerRoom, AmbushSpawnFn spawn) noexcept;
+// Reads a room's server rect; false when it cannot be read. Supplied by event_apply.cpp.
+using AmbushRectFn = bool (*)(void* room, cartographer::eventplan::Rect* serverRect) noexcept;
+
+// Each player tick: starts the next wave when the player (in `playerRoom`) is in the event room (matched by its server rect), and ends the
+// Ambush when its waves are done. Does nothing without a game. True once, when the first wave made a unit: the Ambush has then happened.
+bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept;
 
 // The event room was populated: place the prepared Shrine object near the centre of the server rect. `game` and `room` are the
-// populator's arguments. Game thread.
-void Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect, int scale, uint64_t seed) noexcept;
+// populator's arguments. True only when the game created the object, so a Shrine that was not placed is never announced. Game thread.
+bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect, int scale, uint64_t seed) noexcept;
 
 // The Boss event spawned its boss (`unit`, the spawn's return value): remember it for the Drop.
 void Event6bBossSpawned(void* unit) noexcept;

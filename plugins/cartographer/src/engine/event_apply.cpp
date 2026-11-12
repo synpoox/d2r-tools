@@ -30,6 +30,8 @@ constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
 constexpr int ServerRectOffset = 0x80;      // a server room's x, y, w, h (int32 each): the rect the spawn search and the point-in-room test use
+constexpr int DrlgLevelOffset = 0x90;       // a DRLG room's level record
+constexpr int LevelSizeOffset = 0x2c;       // a level record's width and height (int32 each), in tiles (static; section 5)
 constexpr int DrlgRectOffset = 0x60;        // a DRLG room's x, y, w, h (int32 each), in tiles
 constexpr int GameSuperBitmapOffset = 0x1d8;  // the game's once-per-game superunique bitmap
 constexpr int32_t SpawnMode = 1;            // what the superunique code passes to the monster spawn
@@ -97,6 +99,7 @@ struct State {
 	std::optional<ep::EventRoomTracker> tracker;  // made at the first room of the level, when the plan's event room is known
 	ep::EntryTracker entry;
 	bool spawned = false;
+	bool announced = false;  // the event room was chosen and something spawned: the banner may name the event
 	int probes = 0;
 };
 std::mutex g_lock;
@@ -468,6 +471,7 @@ struct RoomRects {
 	bool ok = false;
 	ep::Rect drlg;    // tiles
 	ep::Rect server;  // the spawn code's units (subtiles, by static reading)
+	int levelW = 0, levelH = 0;  // the level's size in tiles; 0 when it cannot be read
 };
 
 auto ReadRects(void* serverRoom) noexcept -> RoomRects {
@@ -478,6 +482,11 @@ auto ReadRects(void* serverRoom) noexcept -> RoomRects {
 	}
 	out.drlg = {At<int32_t>(drlg, DrlgRectOffset), At<int32_t>(drlg, DrlgRectOffset + 4), At<int32_t>(drlg, DrlgRectOffset + 8), At<int32_t>(drlg, DrlgRectOffset + 12)};
 	out.server = {At<int32_t>(serverRoom, ServerRectOffset), At<int32_t>(serverRoom, ServerRectOffset + 4), At<int32_t>(serverRoom, ServerRectOffset + 8), At<int32_t>(serverRoom, ServerRectOffset + 12)};
+	void* level = At<void*>(drlg, DrlgLevelOffset);
+	if (level != nullptr) {
+		out.levelW = At<int32_t>(level, LevelSizeOffset);
+		out.levelH = At<int32_t>(level, LevelSizeOffset + 4);
+	}
 	out.ok = out.drlg.w > 0 && out.drlg.h > 0;
 	return out;
 }
@@ -517,27 +526,41 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 	return unit != nullptr;
 }
 
+// A room's server rect, to recognise the Ambush's event room by it (event_6b.cpp keeps no room pointer).
+auto ReadServerRect(void* room, ep::Rect* out) noexcept -> bool {
+	if (room == nullptr) {
+		return false;
+	}
+	const RoomRects rects = ReadRects(room);
+	*out = rects.server;
+	return rects.ok;
+}
+
 // The Ambush's wave spawner (event_6b.cpp calls it each wave): one unit, as the Boss and Horde spawns make them.
 auto SpawnAmbushUnit(void* game, void* room, const ep::Spawn& s, void** unit) noexcept -> bool {
 	bool asSuper = false;
 	return SpawnOne(static_cast<Game*>(game), room, s, &asSuper, unit);
 }
 
-void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
+// True when something was placed, so the banner may announce the event. An Ambush is only armed here: it announces itself when its first wave spawns.
+auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept -> bool {
 	if (Event6bPlacesObject(*state.event, state.spawn.kind)) {
-		Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b: a Shrine, or a Treasure chest
-		return;
+		return Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b: a Shrine, or a Treasure chest
 	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
 	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("event '%s' not spawned: %s", state.event->name.c_str(), plan.problem.c_str());
-		return;
+		return false;
 	}
 	if (state.event->kind == ev::Kind::Ambush) {
-		Event6bArmAmbush(*state.event, plan.spawns, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
+		if (!g_tickOn.load()) {
+			plog::Warn("event '%s' (Ambush) not armed: the PlayerTick or room parts are off, so no wave could start", state.event->name.c_str());
+			return false;
+		}
+		Event6bArmAmbush(*state.event, plan.spawns, rects.server, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
 		plog::Info("event '%s' (%s): armed in the event room %s: %zu per wave", state.event->name.c_str(), ev::kindName(state.event->kind), Describe(rects.server).c_str(), plan.spawns.size());
-		return;
+		return false;  // not announced yet: the first wave that spawns announces it
 	}
 	int made = 0, failed = 0, supers = 0;
 	for (const ep::Spawn& s : plan.spawns) {
@@ -555,6 +578,7 @@ void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 	}
 	plog::Info("event '%s' (%s): spawned %d of %zu in the event room %s (%d as a superunique, %d refused by the game)", state.event->name.c_str(),
 	           ev::kindName(state.event->kind), made, plan.spawns.size(), Describe(rects.server).c_str(), supers, failed);
+	return made > 0;
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -594,10 +618,14 @@ void OnPopulated(Game* game, void* room) noexcept {
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
-					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (the first room at least %d tiles from the first populated one)", ep::kMinEventDistance);
+					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (the first room a third of the level's larger side, at most %d tiles, from the first populated one)", ep::kMinEventDistance);
 				}
 			}
-			state->tracker.emplace(plan);
+			const int distance = ep::minEventDistance(rects.levelW, rects.levelH);
+			if (!plan) {
+				plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+			}
+			state->tracker.emplace(plan, distance);
 		}
 		planned = state->tracker->planned();
 		fire = !state->spawned && state->tracker->onPopulated(rects.drlg);
@@ -612,8 +640,20 @@ void OnPopulated(Game* game, void* room) noexcept {
 		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg), ep::scaleKindName(ep::scaleKind(rects.server, rects.drlg)),
 		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
-	if (fire) {
-		SpawnEvent(game, room, *state, rects, ep::eventSeed(state->seed));
+	if (fire && SpawnEvent(game, room, *state, rects, ep::eventSeed(state->seed))) {
+		// The banner names the event only now that it has spawned. If the player is already in the map it follows at once,
+		// else the entry tick shows it with the map's name.
+		std::vector<std::string> lines;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			if (generation == g_generation && g_state == state) {
+				state->announced = true;
+				if (state->entry.inside()) {
+					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the map name was shown on entry
+				}
+			}
+		}
+		ShowEntryMessage(lines);
 	}
 }
 
@@ -771,6 +811,8 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), check.problem.c_str());
 		} else if (!g_spawnOn.load()) {
 			plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
+		} else if (event->kind == ev::Kind::Ambush && !g_tickOn.load()) {
+			plog::Warn("event '%s' is refused: an Ambush starts its waves from the player tick, and the PlayerTick or room parts are off", event->name.c_str());
 		} else {
 			Event6bArmBossDrop(*event, level, player);  // phase 6b: does nothing without a Boss or Treasure monster Drop
 			state->event = std::move(event);
@@ -796,15 +838,29 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			return;
 		}
 		void* room = Call<UnitRoomFn>(EvUnitRoom)(unit);
-		Event6bAmbushTick(rawGame, room, &SpawnAmbushUnit);  // phase 6b: starts the next Ambush wave when the player is in the event room
+		// Phase 6b: starts the next Ambush wave when the player is in the event room. True once, when the first wave spawned: the Ambush counts as placed then.
+		const bool ambushStarted = Event6bAmbushTick(rawGame, room, &ReadServerRect, &SpawnAmbushUnit);
 		const bool inMap = room != nullptr && Call<RoomLevelFn>(EvRoomLevelId)(room) == state->level;
 		std::vector<std::string> lines;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (g_state != state || !state->entry.update(inMap)) {
+			if (g_state != state) {
 				return;
 			}
-			lines = ep::entryLines(state->mapName, state->event ? &*state->event : nullptr);
+			const bool late = ambushStarted && state->event;
+			if (late) {
+				state->announced = true;
+			}
+			const bool wasInside = state->entry.inside();
+			const bool entered = state->entry.update(inMap);
+			if (entered) {
+				lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
+			} else if (late && wasInside) {
+				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the map name was shown on entry
+			} else {
+				return;
+			}
+			lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
 		}
 		ShowEntryMessage(lines);
 	} catch (...) {

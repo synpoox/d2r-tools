@@ -148,6 +148,14 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) 
 	return out;
 }
 
+int minEventDistance(int levelW, int levelH) {
+	const int side = std::max(levelW, levelH);
+	if (side <= 0) {
+		return kMinEventDistance;
+	}
+	return std::clamp(side / 3, 1, kMinEventDistance);
+}
+
 EventRoomTracker::EventRoomTracker(std::optional<Rect> planned, int minDistance) : planned_(planned), minDistance_(minDistance) {}
 
 bool EventRoomTracker::onPopulated(const Rect &room) {
@@ -321,6 +329,10 @@ bool superSeen(const uint8_t *bitmap, int row) {
 		return false;
 	}
 	return ((bitmap[row >> 3] >> (row & 7)) & 1) != 0;
+}
+
+std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late) {
+	return entryLines(late ? std::string() : mapName, announced ? event : nullptr);
 }
 
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event) {

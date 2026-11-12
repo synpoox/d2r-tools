@@ -129,7 +129,8 @@ public:
 	Step step(bool inRoom, uint64_t nowMs);
 	// After SpawnWave: the ids of the units that were made. None at all abandons the event (the room cannot take the spawn).
 	void waveSpawned(const std::vector<uint32_t> &ids, uint64_t nowMs);
-	// A monster died; true when it belonged to the current wave.
+	// A monster died; true when it belonged to the current wave. While the wave is being spawned (Spawning) every death is remembered and
+	// matched against the wave's ids by waveSpawned(), so a unit that dies at once is counted.
 	bool onDeath(uint32_t id);
 
 	Phase phase() const { return phase_; }
@@ -148,6 +149,7 @@ private:
 	uint64_t deadline_ = 0;
 	uint64_t gapUntil_ = 0;
 	std::vector<uint32_t> pending_;
+	std::vector<uint32_t> early_;  // deaths seen while the wave was being spawned
 	WaveEnd lastEnd_ = WaveEnd::None;
 };
 
