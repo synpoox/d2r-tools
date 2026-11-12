@@ -16,6 +16,7 @@
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
+- A map's `Boss` shows its `bosses.txt` Name in game (run `tools\install.ps1` again; not yet checked in game).
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
