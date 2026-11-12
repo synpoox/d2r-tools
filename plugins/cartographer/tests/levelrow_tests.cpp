@@ -192,7 +192,7 @@ TEST_CASE("monsters fill the group count, weight sum and entries of the record, 
 	r.monsterRows = {5, 6};
 	r.monsterWeights = {3, 4};
 	const std::vector<Field> plan = PlanRecord(r, s, RecordOnly(true, false, false));
-	CHECK(plan.size() == 3 + 3 * 2);
+	CHECK(plan.size() == 3 + 3 * 2 + (RecMaxGroups - 2));
 	CHECK(FindField(plan, RecGroupCountOffset)->value == 2);
 	CHECK(FindField(plan, RecGroupCountOffset)->size == 1);
 	CHECK(FindField(plan, RecGroupWeightOffset)->value == 7);
@@ -203,7 +203,14 @@ TEST_CASE("monsters fill the group count, weight sum and entries of the record, 
 	CHECK(FindField(plan, RecGroupsOffset + RecGroupMembersDelta)->value == 0);  // the old group's members are not kept
 	CHECK(FindField(plan, RecGroupsOffset + RecGroupStride)->value == 6);
 	CHECK(FindField(plan, RecGroupsOffset + RecGroupStride + RecGroupWeightDelta)->value == 4);
+	// only the members byte of the slots past the list is written (zero), so the game's appended group starts clean (#263)
 	CHECK(FindField(plan, RecGroupsOffset + 2 * RecGroupStride) == nullptr);
+	for (int i = 2; i < RecMaxGroups; ++i) {
+		const Field* members = FindField(plan, RecGroupsOffset + i * RecGroupStride + RecGroupMembersDelta);
+		CHECK(members != nullptr);
+		CHECK(members->value == 0);
+		CHECK(members->size == 1);
+	}
 	r.monsterRows = {};
 	r.monsterWeights = {};
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());
@@ -212,7 +219,7 @@ TEST_CASE("monsters fill the group count, weight sum and entries of the record, 
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());
 	r.monsterRows = std::vector<int>(MaxMonsters, 3);
 	r.monsterWeights = std::vector<int>(MaxMonsters, 1);
-	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).size() == 3 + 3 * MaxMonsters);
+	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).size() == 3 + 3 * MaxMonsters + (RecMaxGroups - MaxMonsters));
 	r.monsterRows = {5, -1};
 	r.monsterWeights = {1, 1};
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());

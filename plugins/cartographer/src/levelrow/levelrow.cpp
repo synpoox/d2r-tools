@@ -206,6 +206,13 @@ auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed)
 			AddAlways(out, base + RecGroupWeightDelta, 1, static_cast<uint32_t>(r.monsterWeights[i]));
 			AddAlways(out, base + RecGroupMembersDelta, 1, 0);
 		}
+		// The slots past the list keep the level's old groups. The game appends a group for a class that is not listed (a
+		// spawned Treasure monster, an event monster) in the first of them and adds members only up to a limit that counts
+		// what is already there, so a stale members byte leaves the new group the old group's pieces (a bPiece assert when
+		// the unit is sent to the client).
+		for (size_t i = n; i < static_cast<size_t>(RecMaxGroups); ++i) {
+			AddAlways(out, RecGroupsOffset + RecGroupStride * static_cast<int>(i) + RecGroupMembersDelta, 1, 0);
+		}
 	}
 	if (allowed.density && r.density > 0) {
 		const int percent = std::min(r.density, MaxPercent);
