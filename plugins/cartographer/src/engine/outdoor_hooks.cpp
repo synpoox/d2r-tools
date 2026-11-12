@@ -28,7 +28,7 @@ namespace {
 namespace co = cartographer::outdoor;
 
 // --- Engine facts. Offsets are into D2R's own structures (build 93847); each is recorded with its evidence in
-// docs/reverse-engineering/cartographer.md sections 1, 4, 8 and 8a. The functions are found by signature, never by address.
+// docs/reverse-engineering/cartographer.md (index): sections 1, 4, 8 and 8a. The functions are found by signature, never by address.
 constexpr int LvlType = 0x00;         // int32: 1 maze, 2 preset, 3 outdoor
 constexpr int LvlRoomCount = 0x08;    // int32
 constexpr int LvlFirstRoom = 0x10;    // room*: the newest room, next at RoomNext
@@ -119,6 +119,7 @@ struct ArrivalFact {
 };
 ArrivalFact g_arrival;
 std::atomic<bool> g_arrivalLogged{false};
+std::atomic<int> g_arrivalResult{0};  // OutdoorArrivalResult: what the arrival probe found (AutoCheck reads it)
 cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
 
 // One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
@@ -405,6 +406,7 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_arrival = {true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h};
 		g_arrivalLogged = false;
+		g_arrivalResult = 0;
 	}
 	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
@@ -650,6 +652,10 @@ auto OutdoorBossRoom() -> MazeEventRect {
 	return g_bossRoom;
 }
 
+auto OutdoorArrivalResult() -> int {
+	return g_arrivalResult.load();
+}
+
 auto OutdoorArrivalPending() -> bool {
 	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && g_slotLevel.load(std::memory_order_relaxed) > 0;
 }
@@ -667,15 +673,18 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 	const void* drlg = Read<const void*>(room, ServerRoomDrlg);
 	if (drlg == nullptr) {
 		plog::Info("[outdoor probe] arrival: the player's server room %p has no DRLG room", room);
+		g_arrivalResult = 3;
 		return;
 	}
 	const int32_t x = Read<int32_t>(drlg, RoomX), y = Read<int32_t>(drlg, RoomY), w = Read<int32_t>(drlg, RoomW), h = Read<int32_t>(drlg, RoomH);
 	if (w <= 0 || h <= 0) {
 		plog::Info("[outdoor probe] arrival: the player's server room %p has no readable DRLG room (%p)", room, drlg);
+		g_arrivalResult = 3;
 		return;
 	}
 	const bool have = fact.known && fact.levelId == levelId;
 	const bool inCell = have && x >= fact.cellX && y >= fact.cellY && x + w <= fact.cellX + fact.cellW && y + h <= fact.cellY + fact.cellH;
+	g_arrivalResult = have ? (inCell ? 1 : 2) : 3;
 	plog::Info("[outdoor probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d; the entrance cell is %s (%d,%d) %d x %d%s", drlg, room, levelId, x, y, w, h,
 	           have ? "at" : "unknown, last seen at", fact.cellX, fact.cellY, fact.cellW, fact.cellH,
 	           have ? (inCell ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
@@ -707,7 +716,7 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 	g_cache.clear();
 	g_slotLevel = found[0] != nullptr ? found[0]->level : (found[1] != nullptr ? found[1]->level : -1);
 	g_enabled = tables != nullptr && tables->settings.outdoorBuild != 0;
-	g_probe = tables != nullptr && tables->settings.outdoorProbe != 0;
+	g_probe = tables != nullptr && (tables->settings.outdoorProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
 
 void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed) {
@@ -746,6 +755,7 @@ void OutdoorGameLeft() {
 		g_bossRoom = {};
 		g_arrival = {};
 		g_arrivalLogged = false;
+		g_arrivalResult = 0;
 	}
 	g_cache.clear();
 	g_slotState.clear();

@@ -90,7 +90,7 @@ TEST_CASE("placements: centre first, distinct, inside, deterministic, capped by 
 	CHECK(placements(room, 0, 1).empty());
 	CHECK(placements({0, 0, 0, 5}, 3, 1).empty());
 	const std::vector<Spot> tiny = placements({10, 10, 3, 3}, 50, 1);
-	CHECK(tiny.size() <= 9);
+	CHECK(tiny.size() == 9);
 	for (const Spot &s : tiny) {
 		CHECK(inside(s, {10, 10, 3, 3}));
 	}
@@ -112,7 +112,7 @@ TEST_CASE("placements: an outdoor 8 x 8 tile event room (40 x 40 units) holds 4 
 	}
 	const Rect cell{3000, 1500, 160, 160};  // the 32 x 32 tile cell
 	CHECK(placements(cell, 6, 3, 5).size() == 6);
-	CHECK(placements(room, 100, 3, 5).size() < 100);  // never more than the room holds
+	CHECK(placements(room, 100, 3, 5).size() == 36);  // never more than the room holds: 6 x 6 at one tile
 }
 
 TEST_CASE("planEvent: a Horde of 6 in an outdoor event room gets 6 spots and records the count asked for") {

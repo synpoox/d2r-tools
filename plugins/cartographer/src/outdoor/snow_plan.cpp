@@ -1,20 +1,13 @@
 #include "snow_plan.h"
 
 #include <algorithm>
-#include <cctype>
 #include <utility>
 
-#include "rng.h"
+#include "outdoor_plan.h"
 
 namespace cartographer::outdoor::snow {
 
 namespace {
-
-std::string lower(std::string_view text) {
-	std::string out(text);
-	for (char &c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-	return out;
-}
 
 bool isHorizontal(Orientation o) { return o == Orientation::Horizontal; }
 
@@ -54,10 +47,6 @@ std::vector<const Piece *> candidates(Kind kind, char letter) {
 	return out;
 }
 
-std::string cellName(int x, int y) {
-	return "cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
-}
-
 TileRect cellRect(const SnowOptions &o, int x, int y) {
 	TileRect r;
 	r.known = true;
@@ -93,39 +82,24 @@ RoomCells chooseRoomCells(const SnowRequest &r, Orientation o) {
 	entranceCell(o, r.cellsW, r.cellsH, &ex, &ey);
 	const bool horizontal = isHorizontal(o);
 	const int along = horizontal ? r.cellsW : r.cellsH;
-	std::vector<std::pair<int, int>> runs;  // row-major
+	std::vector<GridCell> runs;  // row-major
 	for (int y = 0; y < r.cellsH; ++y) {
 		for (int x = 0; x < r.cellsW; ++x) {
 			const int index = horizontal ? x : y;
-			if (index > 0 && index < along - 1 && !(x == ex && y == ey)) runs.emplace_back(x, y);
+			if (index > 0 && index < along - 1 && !(x == ex && y == ey)) runs.push_back({x, y});
 		}
 	}
 	if (runs.size() < 2) return out;
 	layout::Pcg32 rng(layout::splitmix64(r.seed + 0x524F4F4Dull));
-	const auto dist2 = [](int ax, int ay, int bx, int by) { return (ax - bx) * (ax - bx) + (ay - by) * (ay - by); };
-	// The best by score; among equal scores the seed's pick (a reservoir over the ties).
-	const auto best = [&](const std::vector<std::pair<int, int>> &from, auto score) {
-		int top = -1, ties = 0;
-		std::pair<int, int> at{0, 0};
-		for (const auto &c : from) {
-			const int v = score(c.first, c.second);
-			if (v > top) {
-				top = v;
-				ties = 1;
-				at = c;
-			} else if (v == top && rng.below(static_cast<uint32_t>(++ties)) == 0) {
-				at = c;
-			}
-		}
-		return at;
-	};
-	const auto boss = best(runs, [&](int x, int y) { return dist2(x, y, ex, ey); });
-	std::vector<std::pair<int, int>> rest;
-	for (const auto &c : runs) {
+	const GridCell entrance{ex, ey};
+	GridCell boss, event;
+	pickFarthestCell(runs, {entrance}, rng, boss);
+	std::vector<GridCell> rest;
+	for (const GridCell &c : runs) {
 		if (c != boss) rest.push_back(c);
 	}
-	const auto event = best(rest, [&](int x, int y) { return std::min(dist2(x, y, ex, ey), dist2(x, y, boss.first, boss.second)); });
-	out = {true, boss.first, boss.second, event.first, event.second};
+	pickFarthestCell(rest, {entrance, boss}, rng, event);
+	out = {true, boss.x, boss.y, event.x, event.y};
 	return out;
 }
 
@@ -184,7 +158,7 @@ const Piece *findPiece(int lvlPrest) {
 }
 
 bool snowSizeCells(std::string_view size, int *cellsW, int *cellsH) {
-	const std::string s = lower(size);
+	const std::string s = lowerAscii(size);
 	int w = 0, h = 0;
 	if (s.empty() || s == "medium") { w = 8; h = 5; }
 	else if (s == "small") { w = 6; h = 4; }

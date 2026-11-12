@@ -7,7 +7,7 @@
 // `Champions` has no field in either place (the champion roll is fixed in the game's code), so it is not applied.
 // This file holds the layouts, the value mapping and the bookkeeping, including the undo and revert decisions; the engine part
 // (src/engine/level_row.cpp) finds the memory and does the writes. Layouts (build 93847) and the evidence:
-// docs/reverse-engineering/cartographer.md section 15.
+// docs/reverse-engineering/cartographer/15-map-monster-columns.md.
 #pragma once
 
 #include <cstddef>

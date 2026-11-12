@@ -412,7 +412,7 @@ if ($null -eq $levelId) {
 # The 'cartoboss:' rows are rebuilt from bosses.txt each run (so a renamed or removed entry loses its old row), and running this
 # again changes nothing once they are right. An entry that does not check out is reported and not written.
 # At most $MaxBosses entries: the game keeps a once-per-game "already spawned" bit per superuniques row in a bit list of unknown
-# length (docs/reverse-engineering/cartographer.md), so the number of added rows stays small.
+# length (docs/reverse-engineering/cartographer/01-addresses.md), so the number of added rows stays small.
 $BossKeyPrefix = 'cartoboss:'
 $MaxBosses = 16
 $BossNameKeyPrefix = 'cartographer:'  # the plugin's string namespace (its PluginInfo.id); src/mapname BossRowKey
