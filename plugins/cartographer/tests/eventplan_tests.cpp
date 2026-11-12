@@ -292,9 +292,9 @@ TEST_CASE("idMatches: a field with no NUL is not text") {
 	std::fill(full, full + kMonStatsIdSize, 'a');
 	CHECK_FALSE(idMatches(full, kMonStatsIdSize, std::string(kMonStatsIdSize, 'a')));
 	CHECK_FALSE(idText(full, kMonStatsIdSize).has_value());
-	char forty[kMonStatsIdSize] = {};
-	std::fill(forty, forty + 46, 'b');
-	CHECK(idMatches(forty, kMonStatsIdSize, std::string(46, 'B')));  // the longest Id: 46 characters and the terminator
+	char idBuf[kMonStatsIdSize] = {};
+	std::fill(idBuf, idBuf + 46, 'b');
+	CHECK(idMatches(idBuf, kMonStatsIdSize, std::string(46, 'B')));  // the longest Id: 46 characters and the terminator
 	CHECK_FALSE(idMatches(nullptr, kMonStatsIdSize, "b"));
 }
 

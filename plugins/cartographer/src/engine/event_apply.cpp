@@ -1,6 +1,7 @@
 #include "engine/event_apply.h"
 
 #include "core/part_signatures.h"
+#include "engine/event_6b.h"
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
@@ -488,8 +489,9 @@ auto Describe(const ep::Rect& r) -> std::string {
 }
 
 // One monster at a position in the server rect's units. Returns whether the game gave a unit.
-auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper) noexcept -> bool {
+auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** unitOut) noexcept -> bool {
 	*asSuper = false;
+	*unitOut = nullptr;
 	const int32_t x = s.spot.x, y = s.spot.y;
 	if (s.superUnique && On(SpawnSuperUnique)) {
 		const uint8_t* bitmap = reinterpret_cast<const uint8_t*>(game) + GameSuperBitmapOffset;
@@ -499,6 +501,7 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper) noexcep
 			plog::Info("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
 			if (unit != nullptr) {
 				*asSuper = true;
+				*unitOut = unit;
 				return true;
 			}
 		} else {
@@ -510,10 +513,15 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper) noexcep
 		return false;
 	}
 	void* unit = Call<SpawnMonsterFn>(SpawnMonster)(game, room, x, y, row, SpawnMode, SpawnParam, SpawnFlags);
+	*unitOut = unit;
 	return unit != nullptr;
 }
 
 void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
+	if (state.event->kind == ev::Kind::Shrine) {
+		Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b
+		return;
+	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
 	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
@@ -523,7 +531,11 @@ void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 	int made = 0, failed = 0, supers = 0;
 	for (const ep::Spawn& s : plan.spawns) {
 		bool asSuper = false;
-		if (SpawnOne(game, room, s, &asSuper)) {
+		void* unit = nullptr;
+		if (SpawnOne(game, room, s, &asSuper, &unit)) {
+			if (state.event->kind == ev::Kind::Boss && &s == &plan.spawns.front()) {
+				Event6bBossSpawned(unit);  // phase 6b: the boss is the first spawn; its death rolls the Drop
+			}
 			++made;
 			supers += asSuper ? 1 : 0;
 		} else {
@@ -640,6 +652,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		g_parts[PopulateRoom].status.on = false;
 		g_parts[PopulateRoom].status.detail = "off: not hooked, because a part it needs was not found";
 	}
+	InstallEvent6b(context, overrides);  // phase 6b: the Shrine object and the Boss Drop (its own parts and hook)
 	// The entry message follows the portal's tick part and needs the room parts.
 	bool tickOn = false;
 	for (const PartStatus& s : PartStatuses()) {
@@ -726,11 +739,22 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
 		const ep::SpawnPlan check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
-		if (!check.problem.empty()) {
+		std::string shrineWhy;
+		if (event->kind == ev::Kind::Shrine) {
+			// Phase 6b: a Shrine's Spawn is an objects row, not a monster; it is announced only when it resolves to exactly one row.
+			if (!g_spawnOn.load()) {
+				plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
+			} else if (!Event6bPrepareShrine(*event, tables->objectNames, player, &shrineWhy)) {
+				plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), shrineWhy.c_str());
+			} else {
+				state->event = std::move(event);
+			}
+		} else if (!check.problem.empty()) {
 			plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), check.problem.c_str());
 		} else if (!g_spawnOn.load()) {
 			plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
 		} else {
+			Event6bArmBossDrop(*event, level, player);  // phase 6b: does nothing without a Boss Drop
 			state->event = std::move(event);
 		}
 	}
@@ -771,6 +795,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 }
 
 void EventsGameLeft() noexcept {
+	Event6bGameLeft();
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		++g_generation;
@@ -786,11 +811,14 @@ auto EventPartStatuses() -> std::vector<PartStatus> {
 	for (const Part& part : g_parts) {
 		out.push_back(part.status);
 	}
+	for (PartStatus& status : Event6bPartStatuses()) {
+		out.push_back(std::move(status));
+	}
 	return out;
 }
 
 auto EventsSummary() -> std::string {
-	return "map events: " + SummaryNow();
+	return "map events: " + SummaryNow() + "; " + Event6bSummary();
 }
 
 }  // namespace carto

@@ -56,7 +56,20 @@ PARTS = [
     # Event Spawn names from the game's tables (cartographer.md section 11)
     ("DataTablesBase", 0x300A90, 16, "72", 0),
     ("NameToRow", 0xA121F0, 13, "48 8B 05", 0),
+    # Shrine and Boss Drop (cartographer.md section 13). DeathDrop is hooked (15 bytes); its first relative operand (jne) is at +33.
+    ("DeathDrop", 0x447B80, 33, None, 15),
+    ("DropRoller", 0x441300, 20, "48 8B 05", 0),
+    ("DropLevel", 0x43E8A0, 15, "E8", 0),
+    ("SpawnObject", 0x4022A0, 24, "E8", 0),
+    ("CreateObject", 0x490410, 19, "48 8B 05", 0),
 ]
+
+# The free-spot search (0x402f50) has no signature: it is the target of the call at SpawnObject + 0xff. The 17 bytes before that call
+# (mov r9d, 0x3e01; mov r8d, 5; mov [rsp+0x20], rax) and the first 20 bytes of the target are what the plugin checks too.
+FREE_SPOT_RVA = 0x402F50
+FREE_SPOT_SITE = 0xFF
+FREE_SPOT_CONTEXT = bytes.fromhex("41B9013E000041B80500000048894424" "20")
+FREE_SPOT_PREFIX = bytes.fromhex("405355565741544155415641574881EC98000000")
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000
 HEADER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "core", "part_signatures.h")
@@ -108,6 +121,31 @@ def check_counter_calls(img, found):
     ok = len(sites) >= 2
     print(f"OpenRedPortal -> GameCounter: E8 calls at {', '.join('+0x%x' % o for o in sites) or 'none'}: {'ok' if ok else 'fewer than two'}")
     return 0 if ok else 1
+
+
+def check_free_spot(img, found, code):
+    """SpawnObject + 0xff is a call whose target is 0x402f50: its context bytes and the target's first bytes hold."""
+    base = found.get("SpawnObject")
+    if base is None:
+        print("FreeSpot: not checked (SpawnObject did not resolve)")
+        return 1
+    site = base + FREE_SPOT_SITE
+    problems = []
+    if img[site] != 0xE8:
+        problems.append("no E8 at SpawnObject+0xff")
+        target = None
+    else:
+        target = site + 5 + struct.unpack_from("<i", img, site + 1)[0]
+        if target != FREE_SPOT_RVA:
+            problems.append(f"the call goes to 0x{target:x}, recorded 0x{FREE_SPOT_RVA:x}")
+        if not any(va <= target < va + sz for _, va, sz in code):
+            problems.append("the target is outside the executable sections")
+        elif img[target:target + len(FREE_SPOT_PREFIX)] != FREE_SPOT_PREFIX:
+            problems.append("the target's first bytes differ")
+    if img[site - len(FREE_SPOT_CONTEXT):site] != FREE_SPOT_CONTEXT:
+        problems.append("the bytes before the call differ")
+    print(f"FreeSpot       0x{(target or 0):06x}  call at SpawnObject+0xff: {'ok' if not problems else '; '.join(problems)}")
+    return 1 if problems else 0
 
 
 def main():
@@ -164,6 +202,7 @@ def main():
               f"{', hook ' + str(hook) if hook else ''}: {status}"
               + (f" ({', '.join(hex(h) for h in hits[:4])})" if hits and status != "ok" else ""))
     bad += check_counter_calls(img, found)
+    bad += check_free_spot(img, found, code)
     print("all signatures ok" if not bad else f"{bad} signature(s) failed")
     return 1 if bad else 0
 
