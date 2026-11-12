@@ -474,8 +474,10 @@ auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartogra
 	std::vector<bool> drop(pool.size(), false);
 	for (const cartographer::stats::PoolIssue& issue : cartographer::stats::checkPool(pool)) {
 		const std::string lead = "row " + std::to_string(issue.row + 1) + " (" + pool[issue.row].stat + "): ";
-		std::string message = issue.message.rfind(lead, 0) == 0 ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
-		if (message.find("Weight") != std::string::npos && WasCut(pool[issue.row].weight, weightText[issue.row])) {
+		const bool leads = issue.message.rfind(lead, 0) == 0;
+		std::string message = leads ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
+		// Only the core's own Weight wording (right after the lead), never a Stat name that contains "Weight".
+		if (leads && issue.message.compare(lead.size(), 7, "Weight ") == 0 && WasCut(pool[issue.row].weight, weightText[issue.row])) {
 			message += TypedSuffix(weightText[issue.row]);
 		}
 		if (issue.error) {
@@ -546,15 +548,17 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 		if (!ok) {
 			continue;
 		}
-		// Name the typed number only for the label the message is about: the text after the last "' has " (the name is user text).
+		// Name the typed number only for the label the message is about: the text after the quoted name's "' has " (user text can hold "' has " too).
 		const auto echo = [&](std::string message, bool skipped) {
 			if (message.empty()) {
 				return message;
 			}
-			const size_t has = message.rfind("' has ");
-			if (has != std::string::npos) {
+			const std::string quoted = "'" + row.name + "' has ";
+			const size_t found = message.find(quoted);
+			if (found != std::string::npos) {
+				const size_t has = found + quoted.size();
 				for (const Typed& t : typed) {
-					if (message.compare(has + 6, std::strlen(t.name) + 1, std::string(t.name) + " ") == 0 && WasCut(t.value, t.text)) {
+					if (message.compare(has, std::strlen(t.name) + 1, std::string(t.name) + " ") == 0 && WasCut(t.value, t.text)) {
 						if (skipped) {
 							message += " This row is skipped.";
 						}
