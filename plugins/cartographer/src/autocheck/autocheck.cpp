@@ -170,7 +170,7 @@ auto arrivalVerdict(int result, bool outdoor) -> ArrivalVerdict {
 	case 3:
 		return {true, false, outdoor ? "the arrival room could not be read (see the '[outdoor probe] arrival' line)" : "the arrival room could not be read (see the '[maze probe] arrival' line)"};
 	case 4:
-		return {true, false, "arrival left to the game: no entrance cell was marked (see the 'outdoor arrival: left to the game' line)", true};
+		return {true, false, "arrival left to the game: no entrance cell was marked (see the 'outdoor arrival: left to the game' line)"};
 	default:
 		return {};
 	}
