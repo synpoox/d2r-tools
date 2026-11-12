@@ -114,4 +114,33 @@ private:
 	Slot slots_[kMax];
 };
 
+// --- The state that carries the player's list to the clients (issue #104, cartographer.md section 7) -----------------
+// The game sends a stat list only as part of a state, so the player's list is given a state. The compiled states row
+// (build 93847) is 0x44 bytes: i16 overlay1-4 (+2, +4, +6, +8), castoverlay (+0xa), removerlay (+0xc), pgsvoverlay (+0xe);
+// the flag field (+0x10..+0x17, bit k at byte +0x10+k/8 mask 1<<(k%8); bit 0 nosend, bit 17 disguise); i16 stat (+0x18),
+// setfunc (+0x1a), remfunc (+0x1c); u16 group (+0x1e); i16 skill (+0x38), missile (+0x3a); byte canstack (+0x3c). A
+// lookup column that is empty is negative. The skills row is 0x2ec bytes with i16 aurastate (+0xa0), auratargetstate
+// (+0xa2), passivestate (+0xb4), state1-3 (+0x2d2, +0x2d4, +0x2d6).
+constexpr uint32_t kStateRowSize = 0x44;
+constexpr uint32_t kSkillRowSize = 0x2ec;
+
+// Empty when the SDK view of a table is the game's table: the row size is the wanted one, the pointers are equal and not
+// null, and the 64-bit count equals the SDK's 32-bit one. Else why not.
+std::string checkTableView(const void *viewRows, uint32_t viewCount, uint32_t viewRowSize, const void *dtRows, uint64_t dtCount,
+                           uint32_t wantRowSize);
+
+// States the game or the mod uses by a fixed id (a scan of D2R.exe call sites that pass a constant state; an under-count).
+bool isStaticState(int state);
+
+struct StatePick {
+	int state = -1;       // -1: none
+	bool strict = false;  // the whole flag field and the other columns were empty
+};
+
+// The lowest state id that nothing uses: above 0 and below `count`; not nosend, not disguise (bit 17, which makes
+// SetStateBit toggle a unit flag); no overlay, no stat, no setfunc or remfunc (0 or -1), no group; not named by any skills
+// row; not in the static list. The strict form also needs every flag bit clear and skill, missile and canstack empty;
+// it is tried first. `skills` may be null only with skillCount 0 (then no skills row names a state). Rows are raw bytes.
+StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount);
+
 } // namespace cartographer::statplan

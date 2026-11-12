@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include "../core/tsv.h"
 
@@ -268,6 +269,94 @@ size_t PlayerLists::size() const
 	size_t n = 0;
 	for (const Slot &s : slots_) n += s.list != 0 ? 1 : 0;
 	return n;
+}
+
+// --- The state for the player's list ---------------------------------------------------------------------------------------
+
+namespace {
+
+int16_t i16At(const uint8_t *row, size_t off)
+{
+	int16_t v;
+	std::memcpy(&v, row + off, sizeof(v));
+	return v;
+}
+
+bool flagBit(const uint8_t *row, int bit)
+{
+	return (row[0x10 + (bit >> 3)] & (1u << (bit & 7))) != 0;
+}
+
+bool namedBySkill(const uint8_t *skills, uint32_t skillCount, int state)
+{
+	static const size_t offsets[] = {0xa0, 0xa2, 0xb4, 0x2d2, 0x2d4, 0x2d6};
+	for (uint32_t i = 0; i < skillCount; ++i) {
+		for (const size_t off : offsets) {
+			const int16_t v = i16At(skills + static_cast<size_t>(i) * kSkillRowSize, off);
+			if (v >= 0 && v == state) return true;
+		}
+	}
+	return false;
+}
+
+bool candidate(const uint8_t *row, bool strict)
+{
+	if (flagBit(row, 0) || flagBit(row, 17)) return false;
+	for (size_t off = 2; off <= 0xe; off += 2) {
+		if (i16At(row, off) >= 0) return false;
+	}
+	const int16_t setfunc = i16At(row, 0x1a), remfunc = i16At(row, 0x1c);
+	if (i16At(row, 0x18) >= 0 || (setfunc != 0 && setfunc != -1) || (remfunc != 0 && remfunc != -1) || i16At(row, 0x1e) != 0) {
+		return false;
+	}
+	if (strict) {
+		for (int i = 0; i < 8; ++i) {
+			if (row[0x10 + i] != 0) return false;
+		}
+		if (i16At(row, 0x38) >= 0 || i16At(row, 0x3a) >= 0 || row[0x3c] != 0) return false;
+	}
+	return true;
+}
+
+} // namespace
+
+std::string checkTableView(const void *viewRows, uint32_t viewCount, uint32_t viewRowSize, const void *dtRows, uint64_t dtCount,
+                           uint32_t wantRowSize)
+{
+	if (viewRowSize != wantRowSize) {
+		return "the row size is " + std::to_string(viewRowSize) + ", not " + std::to_string(wantRowSize);
+	}
+	if (viewRows == nullptr || dtRows == nullptr) return "a row pointer is null";
+	if (viewRows != dtRows) return "the SDK rows are not the game's rows";
+	if (dtCount != viewCount) {
+		return "the row counts differ (game " + std::to_string(dtCount) + ", SDK " + std::to_string(viewCount) + ")";
+	}
+	return "";
+}
+
+bool isStaticState(int s)
+{
+	return s == 0 || s == 6 || s == 7 || s == 18 || s == 22 || s == 24 || s == 52 || s == 62 || (s >= 100 && s <= 107) || s == 109 ||
+	       s == 118 || s == 154 || s == 164 || (s >= 165 && s <= 172) || s == 184 || s == 185 || s == 186 || s == 189 || s == 209 ||
+	       s == 219;
+}
+
+StatePick pickPlayerState(const uint8_t *states, uint32_t count, const uint8_t *skills, uint32_t skillCount)
+{
+	StatePick pick;
+	if (states == nullptr || (skills == nullptr && skillCount != 0)) return pick;
+	for (const bool strict : {true, false}) {
+		for (uint32_t s = 1; s < count; ++s) {
+			if (isStaticState(static_cast<int>(s)) || !candidate(states + static_cast<size_t>(s) * kStateRowSize, strict) ||
+			    namedBySkill(skills, skillCount, static_cast<int>(s))) {
+				continue;
+			}
+			pick.state = static_cast<int>(s);
+			pick.strict = strict;
+			return pick;
+		}
+	}
+	return pick;
 }
 
 } // namespace cartographer::statplan

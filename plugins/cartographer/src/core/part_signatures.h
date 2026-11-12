@@ -60,4 +60,13 @@ inline constexpr const char* SpawnSuperUnique = "40 55 53 56 57 41 56 41 57 48 8
 inline constexpr const char* DataTablesBase = "48 83 EC 28 0F B6 C1 48 89 44 24 38 48 83 F8 04 72 19 48 8D 44 24 38 48 8D 4C 24 40 48 89 44 24 40 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 44 24 38 48 8D 0D ?? ?? ?? ?? 48 03 C0 48 8B 04 C1 48 83 C4 28 C3";
 inline constexpr const char* NameToRow = "40 55 56 57 41 54 48 8B EC 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E8 44 89 45 AC";
 
+// Client sync of player stats (cartographer.md section 7); all only called. FindStateList (unit, state) returns the first stat list
+// of the unit whose state is `state`, or null. SetListState (list, state) writes the list's state; it is a 9-byte leaf, so the
+// signature is the whole function. SetStateBit (unit, state, on) turns the state on or off, which is what makes the game send it.
+// StateOn (unit, state) is nonzero while the state is on.
+inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B DA 48 8B F9 48 85 C9 75 13 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B CF E8 ?? ?? ?? ??";
+inline constexpr const char* SetListState = "48 85 C9 74 ?? 89 51 20 C3";
+inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
+inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
+
 }  // namespace carto::sig
