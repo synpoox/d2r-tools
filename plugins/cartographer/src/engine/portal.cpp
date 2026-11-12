@@ -9,6 +9,7 @@
 #include "core/text.h"
 #include "engine/stat_apply.h"
 #include "engine/event_apply.h"
+#include "engine/map_names.h"
 #include "log.h"
 #include "steer.h"
 
@@ -231,7 +232,12 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	if (maze) {
 		MazeMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
 	}
+	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
+	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
 	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
+	if (named && opened == 0) {
+		MapNamesRestore();
+	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
 	}
@@ -474,6 +480,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		StatApplyGameLeft();
 		EventsGameLeft();
+		MapNamesRestore();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
@@ -591,6 +598,7 @@ void SetFirstGameStartNotify(void (*notify)() noexcept) {
 
 void SetTables(std::shared_ptr<const Tables> tables) {
 	SetMazeTables(tables);
+	MapNamesSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_tables = std::move(tables);
 }

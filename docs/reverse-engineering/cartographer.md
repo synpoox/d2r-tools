@@ -1194,6 +1194,45 @@ seconds with an encoding error after an assert on a stat index (`BC_ASSERT nStat
 game's base table; the file only makes Cartographer skip map stats, and `PlayerStats` is off by default). To tell, rerun the same save and mod without `cartographer.dll`: if the assert stays,
 it is setup or save state; if it goes, it is Cartographer. Not looked into; no Cartographer code was changed.
 
+### Mod-free route for a per-map name (issue #90, desk work 2026-11-12)
+
+The live checks above settle that the game reads the slot row's LevelName (`+0xfd`) and LevelEntry (`+0x14d`) keys when it shows the tooltip, the
+automap title and the banner, and that a write there takes effect at once. What was missing is a **string key that resolves to the map's own
+`Name`, without the active mod shipping a string file**. Evidence levels: **dump** (read from the build 93847 dump), **SDK** (read from the pinned SDK 717f727
+headers and guides, not run), **needs game** (not shown). Nothing here was run in a game.
+
+| Candidate | Result |
+|---|---|
+| (a) SDK string service that registers a key at runtime | **Route chosen.** SDK: a plugin owns the string namespace `PluginInfo.id` (`cartographer`) and defines text by a JSON array of `{Key, <language>...}` records at `data/local/lng/strings/d2rloader/<plugin-id>/<any>.json` (`LOCALIZATION.md`). `ResourceService::registerResource` takes a full virtual path under `.../d2rloader/<plugin-id>/...` and bytes from memory (`resources.h`: path "beginning with `data/`", copied before it returns, 64 MiB per resource), and `LOCALIZATION.md` says "Active resource registrations refresh plugin strings". So the plugin needs no file in the mod: it builds the JSON from `maps.txt` and registers it. A key in a fixed-size text field: `LOCALIZATION.md` says "Some text fields, including affix names, store the key in a fixed-size field; the full `namespace:key` must fit that field". LevelName and LevelEntry are exactly such fields (`char[40]`, dump, section 10 above), so the row value is `cartographer:N<i>` (name) and `cartographer:E<i>` (entry), 15 to 18 characters |
+| (b) Hook the game's key lookup `0x3e2b736` | **Rejected.** Dump: `0x3e2b730` and `0x3e2b736` are `FF 25 rel32` loader thunks (bytes `ff 25 da f6 ff ff`, `ff 25 dc f6 ff ff`) into `D2RCore.dll`: not hookable by the 14-byte rule and not signable (the thunk bytes repeat across the whole thunk table: a `FF 25 ?? ?? ?? ??` pattern gives 865 matches). `D2RCore.dll` is not in the dump, so the lookup's code cannot be read or signed. The key alone also does not say which level it is for, and 1217 callers make it a hot path |
+| (c) Hook the tooltip builder `0xc17e0` and whatever feeds the automap and banner | **Rejected as the main route, kept as the tooltip-only fallback.** Dump: `0xc17e0` is hookable and its prefix `40 55 56 41 56 48 8D AC 24 20 FF FF FF 48 81 EC E0 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 D0 00 00 00` matches once (`.text 0xc17e0`, checked again 2026-11-12). It only covers the tooltip. The automap title (`0x14751e0` via `0xc7a30`) and the banner (LevelEntry) have no hook that was found, and the output buffer's encoding after `0x1227840` was not read. It also needs a new engine hook with its own guard, where the chosen route needs none |
+
+#### What the chosen route does (written, not verified in game)
+
+- Off by default: `MapNames=1` in `cartographer.txt` turns it on. Nothing is registered or written while it is `0`, so the working "Colossal Summit" text is untouched.
+- At load and on every table reload the plugin registers one strings file: a `N<i>` record (the map's `Name`) and an `E<i>` record ("Entering " and the `Name`) for every map,
+  with the same text in all 13 languages (a record with a missing language does not fall back to English). Names are trimmed, control characters become spaces and they are cut to 60 bytes at a whole UTF-8 character.
+- When a map opens, on the game thread and just before `OpenRedPortal`, the plugin (1) finds the map's index in the registered list, (2) asks the localization service for both local keys
+  and requires the exact registered texts back (so the loader is known to hold them before the game is pointed at them; otherwise it logs and leaves the slot's name), (3) gets the slot row
+  from the levels row getter `0x32c4a0` with the game's data flag (`game + 0x106`), (4) checks both fields look like text keys (a NUL inside, printable ASCII), (5) saves the original 40 bytes of both,
+  and (6) writes the two keys (NUL-filled to 40 bytes; a key of 40 or more characters is refused). The page is made writable for the copy only if it is not. Maze maps use slot level 139 the same way.
+- The originals are written back on `GameLeft`, on plugin unload and when `OpenRedPortal` opens nothing. Only the first copy of a level is kept as the original; a restore checks that the row is still at the address it wrote.
+- Every step fails open with a log line; the slot level keeps its own name.
+
+| Field | Record |
+|---|---|
+| Part | `LevelsRow` `0x32c4a0` (levels row getter `(dataFlag, levelId) -> row*`), called only, never hooked. Signature (82 bytes, 12 masked) is the one in the Parts table above, added to `part_signatures.h` and to `tools/check_portal_signatures.py`: it matches once on the dump (`.text 0x32c4a0`); the first 46 bytes are shared with the sibling getters (`0x331e50`, `0x331f50`, `0x332050`; the 30-byte prefix also hits `0x32c5a0`), the first relative operand is the `E8` at `+0x12`. `python -I plugins/cartographer/tools/check_portal_signatures.py <dump> --stamp 0x6ab3782c`: "all signatures ok" |
+| Wired to | `plugins/cartographer/src/engine/map_names.cpp` (parts, services, row writes), `plugins/cartographer/src/mapname/` (pure: keys, text, JSON, 40-byte writes, restore bookkeeping; `tests/mapname_tests.cpp`) |
+
+#### Risks and what is still needed from the game
+
+- **needs game (the one unproven link):** that the game's key lookup behind `0x3e2b736` resolves a `cartographer:N0` key read from a levels row the way the SDK documents for fixed-size text fields. The SDK says so for table fields; the lookup lives in `D2RCore.dll`, which is not in the dump. If it does not, the tooltip, title and banner would read "Missing String" for every map while `MapNames=1` (hence off by default). Check: set `MapNames=1`, `cartographer open <Name>` and hover the portal.
+- needs game: that a string file registered at runtime (not a file in an MPQ) is picked up by `getStringByKey` and the engine. The plugin verifies the first half itself before every write (`map names:` log lines, "D2RLoader does not return the registered text yet"); the engine half is the check above.
+- needs game: that the row page is writable in process (the live write of 2026-11-12 used `WriteProcessMemory`, which ignores page protection); the plugin lifts the protection for the copy if needed.
+- needs game: the entry banner format for a long name; the tooltip's `" (owner)"` suffix in TCP/IP (none in single player).
+- Multiplayer: as above, a TCP/IP client keeps "Colossal Summit" unless its own plugin writes the same keys (needs the map identity from the #98 sync).
+- Restore on `GameLeft` assumes the event fires on a thread that may touch the table; one copy of the table was found in the earlier check, a second data bank was not (the plugin uses the game's own data flag).
+
 ## 11. Event Spawn names from the game's compiled tables (issue #95)
 
 **Status:** written and unit tested (issue #95, code in `plugins/cartographer/src/engine/event_apply.cpp`, pure logic in `src/eventplan/`); the signatures were checked statically on the build 93847 dump (`check_portal_signatures.py`, both rows ok); **not run in a game**. The analysis below is static research from the dump. Context: section 9 resolves an event's `Spawn` against the mod's `monstats.txt` `Id` and `superuniques.txt` `Superunique` columns (`ReadSpawnNames`, `plugins/cartographer/src/plugin.cpp`); issue #95 asks whether the game's own loaded tables can do it, so a mod that ships those tables in another form (or none) still resolves. Labels: **static** is read from the dump; **inference** is reasoned from it; **needs game** is a check to run.

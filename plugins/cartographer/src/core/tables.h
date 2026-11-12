@@ -66,6 +66,7 @@ struct Settings {
 	int eventChance = DefaultEventChance;
 	int itemStats = 0;
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
+	int mapNames = 0;   // MapNames: 1 shows a map's own Name on the portal tooltip, the automap title and the entry banner (written, not verified in game)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
 	std::string town = "Harrogath";
 };

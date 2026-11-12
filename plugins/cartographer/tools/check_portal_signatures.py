@@ -67,6 +67,8 @@ PARTS = [
     ("DropLevel", 0x43E8A0, 15, "E8", 0),
     ("SpawnObject", 0x4022A0, 24, "E8", 0),
     ("CreateObject", 0x490410, 19, "48 8B 05", 0),
+    # The map's own Name on the tooltip, automap and banner (cartographer.md section 10): the levels row getter, only called.
+    ("LevelsRow", 0x32C4A0, 18, "E8", 0),
 ]
 
 # The free-spot search (0x402f50) has no signature: it is the target of the call at SpawnObject + 0xff. The 17 bytes before that call
