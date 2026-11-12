@@ -3,6 +3,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <algorithm>
 #include <set>
 #include <string>
 #include <utility>
@@ -244,4 +245,138 @@ TEST_CASE("eventSeed is stable and differs from the map seed") {
 	CHECK(eventSeed(1) == eventSeed(1));
 	CHECK(eventSeed(1) != eventSeed(2));
 	CHECK(eventSeed(12345) != 12345u);
+}
+
+// --- Spawn names from the game's tables --------------------------------------------------------------------------------
+
+namespace {
+
+// A fake compiled monstats table: rows of kMonStatsRowSize bytes with the Id inline at +0.
+std::vector<uint8_t> fakeMonstats(const std::vector<std::string> &ids) {
+	std::vector<uint8_t> rows(ids.size() * kMonStatsRowSize, 0xCC);  // junk after the Id, as a real row has
+	for (size_t i = 0; i < ids.size(); ++i) {
+		uint8_t *row = rows.data() + i * kMonStatsRowSize;
+		std::fill(row, row + kMonStatsIdSize, uint8_t{0});
+		std::copy(ids[i].begin(), ids[i].end(), row);
+	}
+	return rows;
+}
+
+TableFacts goodFacts(const void *rows, uint32_t count, uint32_t rowSize) {
+	TableFacts f;
+	f.viewRows = rows;
+	f.viewCount = count;
+	f.viewRowSize = rowSize;
+	f.dtRows = rows;
+	f.dtCount = count;
+	return f;
+}
+
+} // namespace
+
+TEST_CASE("findMonsterRow: the inline Id, any case, exact length") {
+	const std::vector<uint8_t> rows = fakeMonstats({"skeleton1", "", "Zombie1", "andariel"});
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "skeleton1") == 0);
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "ZOMBIE1") == 2);
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "Andariel") == 3);
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "skeleton") == -1);   // a prefix is not the Id
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "skeleton12") == -1);
+	CHECK(findMonsterRow(rows.data(), 4, kMonStatsRowSize, "") == -1);           // an empty cell never matches an empty name
+	CHECK(findMonsterRow(rows.data(), 3, kMonStatsRowSize, "andariel") == -1);   // past the count
+	CHECK(findMonsterRow(nullptr, 4, kMonStatsRowSize, "andariel") == -1);
+	CHECK(findMonsterRow(rows.data(), 4, 16, "andariel") == -1);                 // a row too small to hold an Id
+}
+
+TEST_CASE("idMatches: a field with no NUL is not text") {
+	char full[kMonStatsIdSize];
+	std::fill(full, full + kMonStatsIdSize, 'a');
+	CHECK_FALSE(idMatches(full, kMonStatsIdSize, std::string(kMonStatsIdSize, 'a')));
+	CHECK_FALSE(idText(full, kMonStatsIdSize).has_value());
+	char forty[kMonStatsIdSize] = {};
+	std::fill(forty, forty + 47, 'b');
+	CHECK(idMatches(forty, kMonStatsIdSize, std::string(47, 'B')));  // the longest Id: 47 characters and the terminator
+	CHECK_FALSE(idMatches(nullptr, kMonStatsIdSize, "b"));
+}
+
+TEST_CASE("checkTable: the SDK view must be the game's table for the data flag") {
+	const std::vector<uint8_t> rows = fakeMonstats({"a", "b"});
+	CHECK(checkTable(goodFacts(rows.data(), 2, kMonStatsRowSize), kMonStatsRowSize).empty());
+	CHECK_FALSE(checkTable(goodFacts(rows.data(), 2, kMonStatsRowSize + 4), kMonStatsRowSize).empty());  // another row layout
+	TableFacts other = goodFacts(rows.data(), 2, kMonStatsRowSize);
+	other.dtRows = rows.data() + 1;  // another bank's table
+	CHECK_FALSE(checkTable(other, kMonStatsRowSize).empty());
+	TableFacts count = goodFacts(rows.data(), 2, kMonStatsRowSize);
+	count.dtCount = 3;
+	CHECK_FALSE(checkTable(count, kMonStatsRowSize).empty());
+	count.dtCount = (1ull << 32) | 2;  // the low 32 bits agree, the 64-bit count does not
+	CHECK_FALSE(checkTable(count, kMonStatsRowSize).empty());
+	CHECK_FALSE(checkTable(goodFacts(nullptr, 2, kMonStatsRowSize), kMonStatsRowSize).empty());
+	CHECK_FALSE(checkTable(goodFacts(rows.data(), 0, kMonStatsRowSize), kMonStatsRowSize).empty());
+	CHECK(checkTable(goodFacts(rows.data(), 2, kSuperRowSize), kSuperRowSize).empty());
+}
+
+TEST_CASE("checkRoundTrip: the name map is trusted only when every Id came back as its own row") {
+	RoundTrip t;
+	t.checked = 800;
+	CHECK(checkRoundTrip(t).empty());
+	t.wrong = 1;
+	t.firstWrongRow = 7;
+	t.firstWrongGot = -1;
+	const std::string why = checkRoundTrip(t);
+	CHECK(why.find("1 of 800") != std::string::npos);
+	CHECK(why.find("row 7 gave -1") != std::string::npos);
+	RoundTrip none;
+	CHECK_FALSE(checkRoundTrip(none).empty());  // nothing was looked up
+	RoundTrip nullMap;
+	nullMap.mapNull = true;
+	nullMap.checked = 5;
+	CHECK_FALSE(checkRoundTrip(nullMap).empty());
+}
+
+TEST_CASE("superRowFromLookup: only a row inside the table counts; -1 is the miss") {
+	CHECK(superRowFromLookup(0, 66) == 0);
+	CHECK(superRowFromLookup(65, 66) == 65);
+	CHECK(superRowFromLookup(-1, 66) == -1);
+	CHECK(superRowFromLookup(-2, 66) == -1);
+	CHECK(superRowFromLookup(66, 66) == -1);
+	CHECK(superRowFromLookup(0, 0) == -1);
+}
+
+TEST_CASE("RouteCache: keyed by revision and data flag; a newer revision drops the rest") {
+	RouteCache cache;
+	RouteVerdict classic;
+	classic.monsters = true;
+	classic.bank = 2;
+	RouteVerdict rotw;
+	rotw.monsters = true;
+	rotw.supers = true;
+	rotw.bank = 3;
+	cache.store({5, 0}, classic);
+	cache.store({5, 3}, rotw);
+	REQUIRE(cache.find({5, 0}) != nullptr);
+	CHECK(cache.find({5, 0})->bank == 2);
+	CHECK(cache.find({5, 3})->supers);          // the same revision pairs a different data flag with a different verdict
+	CHECK(cache.find({5, 1}) == nullptr);
+	CHECK(cache.find({4, 0}) == nullptr);
+	CHECK(cache.size() == 2);
+	RouteVerdict off;
+	off.why = "no bank matches";
+	cache.store({6, 0}, off);                   // a table load: everything from revision 5 is stale
+	CHECK(cache.size() == 1);
+	CHECK(cache.find({5, 0}) == nullptr);
+	REQUIRE(cache.find({6, 0}) != nullptr);
+	CHECK(cache.find({6, 0})->why == "no bank matches");
+	cache.store({6, 0}, classic);               // the same key replaces
+	CHECK(cache.size() == 1);
+	CHECK(cache.find({6, 0})->monsters);
+	CHECK(RouteKey{1, 2} == RouteKey{1, 2});
+	CHECK_FALSE(RouteKey{1, 2} == RouteKey{2, 2});
+}
+
+TEST_CASE("scaleKind says why the spot scale is what it is") {
+	CHECK(scaleKind({0, 0, 20, 16}, {0, 0, 20, 16}) == ScaleKind::Same);
+	CHECK(scaleKind({0, 0, 100, 80}, {0, 0, 20, 16}) == ScaleKind::Multiple);
+	CHECK(scaleKind({0, 0, 101, 80}, {0, 0, 20, 16}) == ScaleKind::NotAMultiple);
+	CHECK(scaleKind({0, 0, 100, 40}, {0, 0, 20, 16}) == ScaleKind::NotAMultiple);
+	CHECK(std::string(scaleKindName(ScaleKind::NotAMultiple)).find("fallback") != std::string::npos);
 }

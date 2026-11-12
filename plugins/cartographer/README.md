@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, the hooks are built only and have not run in game.** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, and the hooks were run in game for Cave maps (see Tested); Crypt has not been run in game.** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -18,12 +18,12 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map
   stays in your inventory; the reason is in the log and the console, and on screen you see "I can't use this yet." Both
   opening in Hell and a refusal (level gate) were seen in a game.
-- **Map properties** (monsters checked in game; the player's stats do not show on the character sheet): when a map opens, `Properties` random properties are drawn
+- **Map properties** (monsters checked in game on cheat-spawned ones only; the player's stats do not show on the character sheet): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
   monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
   `cartographer.txt`; it is `0` by default and then nothing is attached to the player. **Turn `PlayerStats` on only on a
   test character**: the stats apply and are removed when the player leaves the map level, and a Save and Exit inside the
-  map saved a test character without them, but the character screen does not show them (one live check). Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
+  map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), but the character screen does not show them (one live check). Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
@@ -35,7 +35,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   spawns its `Spawn` (a `monstats.txt` `Id` or a `superuniques.txt` name) at the centre of the event room with `Count`
   minions of its class; a `Horde` spawns `Count` of it. In a Cave or Crypt map the event room is the layout's reserved
   event cell; in other maps it is the first room the game fills that is at least 24 tiles from the first one. A superunique
-  can only exist once per game, so a second one spawns as its plain class. Boss and Horde events need the active mod to ship `monstats.txt` and `superuniques.txt` in its excel folder (the plugin looks the `Spawn` row up there; it cannot read the game's own tables by name yet): without them those events are not spawned or announced, and `cartographer check` and the report say so. `Drop` is not applied yet, and `Ambush`,
+  can only exist once per game, so a second one spawns as its plain class. The `Spawn` name is looked up in the game's own loaded tables when the map opens (written and unit tested; not yet checked in game); if that route fails its self-check, the plugin log says why and the mod's `monstats.txt` and `superuniques.txt` in its excel folder are used instead. With that fallback, a missing `monstats.txt` means no Boss or Horde events and a missing `superuniques.txt` means no superunique names (plain monsters still spawn); `cartographer check` and the report say so. `Drop` is not applied yet, and `Ambush`,
   `Treasure` and `Shrine` events are decided but not applied (no spawn, no message). The room populator and the two spawn
   functions are found by byte signature at load; a part that is not found once turns the spawns off (`cartographer check`
   says which) while the map and its entry message still work. The log gets `eventprobe:` lines for the checks in
@@ -133,7 +133,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build. The map properties part has its own live checks, listed under Tested.
+Run in game for Cave maps (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. Not run in game: a Crypt slot, Nightmare and Hell, and the arrival room check (the probe is rewritten, not yet run).
 
 ## Tested
 
@@ -158,6 +158,12 @@ Not run in game: every point above is expected behaviour, checked only by unit t
   - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
   - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
   - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+- In game, the maze slot (Cave level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
+  - 46 games in a row, each with a new game and a Cave map (`Corridor`, `Winding` and `Loop` in turn): the slot built the planned shape (built room grid equal to the plan), no crash, no error line;
+  - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;
+  - a slot too small for the plan (60 x 60) logs the reason and the game's own maze is built, no crash;
+  - entering the slot with no map opened builds the game's own maze;
+  - not checked: which room the player arrives in (the probe cannot tell), a Crypt slot, Nightmare and Hell.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).

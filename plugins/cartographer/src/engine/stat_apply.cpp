@@ -28,6 +28,7 @@ constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data fl
 constexpr int UnitOwnerListOffset = 0x88;  // the unit's own stat list (the engine's 0x34b870 returns it): the chain hangs on it, not on the unit
 constexpr int ListHeadOffset = 0x90;       // on that owner list: the chain head, or the second head at 0x98 (bit 13 lists); next at 0x68
 constexpr int ListHeadAltOffset = 0x98;
+constexpr int ListFlagsOffset = 0x1c;       // the engine walks +0x90/+0x98 only when this int is negative (0x2f5bdd, 0x2f6e93)
 constexpr int ListNextOffset = 0x68;
 constexpr int MaxChain = 512;              // a chain longer than this is not walked further
 constexpr int32_t UnitPlayer = 0;
@@ -136,6 +137,9 @@ auto Chain(Unit* unit, const void* find, bool* found) noexcept -> int {
 	*found = false;
 	const uint8_t* owner = At<const uint8_t*>(unit, UnitOwnerListOffset);
 	if (!Readable(owner, ListHeadAltOffset + sizeof(void*))) {
+		return 0;
+	}
+	if (At<int32_t>(owner, ListFlagsOffset) >= 0) {   // not an extended list: the engine does not read the heads (readable, checked above)
 		return 0;
 	}
 	for (const int head : {ListHeadOffset, ListHeadAltOffset}) {
@@ -302,7 +306,7 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 auto SummaryNow() -> std::string {
 	const bool mon = g_monstersOn.load(), pl = g_playersOn.load();
 	const char* player = !g_playerSetting.load() ? "off (PlayerStats=0 in cartographer.txt, the default)" : pl ? "on (test slot only)" : "off (a part was not found)";
-	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + player + " (not yet verified in game)";
+	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + player + " (monsters checked in game on cheat-spawned monsters; the player half only with Save and Exit)";
 }
 
 auto AllOn(std::initializer_list<PartId> ids) noexcept -> bool {
