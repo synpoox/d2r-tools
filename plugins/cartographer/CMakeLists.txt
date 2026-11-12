@@ -18,6 +18,15 @@ else()
 	target_compile_options(cartographer_layout PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 
+# The outdoor piece-picker (phase 4a): pure C++, reads the layout's types and the tileset catalogue.
+add_library(cartographer_outdoor STATIC src/outdoor/outdoor.cpp src/outdoor/outdoor.h)
+target_include_directories(cartographer_outdoor PUBLIC src/outdoor src/layout)
+if(MSVC)
+	target_compile_options(cartographer_outdoor PRIVATE /W4 /permissive- /utf-8)
+else()
+	target_compile_options(cartographer_outdoor PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)
