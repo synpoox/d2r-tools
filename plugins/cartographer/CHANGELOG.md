@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In a Cave or Crypt maze you now arrive in the planned entrance room, loop mazes included; that room gets no random chests or shrines (#127; written and unit tested, not verified in game).
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
 - When a host opens a map, joined TCP/IP clients are told which map it is; they check it against their own `maps.txt` and log it (nothing else uses it yet; written and unit tested, not verified in game).
 - A TCP/IP client now shows the host's map name (with `MapNames=1`) and builds the host's maze layout, where its own tables fit (#130; written and unit tested, not verified in game).

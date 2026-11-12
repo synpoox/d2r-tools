@@ -197,4 +197,68 @@ bool fixAfterWalk(const Plan &plan, int roomIndex)
 	return plan.rooms[static_cast<size_t>(roomIndex)].fix == Room::Fix::AfterWalk;
 }
 
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects)
+{
+	ArrivalMark out;
+	const auto refuse = [&out](const char *why) {
+		out.why = why;
+		return out;
+	};
+	if (!plan.steer || plan.rooms.empty()) return refuse("the plan places no rooms");
+	if (plan.entrance.room < 0 || static_cast<size_t>(plan.entrance.room) >= plan.rooms.size()) return refuse("the plan has no entrance cell");
+	if (unit <= 0) return refuse("the plan cell size is unknown");
+	if (rects.empty()) return refuse("the level has no rooms");
+	int pMinX = plan.rooms[0].dx, pMinY = plan.rooms[0].dy;
+	for (const Room &r : plan.rooms) {
+		pMinX = std::min(pMinX, r.dx);
+		pMinY = std::min(pMinY, r.dy);
+	}
+	const Room &entrance = plan.rooms[static_cast<size_t>(plan.entrance.room)];
+	out.cellX = entrance.dx - pMinX;
+	out.cellY = entrance.dy - pMinY;
+	int64_t minX = rects[0].x, minY = rects[0].y;
+	int64_t maxX = minX + rects[0].w, maxY = minY + rects[0].h;
+	for (const RoomRect &r : rects) {
+		minX = std::min<int64_t>(minX, r.x);
+		minY = std::min<int64_t>(minY, r.y);
+		maxX = std::max<int64_t>(maxX, static_cast<int64_t>(r.x) + r.w);
+		maxY = std::max<int64_t>(maxY, static_cast<int64_t>(r.y) + r.h);
+	}
+	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
+	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
+	const int64_t w = maxX - minX, h = maxY - minY;
+	if (w != static_cast<int64_t>(plan.widthRooms) * unit || h != static_cast<int64_t>(plan.heightRooms) * unit) {
+		return refuse("the built rooms do not span the plan's box");
+	}
+	out.minX = static_cast<int32_t>(minX);
+	out.minY = static_cast<int32_t>(minY);
+	out.originX = out.minX + out.cellX * unit;
+	out.originY = out.minY + out.cellY * unit;
+	// The room whose top-left corner is in the cell and whose centre is nearest the cell's centre (doubled coordinates, so
+	// there are no halves); ties go to the smaller y, then the smaller x.
+	int64_t best = -1;
+	for (size_t i = 0; i < rects.size(); ++i) {
+		const RoomRect &r = rects[i];
+		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unit) continue;
+		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - (2 * static_cast<int64_t>(out.originX) + unit);
+		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unit);
+		const int64_t d = dx * dx + dy * dy;
+		bool better = best < 0 || d < best;
+		if (!better && d == best) {
+			const RoomRect &cur = rects[static_cast<size_t>(out.room)];
+			better = r.y < cur.y || (r.y == cur.y && r.x < cur.x);
+		}
+		if (better) {
+			best = d;
+			out.room = static_cast<int>(i);
+		}
+	}
+	if (out.room < 0) return refuse("the entrance cell holds no room");
+	for (size_t i = 0; i < rects.size(); ++i) {
+		if (static_cast<int>(i) != out.room && (rects[i].flags & kArrivalFlags) != 0) out.clear.push_back(static_cast<int>(i));
+	}
+	out.mark = true;
+	return out;
+}
+
 } // namespace cartographer::maze
