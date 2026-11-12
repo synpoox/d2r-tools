@@ -41,6 +41,13 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables);
 // layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's).
 void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed = 0);
 
+// True once the Outdoor slot level's build has started in this game (with or without a map open). A client then keeps the layout it has: the
+// host's map seed is not applied (map sync, issue #146).
+auto OutdoorSlotRanAny() -> bool;
+
+// The seed of the open outdoor map (what map sync sends the clients), or 0.
+auto OutdoorOpenSeed() -> uint64_t;
+
 // Empty when the map just handed to OutdoorMapOpened can be planned on the Outdoor slot (the same cached plan the build uses); otherwise the
 // player-facing reason. Call right after OutdoorMapOpened, before the portal opens.
 auto OutdoorPlanProblem() -> std::string;
