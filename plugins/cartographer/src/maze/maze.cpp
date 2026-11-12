@@ -155,8 +155,9 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	Point root{-1, -1};
 	int levelX = 0, levelY = 0;
 	const int maxSteps = ts.maxLevelTiles / ts.roomTiles + 1;
-	for (int total = 0; total <= 2 * maxSteps && root.x < 0; ++total)
-		for (int sx = 0; sx <= total && root.x < 0; ++sx) {
+	bool searchedLargest = false;
+	for (int total = 0; total <= 2 * maxSteps && root.x < 0 && !searchedLargest; ++total)
+		for (int sx = 0; sx <= total && root.x < 0 && !searchedLargest; ++sx) {
 			levelX = levelTilesFor(ts, spanX / 2 + sx);
 			levelY = levelTilesFor(ts, spanY / 2 + (total - sx));
 			const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
@@ -171,12 +172,14 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 						bestScore = score;
 					}
 				}
+			// Both axes at the maximum is the largest level; every later step would repeat it.
+			if (root.x < 0 && levelX == ts.maxLevelTiles && levelY == ts.maxLevelTiles) searchedLargest = true;
 		}
 	if (root.x < 0)
 		return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
 
-	// Walk the layout from the first room, breadth-first, in engine direction order. Special rooms are one-exit rooms
-	// at the end of the path; the entrance is made last so that D2R's "newest free room with this piece" scan in
+	// Walk the layout from the first room, breadth-first, in engine direction order. The entrance is a one-exit room
+	// at the start of the path; it is made last so that D2R's "newest free room with this piece" scan in
 	// 0x3eb850 finds exactly it.
 	Plan plan;
 	std::vector<int> parent;

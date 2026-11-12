@@ -14,7 +14,9 @@
 //   * when the layout cannot fit the tileset, `steer` is false and `reason` says why in plain English: the hooks then
 //     leave the level to D2R's own maze builder.
 // The level size is an output: the plan says how big a level its layout needs (`levelTilesX/Y`, each axis grown only as far as it needs), and the slot row /
-// the build hook must apply it. Nothing about Cave forces 200 tiles; 200 is only what vanilla levels.txt gives.
+// the build hook must apply it. Growth is one axis at a time, smallest total first, so a plan's level can be smaller
+// than an older both-axes rule gave (4,111 of 8,998 plans differ in a sample of Cave/Crypt x 5 shapes x 3 sizes x 300
+// seeds: mostly smaller, 18 larger, and in all 18 the first room moved). Nothing about Cave forces 200 tiles; 200 is only what vanilla levels.txt gives.
 // Refits: a layout can change for a seed (planForSeed retries other layout seeds), so anything that rebuilds the layout
 // from the map seed (automap preview, multiplayer {map, seed}) MUST use SeedPlan::layout and never layout::generate(seed).
 // Directions: the layout's own (mask bits W 1, E 2, S 4, N 8; x grows east, y grows south) and D2R's room placer order
@@ -146,6 +148,8 @@ struct SpecialSteer {
 // whatever order or number the slot's code makes them. Hook requirement: after the slot's case returns, check that
 // the Prev call came when `entrance.place` is true. If it never did, the room is still the ordinary piece (the plan's
 // pieces and hash say otherwise), so log it and treat the level as a fallback.
+// A suppressed call places nothing: the hook skips the original 0x3eb850 and returns without writing a room. What it
+// must leave in the int* out parameter, and that the caller tolerates this, is still to verify in the engine (plan 3.6 [V]).
 SpecialSteer steerSpecial(const Tileset &ts, const Plan &plan, int toPiece, int priorPrevCalls = 0);
 
 // The tileset's rules clamped to the rooms the largest allowed level holds, and then a plan from a layout generated on them. When a

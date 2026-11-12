@@ -74,7 +74,7 @@ const layout::Cell &cellOf(const Layout &l, Point p) { return l.at(p.x, p.y); }
 
 // Everything below is checked by replaying the plan the way D2R's functions would apply it, without using any of the
 // plan's own derived fields (mask, piece) as input: masks come from the adds and links, positions from the add dirs.
-// fixPlacedEarly replays the WRONG hook order (placed ends fixed right after the walk, before 0x3eb850 runs) and must fail.
+// fixPlacedEarly replays the WRONG hook order (the placed entrance fixed right after the walk, before 0x3eb850 runs) and must fail.
 std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPlacedEarly = false)
 {
 	if (!p.steer) return "plan does not steer";
