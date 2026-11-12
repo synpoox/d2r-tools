@@ -46,8 +46,8 @@ auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::v
 void Event6bArmBossDrop(const cartographer::events::Event& event, int level, void* player);
 
 // The event room was populated: place the prepared Shrine object near the centre of the server rect. `game` and `room` are the
-// populator's arguments. Game thread.
-void Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect, int scale, uint64_t seed) noexcept;
+// populator's arguments. True only when the game created the object, so a Shrine that was not placed is never announced. Game thread.
+bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect, int scale, uint64_t seed) noexcept;
 
 // The Boss event spawned its boss (`unit`, the spawn's return value): remember it for the Drop.
 void Event6bBossSpawned(void* unit) noexcept;

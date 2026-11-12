@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- In a small preset map (under about 24 tiles across) the event is announced but nothing spawns (#115). Cave and Crypt maps are not affected.
+- Small preset maps now get their event, and the banner names an event only after it has spawned (#115; written, not verified in game).
 - Shrine events place an object from `objects.txt` and a Boss `Drop` rolls an extra treasure class when the boss dies (written and unit tested; not yet verified in game).
 - Ambush and Treasure events are not applied yet.
 - Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (checked in game with a superunique name only).
