@@ -210,19 +210,47 @@ void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game
 	}
 }
 
-// Every map (Cave or Crypt) opens through the Maze slot and is built by the maze steering hooks.
+// A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
 	return MapIsMaze(map);
 }
 
-auto SlotNameFor(const MapDef&) noexcept -> const char* {
-	return MazeSlot;
+// A Jungle map opens through the Outdoor slot and is built by the outdoor build hook.
+auto IsOutdoorMap(const MapDef& map) noexcept -> bool {
+	return MapIsOutdoor(map);
+}
+
+auto SlotNameFor(const MapDef& map) noexcept -> const char* {
+	return MapSlotName(map);
+}
+
+// What stops an outdoor map from opening, or empty: OutdoorBuild is 0 (the hooks are then not installed), a part or hook is missing, the Outdoor slot row is
+// refused (a vanilla level, not Act 5) or has another LevelType or DrlgType than the tileset needs.
+auto OutdoorProblem(const MapDef& map, const Tables& tables) -> std::string {
+	if (tables.settings.outdoorBuild == 0) {
+		return "Cartographer: " + map.tileset + " maps need OutdoorBuild = 1 in cartographer.txt (it is 0, so the outdoor build is off). Set it and restart the game.";
+	}
+	if (!OutdoorBuildLive()) {
+		return "Cartographer: the outdoor build is not running, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
+	}
+	for (const Slot& slot : tables.slots) {
+		if (EqualsNoCase(slot.name, OutdoorSlot)) {
+			if (const std::string refusal = OutdoorSlotRefusal(slot); !refusal.empty()) {
+				return "Cartographer: " + refusal + ", so " + map.tileset + " maps cannot be built. Run tools\\install.ps1 and restart the game.";
+			}
+		}
+	}
+	const std::string problem = OutdoorSlotProblem(map, tables.slots);
+	return problem.empty() ? problem : "Cartographer: " + problem;
 }
 
 // What stops a map from opening before the gates, or empty. `level` is the map's slot level (-1: not installed).
 auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::string {
 	if (level <= 0) {
-		return "Cartographer: the Maze slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
+		return std::string("Cartographer: the ") + SlotNameFor(map) + " slot is not installed or was refused. Run tools\\install.ps1, see cartographer-report.txt, then restart the game.";
+	}
+	if (IsOutdoorMap(map)) {
+		return OutdoorProblem(map, tables);
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
@@ -241,8 +269,12 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 // Opens `map` through its slot. A maze map hands its plan to the maze hooks first; if the game then opens no portal, the plan is dropped.
 auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level) noexcept -> int32_t {
 	const bool maze = IsMazeMap(map);
+	const bool outdoor = IsOutdoorMap(map);
 	if (maze) {
 		MazeMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
+	}
+	if (outdoor) {
+		OutdoorMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
 	}
 	// The map's own name goes into the slot row before the portal exists, so no reader sees the old text first.
 	const bool named = MapNamesBeforeOpen(map, tables, level, At<uint8_t>(game, GameDataFlagOffset));
@@ -258,6 +290,9 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
+	}
+	if (outdoor && opened == 0) {
+		OutdoorMapCancelled();
 	}
 	return opened;
 }

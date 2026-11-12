@@ -1171,6 +1171,10 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 - Nothing here has run in a game.
 
 
+
+### Opening an outdoor map (issue #144)
+
+A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). It needs `OutdoorBuild = 1` (the hooks are not installed otherwise). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 14). Desk work only; the open path has not run in a game. Multiplayer: the host seed is not sent to clients for outdoor maps yet (section 12 carries the maze seed only).
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 
 **Status:** written and unit tested; signatures checked statically on the build 93847 dump (`check_portal_signatures.py`); **not run in a game**. Code: `plugins/cartographer/src/engine/event_apply.cpp`; pure logic (spawn name lookup, placement, event room choice, spawn plan, entry lines, banner timing) in `src/eventplan/`, the decision in `src/events/`.

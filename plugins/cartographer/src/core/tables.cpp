@@ -18,12 +18,13 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the others
+// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); Jungle is buildable
+// through the outdoor build hook, which needs the Outdoor slot and OutdoorBuild = 1 (each is checked when the map opens); the others
 // are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
-	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", false},    {"Snow", false},
+	{"Basement", false}, {"Spider", false}, {"Temple", false}, {"Jungle", true},     {"Snow", false},
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
@@ -795,6 +796,9 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 		} else if (EqualsNoCase(slot.name, MazeSlot) &&
 		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
 			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
+		} else if (EqualsNoCase(slot.name, OutdoorSlot) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], OutdoorLevelName)) {
+			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + OutdoorLevelName + "'). Run the installer again (tools\\install.ps1)");
 		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return k.level == slot.level; })) {
 			drop("which another slot already uses");
 		} else if (std::any_of(kept.begin(), kept.end(), [&](const Slot& k) { return EqualsNoCase(k.name, slot.name); })) {
@@ -893,6 +897,14 @@ auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> st
 		return {};
 	}
 	return {};
+}
+
+auto MapIsOutdoor(const MapDef& map) -> bool {
+	return OutdoorLevelType(map.tileset) >= 0;
+}
+
+auto MapSlotName(const MapDef& map) -> const char* {
+	return MapIsOutdoor(map) ? OutdoorSlot : MazeSlot;
 }
 
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {

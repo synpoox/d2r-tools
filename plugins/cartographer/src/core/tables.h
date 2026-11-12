@@ -40,9 +40,11 @@ inline constexpr int MapItemSpell = 16;
 inline constexpr const char* MazeSlot = "Maze";
 // The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
 inline constexpr const char* MazeLevelName = "Cartographer Maze";
-// The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). Recognised
-// and checked here; no map opens through it yet, because the outdoor builder is not wired in (those tilesets are still refused).
+// The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). A Jungle map's
+// item opens it; the outdoor build hook (OutdoorBuild = 1 in cartographer.txt) builds it.
 inline constexpr const char* OutdoorSlot = "Outdoor";
+// The levels.txt Name of the Outdoor slot's level, as tools\install.ps1 writes it; an Outdoor slot on any other level is refused.
+inline constexpr const char* OutdoorLevelName = "Cartographer Outdoor";
 inline constexpr int OutdoorDrlgType = 3;
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
@@ -172,6 +174,12 @@ auto OutdoorLevelType(std::string_view tileset) -> int;
 // level. Empty too for a map that is not outdoor, when there is no Outdoor slot (the "not installed" message says so) and when levels.txt
 // was not read (-1): this check never refuses on what it does not know.
 auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> std::string;
+
+// True for a map built on the Outdoor slot (Jungle for now): its tileset has an outdoor LevelType. Every other map is a maze map.
+auto MapIsOutdoor(const MapDef& map) -> bool;
+
+// The slot a map opens through: "Outdoor" for an outdoor map, otherwise "Maze".
+auto MapSlotName(const MapDef& map) -> const char*;
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;
