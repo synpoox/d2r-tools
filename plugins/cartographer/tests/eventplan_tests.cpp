@@ -211,6 +211,41 @@ TEST_CASE("presetEventDistance: capped at the farthest room, so a small level st
 	CHECK(presetEventDistance(0, 0, entry, {}) == kMinEventDistance);
 }
 
+TEST_CASE("EventRoomTracker: the map Boss's tracker, made from the plan's boss room, fires only there, once") {
+	EventRoomTracker t(Rect{40, 40, 8, 8});
+	CHECK_FALSE(t.onPopulated({8, 24, 8, 4}));
+	CHECK(t.onPopulated({40, 40, 8, 8}));
+	CHECK_FALSE(t.onPopulated({40, 40, 8, 8}));
+}
+
+TEST_CASE("planMapBoss: one monster at the room centre, a superunique as itself, no minions") {
+	const Rect room{0, 0, 20, 20};
+	SpawnPlan p = planMapBoss("Bishibosh", resolveSpawn(table(), "Bishibosh"), room, 1);
+	REQUIRE(p.problem.empty());
+	REQUIRE(p.spawns.size() == 1);
+	CHECK(p.spawns[0].superUnique);
+	CHECK(p.spawns[0].row == 0);
+	CHECK(p.spawns[0].classRow == 4);
+	CHECK(p.spawns[0].spot.x == 10);
+	CHECK(p.spawns[0].spot.y == 10);
+	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), room, 1);
+	REQUIRE(p.spawns.size() == 1);
+	CHECK_FALSE(p.spawns[0].superUnique);
+	CHECK(p.spawns[0].row == 3);
+	// a server room rect: the same spacing rule as the events (the centre of a 40 x 20 rect)
+	p = planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{100, 50, 40, 20}, 1, 5);
+	REQUIRE(p.spawns.size() == 1);
+	CHECK(p.spawns[0].spot.x == 120);
+	CHECK(p.spawns[0].spot.y == 60);
+	// problems are said
+	CHECK_FALSE(planMapBoss("Nobody", resolveSpawn(table(), "Nobody"), room, 1).problem.empty());
+	Resolved noClass;
+	noClass.kind = ev::NameKind::Unique;
+	noClass.row = 2;
+	CHECK_FALSE(planMapBoss("X", noClass, room, 1).problem.empty());
+	CHECK_FALSE(planMapBoss("andariel", resolveSpawn(table(), "andariel"), Rect{0, 0, 0, 0}, 1).problem.empty());
+}
+
 TEST_CASE("planEvent: a Boss is the lead plus minions, centre first") {
 	const Rect room{0, 0, 20, 20};
 	ev::Event e = event(ev::Kind::Boss, "Bishibosh");

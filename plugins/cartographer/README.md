@@ -12,10 +12,11 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Red portal**: one map per game, in Harrogath, in Hell. A refused map stays in your inventory and you see "I can't use this yet."
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt`; the rest load.
-- **Cave and Crypt mazes**: these maps are built from the map's layout (`Corridor`, `Winding`, `Branching`, `Loop`,
-  `Sprawl`) through a `Maze` slot you add by hand (see below).
+- **Cave and Crypt mazes**: every map is generated (Cave or Crypt) from the map's layout (`Corridor`, `Winding`,
+  `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are off by
   default (`PlayerStats`, test characters only, experimental).
+- **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
   placement are experimental).
 - **Map names** (off by default, experimental): `MapNames=1` shows a map's own name on its portal, automap and entry banner.
@@ -135,7 +136,7 @@ that cannot be built is skipped.
 | MinBranchLen, MaxBranchLen | Rooms in one side room | the base shape's |
 | Loop | `1` for a ring back to the entrance, `0` for a path | the base shape's |
 | MinLoops, MaxLoops | Extra loops that rejoin the layout | the base shape's |
-| Width, Height | Grid size in rooms, 2 to 32 | the base shape's, else from `Size` |
+| Width, Height | Grid size in rooms, 2 to 32 | from `Size` |
 | BossRoom | `1` to place a boss room, `0` for none | the base shape's |
 
 Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	MaxPath	Straight	MinBranches	MaxBranches	Loop`.
@@ -180,9 +181,9 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
   Boss, Horde and Ambush events, the portal tooltip reading "Colossal Summit", and `MapNames=1` (a map's own name
-  seen on its portal, automap and banner in single player).
+  seen on its portal, automap and banner in single player), and arriving in the planned maze entrance room.
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
-  banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, arriving in the planned maze entrance
-  room, opening a map in Hell (only the Normal refusal was seen), and a second Crypt map in one game.
+  banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare and Hell
+  difficulty for mazes, opening a map in Hell (only the Normal refusal was seen), and a second Crypt map in one game.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

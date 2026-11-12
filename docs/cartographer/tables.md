@@ -10,10 +10,10 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the installed Maze level. |
 | `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze` row); you do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player only when `PlayerStats` is 1 (written and unit tested; **not yet verified in game**). `shapes.txt` and `mapevents.txt`: no, they are read and checked, but nothing rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player only when `PlayerStats` is 1 (written and unit tested; **not yet verified in game**). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: no, it is read and checked, but nothing rolls events from it yet (later phase). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what

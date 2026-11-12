@@ -38,6 +38,11 @@ SIGNATURES = [
     ("ArrivalFinder", 0x3DA650, "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ?? 4C 8B AC 24 80 00 00 00 44 8B C3 4C 8B B4 24 88 00 00 00 48 8B D7 41 0F B6 CC 48 8B E8 41 C7 45 00 FF FF FF FF 41 C7 06 FF FF FF FF E8 ?? ?? ?? ?? 4C 8B F8 48 83 78 10 00 75 0C 48 8B D0 41 0F B6 CC E8 ?? ?? ?? ?? 83 BD 90 00 00 00 00 49 8B D7 41 0F B6 CC 74 ?? 83 FE 0D 75 0D 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ?? EB 10 4D 8B CD 4C 89 74 24 20 44 8B C6 E8 ?? ?? ?? ?? 48 8B D0 41 0F B6 CC 48 8B D8 E8 ?? ?? ?? ?? 48 8B 43 58 E9 ?? ?? ?? ?? 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ??", 0, 999),  # only checked, never hooked
     ("ArrivalRoomFinder", 0x3DAD90, "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48", 0, 999),  # only checked, never hooked
     ("ArrivalFlagTest", 0x3612D0, "8B 41 50 25 00 00 03 00 C3", 0, 999),  # only checked, never hooked
+    # The outdoor slot parts (section 8): nothing hooks them yet, so the max patch is not checked (999); a hook re-derives it.
+    ("OutdoorEntry", 0x3EE320, "48 89 54 24 10 53 55 56 57 41 54 41 56 41 57 48 83 EC 50 4C 8B 7A 18 33 C0 4C 8B F2 44 0F B6 E1 49 89 87 A8 00 00 00 49 8D 4F 08 8B 42 2C 99 83", 0, 999),
+    ("OutdoorAct5Builder", 0x3FE2E0, "40 55 53 56 57 41 54 41 56 41 57 48 8D 6C 24 D9 48 81 EC C0 00 00 00 83 BA F8 01 00 00 6E 48 8B F2 44 0F B6 F1", 0, 999),
+    ("PieceStamp", 0x3ECFC0, "48 89 5C 24 08 44 89 4C 24 20 44 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 4C 8B 62 18 48 8B FA 48 63 B4 24 90 00 00 00 45 8B E9 8B D6 4C 89 64 24", 0, 999),
+    ("VoidCell", 0x3EDE00, "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00", 0, 999),
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000

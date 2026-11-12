@@ -9,6 +9,7 @@
 #include "core/tables.h"
 #include "core/text.h"
 #include "core/tsv.h"
+#include "event6b.h"
 #include "crash_guard.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
@@ -114,21 +115,25 @@ auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<st
 }
 
 // monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder.
-// This is the fallback: at map open the game's own loaded tables are tried first (engine/event_apply.cpp). The row index is the
-// parsed row count, which is the game's row number only if the file has no blank lines (ParseTsv drops them): an assumption, unchecked.
+// The `Expansion` marker line (monstats row 410, superuniques row 42) is dropped from both. This is the fallback: at map open the game's own
+// loaded tables are tried first (engine/event_apply.cpp). The row index is the parsed row count, which is the game's row number only if the
+// file has no blank lines (ParseTsv drops them): an assumption, unchecked.
 // Empty when a table is missing.
 auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 	cartographer::eventplan::SpawnTable out;
 	if (g_excelDir.empty()) {
 		return out;
 	}
-	std::vector<std::string> supers, classes;
-	if (!ReadColumnRows(g_excelDir + L"\\monstats.txt", "Id", &out.monsters)) {
-		out.monsters.clear();
+	std::vector<std::string> supers, classes, ids;
+	if (ReadColumnRows(g_excelDir + L"\\monstats.txt", "Id", &ids)) {
+		out.monsters = cartographer::event6b::dropMarkerLines(ids, ids);
 	}
 	if (ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Superunique", &supers) && ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Class", &classes)) {
-		for (size_t i = 0; i < supers.size(); ++i) {
-			out.supers.push_back({supers[i], i < classes.size() ? classes[i] : std::string()});
+		classes.resize(supers.size());
+		const std::vector<std::string> keptClasses = cartographer::event6b::dropMarkerLines(supers, classes);
+		const std::vector<std::string> keptSupers = cartographer::event6b::dropMarkerLines(supers, supers);
+		for (size_t i = 0; i < keptSupers.size(); ++i) {
+			out.supers.push_back({keptSupers[i], keptClasses[i]});
 		}
 	}
 	return out;
@@ -220,8 +225,16 @@ auto LoadAll() -> Loaded {
 	loaded.tables->spawnNames = ReadSpawnNames();
 	// objects.txt Name by row, for a Shrine. ParseTsv drops blank lines, so a file with one fails the line-count check against the
 	// game's row count (engine/event_6b.cpp) and its Shrine is then given by row number instead.
-	if (g_excelDir.empty() || !ReadColumnRows(g_excelDir + L"\\objects.txt", "Name", &loaded.tables->objectNames)) {
-		loaded.tables->objectNames.clear();
+	// The `Expansion` marker line has no compiled row (588 lines, 587 rows in the stock file), so it is dropped here (issue #135).
+	{
+		std::vector<std::string> classes, names;
+		if (!g_excelDir.empty() && ReadColumnRows(g_excelDir + L"\\objects.txt", "Class", &classes) && ReadColumnRows(g_excelDir + L"\\objects.txt", "Name", &names)) {
+			loaded.tables->objectNames = cartographer::event6b::objectRowNames(classes, names);
+			loaded.tables->objectClasses = cartographer::event6b::dropMarkerLines(classes, classes);
+		} else {
+			loaded.tables->objectNames.clear();
+			loaded.tables->objectClasses.clear();
+		}
 	}
 	// Boss and Horde names are looked up in the game's loaded tables at map open; these two files are only the fallback for when that
 	// route is off (checked then, not here). Without monstats.txt that fallback has nothing; without superuniques.txt it has no superunique.

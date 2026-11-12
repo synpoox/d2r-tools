@@ -294,6 +294,44 @@ TEST_CASE("a second slot on the same level or with the same name is dropped") {
 	CHECK(report.Errors() == 2);
 }
 
+TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is checked against the tileset") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nOutdoor\t140\nMaze\t139\n", report);
+	CHECK(slots[1].name == OutdoorSlot);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\tLevelType\nA\t138\t2\t2\nB\t139\t1\t3\nC\t140\t3\t21\n");
+	CHECK(slots[0].drlgType == 2);
+	CHECK(slots[1].drlgType == 3);
+	CHECK(slots[1].levelType == 21);
+	CHECK(slots[2].drlgType == 1);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\nC\t140\t1\n");  // only the DrlgType column: LevelType stays
+	CHECK(slots[1].drlgType == 1);
+	CHECK(slots[1].levelType == 21);
+
+	CHECK(OutdoorLevelType("jungle") == 21);
+	CHECK(OutdoorLevelType("Snow") == 31);
+	CHECK(OutdoorLevelType("Cave") == -1);
+
+	MapDef jungle;
+	jungle.name = "Shorelines";
+	jungle.tileset = "Jungle";
+	CHECK(OutdoorSlotProblem(jungle, slots).find("DrlgType 1") != std::string::npos);
+	ReadSlotLevelTypes(slots, "Name\tId\tDrlgType\tLevelType\nC\t140\t3\t21\n");
+	CHECK(OutdoorSlotProblem(jungle, slots).empty());
+	MapDef snow = jungle;
+	snow.tileset = "Snow";
+	const std::string wrong = OutdoorSlotProblem(snow, slots);
+	CHECK(wrong.find("LevelType 21") != std::string::npos);
+	CHECK(wrong.find("needs 31") != std::string::npos);
+	CHECK(wrong.find("Shorelines") != std::string::npos);
+
+	MapDef cave = jungle;
+	cave.tileset = "Cave";
+	CHECK(OutdoorSlotProblem(cave, slots).empty());       // not an outdoor map
+	CHECK(OutdoorSlotProblem(jungle, {}).empty());        // no Outdoor slot: the 'not installed' message says so
+	auto unread = LoadSlots("Slot\tLevel\nOutdoor\t140\n", report);
+	CHECK(OutdoorSlotProblem(jungle, unread).empty());    // levels.txt not read: never refuses on what it does not know
+}
+
 TEST_CASE("every map needs an Item: a blank cell is refused") {
 	Report report;
 	const auto maps = Load("Has\tCave\tLoop\t\t\tt20\nNone\tCave\tLoop\n", report);
@@ -442,7 +480,8 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
-	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow};
+	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow,
+	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);

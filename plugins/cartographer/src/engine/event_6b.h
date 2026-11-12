@@ -40,7 +40,7 @@ auto Event6bSummary() -> std::string;
 
 // A Shrine was decided: resolve its Spawn to an objects row. False (with `why`) when the event cannot be placed, so it is neither
 // announced nor waited for. `player` is the player unit (its data flag picks the game's tables). Game thread, at map open.
-auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool;
+auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool;
 
 // A Boss event or a Treasure monster was accepted: resolve its Drop treasure class and arm the death hook. Does nothing without a Drop.
 // Remembers `player` as the unit a Treasure monster flees from. Game thread, at map open.
@@ -58,7 +58,7 @@ auto Event6bPlacesObject(const cartographer::events::Event& event, cartographer:
 
 // A Treasure chest was accepted: resolve its objects row (like a Shrine) and its Drop. False (with `why`) when the chest cannot be placed.
 // A Drop that cannot be used does not stop the chest. Game thread, at map open.
-auto Event6bPrepareChest(const cartographer::events::Event& event, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool;
+auto Event6bPrepareChest(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool;
 
 // The first spawn of a Boss or Treasure event (`unit`, the spawn's return value): track it for the Drop; a Treasure monster also flees.
 void Event6bFirstSpawned(void* game, cartographer::events::Kind kind, void* unit) noexcept;
@@ -79,7 +79,7 @@ bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, Ambu
 
 // The event room was populated: place the prepared Shrine object near the centre of the server rect. `game` and `room` are the
 // populator's arguments. True only when the game created the object, so a Shrine that was not placed is never announced. Game thread.
-bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect, int scale, uint64_t seed) noexcept;
+bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect) noexcept;
 
 // The Boss event spawned its boss (`unit`, the spawn's return value): remember it for the Drop.
 void Event6bBossSpawned(void* unit) noexcept;

@@ -2,7 +2,7 @@
 // (0x3eb850) and ring grower (0x3e9820), found by byte signature, and builds the maze a map's layout asks for instead of
 // the random one. Only the Maze slot level is touched; every other level runs the game's own code. All four hooks go in
 // at load and pass straight through until every part is on; a part that is missing or refused turns only the maze steering
-// off (the preset maps keep working). If the plan cannot be built or the engine refuses a step, that build falls back to
+// off (every other level keeps working). If the plan cannot be built or the engine refuses a step, that build falls back to
 // the game's own maze with the reason logged. Notes: docs/reverse-engineering/cartographer.md sections 1, 1a and 5.
 #pragma once
 
@@ -78,6 +78,9 @@ struct MazeEventRect {
 	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0;
 };
 auto MazeEventRoom() -> MazeEventRect;
+
+// The plan's boss room (the far cell of the main path), in the same form and with the same lifetime. Not known when the layout has no boss room.
+auto MazeBossRoom() -> MazeEventRect;
 
 // The DRLG rects (tiles) of every room in `level`'s room list (level +0x10 first room, room +0x48 next), read through the guarded
 // walker. False, and `out` left empty, when the list cannot be read (no level, no first room, an unreadable room, or more than the
