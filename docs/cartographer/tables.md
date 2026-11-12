@@ -23,10 +23,11 @@ Nothing in this plugin has been run in a game yet. This page is checked against 
 
 General rules for every table:
 
-- Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt` says so in the report).
+- Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt`, `mapstats.txt` and `mapevents.txt` say so in the report).
 - Blank lines are skipped. A leading byte order mark (what some editors add) is fine.
 - Each cell is trimmed of spaces at both ends.
-
+- An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
+- A column named twice in the header of `maps.txt`, `mapstats.txt`, `mapevents.txt` or `shapes.txt` is an error, but the file still loads and only the first one is used. (`cartographer.txt` is not checked for this.)
 - Words that are Cartographer's own (tileset, shape, size, difficulty, target, kind) ignore case.
 - Names from the game's own tables (monster `Id`, superunique name, stat names) must match exactly, capital letters included. Item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
@@ -88,8 +89,6 @@ Rules and limits:
 - `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
 - `Min` and `Max` need a column and a number on every row; a blank cell is an error and the row is skipped.
 - `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
-- An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
-- A column named twice in the header is an error; only the first one is used.
 - `Stat` must be a `Stat` name in the game's `itemstatcost.txt` (exact spelling). `check` reports a name it does not find, with a suggestion. A row with a wrong name is still in the pool; if it is drawn it is skipped and the plugin log says so. A value that rolls 0 is skipped, as it changes nothing.
 - When a map opens, `Monsters` rows are applied to every monster that spawns in the map level, and `Players` rows to the player while the player is in the map level. Neither has been seen working in a game yet; the plugin log (`statprobe:` lines) records what happened.
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
