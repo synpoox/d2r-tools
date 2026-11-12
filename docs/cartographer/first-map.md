@@ -18,8 +18,9 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`. The installer reads it, so do this first.
 3. Run the installer from the unzipped plugin folder:
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`
-4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row and a `superuniques.txt` row per boss (each table backed
-   up once as `.bak`), and writes `slots.txt`. It is safe to run twice. Expect lines like:
+4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row, the `cmap` item type to `itemtypes.txt` and a
+   `superuniques.txt` row per boss (each table backed up once as `.bak`), and writes `slots.txt`. It is safe to run
+   twice. Expect lines like:
 
    ```
    levels.txt: added 'Cartographer Maze' as level N (Cave, copied from level N).
@@ -31,9 +32,12 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
 ## 2. Make the map item
 
-Cartographer adds no items. Add one row per map to the mod's `misc.txt` with a free 3-character `code` and `pSpell` 16
-(copy a plain item such as `isc`), then give players the item through your own drop, shop or recipe. The values for the
-three example maps are in [`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt).
+Each map is a row in the mod's `misc.txt` of type `cmap` (the item type `install.ps1` adds to `itemtypes.txt`, so the
+tooltip shows the map's name), `pSpell` 16, `belt` 0, `useable` 1, and a free 3-character `code`. Copy the `isc` row and set
+the values that [`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) shows for the three example
+maps. Add each name to `item-names.json` and the code to `items.json`. Cartographer ships no items: give players the item
+through your own drop, shop or recipe. To test, `tools\stage_check.ps1 -MapItems` sets the rows up
+([testing.md](testing.md#map-items-in-a-test-slot--mapitems)).
 
 ## 3. Add the map
 

@@ -63,8 +63,8 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
    of the repository (the release zip does not carry it). It adds the Maze, Outdoor and Snow levels and their three slots,
-   plus a `superuniques.txt` row per boss; `-Tileset Crypt` makes the Maze level a Crypt.
-3. Give each map an item in `misc.txt` with item spell 16 (`pSpell`) and add `maps.txt` next to `bosses.txt`.
+   plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`; `-Tileset Crypt` makes the Maze level a Crypt.
+3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
 
 ## Manual install
@@ -98,6 +98,10 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
    header `Slot` and `Level`, then rows `Maze`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
+5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, and `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
+   because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
+   miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
+   type, so no belt). A row with code `cmap` that is not this one must be changed first.
 
 ## Configuration
 

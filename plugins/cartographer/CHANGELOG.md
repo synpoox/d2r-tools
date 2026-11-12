@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
 - Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
