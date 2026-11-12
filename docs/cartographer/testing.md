@@ -207,7 +207,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 
 ## Staging a game check (`stage_check.ps1`)
 
-`plugins\cartographer	ools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>]`
+`plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>]`
 sets up one test slot for a check. Only slots 5, 6, 7 and 11 are accepted (the ones approved for Cartographer checks); slot 1 and every other slot are refused.
 Before it locks anything it checks the inputs, `install.ps1`, the vanilla tables, that no game runs in the slot, that every write target is outside the owner's own install,
 and that `-Saves` is not inside the owner's real save folders (the vanilla `Saved Games\Diablo II Resurrected` root and every mod folder under it, junctions resolved): use a scratch folder of test saves.
