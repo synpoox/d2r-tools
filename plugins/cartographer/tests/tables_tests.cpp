@@ -112,6 +112,19 @@ TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazePro
 	CHECK(settingsReport.Errors() == 1);
 }
 
+TEST_CASE("AutoCheck is off by default; AutoCheckMap keeps the map name as written") {
+	Report report;
+	const Settings off = LoadSettings("", report);
+	CHECK(off.autoCheck == 0);
+	CHECK(off.autoCheckMap.empty());
+	const Settings on = LoadSettings("Setting\tValue\nAutoCheck\t1\nautocheckmap\tColossal Summit\n", report);
+	CHECK(on.autoCheck == 1);
+	CHECK(on.autoCheckMap == "Colossal Summit");
+	CHECK(report.Errors() == 0);
+	CHECK(LoadSettings("Setting\tValue\nAutoCheck\t2\n", report).autoCheck == 0);
+	CHECK(report.Errors() == 1);
+}
+
 TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row") {
 	Report report;
 	const auto maps = Load(
@@ -464,7 +477,7 @@ TEST_CASE("signatures: every recorded part signature parses and has at least 24 
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
 	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow,
-	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell};
+	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell, sig::UnitMove};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);

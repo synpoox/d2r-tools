@@ -74,6 +74,20 @@ auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> Ope
 
 auto PortalLive() -> bool;
 
+// AutoCheck (issue #173, src/engine/auto_check.cpp). Game thread only, with the game and player pointers of the tick.
+struct CheckOpen {
+	bool opened = false;
+	bool shaped = false;  // the map's monster columns were written (Level, Density, Uniques or Monsters changed something)
+	int level = -1;       // the slot level the portal leads to
+	std::string why;      // when not opened: why
+};
+// Opens the named map for `player` through the same gates and the same open path an item use takes, without the item. `mapOut` gets a copy of the map's row.
+auto OpenMapForCheck(void* game, void* player, const std::string& name, MapDef* mapOut) -> CheckOpen;
+// The level id the player stands in, or -1.
+auto PlayerLevelOf(void* player) noexcept -> int;
+// The game's difficulty (0 Normal, 1 Nightmare, 2 Hell), or -1.
+auto GameDifficultyOf(void* game) noexcept -> int;
+
 // True once the player tick has run in this game: this process has the server (single player or a host). A remote client never sees it.
 auto ServerTickSeen() -> bool;
 auto PartStatuses() -> std::vector<PartStatus>;

@@ -1,6 +1,7 @@
 #include "engine/event_apply.h"
 
 #include "core/part_signatures.h"
+#include "engine/auto_check.h"
 #include "engine/event_6b.h"
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
@@ -597,6 +598,7 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
+		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
 		return;
 	}
 	bool asSuper = false;
@@ -604,6 +606,7 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	const bool made = SpawnOne(game, room, plan.spawns.front(), &asSuper, &unit);
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
 	           asSuper ? "as a superunique" : "as a plain monster");
+	AutoCheckNoteBoss(state.bossName, made, asSuper, made ? std::string() : std::string("the game refused to spawn it"));
 }
 
 void OnPopulated(Game* game, void* room) noexcept {

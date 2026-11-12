@@ -1,0 +1,73 @@
+// AutoCheck (issue #173): the pure parts of the game check the plugin can run by itself in a test slot. The checklist the engine fills in,
+// the one-line results it writes to the plugin log, how the setting names a map, and where to stand to wake the map Boss. No engine
+// code here; src/engine/auto_check.cpp drives it from the player tick.
+#pragma once
+
+#include <cstddef>
+#include <optional>
+#include <string>
+#include <vector>
+
+namespace cartographer::autocheck {
+
+// The things one check looks at, in the order they are settled.
+enum class Item { Open, Arrival, Boss, MapSettings, StatChanges };
+inline constexpr size_t ItemCount = 5;
+
+// The name written after PASS or FAIL in the log.
+auto itemName(Item item) -> const char *;
+
+struct Result {
+	Item item = Item::Open;
+	bool pass = false;
+	std::string detail;  // one short line of why; may be empty
+};
+
+// What has been settled so far. Each item is settled once: a second record for the same item is ignored.
+class Checklist {
+  public:
+	// The first item not yet settled, in order, or nothing when all are.
+	auto next() const -> std::optional<Item>;
+	auto settled(Item item) const -> bool;
+	void record(Item item, bool pass, const std::string &detail);
+	// Settles every item not yet settled as a failure with `reason` (a missing part or a step that cannot go on). Fails open: the later items still get their line.
+	void failRest(const std::string &reason);
+	auto complete() const -> bool;
+	auto passCount() const -> size_t;
+	auto failCount() const -> size_t;
+	// The settled results in the order of Item, whatever order they were recorded in.
+	auto results() const -> std::vector<Result>;
+
+  private:
+	bool done_[ItemCount] = {};
+	Result result_[ItemCount];
+};
+
+// "AUTOCHECK PASS open" or "AUTOCHECK FAIL boss: the game refused it".
+auto resultLine(const Result &result) -> std::string;
+// "AUTOCHECK DONE pass=3 fail=2".
+auto doneLine(const Checklist &list) -> std::string;
+// Every result line in item order, then the DONE line. An unsettled item is written as a failure first (the copy is not changed).
+auto finalLines(Checklist list) -> std::vector<std::string>;
+
+// cartographer.txt: AutoCheck (0 or 1) and AutoCheckMap (a map's Name in maps.txt, any case).
+struct Config {
+	bool enabled = false;
+	std::string map;      // the name as maps.txt writes it, once resolved
+	std::string problem;  // enabled, but the map cannot be used: why
+};
+// `mapNames` are the Name cells of maps.txt. Enabled with an empty or unknown AutoCheckMap gives a problem, not a map.
+auto resolveConfig(int autoCheck, const std::string &autoCheckMap, const std::vector<std::string> &mapNames) -> Config;
+
+// Where the player stands to wake the boss room: tiles in, the point in subtiles (5 per tile, the unit the game positions units in).
+// Inside the room, a quarter of its width from the left edge and at half its height, so the player is next to the boss at its centre.
+struct Point {
+	int x = 0, y = 0;
+};
+inline constexpr int SubtilesPerTile = 5;
+auto bossStandPoint(int tileX, int tileY, int tileW, int tileH) -> Point;
+
+// Whether a stage that began at `startMs` has run past `limitMs` at `nowMs` (the clock may step back: an earlier now is not a timeout).
+auto timedOut(unsigned long long startMs, unsigned long long nowMs, unsigned long long limitMs) -> bool;
+
+}  // namespace cartographer::autocheck

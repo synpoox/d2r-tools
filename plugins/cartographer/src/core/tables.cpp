@@ -584,7 +584,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorBuild", "OutdoorProbe"};
+	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorBuild", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
 		const std::string* name = Canonical(known, key);
@@ -603,6 +603,10 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 			} else {
 				fail("town '" + value + "' is not supported: maps are in Act 5, and a portal only reaches its own act. Use 'Harrogath'.");
 			}
+			continue;
+		}
+		if (*name == "AutoCheckMap") {
+			settings.autoCheckMap = value;  // checked against maps.txt by the engine (autocheck::resolveConfig), which says why a name is unusable
 			continue;
 		}
 		int lo = 0, hi = 20, *target = &settings.properties;
@@ -627,6 +631,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "OutdoorProbe") {
 			hi = 1;
 			target = &settings.outdoorProbe;
+		} else if (*name == "AutoCheck") {
+			hi = 1;
+			target = &settings.autoCheck;
 		}
 		if (!ParseInt(value, lo, hi, target)) {
 			fail(*name + " '" + value + "' is not a whole number " + Range(lo, hi) + ".");

@@ -2071,3 +2071,26 @@ The row is restored on `GameLeft` and on unload, and on a failed open (`Undo`), 
 ### Game check (listed for later)
 
 A map with `Level` 60 and `Monsters` `quillrat1,zombie1`; `cartographer open`; the log shows the row and record writes; read a monster's level and kinds. Then `Density` 100 and `Uniques` 100 on a slot with a nonzero base and count packs. Leave the game and check the log reports the row put back.
+
+## 16. AutoCheck: a game check the plugin runs by itself (issue #173)
+
+`AutoCheck=1` and `AutoCheckMap=<map Name>` in `cartographer.txt` (test slots only). In a Hell game the plugin opens the map through the console path's own gates and `OpenMapPortal` (no item), waits for the player to be in the portal level, logs the arrival, moves the player into the plan's boss room, and writes `AUTOCHECK PASS|FAIL <item>` for `open`, `arrival`, `boss`, `monster-settings` and `stat-changes`, then `AUTOCHECK DONE pass=N fail=M`. Code: `src/engine/auto_check.cpp`; pure parts (checklist, lines, setting, stand point): `src/autocheck`. `AutoCheck=1` also turns on the arrival probe (the `[maze probe] arrival` line), nothing else of `MazeProbe`.
+
+### New part
+
+| Part | Role | RVA | Signature | Max patch / hook | Guard |
+|---|---|---|---|---|---|
+| UnitMove | Called. `(game, unit, room or null, x, y, 0, 0)`: puts a unit at a subtile position in the level it is in. With a null room it looks one up from x and y (`0x38dfb0`); the argument order is read from the prologue (`r9d` to `esi`, y at `[rbp+0x6f]`, the last flag at `[rbp+0x77]`) and matches `monster-count-addresses.md` | `0x491ca0` | `40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11` | 25 (security cookie load) / 0, only called | 60-byte signature unique across the executable sections; `check_portal_signatures.py` passes |
+
+Evidence: disassembly over the dump (`dump_dis.py`, stamp `0x6ab3782c`), signature uniqueness by `check_portal_signatures.py`. If the part is not found, the boss step logs that the player must walk to the boss room, and waits.
+
+### Searched, not found (static)
+
+- **Entering a portal (moving the player to another level).** `cheat goto` does it, but the console command's handler could not be reached from the strings in the dump (`goto` appears at `0x238bba0` with no direct pointer or `lea` to it). `UnitMove` does not cross levels: the room lookup is by x and y in the unit's own level. The check therefore waits (180 s) for the player to walk into the red portal and logs `AUTOCHECK waiting`.
+- **Leaving the game.** The dump has the strings `ExitGame`, `QuitGameConfirmation` and `Leave Game`, but no handler was followed to a callable function, and the SDK has no leave call. After `AUTOCHECK DONE` the plugin logs `AUTOCHECK LEAVE not done` and the checker uses Save and Exit.
+
+Both are desk results (static only); finding them needs a debugger session in a test slot.
+
+### Needs a game
+
+Everything above. The unit mover's meaning of `x`/`y` (subtiles, as the server room rect is) and that standing in the boss room wakes its population are read from code and from the earlier `cheat goto 138,25020,10130` evidence, not run. A passing run needs: Hell game, a character in Harrogath, the map's slot installed, then one click on the portal.

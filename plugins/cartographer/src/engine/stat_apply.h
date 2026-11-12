@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace carto {
@@ -39,6 +40,17 @@ void StatApplyPlayerTick(void* game, void* unit) noexcept;
 void StatApplyGameLeft() noexcept;
 
 auto StatApplyPartStatuses() -> std::vector<PartStatus>;
+
+// AutoCheck: what the open map's stats did so far. Any thread.
+struct StatApplyCounts {
+	int drawnMonster = 0;      // monster properties drawn for the map
+	int drawnPlayer = 0;       // player properties drawn for the map
+	int monstersChanged = 0;   // monsters given the map's stats list
+	int monstersFailed = 0;    // monsters the list could not be put on
+	int playersChanged = 0;    // times the player stats were applied
+	std::string drawnText;     // the drawn properties, as "stat min..value" pairs, for the log
+};
+auto StatApplyCountsNow() -> StatApplyCounts;
 
 // For 'cartographer check': one line saying what is applied.
 auto StatApplySummary() -> std::string;

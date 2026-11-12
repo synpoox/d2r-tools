@@ -80,6 +80,8 @@ PARTS = [
     ("FleeTarget", 0x34C730, 28, None, 0),
     ("TcLookup", 0x397290, 18, None, 0),
     ("TcRoller", 0x4404F0, 12, None, 0),
+    # AutoCheck (cartographer.md section 16): the unit mover, only called.
+    ("UnitMove", 0x491CA0, 25, "48 8B 05", 0),
 ]
 
 # The free-spot search (0x402f50) has no signature: it is the target of the call at SpawnObject + 0xff. The 17 bytes before that call

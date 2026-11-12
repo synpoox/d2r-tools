@@ -115,4 +115,9 @@ inline constexpr const char* FleeTarget = "48 89 5C 24 10 48 89 6C 24 18 48 89 7
 inline constexpr const char* TcLookup = "48 89 5C 24 08 55 56 57 48 83 EC 30 41 8B D8";
 inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 
+// AutoCheck (issue #173; cartographer.md section 16). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
+// level it is in (a null room is looked up from x and y); only called, by the test-slot check, to stand the player in the map Boss's room.
+// The first RIP-relative operand is the security cookie load at +25; the signature runs on to the first `test rdx, rdx`.
+inline constexpr const char* UnitMove = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11";
+
 }  // namespace carto::sig

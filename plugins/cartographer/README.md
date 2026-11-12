@@ -81,6 +81,10 @@ in [`examples/first-map/`](examples/first-map/).
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
+| AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS` or `AUTOCHECK FAIL` lines to the plugin log; for test slots only | 0 |
+| AutoCheckMap | The `Name` of the map `AutoCheck` opens, without its item; for test slots only | none |
+
+`AutoCheck` is for test slots only. In a Hell game it opens `AutoCheckMap`, waits until you walk into the red portal, then logs the arrival, moves you into the map's boss room, and logs the Boss, the monster settings and the stat changes. Each gets an `AUTOCHECK PASS` or `AUTOCHECK FAIL` line, then `AUTOCHECK DONE`. Walking into the portal and leaving the game are still done by hand. Leave it at 0 for normal play.
 
 ### Optional files
 
