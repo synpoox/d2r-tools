@@ -71,7 +71,7 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 | `Size` | no | `Small`, `Medium` (default) or `Large` | Large |
 | `Level` | no | Monster level in the map (default 85) | 90 |
 | `Item` | no | Item code of the map item. Blank: the map can drop from Cartographer's own map item | `shm1` |
-| `Boss` | no | A monstats `Id` placed at the end of the path. Blank: no boss | `fallenshaman` |
+| `Boss` | no | A monstats `Id` or superuniques `Name` placed at the end of the path. Blank: no boss | `fallenshaman` |
 | `Monsters` | no | Up to 10 monstats `Id`s, comma-separated. Blank: the tileset's own monsters | `quillrat1,zombie3` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` (default) | |
 | `MinCharLevel` | no | Character level needed (default 1) | 80 |

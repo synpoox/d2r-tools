@@ -20,7 +20,7 @@ One row per map.
 | `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map | 85 | 90 |
 | `Item` | no | Item code of the map item | Cartographer's own map item | `shm1` |
-| `Boss` | no | A monster `Id` placed at the end of the path (case must match) | no boss | `fallenshaman1` |
+| `Boss` | no | A monster `Id` or unique monster name placed at the end of the path (case must match) | no boss | `fallenshaman1` |
 | `Monsters` | no | Up to 10 monster `Id`s, separated by commas | the tileset's own monsters | `quillrat1,zombie3` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed | 1 | 80 |
@@ -31,8 +31,6 @@ One row per map.
 | `Uniques` | no | Percent more unique packs | 0 | 25 |
 
 Smallest map: `Name`, `Tileset` and `Shape` filled in.
-
-**Open question (owner call pending):** the examples use `Bishibosh`, a unique monster, but `Boss` takes a monster `Id`. `Boss` may need to accept unique monster names too.
 
 ## mapstats.txt (optional)
 
