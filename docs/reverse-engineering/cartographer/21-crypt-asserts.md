@@ -48,7 +48,7 @@ count, and the class, weight and presets of a slot past the count are rewritten 
 
 | Level | Result |
 |---|---|
-| Unit tests (`tools\build.ps1 -Plugin cartographer -Test`) | the plan writes a zero members byte for every slot n..12 and only that; 18 of 18 tests pass |
+| Unit tests (`tools\build.ps1 -Plugin cartographer -Test`) | the plan writes a zero members byte for every slot n..12 and only that; 18 of 18 test executables pass |
 | Build | clean |
 | Live in game (slot 7, Hell, `cartographer open CryptHell`, `cheat goto` to the event room) | before the fix: 1 of 1 game logged the `BAD` unit and the `bPiece` assert at the Treasure spawn. With the fix: 3 of 3 games (two with the probe, one with the final DLL) spawned the Treasure monster in the event room with no `BAD` line and no `bPiece` assert; the loader log of each held `ptWarp` only |
 
