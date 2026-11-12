@@ -293,8 +293,8 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
 
 ## 5. Maze slot engine checks (issue #62)
 
-Answers the four static questions of plan section 3.6 [V] for the guided maze slot. Everything here is read from the build 93847 dump and the
-Ghidra decompile of it; nothing was run in a game. Where a conclusion needs the game, the check is given as "needs game: set X, observe Y".
+Answers the four static questions of plan section 3.6 [V] for the guided maze slot. Everything here is read from the build 93847 dump (Capstone
+disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a conclusion needs the game, the check is given as "needs game: set X, observe Y".
 
 | Field | Record |
 |---|---|
