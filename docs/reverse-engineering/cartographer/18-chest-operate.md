@@ -14,7 +14,7 @@ The treasure chest hook sat on the dispatcher `0x592c40` (section 13). A click o
 
 | Part | Role | RVA | Signature | Hook | Guard |
 |---|---|---|---|---|---|
-| ChestOperate | Chest operate handler. One argument: a pointer to the operate context, `[0]` game, `[8]` object, `[0x10]` activator. Returns 0 early when the object's mode is nonzero; says "It's locked" / "I need a key" (`0x491960(player, 0x17, ...)`) when the lock bit is set and returns 1. | `0x58e2f0` | `48 89 4C 24 08 55 48 8B EC 48 81 EC 80 00 00 00 48 8B 49 08` | 16 bytes (four whole instructions, no relative operand) | Matches once; `tools/check_portal_signatures.py` checks it against the dump. A miss logs and leaves the chest roll off. |
+| ChestOperate | Chest operate handler. One argument: a pointer to the operate context, `[0]` game, `[8]` object, `[0x10]` activator. Returns 0 early when the object's mode is nonzero; says "It's locked" / "I need a key" (`0x491960(player, 0x17, ...)`) when the lock bit is set and returns 1. | `0x58e2f0` | `48 89 4C 24 08 55 48 8B EC 48 81 EC 80 00 00 00 48 8B 49 08` | 16 bytes (four whole instructions, no relative operand) | Matches once; `tools/check_portal_signatures.py` checks it against the dump. A miss logs and leaves the chest roll off. Nothing else hooks `0x58e2f0`. |
 
 ### In game (slot 5, Hell test save, build above, log showed the build just made)
 
@@ -24,4 +24,4 @@ The treasure chest hook sat on the dispatcher `0x592c40` (section 13). A click o
 
 ### Left over
 
-Placed chests are randomly locked (InitFn 3), and a locked chest needs a key (4 of 6 test chests were locked). The roll only runs when the game opens the chest.
+Placed chests were randomly locked (InitFn 3), and a locked chest needs a key (4 of 6 test chests were locked). The plugin now clears the lock on its own chest: section 19.

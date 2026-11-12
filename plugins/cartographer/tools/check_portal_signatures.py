@@ -75,6 +75,9 @@ PARTS = [
     # Ambush and Treasure (cartographer/13-ambush-treasure-shrine.md). ChestOperate (the chest handler, 0x58e2f0) is hooked (16 bytes: four whole instructions); its first relative
     # operand is the call at +20. The others are only called (their max patch is where the signature ends or its first call).
     ("ChestOperate", 0x58E2F0, 20, None, 16),
+    # The chest's lock (cartographer/19-chest-lock.md): the object flag getter and setter, only called.
+    ("ObjectFlagsGet", 0x34AD40, 12, "75", 0),
+    ("ObjectFlagsSet", 0x34E9D0, 19, "75", 0),
     ("FleeSetup", 0x597030, 30, None, 0),
     ("FleeBlock", 0x34C2C0, 18, "E8", 0),
     ("FleeTarget", 0x34C730, 28, None, 0),

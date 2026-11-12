@@ -74,13 +74,15 @@ struct OperateContext {
 	Unit* activator;
 };
 using OperateFn = int32_t (*)(OperateContext*) noexcept;
+using ObjectFlagsGetFn = uint32_t (*)(Unit*) noexcept;      // the object data's flag word; the low byte has the locked bit 0x80
+using ObjectFlagsSetFn = void (*)(Unit*, uint8_t) noexcept;  // writes that low byte (and clears the high byte)
 using FleeSetupFn = void (*)(Game*, Unit* source, Unit* target, int32_t r9, int32_t arg5, int32_t arg6) noexcept;
 using FleeBlockFn = int32_t (*)(Unit*) noexcept;
 using FleeTargetFn = uint8_t (*)(Unit*, uint8_t, uint8_t, uint8_t, uint8_t) noexcept;
 using TcLookupFn = const void* (*)(uint32_t dataFlag, uint16_t tcIndex, int32_t level) noexcept;
 using TcRollerFn = uint64_t (*)(Game*, Unit* a, Unit* b, const void* tc, int32_t s20, int32_t s28, int32_t s30, void* out, int32_t* s40, int32_t s48) noexcept;
 
-enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, FleeSetup, FleeBlock, FleeTarget, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
+enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, ObjectFlagsGet, ObjectFlagsSet, FleeSetup, FleeBlock, FleeTarget, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
 
 Part g_parts[PartCount] = {
 	{"DeathDrop", sig::DeathDrop, 15, false, nullptr, {}, {}},
@@ -90,6 +92,8 @@ Part g_parts[PartCount] = {
 	{"FreeSpot", nullptr, 0, false, nullptr, {}, {}},  // no signature: the call target inside SpawnObject
 	{"CreateObject", sig::CreateObject, 0, false, nullptr, {}, {}},
 	{"ChestOperate", sig::ChestOperate, 16, false, nullptr, {}, {}},
+	{"ObjectFlagsGet", sig::ObjectFlagsGet, 0, false, nullptr, {}, {}},
+	{"ObjectFlagsSet", sig::ObjectFlagsSet, 0, false, nullptr, {}, {}},
 	{"FleeSetup", sig::FleeSetup, 0, false, nullptr, {}, {}},
 	{"FleeBlock", sig::FleeBlock, 0, false, nullptr, {}, {}},
 	{"FleeTarget", sig::FleeTarget, 0, false, nullptr, {}, {}},
@@ -229,6 +233,35 @@ auto DeathDropHook(Game* game, Unit* victim, int32_t arg3, void* info) noexcept 
 }
 
 // --- Treasure chest: roll the Drop when the event's chest is opened ---------------------------------------------------------------
+
+// The event's chest is never locked. The object's InitFn 3 sets the locked bit (0x80 of the object data's flag byte) at random, and a locked chest
+// only says "I need a key" and never reaches its Drop. Called once, for the plugin's own chest right after the game created it (an object unit): reads the
+// flag byte through the game's getter, writes it back without the bit through the game's setter, and reads it again to check. Off (logged) when a part is missing
+// or the check fails: the chest then stays as the game made it.
+void UnlockPlacedChest(Unit* unit) noexcept {
+	if (!On(ObjectFlagsGet) || !On(ObjectFlagsSet)) {
+		plog::Warn("treasure chest: not unlocked: the object flag part (ObjectFlagsGet or ObjectFlagsSet) is off, so the chest may need a key");
+		return;
+	}
+	const auto get = Call<ObjectFlagsGetFn>(ObjectFlagsGet);
+	const e6::ChestUnlock unlock = e6::unlockChest(static_cast<uint8_t>(get(unit)));
+	if (!unlock.change) {
+		plog::Info("eventprobe: treasure chest: unit %p was not locked", static_cast<void*>(unit));
+		return;
+	}
+	Call<ObjectFlagsSetFn>(ObjectFlagsSet)(unit, unlock.value);
+	const uint8_t after = static_cast<uint8_t>(get(unit));
+	if (after != unlock.value) {
+		const char* detail = "off: the flag byte did not read back after it was set";
+		g_parts[ObjectFlagsGet].status.on = false;
+		g_parts[ObjectFlagsGet].status.detail = detail;
+		g_parts[ObjectFlagsSet].status.on = false;
+		g_parts[ObjectFlagsSet].status.detail = detail;
+		plog::Warn("treasure chest: unlock did not take (flag byte 0x%02x, wrote 0x%02x): the chest may need a key; the chest unlock is off", after, unlock.value);
+		return;
+	}
+	plog::Info("eventprobe: treasure chest: unit %p unlocked (flag byte 0x%02x -> 0x%02x)", static_cast<void*>(unit), static_cast<unsigned>(unlock.value | 0x80), after);
+}
 
 // Rolls the chest's Drop with the roller 0x5930b0 uses for a chest, once, when the operate call changed the chest's mode.
 void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, int32_t result) {
@@ -798,6 +831,9 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) n
 			g_state.chestTracked = At<int32_t>(unit, UnitTypeOffset) == ObjectUnitType;
 			g_state.chestId = At<uint32_t>(unit, UnitIdOffset);
 			g_state.chestRolled = false;
+			if (g_state.chestTracked) {
+				UnlockPlacedChest(static_cast<Unit*>(unit));
+			}
 			plog::Info("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, g_state.chestId, At<int32_t>(unit, UnitModeOffset), g_state.chestArmed ? "" : "; no armed Drop");
 		}
 		return true;

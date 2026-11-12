@@ -202,6 +202,14 @@ struct ChestInput {
 ChestReason decideChest(const ChestInput &input);
 const char *chestReasonName(ChestReason reason);
 
+// A chest's flag byte (the low byte of the game's object data getter 0x34ad40): bit 7 is "locked", the low 7 bits are the chest's look.
+// The Treasure chest of an event is never locked, so the plugin clears bit 7 once after the chest is created and leaves the rest.
+struct ChestUnlock {
+	bool change = false;  // the byte has the locked bit set
+	uint8_t value = 0;    // the byte to write back (the same bits with bit 7 cleared)
+};
+ChestUnlock unlockChest(uint8_t flags);
+
 // --- Treasure monster flee ----------------------------------------------------------------------------------------------
 
 // What the two checks 0x597030 makes first said about the target (-1: that check was not run). The flee setup returns at once when

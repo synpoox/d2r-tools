@@ -389,6 +389,13 @@ ChestReason decideChest(const ChestInput &in) {
 	return ChestReason::Rolled;
 }
 
+ChestUnlock unlockChest(uint8_t flags) {
+	ChestUnlock result;
+	result.change = (flags & 0x80) != 0;
+	result.value = static_cast<uint8_t>(flags & 0x7f);
+	return result;
+}
+
 const char *chestReasonName(ChestReason reason) {
 	switch (reason) {
 	case ChestReason::Rolled: return "rolled";
