@@ -49,7 +49,8 @@ in [`examples/first-map/`](examples/first-map/).
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
-   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
+   of the Scroll of Resistance, `tr2` (not a town portal or identify scroll: the game names those by their spell, so your item
+   would read "Scroll of Town Portal"). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the

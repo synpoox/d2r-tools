@@ -54,7 +54,7 @@
 .PARAMETER MapItems
     Adds the example map items (examples\first-map\map-items.txt: t20, t21, t22) to the test mod so a map can be opened from its
     item. A map item needs three things in the test mod, and this switch stages all three (test staging only; players get
-    no such files): the misc.txt rows (the base row, the Scroll of Identify, copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
+    no such files): the misc.txt rows (the base row, the Scroll of Resistance, a quest item (a scroll or tome base is named by its spell, not by namestr), copied from the slot or vanilla misc.txt with the overrides applied by column name; never a potion), an entry per
     code in data\hd\items\items.json (the picture; without it the item has no icon), and a name per code in
     data\local\lng\strings\item-names.json and strings-legacy (the tooltip). The mod's own copy of items.json and
     item-names.json replaces the game's whole file, so each is seeded from -VanillaData when the slot lacks it. Then
@@ -540,8 +540,7 @@ try {
             $sep = if ($body.EndsWith('[')) { $nl } else { ',' + $nl }
             return $body + $sep + ($entries -join (',' + $nl)) + $nl + ']' + $nl
         }
-        # items.json: one entry per code, pointing at the scroll picture the base item uses (no entry = no icon).
-        $asset = 'scroll/identify_scroll'
+        # items.json: one entry per code, pointing at the picture the base item uses (no entry = no icon).
         $itemsJson = Join-Path $modDir "$modName.mpq\data\hd\items\items.json"
         $vItems = Join-Path $VanillaData 'hd\items\items.json'
         $newJson = $false
@@ -552,7 +551,10 @@ try {
         $jsrc = if (Test-Path -PathType Leaf $itemsJson) { $itemsJson } else { $vItems }
         $jt = $enc8.GetString([System.IO.File]::ReadAllBytes($jsrc))
         $jnl = if ($jt.Contains("`r`n")) { "`r`n" } else { "`n" }
-        $new = @($items | Where-Object { $jt -notmatch ('"' + [regex]::Escape($_.code) + '"\s*:') } | ForEach-Object { "  { `"$($_.code)`": { `"asset`": `"$asset`" } }" })
+        $new = @($items | Where-Object { $jt -notmatch ('"' + [regex]::Escape($_.code) + '"\s*:') } | ForEach-Object {
+            $bm = [regex]::Match($jt, '"' + [regex]::Escape($_.base) + '"\s*:\s*\{\s*"asset"\s*:\s*"([^"]+)"')
+            if (-not $bm.Success) { throw "items.json has no picture entry for the base item '$($_.base)' (see $MapItemRows)." }
+            "  { `"$($_.code)`": { `"asset`": `"$($bm.Groups[1].Value)`" } }" })
         if ($new.Count -gt 0) {
             if (-not $newJson -and -not $placed.Contains($itemsJson) -and (Test-Path -PathType Leaf $itemsJson)) {
                 Say "  items.json in the slot was not placed by this script: -Restore removes the entries added to it."
