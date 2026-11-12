@@ -97,13 +97,12 @@ written from this page alone for the rows without a signature (AGENTS.md); the 1
 ## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
 
 **Date:** 2026-11-11 (validated 2026-11-12). **Status:** validated in game on build 93847, image stamp `0x6ab3782c`
-(D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save, Normal difficulty): all thirteen parts
+(D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save): all thirteen parts
 found by signature at load, the three hooks installed, the item opened its own map's portal, the map loaded and returned,
 a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
-`LocalPlayerReady.playerId`. Not validated in game: a Hell-difficulty open, the level and free-spot gates, an ordinary
-spell-16 item that no map names compared with vanilla (the pass-through of the two item hooks), the spell-16 use with no
-matching check, leaving the game with the portal open, and the TCP/IP client refusal. Open, cause unknown: a town portal
-scroll used on the map level itself did nothing; no comparison without Cartographer was made.
+`LocalPlayerReady.playerId`. A second pass on 2026-11-12 (Hell game, level-1 then level-25 Barbarian) settled more; the
+per-check levels are in "Game checks of 2026-11-12" at the end of this section. Still not validated in game: the free-spot
+refusal, the spell-16 use with no matching check, and the TCP/IP client refusal.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
 sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
@@ -162,7 +161,7 @@ first, then serves a posted console request when the unit is a player (`+0` == 0
 with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
 `cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
 The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
-checks in the plugin README. Not validated in game.
+checks in the plugin README. In game the console `open` worked in a normal game (section 3, Game checks); the TCP/IP client refusal was not exercised.
 
 Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the nearest `.pdata` entry before it starts at `0x2efb70`, a different function). The plugin checks `.pdata` only for hooked parts overridden in `signatures.txt`, so `RoomLevelId` needs only a unique match. None looks wrong. Findings per part:
 
@@ -203,9 +202,35 @@ Re-check on a new build: write a memory-layout image with d2rAI-toolkit's `tools
 D2RLoader), then `python -I plugins/cartographer/tools/check_portal_signatures.py <image> --stamp <stamp>`. The packed
 `D2R.exe` on disk cannot be checked (encrypted code).
 
-What remains: the in-game check listed in the plugin README and the #20 pull request (install, the signatures all
-resolving at load with `cartographer check`, the hooks going in, one opening and the refusals). Nothing in section 3 is
-validated in game, and the hook entries and `UnitStat`'s thunk are only checked in the dump of a running process.
+### Game checks of 2026-11-12
+
+Hell game on slot 11 with the D2RToolsTest mod, test save `cartos` (progression raised so Hell is offered), vanilla
+`levels.txt`, `lvlprest.txt` and `misc.txt` plus the installer's "Cartographer Preset" level 138 and three `misc.txt`
+rows with `pSpell` 16 (`t20`, `t21`, `t22`); maps `Shorelines` (Hell, level 1) and `Gated` (Hell, level 20).
+Levels: live = seen in the running game; static = read from the dump only; not done = not tried.
+
+| Check | Level | Result |
+|---|---|---|
+| Open a map in Hell | live | `t21` in Harrogath opened `Gated` through level 138; a red portal appeared, the scroll was consumed, the portal led to level 138 and back. |
+| Level gate refuses | live | Level 1 using `Gated` (needs 20): log "Gated needs character level 20 (you are 1)", item kept. On screen the player sees only "cartos says: I can't use this yet."; the Cartographer wording is in the log and console. |
+| Level gate allows | live | After `cheat level 25` the same item opened the portal. This exercises `UnitStat` (`0x2f5020`) on its success path only. |
+| Free-spot gate | not done | `cheat mspawn zombie1,100` around the player did not stop the spot search; the portal opened. A refusal was never seen, so `FindFreeSpot` (`0x517f90`) has only its success path exercised. |
+| Spell-16 item no map names | live | `t22` (spell 16, in no `maps.txt` row): no log line, no message, not consumed, the same as with Cartographer unloaded. |
+| Spell-16 use with no matching check | not done | Needs an item use that skips `ItemSpellCheck`; no such path found in game. Covered by unit tests only. |
+| Leave game with a portal open, next game | live | Save and Exit from level 138 with the portal open: clean exit, no crash. In the next game `Shorelines` opened (the per-game `'MAPS'` counter was fresh) and the tick logged its first player unit again. |
+| TCP/IP client refused | not done | Needs a second game instance; not run. The refusal is in the code (no tick seen) and the unit tests. |
+| Town portal scroll on the map level | live | `tsc` used in level 138 did nothing: not consumed, no portal, no log line. With Cartographer unloaded the same scroll did the same, so this is vanilla behaviour with a preset-level slot, not Cartographer. |
+| Better Auras alongside | live | Both loaded in one game (Better Auras' log: "other plugins: cartographer.dll"); `Shorelines` opened; no new crash report. Cartographer hooks `0x42e350`, Better Auras `0x42e600`, so the two do not meet. |
+
+Gate evidence, as it stands: the order `NotInTown`, `Difficulty`, `CharLevel`, `AlreadyOpen`, `NoSpot` is the code's; in game
+the Normal-difficulty refusal, the Hell allow, the level refusal and the level allow were seen. `UnitStat` and
+`FindFreeSpot` were run only on their success path (a level read, a spot found); neither has been shown to refuse live.
+
+Portal label: the red portal's tooltip read "Missing String" when the player stood in Harrogath and "Harrogath" inside level
+138. Probably the test preset level has no name string; not checked.
+
+What remains: the free-spot refusal, the spell-16 use with no matching check and the TCP/IP client refusal. The hook
+entries and `UnitStat`'s thunk are checked in the dump and by the game running through them.
 
 ## 4. Outdoor S0 and S1 spike results (issue #22)
 

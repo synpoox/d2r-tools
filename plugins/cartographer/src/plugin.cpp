@@ -342,7 +342,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	crash_guard::Describe(image, sizeof(image), D2RL::GetBuildVersion(context));
 	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "none", image);
 	try {
-		if (context->modDirectory != nullptr && context->modDirectory[0] != L'\0' && context->activeMod != nullptr) {
+		if (context->modDirectory != nullptr && context->modDirectory[0] != L'\0' && context->activeMod != nullptr && context->activeMod[0] != '\0') {
 			// Older loaders pass the mod folder, which holds <Mod>.mpq; D2RLoader 1.3.1 passes the <Mod>.mpq folder itself.
 			// <Mod>.mpq is probed first: the 1.3.1 folder does not hold a nested <Mod>.mpq, so neither layout picks the other's path.
 			g_excelDir = std::wstring(context->modDirectory) + L"\\" + Widen(context->activeMod) + L".mpq\\data\\global\\excel";
