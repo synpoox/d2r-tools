@@ -607,3 +607,36 @@ TEST_CASE("mapevents.txt: Waves is only read on Ambush rows; a number beyond int
 	CHECK(report.problems[1].line == 4);
 	CHECK(report.problems[1].text.find("not a whole number") == std::string::npos);
 }
+
+TEST_CASE("messages after the int32 cut echo the number typed") {
+	Report stats;
+	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tfireresist\t1\t3\t99999999999\n", stats);
+	REQUIRE(!stats.problems.empty());
+	CHECK_MESSAGE(stats.problems[0].text.find("Weight 99999999999 is above") != std::string::npos, stats.problems[0].text);
+	CHECK(stats.problems[0].text.find("2147483647") == std::string::npos);
+
+	Report events;
+	LoadMapEvents("Name\tKind\tSpawn\tCount\nBig\tHorde\tzombie1\t3000000000\n", events);
+	REQUIRE(events.Errors() == 1);
+	CHECK_MESSAGE(events.problems[0].text.find("Count 3000000000") != std::string::npos, events.problems[0].text);
+	CHECK(events.problems[0].text.find("2147483647") == std::string::npos);
+}
+
+TEST_CASE("a repeated unknown column is reported once") {
+	const GameNames names;
+	Report report;
+	LoadMaps("Name\tTileset\tShape\tItem\tColour\tcolour\nA\tPreset\tCorridor\tt20\t\t\n", names, report, nullptr);
+	int unused = 0;
+	for (const Problem& p : report.problems) {
+		unused += p.text.find("is not used") != std::string::npos ? 1 : 0;
+	}
+	CHECK(unused == 1);
+
+	Report stats;
+	LoadMapStats("Target\tStat\tMin\tMax\tfoo\tfoo\n", stats);
+	int statsUnused = 0;
+	for (const Problem& p : stats.problems) {
+		statsUnused += p.text.find("is not used") != std::string::npos ? 1 : 0;
+	}
+	CHECK(statsUnused == 1);
+}
