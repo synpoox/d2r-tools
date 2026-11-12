@@ -555,9 +555,9 @@ auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartogr
 			const std::string quoted = "'" + row.name + "' has ";
 			const size_t found = message.find(quoted);
 			if (found != std::string::npos) {
-				const size_t has = found + quoted.size() - 6;
+				const size_t has = found + quoted.size();
 				for (const Typed& t : typed) {
-					if (message.compare(has + 6, std::strlen(t.name) + 1, std::string(t.name) + " ") == 0 && WasCut(t.value, t.text)) {
+					if (message.compare(has, std::strlen(t.name) + 1, std::string(t.name) + " ") == 0 && WasCut(t.value, t.text)) {
 						if (skipped) {
 							message += " This row is skipped.";
 						}

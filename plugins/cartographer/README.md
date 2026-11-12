@@ -61,7 +61,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Preset` for now; the other tileset names are accepted but refused until they are built | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` (not used by `Preset`) | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet) (not used by `Preset`) | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
