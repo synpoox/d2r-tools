@@ -124,3 +124,22 @@ Live on slot 11 (test mod `D2RToolsTest`, test save `cartos` raised to Hell in a
 | 10. A repeated monstats `Id` | live | A copy of the `fallenshaman1` row appended to the mod's `monstats.txt` (so the game has it at rows 58 and 751, 752 rows; `PROBE106: monstats rows with Id 'fallenshaman1': 58 751`) compiled without complaint and the route stayed on (`spawn names: ... monstats from the game's table on (SDK bank Rotw), superuniques by the game's name map on`, no `did not map back` line). The name map keeps the **first** copy: `name map query 'fallenshaman1': monstats -> 58` (also in upper case), and the superuniques class of Bishibosh, which the game resolves through that map at load, stayed `u16@+8=58` (the first copy; the last would be 751). The plugin's own scan agrees: `spawn 'fallenshaman1': monstats row 58 from the game's table`. So the map gives the first copy, the same row as `findMonsterRow`; `idRowAccepted` is still the safe form and a repeated `Id` is a mod mistake only in that the second row is never used |
 
 Not run here: the stock-table `Class` against the txt (done in the first run), a blank line in `monstats.txt`, the txt route forced on in the game, `Normal` and `Nightmare`. Screenshots of the game window and the logs of the three games were kept outside the repository.
+
+### Status of the "Needs game" items (2026-11-12, issue #106)
+
+A summary of the records above and of [slot11-check](../../cartographer/checks/2026-11-12-slot11-check.md) (S11); nothing new was run for this note. The desk nits (cache on `TableView.revision`, repeated `Id`, superuniques row index, txt `Class` from the game's monstats, the order change) are done and recorded under "What was built". Item numbers are those of "Needs game"; the second-run table above calls the blank-line check "item 8" (the issue's numbering), which is the same check as S11 section 5. Levels: **live** = seen in the running game; **not checked** = no evidence in any record.
+
+| Item | Status | Evidence |
+|---|---|---|
+| 1. Name maps resolve stock names | live | First run: `spawn names: ... on` and `Bishibosh` row 0. S11 section 1: three Boss names each gave `superuniques row N from the game's table` |
+| 2. Miss is -1, no log, empty name | live for the miss; **not checked** for an empty name | First run (the failed round trip reported -1). The plugin rejects an empty name before the call, so the empty-name return was never exercised |
+| 3. `Id` at row `+2`, `Class` is a monstats row | live for stock tables; **not checked** for a mod that renames monsters | First run (`Bishibosh` class row 58 = `fallenshaman1`); S11 section 1 (class monstats row 5 for three Bosses) |
+| 4. `u16` at superuniques row `+0` | live | Second run: the row's own index (0 to 4 and 65) |
+| 5. `getTable` on the event thread | live: not `Busy` | First run: the self-check line appears at the first map open |
+| 6. Bank pairing | live for data flag 3 (SDK bank `Rotw`); **not checked** for Classic and LoD | First run |
+| 7. Upper-case query alone | live | Second run: upper, lower and mixed case give the same row in both maps |
+| 8. Log lines readable; blank line in a table; `.txt` route | live | Log lines in the first run and S11. Blank line in `superuniques.txt` (second run) and in `monstats.txt` (S11 section 5): the loader stops startup, so the plugin never sees it. S11: `.txt` route forced on (DataTablesBase part off, `monstats from the game's table OFF`): the Boss and the Boss event still spawned |
+| 9. Revision stable and non-zero | live for stable (`table revision 1` at every map open, self-check line once per game); **not checked** for the revision changing after a table load | First run; S11 |
+| 10. Repeated monstats `Id`; superuniques `Class` vs txt | live | Second run: the map keeps the first copy; first run: no txt disagreement warning for stock |
+
+Still not checked: the empty-name return, a mod that renames monsters, banks Classic and LoD, the revision after a table reload, Normal and Nightmare.
