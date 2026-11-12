@@ -10,6 +10,7 @@
 - Cave and Crypt maps are built from their layout through a manual `Maze` slot; one slot serves one tileset.
 - Random map properties from `mapstats.txt` apply to the map's monsters; `PlayerStats=1` adds player properties (off by default, test characters only, experimental).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
+- A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default).

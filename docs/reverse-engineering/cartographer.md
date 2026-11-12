@@ -1175,6 +1175,17 @@ Live, slot 11 (test mod D2RToolsTest, save `cartos`), build 93847, D2RLoader 1.3
 
 Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the monstats `Id` is at row `+2`, not `+0`).
 
+### Map Boss (issue #152)
+
+**Status:** written and unit tested (`eventplan_tests`: `planMapBoss`, the tracker on the plan's boss rect); **not run in a game**. No new address: it reuses the populator hook `0x50acf0`, `SpawnMonster` `0x492cf0` and `SpawnSuperUnique` `0x499ba0` of this section, with their guards and their per-part off switch (the populator hook needs `PopulateRoom`, `SpawnMonster` and `EventRoomLevelId`; a missing `SpawnSuperUnique` spawns the boss as its Class). If those parts are off the map Boss is logged and left off; the map, its event and its stats still work.
+
+- **What:** the `Boss` column of `maps.txt` (a monstats `Id` or a superuniques name, resolved like an event's `Spawn`, section 11) is spawned once per map open: one monster at the centre of the boss room, no minions and no `Drop` (those belong to the Boss event). It is armed at map open whether or not an event was drawn. Flags 0, so the map's stats reach it.
+- **Where:** a Cave or Crypt maze: the plan's boss room, the far cell of the main path (`Plan::bossRoom`, `Role::Boss`). `maze_hooks.cpp` records its DRLG rect after the slot build next to the event room (`MazeBossRoom()`, log `eventprobe: maze boss room ...`) and the populate hook fires an `EventRoomTracker` on that rect. A layout with `BossRoom` off has no boss room: the map Boss is left off, with a warning. There is no Preset code, since Preset is being removed.
+- **Boss and Boss event together:** both are kept. The event goes in the event room (partway along the main path), the map Boss in the boss room (the far end); they are different cells of the plan. A superunique that both name spawns once per game, then as its Class.
+- **Outdoor:** waits on issue #145. The hook point is in `OnPopulated` (`event_apply.cpp`), where `bossPlan` is read from `MazeBossRoom()` for a maze; an outdoor map reads its stamp plan's boss rectangle there, and the tracker and `SpawnMapBoss` are unchanged.
+- **`Monsters`:** not part of this change. The monster pool is written into the slot level's levels row with Level, Density, Champions and Uniques, in issue #156.
+- **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
+
 ## 10. Red portal tooltip and area name (issue #90)
 
 Static answers for issue #90: show each map's own `Name` on the red portal tooltip and as the area name inside the map, instead of the slot

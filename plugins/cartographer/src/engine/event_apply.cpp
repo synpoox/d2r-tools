@@ -100,6 +100,12 @@ struct State {
 	ep::EntryTracker entry;
 	bool spawned = false;
 	bool announced = false;  // the event room was chosen and something spawned: the banner may name the event
+	// The map's own Boss (maps.txt `Boss`), separate from the event: one monster in the boss room, once per map open.
+	std::string bossName;
+	ep::Resolved bossSpawn;
+	bool bossArmed = false;  // the name resolves and the spawn parts are on
+	std::optional<ep::EventRoomTracker> bossTracker;  // made with the event tracker, at the first populated room
+	bool bossSpawned = false;
 	int probes = 0;
 };
 std::mutex g_lock;
@@ -583,6 +589,21 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 	return made > 0;
 }
 
+// The map's own Boss, in the boss room: one monster at the centre (a superunique as itself, or as its Class when the game has spawned it this game).
+// No minions and no Drop; those are the Boss event's. The map's stats reach it like any monster (flags 0, section 7).
+void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
+	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
+	if (!plan.problem.empty()) {
+		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
+		return;
+	}
+	bool asSuper = false;
+	void* unit = nullptr;
+	const bool made = SpawnOne(game, room, plan.spawns.front(), &asSuper, &unit);
+	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
+	           asSuper ? "as a superunique" : "as a plain monster");
+}
+
 void OnPopulated(Game* game, void* room) noexcept {
 	std::shared_ptr<State> state;
 	uint64_t generation = 0;
@@ -599,6 +620,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 	const RoomRects rects = ReadRects(room);
 	bool fire = false;
+	bool fireBoss = false;
 	bool planned = false;
 	int number = 0;
 	{
@@ -624,8 +646,25 @@ void OnPopulated(Game* game, void* room) noexcept {
 				}
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
+			// The map's own Boss goes in the plan's boss room (the maze's far cell), apart from the event room. No plan rect, no map Boss.
+			// Outdoor (issue #145): the stamp plan's boss rectangle is read here instead, and the same tracker and spawn follow.
+			if (state->bossArmed) {
+				std::optional<ep::Rect> bossPlan;
+				if (state->maze) {
+					const MazeEventRect b = MazeBossRoom();
+					if (b.known && b.levelId == state->level) {
+						bossPlan = ep::Rect{b.x, b.y, b.w, b.h};
+					}
+				}
+				if (bossPlan) {
+					state->bossTracker.emplace(bossPlan);
+					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
+				} else {
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a layout with BossRoom off has none)", state->bossName.c_str());
+				}
+			}
 			if (!plan) {
-				// A preset map: this is the first populated room, the entry room. The distance is capped at the farthest room of the
+				// No plan event room: this is the first populated room, the entry room. The distance is capped at the farthest room of the
 				// level's list, so at least one room qualifies; the event fires on the first populated room at or past it.
 				std::vector<ep::Rect> all;
 				if (LevelRoomRects(rects.level, &all)) {
@@ -643,6 +682,11 @@ void OnPopulated(Game* game, void* room) noexcept {
 			state->spawned = true;
 		} else {
 			fire = false;
+		}
+		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
+		if (state->bossTracker && !state->bossSpawned && state->bossTracker->onPopulated(rects.drlg)) {
+			state->bossSpawned = true;
+			fireBoss = true;
 		}
 	}
 	if (number <= MaxPopulateProbes) {
@@ -665,6 +709,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		ShowEntryMessage(lines);
 	}
+	if (fireBoss) {
+		plog::Info("eventprobe: room #%d of level %d is the boss room (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
+		SpawnMapBoss(game, room, *state, rects, ep::eventSeed(state->seed) ^ 0xB055);
+	}
 }
 
 auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
@@ -682,8 +730,53 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 	return result;
 }
 
+// A monster name (an event's Spawn, or a map's Boss) as a monstats row or a superuniques row: the game's loaded tables first (section 11), the mod's
+// .txt files only when that route is off or cannot decide. Unresolved when neither has the name. Game thread, at map open.
+auto ResolveName(const std::string& name, const ep::SpawnTable& txt, void* player) noexcept -> ep::Resolved {
+	ep::Resolved out;
+	if (player != nullptr && g_dataTables != nullptr) {
+		const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
+		const ep::RouteVerdict route = RouteFor(dataFlag);
+		if (route.monsters) {
+			if (ResolveFromGameTables(route, dataFlag, name, txt, &out)) {
+				return out;
+			}
+			out = ep::resolveSpawn(txt, name);
+			// A superunique found in the txt: its Class is looked up in the game's proven monstats table, not by txt row count.
+			if (out.kind == ev::NameKind::Unique) {
+				const std::string_view cls = ep::superClassOf(txt, out.row);
+				if (const int gameRow = cls.empty() ? -1 : GameMonsterRow(route, dataFlag, cls); gameRow >= 0) {
+					out.classRow = gameRow;
+				} else {
+					plog::Warn("spawn '%s': its Class '%.*s' (mod's superuniques.txt) is not in the game's monstats table; treated as not found", name.c_str(), static_cast<int>(cls.size()), cls.data());
+					out = ep::Resolved{};
+				}
+			}
+			return out;
+		}
+	}
+	return ep::resolveSpawn(txt, name);
+}
+
+// Arms the map's own Boss (the maps.txt `Boss` column) when it can be spawned; else says why not and leaves it off. The rest of the map is untouched.
+void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* player) noexcept {
+	state.bossName = map.boss;
+	if (!g_spawnOn.load()) {
+		plog::Warn("map Boss '%s' will not be spawned: the spawn parts are off", map.boss.c_str());
+		return;
+	}
+	state.bossSpawn = ResolveName(map.boss, tables.spawnNames, player);
+	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24}, state.seed);  // a stand-in room
+	if (!check.problem.empty()) {
+		plog::Warn("map Boss '%s' will not be spawned: %s", map.boss.c_str(), check.problem.c_str());
+		return;
+	}
+	state.bossArmed = true;
+	plog::Info("map Boss for '%s': %s", map.name.c_str(), state.bossSpawn.kind == ev::NameKind::Unique ? "a superunique" : "a monster");
+}
+
 auto SummaryNow() -> std::string {
-	const std::string spawn = g_spawnOn.load() ? "Boss and Horde events on" : "Boss and Horde events off";
+	const std::string spawn = g_spawnOn.load() ? "map Boss, Boss and Horde events on" : "map Boss, Boss and Horde events off";
 	const std::string banner = !g_tickOn.load() ? "entry message off (a part was not found)" : g_bannerOverlay.load() ? "entry message on the overlay" : "entry message on the console";
 	return spawn + ", " + banner + " (not yet verified in game)";
 }
@@ -775,31 +868,8 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
 		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
-		const bool monsterSpawn = event->kind != ev::Kind::Shrine;  // a Treasure's Spawn is looked up too: a miss means a chest's objects name
-		bool decided = !monsterSpawn;
-		if (monsterSpawn && player != nullptr && g_dataTables != nullptr) {
-			const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
-			const ep::RouteVerdict route = RouteFor(dataFlag);
-			if (route.monsters) {
-				decided = ResolveFromGameTables(route, dataFlag, event->spawn, tables->spawnNames, &state->spawn);
-				if (!decided) {
-					state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
-					decided = true;
-					// A superunique found in the txt: its Class is looked up in the game's proven monstats table, not by txt row count.
-					if (state->spawn.kind == ev::NameKind::Unique) {
-						const std::string_view cls = ep::superClassOf(tables->spawnNames, state->spawn.row);
-						if (const int gameRow = cls.empty() ? -1 : GameMonsterRow(route, dataFlag, cls); gameRow >= 0) {
-							state->spawn.classRow = gameRow;
-						} else {
-							plog::Warn("spawn '%s': its Class '%.*s' (mod's superuniques.txt) is not in the game's monstats table; treated as not found", event->spawn.c_str(), static_cast<int>(cls.size()), cls.data());
-							state->spawn = ep::Resolved{};
-						}
-					}
-				}
-			}
-		}
-		if (!decided) {
-			state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
+		if (event->kind != ev::Kind::Shrine) {  // a Treasure's Spawn is looked up too: a miss means a chest's objects name
+			state->spawn = ResolveName(event->spawn, tables->spawnNames, player);
 		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
 		const bool placesObject = Event6bPlacesObject(*event, state->spawn.kind);
@@ -827,6 +897,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			Event6bArmBossDrop(*event, level, player);  // phase 6b: does nothing without a Boss or Treasure monster Drop
 			state->event = std::move(event);
 		}
+	}
+	// The map's own Boss, apart from the event (it is armed whether or not an event was drawn).
+	if (!map.boss.empty()) {
+		ArmMapBoss(*state, map, *tables, player);
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_state = std::move(state);
