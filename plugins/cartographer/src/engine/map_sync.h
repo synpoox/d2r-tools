@@ -25,7 +25,7 @@ auto InstallMapSync(const D2RL::PluginContext* context) -> bool;
 void MapSyncSetTables(const std::shared_ptr<const Tables>& tables);
 
 // A map was opened (the portal is open) on the host or in single player. `map` points into `tables.maps`. `slotLevel` is the level the
-// portal leads to, `openings` the game's opening count after the open, `seed` the maze layout seed (0 for a preset map). `outdoor` marks an outdoor map: `seed` is then the outdoor layout seed (OutdoorOpenSeed()); the portal passes it once it opens outdoor maps (issue #144).
+// portal leads to, `openings` the game's opening count after the open, `seed` the maze layout seed (0 for a preset map). `outdoor` marks an outdoor map: `seed` is then the outdoor layout seed (OutdoorOpenSeed()); the portal passes it (issue #144).
 // Game thread. Sends to the clients that said hello; does nothing else.
 void MapSyncMapOpened(const MapDef& map, const Tables& tables, int slotLevel, int openings, bool maze, uint64_t seed, bool outdoor = false);
 
