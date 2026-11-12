@@ -22,14 +22,6 @@ constexpr int dxOf[4] = {0, 1, 0, -1}; // N E S W
 constexpr int kMaxWeight = 1000000; // keeps the weight total in 64 bits for any catalogue size
 constexpr int dyOf[4] = {-1, 0, 1, 0};
 
-std::string lower(std::string_view s)
-{
-	std::string out(s);
-	for (char &c : out)
-		if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
-	return out;
-}
-
 std::string trim(std::string_view s)
 {
 	size_t a = 0, b = s.size();
@@ -75,7 +67,7 @@ bool parseInt(const std::string &text, int &out)
 
 bool parseRole(const std::string &text, PieceRole &out)
 {
-	const std::string s = lower(trim(text));
+	const std::string s = lowerAscii(trim(text));
 	static const std::pair<const char *, PieceRole> names[] = {
 		{"path", PieceRole::Path}, {"clearing", PieceRole::Clearing}, {"entry", PieceRole::Entry},
 		{"boss", PieceRole::Boss}, {"event", PieceRole::Event}, {"filler", PieceRole::Filler}, {"border", PieceRole::Border}};
@@ -132,7 +124,7 @@ bool pickable(const Piece &p, const std::string &tilesetLower)
 {
 	const bool checked = p.check.empty() || p.check == "ok" || p.check == "n/a" || p.check == "variants";
 	return checked && p.w == 1 && p.h == 1 && p.weight > 0 && p.role != PieceRole::Border && p.role != PieceRole::Filler &&
-		lower(p.tileset) == tilesetLower;
+		lowerAscii(p.tileset) == tilesetLower;
 }
 
 // An exit needs a path socket, no exit needs a closed one.
@@ -146,6 +138,19 @@ bool socketsMatch(const Piece &p, uint8_t mask)
 }
 
 } // namespace
+
+std::string lowerAscii(std::string_view s)
+{
+	std::string out(s);
+	for (char &c : out)
+		if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+	return out;
+}
+
+std::string cellName(int x, int y)
+{
+	return "cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
+}
 
 const char *pieceRoleName(PieceRole role)
 {
@@ -203,7 +208,7 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		if (!haveHeader) {
 			haveHeader = true;
 			for (size_t i = 0; i < row.size(); ++i) {
-				const std::string n = lower(trim(row[i]));
+				const std::string n = lowerAscii(trim(row[i]));
 				for (int k = 0; k < kCols; ++k)
 					if (n == colNames[k] && col[k] < 0) col[k] = static_cast<int>(i);
 			}
@@ -247,7 +252,7 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 			warn(lineNo, "weight of " + who + " is above " + std::to_string(kMaxWeight) + "; using " + std::to_string(kMaxWeight));
 			p.weight = kMaxWeight;
 		}
-		p.check = lower(cellAt(row, col[Check]));
+		p.check = lowerAscii(cellAt(row, col[Check]));
 		if (!p.check.empty() && p.check != "ok" && p.check != "n/a" && p.check != "variants") {
 			warn(lineNo, "check of " + who + " is '" + p.check + "', not ok or n/a; row skipped (its DS1 does not match the catalogue)");
 			continue;
@@ -272,7 +277,7 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		if (!edgesOk) continue;
 		bool dup = false;
 		for (const Piece &o : res.catalogue.pieces)
-			if (o.lvlPrest == p.lvlPrest && lower(o.tileset) == lower(p.tileset)) dup = true;
+			if (o.lvlPrest == p.lvlPrest && lowerAscii(o.tileset) == lowerAscii(p.tileset)) dup = true;
 		if (dup) {
 			warn(lineNo, who + " is listed twice; the second row is skipped");
 			continue;
@@ -307,7 +312,7 @@ PickResult pickPieces(const layout::Layout &layout, const Catalogue &catalogue, 
 	res.height = layout.height;
 	res.cells.resize(static_cast<size_t>(layout.width) * static_cast<size_t>(layout.height));
 	const std::string tsName(tileset);
-	const std::string tsLower = lower(tileset);
+	const std::string tsLower = lowerAscii(tileset);
 
 	bool anyPiece = false;
 	for (const Piece &p : catalogue.pieces)
@@ -400,7 +405,7 @@ std::vector<std::string> checkPicks(const layout::Layout &layout, const Catalogu
 	const PickResult &result)
 {
 	std::vector<std::string> bad;
-	const std::string tsLower = lower(tileset);
+	const std::string tsLower = lowerAscii(tileset);
 	if (result.width != layout.width || result.height != layout.height ||
 		result.cells.size() != static_cast<size_t>(layout.width) * static_cast<size_t>(layout.height)) {
 		bad.push_back("the picked grid is not the layout's size");
@@ -426,7 +431,7 @@ std::vector<std::string> checkPicks(const layout::Layout &layout, const Catalogu
 				continue;
 			}
 			const Piece &p = catalogue.pieces[static_cast<size_t>(c.piece)];
-			if (p.lvlPrest != c.lvlPrest || lower(p.tileset) != tsLower) bad.push_back("piece is not from the tileset" + where);
+			if (p.lvlPrest != c.lvlPrest || lowerAscii(p.tileset) != tsLower) bad.push_back("piece is not from the tileset" + where);
 			if (p.openMask == 0) bad.push_back("mask 0 piece" + where);
 			if (c.ds1Variant < -1 || c.ds1Variant >= static_cast<int>(p.ds1.size()) || (c.ds1Variant < 0 && !p.ds1.empty()))
 				bad.push_back("ds1 variant out of range" + where);

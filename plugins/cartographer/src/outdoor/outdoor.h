@@ -26,6 +26,10 @@
 
 namespace cartographer::outdoor {
 
+// ASCII lower-casing and the "cell (x,y)" wording every tileset uses in plan checks and errors.
+std::string lowerAscii(std::string_view text);
+std::string cellName(int x, int y);
+
 enum class PieceRole : uint8_t { Path, Clearing, Entry, Boss, Event, Filler, Border };
 const char *pieceRoleName(PieceRole role);
 
