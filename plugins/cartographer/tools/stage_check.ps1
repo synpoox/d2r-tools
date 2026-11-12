@@ -48,6 +48,19 @@
 .PARAMETER AutoCheckMap
     Writes AutoCheck=1 and AutoCheckMap=<name> into the slot's cartographer.txt (settings of PR #176; unknown settings
     are harmless to a build without them).
+.PARAMETER MapItems
+    Adds the example map items (examples\first-map\misc.txt: t20, t21, t22) to the test mod so a map can be opened from its
+    item. A map item needs three things in the test mod, and this switch stages all three (test staging only; players get
+    no such files): the misc.txt rows (cloned from the Scroll of Identify with pSpell 16, never from a potion), an entry per
+    code in data\hd\items\items.json (the picture; without it the item has no icon), and a name per code in
+    data\local\lng\strings\item-names.json and strings-legacy (the tooltip). The mod's own copy of items.json and
+    item-names.json replaces the game's whole file, so each is seeded from -VanillaData when the slot lacks it. Then
+    in the game: debug_mode, then cheat spawn t20,inv 0 (see docs/cartographer/testing.md, "Map items in a test slot").
+.PARAMETER MapItemRows
+    misc.txt with a header and the map item rows (default: examples\first-map\misc.txt in the plugin folder).
+.PARAMETER VanillaData
+    Extracted vanilla data folder holding hd\items\items.json and local\lng\strings\item-names.json (default:
+    <toolkit>\d2r-data\93847\data). Copy only, never edited.
 .PARAMETER VanillaExcel
     Folder with the vanilla tables the test mod's excel is seeded from (copy only, never edited). Default: the d2r-game
     d2rloader compiler data next to this repo.
@@ -74,6 +87,9 @@ param(
     [string]$Tables,
     [string]$Saves,
     [string]$AutoCheckMap,
+    [switch]$MapItems,
+    [string]$MapItemRows,
+    [string]$VanillaData,
     [string]$VanillaExcel,
     [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
     [string]$Project = $env:MODKIT_PROJECT,
@@ -107,6 +123,8 @@ if (-not $Toolkit) {
     if (-not (Test-Path $Toolkit)) { $Toolkit = Join-Path $env:USERPROFILE 'source\repos\d2rAI-toolkit' }
 }
 if (-not $VanillaExcel) { $VanillaExcel = Join-Path $env:USERPROFILE 'source\repos\d2r-game\d2rloader\data\compiler\3.3.0\data\global\excel' }
+if (-not $VanillaData) { $VanillaData = Join-Path $Toolkit 'd2r-data\93847\data' }
+if (-not $MapItemRows) { $MapItemRows = Join-Path (Split-Path -Parent $here) 'examples\first-map\misc.txt' }
 $testing = Join-Path $Toolkit 'testing'
 if (-not (Test-Path (Join-Path $testing 'game_slots.py'))) { throw "No d2rAI-toolkit testing folder at $testing. Pass -Toolkit." }
 if (-not $env:MODKIT_TESTING_CONFIG) { $env:MODKIT_TESTING_CONFIG = 'C:\D2RTestSlots\modkit-testing.toml' }
@@ -275,6 +293,14 @@ foreach ($name in @('levels.txt', 'lvlmaze.txt')) {
 }
 if ($missingSeed.Count -gt 0) { throw "Neither the slot's test mod nor $VanillaExcel has $($missingSeed -join ', '), which install.ps1 requires." }
 
+if ($MapItems) {
+    if (-not (Test-Path -PathType Leaf $MapItemRows)) { throw "No map item rows at $MapItemRows. Pass -MapItemRows." }
+    foreach ($rel in @('hd\items\items.json', 'local\lng\strings\item-names.json', 'local\lng\strings-legacy\item-names.json')) {
+        if (-not (Test-Path -PathType Leaf (Join-Path $VanillaData $rel))) { throw "No vanilla $rel under $VanillaData, which -MapItems seeds the test mod from. Pass -VanillaData." }
+    }
+    if (-not (Test-Path -PathType Leaf (Join-Path $VanillaExcel 'misc.txt')) -and -not (Test-Path -PathType Leaf (Join-Path $excel 'misc.txt'))) { throw "No misc.txt in the slot's test mod or in $VanillaExcel." }
+}
+
 # 1. Lock (never --force).
 Say "Slot $Slot, owner $Owner, test mod $modName, slot folder $slotDir"
 if ($WhatIf) {
@@ -363,6 +389,7 @@ try {
         Say 'Tables:'
         foreach ($f in Get-ChildItem $Tables -File -Filter '*.txt') {
             if ($f.Name -ieq 'cartographer.txt' -and $AutoCheckMap) { continue }  # written with the settings below
+            if ($f.Name -ieq 'misc.txt') { continue }  # item rows belong in the mod's excel folder: -MapItems stages them there
             Copy-IfChanged $f.FullName (Join-Path $cartoTables $f.Name) $null
         }
     }
@@ -370,6 +397,107 @@ try {
     if ($Saves) {
         Say "Saves -> $($p.saveDir):"
         foreach ($f in Get-ChildItem $Saves -File) { Copy-IfChanged $f.FullName (Join-Path $p.saveDir $f.Name) $null }
+    }
+
+    # 4b. Map items (-MapItems): misc.txt rows, the HD picture entry and the name strings for each code.
+    if ($MapItems) {
+        Say 'Map items:'
+        $enc8 = New-Object System.Text.UTF8Encoding($false)
+        $exRows = @($latin1.GetString([System.IO.File]::ReadAllBytes($MapItemRows)) -split "\r?\n" | Where-Object { $_ -ne '' })
+        $exHead = $exRows[0].Split("`t")
+        $exCode = [array]::IndexOf($exHead, 'code'); $exName = [array]::IndexOf($exHead, 'name')
+        if ($exCode -lt 0 -or $exName -lt 0) { throw "$MapItemRows needs the columns name and code." }
+        $items = @(foreach ($line in $exRows[1..($exRows.Count - 1)]) {
+            $c = $line.Split("`t"); $v = @{}
+            for ($i = 0; $i -lt $exHead.Count; $i++) { $v[$exHead[$i]] = if ($i -lt $c.Count) { $c[$i] } else { '' } }
+            @{ code = $c[$exCode]; name = $c[$exName]; values = $v }
+        })
+        # misc.txt: seeded from the vanilla table when the slot lacks it; a row is added by the slot's own column order.
+        $misc = Join-Path $excel 'misc.txt'
+        if (-not (Test-Path -PathType Leaf $misc)) {
+            Plan "Test mod: seed misc.txt from the vanilla tables (copy; the original is not touched)"
+            if (-not $WhatIf) { $null = New-Item -ItemType Directory -Force $excel; Copy-Item -LiteralPath (Join-Path $VanillaExcel 'misc.txt') -Destination $misc; Clear-ReadOnly $misc; $placed[$misc] = '' }
+        }
+        if (Test-Path -PathType Leaf $misc) {
+            $text = $latin1.GetString([System.IO.File]::ReadAllBytes($misc))
+            $mnl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+            $mlines = [System.Collections.Generic.List[string]]($text -split "\r?\n")
+            while ($mlines.Count -gt 0 -and $mlines[$mlines.Count - 1] -eq '') { $mlines.RemoveAt($mlines.Count - 1) }
+            $mh = $mlines[0].Split("`t"); $mc = [array]::IndexOf($mh, 'code')
+            $added = 0
+            foreach ($it in $items) {
+                $have = @($mlines | Select-Object -Skip 1 | Where-Object { $_.Split("`t")[$mc] -ceq $it.code })
+                if ($have.Count -gt 0) { Say "  misc.txt already has a row with code $($it.code); left as it is"; continue }
+                $row = ($mh | ForEach-Object { if ($it.values.ContainsKey($_)) { $it.values[$_] } else { '' } }) -join "`t"
+                $mlines.Add($row); $added++
+                if (-not $WhatIf) { $rowsWritten.Add(@{ file = $misc; row = $row }) }
+            }
+            if ($added -gt 0) {
+                Plan "  misc.txt: add $added map item row(s) ($(($items | ForEach-Object { $_.code }) -join ', '))"
+                if (-not $WhatIf) { Clear-ReadOnly $misc; [System.IO.File]::WriteAllBytes($misc, $latin1.GetBytes(($mlines -join $mnl) + $mnl)) }
+            }
+        }
+        # items.json: one entry per code, pointing at the scroll picture the clone source uses (no entry = no icon).
+        $asset = 'scroll/identify_scroll'
+        $itemsJson = Join-Path $modDir "$modName.mpq\data\hd\items\items.json"
+        $newJson = $false
+        if (-not (Test-Path -PathType Leaf $itemsJson)) {
+            Plan "Test mod: seed items.json from the vanilla data (copy; the mod's file replaces the game's whole file)"
+            if (-not $WhatIf) { $null = New-Item -ItemType Directory -Force (Split-Path $itemsJson -Parent); Copy-Item -LiteralPath (Join-Path $VanillaData 'hd\items\items.json') -Destination $itemsJson; Clear-ReadOnly $itemsJson; $placed[$itemsJson] = ''; $newJson = $true }
+        }
+        if (Test-Path -PathType Leaf $itemsJson) {
+            $jt = $enc8.GetString([System.IO.File]::ReadAllBytes($itemsJson))
+            $jnl = if ($jt.Contains("`r`n")) { "`r`n" } else { "`n" }
+            $new = @($items | Where-Object { $jt -notmatch ('"' + [regex]::Escape($_.code) + '"\s*:') } | ForEach-Object { "  { `"$($_.code)`": { `"asset`": `"$asset`" } }" })
+            if ($new.Count -gt 0) {
+                if (-not $newJson -and -not $placed.Contains($itemsJson)) { Write-Warning "items.json in the slot was not placed by this script: the entries added to it stay after -Restore." }
+                Plan "  items.json: add $($new.Count) picture entr$(if ($new.Count -eq 1) { 'y' } else { 'ies' })"
+                if (-not $WhatIf) {
+                    $end = $jt.LastIndexOf(']'); $body = $jt.Substring(0, $end).TrimEnd()
+                    $jt = $body + ',' + $jnl + ($new -join (',' + $jnl)) + $jnl + ']' + $jnl
+                    Clear-ReadOnly $itemsJson; [System.IO.File]::WriteAllBytes($itemsJson, $enc8.GetBytes($jt))
+                }
+            }
+        }
+        # item-names.json (HD and legacy): a record per code; ids start above the highest id below 65536 in either file.
+        $nameFiles = @('local\lng\strings\item-names.json', 'local\lng\strings-legacy\item-names.json')
+        $langs = 'enUS', 'zhTW', 'deDE', 'esES', 'frFR', 'itIT', 'koKR', 'plPL', 'esMX', 'jaJP', 'ptBR', 'ruRU', 'zhCN'
+        $maxId = 28105
+        foreach ($rel in $nameFiles) {
+            foreach ($f in @((Join-Path $modDir "$modName.mpq\data\$rel"), (Join-Path $VanillaData $rel))) {
+                if (-not (Test-Path -PathType Leaf $f)) { continue }
+                foreach ($m in [regex]::Matches($enc8.GetString([System.IO.File]::ReadAllBytes($f)), '"id"\s*:\s*(\d+)')) { $n = [long]$m.Groups[1].Value; if ($n -lt 65536 -and $n -gt $maxId) { $maxId = $n } }
+            }
+        }
+        foreach ($rel in $nameFiles) {
+            $target = Join-Path $modDir "$modName.mpq\data\$rel"
+            $newFile = $false
+            if (-not (Test-Path -PathType Leaf $target)) {
+                Plan "Test mod: seed $rel from the vanilla data (copy; the mod's file replaces the game's whole file)"
+                if (-not $WhatIf) { $null = New-Item -ItemType Directory -Force (Split-Path $target -Parent); Copy-Item -LiteralPath (Join-Path $VanillaData $rel) -Destination $target; Clear-ReadOnly $target; $placed[$target] = ''; $newFile = $true }
+            }
+            if (-not (Test-Path -PathType Leaf $target)) { continue }
+            $st = $enc8.GetString([System.IO.File]::ReadAllBytes($target))
+            $snl = if ($st.Contains("`r`n")) { "`r`n" } else { "`n" }
+            $next = $maxId
+            $recs = @(foreach ($it in $items) {
+                if ($st -match ('"Key"\s*:\s*"' + [regex]::Escape($it.code) + '"')) { continue }
+                $next++
+                $label = $it.name -replace '[\\"]', ''
+                $pairs = @($langs | ForEach-Object { "    `"$_`": `"$label`"" }) -join (',' + $snl)
+                "  {$snl    `"id`": $next,$snl    `"Key`": `"$($it.code)`",$snl$pairs$snl  }"
+            })
+            if ($recs.Count -gt 0) {
+                if (-not $newFile -and -not $placed.Contains($target)) { Write-Warning "$rel in the slot was not placed by this script: the names added to it stay after -Restore." }
+                Plan "  ${rel}: add $($recs.Count) name(s)"
+                if (-not $WhatIf) {
+                    $end = $st.LastIndexOf(']'); $body = $st.Substring(0, $end).TrimEnd()
+                    $st = $body + ',' + $snl + ($recs -join (',' + $snl)) + $snl + ']' + $snl
+                    Clear-ReadOnly $target; [System.IO.File]::WriteAllBytes($target, $enc8.GetBytes($st))
+                }
+            }
+        }
+        Say "  In the game: debug_mode, then cheat spawn <code>,inv 0 for $(($items | ForEach-Object { $_.code }) -join ', ')."
     }
 
     # A levels.txt row past the vanilla rows that is not a Cartographer row changes the id the Maze level gets.

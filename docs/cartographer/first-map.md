@@ -36,18 +36,27 @@ and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into
 
 ## 2. Make an item that opens the map
 
-Each map has an item of its own. In your mod's `misc.txt`, copy an ordinary item (a scroll is a good start) to a new row
-and change two things:
+Each map has an item of its own. In your mod's `misc.txt`, copy an ordinary item to a new row (the Scroll of Identify, `isc`,
+is a good base: not a potion, which carries stats and belt settings) and change these:
 
-- `code`: up to 4 characters that no other item uses. This guide uses `t20`.
+- `code`: 3 characters that no row of `misc.txt`, `weapons.txt` or `armor.txt` uses (the vanilla charms `cm1` to `cm3`
+  and runes `r01` and up are taken). This guide uses `t20`. Three characters: the toolkit notes say the HD picture lookup does not find a 4-character code (unverified).
 - `pSpell`: `16`.
+- `namestr`: the key of the item's name in your `item-names.json` strings (add the record there), and `spawnable` `0`
+  with the vendor columns blank unless NPCs should sell it.
 
-The example pack's `maps.txt` also has two more maps, one that uses item `t21` and a Jungle map that uses item `t22`, so
-if you copy the whole pack, `misc.txt` needs `t20`, `t21` and `t22`. The Jungle map also needs `OutdoorBuild = 1` in
-`cartographer.txt`; until then it is refused when you use its item.
+The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "scroll/identify_scroll" } }`),
+or the item has no icon.
 
-Give it a name in your string tables so players can tell it apart. Cartographer adds no items of its own, so also decide
-how players get it (a drop, a shop or a cube recipe in your mod).
+A ready-made copy of the three example rows is [`examples/first-map/misc.txt`](../../plugins/cartographer/examples/first-map/misc.txt):
+append its rows (not its header) to your `misc.txt`. The example pack's `maps.txt` has three maps, using items `t20`, `t21`
+and a Jungle map that uses `t22`. The Jungle map also needs `OutdoorBuild = 1` in `cartographer.txt`; until then it is
+refused when you use its item.
+
+Cartographer adds no items of its own, so decide how players get it (a drop, a shop or a cube recipe in your mod). To test
+only, spawn it with the console: `debug_mode`, then `cheat spawn t20,inv 0`. In a Cartographer test slot,
+`tools\stage_check.ps1 -MapItems` sets up the rows, picture entries and names for you; see
+[testing.md](testing.md#map-items-in-a-test-slot--mapitems).
 
 ## 3. Add the map
 
