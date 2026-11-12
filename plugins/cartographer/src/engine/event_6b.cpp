@@ -4,6 +4,7 @@
 #include "engine/scan.h"
 #include "event6b.h"
 #include "log.h"
+#include "hookguard.h"
 
 #include <windows.h>
 
@@ -426,7 +427,7 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		Part& part = g_parts[DeathDrop];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&DeathDropHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = hooked && g_original != nullptr;
+		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_original != nullptr));
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every monster's own drop is skipped until the game is restarted";
 		if (hooked && !ok) {
@@ -442,7 +443,7 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		Part& part = g_parts[OperateObject];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&OperateHook), reinterpret_cast<void**>(&g_operateOriginal));
-		const bool ok = hooked && g_operateOriginal != nullptr;
+		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_operateOriginal != nullptr));
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every object use is skipped until the game is restarted";
 		if (hooked && !ok) {

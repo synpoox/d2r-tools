@@ -90,6 +90,15 @@ enum class PlayerAction { None, Apply, Remove };
 // the reason (left the level, map closed, plan replaced).
 PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool settingOn);
 
+// What to do with a list the plugin put on a player when it has to come off.
+enum class RemoveAction { Forget, StateOffDetachFree, DetachFree };
+
+// onChain: the list is still on the unit's list chain. foundByState: the game's finder returns this very list for the state
+// the plugin gave it (and the state and the state-bit call are usable). A list the unit does not hold is only forgotten
+// (never detached or freed: it may already be gone). A list still on the chain always comes off, so the map's player
+// stats never follow the player into a vanilla level; the state bit is cleared only when the finder confirms the list.
+RemoveAction decideRemoval(bool onChain, bool foundByState);
+
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);
 

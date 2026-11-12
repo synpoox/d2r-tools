@@ -4,6 +4,7 @@
 #include "core/text.h"
 #include "engine/scan.h"
 #include "log.h"
+#include "hookguard.h"
 #include "statplan.h"
 
 #include <windows.h>
@@ -345,32 +346,45 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		list = g_lists.find(id);
 		state = g_lists.stateOf(id);
+	}
+	// The record is dropped only after the removal attempt below, so a failed lookup never leaves a list on the player that the
+	// plugin has forgotten: the next tick tries again.
+	const auto forget = [&]() noexcept {
+		std::lock_guard<std::mutex> lock(g_lock);
 		g_lists.remove(id);
 		UpdateBusy();
-	}
+	};
 	if (list == 0) {
+		forget();
 		return;
 	}
 	bool found = false;
 	const int before = Chain(unit, reinterpret_cast<void*>(list), &found);
-	if (!found) {
+	// The state is the one the plugin stored with the list, never read back from the list. If the game freed the list and the
+	// address was reused, the finder no longer returns it for that state.
+	const bool foundByState = state > 0 && On(SetStateBit) && On(FindStateList) && Call<FindStateListFn>(FindStateList)(unit, state) == reinterpret_cast<void*>(list);
+	const sp::RemoveAction action = sp::decideRemoval(found, foundByState);
+	if (action == sp::RemoveAction::Forget) {
 		// Never detach or free a list the unit does not hold: it may already be gone.
 		plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
+		forget();
 		return;
 	}
-	// The state is the one the plugin stored with the list, never read back from the list. If the game freed the list and the
-	// address was reused, the finder no longer returns it for that state: forget it and touch nothing.
-	if (state <= 0 || !On(SetStateBit) || !On(FindStateList) ||
-	    Call<FindStateListFn>(FindStateList)(unit, state) != reinterpret_cast<void*>(list)) {
-		plog::Warn("map stats: the game does not find the player's list by its state %d any more; it is forgotten, not freed, and nothing was touched", state);
-		return;
+	// The order: state off first (the clients get the state-off packet), then off the chain, then freed. The list is on the unit's
+	// chain, so it is ours to take off even when the state lookup failed: leaving it would carry the map's stats into vanilla levels.
+	if (action == sp::RemoveAction::StateOffDetachFree) {
+		Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
+	} else {
+		plog::Warn("map stats: the game does not find the player's list by its state %d; it is detached and freed anyway, the state bit is left alone", state);
 	}
-	// The order: state off first (the clients get the state-off packet), then off the chain, then freed.
-	Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 	Call<DetachStatListFn>(DetachStatList)(unit, reinterpret_cast<void*>(list));
 	Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), reinterpret_cast<void*>(list));
 	bool still = false;
 	const int after = Chain(unit, reinterpret_cast<void*>(list), &still);
+	if (still) {
+		plog::Error("map stats: the player's list is still on the unit after it was removed (chain %d -> %d lists)", before, after);
+	}
+	forget();
 	plog::Info("statprobe: player %u left the map: list removed (chain %d -> %d lists)", id, before, after);
 }
 
@@ -469,7 +483,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 		Part& part = g_parts[MonsterSetup];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&MonsterSetupHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = hooked && g_original != nullptr;
+		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_original != nullptr));
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every monster's own setup is skipped until the game is restarted";
 		if (hooked && !ok) {

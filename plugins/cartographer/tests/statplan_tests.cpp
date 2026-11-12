@@ -177,6 +177,14 @@ TEST_CASE("the player's list goes on in the map, off when it no longer applies")
 	CHECK(decidePlayer(true, true, true, false) == PlayerAction::Remove);
 }
 
+TEST_CASE("a player list still on the unit always comes off, even when the state lookup fails")
+{
+	CHECK(decideRemoval(true, true) == RemoveAction::StateOffDetachFree);
+	CHECK(decideRemoval(true, false) == RemoveAction::DetachFree);  // finder lost it: still detached and freed
+	CHECK(decideRemoval(false, true) == RemoveAction::Forget);      // not held by the unit: never touched
+	CHECK(decideRemoval(false, false) == RemoveAction::Forget);
+}
+
 TEST_CASE("monsters get stats only in the slot level while a map is active")
 {
 	CHECK(monsterGetsStats(true, 7, 7));

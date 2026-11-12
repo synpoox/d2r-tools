@@ -12,6 +12,7 @@
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
 #include "log.h"
+#include "hookguard.h"
 #include "steer.h"
 
 #include <windows.h>
@@ -545,7 +546,7 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 	const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PlayerTickHook), reinterpret_cast<void**>(&g_tickOriginal));
-	const bool ok = hooked && g_tickOriginal != nullptr;
+	const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_tickOriginal != nullptr));
 	part.status.on = ok;
 	part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
 	g_consoleLive = ok;
@@ -681,7 +682,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		}
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
-		const bool ok = hooked && *original != nullptr;
+		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, *original != nullptr));
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
 		if (hooked && !ok) {

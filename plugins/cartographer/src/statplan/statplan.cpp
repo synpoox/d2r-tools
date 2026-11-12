@@ -224,6 +224,12 @@ PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool se
 	return PlayerAction::None;
 }
 
+RemoveAction decideRemoval(bool onChain, bool foundByState)
+{
+	if (!onChain) return RemoveAction::Forget;
+	return foundByState ? RemoveAction::StateOffDetachFree : RemoveAction::DetachFree;
+}
+
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel)
 {
 	return planActive && slotLevel > 0 && levelId == slotLevel;

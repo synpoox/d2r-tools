@@ -5,6 +5,7 @@
 #include "engine/maze_hooks.h"
 #include "engine/scan.h"
 #include "log.h"
+#include "hookguard.h"
 
 #include <windows.h>
 
@@ -702,7 +703,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		Part& part = g_parts[PopulateRoom];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PopulateHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = hooked && g_original != nullptr;
+		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_original != nullptr));
 		part.status.on = ok;
 		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every room's own population is skipped until the game is restarted";
 		if (hooked && !ok) {
