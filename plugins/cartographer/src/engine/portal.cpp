@@ -86,7 +86,10 @@ Part g_parts[PartCount] = {
 	{"FindFreeSpot", nullptr, 0, false, nullptr, {}, {}},
 	// Not needed by the map item: only the console command waits on it. Build 93847: the player mana step
 	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer.md section 3).
-	{"PlayerTick", "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9", 14, false, nullptr, {}, {}},
+	{"PlayerTick",
+	 "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? "
+	 "48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??",
+	 14, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
@@ -108,6 +111,8 @@ OpenRequest g_request;                     // the console's request; guarded by 
 std::atomic<bool> g_requested{false};      // g_request has something to serve: the per-frame hook reads only this
 std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
+std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this game: this process has a server
+std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
 
 auto NowMs() noexcept -> uint64_t {
 	return GetTickCount64();
@@ -417,6 +422,13 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 
 auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	const uint64_t result = g_tickOriginal(game, unit);
+	if (!g_tickSeen.load(std::memory_order_relaxed)) {
+		g_tickSeen = true;
+	}
+	if (!g_firstLogged.load(std::memory_order_relaxed) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0) {
+		g_firstLogged = true;  // once per game, to settle whether LocalPlayerReady.playerId is the unit id
+		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), g_localPlayer.load());
+	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
 		ServeRequest(game, unit);
 	}
@@ -432,6 +444,8 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_localPlayer = event->playerId;
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		g_localPlayer = NoPlayer;
+		g_tickSeen = false;
+		g_firstLogged = false;
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
@@ -457,6 +471,16 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 		part.status.detail = "off: D2RLoader has no Lifecycle service of the expected version";
 		return;
 	}
+	D2RL::Lifecycle::ListenerHandle handles[2] = {D2RL::Lifecycle::InvalidHandle, D2RL::Lifecycle::InvalidHandle};
+	int registered = 0;
+	const auto dropListeners = [&]() {
+		for (int i = 0; i < registered; ++i) {
+			if (lifecycle->unregisterGameplayEventListener != nullptr) {
+				(void)lifecycle->unregisterGameplayEventListener(context, handles[i]);
+			}
+		}
+		registered = 0;
+	};
 	for (const D2RL::Lifecycle::GameplayEventKind kind : {D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady, D2RL::Lifecycle::GameplayEventKind::GameLeft}) {
 		D2RL::Lifecycle::GameplayEventListener listener{};
 		listener.structSize = D2RL::Lifecycle::GameplayEventListenerSize;
@@ -466,8 +490,10 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 		if (lifecycle->registerGameplayEventListener(context, &listener, &handle) != D2RL::Lifecycle::Result::Success) {
 			part.status.on = false;
 			part.status.detail = "off: D2RLoader refused a gameplay event listener";
+			dropListeners();
 			return;
 		}
+		handles[registered++] = handle;
 	}
 	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 	const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PlayerTickHook), reinterpret_cast<void**>(&g_tickOriginal)) &&
@@ -475,6 +501,9 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	part.status.on = ok;
 	part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
 	g_consoleLive = ok;
+	if (!ok) {
+		dropListeners();
+	}
 }
 
 }  // namespace
@@ -486,11 +515,17 @@ auto RequestOpen(const std::string& name) -> OpenStart {
 		return OpenStart::NoSuchMap;
 	}
 	if (!g_consoleLive.load()) {
-		g_armed = map->name;
-		return OpenStart::Armed;
+		return OpenStart::Unavailable;
 	}
 	if (g_localPlayer.load() == NoPlayer) {
 		return OpenStart::NotInGame;
+	}
+	if (!g_tickSeen.load()) {
+		return OpenStart::NoServer;  // a remote client has no server: the tick would never run, and nothing would answer
+	}
+	if (g_request.Stale(NowMs(), RequestLifeMs)) {  // an old request the hook never reached
+		plog::Warn("an earlier open request was never served and is dropped");
+		g_request.Clear();
 	}
 	g_request.Post(map->name, NowMs());
 	g_requested = true;
@@ -566,10 +601,22 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 					std::memcpy(part.guard, pattern.bytes, part.hookSize);
 				}
 			}
-			if (part.address != nullptr && isOverride) {
+			// An override of a hooked part must keep the built-in entry bytes: the hook is written for that prologue.
+			if (part.address != nullptr && isOverride && part.hookSize > 0 && part.signature != nullptr) {
+				Pattern builtIn{};
+				if (!ParsePattern(part.signature, &builtIn) || builtIn.size < part.hookSize ||
+				    std::memcmp(builtIn.bytes, pattern.bytes, part.hookSize) != 0) {
+					why = "the signature from signatures.txt does not start with the built-in entry bytes this hook is written for";
+					part.address = nullptr;
+				}
+			}
+			// Only a hooked part must start at a .pdata function: a called-only part can be a leaf with no .pdata entry
+			// (RoomLevelId, 0x2efc10, is one), so it needs a unique match only.
+			if (part.address != nullptr && isOverride && part.hookSize > 0) {
 				bool known = false;
-				if (!IsFunctionEntry(context->exeBase, part.address, &known) && known) {
-					why = "the signature from signatures.txt does not match at the start of a function";
+				if (!IsFunctionEntry(context->exeBase, part.address, &known)) {
+					why = known ? "the signature from signatures.txt does not match at the start of a function"
+					            : "the game's exception directory is missing, so the signature from signatures.txt cannot be checked";
 					part.address = nullptr;
 				}
 			}

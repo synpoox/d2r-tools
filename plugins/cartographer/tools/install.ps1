@@ -11,7 +11,7 @@
     nothing in the mod's string files is edited.
     It also writes d2rloader\cartographer\slots.txt, which tells the plugin the level id it got.
     All three tables are read and checked before anything is written. Each is backed up once as <name>.bak.
-    Rows are only added when missing, so running it again changes nothing. Restart the game afterwards.
+    Rows are only added when missing, so running it again changes nothing. Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
     The mod's folder, for example <game>\mods\MyMod. The tables are read from <ModDirectory>\<Mod>.mpq\data.
@@ -192,4 +192,4 @@ if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
-Write-Host 'Done. Restart the game so it reads the tables.'
+Write-Host 'Done. Restart the game so it reads the tables. If the mod ships .bin table files, rebuild them from the edited .txt (the game ignores the .txt then).'

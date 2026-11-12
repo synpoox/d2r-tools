@@ -226,9 +226,12 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			case carto::OpenStart::NotInGame:
 				Say(command, "Cartographer: join a game first.");
 				return D2RL::ConsoleCommandResult::Failed;
-			case carto::OpenStart::Armed:
-				Say(command, "Cartographer: " + rest + " will open the next time you use a map item in Harrogath.");
-				break;
+			case carto::OpenStart::Unavailable:
+				Say(command, "Cartographer: opening without an item is not available (a game part is missing). Run 'cartographer check' to see which.");
+				return D2RL::ConsoleCommandResult::Failed;
+			case carto::OpenStart::NoServer:
+				Say(command, "Cartographer: a map can only be opened in a game you host, once the game is running.");
+				return D2RL::ConsoleCommandResult::Failed;
 			case carto::OpenStart::Posted:
 				Say(command, "Cartographer: opening " + rest + "...");
 				break;

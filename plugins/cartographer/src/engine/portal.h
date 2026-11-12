@@ -43,9 +43,10 @@ auto ArmMap(const std::string& name) -> bool;
 
 enum class OpenStart {
 	Posted,      // the game thread opens it, through the gates, on the next frame
-	Armed,       // the console path is off: the next map item opens it instead
 	NoSuchMap,
 	NotInGame,   // no local player yet
+	Unavailable, // the PlayerTick part is missing or refused: there is no direct open
+	NoServer,    // no server tick has run in this game (a game joined over TCP/IP): only the host can open it
 };
 
 // 'cartographer open <Name>': asks the game to open the map for the local player without an item. Safe from any thread.

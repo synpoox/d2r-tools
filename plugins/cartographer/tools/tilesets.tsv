@@ -1,0 +1,28 @@
+tileset	builder	leveltype	group	cell	pieces	ready
+Cave	maze	3	maze, ready	piece	30	pieces
+Crypt	maze	4	maze, ready	piece	30	pieces
+Lava	maze	28	maze, ready	piece	15	pieces
+Barracks	maze	7	maze, one extra hook	piece	30	pieces
+Jail	maze	8	maze, one extra hook	piece	30	pieces
+Lair	maze	18	maze, one extra hook	piece	15	pieces
+Durance	maze	22	maze, one extra hook	piece	30	pieces
+Dungeon	maze	24	maze, one extra hook	piece	30	pieces
+Sewer	maze	25	maze, one extra hook	piece	30	pieces
+Ice	maze	33	maze, one extra hook	piece	19	pieces
+Act 5 Lava	maze	35	maze, one extra hook	piece	6	pieces
+Arcane	maze	19	maze, own growers	piece	15	pieces
+Catacombs	maze	10	maze, own growers	piece	30	pieces
+Tombs	maze	17	maze, own growers	piece	30	pieces
+Act 2 Sewer	maze	13	maze, own growers	piece	28	pieces
+Jungle	outdoor	21	outdoor, connectable pieces	32	75	pieces
+Barricade	outdoor	31	outdoor, connectable pieces	16	16	pieces
+Snow	outdoor	31	outdoor, connectable pieces	16	16	pieces
+Siege	outdoor	30	outdoor, connectable pieces	16	0	no-pieces
+Kurast	outdoor	22	outdoor, connectable pieces	8	0	no-pieces
+Wilderness	outdoor	2	outdoor, open fields	piece	0	no-pieces
+Desert	outdoor	16	outdoor, open fields	piece	0	no-pieces
+Mesa	outdoor	27	outdoor, open fields	piece	0	no-pieces
+Harem	maze	14	maze, one extra hook	piece	0	no-pieces
+Basement	maze	15	maze, one extra hook	piece	0	no-pieces
+Spider	maze	23	maze, one extra hook	piece	0	no-pieces
+Temple	maze	32	maze, one extra hook	piece	0	no-pieces

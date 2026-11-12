@@ -1,6 +1,7 @@
 build/
 dist/
 .vs/
+__pycache__/
 *.obj
 *.pdb
 *.user

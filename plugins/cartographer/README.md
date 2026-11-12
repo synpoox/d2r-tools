@@ -15,8 +15,8 @@ recorded: until they are, the plugin loads, reads and checks your tables, and th
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
 - **Console open**: `cartographer open <Name>` opens the portal itself, with no map item, through the same gates. It needs
-  the `PlayerTick` part (`cartographer check` shows it); without it the command only picks the map the next item opens.
-  Not tried in a game yet.
+  the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
+  refuses and says so. Not tried in a game yet.
 - **Built-in preset map**: a map called `Preset` always exists, so a three-cell `maps.txt` row
   (`Name`, `Tileset` = `Preset`, `Shape`) works from the start.
 
@@ -33,7 +33,9 @@ recorded: until they are, the plugin loads, reads and checks your tables, and th
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the map item `cmap` (a Scroll of Town Portal copy),
    one level ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `misc.txt`,
    `levels.txt` and `lvlprest.txt` (backing each up once as `.bak`) and writes `slots.txt`. Running
-   it again changes nothing.
+   it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
+   its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
+   edited tables, or remove them, before starting.
 4. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader. Check `cartographer-report.txt` in the plugin's log folder.
 
@@ -61,10 +63,14 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 the built-in preset map opens.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
-without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off.
+without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
 
 ## Tested
 
 - Unit tests of the table loader, the gates and the signature scanner (`tools\build.ps1 -Plugin cartographer -Test`).
 - The installer on a copy of the vanilla 93847 tables, run twice.
-- Not yet: installed into a game, or opened in game.
+- Not yet: installed into a game, or opened in game. Game check: the item name key `cartographer:CartographerMap` is 28 characters;
+  if `misc.txt` `namestr` has a fixed length, confirm the name is not cut off.
+- Game check for `cartographer open <Name>`: the log line "first player unit seen by the tick" shows the same id as
+  "local player ready"; the portal opens; step through it and back; leave the game with the portal still open; repeat with
+  Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.
