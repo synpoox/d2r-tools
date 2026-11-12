@@ -14,6 +14,7 @@ leads to a level built from your `maps.txt`. MIT licensed.
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing).
+
 ## Features
 
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
@@ -32,8 +33,8 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), and the character screen showed them inside the map and back to normal on leaving (single player, one run, test character; `cartographer check` prints the state it would use or, if none, why the closest rows were refused). Not checked: joining clients and multiplayer, more than 16 player stats, death and curses, and a save with the stats attached where the save writer is confirmed to run. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
-  once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
-  (`Level`, `Density`, ...) and the panel are not applied yet. `ItemStats=1` (the item's own stats, unit tested, not run in a game) is read at use time. The plugin log gets `statprobe:` lines
+  once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. The area columns
+  (`Level`, `Density`, `Uniques`, `Monsters`) are written at map open (written and unit tested, not verified in game; see section 15 of the reverse-engineering notes for the game check); `Champions` and the panel are not applied yet. `ItemStats=1` (the item's own stats, unit tested, not run in a game) is read at use time. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
 - **Map events** (Boss and Horde spawns and the game-table names checked in game, with the event distance lowered to 12 in a scratch build for the small test map, the scaled distance itself not yet run in game; the on-screen banner text was not seen; see Tested): when a map opens, `EventChance` and `mapevents.txt` decide whether it has an event
   (the row is drawn by `Weight`). On arrival in the map level a banner shows the map's `Name` and, for an event that will
@@ -75,7 +76,7 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
    and its maze row to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` row to
    `slots.txt` (other rows are kept). It adds no items. Running it again changes nothing once the tables are up to date.
    Rows of an older install ("Cartographer Preset", its `lvlprest.txt` row, the `Preset` slot row) are left alone and
-   can be deleted. A "Cartographer Maze" row from an earlier install (copied from the Den of Evil) has its quest flag, level group and warp text repaired on re-run. Written and run on a copy of the vanilla 3.3.0 tables only; not run against a game install. D2RLoader compiles the
+   can be deleted. A "Cartographer Maze" row from an earlier install (copied from the Den of Evil) has its quest flag, level group, entry and warp text, `Vis0` to `Vis7` and name string (tooltip) repaired on re-run. Written and run on a copy of the vanilla 3.3.0 tables only; not run against a game install. D2RLoader compiles the
    mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
@@ -99,12 +100,12 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
-| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` and `EventChance` are used when a map opens (`Properties` checked in game for monsters); `Density`, `Champions` and `Uniques` are checked only | cartographer.txt |
+| Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` and `EventChance` are used when a map opens (`Properties` checked in game for monsters); `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level (experimental, not verified in game); `Champions` is checked only | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (0, see below) and
 `Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but every
 map opens through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`. The `Preset` tileset is gone: a `Preset` row is refused with "Preset maps are gone: use Cave or Crypt."
-A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, or repeats another slot's level or name; unit tested, not run in game.
+A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, is a `Maze` slot on a level not named `Cartographer Maze`, or repeats another slot's level or name; unit tested, not run in game.
 
 `MapNames=1` shows a map's own `Name` on its portal, the automap and the entry banner. It is off by default and not verified in game. A second map opened in the same game shows its name on the first map's portal too.
 

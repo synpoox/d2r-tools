@@ -68,7 +68,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Boss, Monsters | A monster id or superunique name; up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Champions, Uniques | Read and checked; not applied yet | cartographer.txt |
+| Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
+| Champions | Read and checked; not applied yet | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
 
@@ -144,7 +145,7 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 #### slots.txt
 
 Which level the `Maze` slot opens. `tools\install.ps1` writes the row (see [Maze slot](#maze-slot-cave-and-crypt)). A slot
-that names a level of the original game, a town, a level with no row in `levels.txt`, or a level another slot uses is
+that names a level of the original game, a town, a level with no row in `levels.txt`, a `Maze` level whose row is not named `Cartographer Maze`, or a level another slot uses is
 left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
@@ -181,10 +182,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, `MapNames=1` (a map's own name seen on its portal, automap and banner in single
-  player), and arriving in the planned maze entrance room.
-  Boss, Horde and Ambush events, the portal tooltip reading "Colossal Summit", and `MapNames=1` (a map's own name
-  seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
+  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
   banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare
   difficulty for mazes, and a second Crypt map in one game.

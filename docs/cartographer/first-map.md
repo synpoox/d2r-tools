@@ -13,8 +13,8 @@ Every column is explained in [tables.md](tables.md).
 A map opens a portal to a generated maze on the Maze level the installer adds. These columns take effect in game: `Name`
 (the message "Cartographer: <Name> is open." and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it,
 and when), `Tileset` (Cave or Crypt), `Shape` and `Size` (the maze layout), `Boss` (placed in the far room), `Properties`
-and `EventChance`. `Level`, `Monsters`, `Density`, `Champions` and `Uniques` are checked and reported but **not applied
-yet**.
+and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens
+(experimental, not verified in game). `Champions` is checked and reported but **not applied yet**.
 
 ## Prerequisites
 
@@ -58,7 +58,7 @@ Name	Tileset	Shape	Item
 Shorelines	Cave	Corridor	t20
 ```
 
-Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), none is applied in game yet.
+Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), size and properties apply in game; the monster level is written into the map's level (experimental, not verified in game).
 What does act: Hell difficulty, any character level, opened from Harrogath.
 
 Optional columns go to the right and a blank cell keeps the default. A fuller row:
@@ -99,11 +99,11 @@ not in town, character level too low, a map already open this game, no free spot
 ## Where to go next
 
 - Add more maps: one row and one item each (all use the installed tileset, Cave or Crypt).
-- Plan a boss, a shape or a size: the optional columns in [tables.md](tables.md#mapstxt-required) apply now; `Level`,
-  `Monsters` and the density columns are checked only.
+- Plan a boss, a shape or a size: the optional columns in [tables.md](tables.md#mapstxt-required) apply now;
+  `Level`, `Monsters`, `Density` and `Uniques` are experimental, and `Champions` is checked only.
 - Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same
   folder) are applied; `cartographer check` reports bad rows.
-- The defaults for every map: `cartographer.txt`. Its settings are applied.
+- The defaults for every map: `cartographer.txt`. `Properties` and `PlayerStats` are used; the other settings are checked and reported but nothing uses them yet (see [tables.md](tables.md#cartographertxt-optional)).
 
 ## When something does not work
 

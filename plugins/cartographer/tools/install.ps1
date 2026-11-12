@@ -7,7 +7,7 @@
       levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
                     360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
-                    the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way.
+                    the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
     It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
     any other row is kept.
@@ -143,10 +143,23 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+    # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
+    $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
+    if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {
+        $drlgCol = Column $levels 'DrlgType'
+        $questCol = [array]::IndexOf($levels.Header, 'Quest')
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $t = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($t.Count -gt [Math]::Max([Math]::Max($drlgCol, $typeCol), [Math]::Max($idCol, [Math]::Max($questCol, $nameCol))) -and
+                $t[$drlgCol] -eq '1' -and $t[$typeCol] -eq $LevelType -and ($questCol -lt 0 -or $t[$questCol] -in '', '0') -and
+                [int]::TryParse($t[$idCol], [ref]$parsed) -and $parsed -le 137) { $cells[$nameCol] = $t[$nameCol]; break }
+        }
+    }
     if (($cells -join "`t") -ne $before) {
         $levels.Lines[$existing] = $cells -join "`t"
         Save-Table $levels
-        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0), so it counts toward none of the game's levels."
+        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0, plain name string), so it counts toward none of the game's levels."
     }
 } else {
     # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),
