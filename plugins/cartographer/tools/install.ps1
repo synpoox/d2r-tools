@@ -345,7 +345,7 @@ if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
 
 # --- superuniques.txt: one row per bosses.txt entry -------------------------------------------------------------------
 # A map's Boss names a bosses.txt entry (d2rloader\cartographer\bosses.txt: Name, Base, Mods, Minions). Each entry gets its own
-# superuniques.txt row, keyed 'cartoboss:<Name>' so it can never be a vanilla row. Vanilla rows are copied from, never edited.
+# superuniques.txt row, keyed 'cartoboss:' plus the escaped Name (Get-BossEscaped) so it can never be a vanilla row. Vanilla rows are copied from, never edited.
 # The 'cartoboss:' rows are rebuilt from bosses.txt each run (so a renamed or removed entry loses its old row), and running this
 # again changes nothing once they are right. An entry that does not check out is reported and not written.
 # At most $MaxBosses entries: the game keeps a once-per-game "already spawned" bit per superuniques row in a bit list of unknown
@@ -368,6 +368,9 @@ function Get-BossLocalKey([string]$Name) { 'boss_' + (Get-BossEscaped $Name) }
 # Trims only space, tab, CR and LF, like the plugin's Trim (core/text.h). .NET Trim() also strips U+00A0, U+0085, \v and \f, which
 # would give the two sides different keys for a Name that ends in one (easy to get in Latin-1).
 function Trim-BossCell([string]$Text) { $Text.Trim(' ', "`t", "`r", "`n") }
+# Folds only A-Z, like the plugin's Lower (core/text.h). ToLowerInvariant would also fold 'É' to 'é', so 'René' and 'RENÉ' would be
+# the same name here but two names in the plugin.
+function Get-AsciiLower([string]$Text) { [regex]::Replace($Text, '[A-Z]', { param($m) $m.Value.ToLowerInvariant() }) }
 $bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
 # A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
 $bossLines = @()
@@ -377,8 +380,10 @@ if (Test-Path $bossPath) {
 }
 if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
     $bossHeader = @(if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" })
-    $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
-    $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
+    # The plugin matches these headers ignoring case (core/tsv.h), so the installer does too (A-Z only, like the plugin).
+    $bossHeaderLower = @($bossHeader | ForEach-Object { Get-AsciiLower $_ })
+    $nameAt = [array]::IndexOf($bossHeaderLower, 'name'); $baseAt = [array]::IndexOf($bossHeaderLower, 'base')
+    $modsAt = [array]::IndexOf($bossHeaderLower, 'mods'); $minionsAt = [array]::IndexOf($bossHeaderLower, 'minions')
     $superPath = Join-Path $ExcelDir 'superuniques.txt'
     $monstatsPath = Join-Path $ExcelDir 'monstats.txt'
     $supers = $null
@@ -397,9 +402,9 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         }
     }
     if ($supers) {
-        # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name-versus-monster check ignores case, like ContainsNoCase.
+        # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name checks fold only A-Z (Get-AsciiLower), like ContainsNoCase.
         $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-        $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)  # holds Get-AsciiLower ids
         $bossIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
         $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
@@ -407,7 +412,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {
             $c = $monstats.Lines[$i] -split "`t"
             if ($c.Count -gt $mIdCol -and $c[$mIdCol] -ne '') {
-                [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add($c[$mIdCol])
+                [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add((Get-AsciiLower $c[$mIdCol]))
                 if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { [void]$bossIds.Add($c[$mIdCol]) }
             }
         }
@@ -427,7 +432,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         }
         $superCol = Column $supers 'Superunique'
         $hcCol = Column $supers 'hcIdx'
-        $vanillaSupers = @{}
+        $vanillaSupers = [System.Collections.Generic.Dictionary[string,bool]]::new([StringComparer]::Ordinal)  # a PowerShell @{} folds case (also non-ASCII)
         $kept = [System.Collections.Generic.List[string]]::new()
         $oldRows = [System.Collections.Generic.List[string]]::new()
         $kept.Add($supers.Lines[0])
@@ -437,7 +442,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             $key = if ($c.Count -gt $superCol) { $c[$superCol] } else { '' }
             if ($key.StartsWith($BossKeyPrefix)) { $oldRows.Add($supers.Lines[$i]); continue }
             $kept.Add($supers.Lines[$i])
-            if ($key -ne '') { $vanillaSupers[$key.ToLowerInvariant()] = $true }
+            if ($key -ne '') { $vanillaSupers[(Get-AsciiLower $key)] = $true }
             $parsed = 0
             if ($c.Count -gt $hcCol -and [int]::TryParse($c[$hcCol], [ref]$parsed) -and $parsed -gt $maxHc) { $maxHc = $parsed }
         }
@@ -445,7 +450,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         if ($template -lt 0) { $template = 1 }
         $templateLine = $supers.Lines[$template]
         $rows = [System.Collections.Generic.List[string]]::new()
-        $seen = @{}
+        $seen = [System.Collections.Generic.Dictionary[string,bool]]::new([StringComparer]::Ordinal)
         for ($b = 1; $b -lt $bossLines.Count; $b++) {
             $bc = $bossLines[$b] -split "`t"
             $bossName = if ($bc.Count -gt $nameAt) { Trim-BossCell $bc[$nameAt] } else { '' }
@@ -455,8 +460,8 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
                 Write-Host "superuniques.txt: skipped bosses.txt row $b ('$bossName'): $why"
             }
             if ($bossName -eq '') { & $skip 'the Name cell is empty.'; continue }
-            if ($seen.ContainsKey($bossName.ToLowerInvariant())) { & $skip 'a boss with that name is already listed.'; continue }
-            if ($vanillaSupers.ContainsKey($bossName.ToLowerInvariant()) -or $monsterIdsNoCase.Contains($bossName)) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
+            if ($seen.ContainsKey((Get-AsciiLower $bossName))) { & $skip 'a boss with that name is already listed.'; continue }
+            if ($vanillaSupers.ContainsKey((Get-AsciiLower $bossName)) -or $monsterIdsNoCase.Contains((Get-AsciiLower $bossName))) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
             if ($bossBase -eq '') { & $skip 'the Base cell is empty.'; continue }
             if (-not $monsterIds.Contains($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
             if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
@@ -479,7 +484,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
                 else { & $skip "Minions '$($bc[$minionsAt].Trim())' is not a whole number from 0 to 10."; continue }
             }
             if ($rows.Count -ge $MaxBosses) { & $skip "bosses.txt may have at most $MaxBosses entries."; continue }
-            $seen[$bossName.ToLowerInvariant()] = $true
+            $seen[(Get-AsciiLower $bossName)] = $true
             $key = $BossKeyPrefix + (Get-BossEscaped $bossName)  # escaped like the string key: ASCII only (BossKey in src/core/tables.cpp)
             # A copy of a vanilla row (read only); every cell that matters is set below.
             $cells = Cells $supers $templateLine
@@ -497,7 +502,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             }
             $rows.Add($cells -join "`t")
         }
-        if (($oldRows -join "`n") -ne ($rows -join "`n")) {
+        if (($oldRows -join "`n") -cne ($rows -join "`n")) {
             foreach ($line in $rows) { $kept.Add($line) }
             $supers.Lines = $kept
             Save-Table $supers

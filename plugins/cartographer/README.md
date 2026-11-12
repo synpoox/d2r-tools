@@ -127,7 +127,8 @@ minions) and the log says which path was taken. The same happens for a second sp
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game. If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
+and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game. A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
+If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |
 |---|---|---|
