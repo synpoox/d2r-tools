@@ -2119,6 +2119,8 @@ Spike: `plugins/cartographer-outdoor-spike/` on `spike/cartographer-outdoor-s2` 
 5. Automap and minimap edge behaviour, a border piece or fill if the automap shows the void, and the arrival choice made by the layout (the entry cell) instead of a spike-side room flag.
 6. The real player flow: the map item and portal tooltip path (sections 3 and 10) driving this slot, multiplayer sync (section 12) and a sweep over layouts and LevelTypes; none of that was run in this spike.
 
+Non-rectangular outlines for the open-field families (issue #148, static only): [cartographer-outline.md](cartographer-outline.md).
+
 ## 17. AutoCheck: a game check the plugin runs by itself (issue #173)
 
 `AutoCheck=1` and `AutoCheckMap=<map Name>` in `cartographer.txt` (test slots only). In a Hell game the plugin opens the map through the console path's own gates and `OpenMapPortal` (no item), waits for the player to be in the portal level, logs the arrival, moves the player into the plan's boss room (the `goto` route), and writes `AUTOCHECK PASS|FAIL <item>` for `open`, `arrival`, `boss`, `monster-settings` and `stat-changes`, then `AUTOCHECK DONE pass=N fail=M` (an item that does not apply is written `AUTOCHECK N/A <item>` and counted as `n/a=K`, not in `pass`). Code: `src/engine/auto_check.cpp`; pure parts (checklist, lines, setting, stand point): `src/autocheck`. `AutoCheck=1` also turns on the arrival probe (the `[maze probe] arrival` line), nothing else of `MazeProbe`.
