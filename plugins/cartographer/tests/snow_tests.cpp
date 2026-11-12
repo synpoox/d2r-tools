@@ -4,6 +4,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -516,4 +517,59 @@ TEST_CASE("an automatic orientation takes the one that fits the size")
 	neither.cellsW = 2;
 	neither.cellsH = 2;
 	CHECK_FALSE(planSnowMap(neither).ok);
+}
+
+TEST_CASE("a 3 x 1 or 3 x 2 map has fewer than three run cells: it plans, with no boss or event rectangle")
+{
+	for (int h = 1; h <= 2; ++h) {
+		for (uint64_t seed = 0; seed < 50; ++seed) {
+			SnowRequest fixed = request(seed, 3, h, Orientation::Horizontal);
+			fixed.options.originX = 6000;
+			fixed.options.originY = 3600;
+			const SnowPlan p = planSnowMap(fixed);
+			REQUIRE_MESSAGE(p.ok, p.reason);
+			CHECK(p.stamps.entrance.known);
+			CHECK_FALSE(p.stamps.boss.known);
+			CHECK_FALSE(p.stamps.event.known);
+			CHECK(checkSnowPlan(fixed, p).empty());
+			// Three cells across and one or two down has no vertical line of three.
+			CHECK_FALSE(planSnowMap(request(seed, 3, h, Orientation::Vertical)).ok);
+			SnowRequest autoPick;
+			autoPick.seed = seed;
+			autoPick.cellsW = 3;
+			autoPick.cellsH = h;
+			const SnowPlan a = planSnowMap(autoPick);
+			REQUIRE_MESSAGE(a.ok, a.reason);
+			CHECK(a.orientation == Orientation::Horizontal);
+			CHECK_FALSE(a.stamps.boss.known);
+			CHECK_FALSE(a.stamps.event.known);
+		}
+	}
+}
+
+TEST_CASE("the boss cell is a farthest run cell from the entrance and the event cell maximises its distance to the nearer of the two")
+{
+	for (uint64_t seed = 0; seed < 2000; ++seed) {
+		const SnowRequest r = request(seed * 7919 + 1, 4 + static_cast<int>(seed % 9), 3 + static_cast<int>((seed / 9) % 8), seed % 2 ? Orientation::Horizontal : Orientation::Vertical);
+		const SnowPlan p = planSnowMap(r);
+		if (!p.ok || !p.stamps.boss.known) continue;
+		const bool horizontal = p.orientation == Orientation::Horizontal;
+		const int along = horizontal ? r.cellsW : r.cellsH;
+		const auto cell = [](const TileRect &t, int *x, int *y) { *x = t.x / 16; *y = t.y / 16; };
+		int ex, ey, bx, by, vx, vy;
+		cell(p.stamps.entrance, &ex, &ey);
+		cell(p.stamps.boss, &bx, &by);
+		cell(p.stamps.event, &vx, &vy);
+		const auto d2 = [](int ax, int ay, int cx, int cy) { return (ax - cx) * (ax - cx) + (ay - cy) * (ay - cy); };
+		int bestBoss = 0, bestEvent = 0;
+		for (int y = 0; y < r.cellsH; ++y)
+			for (int x = 0; x < r.cellsW; ++x) {
+				const int idx = horizontal ? x : y;
+				if (idx == 0 || idx == along - 1 || (x == ex && y == ey)) continue;
+				bestBoss = std::max(bestBoss, d2(x, y, ex, ey));
+				if (x != bx || y != by) bestEvent = std::max(bestEvent, std::min(d2(x, y, ex, ey), d2(x, y, bx, by)));
+			}
+		CHECK(d2(bx, by, ex, ey) == bestBoss);
+		CHECK(std::min(d2(vx, vy, ex, ey), d2(vx, vy, bx, by)) == bestEvent);
+	}
 }
