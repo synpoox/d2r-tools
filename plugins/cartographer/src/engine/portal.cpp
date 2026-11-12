@@ -454,16 +454,23 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 
 // MazeProbe: once per game, where the local player stands when it is in the Maze slot level (compared with the entrance room).
 void MazeArrivalCheck(Unit* unit) noexcept {
-	if (!MazeArrivalPending()) {
-		return;  // the common case: MazeProbe is off, or the arrival was logged
+	const bool maze = MazeArrivalPending(), outdoor = OutdoorArrivalPending();
+	if (!maze && !outdoor) {
+		return;  // the common case: the probes are off, or the arrivals were logged
 	}
-	const int slot = MazeSlotLevelId();
-	if (slot <= 0 || g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
+	if (g_parts[UnitRoom].address == nullptr || g_parts[RoomLevelId].address == nullptr) {
 		return;
 	}
 	void* room = Call<UnitRoomFn>(UnitRoom)(unit);
-	if (room != nullptr && Call<RoomLevelFn>(RoomLevelId)(room) == slot) {
-		MazeProbeArrival(room, slot);
+	if (room == nullptr) {
+		return;
+	}
+	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
+	if (maze && level == MazeSlotLevelId() && level > 0) {
+		MazeProbeArrival(room, level);
+	}
+	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {
+		OutdoorProbeArrival(room, level);
 	}
 }
 

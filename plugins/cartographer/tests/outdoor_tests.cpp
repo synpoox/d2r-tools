@@ -964,3 +964,80 @@ TEST_CASE("compareGrid agrees with a replayed plan and names every way a grid ca
 	CHECK(compareGrid(plan, shortGrid)[0].find("expects") != std::string::npos);
 	CHECK(!compareGrid(StampPlan{}, GridSample{}).empty());
 }
+
+namespace {
+// The rooms the engine builds for a plan: 8 x 8 tiles for every stamped cell, row-major, absolute.
+std::vector<BuiltRoom> roomsOf(const StampPlan &plan)
+{
+	std::vector<BuiltRoom> rooms;
+	for (const Stamp &s : plan.stamps) {
+		for (int ry = 0; ry < 4; ++ry) {
+			for (int rx = 0; rx < 4; ++rx) rooms.push_back({plan.originX + s.cx * 8 + rx * 8, plan.originY + s.cy * 8 + ry * 8, 8, 8, 0});
+		}
+	}
+	return rooms;
+}
+}
+
+TEST_CASE("the entry room is the room at the entrance cell's centre, and the boss and event cells reduce to one exact room")
+{
+	for (uint64_t seed = 1; seed <= 200; ++seed) {
+		const MapPlan plan = planOutdoorMap(jungleRequest(seed), builtinJungleCatalogue());
+		if (!plan.ok) continue;
+		CAPTURE(seed);
+		const std::vector<BuiltRoom> rooms = roomsOf(plan.stamps);
+		const ArrivalMark m = planArrival(plan.stamps, rooms);
+		REQUIRE(m.mark);
+		const BuiltRoom &e = rooms[static_cast<size_t>(m.room)];
+		const TileRect &c = plan.stamps.entrance;
+		CHECK(e.x >= c.x);
+		CHECK(e.x + e.w <= c.x + c.w);
+		CHECK(e.y >= c.y);
+		CHECK(e.y + e.h <= c.y + c.h);
+		CHECK(e.x + e.w / 2 >= c.centreX() - 8);
+		CHECK(e.x + e.w / 2 <= c.centreX() + 8);
+		CHECK(m.clear.empty());
+		// The boss cell: a 32 x 32 clearing inside the level that yields one room; the event cell likewise.
+		const TileRect &b = plan.stamps.boss;
+		if (b.known) {
+			CHECK(b.w == 32);
+			CHECK(b.h == 32);
+			CHECK(b.x >= plan.stamps.originX);
+			CHECK(b.x + b.w <= plan.stamps.originX + plan.stamps.tilesW);
+			const int br = chooseCellRoom(b, rooms);
+			REQUIRE(br >= 0);
+			CHECK(br != m.room);
+		}
+		if (plan.stamps.event.known) CHECK(chooseCellRoom(plan.stamps.event, rooms) >= 0);
+	}
+}
+
+TEST_CASE("the arrival mark moves: other marked rooms are cleared, and a build that is not the plan is left to the game")
+{
+	const MapPlan plan = planOutdoorMap(jungleRequest(4242), builtinJungleCatalogue());
+	REQUIRE(plan.ok);
+	std::vector<BuiltRoom> rooms = roomsOf(plan.stamps);
+	rooms[0].flags = 0x10000;
+	rooms[1].flags = 0x20000 | 4;
+	const ArrivalMark m = planArrival(plan.stamps, rooms);
+	REQUIRE(m.mark);
+	CHECK(m.clear.size() >= 1);
+
+	std::vector<BuiltRoom> outside = rooms;
+	outside.push_back({plan.stamps.originX - 8, plan.stamps.originY, 8, 8, 0});
+	const ArrivalMark bad = planArrival(plan.stamps, outside);
+	CHECK(!bad.mark);
+	CHECK(bad.why.find("outside the plan's level rectangle") != std::string::npos);
+	CHECK(!planArrival(plan.stamps, {}).mark);
+
+	// A room that straddles the cell's edge is not in the cell; an unknown cell gives no room.
+	TileRect cell;
+	cell.known = true;
+	cell.w = 32;
+	cell.h = 32;
+	CHECK(chooseCellRoom(cell, {{28, 0, 8, 8, 0}}) == -1);
+	CHECK(chooseCellRoom(TileRect{}, {{0, 0, 8, 8, 0}}) == -1);
+	// Nearest the centre wins; a tie goes to the smaller y, then the smaller x.
+	CHECK(chooseCellRoom(cell, {{0, 0, 8, 8, 0}, {12, 12, 8, 8, 0}}) == 1);
+	CHECK(chooseCellRoom(cell, {{16, 16, 8, 8, 0}, {8, 8, 8, 8, 0}, {16, 8, 8, 8, 0}, {8, 16, 8, 8, 0}}) == 1);
+}
