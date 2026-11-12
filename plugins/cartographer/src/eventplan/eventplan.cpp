@@ -278,7 +278,7 @@ std::vector<Spot> bossSpots(const Rect &room, int scale) {
 	return out;
 }
 
-SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, uint64_t seed, int scale) {
+SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, int scale) {
 	SpawnPlan plan;
 	if (boss.kind != events::NameKind::Monster && boss.kind != events::NameKind::Unique) {
 		plan.problem = "Boss '" + name + "' is not a monstats Id or a superuniques name";
@@ -288,7 +288,6 @@ SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect 
 		plan.problem = "Boss '" + name + "' has no monster to spawn (its Class is not in monstats.txt)";
 		return plan;
 	}
-	(void)seed;
 	const std::vector<Spot> spots = bossSpots(room, scale);
 	if (spots.empty()) {
 		plan.problem = "the boss room is too small to place anything";

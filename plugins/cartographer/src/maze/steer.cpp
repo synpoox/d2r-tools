@@ -216,14 +216,24 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	const Room &cell = plan.rooms[static_cast<size_t>(planRoom)];
 	out.cellX = cell.dx - pMinX;
 	out.cellY = cell.dy - pMinY;
-	int64_t minX = rects[0].x, minY = rects[0].y;
-	int64_t maxX = minX + rects[0].w, maxY = minY + rects[0].h;
+	int64_t minX = 0, minY = 0, maxX = 0, maxY = 0;
+	bool any = false;
 	for (const RoomRect &r : rects) {
+		if (r.w <= 0 || r.h <= 0) continue;  // a room with no area is not a room: it neither joins the box nor is chosen
+		if (!any) {
+			minX = r.x;
+			minY = r.y;
+			maxX = static_cast<int64_t>(r.x) + r.w;
+			maxY = static_cast<int64_t>(r.y) + r.h;
+			any = true;
+			continue;
+		}
 		minX = std::min<int64_t>(minX, r.x);
 		minY = std::min<int64_t>(minY, r.y);
 		maxX = std::max<int64_t>(maxX, static_cast<int64_t>(r.x) + r.w);
 		maxY = std::max<int64_t>(maxY, static_cast<int64_t>(r.y) + r.h);
 	}
+	if (!any) return refuse("the level has no rooms");
 	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
 	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
 	const int64_t w = maxX - minX, h = maxY - minY;

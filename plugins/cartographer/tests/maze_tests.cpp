@@ -1116,18 +1116,20 @@ TEST_CASE("arrival: the level is left to the game, with a reason, when nothing c
 
 // --- the event and boss rooms (issue #184) --------------------------------------------------------------------------------
 
-TEST_CASE("cell room: the event and boss rooms are found by rect in their plan cell, not by the plan's room number")
+TEST_CASE("cell room: the event and boss rooms are found by rect in their plan cell, whatever stale records the level list holds")
 {
 	const Tileset tiles[] = {caveTileset(), cryptTileset()};
 	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
-	int found = 0, indexDiffers = 0;
+	int found = 0, notCorner = 0;
 	for (const Tileset &ts : tiles) {
 		for (const layout::Shape shape : shapes) {
 			for (int seed = 1; seed <= 40; ++seed) {
 				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), static_cast<uint64_t>(seed));
 				if (!sp.plan.steer) continue;
 				std::vector<RoomRect> rects = builtRects(sp.plan, ts.roomTiles, 1000, 2000);
-				// a degenerate 0 x 0 room inside the box, in front: never chosen
+				// The real failure (issue #184): the walk's record of a plan room is stale after the build. It reads as a 0 x 0 room at
+				// (1,0), far outside the box, or as the cell's top-left 8 x 8 room. Neither may be chosen or break the box check.
+				rects.insert(rects.begin(), RoomRect{1, 0, 0, 0, 0});
 				rects.insert(rects.begin(), RoomRect{1001, 2001, 0, 0, 0});
 				int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
 				for (const Room &o : sp.plan.rooms) {
@@ -1145,14 +1147,18 @@ TEST_CASE("cell room: the event and boss rooms are found by rect in their plan c
 					CHECK(r.w > 0);
 					CHECK(r.x == 1000 + (pr.dx - minX) * ts.roomTiles + third);
 					CHECK(r.y == 2000 + (pr.dy - minY) * ts.roomTiles + third);
-					if (c.room != planRoom) ++indexDiffers;
+					if (ts.roomTiles >= 24) {  // a Cave cell: the centre room of its 3 x 3, never the cell's top-left one
+						CHECK(r.x != c.originX);
+						CHECK(r.y != c.originY);
+						++notCorner;
+					}
 					++found;
 				}
 			}
 		}
 	}
 	CHECK(found > 100);
-	CHECK(indexDiffers > 50);  // the plan number is usually not the list index
+	CHECK(notCorner > 50);
 }
 
 TEST_CASE("cell room: refused with a reason when there is nothing to match")

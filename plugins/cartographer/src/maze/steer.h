@@ -171,9 +171,10 @@ struct ArrivalMark {
 // must be the plan's (in cells) and the cell must hold a room; the room nearest the cell's centre is chosen.
 ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects);
 
-// The built room of one plan room (issue #184): the plan's room numbers are not positions in the engine's room list (a cell becomes
-// 3 x 3 engine rooms), so the room is found by its rect, as the arrival is: the room with area whose corner is in the plan room's
-// cell and whose centre is nearest the cell's centre. room < 0, with `why`, when the built rooms do not span the plan's box or the
+// The built room of one plan room (issue #184): the walk's record of a plan room is stale once the build splits the cell (the cell's
+// top-left room, or freed memory read as (1,0) 0 x 0), so the room is found by its rect in the level's list, as the arrival is: the
+// room with area whose corner is in the plan room's cell and whose centre is nearest the cell's centre. Rooms with no area are
+// skipped everywhere, the box check included. room < 0, with `why`, when the built rooms do not span the plan's box or the
 // cell holds no room.
 struct CellRoom {
 	int room = -1;  // index into the rects

@@ -419,16 +419,18 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 }
 
 // The plan's event room and boss room: the rect of the built DRLG room in each plan cell, which the event spawn compares with the room the
-// game populates. The plan's room numbers are not positions in the engine's list (a cell is 3 x 3 engine rooms and the walk's own list
-// is not the level's), so each is matched by rect against its plan cell (issue #184), as the arrival is. A room that cannot be found is
-// refused here, with the reason, and the event or Boss is left off.
+// game populates. ctx.rooms[plan room] is the walk's record of that room, but once the build splits the cell that record is stale: it is
+// the cell's top-left 8 x 8 room, or no room at all (freed memory, read as (1,0) 0 x 0; issue #184, static from the dump plus the
+// hell-check-2 log, see section 9 of cartographer.md). So each room is matched by rect in the level's list against its plan cell, as
+// the arrival is. A room that cannot be found is refused here with the reason: the event then falls back to the distance rule and
+// the map Boss is left off.
 void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 	std::vector<cm::RoomRect> rects;
 	for (const void* room = Read<const void*>(level, LvlFirstRoom); room != nullptr && rects.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98);
 	     room = Read<const void*>(room, RoomNext)) {
 		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH), 0});
 	}
-	const auto find = [&](int planRoom, const char* what) {
+	const auto find = [&](int planRoom, const char* what, const char* instead) {
 		MazeEventRect out;
 		if (planRoom < 0) {
 			plog::Info("eventprobe: the maze plan has no %s room", what);
@@ -436,7 +438,7 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 		}
 		const cm::CellRoom c = cm::planCellRoom(plan, unit, planRoom, rects);
 		if (c.room < 0) {
-			plog::Warn("eventprobe: the maze plan's %s room (plan room %d) is left off: %s", what, planRoom, c.why.c_str());
+			plog::Warn("eventprobe: the maze plan's %s room (plan room %d) was not found: %s; %s", what, planRoom, c.why.c_str(), instead);
 			return out;
 		}
 		const cm::RoomRect& r = rects[static_cast<size_t>(c.room)];
@@ -445,8 +447,8 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 		           out.levelId, out.x, out.y, out.w, out.h);
 		return out;
 	};
-	const MazeEventRect rect = find(plan.eventRoom, "event");
-	const MazeEventRect boss = find(plan.bossRoom, "boss");
+	const MazeEventRect rect = find(plan.eventRoom, "event", "the event room is chosen by the distance rule instead");
+	const MazeEventRect boss = find(plan.bossRoom, "boss", "the map Boss is left off");
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_eventRoom = rect;
 	g_bossRoom = boss;

@@ -595,30 +595,50 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 	return made > 0;
 }
 
-// The map's own Boss, in the boss room: one monster at the centre (a superunique as itself, or as its Class when the game has spawned it this game).
+// The map's own Boss, in the boss room: one monster, the centre first and then a few spots around it (a superunique as itself, or as its Class when the game has spawned it this game).
 // No minions and no Drop; those are the Boss event's. The map's stats reach it like any monster (flags 0, section 7).
-void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
-	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
+void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects) noexcept {
+	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
 		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
 		return;
 	}
-	// The centre first, then spots around it: a Cave room's centre can be rock and the game refuses a spawn there (issue #183).
+	// The game's own free-spot search (p7 = 0xa) covers the whole room from any start, so a refusal means no free subtile in the room
+	// (section 9, "Plan rooms and the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the search's
+	// ring grid onto subtiles the first start skipped. The superunique is tried at every spot before the first plain spawn, so the Boss
+	// keeps its own row (and minions) whenever any spot takes it.
 	bool asSuper = false;
 	void* unit = nullptr;
 	bool made = false;
+	const size_t total = plan.spawns.size();
 	size_t tried = 0;
-	for (const ep::Spawn& spawn : plan.spawns) {
+	const auto attempt = [&](const ep::Spawn& spawn, const char* how) {
 		++tried;
 		made = SpawnOne(game, room, spawn, &asSuper, &unit);
 		if (made) {
 			if (tried > 1) {
-				plog::Info("map Boss '%s': accepted at (%d,%d), spot %zu of %zu (the room centre was refused)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, plan.spawns.size());
+				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, how);
 			}
-			break;
+		} else {
+			plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, (tried - 1) % total + 1, total);
 		}
-		plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%zu of %zu)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, plan.spawns.size());
+		return made;
+	};
+	if (state.bossSpawn.kind == ev::NameKind::Unique) {
+		for (const ep::Spawn& spawn : plan.spawns) {
+			ep::Spawn superOnly = spawn;
+			superOnly.classRow = -1;  // SpawnOne then makes no plain spawn
+			if (attempt(superOnly, "as a superunique")) break;
+		}
+	}
+	if (!made) {
+		for (const ep::Spawn& spawn : plan.spawns) {
+			ep::Spawn plain = spawn;
+			plain.superUnique = false;
+			plain.row = spawn.classRow;
+			if (attempt(plain, "as a plain monster")) break;
+		}
 	}
 	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
@@ -735,7 +755,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 	if (fireBoss) {
 		plog::Info("eventprobe: room #%d of level %d is the boss room (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
-		SpawnMapBoss(game, room, *state, rects, ep::eventSeed(state->seed) ^ 0xB055);
+		SpawnMapBoss(game, room, *state, rects);
 	}
 }
 
@@ -815,7 +835,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 	if (path == BossPath::PlainMonster) {
 		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
 	}
-	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24}, state.seed);  // a stand-in room
+	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24});  // a stand-in room
 	if (!check.problem.empty()) {
 		plog::Warn("map Boss '%s' will not be spawned: %s", map.boss.c_str(), check.problem.c_str());
 		return;
