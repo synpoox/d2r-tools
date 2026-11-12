@@ -5,7 +5,7 @@ Every file used here is in [`plugins/cartographer/examples/first-map/`](../../pl
 Every column is explained in [tables.md](tables.md).
 
 > **Not tried in a game yet.** The steps match what the plugin checks today (unit tested), but nobody has opened a
-> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` when `OutdoorBuild = 1`; the other tilesets are known names
+> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` and `Snow` when `OutdoorBuild = 1`; the other tilesets are known names
 > that are refused with a message until they are ready.
 
 ## What works today

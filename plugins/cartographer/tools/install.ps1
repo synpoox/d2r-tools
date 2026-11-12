@@ -15,7 +15,10 @@
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
                     LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
-    It also adds or updates the Maze and Outdoor rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
+                  the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
+                  outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
+    It also adds or updates the Maze, Outdoor and OutdoorSnow rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -61,6 +64,12 @@ $OutdoorSize = '384'      # SizeX and SizeY in every difficulty: the largest out
 $OutdoorOffsetX = '6000'  # clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360)
 $OutdoorOffsetY = '3000'
 $OutdoorTemplateId = 111  # Act 5 - Barricade 1: the outdoor level the spike (issue #89) copied; any other plain Act 5 DrlgType 3 row is the fallback
+$SnowLevelName = 'Cartographer Snow'
+$SnowLevelType = '31'     # Act 5 - Barricade (the level type of Frigid Highlands, Arreat Plateau and Frozen Tundra); the Jungle level's 21 cannot serve Snow maps
+$SnowSize = '192'         # SizeX and SizeY in every difficulty: the largest Snow plan is 12 x 12 cells of 16 tiles
+$SnowOffsetX = '6000'     # clear of every Act 5 level, of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384)
+$SnowOffsetY = '3600'
+$SnowTemplateId = 117     # Act 5 - Barricade Snow (Frozen Tundra), the snow level; any other plain Act 5 DrlgType 3 row is the fallback
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -233,80 +242,87 @@ if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
     Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
 }
 
-# --- levels.txt: the Outdoor level ------------------------------------------------------------------------------------
-$outdoorExisting = Find-Row $levels 'Name' $OutdoorLevelName
-if ($outdoorExisting -ge 0) {
-    $outdoorId = [int](($levels.Lines[$outdoorExisting] -split "`t")[$idCol])
-    Write-Host "levels.txt: '$OutdoorLevelName' is already there (level $outdoorId)."
-    $cells = Cells $levels $levels.Lines[$outdoorExisting]
-    $before = $cells -join "`t"
-    Set-CellIf $levels $cells 'Quest' '0'
-    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
-    Set-CellIf $levels $cells 'LevelEntry' ''
-    Set-CellIf $levels $cells 'LevelWarp' ''
-    Set-CellIf $levels $cells 'SubType' '-1'
-    Set-CellIf $levels $cells 'SubTheme' '-1'
-    for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
-    if (($cells -join "`t") -ne $before) {
-        $levels.Lines[$outdoorExisting] = $cells -join "`t"
-        Save-Table $levels
-        Write-Host "levels.txt: repaired level $outdoorId (no quest, no level group, no entry or warp text, no sub-level set, Vis0..Vis7 = 0)."
-    }
-} else {
-    $drlgCol = Column $levels 'DrlgType'
-    $actCol = Column $levels 'Act'
-    $questCol = [array]::IndexOf($levels.Header, 'Quest')
-    $widest = [Math]::Max([Math]::Max($drlgCol, $actCol), [Math]::Max($idCol, $questCol))
-    $templateRow = -1
-    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-        $cells = $levels.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '3' -and $cells[$actCol] -eq $ActFive -and
-            ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
-            [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) {
-            if ($templateRow -lt 0) { $templateRow = $i }
-            if ($parsed -eq $OutdoorTemplateId) { $templateRow = $i; break }
+# One new outdoor level (Act 5, DrlgType 3) copied from a plain Act 5 outdoor row; an existing row of that name is only repaired. Returns the level id.
+function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [string]$offX, [string]$offY, [int]$wantTemplate, [string]$tilesetName) {
+    $existingRow = Find-Row $levels 'Name' $name
+    if ($existingRow -ge 0) {
+        $newId = [int](($levels.Lines[$existingRow] -split "`t")[$idCol])
+        Write-Host "levels.txt: '$name' is already there (level $newId)."
+        $cells = Cells $levels $levels.Lines[$existingRow]
+        $before = $cells -join "`t"
+        Set-CellIf $levels $cells 'Quest' '0'
+        Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+        Set-CellIf $levels $cells 'LevelEntry' ''
+        Set-CellIf $levels $cells 'LevelWarp' ''
+        Set-CellIf $levels $cells 'SubType' '-1'
+        Set-CellIf $levels $cells 'SubTheme' '-1'
+        for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+        if (($cells -join "`t") -ne $before) {
+            $levels.Lines[$existingRow] = $cells -join "`t"
+            Save-Table $levels
+            Write-Host "levels.txt: repaired level $newId (no quest, no level group, no entry or warp text, no sub-level set, Vis0..Vis7 = 0)."
         }
+    } else {
+        $drlgCol = Column $levels 'DrlgType'
+        $actCol = Column $levels 'Act'
+        $questCol = [array]::IndexOf($levels.Header, 'Quest')
+        $widest = [Math]::Max([Math]::Max($drlgCol, $actCol), [Math]::Max($idCol, $questCol))
+        $templateRow = -1
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $cells = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '3' -and $cells[$actCol] -eq $ActFive -and
+                ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
+                [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) {
+                if ($templateRow -lt 0) { $templateRow = $i }
+                if ($parsed -eq $wantTemplate) { $templateRow = $i; break }
+            }
+        }
+        if ($templateRow -lt 0) { throw 'levels.txt has no Act 5 outdoor level (DrlgType 3) to copy.' }
+        $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
+        $maxId = 0
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $cells = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
+        }
+        $newId = $maxId + 1
+        $cells = Cells $levels $levels.Lines[$templateRow]
+        Set-Cell $levels $cells 'Name' $name
+        Set-Cell $levels $cells 'Id' "$newId"
+        Set-Cell $levels $cells 'Act' $ActFive
+        Set-Cell $levels $cells 'DrlgType' '3'
+        Set-Cell $levels $cells 'LevelType' $type
+        Set-Cell $levels $cells 'Depend' '0'
+        Set-Cell $levels $cells 'OffsetX' $offX
+        Set-Cell $levels $cells 'OffsetY' $offY
+        Set-CellIf $levels $cells 'Position' '0'
+        Set-CellIf $levels $cells 'SubType' '-1'    # the template's sub-level set (decoration) is not carried over
+        Set-CellIf $levels $cells 'SubTheme' '-1'
+        for ($n = 0; $n -lt 8; $n++) {
+            Set-Cell $levels $cells "Vis$n" '0'
+            Set-Cell $levels $cells "Warp$n" '-1'
+        }
+        $sized = 0
+        foreach ($h in $levels.Header) {
+            if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $size; $sized++ }
+        }
+        if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
+        Set-Cell $levels $cells 'Waypoint' '255'
+        Set-CellIf $levels $cells 'Quest' '0'
+        Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+        Set-CellIf $levels $cells 'LevelEntry' ''
+        Set-CellIf $levels $cells 'LevelWarp' ''
+        $levels.Lines.Add($cells -join "`t")
+        Save-Table $levels
+        Write-Host "levels.txt: added '$name' as level $newId ($tilesetName, copied from level $templateId)."
     }
-    if ($templateRow -lt 0) { throw 'levels.txt has no Act 5 outdoor level (DrlgType 3) to copy.' }
-    $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
-    $maxId = 0
-    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-        $cells = $levels.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
-    }
-    $outdoorId = $maxId + 1
-    $cells = Cells $levels $levels.Lines[$templateRow]
-    Set-Cell $levels $cells 'Name' $OutdoorLevelName
-    Set-Cell $levels $cells 'Id' "$outdoorId"
-    Set-Cell $levels $cells 'Act' $ActFive
-    Set-Cell $levels $cells 'DrlgType' '3'
-    Set-Cell $levels $cells 'LevelType' $OutdoorLevelType
-    Set-Cell $levels $cells 'Depend' '0'
-    Set-Cell $levels $cells 'OffsetX' $OutdoorOffsetX
-    Set-Cell $levels $cells 'OffsetY' $OutdoorOffsetY
-    Set-CellIf $levels $cells 'Position' '0'
-    Set-CellIf $levels $cells 'SubType' '-1'    # level 111's Siege sub-level set does not belong on a Jungle level
-    Set-CellIf $levels $cells 'SubTheme' '-1'
-    for ($n = 0; $n -lt 8; $n++) {
-        Set-Cell $levels $cells "Vis$n" '0'
-        Set-Cell $levels $cells "Warp$n" '-1'
-    }
-    $sized = 0
-    foreach ($h in $levels.Header) {
-        if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $OutdoorSize; $sized++ }
-    }
-    if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
-    Set-Cell $levels $cells 'Waypoint' '255'
-    Set-CellIf $levels $cells 'Quest' '0'
-    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
-    Set-CellIf $levels $cells 'LevelEntry' ''
-    Set-CellIf $levels $cells 'LevelWarp' ''
-    $levels.Lines.Add($cells -join "`t")
-    Save-Table $levels
-    Write-Host "levels.txt: added '$OutdoorLevelName' as level $outdoorId (Jungle, copied from level $templateId)."
+    $newId
 }
+
+# --- levels.txt: the Outdoor level (Jungle) and the Snow level --------------------------------------------------------
+$outdoorId = Ensure-OutdoorLevel $OutdoorLevelName $OutdoorLevelType $OutdoorSize $OutdoorOffsetX $OutdoorOffsetY $OutdoorTemplateId 'Jungle'
+$snowId = Ensure-OutdoorLevel $SnowLevelName $SnowLevelType $SnowSize $SnowOffsetX $SnowOffsetY $SnowTemplateId 'Snow'
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
 $mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
@@ -506,14 +522,14 @@ Write-Pending
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
-# Existing rows are kept (an older install's Preset row, for one): only the Maze and Outdoor rows are added or updated.
+# Existing rows are kept (an older install's Preset row, for one): only the Maze, Outdoor and OutdoorSnow rows are added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
 if (Test-Path $slotPath) {
     foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
 }
 $slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
 if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
-    foreach ($row in @(@('Maze', $levelId), @('Outdoor', $outdoorId))) {
+    foreach ($row in @(@('Maze', $levelId), @('Outdoor', $outdoorId), @('OutdoorSnow', $snowId))) {
         $at = -1
         for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq $row[0]) { $at = $i; break } }
         if ($at -lt 0) { $slotLines.Add("$($row[0])`t$($row[1])") }
@@ -521,7 +537,7 @@ if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -
     }
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
-    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId"); $slotLines.Add("Outdoor`t$outdoorId")
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId"); $slotLines.Add("Outdoor`t$outdoorId"); $slotLines.Add("OutdoorSnow`t$snowId")
 }
 if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0) {
     Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
@@ -529,7 +545,7 @@ if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0
 $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host "slots.txt: Maze is level $levelId, Outdoor is level $outdoorId (other rows kept)."
+    Write-Host "slots.txt: Maze is level $levelId, Outdoor is level $outdoorId, OutdoorSnow is level $snowId (other rows kept)."
 } else {
     Write-Host 'slots.txt: already up to date.'
 }

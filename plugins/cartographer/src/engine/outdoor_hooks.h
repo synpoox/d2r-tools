@@ -56,6 +56,10 @@ auto OutdoorPlanProblem() -> std::string;
 // outdoor map cannot be opened until the game is left.
 auto OutdoorSlotBuilt() -> bool;
 
+// The tileset of the outdoor map opened and not yet cleared (the job the next slot build would use), or empty. One job serves both outdoor
+// slots, so portal.cpp refuses to open a map of the other tileset while this is set (OutdoorOpenConflict).
+auto OutdoorPendingTileset() -> std::string;
+
 // The portal did not open after all: forget the map.
 void OutdoorMapCancelled();
 

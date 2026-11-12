@@ -79,11 +79,6 @@ void entranceCell(Orientation o, int cellsW, int cellsH, int *x, int *y) {
 	}
 }
 
-Orientation resolveOrientation(const SnowRequest &r) {
-	if (!r.autoOrientation) return r.orientation;
-	return (layout::splitmix64(r.seed ^ 0x4F52494Eull) & 1u) ? Orientation::Vertical : Orientation::Horizontal;
-}
-
 // Size problems, shared by the planner and the checker. Empty means the size is acceptable.
 std::string sizeProblem(const SnowRequest &r, Orientation o) {
 	if (r.cellsW < 1 || r.cellsH < 1) return "the map needs at least one cell on each side.";
@@ -100,6 +95,16 @@ std::string sizeProblem(const SnowRequest &r, Orientation o) {
 			" x " + limit(r.options.maxTilesY) + ".";
 	}
 	return {};
+}
+
+// The orientation of a request: the fixed one, or the seed's pick. When the seed's pick does not fit the size but the other one does (2 x 5 cells
+// has a vertical line of 5 and no horizontal line of 3), the other one is used, so a size that can be planned is not refused by the seed.
+Orientation resolveOrientation(const SnowRequest &r) {
+	if (!r.autoOrientation) return r.orientation;
+	const Orientation picked = (layout::splitmix64(r.seed ^ 0x4F52494Eull) & 1u) ? Orientation::Vertical : Orientation::Horizontal;
+	if (sizeProblem(r, picked).empty()) return picked;
+	const Orientation other = isHorizontal(picked) ? Orientation::Vertical : Orientation::Horizontal;
+	return sizeProblem(r, other).empty() ? other : picked;
 }
 
 } // namespace
@@ -237,6 +242,7 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 	std::vector<std::string> bad;
 	const Orientation o = plan.orientation;
 	if (!request.autoOrientation && o != request.orientation) bad.push_back("the plan's orientation is not the requested one");
+	if (request.autoOrientation && o != resolveOrientation(request)) bad.push_back("the plan's orientation is not the one the seed picks");
 	if (const std::string size = sizeProblem(request, o); !size.empty()) {
 		bad.push_back(size);
 		return bad;
@@ -251,6 +257,8 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 	if (sp.tilesW != W * kCellTiles || sp.tilesH != H * kCellTiles || sp.cellsW != W * per || sp.cellsH != H * per || sp.macroW != W || sp.macroH != H ||
 		sp.originX != request.options.originX || sp.originY != request.options.originY)
 		bad.push_back("the stamp plan's level box does not match the request");
+	if (sp.macroMinX != 0 || sp.macroMinY != 0) bad.push_back("the stamp plan's macro grid does not start at 0, 0");
+	if (plan.hash != stampPlanHash(sp)) bad.push_back("the plan's hash is not the hash of its stamps");
 	if (sp.stamps.size() != plan.grid.size()) {
 		bad.push_back("the plan has " + std::to_string(sp.stamps.size()) + " stamps for " + std::to_string(plan.grid.size()) + " cells");
 		return bad;
