@@ -644,7 +644,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
-					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (a third of the level's larger side and at most %d tiles from the first populated one, capped at the farthest room of the level)", ep::kMinEventDistance);
+					plog::Warn("the maze plan's event room is not known; the event room is chosen from the level's room list (a third of the level's larger side and at most %d tiles from the first populated one, capped at the farthest room of the level)", ep::kMinEventDistance);
 				}
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
@@ -662,7 +662,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					state->bossTracker.emplace(bossPlan);
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
 				} else {
-					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a layout with BossRoom off has none)", state->bossName.c_str());
+					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (the layout has BossRoom off, or the level was not built from a maze plan)", state->bossName.c_str());
 				}
 			}
 			if (!plan) {

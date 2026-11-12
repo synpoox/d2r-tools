@@ -5,23 +5,22 @@ Every file used here is in [`plugins/cartographer/examples/first-map/`](../../pl
 Every column is explained in [tables.md](tables.md).
 
 > **Not tried in a game yet.** The steps match what the plugin checks today (unit tested), but nobody has opened a
-> map in game. Today only the `Preset` tileset is built; `Cave`, `Jungle` and the others are known names that are refused
+> map in game. Today only the `Cave` and `Crypt` tilesets are built; `Jungle` and the others are known names that are refused
 > with a message until they are ready.
 
 ## What works today
 
-Today a map only **opens a portal**. These columns take effect in game: `Name` (the message "Cartographer: <Name> is open."
-and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it, and when), and `Tileset` (written
-to the log). `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens (experimental, not
-verified in game). Everything else (`Size`, `Boss`, `Properties`, `EventChance`, `Champions`, and the settings in
-`cartographer.txt`) is checked and reported but **not applied yet**: every map opens the same
-level, the one preset level the installer adds. Generated layouts, bosses and properties come in later phases.
+A map opens a portal to a generated maze on the Maze level the installer adds. These columns take effect in game: `Name`
+(the message "Cartographer: <Name> is open." and `cartographer open <Name>`), `Item` and `MinCharLevel` (who may open it,
+and when), `Tileset` (Cave or Crypt), `Shape` and `Size` (the maze layout), `Boss` (placed in the far room), `Properties`
+and `EventChance`. `Level`, `Density`, `Uniques` and `Monsters` are written into the map's level when it opens
+(experimental, not verified in game). `Champions` is checked and reported but **not applied yet**.
 
 ## Prerequisites
 
 - D2RLoader and Diablo II: Resurrected, and a mod. Cartographer reads nothing without one.
-- The mod ships `levels.txt`, `lvlprest.txt` and `misc.txt` as text tables in its own `data\global\excel` folder. The
-  installer stops if `levels.txt` or `lvlprest.txt` is missing, and without `misc.txt` the item spell check is skipped.
+- The mod ships `levels.txt`, `lvlmaze.txt` and `misc.txt` as text tables in its own `data\global\excel` folder. The
+  installer stops if `levels.txt` or `lvlmaze.txt` is missing, and without `misc.txt` the item spell check is skipped.
 - A way for the player to get the map item (step 2). Cartographer adds no items, drops or recipes. Use your mod's own drop,
   shop or cube recipe, or, to test only, add the item with whatever tool you already use for that.
 
@@ -29,8 +28,9 @@ level, the one preset level the installer adds. Generated layouts, bosses and pr
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from the plugin folder. It adds one level to the mod's
-   `levels.txt` and `lvlprest.txt` (backing each up once as `.bak`) and writes `slots.txt`. It is safe to run twice.
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from the plugin folder. It adds the Maze level to the mod's
+   `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`) and writes `slots.txt`. It builds a Cave level; add
+   `-Tileset Crypt` for a Crypt (every map then uses that tileset). It is safe to run twice.
    If your mod ships `.bin` table files, rebuild them from the edited `.txt` tables or remove them (this also applies to
    the `misc.txt` edit in step 2).
 
@@ -55,24 +55,23 @@ spreadsheet saved as "Text (Tab delimited)" works). Four columns are enough:
 
 ```
 Name	Tileset	Shape	Item
-Shorelines	Preset	Corridor	t20
+Shorelines	Cave	Corridor	t20
 ```
 
-Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), none is applied in game yet.
-What does act: Hell difficulty, any character level, opened from Harrogath. `Shape` has to be filled in but a `Preset` map
-does not use it yet.
+Of the defaults a row is checked against (size Medium, monster level 85, 6 random properties), size and properties apply in game; the monster level is written into the map's level (experimental, not verified in game).
+What does act: Hell difficulty, any character level, opened from Harrogath.
 
 Optional columns go to the right and a blank cell keeps the default. A fuller row:
 
 ```
 Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel
-Shorelines	Preset	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	80
+Shorelines	Cave	Corridor	t20	Large	90	Bishibosh	quillrat1,zombie1	80
 ```
 
-In game today only `Item` and `MinCharLevel` change what happens here; `Size`, `Level`, `Boss` and
-`Monsters` are accepted and checked, then ignored, so this map opens the same level as the plain row above.
+In game today `Size`, `Boss` and the other applied columns change the map; `Level` and `Monsters` are accepted and
+checked, then ignored.
 
-Upper and lower case do not matter for Cartographer's own words (`Preset`, `Large`, `Hell`) or for item codes. Names
+Upper and lower case do not matter for Cartographer's own words (`Cave`, `Large`) or for item codes. Names
 from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
 
 ## 4. Start the game and check
@@ -99,12 +98,12 @@ not in town, character level too low, a map already open this game, no free spot
 
 ## Where to go next
 
-- Add more maps: one row and one item each. Each row's `Item` and `MinCharLevel` work now.
-- Plan a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required) are checked now
-  and will apply once layouts are generated (later phases).
+- Add more maps: one row and one item each (all use the installed tileset, Cave or Crypt).
+- Plan a boss, a shape or a size: the optional columns in [tables.md](tables.md#mapstxt-required) apply now;
+  `Level`, `Monsters`, `Density` and `Uniques` are experimental, and `Champions` is checked only.
 - Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same
-  folder). The plugin reads and checks them now, and `cartographer check` reports bad rows, but nothing applies them yet.
-- The defaults for every map: `cartographer.txt`. Its settings are checked, not applied yet.
+  folder) are applied; `cartographer check` reports bad rows.
+- The defaults for every map: `cartographer.txt`. `Properties` and `PlayerStats` are used; the other settings are checked and reported but nothing uses them yet (see [tables.md](tables.md#cartographertxt-optional)).
 
 ## When something does not work
 
@@ -112,7 +111,7 @@ not in town, character level too low, a map already open this game, no free spot
 |---|---|
 | "Item ... cannot open a map: it needs item spell 16" | `pSpell` in your `misc.txt` row is not 16 |
 | "item ... is not in the item tables" | the code is not in `misc.txt`, `weapons.txt` or `armor.txt` of the mod; the text suggests the closest code |
-| "tileset ... is planned but Cartographer cannot build it yet" | use `Preset` for now |
+| "tileset ... is planned but Cartographer cannot build it yet" | use `Cave` or `Crypt` for now |
 | "slots.txt ... is missing" | run `tools\install.ps1` and restart the game |
 | The item acts like an ordinary item | no map names that item in its `Item` cell |
 | Nothing is read at all | the game is running without a mod, or the tables are not in the folder named in step 3 |
