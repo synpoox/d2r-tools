@@ -926,8 +926,8 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 | RVA | Role found | Question | Label | Unique masked prefix (offset 0) |
 |---|---|---|---|---|
 | `0x3faa50` | Grid op `(grid, x, y, value, op)`; op 0 OR, 1 AND, 2 XOR, 3 SET, 4 set if zero, 5 AND-NOT | Q3 | call-only | `40 53 48 8B 41 20 48 8D 1D ?? ?? ?? ?? 4C 63 5C 24 30 4D 63 C0 4E 63 14 80` |
-| `0x3ede00` | Void cell setter `(level, x, y)`: SETs piece grid `+0x08` to 0 and flag grid `+0x58` to `0x100` | Q3 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00` |
-| `0x3edda0` | Clear cell `(level, x, y)`: SETs both grids to 0 (same shape as `0x3ede00`; only the last constant differs) | Q3 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 45 33 C9` |
+| `0x3ede00` | Void cell setter `(level, x, y)`: SETs piece grid `+0x08` to 0 and flag grid `+0x58` to `0x100` | Q3 | hookable; signed (see "Signed for the outdoor slot" below) | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00` |
+| `0x3edda0` | Clear cell `(level, x, y)`: SETs both grids to 0 (same shape as `0x3ede00`; only the last argument differs: `xor r9d, r9d` against `mov r9d, 0x100`) | Q3 | hookable | `48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 45 33 C9` |
 | `0x3efaf0` | Outdoor outline and border pass `(dataFlag, level)`; its chunk holds the loop at `0x3f00a0` that ORs `0x100` into edge cells | Q3 | hookable | `48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D9 48 81 EC E0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 17 4C 8B EA` |
 | `0x3f95e0` | Per-room grid pass `(dataFlag, arg)`: `arg` holds the level at `+0x90`; allocates three grids at `[arg+0x40]` with `0x3fa7f0` and loops grid `+0x50` of that block, ORing (op 0) a value chosen by a switch on `level+0x1e0 - 0x10` (jump table `0x3f987c`; `0x100` only for 16, Act 2 desert) into cells whose `(flags & 0x3f0ff80) == 0`; `.pdata` chunk `0x3f95e0..0x3f98bc`. Not the outdoor flag grid | Q3 | hookable | `88 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC C8 00 00 00` |
 | `0x327c40` | Level teardown `(dataFlag, level, keep)`; dispatches on level `+0x00` to `0x3e69d0` (maze), `0x3dd370` (preset) or `0x3ee220` (outdoor); frees `+0x1c0`, `+0x1d8`, `+0x1f0` | Q4 | hookable | `48 89 5C 24 08 48 89 6C 24 18 56 57 41 56 48 83 EC 20 41 8B E8 48 89 54 24 48` |
@@ -1111,6 +1111,21 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 7. Q11: a tile set from a different act than the slot's.
 8. Q12: the file path actually opened for a jungle DS1.
 
+### Signed for the outdoor slot (desk work, 2026-11-12)
+
+Four outdoor parts now have a signature in `plugins/cartographer/src/core/part_signatures.h` and a row in `plugins/cartographer/tools/check_maze_signatures.py`; nothing in the plugin uses them yet (no hook, no call), so they are checked, not run.
+
+| Part | RVA | Signature source | Hook length | Evidence |
+|---|---|---|---|---|
+| `OutdoorEntry` | `0x3ee320` | section 4 S0 table, same bytes | 19 in the spike; not re-derived | static: unique, resolves to the RVA, guard holds (checker run on the 93847 dump, stamp `0x6ab3782c`); the spike's live match is section 4 |
+| `OutdoorAct5Builder` | `0x3fe2e0` | section 4 S0 table | 16 in the spike | same |
+| `PieceStamp` | `0x3ecfc0` | section 4 S0 table | called only | same |
+| `VoidCell` | `0x3ede00` | the 62-byte masked signature of the section 8 table; it ends with `41 B9 00 01 00 00` (`mov r9d, 0x100`), where its twin `0x3edda0` has `45 33 C9` (`xor r9d, r9d`), so the twin cannot match | called only (hookable by the 14-byte rule) | static, same checker (the signature matches `0x3ede00` only; without the last 6 bytes it matches both); never run in a game |
+
+The outdoor slot itself (moved here from the plugin README, which is for players): outdoor maps (`Jungle` first) are planned to open through a third level, the `Outdoor` slot, a `levels.txt` level with `DrlgType` 3 and `LevelType` 21 listed in `slots.txt` as an `Outdoor` row. What exists is groundwork only, none of it verified in game and none of it called by the plugin: `slots.txt` accepts the row, the loader reads that level's `DrlgType` and `LevelType` (`ReadSlotLevelTypes`, the one part that runs), `OutdoorSlotProblem` can compare them with a map's tileset but nothing calls it yet, and the piece picker and stamp plan (`src/outdoor/`, unit tested) turn a layout into the pieces, level size and void cells. No hook exists and no map opens through the slot: `Jungle` and `Snow` maps are still refused, and an `Outdoor` row changes nothing in game. `planStamps` refuses every bad input itself (including piece 529 and a pinned file over 15); `checkStampPlan` is the independent second check.
+
+The checker rows carry max patch 999 ("only checked"): whoever adds a hook re-derives the patch length and the row. `VoidCell` is reached in the engine only through function pointers (Q3), so calling it from a plugin is untested: calling it directly, rather than setting the grid with `0x3faa50`, is an assumption that the first game check settles.
+
 
 ## 9. Map events: entry message, decision, Boss and Horde (issue #92)
 
@@ -1159,6 +1174,17 @@ Live, slot 11 (test mod D2RToolsTest, save `cartos`), build 93847, D2RLoader 1.3
 | 8. txt fallback | Not exercised: with the mod's `superuniques.txt` removed for one game the route stayed on (`superuniques row 0 from the game's table`) and the Horde spawned as before, which shows the game's route does not need the mod's file. The txt route itself (route off) was not forced. |
 
 Fix made to run these checks: see section 11, "Game checks of 2026-11-12" (the monstats `Id` is at row `+2`, not `+0`).
+
+### Map Boss (issue #152)
+
+**Status:** written and unit tested (`eventplan_tests`: `planMapBoss`, the tracker on the plan's boss rect); **not run in a game**. No new address: it reuses the populator hook `0x50acf0`, `SpawnMonster` `0x492cf0` and `SpawnSuperUnique` `0x499ba0` of this section, with their guards and their per-part off switch (the populator hook needs `PopulateRoom`, `SpawnMonster` and `EventRoomLevelId`; a missing `SpawnSuperUnique` spawns the boss as its Class). If those parts are off the map Boss is logged and left off; the map, its event and its stats still work.
+
+- **What:** the `Boss` column of `maps.txt` (a monstats `Id` or a superuniques name, resolved like an event's `Spawn`, section 11) is spawned once per map open: one monster at the centre of the boss room, no minions and no `Drop` (those belong to the Boss event). It is armed at map open whether or not an event was drawn. Flags 0, so the map's stats reach it.
+- **Where:** a Cave or Crypt maze: the plan's boss room, the far cell of the main path (`Plan::bossRoom`, `Role::Boss`). `maze_hooks.cpp` records its DRLG rect after the slot build next to the event room (`MazeBossRoom()`, log `eventprobe: maze boss room ...`) and the populate hook fires an `EventRoomTracker` on that rect. A layout with `BossRoom` off has no boss room: the map Boss is left off, with a warning. There is no Preset code, since Preset is being removed.
+- **Boss and Boss event together:** both are kept. The event goes in the event room (partway along the main path), the map Boss in the boss room (the far end); they are different cells of the plan. A superunique that both name spawns once per game, then as its Class.
+- **Outdoor:** waits on issue #145. The hook point is in `OnPopulated` (`event_apply.cpp`), where `bossPlan` is read from `MazeBossRoom()` for a maze; an outdoor map reads its stamp plan's boss rectangle there, and the tracker and `SpawnMapBoss` are unchanged.
+- **`Monsters`:** not part of this change. The monster pool is written into the slot level's levels row with Level, Density, Champions and Uniques, in issue #156.
+- **Needs game:** `eventprobe: the map Boss 'X' goes in the plan's boss room`, then `room #n ... is the boss room` and `map Boss 'X': spawned in the boss room`; the boss stands in the far room with the map's stats; with a Boss event on the same map both appear in their own rooms.
 
 ## 10. Red portal tooltip and area name (issue #90)
 
