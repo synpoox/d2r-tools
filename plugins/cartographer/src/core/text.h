@@ -40,6 +40,78 @@ inline auto EscapeKeyBytes(std::string_view s) -> std::string {
 	return out;
 }
 
+// Text tables are UTF-8. True when `s` is strictly valid UTF-8 (no overlong forms, surrogates or values above U+10FFFF), the same
+// test as .NET's UTF8Encoding(false, true) that tools/install.ps1 uses.
+inline auto IsValidUtf8(std::string_view s) noexcept -> bool {
+	size_t i = 0;
+	const auto at = [&](size_t k) { return static_cast<unsigned char>(s[k]); };
+	while (i < s.size()) {
+		const unsigned c = at(i);
+		size_t extra = 0;
+		unsigned lo = 0x80, hi = 0xBF;  // allowed range of the first continuation byte
+		if (c < 0x80) {
+			++i;
+			continue;
+		} else if (c >= 0xC2 && c <= 0xDF) {
+			extra = 1;
+		} else if (c >= 0xE0 && c <= 0xEF) {
+			extra = 2;
+			if (c == 0xE0) lo = 0xA0;
+			if (c == 0xED) hi = 0x9F;
+		} else if (c >= 0xF0 && c <= 0xF4) {
+			extra = 3;
+			if (c == 0xF0) lo = 0x90;
+			if (c == 0xF4) hi = 0x8F;
+		} else {
+			return false;
+		}
+		if (i + extra >= s.size()) {
+			return false;
+		}
+		const unsigned first = at(i + 1);
+		if (first < lo || first > hi) {
+			return false;
+		}
+		for (size_t k = 2; k <= extra; ++k) {
+			if ((at(i + k) & 0xC0) != 0x80) {
+				return false;
+			}
+		}
+		i += extra + 1;
+	}
+	return true;
+}
+
+// Each byte read as one Latin-1 character and written as UTF-8 (0xE9 -> C3 A9).
+inline auto Latin1ToUtf8(std::string_view s) -> std::string {
+	std::string out;
+	out.reserve(s.size());
+	for (const char ch : s) {
+		const auto byte = static_cast<unsigned char>(ch);
+		if (byte < 0x80) {
+			out += ch;
+		} else {
+			out += static_cast<char>(0xC0 | (byte >> 6));
+			out += static_cast<char>(0x80 | (byte & 0x3F));
+		}
+	}
+	return out;
+}
+
+// The text of a table file as UTF-8: a UTF-8 byte order mark is dropped, and text that is not valid UTF-8 is taken as Latin-1
+// (what an editor's "ANSI" save gives for Western names) and converted. *fromLatin1 says which. tools/install.ps1 does the same.
+inline auto NormalizeTableText(std::string_view raw, bool* fromLatin1 = nullptr) -> std::string {
+	if (raw.size() >= 3 && static_cast<unsigned char>(raw[0]) == 0xEF && static_cast<unsigned char>(raw[1]) == 0xBB &&
+	    static_cast<unsigned char>(raw[2]) == 0xBF) {
+		raw.remove_prefix(3);
+	}
+	const bool latin = !IsValidUtf8(raw);
+	if (fromLatin1 != nullptr) {
+		*fromLatin1 = latin;
+	}
+	return latin ? Latin1ToUtf8(raw) : std::string(raw);
+}
+
 inline auto Trim(std::string_view s) -> std::string {
 	size_t a = 0, b = s.size();
 	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r' || s[a] == '\n')) {
