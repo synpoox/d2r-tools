@@ -115,8 +115,9 @@ auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<st
 }
 
 // monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder.
-// The `Expansion` marker line (monstats row 410, superuniques row 42) is dropped. This is the fallback: at map open the game's own loaded tables are tried first (engine/event_apply.cpp). The row index is the
-// parsed row count, which is the game's row number only if the file has no blank lines (ParseTsv drops them): an assumption, unchecked.
+// The `Expansion` marker line (monstats row 410, superuniques row 42) is dropped from both. This is the fallback: at map open the game's own
+// loaded tables are tried first (engine/event_apply.cpp). The row index is the parsed row count, which is the game's row number only if the
+// file has no blank lines (ParseTsv drops them): an assumption, unchecked.
 // Empty when a table is missing.
 auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 	cartographer::eventplan::SpawnTable out;
