@@ -165,7 +165,9 @@ PeerBook::Add PeerBook::add(uint64_t peer) {
 		return Add::Known;
 	}
 	if (peers_.size() >= kMaxPeers) {
-		return Add::Full;
+		peers_.erase(peers_.begin());
+		peers_.push_back(peer);
+		return Add::AddedDroppedOldest;
 	}
 	peers_.push_back(peer);
 	return Add::Added;
@@ -205,5 +207,12 @@ Step step(ConnectSchedule &s, uint64_t nowMs) {
 }
 
 void finish(ConnectSchedule &s) { s.done = true; }
+
+bool onRejected(ConnectSchedule &s, bool hostUnavailable) {
+	if (!hostUnavailable) {
+		finish(s);
+	}
+	return !s.done;
+}
 
 }  // namespace cartographer::mapsync

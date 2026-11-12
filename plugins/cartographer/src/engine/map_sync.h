@@ -45,4 +45,7 @@ auto MapSyncRemoteMap() -> std::optional<RemoteMap>;
 // For 'cartographer check': one line saying whether the sync is on and what it holds.
 auto MapSyncSummary() -> std::string;
 
+// Unload: turns the sync off and unregisters the channel when the SDK offers it. Never throws.
+void UnloadMapSync() noexcept;
+
 }  // namespace carto

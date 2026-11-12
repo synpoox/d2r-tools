@@ -2,6 +2,7 @@
 #include "map_sync.h"
 
 #include "log.h"
+#include "portal.h"
 
 #include <windows.h>
 
@@ -38,6 +39,7 @@ ms::ConnectSchedule g_schedule;
 uint32_t g_generation = 0;  // changes at every game entered and left: a queued step from an old game does nothing
 bool g_clientActive = false;  // the connect loop of this game is running or done; this process asked to connect
 bool g_helloSent = false;
+std::string g_clientNote;  // why a client stopped, for cartographer check; empty while connecting or connected
 
 auto NowMs() noexcept -> uint64_t {
 	return GetTickCount64();
@@ -156,9 +158,8 @@ void __cdecl OnHostMessage(const D2RL::PluginContext* context, net::ChannelHandl
 			std::lock_guard<std::mutex> lock(g_lock);
 			added = g_peers.add(peer);
 		}
-		if (added == ms::PeerBook::Add::Full) {
-			plog::Warn("map sync: too many clients said hello; client %llu is not told about maps", static_cast<unsigned long long>(peer));
-			return;
+		if (added == ms::PeerBook::Add::AddedDroppedOldest) {
+			plog::Warn("map sync: %zu clients known; the oldest was dropped to make room for client %llu", ms::kMaxPeers, static_cast<unsigned long long>(peer));
 		}
 		plog::Info("map sync: client %llu said hello (%s)", static_cast<unsigned long long>(peer), added == ms::PeerBook::Add::Added ? "new" : "again");
 		// The send goes through the game thread, as the SDK sample does for a reply.
@@ -175,6 +176,9 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 	try {
 		if (!g_on.load()) {
 			return;
+		}
+		if (ServerTickSeen()) {
+			return;  // a host or single player process never keeps a remote map
 		}
 		if (messageId != ms::kMsgMapOpen) {
 			static std::atomic<uint32_t> unknown{0};
@@ -209,6 +213,9 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 
 // Client: connected. Says hello once so the host knows this peer and sends the open map.
 void SendHello(const D2RL::PluginContext* context) noexcept {
+	if (ServerTickSeen()) {
+		return;  // a host or single player process never acts as a client, even if it connected to itself
+	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		if (g_helloSent) {
@@ -249,8 +256,14 @@ void __cdecl OnConnectionState(const D2RL::PluginContext* context, const net::Co
 		case net::ConnectionState::Rejected:
 			plog::Warn("map sync: the host refused the connection: %s", ReasonName(event->reason));
 			if (client) {
+				const bool retry = event->reason == net::RejectionReason::HostUnavailable;
 				std::lock_guard<std::mutex> lock(g_lock);
-				ms::finish(g_schedule);
+				if (ms::onRejected(g_schedule, retry)) {
+					plog::Info("map sync: the host is not available yet; the connect loop keeps retrying");
+				} else {
+					g_clientActive = false;
+					g_clientNote = std::string("the host refused the connection: ") + ReasonName(event->reason);
+				}
 			}
 			break;
 		case net::ConnectionState::Disconnected: {
@@ -295,6 +308,8 @@ void __cdecl ConnectStep(const D2RL::PluginContext* context, void* userData) noe
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (g_clientActive) {
 				plog::Warn("map sync: could not connect to a host after %d attempts; maps opened by a host will not be known here", g_schedule.attempts);
+				g_clientActive = false;
+				g_clientNote = "gave up connecting to a host";
 			}
 			return;
 		}
@@ -328,6 +343,8 @@ void __cdecl ConnectStep(const D2RL::PluginContext* context, void* userData) noe
 				plog::Warn("map sync: the host cannot be reached for map sync (%s); giving up for this game", ResultName(r));
 				std::lock_guard<std::mutex> lock(g_lock);
 				ms::finish(g_schedule);
+				g_clientActive = false;
+				g_clientNote = std::string("the host cannot be reached (") + ResultName(r) + ")";
 				return;
 			}
 		}
@@ -445,6 +462,7 @@ void MapSyncGameEntered() {
 			g_hostMap.reset();
 			g_clientMap.clear();
 			g_clientActive = false;
+			g_clientNote.clear();
 			g_helloSent = false;
 			ms::begin(g_schedule, NowMs());
 		}
@@ -466,6 +484,18 @@ void MapSyncGameLeft() {
 		g_clientActive = false;
 		g_helloSent = false;
 		ms::finish(g_schedule);
+	} catch (...) {
+	}
+}
+
+void UnloadMapSync() noexcept {
+	try {
+		g_on = false;
+		g_state = "off: unloaded";
+		if (g_net != nullptr && g_ctx != nullptr && g_channel != net::InvalidChannelHandle && D2RL::HasNetworkServiceField(g_net, D2RL::NetworkServiceUnregisterChannelFieldEnd)) {
+			(void)g_net->unregisterChannel(g_ctx, g_channel);
+		}
+		g_channel = net::InvalidChannelHandle;
 	} catch (...) {
 	}
 }
@@ -499,6 +529,8 @@ auto MapSyncSummary() -> std::string {
 		text += "; client: the host's map is " + Describe(id, id.mapIndex < g_names.size() ? g_names[id.mapIndex] : std::string("?"));
 	} else if (g_clientActive) {
 		text += "; client: connecting to the host, no map told yet";
+	} else if (!g_clientNote.empty()) {
+		text += "; client: " + g_clientNote;
 	}
 	return text;
 }

@@ -472,6 +472,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	carto::UnloadMapSync();
 	crash_guard::Remove();
 	g_context = nullptr;
 }

@@ -194,8 +194,12 @@ TEST_CASE("the peer list is bounded and de-duplicated") {
 	for (uint64_t p = 1; p <= kMaxPeers; ++p) {
 		CHECK(book.add(p) == PeerBook::Add::Added);
 	}
-	CHECK(book.add(1000) == PeerBook::Add::Full);
 	CHECK(book.add(1) == PeerBook::Add::Known);  // a known peer is still known when the book is full
+	CHECK(book.add(1000) == PeerBook::Add::AddedDroppedOldest);  // the oldest (1) makes room
+	CHECK(book.peers().size() == kMaxPeers);
+	CHECK(!book.has(1));
+	CHECK(book.has(2));
+	CHECK(book.peers().back() == 1000);
 	book.clear();
 	CHECK(book.peers().empty());
 	CHECK(book.add(1000) == PeerBook::Add::Added);
@@ -221,6 +225,16 @@ TEST_CASE("the connect schedule waits, retries and gives up") {
 	CHECK(step(s, now) == Step::GiveUp);
 	CHECK(s.done);
 	CHECK(step(s, now + 100000) == Step::GiveUp);
+}
+
+TEST_CASE("a rejection ends the schedule unless the host is unavailable") {
+	ConnectSchedule s;
+	begin(s, 0);
+	CHECK(step(s, kFirstDelayMs) == Step::Try);
+	CHECK(onRejected(s, true));  // HostUnavailable: retry
+	CHECK(step(s, kFirstDelayMs + kRetryMs) == Step::Try);
+	CHECK(!onRejected(s, false));
+	CHECK(step(s, kFirstDelayMs + 2 * kRetryMs) == Step::GiveUp);
 }
 
 TEST_CASE("a finished schedule makes no more attempts") {

@@ -95,11 +95,12 @@ private:
 
 // --- The host's clients ------------------------------------------------------------------------------------------------
 
-// The peers that said hello, at most kMaxPeers (a game holds 8 players; the cap only bounds a flood). Not thread safe.
+// The peers that said hello, at most kMaxPeers (a game holds 8 players; the cap only bounds a flood). When full, the oldest
+// entry is dropped for a new peer (a dead handle may never have been removed). Not thread safe.
 constexpr size_t kMaxPeers = 16;
 class PeerBook {
 public:
-	enum class Add { Added, Known, Full };
+	enum class Add { Added, Known, AddedDroppedOldest };
 	Add add(uint64_t peer);
 	bool remove(uint64_t peer);
 	bool has(uint64_t peer) const;
@@ -130,5 +131,8 @@ void begin(ConnectSchedule &s, uint64_t nowMs);
 // Wait: nothing yet. Try: call connectToHost now (counts one attempt, the next is kRetryMs later). GiveUp: no more attempts.
 Step step(ConnectSchedule &s, uint64_t nowMs);
 void finish(ConnectSchedule &s);  // connected, rejected or the game ended: no more steps
+// The host rejected the connection. HostUnavailable (its side may not be ready yet) keeps the schedule running so the next Try
+// retries, as the SDK says; any other reason ends it. Returns whether the schedule keeps going.
+bool onRejected(ConnectSchedule &s, bool hostUnavailable);
 
 }  // namespace cartographer::mapsync
