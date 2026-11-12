@@ -50,7 +50,9 @@ bool isRowNumber(std::string_view text, int *value) {
 	return true;
 }
 
-ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_view spawn, uint64_t gameRows) {
+ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_view spawn, uint64_t gameRows) { return resolveObject({}, names, spawn, gameRows); }
+
+ObjectLookup resolveObject(const std::vector<std::string> &classes, const std::vector<std::string> &names, std::string_view spawn, uint64_t gameRows) {
 	ObjectLookup out;
 	if (spawn.empty()) {
 		return out;
@@ -59,12 +61,21 @@ ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_vi
 		out.result = ObjectResult::NoGameCount;
 		return out;
 	}
+	const bool classesTrusted = !classes.empty() && classes.size() == gameRows;
 	const bool namesTrusted = !names.empty() && names.size() == gameRows;
-	if (namesTrusted) {
-		std::vector<int> rows = linesNamed(names, spawn, true);
+	auto pick = [&](const std::vector<std::string> &column) {
+		std::vector<int> rows = linesNamed(column, spawn, true);
 		if (rows.empty()) {
-			rows = linesNamed(names, spawn, false);
+			rows = linesNamed(column, spawn, false);
 		}
+		return rows;
+	};
+	// Class first (every Class is distinct), then Name, which is refused when more than one line has it.
+	for (int pass = 0; pass < 2; ++pass) {
+		if (!(pass == 0 ? classesTrusted : namesTrusted)) {
+			continue;
+		}
+		std::vector<int> rows = pick(pass == 0 ? classes : names);
 		if (rows.size() == 1) {
 			out.result = ObjectResult::Found;
 			out.row = rows[0];
@@ -87,20 +98,22 @@ ObjectLookup resolveObject(const std::vector<std::string> &names, std::string_vi
 		}
 		return out;
 	}
-	out.result = names.empty() ? ObjectResult::NoTable : !namesTrusted ? ObjectResult::CountMismatch : ObjectResult::NotFound;
+	out.result = (names.empty() && classes.empty()) ? ObjectResult::NoTable : !(namesTrusted || classesTrusted) ? ObjectResult::CountMismatch : ObjectResult::NotFound;
 	return out;
 }
 
-std::vector<std::string> objectRowNames(const std::vector<std::string> &classes, const std::vector<std::string> &names) {
+std::vector<std::string> dropMarkerLines(const std::vector<std::string> &classes, const std::vector<std::string> &cells) {
 	std::vector<std::string> out;
-	const size_t n = classes.size() < names.size() ? classes.size() : names.size();
+	const size_t n = classes.size() < cells.size() ? classes.size() : cells.size();
 	for (size_t i = 0; i < n; ++i) {
 		if (!equalsNoCase(classes[i], "Expansion")) {
-			out.push_back(names[i]);
+			out.push_back(cells[i]);
 		}
 	}
 	return out;
 }
+
+std::vector<std::string> objectRowNames(const std::vector<std::string> &classes, const std::vector<std::string> &names) { return dropMarkerLines(classes, names); }
 
 bool spotInBox(const SpotBox &room, int x, int y) { return x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h; }
 
@@ -110,7 +123,7 @@ std::vector<SpotAttempt> freeSpotAttempts(const SpotBox &room, int maxRadius) {
 		return out;
 	}
 	std::vector<int> radii;
-	for (int r : {maxRadius, 2, 0}) {
+	for (int r : {maxRadius, 2, 1}) {
 		if (r <= maxRadius && (radii.empty() || radii.back() > r)) {
 			radii.push_back(r);
 		}
@@ -138,13 +151,13 @@ std::string describeObjectLookup(const ObjectLookup &lookup, std::string_view sp
 		return lookup.numeric ? "objects row " + std::to_string(lookup.row) + " from the number in Spawn (the game has " + std::to_string(gameRows) + " rows)"
 		                      : "objects row " + std::to_string(lookup.row) + " by its line in objects.txt (the game has " + std::to_string(gameRows) + " rows)";
 	case ObjectResult::NotFound:
-		return "no line of objects.txt is named '" + name + "'; give the objects row number in Spawn instead";
+		return "no line of objects.txt has Class or Name '" + name + "'; give the objects row number in Spawn instead";
 	case ObjectResult::Duplicate: {
 		std::string list;
 		for (size_t i = 0; i < lookup.rows.size() && i < 8; ++i) {
 			list += (i ? ", " : "") + std::to_string(lookup.rows[i]);
 		}
-		return "'" + name + "' names " + std::to_string(lookup.rows.size()) + " lines of objects.txt (rows " + list + (lookup.rows.size() > 8 ? ", ..." : "") +
+		return "'" + name + "' matches " + std::to_string(lookup.rows.size()) + " lines of objects.txt (rows " + list + (lookup.rows.size() > 8 ? ", ..." : "") +
 		       "), so it is not a single object; give the objects row number in Spawn instead";
 	}
 	case ObjectResult::NoTable:

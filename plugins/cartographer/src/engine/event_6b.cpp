@@ -486,7 +486,7 @@ auto Event6bSummary() -> std::string {
 	return "phase 6b: " + SummaryNow(g_populatorOn);
 }
 
-auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
+auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
 	if (!On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
 		*why = "a Shrine part is off (FreeSpot, CreateObject or DataTablesBase; see the parts above)";
 		return false;
@@ -502,7 +502,7 @@ auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>
 		return false;
 	}
 	const uint64_t gameRows = At<uint32_t>(dt, DtObjectCountOffset);
-	const e6::ObjectLookup lookup = e6::resolveObject(objectNames, event.spawn, gameRows);
+	const e6::ObjectLookup lookup = e6::resolveObject(objectClasses, objectNames, event.spawn, gameRows);
 	const std::string text = e6::describeObjectLookup(lookup, event.spawn, objectNames.size(), gameRows);
 	plog::Info("eventprobe: shrine: Spawn '%s': %s (objects.txt: %zu lines, game: %llu rows)", event.spawn.c_str(), text.c_str(), objectNames.size(), static_cast<unsigned long long>(gameRows));
 	if (lookup.result != e6::ObjectResult::Found) {
@@ -558,8 +558,8 @@ auto Event6bPlacesObject(const ev::Event& event, ev::NameKind spawnKind) noexcep
 	return route == e6::Route::Shrine || route == e6::Route::TreasureChest;
 }
 
-auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
-	if (!Event6bPrepareShrine(event, objectNames, player, why)) {
+auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
+	if (!Event6bPrepareShrine(event, objectClasses, objectNames, player, why)) {
 		return false;
 	}
 	{
@@ -730,7 +730,7 @@ bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, Ambu
 	return false;
 }
 
-bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, int scale, uint64_t seed) noexcept {
+bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) noexcept {
 	try {
 		int row = -1;
 		{
@@ -761,8 +761,6 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 			plog::Warn("shrine not placed: the event room is too small to place anything");
 			return false;
 		}
-		(void)scale;
-		(void)seed;
 		int32_t xy[2] = {0, 0};
 		void* landed = nullptr;
 		bool found = false;

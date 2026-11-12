@@ -363,7 +363,7 @@ TEST_CASE("freeSpotAttempts: start points stay inside the room, radius by radius
 	CHECK(a[0].y == 10130);
 	CHECK(a[0].radius == 5);
 	CHECK(a[5].radius == 2);
-	CHECK(a[10].radius == 0);
+	CHECK(a[10].radius == 1);  // 3x3 footprint: covers a 3-wide chest
 	for (const SpotAttempt &s : a) {
 		CHECK(spotInBox(room, s.x, s.y));
 	}
@@ -379,7 +379,7 @@ TEST_CASE("freeSpotAttempts: start points stay inside the room, radius by radius
 }
 
 TEST_CASE("freeSpotAttempts: small radius limits, empty room") {
-	CHECK(freeSpotAttempts({0, 0, 40, 20}, 1).size() == 10);  // radii 1, 0
+	CHECK(freeSpotAttempts({0, 0, 40, 20}, 1).size() == 5);  // radius 1 only
 	CHECK(freeSpotAttempts({0, 0, 40, 20}, 0).size() == 5);
 	CHECK(freeSpotAttempts({0, 0, 0, 20}, 5).empty());
 	CHECK(freeSpotAttempts({0, 0, 40, -1}, 5).empty());

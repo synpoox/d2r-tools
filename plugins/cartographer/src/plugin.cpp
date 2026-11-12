@@ -115,7 +115,7 @@ auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<st
 }
 
 // monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder.
-// This is the fallback: at map open the game's own loaded tables are tried first (engine/event_apply.cpp). The row index is the
+// The `Expansion` marker line (monstats row 410, superuniques row 42) is dropped. This is the fallback: at map open the game's own loaded tables are tried first (engine/event_apply.cpp). The row index is the
 // parsed row count, which is the game's row number only if the file has no blank lines (ParseTsv drops them): an assumption, unchecked.
 // Empty when a table is missing.
 auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
@@ -128,8 +128,11 @@ auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 		out.monsters.clear();
 	}
 	if (ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Superunique", &supers) && ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Class", &classes)) {
-		for (size_t i = 0; i < supers.size(); ++i) {
-			out.supers.push_back({supers[i], i < classes.size() ? classes[i] : std::string()});
+		classes.resize(supers.size());
+		const std::vector<std::string> keptClasses = cartographer::event6b::dropMarkerLines(supers, classes);
+		const std::vector<std::string> keptSupers = cartographer::event6b::dropMarkerLines(supers, supers);
+		for (size_t i = 0; i < keptSupers.size(); ++i) {
+			out.supers.push_back({keptSupers[i], keptClasses[i]});
 		}
 	}
 	return out;
@@ -226,8 +229,10 @@ auto LoadAll() -> Loaded {
 		std::vector<std::string> classes, names;
 		if (!g_excelDir.empty() && ReadColumnRows(g_excelDir + L"\\objects.txt", "Class", &classes) && ReadColumnRows(g_excelDir + L"\\objects.txt", "Name", &names)) {
 			loaded.tables->objectNames = cartographer::event6b::objectRowNames(classes, names);
+			loaded.tables->objectClasses = cartographer::event6b::dropMarkerLines(classes, classes);
 		} else {
 			loaded.tables->objectNames.clear();
+			loaded.tables->objectClasses.clear();
 		}
 	}
 	// Boss and Horde names are looked up in the game's loaded tables at map open; these two files are only the fallback for when that
