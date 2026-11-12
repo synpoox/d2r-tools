@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released).** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, the hooks are built only and have not run in game.** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -43,7 +43,7 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
    ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `levels.txt` and `lvlprest.txt`
-   (backing each up once as `.bak`), and writes `slots.txt`. It adds no items. Running
+   (backing each up once as `.bak`), and adds the `Preset` row to `slots.txt` (other rows are kept). It adds no items. Running
    it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
@@ -60,7 +60,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset` for now; the other tileset names are accepted but refused until they are built | required |
+| Tileset | `Preset`, `Cave` or `Crypt` (maze, needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (checked only; not applied in game yet). Not used by `Preset`. | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
@@ -71,11 +71,43 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Properties, EventChance, Density, Champions, Uniques | Numbers, kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0) and
-`Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
-map in `maps.txt` opens through the one map level (`Preset` slot); nothing opens without a mod and a `maps.txt`.
+`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but a
+`Preset` map opens through the one map level (the `Preset` slot) and a `Cave` or `Crypt` map through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
+
+## Maze slot (Cave and Crypt, manual setup)
+
+A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, and the plugin builds that level from the map's layout
+instead of the game's random maze. **One Maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
+or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
+try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
+refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1`
+does not add the Maze level; add it by hand:
+
+- `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer creates
+  it). It is tab separated with the header `Slot` and `Level`, one row per slot, the level being the `Id` in `levels.txt`:
+
+  ```
+  Slot	Level
+  Preset	138
+  Maze	139
+  ```
+
+  Add the `Maze` row yourself with your new level's id. Running `tools\install.ps1` again keeps it: the installer only adds or
+  updates the `Preset` row and leaves every other row alone.
+- `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
+  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row. Cartographer
+  reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave and Crypt maps are refused.
+- Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
+  plan cannot be built or the engine refuses a step, the game's own walk finishes that maze (with the slot's own size and
+  `lvlmaze.txt` row restored first) and the reason is logged.
+- The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
+  start a new one").
+
+Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build.
 
 ## Tested
 
