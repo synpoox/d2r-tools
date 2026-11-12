@@ -94,10 +94,16 @@ PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool se
 enum class RemoveAction { Forget, StateOffDetachFree, DetachFree };
 
 // onChain: the list is still on the unit's list chain. foundByState: the game's finder returns this very list for the state
-// the plugin gave it (and the state and the state-bit call are usable). A list the unit does not hold is only forgotten
-// (never detached or freed: it may already be gone). A list still on the chain always comes off, so the map's player
-// stats never follow the player into a vanilla level; the state bit is cleared only when the finder confirms the list.
-RemoveAction decideRemoval(bool onChain, bool foundByState);
+// the plugin gave it (and the state and the state-bit call are usable). ownedByPlugin: the list's own fields say it is ours
+// (ownsList; only read once the list is known to be on the chain, so its memory is live). A list the unit does not hold, or
+// one on the chain whose fields are not ours (the game freed ours and reused the address), is only forgotten: never
+// detached, freed or written. Only an owned list on the chain comes off, so the map's player stats never follow the player
+// into a vanilla level; the state bit is cleared only when the finder also confirms the list.
+RemoveAction decideRemoval(bool onChain, bool foundByState, bool ownedByPlugin);
+
+// Whether a list on the chain is the plugin's: it carries the state the plugin gave it (list +0x20) and flags 0 (list +0x1c;
+// the plugin makes its lists with flags 0, the engine's own lists use flags such as 2).
+bool ownsList(uint32_t listFlags, uint32_t listState, int expectedState);
 
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);

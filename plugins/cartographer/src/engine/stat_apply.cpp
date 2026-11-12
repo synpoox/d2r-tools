@@ -29,7 +29,8 @@ constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data fl
 constexpr int UnitOwnerListOffset = 0x88;  // the unit's own stat list (the engine's 0x34b870 returns it): the chain hangs on it, not on the unit
 constexpr int ListHeadOffset = 0x90;       // on that owner list: the chain head, or the second head at 0x98 (bit 13 lists); next at 0x68
 constexpr int ListHeadAltOffset = 0x98;
-constexpr int ListFlagsOffset = 0x1c;       // the engine walks +0x90/+0x98 only when this int is negative (0x2f5bdd, 0x2f6e93)
+constexpr int ListStateOffset = 0x20;       // the state SetListState writes (0x2f72f0); the finder matches it
+constexpr int ListFlagsOffset = 0x1c;      // the engine walks +0x90/+0x98 only when this int is negative (0x2f5bdd, 0x2f6e93)
 constexpr int ListNextOffset = 0x68;
 constexpr int MaxChain = 512;              // a chain longer than this is not walked further
 constexpr int32_t UnitPlayer = 0;
@@ -347,8 +348,7 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 		list = g_lists.find(id);
 		state = g_lists.stateOf(id);
 	}
-	// The record is dropped only after the removal attempt below, so a failed lookup never leaves a list on the player that the
-	// plugin has forgotten: the next tick tries again.
+	// The record is dropped on every path below, once the attempt is over; nothing is retried on a later tick.
 	const auto forget = [&]() noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_lists.remove(id);
@@ -363,10 +363,19 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	// The state is the one the plugin stored with the list, never read back from the list. If the game freed the list and the
 	// address was reused, the finder no longer returns it for that state.
 	const bool foundByState = state > 0 && On(SetStateBit) && On(FindStateList) && Call<FindStateListFn>(FindStateList)(unit, state) == reinterpret_cast<void*>(list);
-	const sp::RemoveAction action = sp::decideRemoval(found, foundByState);
+	// Being on the chain proves only that some live list sits at this address. If the game freed ours and reused the address, it is
+	// the game's list now, so its own fields must say it is ours (flags 0, our state) before anything is detached or freed. The
+	// memory is live only because the chain walk found it; nothing is read for a list that is not on the chain.
+	const bool owned = found && sp::ownsList(static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListFlagsOffset)),
+	                                         static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListStateOffset)), state);
+	const sp::RemoveAction action = sp::decideRemoval(found, foundByState, owned);
 	if (action == sp::RemoveAction::Forget) {
-		// Never detach or free a list the unit does not hold: it may already be gone.
-		plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
+		// Never detach, free or write a list the unit does not hold, or one that is not ours: it is the game's now (or gone).
+		if (!found) {
+			plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
+		} else {
+			plog::Warn("map stats: the list at the recorded address is on the unit but is not the plugin's (flags/state differ); the game freed ours and reused the address; it is forgotten, not freed, and the state bit is left alone");
+		}
 		forget();
 		return;
 	}
@@ -375,7 +384,10 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	if (action == sp::RemoveAction::StateOffDetachFree) {
 		Call<SetStateBitFn>(SetStateBit)(unit, state, 0);
 	} else {
-		plog::Warn("map stats: the game does not find the player's list by its state %d; it is detached and freed anyway, the state bit is left alone", state);
+		// The state bit is left set: the finder returned another list for this state (or a part is missing), so the game may have
+		// its own list on this state and clearing the bit would clear that one too. The bit stays on with no list behind it; the
+		// next map's ApplyToPlayer then finds the state in use and keeps player stats off for that map.
+		plog::Warn("map stats: the game does not find the player's list by its state %d; it is detached and freed anyway, the state bit is left alone (player stats stay off for the next map)", state);
 	}
 	Call<DetachStatListFn>(DetachStatList)(unit, reinterpret_cast<void*>(list));
 	Call<FreeStatListFn>(FreeStatList)(At<uint8_t>(unit, UnitDataFlagOffset), reinterpret_cast<void*>(list));
@@ -483,12 +495,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 		Part& part = g_parts[MonsterSetup];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&MonsterSetupHook), reinterpret_cast<void**>(&g_original));
-		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, g_original != nullptr));
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every monster's own setup is skipped until the game is restarted";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own setup is skipped for EVERY monster (not only the map's) until the game is restarted; restart it after removing what conflicts", part.name);
-		}
+		const bool ok = HookOutcome(part, hooked, g_original != nullptr);
 		g_monstersOn = ok;
 	}
 

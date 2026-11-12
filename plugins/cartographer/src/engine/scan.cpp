@@ -2,6 +2,7 @@
 
 #include "core/sig.h"
 #include "core/text.h"
+#include "hookguard.h"
 #include "log.h"
 
 #include <windows.h>
@@ -100,6 +101,7 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 		std::string why;
 		Pattern pattern{};
 		part.address = nullptr;
+		part.guardExact = 0;
 		if (count == 0) {
 			why = "the game image could not be read";
 		} else {
@@ -117,6 +119,7 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 				part.address = nullptr;
 			} else {
 				std::memcpy(part.guard, pattern.bytes, part.hookSize);
+				part.guardExact = part.hookSize;
 			}
 		}
 		// An override of a hooked part must keep the built-in entry bytes: the hook is written for that prologue.
@@ -141,6 +144,37 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 		part.status.on = part.address != nullptr;
 		part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
 	}
+}
+
+auto HookOutcome(Part& part, bool installed, bool haveOriginal) noexcept -> bool {
+	namespace hg = cartographer::hookguard;
+	const hg::HookState state = hg::classifyHook(installed, haveOriginal);
+	bool restored = false;
+	if (state == hg::HookState::NoOriginal) {
+		if (hg::canRestoreHook(state, part.hookSize, sizeof(part.guard), part.guardExact) && part.address != nullptr) {
+			// The guard is the signature's own exact bytes and is what the loader overwrote and re-checks, so writing it back removes
+			// the hook; the loader's trampoline is left unused. Nothing has run through the hook yet: this is install time.
+			auto* target = const_cast<uint8_t*>(part.address);
+			DWORD old = 0;
+			if (VirtualProtect(target, part.hookSize, PAGE_EXECUTE_READWRITE, &old) != FALSE) {
+				std::memcpy(target, part.guard, part.hookSize);
+				DWORD ignored = 0;
+				VirtualProtect(target, part.hookSize, old, &ignored);
+				FlushInstructionCache(GetCurrentProcess(), target, part.hookSize);
+				restored = true;
+			}
+		}
+		if (restored) {
+			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own %u entry bytes were written back, so the game runs its own function; the part and its feature are off", part.name, part.hookSize);
+		} else {
+			plog::Error("part %s: D2RLoader installed the hook but gave no original, and it could not be taken out (%s); the game's function is skipped until the game is restarted; restart it after removing what conflicts", part.name,
+			            part.guardExact < part.hookSize ? "the original bytes are not all known" : "the code could not be written");
+		}
+	}
+	const bool ok = hg::hookUsable(state);
+	part.status.on = ok;
+	part.status.detail = hg::hookDetail(state, restored);
+	return ok;
 }
 
 }  // namespace carto

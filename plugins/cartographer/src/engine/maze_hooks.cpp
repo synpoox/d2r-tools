@@ -965,14 +965,7 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 		Part& part = g_parts[id];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
-		const bool ok = cartographer::hookguard::hookUsable(cartographer::hookguard::classifyHook(hooked, *original != nullptr));
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
-		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; %s until the game is restarted; restart it after removing what conflicts", part.name,
-			            id == LevelBuild ? "EVERY level build is skipped (not only the maze), so no level will load" : "the game's maze code is skipped");
-		}
-		return ok;
+		return HookOutcome(part, hooked, *original != nullptr);
 	};
 	// Inner hooks first; the level build, which switches the others on, last.
 	bool ok = install(MazeRingGrower, reinterpret_cast<void*>(&RingHook), reinterpret_cast<void**>(&g_ringOriginal));

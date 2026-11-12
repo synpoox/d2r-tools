@@ -177,12 +177,30 @@ TEST_CASE("the player's list goes on in the map, off when it no longer applies")
 	CHECK(decidePlayer(true, true, true, false) == PlayerAction::Remove);
 }
 
-TEST_CASE("a player list still on the unit always comes off, even when the state lookup fails")
+TEST_CASE("a player list still on the unit and carrying the plugin's fields comes off, even when the state lookup fails")
 {
-	CHECK(decideRemoval(true, true) == RemoveAction::StateOffDetachFree);
-	CHECK(decideRemoval(true, false) == RemoveAction::DetachFree);  // finder lost it: still detached and freed
-	CHECK(decideRemoval(false, true) == RemoveAction::Forget);      // not held by the unit: never touched
-	CHECK(decideRemoval(false, false) == RemoveAction::Forget);
+	CHECK(decideRemoval(true, true, true) == RemoveAction::StateOffDetachFree);
+	CHECK(decideRemoval(true, false, true) == RemoveAction::DetachFree);  // finder lost it: still detached and freed
+	CHECK(decideRemoval(false, true, true) == RemoveAction::Forget);      // not held by the unit: never touched
+	CHECK(decideRemoval(false, false, true) == RemoveAction::Forget);
+	CHECK(decideRemoval(false, false, false) == RemoveAction::Forget);
+}
+
+TEST_CASE("a list on the chain that is not the plugin's is forgotten, never freed")
+{
+	// The game freed ours and gave the address to one of its own lists on the same unit.
+	CHECK(decideRemoval(true, false, false) == RemoveAction::Forget);
+	CHECK(decideRemoval(true, true, false) == RemoveAction::Forget);
+}
+
+TEST_CASE("a list is the plugin's only with flags 0 and the state it gave")
+{
+	CHECK(ownsList(0, 77, 77));
+	CHECK_FALSE(ownsList(2, 77, 77));   // an engine list (flags 2) that has our state
+	CHECK_FALSE(ownsList(0, 12, 77));   // another state
+	CHECK_FALSE(ownsList(0x80000000u, 77, 77));
+	CHECK_FALSE(ownsList(0, 0, 0));     // no state recorded
+	CHECK_FALSE(ownsList(0, 0xffffffffu, -1));
 }
 
 TEST_CASE("monsters get stats only in the slot level while a map is active")
