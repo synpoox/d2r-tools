@@ -60,6 +60,8 @@ inline auto Split(std::string_view s, char sep) -> std::vector<std::string> {
 }
 
 // Edit distance ignoring case; a swap of two neighbouring letters counts as one edit ("Jungel" -> "Jungle").
+inline constexpr size_t MaxSuggestWord = 64;  // longer words get no suggestion: the work grows with the product of lengths
+
 inline auto EditDistance(std::string_view a, std::string_view b) -> int {
 	const size_t n = a.size(), m = b.size();
 	std::vector<std::vector<int>> d(n + 1, std::vector<int>(m + 1, 0));
@@ -83,10 +85,16 @@ inline auto EditDistance(std::string_view a, std::string_view b) -> int {
 
 // The name closest to `word` (the same name in another case first), or "" when nothing is close enough to be a guess.
 inline auto Suggest(std::string_view word, const std::vector<std::string>& names) -> std::string {
+	if (word.size() > MaxSuggestWord) {
+		return {};
+	}
 	const int allowed = std::max(1, std::min(3, static_cast<int>(word.size()) / 3));
 	int best = allowed + 1;
 	std::string pick;
 	for (const std::string& name : names) {
+		if (name.size() > MaxSuggestWord) {
+			continue;
+		}
 		const int d = EditDistance(word, name);
 		if (d < best) {
 			best = d;

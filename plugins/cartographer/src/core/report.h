@@ -19,7 +19,19 @@ struct Problem {
 struct Report {
 	std::vector<Problem> problems;
 
-	void Error(const std::string& file, int line, const std::string& text) { problems.push_back({Severity::Error, file, line, text}); }
+	static constexpr int MaxPerFile = 200;  // a hostile or broken table cannot make the report huge
+
+	void Error(const std::string& file, int line, const std::string& text) {
+		int same = 0;
+		for (const Problem& p : problems) {
+			same += p.file == file ? 1 : 0;
+		}
+		if (same < MaxPerFile) {
+			problems.push_back({Severity::Error, file, line, text});
+		} else if (same == MaxPerFile) {
+			problems.push_back({Severity::Note, file, 0, "more than 200 problems; the rest are not listed."});
+		}
+	}
 	void Note(const std::string& file, int line, const std::string& text) { problems.push_back({Severity::Note, file, line, text}); }
 
 	auto Errors() const -> int {

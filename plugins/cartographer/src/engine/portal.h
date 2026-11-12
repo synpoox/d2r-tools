@@ -41,6 +41,10 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 // The map named `name` opens on the next use of a map item. Returns false when there is no such map.
 auto ArmMap(const std::string& name) -> bool;
 
+// Looks again for parts that were not found at load and installs the hooks if all are now there (`cartographer check`
+// calls it). Does nothing once the hooks were tried or while the portal is live. Returns whether the portal is live.
+auto RescanPortal() -> bool;
+
 auto PortalLive() -> bool;
 auto PartStatuses() -> std::vector<PartStatus>;
 

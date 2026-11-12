@@ -7,9 +7,11 @@
       levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the built-in preset map)
       lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
       misc.txt      the map item "cmap": a copy of the Scroll of Town Portal with item spell 16
-      item-names.json (if the mod has one) the item's name
+    The item's name is the plugin's own string (cartographer:CartographerMap, from the plugin's companion files), so
+    nothing in the mod's string files is edited.
     It also writes d2rloader\cartographer\slots.txt, which tells the plugin the level id it got.
-    Rows are only added when missing, so running it again changes nothing. Restart the game afterwards.
+    All three tables are read and checked before anything is written. Each is backed up once as <name>.bak.
+    Rows are only added when missing, so running it again changes nothing. Restart the game afterwards (a mod that ships .bin tables must have them rebuilt from the edited .txt).
 
 .PARAMETER ModDirectory
     The mod's folder, for example <game>\mods\MyMod. The tables are read from <ModDirectory>\<Mod>.mpq\data.
@@ -17,23 +19,20 @@
 .PARAMETER ExcelDir
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
-.PARAMETER NamesFile
-    The item-names.json to edit instead of the one under ModDirectory.
-
 .EXAMPLE
     plugins\cartographer\tools\install.ps1 -ModDirectory "C:\Games\Diablo II Resurrected\mods\MyMod"
 #>
 [CmdletBinding()]
 param(
     [string]$ModDirectory,
-    [string]$ExcelDir,
-    [string]$NamesFile
+    [string]$ExcelDir
 )
 
 $ErrorActionPreference = 'Stop'
 $LevelName = 'Cartographer Preset'
 $ItemCode = 'cmap'
 $ItemName = 'Cartographer Map'
+$ItemNameKey = 'cartographer:CartographerMap'  # a string the plugin defines (namespace = its plugin id)
 $TemplateLevelId = '137'  # Act 5 - Colossal Summit: a preset level, so a copy opens with only the preset's rooms
 
 if (-not $ExcelDir) {
@@ -41,28 +40,40 @@ if (-not $ExcelDir) {
     $mod = Split-Path $ModDirectory -Leaf
     $data = Join-Path $ModDirectory "$mod.mpq\data"
     $ExcelDir = Join-Path $data 'global\excel'
-    if (-not $NamesFile) { $NamesFile = Join-Path $data 'local\lng\strings\item-names.json' }
 }
 if (-not (Test-Path $ExcelDir)) { throw "No excel folder at $ExcelDir. Is this the mod's folder?" }
 
+# Tables are read and written byte for byte (Latin-1 maps every byte to one char), so text the installer does not
+# touch, in any code page, is kept exactly as it was.
+$bytes = [System.Text.Encoding]::GetEncoding(28591)
 $utf8 = New-Object System.Text.UTF8Encoding($false)
+$pending = [System.Collections.Generic.List[object]]::new()
+$bom = [string][char]0xEF + [char]0xBB + [char]0xBF
 
 # A tab-separated table with a header: lines kept as they are, edited by column name.
 function Read-Table([string]$path) {
     if (-not (Test-Path $path)) { throw "Missing $path. This mod does not carry that table, so it cannot be edited here." }
-    $text = [System.IO.File]::ReadAllText($path, $utf8)
+    $text = $bytes.GetString([System.IO.File]::ReadAllBytes($path))
     $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = [System.Collections.Generic.List[string]]($text -split [regex]::Escape($eol))
     $final = $lines.Count -gt 0 -and $lines[$lines.Count - 1] -eq ''
     if ($final) { $lines.RemoveAt($lines.Count - 1) }
-    $header = $lines[0] -split "`t"
+    if ($lines.Count -eq 0 -or $lines[0] -eq '') { throw "$path is empty." }
+    $header = ($lines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t"
     [pscustomobject]@{ Path = $path; Eol = $eol; Lines = $lines; Header = $header; FinalEol = $final }
 }
 
-function Save-Table($t) {
-    $text = ($t.Lines -join $t.Eol)
-    if ($t.FinalEol) { $text += $t.Eol }
-    [System.IO.File]::WriteAllText($t.Path, $text, $utf8)
+# Queues the table; nothing is written until every table has been read and checked.
+function Save-Table($t) { $pending.Add($t) }
+
+function Write-Pending {
+    foreach ($t in $pending) {
+        $bak = "$($t.Path).bak"
+        if (-not (Test-Path $bak)) { Copy-Item $t.Path $bak }  # the original, once
+        $text = ($t.Lines -join $t.Eol)
+        if ($t.FinalEol) { $text += $t.Eol }
+        [System.IO.File]::WriteAllBytes($t.Path, $bytes.GetBytes($text))
+    }
 }
 
 function Column($t, [string]$name) {
@@ -88,6 +99,10 @@ function Find-Row($t, [string]$column, [string]$value) {
 
 function Set-Cell($t, $cells, [string]$column, [string]$value) {
     $cells[(Column $t $column)] = $value
+}
+
+foreach ($name in 'levels.txt', 'lvlprest.txt', 'misc.txt') {
+    if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
 
 # --- levels.txt -------------------------------------------------------------------------------------------------------
@@ -154,7 +169,7 @@ if ((Find-Row $misc 'code' $ItemCode) -ge 0) {
     $cells = Cells $misc $misc.Lines[$templateRow]
     Set-Cell $misc $cells 'name' $ItemName
     Set-Cell $misc $cells 'code' $ItemCode
-    Set-Cell $misc $cells 'namestr' $ItemCode
+    Set-Cell $misc $cells 'namestr' $ItemNameKey
     Set-Cell $misc $cells 'pSpell' '16'
     Set-Cell $misc $cells 'useable' '1'
     Set-Cell $misc $cells 'spawnable' '0'
@@ -163,27 +178,8 @@ if ((Find-Row $misc 'code' $ItemCode) -ge 0) {
     Write-Host "misc.txt: added item '$ItemCode' (item spell 16)."
 }
 
-# --- item-names.json (best effort: the item still works without a name, it just shows the key) -------------------------
-if ($NamesFile -and (Test-Path $NamesFile)) {
-    $raw = [System.IO.File]::ReadAllText($NamesFile, $utf8)
-    if ($raw -match '"Key"\s*:\s*"' + $ItemCode + '"') {
-        Write-Host "item-names.json: '$ItemCode' already has a name."
-    } else {
-        $entries = $raw | ConvertFrom-Json
-        $maxNameId = ($entries | ForEach-Object { [int]$_.id } | Measure-Object -Maximum).Maximum
-        $entry = [ordered]@{}
-        foreach ($p in $entries[0].PSObject.Properties) { $entry[$p.Name] = $ItemName }
-        $entry['id'] = $maxNameId + 1
-        $entry['Key'] = $ItemCode
-        $close = $raw.LastIndexOf(']')
-        $before = $raw.Substring(0, $close).TrimEnd()
-        $text = $before + ",`n  " + ($entry | ConvertTo-Json -Compress) + "`n" + $raw.Substring($close)
-        [System.IO.File]::WriteAllText($NamesFile, $text, $utf8)
-        Write-Host "item-names.json: named '$ItemCode' '$ItemName'."
-    }
-} else {
-    Write-Host "item-names.json: not found, so the item has no name text (it shows as '$ItemCode')."
-}
+# --- write ------------------------------------------------------------------------------------------------------------
+Write-Pending
 
 # --- slots.txt --------------------------------------------------------------------------------------------------------
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
@@ -196,4 +192,4 @@ if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
-Write-Host 'Done. Restart the game so it reads the tables.'
+Write-Host 'Done. Restart the game so it reads the tables. If the mod ships .bin table files, rebuild them from the edited .txt (the game ignores the .txt then).'
