@@ -343,10 +343,13 @@ auto SetPlayerState(Unit* unit, void* list, int state, std::string* why) noexcep
 void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	uintptr_t list = 0;
 	int state = 0;
+	uint32_t storedFlags = 0, storedState = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		list = g_lists.find(id);
 		state = g_lists.stateOf(id);
+		storedFlags = g_lists.flagsOf(id);
+		storedState = g_lists.rawStateOf(id);
 	}
 	// The record is dropped on every path below, once the attempt is over; nothing is retried on a later tick.
 	const auto forget = [&]() noexcept {
@@ -366,15 +369,20 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	// Being on the chain proves only that some live list sits at this address. If the game freed ours and reused the address, it is
 	// the game's list now, so its own fields must say it is ours (flags 0, our state) before anything is detached or freed. The
 	// memory is live only because the chain walk found it; nothing is read for a list that is not on the chain.
-	const bool owned = found && sp::ownsList(static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListFlagsOffset)),
-	                                         static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListStateOffset)), state);
+	// The flags are compared with what was read right after the attach (the engine may set bits there), not with 0.
+	uint32_t readFlags = 0, readState = 0;
+	if (found) {
+		readFlags = static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListFlagsOffset));
+		readState = static_cast<uint32_t>(At<int32_t>(reinterpret_cast<void*>(list), ListStateOffset));
+	}
+	const bool owned = found && sp::ownsList(readFlags, readState, storedFlags, storedState, state);
 	const sp::RemoveAction action = sp::decideRemoval(found, foundByState, owned);
 	if (action == sp::RemoveAction::Forget) {
 		// Never detach, free or write a list the unit does not hold, or one that is not ours: it is the game's now (or gone).
 		if (!found) {
 			plog::Warn("map stats: the player's list is no longer on the unit (%d lists); it is forgotten, not freed", before);
 		} else {
-			plog::Warn("map stats: the list at the recorded address is on the unit but is not the plugin's (flags/state differ); the game freed ours and reused the address; it is forgotten, not freed, and the state bit is left alone");
+			plog::Warn("map stats: the list at the recorded address is on the unit but is not the plugin's (flags 0x%x state %u read, flags 0x%x state %u stored at apply, state %d given); the game freed ours and reused the address; it is forgotten, not freed, and the state bit is left alone", readFlags, readState, storedFlags, storedState, state);
 		}
 		forget();
 		return;
@@ -432,11 +440,14 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 		plog::Warn("map stats: player stats are off for this map, the list was taken off again: %s", why.c_str());
 		return;
 	}
+	// Read what the attach and the state call left in the list; removal compares against these, never against 0.
+	const uint32_t listFlags = static_cast<uint32_t>(At<int32_t>(list, ListFlagsOffset));
+	const uint32_t listState = static_cast<uint32_t>(At<int32_t>(list, ListStateOffset));
 	bool ok = false, stale = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		stale = generation != g_generation;
-		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list), state);
+		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list), state, listFlags, listState);
 		UpdateBusy();
 	}
 	if (stale) {
@@ -455,8 +466,8 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 	++g_playerCount;
 	bool onChain = false;
 	const int chainAfter = Chain(unit, list, &onChain);
-	plog::Info("statprobe: player %u entered the map: totals [%s] -> [%s], list on chain: %s (%d -> %d lists)", id, before.c_str(),
-	           Totals(unit, plan.players).c_str(), onChain ? "yes" : "NO", chainBefore, chainAfter);
+	plog::Info("statprobe: player %u entered the map: totals [%s] -> [%s], list on chain: %s (%d -> %d lists), list flags 0x%x state %u (state given %d)", id, before.c_str(),
+	           Totals(unit, plan.players).c_str(), onChain ? "yes" : "NO", chainBefore, chainAfter, listFlags, listState, state);
 }
 
 // --- Level and plan -------------------------------------------------------------------------------------------------------

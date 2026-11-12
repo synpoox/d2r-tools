@@ -119,9 +119,11 @@ enum class RemoveAction { Forget, StateOffDetachFree, DetachFree };
 // into a vanilla level; the state bit is cleared only when the finder also confirms the list.
 RemoveAction decideRemoval(bool onChain, bool foundByState, bool ownedByPlugin);
 
-// Whether a list on the chain is the plugin's: it carries the state the plugin gave it (list +0x20) and flags 0 (list +0x1c;
-// the plugin makes its lists with flags 0, the engine's own lists use flags such as 2).
-bool ownsList(uint32_t listFlags, uint32_t listState, int expectedState);
+// Whether a list on the chain is the plugin's: its flags (list +0x1c) and state (list +0x20) equal the values read right after
+// the plugin attached it and gave it the state (the attach is engine code that may set bits in the flags, so they are
+// compared with what was read then, not with 0). A game list that reused the address has other values. expectedState is the
+// state the plugin gave the list; 0 or less never matches.
+bool ownsList(uint32_t listFlags, uint32_t listState, uint32_t storedFlags, uint32_t storedState, int expectedState);
 
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);
@@ -134,8 +136,11 @@ public:
 	uintptr_t find(uint32_t unit) const;
 	// The state the plugin gave the list of `unit` (never read back from the list), or 0.
 	int stateOf(uint32_t unit) const;
+	// The list's +0x1c and +0x20 as read right after the state was set (0 when unknown).
+	uint32_t flagsOf(uint32_t unit) const;
+	uint32_t rawStateOf(uint32_t unit) const;
 	// False when the table is full or `list` is 0 (the caller then does not apply).
-	bool add(uint32_t unit, uintptr_t list, int state = 0);
+	bool add(uint32_t unit, uintptr_t list, int state = 0, uint32_t flags = 0, uint32_t rawState = 0);
 	void remove(uint32_t unit);
 	void clear();
 	size_t size() const;
@@ -146,6 +151,8 @@ private:
 		uint32_t unit = 0;
 		uintptr_t list = 0;
 		int state = 0;
+		uint32_t flags = 0;
+		uint32_t rawState = 0;
 	};
 	Slot slots_[kMax];
 };

@@ -5,6 +5,8 @@
 #include "hookguard.h"
 #include "log.h"
 
+#include <string_view>
+
 #include <windows.h>
 
 namespace carto {
@@ -146,6 +148,19 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 	}
 }
 
+// What a hook that cannot be undone costs the player, by part, for the log.
+static const char* HookConsequence(const char* name) noexcept {
+	const std::string_view n(name);
+	if (n == "LevelBuild") return "EVERY level build is skipped (not only the maze), so no level will load";
+	if (n == "DeathDrop") return "the game's own monster drop is skipped for EVERY monster";
+	if (n == "OperateObject") return "the game's object use is skipped for EVERY object";
+	if (n == "PopulateRoom") return "the game's own room population is skipped for EVERY room";
+	if (n == "PlayerTick") return "the game's player mana step is skipped for every player";
+	if (n == "ItemSpellUse" || n == "ItemSpellCheck") return "every item-spell use is dropped (not only map items)";
+	if (n == "MonsterSetup") return "the game's own setup is skipped for EVERY monster (not only the map's)";
+	return "the game's own function is skipped (the maze code, for a maze part)";
+}
+
 auto HookOutcome(Part& part, bool installed, bool haveOriginal) noexcept -> bool {
 	namespace hg = cartographer::hookguard;
 	const hg::HookState state = hg::classifyHook(installed, haveOriginal);
@@ -167,8 +182,8 @@ auto HookOutcome(Part& part, bool installed, bool haveOriginal) noexcept -> bool
 		if (restored) {
 			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own %u entry bytes were written back, so the game runs its own function; the part and its feature are off", part.name, part.hookSize);
 		} else {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original, and it could not be taken out (%s); the game's function is skipped until the game is restarted; restart it after removing what conflicts", part.name,
-			            part.guardExact < part.hookSize ? "the original bytes are not all known" : "the code could not be written");
+			plog::Error("part %s: D2RLoader installed the hook but gave no original, and it could not be taken out (%s); %s until the game is restarted; restart it after removing what conflicts", part.name,
+			            part.guardExact < part.hookSize ? "the original bytes are not all known" : "the code could not be written", HookConsequence(part.name));
 		}
 	}
 	const bool ok = hg::hookUsable(state);

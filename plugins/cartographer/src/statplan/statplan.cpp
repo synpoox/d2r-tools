@@ -263,9 +263,9 @@ RemoveAction decideRemoval(bool onChain, bool foundByState, bool ownedByPlugin)
 	return foundByState ? RemoveAction::StateOffDetachFree : RemoveAction::DetachFree;
 }
 
-bool ownsList(uint32_t listFlags, uint32_t listState, int expectedState)
+bool ownsList(uint32_t listFlags, uint32_t listState, uint32_t storedFlags, uint32_t storedState, int expectedState)
 {
-	return expectedState > 0 && listFlags == 0 && listState == static_cast<uint32_t>(expectedState);
+	return expectedState > 0 && listFlags == storedFlags && listState == storedState && listState == static_cast<uint32_t>(expectedState);
 }
 
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel)
@@ -287,19 +287,35 @@ int PlayerLists::stateOf(uint32_t unit) const
 	return 0;
 }
 
-bool PlayerLists::add(uint32_t unit, uintptr_t list, int state)
+uint32_t PlayerLists::flagsOf(uint32_t unit) const
+{
+	for (const Slot &s : slots_)
+		if (s.list != 0 && s.unit == unit) return s.flags;
+	return 0;
+}
+
+uint32_t PlayerLists::rawStateOf(uint32_t unit) const
+{
+	for (const Slot &s : slots_)
+		if (s.list != 0 && s.unit == unit) return s.rawState;
+	return 0;
+}
+
+bool PlayerLists::add(uint32_t unit, uintptr_t list, int state, uint32_t flags, uint32_t rawState)
 {
 	if (list == 0) return false;
 	for (Slot &s : slots_) {
 		if (s.list != 0 && s.unit == unit) {
 			s.list = list;
 			s.state = state;
+			s.flags = flags;
+			s.rawState = rawState;
 			return true;
 		}
 	}
 	for (Slot &s : slots_) {
 		if (s.list == 0) {
-			s = {unit, list, state};
+			s = {unit, list, state, flags, rawState};
 			return true;
 		}
 	}

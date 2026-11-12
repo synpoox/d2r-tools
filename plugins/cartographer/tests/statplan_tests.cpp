@@ -193,14 +193,30 @@ TEST_CASE("a list on the chain that is not the plugin's is forgotten, never free
 	CHECK(decideRemoval(true, true, false) == RemoveAction::Forget);
 }
 
-TEST_CASE("a list is the plugin's only with flags 0 and the state it gave")
+TEST_CASE("a list is the plugin's only with the flags and state read when it was attached")
 {
-	CHECK(ownsList(0, 77, 77));
-	CHECK_FALSE(ownsList(2, 77, 77));   // an engine list (flags 2) that has our state
-	CHECK_FALSE(ownsList(0, 12, 77));   // another state
-	CHECK_FALSE(ownsList(0x80000000u, 77, 77));
-	CHECK_FALSE(ownsList(0, 0, 0));     // no state recorded
-	CHECK_FALSE(ownsList(0, 0xffffffffu, -1));
+	CHECK(ownsList(0, 77, 0, 77, 77));
+	CHECK_FALSE(ownsList(2, 77, 0, 77, 77));   // an engine list (flags 2) that has our state
+	CHECK_FALSE(ownsList(0, 12, 0, 77, 77));   // another state
+	CHECK_FALSE(ownsList(0x80000000u, 77, 0, 77, 77));
+	CHECK_FALSE(ownsList(0, 0, 0, 0, 0));      // no state recorded
+	CHECK_FALSE(ownsList(0, 0xffffffffu, 0, 0xffffffffu, -1));
+}
+
+TEST_CASE("an attach that set flag bits still leaves the list owned, so the normal removal detaches it")
+{
+	// The attach set bits in the flags; the plugin stored them, so the same values read at removal match.
+	PlayerLists lists;
+	REQUIRE(lists.add(5, 0x5000, 77, 0x2004u, 77));
+	CHECK(lists.flagsOf(5) == 0x2004u);
+	CHECK(lists.rawStateOf(5) == 77u);
+	CHECK(lists.flagsOf(9) == 0u);
+	const bool owned = ownsList(0x2004u, 77, lists.flagsOf(5), lists.rawStateOf(5), lists.stateOf(5));
+	CHECK(owned);
+	CHECK(decideRemoval(true, true, owned) == RemoveAction::StateOffDetachFree);
+	CHECK(decideRemoval(true, false, owned) == RemoveAction::DetachFree);
+	// A game list at the reused address with other flags is not ours.
+	CHECK_FALSE(ownsList(0, 77, lists.flagsOf(5), lists.rawStateOf(5), lists.stateOf(5)));
 }
 
 TEST_CASE("monsters get stats only in the slot level while a map is active")
