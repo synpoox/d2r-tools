@@ -79,6 +79,7 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
   parts with the load-time `signatures.txt` and turns the portal on if all are now found; the two item hooks are written at
   load only, so a missing hooked part needs a restart).
 - Not yet in game either: an item no map names is used like an ordinary item (the hooks pass it through).
+- Not yet in game either: a spell-16 use with no matching check, whose code names a map, is dropped (it opens nothing and is not passed to the game).
 - Game check for `cartographer open <Name>`: the log line "first player unit seen by the tick" shows the same id as
   "local player ready"; the portal opens; step through it and back; leave the game with the portal still open; repeat with
   Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.
