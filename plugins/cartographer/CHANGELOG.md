@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cave and Crypt maps can be built from their layout through a manual `Maze` slot (not yet run in game); one Maze slot serves one tileset (Cave or Crypt), and a map of the other tileset is refused with a message. Turn on `MazeProbe` in `cartographer.txt` to log what the game builds.
+- `tools\install.ps1` keeps the other rows of `slots.txt` (such as the `Maze` row) when it runs again.
 - `cartographer check` and the report now say when `core-maps` is loaded too; use one or the other.
 - Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt` and reports problems in them, and lets a map's `Shape` name a `shapes.txt` row (checked only; not applied in game yet).
 - New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.

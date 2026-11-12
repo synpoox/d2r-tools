@@ -23,6 +23,8 @@ import sys
 # offset), offset of the function start from the match (0: every signature starts at the function entry), max patch
 # length (bytes from the entry before the first relative branch or call, from disassembly of the 93847 image)
 SIGNATURES = [
+    ("LevelBuild", 0x3271C0, "48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2", 0, 48),
+    ("MazeWalk", 0x3E96D0, "48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18", 0, 50),
     ("MazeEntranceExit", 0x3EB850, "41 56 48 83 EC 30 44 8B 0A 4D 8B F0 48 89 5C 24 40 4C 8B D2 48 8B 59 10", 0, 47),
     ("MazePiecePicker", 0x3EB960, "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB", 0, 36),
     ("MazeRingGrower", 0x3E9820, "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 48 48 8B 49 10", 0, 39),

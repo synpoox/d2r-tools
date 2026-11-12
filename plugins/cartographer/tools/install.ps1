@@ -6,7 +6,8 @@
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
       lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
-    It also writes d2rloader\cartographer\slots.txt, which tells the plugin the level id it got.
+    It also adds or updates the Preset row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
+    any other row (such as a hand-added Maze row) is kept.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
     Both tables are read and checked before anything is written. Each is backed up once as <name>.bak.
@@ -161,11 +162,26 @@ Write-Pending
 # --- slots.txt --------------------------------------------------------------------------------------------------------
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
-$slotText = "Slot`tLevel`r`nPreset`t$levelId`r`n"
 $slotPath = Join-Path $slotDir 'slots.txt'
+# Existing rows are kept (a hand-added Maze row, for one): only the Preset row is added or updated.
+$slotLines = [System.Collections.Generic.List[string]]::new()
+if (Test-Path $slotPath) {
+    foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
+}
+$slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
+if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
+    $presetAt = -1
+    for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq 'Preset') { $presetAt = $i; break } }
+    if ($presetAt -lt 0) { $slotLines.Add("Preset`t$levelId") }
+    else { $slotLines[$presetAt] = "Preset`t$levelId" }
+} else {
+    if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Preset`t$levelId")
+}
+$slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host "slots.txt: Preset is level $levelId."
+    Write-Host "slots.txt: Preset is level $levelId (other rows kept)."
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
