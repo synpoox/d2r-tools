@@ -1,7 +1,8 @@
 // Map sync in the game (phase 7, part 1): when the host opens a map it tells each joined TCP/IP client which map is open (the
 // maps.txt row, the slot level and the layout seed), over the SDK's NetworkService. A client connects to the host after it enters a
-// game, says hello, checks what it is sent against its own maps.txt and keeps it. The client does nothing with it yet; later parts
-// apply names, stats and the maze layout from it. No engine address and no hook: everything here goes through the SDK, so a missing
+// game, says hello, checks what it is sent against its own maps.txt and keeps it. Part 2: the client then applies the map's name
+// (MapNames, in its own copy of the slot level's row) and, for a Cave or Crypt map, the host's layout seed (the maze job of its next
+// slot build), each only where it fits the client's own tables. Stats and events stay with the host. No new engine address and no hook of its own: everything here goes through the SDK, so a missing
 // or older NetworkService only turns the sync off (logged) and the game runs as before. Single player and a host with no client
 // send nothing. Written, not verified in a game: docs/reverse-engineering/cartographer.md section 12.
 #pragma once

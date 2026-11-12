@@ -895,6 +895,19 @@ TEST_CASE("slot build state: only a build with a map open uses the slot up, and 
 	CHECK(!st.blocked());
 }
 
+TEST_CASE("slot build state: ranAny sees a build with no map open, which blocked() does not")
+{
+	SlotBuildState st;
+	CHECK(!st.ranAny());
+	st.begin();
+	CHECK(st.ranAny());  // running
+	st.end(false);
+	CHECK(st.ranAny());
+	CHECK(!st.blocked());
+	st.clear();
+	CHECK(!st.ranAny());
+}
+
 TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English")
 {
 	Tileset cave, crypt;

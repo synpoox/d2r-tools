@@ -208,8 +208,7 @@ void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game
 // A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
 // Preset slot.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
-	cartographer::maze::Tileset ts;
-	return cartographer::maze::builtinTileset(map.tileset, ts);
+	return MapIsMaze(map);
 }
 
 auto SlotNameFor(const MapDef& map) noexcept -> const char* {
