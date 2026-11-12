@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Shrine events place an object from `objects.txt` and a Boss `Drop` rolls an extra treasure class when the boss dies (written and unit tested; not yet verified in game).
-- Ambush and Treasure events are not applied yet.
+- Ambush events spawn their waves when you reach the event room, and Treasure events spawn a fleeing monster or a chest that rolls `Drop` (written and unit tested; not yet verified in game).
 - Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (written and unit tested; not yet verified in game).
 - When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (written and unit tested; not yet verified in game).
 - When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters (checked in game on cheat-spawned monsters only).

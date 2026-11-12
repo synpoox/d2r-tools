@@ -1,4 +1,4 @@
-// Host tests for the phase 6b core: the objects name rule, the treasure class index, the boss Drop decision and the call
+// Host tests for the phase 6b core: event routing, the Ambush wave bookkeeping, the Treasure chest and flee decisions, the objects name rule, the treasure class index, the boss Drop decision and the call
 // target decoder. No game, no SDK.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
@@ -156,4 +156,167 @@ TEST_CASE("callTargetOffset: the rel32 of an E8 at the site") {
 	CHECK(callTargetOffset(back, sizeof(back), 0) == 0);
 	const uint8_t before[] = {0xE8, 0xF0, 0xFF, 0xFF, 0xFF};  // rel32 -16: before the buffer
 	CHECK(callTargetOffset(before, sizeof(before), 0) == -11);
+}
+
+// --- Phase 6b second half: routing, Ambush waves, the Treasure chest and flee ------------------------------------------------
+
+namespace ev = cartographer::events;
+
+TEST_CASE("routeEvent: each kind takes its own path") {
+	CHECK(routeEvent(ev::Kind::Boss, ev::NameKind::Monster) == Route::Boss);
+	CHECK(routeEvent(ev::Kind::Horde, ev::NameKind::Unique) == Route::Horde);
+	CHECK(routeEvent(ev::Kind::Ambush, ev::NameKind::Monster) == Route::Ambush);
+	CHECK(routeEvent(ev::Kind::Shrine, ev::NameKind::Unresolved) == Route::Shrine);  // a Shrine's Spawn is never a monster
+	CHECK(routeEvent(ev::Kind::Shrine, ev::NameKind::Monster) == Route::Shrine);
+	CHECK(routeEvent(ev::Kind::Invalid, ev::NameKind::Monster) == Route::None);
+}
+
+TEST_CASE("routeEvent: a Treasure is a monster when Spawn is one, else a chest") {
+	CHECK(routeEvent(ev::Kind::Treasure, ev::NameKind::Monster) == Route::TreasureMonster);
+	CHECK(routeEvent(ev::Kind::Treasure, ev::NameKind::Unique) == Route::TreasureMonster);
+	CHECK(routeEvent(ev::Kind::Treasure, ev::NameKind::Object) == Route::TreasureChest);
+	CHECK(routeEvent(ev::Kind::Treasure, ev::NameKind::Unresolved) == Route::TreasureChest);
+	CHECK(std::string(routeName(Route::TreasureChest)) == "treasure chest");
+	CHECK(std::string(routeName(Route::None)) == "none");
+}
+
+namespace {
+WaveTracker armed(int waves, uint64_t timeout = 1000, uint64_t gap = 50) {
+	WaveTracker t;
+	t.arm(waves, timeout, gap);
+	return t;
+}
+}  // namespace
+
+TEST_CASE("WaveTracker: nothing happens until the player is in the room, then one wave is asked for") {
+	WaveTracker t = armed(2);
+	CHECK(t.phase() == WaveTracker::Phase::Waiting);
+	CHECK(t.active());
+	CHECK(t.step(false, 0) == WaveTracker::Step::Wait);
+	CHECK(t.step(false, 5000) == WaveTracker::Step::Wait);
+	CHECK(t.step(true, 100) == WaveTracker::Step::SpawnWave);
+	CHECK(t.wavesStarted() == 1);
+	// The caller has not answered yet: it is not asked twice.
+	CHECK(t.step(true, 101) == WaveTracker::Step::Wait);
+	CHECK(t.wavesStarted() == 1);
+	// An unarmed tracker never asks.
+	WaveTracker idle;
+	CHECK_FALSE(idle.active());
+	CHECK(idle.step(true, 0) == WaveTracker::Step::Wait);
+}
+
+TEST_CASE("WaveTracker: a wave is cleared when every tracked id died, then the next comes after the gap") {
+	WaveTracker t = armed(2);
+	REQUIRE(t.step(true, 100) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({7, 8, 9}, 100);
+	CHECK(t.phase() == WaveTracker::Phase::Fighting);
+	CHECK(t.remaining() == 3);
+	CHECK_FALSE(t.onDeath(99));  // a monster that is not in the wave
+	CHECK(t.remaining() == 3);
+	CHECK(t.onDeath(8));
+	CHECK_FALSE(t.onDeath(8));  // reported twice
+	CHECK(t.step(true, 200) == WaveTracker::Step::Wait);
+	CHECK(t.onDeath(7));
+	CHECK(t.onDeath(9));
+	CHECK(t.step(true, 300) == WaveTracker::Step::Wait);  // cleared: the gap starts
+	CHECK(t.lastEnd() == WaveEnd::Cleared);
+	CHECK(t.phase() == WaveTracker::Phase::Gap);
+	CHECK(t.step(true, 349) == WaveTracker::Step::Wait);
+	CHECK(t.step(false, 400) == WaveTracker::Step::Wait);  // the player left: the wave waits for the room
+	CHECK(t.step(true, 400) == WaveTracker::Step::SpawnWave);
+	CHECK(t.wavesStarted() == 2);
+}
+
+TEST_CASE("WaveTracker: the last wave ends the event") {
+	WaveTracker t = armed(2);
+	REQUIRE(t.step(true, 0) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({1}, 0);
+	t.onDeath(1);
+	REQUIRE(t.step(true, 10) == WaveTracker::Step::Wait);
+	REQUIRE(t.step(true, 100) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({2, 3}, 100);
+	t.onDeath(2);
+	t.onDeath(3);
+	CHECK(t.step(true, 110) == WaveTracker::Step::Finished);
+	CHECK(t.phase() == WaveTracker::Phase::Done);
+	CHECK_FALSE(t.active());
+	CHECK(t.step(true, 120) == WaveTracker::Step::Finished);
+	CHECK_FALSE(t.onDeath(2));
+}
+
+TEST_CASE("WaveTracker: a wave that is not cleared times out and the next one still comes") {
+	WaveTracker t = armed(2, 1000, 50);
+	REQUIRE(t.step(true, 0) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({1, 2}, 0);
+	t.onDeath(1);
+	CHECK(t.step(true, 999) == WaveTracker::Step::Wait);
+	CHECK(t.step(true, 1000) == WaveTracker::Step::Wait);  // timed out: the gap starts
+	CHECK(t.lastEnd() == WaveEnd::TimedOut);
+	CHECK(t.remaining() == 0);
+	CHECK_FALSE(t.onDeath(2));  // too late to count
+	CHECK(t.step(true, 1050) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({5}, 1050);
+	CHECK(t.step(true, 2049) == WaveTracker::Step::Wait);
+	CHECK(t.step(true, 2050) == WaveTracker::Step::Finished);  // the last wave timing out ends it
+	CHECK(t.lastEnd() == WaveEnd::TimedOut);
+}
+
+TEST_CASE("WaveTracker: a wave the game made no unit of abandons the event") {
+	WaveTracker t = armed(3);
+	REQUIRE(t.step(true, 0) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({}, 0);
+	CHECK(t.lastEnd() == WaveEnd::Empty);
+	CHECK(t.phase() == WaveTracker::Phase::Done);
+	CHECK(t.step(true, 1) == WaveTracker::Step::Finished);
+	CHECK(std::string(waveEndName(WaveEnd::Empty)).find("none") != std::string::npos);
+}
+
+TEST_CASE("WaveTracker: one wave only, waves below 1 count as 1, arm starts over, reset clears") {
+	WaveTracker t;
+	t.arm(0, 100, 10);
+	CHECK(t.wavesTotal() == 1);
+	REQUIRE(t.step(true, 0) == WaveTracker::Step::SpawnWave);
+	t.waveSpawned({1}, 0);
+	t.onDeath(1);
+	CHECK(t.step(true, 1) == WaveTracker::Step::Finished);
+	t.arm(2, 100, 10);
+	CHECK(t.phase() == WaveTracker::Phase::Waiting);
+	CHECK(t.wavesStarted() == 0);
+	CHECK(t.lastEnd() == WaveEnd::None);
+	t.reset();
+	CHECK_FALSE(t.active());
+	CHECK(t.step(true, 0) == WaveTracker::Step::Wait);
+	// waveSpawned outside the Spawning phase is ignored.
+	t.waveSpawned({4}, 0);
+	CHECK(t.remaining() == 0);
+}
+
+TEST_CASE("decideChest: roll once when the chest's mode changed during the call") {
+	ChestInput in;
+	in.armed = in.tracked = in.object = true;
+	in.modeBefore = 0;
+	in.modeAfter = 2;
+	CHECK(decideChest(in) == ChestReason::Rolled);
+	in.rolled = true;
+	CHECK(decideChest(in) == ChestReason::AlreadyRolled);
+	in.rolled = false;
+	in.modeAfter = 0;
+	CHECK(decideChest(in) == ChestReason::NotOpened);
+	in.modeAfter = 2;
+	in.object = false;
+	CHECK(decideChest(in) == ChestReason::NotObject);
+	in.object = true;
+	in.tracked = false;
+	CHECK(decideChest(in) == ChestReason::NotTracked);
+	in.armed = false;
+	CHECK(decideChest(in) == ChestReason::NotArmed);
+	CHECK(std::string(chestReasonName(ChestReason::NotOpened)).find("mode") != std::string::npos);
+}
+
+TEST_CASE("describeFleeChecks: says which check would stop the flee") {
+	CHECK(describeFleeChecks(0, 1).find("should set the flee") != std::string::npos);
+	CHECK(describeFleeChecks(1, 1).find("will return without") != std::string::npos);
+	CHECK(describeFleeChecks(0, 0).find("will return without") != std::string::npos);
+	CHECK(describeFleeChecks(-1, -1).find("not fully probed") != std::string::npos);
+	CHECK(describeFleeChecks(-1, 0).find("will return without") != std::string::npos);
 }

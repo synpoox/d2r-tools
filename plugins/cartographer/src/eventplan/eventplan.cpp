@@ -176,7 +176,7 @@ bool EventRoomTracker::onPopulated(const Rect &room) {
 
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
-	if (event.kind != events::Kind::Boss && event.kind != events::Kind::Horde) {
+	if (event.kind == events::Kind::Shrine || event.kind == events::Kind::Invalid) {
 		plan.problem = std::string(events::kindName(event.kind)) + " events are not applied yet";
 		return plan;
 	}
@@ -188,13 +188,17 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 		plan.problem = "Spawn '" + event.spawn + "' has no monster to spawn (its Class is not in monstats.txt)";
 		return plan;
 	}
-	const int total = event.kind == events::Kind::Boss ? 1 + std::max(0, event.minions) : std::max(0, event.hordeSize);
+	// Ambush: one wave's worth (the engine part spawns it once per wave). Treasure: the one monster (a chest is placed by the engine part).
+	const int total = event.kind == events::Kind::Boss       ? 1 + std::max(0, event.minions)
+	                  : event.kind == events::Kind::Ambush   ? std::max(0, event.waveSize)
+	                  : event.kind == events::Kind::Treasure ? 1
+	                                                         : std::max(0, event.hordeSize);
 	const std::vector<Spot> spots = placements(room, total, seed, scale);
 	for (size_t i = 0; i < spots.size(); ++i) {
 		Spawn s;
 		s.spot = spots[i];
 		s.classRow = spawn.classRow;
-		if (event.kind == events::Kind::Boss && i == 0 && spawn.kind == events::NameKind::Unique) {
+		if ((event.kind == events::Kind::Boss || event.kind == events::Kind::Treasure) && i == 0 && spawn.kind == events::NameKind::Unique) {
 			s.superUnique = true;
 			s.row = spawn.row;
 		} else {

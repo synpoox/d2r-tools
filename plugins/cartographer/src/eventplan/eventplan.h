@@ -184,7 +184,9 @@ struct SpawnPlan {
 };
 
 // A Boss: the named boss at the room centre, plus `minions` of its class around it. A Horde: `hordeSize` of the named
-// monster (a superunique spawns as its class: it can only exist once per game). Other kinds give a problem (phase 6b).
+// monster (a superunique spawns as its class: it can only exist once per game). An Ambush: one wave, `waveSize` of the named monster
+// (the engine part spawns it once per wave). A Treasure monster: the one monster (the first spawn, a superunique if named). A Shrine and a
+// Treasure chest are placed by the engine part, not planned here: a Shrine gives a problem.
 // `room` is the rect the spots are placed in (the server room's, which is what the spawn code takes), `scale` its units per tile.
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale = 1);
 

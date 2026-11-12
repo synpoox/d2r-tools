@@ -517,9 +517,15 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 	return unit != nullptr;
 }
 
+// The Ambush's wave spawner (event_6b.cpp calls it each wave): one unit, as the Boss and Horde spawns make them.
+auto SpawnAmbushUnit(void* game, void* room, const ep::Spawn& s, void** unit) noexcept -> bool {
+	bool asSuper = false;
+	return SpawnOne(static_cast<Game*>(game), room, s, &asSuper, unit);
+}
+
 void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept {
-	if (state.event->kind == ev::Kind::Shrine) {
-		Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b
+	if (Event6bPlacesObject(*state.event, state.spawn.kind)) {
+		Event6bPlaceShrine(game, room, rects.server, ep::spotScale(rects.server, rects.drlg), seed);  // phase 6b: a Shrine, or a Treasure chest
 		return;
 	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
@@ -528,13 +534,18 @@ void SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		plog::Warn("event '%s' not spawned: %s", state.event->name.c_str(), plan.problem.c_str());
 		return;
 	}
+	if (state.event->kind == ev::Kind::Ambush) {
+		Event6bArmAmbush(*state.event, plan.spawns, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
+		plog::Info("event '%s' (%s): armed in the event room %s: %zu per wave", state.event->name.c_str(), ev::kindName(state.event->kind), Describe(rects.server).c_str(), plan.spawns.size());
+		return;
+	}
 	int made = 0, failed = 0, supers = 0;
 	for (const ep::Spawn& s : plan.spawns) {
 		bool asSuper = false;
 		void* unit = nullptr;
 		if (SpawnOne(game, room, s, &asSuper, &unit)) {
-			if (state.event->kind == ev::Kind::Boss && &s == &plan.spawns.front()) {
-				Event6bBossSpawned(unit);  // phase 6b: the boss is the first spawn; its death rolls the Drop
+			if (&s == &plan.spawns.front()) {
+				Event6bFirstSpawned(game, state.event->kind, unit);  // phase 6b: the Boss or Treasure monster is the first spawn; its death rolls the Drop
 			}
 			++made;
 			supers += asSuper ? 1 : 0;
@@ -714,7 +725,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
 		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
-		const bool monsterSpawn = event->kind != ev::Kind::Shrine;
+		const bool monsterSpawn = event->kind != ev::Kind::Shrine;  // a Treasure's Spawn is looked up too: a miss means a chest's objects name
 		bool decided = !monsterSpawn;
 		if (monsterSpawn && player != nullptr && g_dataTables != nullptr) {
 			const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
@@ -741,16 +752,17 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
 		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
+		const bool placesObject = Event6bPlacesObject(*event, state->spawn.kind);
 		ep::SpawnPlan check;
-		if (monsterSpawn) {
+		if (!placesObject) {
 			check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
 		}
 		std::string shrineWhy;
-		if (event->kind == ev::Kind::Shrine) {
-			// Phase 6b: a Shrine's Spawn is an objects row, not a monster; it is announced only when it resolves to exactly one row.
+		if (placesObject) {
+			// Phase 6b: a Shrine's Spawn (or a Treasure chest's) is an objects row, not a monster; it is announced only when it resolves to exactly one row.
 			if (!g_spawnOn.load()) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
-			} else if (!Event6bPrepareShrine(*event, tables->objectNames, player, &shrineWhy)) {
+			} else if (!(event->kind == ev::Kind::Shrine ? Event6bPrepareShrine(*event, tables->objectNames, player, &shrineWhy) : Event6bPrepareChest(*event, tables->objectNames, level, player, &shrineWhy))) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), shrineWhy.c_str());
 			} else {
 				state->event = std::move(event);
@@ -760,7 +772,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		} else if (!g_spawnOn.load()) {
 			plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
 		} else {
-			Event6bArmBossDrop(*event, level, player);  // phase 6b: does nothing without a Boss Drop
+			Event6bArmBossDrop(*event, level, player);  // phase 6b: does nothing without a Boss or Treasure monster Drop
 			state->event = std::move(event);
 		}
 	}
@@ -770,7 +782,6 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 }
 
 void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexcept {
-	(void)rawGame;
 	auto* unit = static_cast<Unit*>(rawUnit);
 	if (!g_busy.load(std::memory_order_relaxed) || !g_tickOn.load() || unit == nullptr || At<int32_t>(unit, UnitTypeOffset) != 0 || At<uint32_t>(unit, UnitIdOffset) != localPlayer) {
 		return;
@@ -785,6 +796,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			return;
 		}
 		void* room = Call<UnitRoomFn>(EvUnitRoom)(unit);
+		Event6bAmbushTick(rawGame, room, &SpawnAmbushUnit);  // phase 6b: starts the next Ambush wave when the player is in the event room
 		const bool inMap = room != nullptr && Call<RoomLevelFn>(EvRoomLevelId)(room) == state->level;
 		std::vector<std::string> lines;
 		{

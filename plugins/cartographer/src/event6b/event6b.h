@@ -1,5 +1,5 @@
-// Cartographer events, phase 6b (Shrine and Boss Drop): the small decisions that need no game. Pure C++ on plain values:
-// no engine, no SDK. The engine part (src/engine/event_6b.cpp) reads the game and calls these.
+// Cartographer events, phase 6b (Shrine, Boss Drop, Ambush, Treasure): the small decisions that need no game. Pure C++ on plain
+// values: no engine, no SDK. The engine part (src/engine/event_6b.cpp) reads the game and calls these.
 // Notes and evidence: docs/reverse-engineering/cartographer.md section 13.
 #pragma once
 #include <cstddef>
@@ -7,6 +7,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "events.h"
 
 namespace cartographer::event6b {
 
@@ -85,5 +87,89 @@ const char *dropReasonName(DropReason reason);
 // offset from `code` (it may lie outside the buffer), or `kNoTarget` when the byte at `site` is not E8 or the call does not fit.
 constexpr int64_t kNoTarget = INT64_MIN;
 int64_t callTargetOffset(const uint8_t *code, size_t size, size_t site);
+
+// --- Which engine path an event takes -----------------------------------------------------------------------------------
+
+enum class Route : uint8_t {
+	None,             // not one of the five kinds
+	Boss,             // the named boss and its minions
+	Horde,            // Count of the named monster
+	Ambush,           // waves of Count x Spawn, started when the player reaches the event room
+	TreasureMonster,  // Treasure whose Spawn is a monster: it flees, and its death rolls Drop
+	TreasureChest,    // Treasure whose Spawn is not a monster (an objects.txt name): a chest that rolls Drop when opened
+	Shrine,           // an objects.txt row placed at a free spot
+};
+// `spawnKind` is what the monster lookup made of Spawn (a monstats Id or a superuniques name). A Treasure whose Spawn is not a monster
+// is a chest; whether its objects.txt name is valid is decided later, against the game's row count.
+Route routeEvent(events::Kind kind, events::NameKind spawnKind);
+const char *routeName(Route route);
+
+// --- Ambush waves ---------------------------------------------------------------------------------------------------
+
+// Bookkeeping for an Ambush: wait for the player in the event room, spawn a wave, count its kills by unit id, give the wave a
+// time-out, spawn the next one after a short gap, and finish after the last. Plain values; the caller gives the clock (ms).
+constexpr uint64_t kWaveTimeoutMs = 90000;  // a guess: a wave not cleared by then counts as done (needs-game item 9)
+constexpr uint64_t kWaveGapMs = 1500;       // between a cleared wave and the next
+enum class WaveEnd : uint8_t { None, Cleared, TimedOut, Empty };  // how the last wave ended; Empty: the game made none of its units
+const char *waveEndName(WaveEnd end);
+
+class WaveTracker {
+public:
+	enum class Step : uint8_t {
+		Wait,       // nothing to do
+		SpawnWave,  // spawn the next wave now, then call waveSpawned() with the ids
+		Finished,   // every wave is done (or the event was abandoned)
+	};
+	enum class Phase : uint8_t { Idle, Waiting, Spawning, Fighting, Gap, Done };
+
+	// Starts a new Ambush of `waves` waves (at least 1).
+	void arm(int waves, uint64_t timeoutMs = kWaveTimeoutMs, uint64_t gapMs = kWaveGapMs);
+	void reset();
+	// Called every tick: `inRoom` is whether the local player is in the event room.
+	Step step(bool inRoom, uint64_t nowMs);
+	// After SpawnWave: the ids of the units that were made. None at all abandons the event (the room cannot take the spawn).
+	void waveSpawned(const std::vector<uint32_t> &ids, uint64_t nowMs);
+	// A monster died; true when it belonged to the current wave.
+	bool onDeath(uint32_t id);
+
+	Phase phase() const { return phase_; }
+	bool active() const { return phase_ != Phase::Idle && phase_ != Phase::Done; }
+	int wavesStarted() const { return started_; }
+	int wavesTotal() const { return waves_; }
+	size_t remaining() const { return pending_.size(); }
+	WaveEnd lastEnd() const { return lastEnd_; }
+
+private:
+	Phase phase_ = Phase::Idle;
+	int waves_ = 0;
+	int started_ = 0;
+	uint64_t timeoutMs_ = kWaveTimeoutMs;
+	uint64_t gapMs_ = kWaveGapMs;
+	uint64_t deadline_ = 0;
+	uint64_t gapUntil_ = 0;
+	std::vector<uint32_t> pending_;
+	WaveEnd lastEnd_ = WaveEnd::None;
+};
+
+// --- Treasure chest ---------------------------------------------------------------------------------------------------
+
+// The operate hook (0x592c40) sees every object use. The chest rolls its Drop once, when its mode changed during the call.
+enum class ChestReason : uint8_t { Rolled, NotArmed, NotTracked, NotObject, AlreadyRolled, NotOpened };
+struct ChestInput {
+	bool armed = false;    // a Treasure chest with a resolved Drop is armed
+	bool tracked = false;  // the object's id is the chest the event placed
+	bool object = false;   // the unit's type is 2
+	bool rolled = false;   // the Drop was rolled already
+	int32_t modeBefore = 0;
+	int32_t modeAfter = 0;
+};
+ChestReason decideChest(const ChestInput &input);
+const char *chestReasonName(ChestReason reason);
+
+// --- Treasure monster flee ----------------------------------------------------------------------------------------------
+
+// What the two checks 0x597030 makes first said about the target (-1: that check was not run). The flee setup returns at once when
+// `blocked` (0x34c2c0) is nonzero or `targetOk` (0x34c730) is zero.
+std::string describeFleeChecks(int blocked, int targetOk);
 
 }  // namespace cartographer::event6b
