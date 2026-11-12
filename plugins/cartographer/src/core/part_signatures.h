@@ -46,7 +46,7 @@ inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 
 inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
 
-// Map events (cartographer.md section 8). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
+// Map events (cartographer.md section 9). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
 // room, from both activation paths, so the original is called first and the event spawns after the room is populated.
 // The 12-byte prefix alone matches 3 sites, so the signature runs on to 41 bytes; the hook cuts the first 12.
 inline constexpr const char* PopulateRoom = "4C 8B DC 53 56 48 81 EC B8 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 80 00 00 00 83 3D ?? ?? ?? ?? 00 48 8B F2 48 8B D9";

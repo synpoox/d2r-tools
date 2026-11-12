@@ -21,7 +21,7 @@ namespace {
 namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
-// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 8.
+// --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer.md section 9.
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room

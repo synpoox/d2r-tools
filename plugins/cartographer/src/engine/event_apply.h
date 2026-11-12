@@ -8,7 +8,7 @@
 // Every address is found by byte signature at load; a part that finds no single match, or whose guard does not match, is
 // logged and left off (the event is then neither spawned nor announced; the map and the banner still work). Nothing here is
 // checked in a game yet; the probe lines it logs ("eventprobe:") are for the needs-game checks in
-// docs/reverse-engineering/cartographer.md section 8.
+// docs/reverse-engineering/cartographer.md section 9.
 #pragma once
 
 #include "engine/portal.h"
