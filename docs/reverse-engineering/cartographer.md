@@ -22,8 +22,8 @@ The pd2-resurrected links above are under https://github.com/synpoox/pd2-resurre
 
 Every row in section 1 has: Build 93847, Guard "not yet: needs a byte signature" (except the nine maze rows of
 section 1a, which have one, and the rows marked "signed", which carry a signature that matched exactly once in the running image; their Guard and Validation are in section 4), Status "not validated in this repo" (the 1a rows: static only), and
-Failure mode "fail open: log and leave Cartographer's map off". The tested image stamp is the registry's
-(`0x6ab3782c`); the outdoor spike did not log the stamp itself (section 4). Coexistence: D2RCore patches or thunks some DRLG code (`0x3e2b5ce`); see that row.
+Failure mode "fail open: log and leave Cartographer's map off". The tested image stamp is `0x6ab3782c`, read
+from the loaded image and logged by the outdoor spike at load (section 4). Coexistence: D2RCore patches or thunks some DRLG code (`0x3e2b5ce`); see that row.
 
 ## 1. Addresses
 
@@ -209,13 +209,17 @@ validated in game, and the hook entries and `UnitStat`'s thunk are only checked 
 
 ## 4. Outdoor S0 and S1 spike results (issue #22)
 
-**Spike:** `spike/cartographer-outdoor-s1` at 9eeaedc (`plugins/cartographer-outdoor-spike/`, never merged; S0 and the level build ran at 8d377ca, the position, collision and walk tooling is 9eeaedc).
-**Run:** build 93847, D2RLoader 1.3.1 (PluginSDK 0.4.0), vanilla RotW test slot 11 (mod `D2RToolsTest`), test character
-(Barbarian, Normal), 2026-11-11. The owner's install was not touched.
-**Validation levels reached:** clean build; installed; live in the test slot (signatures, hooks, a level built in game, the
-character walked both ends of the line with a logged position, automap screenshots). The line was NOT walked in one
-continuous run (see S1). The image stamp (`0x6ab3782c`) and the D2RLoader version were taken from the registry and the
-loader banner, not logged by the spike.
+**Spike:** `spike/cartographer-outdoor-s1-finish` at 7f59e16 (`plugins/cartographer-outdoor-spike/`, never merged; S0 and the level build ran at 8d377ca, the position, collision and walk tooling is 9eeaedc, 7f59e16 adds the load-time stamp and loader log).
+**Run:** build 93847, D2RLoader v1.3.1-beta, vanilla RotW test slot 11 (mod `D2RToolsTest`), test character
+(Barbarian, Normal), 2026-11-11 (first run) and 2026-11-12 (finishing run). The owner's install was not touched.
+**Validation levels reached:** clean build; installed; live in the test slot (signatures, hooks, a level built in game, a
+logged-position walk from tile 7 to tile 150 (of 0..159), route-guided to tile 142.8 (one run as operated; continuity not logged); own-room collision reads, automap
+screenshots). Live in game means the position log, the collision reads and the screenshots below; unit tests do not apply
+to the spike. The DS1 walk flags were not used as evidence.
+**Build identity (logged live at load by the spike, 7f59e16):** PE TimeDateStamp `0x6ab3782c`, game build strings the loader reports
+(`buildVersion` / `buildName`: `3.3.0` / `93847`), the context's `abiVersion` (4) and `contextSize`. Not logged: PluginSDK 0.4.0 is the build-time submodule
+pin, and D2RLoader v1.3.1-beta comes from the loader banner on screen (the loader does not expose its version through the
+context).
 
 **Probe commands** (console, test harness): `cartographer pos`, `track on|off|reset` (logs `pos subtile ...` lines and the
 reached extents), `coll <mask> [dump]` (collision at the player; `dump` writes an 800x160 subtile file), `peek <addr> <len>`,
@@ -266,7 +270,7 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
   five 32-tile blocks, each 4x4 grid cells of 8 tiles (a 20x4 cell grid over 160x32 tiles). `0x3ecfc0` takes the file from the level RNG at
   `+0x1e4` (file 0 each time here).
 - **Jungle tiles render in Act 5:** yes. Jungle ground, palms, ferns and a fallen-tree bridge render on the level (in game).
-- **Rooms:** 80 rooms (8x8 tiles each, a 160x32 tile rect) on both the server and the client drlg. The spike's LogRooms prints every room as `piece` or `fill`, so the logs carry the split plan §1.5 expected, but it was not counted for this record (it matters for the room bits at `+0x258` and S2). The room lists and grid dumps of every build
+- **Rooms:** 80 rooms (8x8 tiles each, a 160x32 tile rect) on both the server and the client drlg. Piece/fill split (live, from LogRooms): 80 piece rooms and 0 fill rooms on both sides, 16 of lvlprest 530 (Jungle W, `rivw`), 16 of 531 (Jungle E, `rive`) and 48 of 532 (Jungle EW, `rivew`), file 0 each time. Every cell of the 20x4 grid is covered by a piece, so the line has no fill rooms to account for in the room bits at `+0x258` or in S2. The room lists and grid dumps of every build
   (server, client, client again after leaving and returning, and server and client in a second game) are identical.
 - **Monsters:** spawn on the level (Frigid Highlands monsters, from the cloned levels.txt row; they attack).
 - **Leave and return:** `cheat goto 1` then back to 138: the client rebuilt the level and the room list and grid dump
@@ -275,26 +279,16 @@ and the plugin logs it and leaves the level to the game (fail open). No signatur
   no crash. No crash dump was written and the spike's log shows no fault, in either game.
 - **Position readout (live):** `cartographer pos` and `track` read the player's dynamic path (unit `+0x38`, x `+0x2`, y `+0x6`,
   subtiles; control unit `0x484c90`, byte-checked at load). Level origin is subtile (30000,15000). Validated live.
-- **Walking (live, in two segments, not one run):** a click walk driven by the logged position went from tile x 148 west to
-  x 89 (subtiles 30446..30741), crossing the seams at 128 and 96. A second run, after teleporting to the west end, went from
-  x 11 east to x 70 (subtiles 30054..30354), crossing the seams at 32 and 64. Both stopped at a dark blocked channel
-  (screenshot at x 89; x 70 stalled the same way). The stretch x 70..89 was not walked, so the end-to-end
-  condition is NOT met as one walk; all four seams were crossed on foot. The monsters' columns were zeroed in the slot's `levels.txt` for
-  these runs (restored afterwards), the first stall was a locked chest object.
-- **Collision (partial, own-room only):** `0x350a20` is reliable only inside the player's own room (it walks that room's
-  near list; elsewhere it reports blocked, about 98 percent of the level). The spike sampled the player in 65 of 80 rooms
-  (the north-west and east edges were not reached) and kept each own-room window. That OR-merged map is a partial map (65 of 80 rooms), not a bound either way: it over-reports open ground (it showed open tiles in the dark channel the character could not enter) and leaves the unsampled rooms blocked, so it is
-  not used as proof. It shows a walkable band through rows 9..13 at all four seams and a 1897-tile connected component from x 5 to 150.
+- **Walking (live, route-guided; one run as operated, continuity not logged):** the earlier two-segment walk (x 148 to 89 and x 11 to 70, all four seams crossed) is superseded. In the finishing run the character went from tile 7 (`cheat goto 138,30037,15066`) to the east end in what was operated as a single click-walk, driven by the logged position and a route computed from the own-room collision scan (below). It crossed all four seams (tiles 32, 64, 96, 128) and the former stall zone at x 70..89 with no stall in the routed phase, reaching subtile x 714 (tile 142.8); the game's own pathing then took it blind east to a dead end at subtile (751,64), tile 150.2 (`track off`: reached x 30034..30751, y 15032..15066). Tiles 142.8 to 150.2 were the game's own pathing, not the route; the east tail is almost certainly the closed outer edge of the last block, not proven. Tiles 0 to 5 and 151 to 159 were not walked; tile 6 was only touched (min x 30034 is in tile 6). The run is route-guided, not free exploration: the route was planned from the collision scan, then followed by feedback clicks. Not recorded: whether `track reset` was run before the counted walk (the extents also cover teleports, such as the `goto` sweeps and the abandoned attempt, so the extents alone do not show one run), and whether the `pos subtile` log runs without jumps from 30037 to 30751; the spike code does not show either. The offline merge and route planning tooling is not recorded and is not in the repo or on the spike branch (`coll <mask> dump` overwrites one fixed file per mask, so keeping each room's window and merging 62 rooms happened outside the spike). The monsters' columns (64 to 72 and 75) were zeroed in the slot's `levels.txt` for the walks (restored afterwards); the first stall of the first run was a locked chest object, and one stall near tile 23.8 in the first attempt was a dead end of an over-eroded route, not terrain. Whether the counted run was a fresh start at tile 7 after that attempt was abandoned is not recorded in the logs; the `cheat goto 138,30037,15066` start suggests it, but that is an inference.
+- **Collision (live, own-room only):** `0x350a20` (mask `0x1c09`) is reliable only inside the player's own room (it walks that room's near list; elsewhere it reports blocked, about 98 percent of the level). The finishing run teleported the player into each room (`cheat goto`) and kept the own-room window: 62 of 80 rooms were sampled. Missing: rooms (0,0), (0,3), (3,0), (4,0), (4,3), (5,0), (6,0), (7,0), (8,3), (11,0), (12,3), (15,0), (16,0), (17,0) and the whole column 19 (non-walkable targets snap to the entry, so those rooms could not be entered by `goto`). The own-room merge is not a bound either way: the first run's merge over-reported open ground (it showed open tiles in the dark channel the character could not enter), and the finishing run's data does not show that the over-report is gone, so the caveat stands; unsampled rooms count as blocked. From it the walk route was found, and the route was then confirmed by the character actually standing along it (logged positions), which is the evidence, not the map alone.
 - **Automap (live, compared by eye):** the automap draws a continuous blue dotted line along the whole line (both ends and
   across the seams seen) with tree rows flanking the corridor, matching `[E][EW][EW][EW][W]` running east-west. It was
   compared by screenshots (`automap_east`, `automap_west`) at two positions, not cell by cell and not against a mask dump.
   Verdict: consistent with the masks; not an exhaustive check.
-- **River or path (still open, leaning river):** the line is one row of blocks, so every seam is shared by two blocks
-  and the mask alone cannot separate "river" from "path". What was seen: the dotted automap line and a dark flat channel run
-  continuously through the corridor, and walkable ground exists on the same rows at all four seams. Which feature runs through
-  each 32-tile seam was not separated with trustworthy collision data, so this stays open, leaning river (visual: the automap line and the dark channel). It gets decided in S2 (an L-shape plus a branch, with a closed edge next to an occupied cell) or from the DS1 walk flags in the catalogue tool.
-- **Slot used:** 11 (`D2RToolsTest`). Game stopped, slot unlocked, the spike DLL removed and the slot's own plugins
-  restored.
+- **River or path (decided: both exist, the line is traversable):** the dark channel at x 70..90 looks like water in the screenshots (a river, or a lake where the line widens) and is impassable (the live evidence is the stalls and the route around the channel; why it is impassable is not known): a straight click walk into it stalled, as the earlier runs did. It does not cut the line: the banks and a north shelf are walkable ground. The live route kept to the north bank (rows about 9 to 12), detoured up to rows about 6 to 8 around the x 70..90 water body, then ran along rows about 8 to 11 to x 142 and crossed every seam on foot. So the stamped line is a navigable path with a river beside and through it, not a river-only line. Evidence: live in game (position log, own-room collision, the click walk). Offline DS1 walk flags (catalogue tool, `lay.unwalkable` = cell flag `0x20000`, subtile flag = DT1 bit 0) were ambiguous: honouring the flag cut the line near x 22, ignoring it left everything open, so they are not used as evidence (offline, not live). Not covered: the S2 questions (an L-shape plus a branch, a closed edge next to an occupied cell).
+- **Earlier S1 conditions not redone in the finishing run:** render, automap, monsters, host and client logs, leave and return, and new game are from the first run (above). The finishing run did not repeat them, so issue #22 is `Refs`, not `Closes`.
+- **Slot used:** 11 (`D2RToolsTest`). Game stopped, slot unlocked, the spike DLL removed, and the slot's plugins, config, logs,
+  `levels.txt` and save folder restored from a backup taken before the runs.
 
 ## 5. Maze slot engine checks (issue #62)
 
