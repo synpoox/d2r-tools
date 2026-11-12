@@ -5,6 +5,7 @@
 #pragma once
 
 #include "core/tables.h"
+#include "eventplan.h"
 #include "statplan.h"
 
 #include <D2RLPlugin/api.h>
@@ -24,6 +25,7 @@ struct Tables {
 	std::vector<cartographer::stats::PoolRow> pool;  // empty: the built-in pool
 	std::vector<cartographer::events::Row> events;
 	cartographer::statplan::StatIds statIds;  // itemstatcost.txt: stat name -> id, for the map stats
+	cartographer::eventplan::SpawnTable spawnNames;  // monstats.txt Id and superuniques.txt Superunique/Class by row, for the event spawns
 };
 
 // One engine part and what became of it.

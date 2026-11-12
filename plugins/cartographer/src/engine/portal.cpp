@@ -8,6 +8,7 @@
 #include "core/sig.h"
 #include "core/text.h"
 #include "engine/stat_apply.h"
+#include "engine/event_apply.h"
 #include "log.h"
 #include "steer.h"
 
@@ -184,6 +185,15 @@ void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& table
 	}
 }
 
+// The map is open: decides its event and arms the entry message (event_apply.cpp). Never lets a failure reach the game.
+void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player, int level, bool maze) noexcept {
+	try {
+		EventsMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), level, maze);
+	} catch (...) {
+		plog::Error("deciding the map's event failed; '%s' opens without one", map.name.c_str());
+	}
+}
+
 // A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
 // Preset slot.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
@@ -335,6 +345,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, player);
+		StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
 	}
 }
 
@@ -397,6 +408,7 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, unit);
+		StartMapEvents(*map, tables, game, unit, level, IsMazeMap(*map));
 	}
 }
 
@@ -438,6 +450,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		ServeRequest(game, unit);
 	}
 	StatApplyPlayerTick(game, unit);
+	if (known != NoPlayer) {
+		EventsPlayerTick(game, unit, known);
+	}
 	return result;
 }
 
@@ -458,6 +473,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_firstLogged = false;
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		StatApplyGameLeft();
+		EventsGameLeft();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
