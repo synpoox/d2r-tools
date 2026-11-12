@@ -1,7 +1,15 @@
 # THROWAWAY spike (never merged). `level` is the levels.txt row added to the test slot's mod.
+# S2 layout: rows top (y 0) to bottom, '/' between rows, ',' between cells; '-' void; '*' clearing; W E S N exits.
+#   *E  EWS  SW      entry clearing (0,0) -> path -> junction -> corner, boss clearing at (2,2)
+#    -  *N   NS      branch south from (1,0) to a dead-end clearing (1,1)
+#    -   -   *N
 [cartographer-outdoor-spike]
 level = 138
-line = "E,EW,EW,EW,W"
+layout = "*E,EWS,SW/-,*N,NS/-,-,*N"
+void = "mark"
+arrival = "mark"
+entry_col = 0
+entry_row = 0
 offset_x = 6000
 offset_y = 3000
 stamp = true

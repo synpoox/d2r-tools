@@ -35,7 +35,7 @@
 namespace {
 
 constexpr const char* PluginName = "cartographer-outdoor-spike";
-constexpr const char* PluginVersion = "0.0.3";
+constexpr const char* PluginVersion = "0.0.4";
 
 // --- Signatures (build 93847; docs/reverse-engineering/cartographer.md). `??` = any byte. ---------------------------
 // Each is the function's entry up to its first relative operand. `hook` is the instruction-boundary length the hook
@@ -46,7 +46,7 @@ struct Part {
 	uint32_t hook;
 	uint64_t expectRva;  // the 93847 RVA, for the log only
 };
-enum PartId { LevelBuild, OutdoorEntry, Act5, Stamp, Rooms, GridAlloc, GridRead, Act1, PartCount };
+enum PartId { LevelBuild, OutdoorEntry, Act5, Stamp, Rooms, GridAlloc, GridRead, Act1, VoidSet, PlayerTick, OpenPortal, PartCount };
 constexpr Part Parts[PartCount] = {
 	{"level build 3271c0",
 	 "48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2 44 0F B6 F9 8B 90 60 08 00 00 49 8D 8E E4 01 00 00 41 03 96 F8",
@@ -62,6 +62,14 @@ constexpr Part Parts[PartCount] = {
 	{"grid alloc 3fa7f0", "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 20 49 63 E8 44 8B FA 4C 8B F1 89 51 08 89 69 0C 8D 34", 16, 0x3fa7f0},
 	{"grid read 3fa790", "48 8B 41 20 4D 63 C0 48 63 D2 4E 63 0C 80 48 8B 41 18 4C 03 CA 4A 8B 04 C8", 0, 0x3fa790},
 	{"act 1 builder 3fac10", "48 89 5C 24 08 57 48 83 EC 20 0F B6 F9 48 8B DA 8B 8A F8 01 00 00 8D 41 FE 83 F8 01 76 0D 83 F9 11 74 08 48 8B CA", 10, 0x3fac10},
+	// S2: the void cell setter (call only), the player tick (hooked, serves the portal request and logs the arrival) and OpenRedPortal (call only).
+	{"void setter 3ede00",
+	 "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 59 18 45 33 C9 41 8B F8 C7 44 24 20 03 00 00 00 8B F2 48 8D 4B 08 E8 ?? ?? ?? ?? 48 8D 4B 58 C7 44 24 20 03 00 00 00 41 B9 00 01 00 00",
+	 0, 0x3ede00},
+	{"player tick",
+	 "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??",
+	 14, 0},
+	{"open red portal", "48 89 5C 24 08 48 89 6C 24 10 44 89 44 24 18 56 57 41 56 48 83 EC 70 48 8B E9", 0, 0x5da800},
 };
 
 // --- Level and room fields (decompiles of 0x3271c0 / 0x3ee320) ---------------------------------------------------------
@@ -75,7 +83,11 @@ constexpr int RoomPiece = 0x40, RoomNext = 0x48, RoomX = 0x60, RoomY = 0x64, Roo
 // --- Config ------------------------------------------------------------------------------------------------------------
 struct Config {
 	int level = -1;                         // levels.txt id of the slot row
-	char line[64] = "E,EW,EW,EW,W";         // the fixed jungle line, left to right
+	char layout[256] = "*E,EWS,SW/-,*N,NS/-,-,*N";  // rows top (y 0) to bottom, '/' between rows, ',' between cells; '-' void, '*' clearing
+	bool voidMark = true;                   // void cells get 0x100 through 0x3ede00; false: left unstamped and untouched
+	bool arrivalMark = true;                // flag the entry cell's room 0x30000 so the level-entry finder picks it
+	int entryCol = 0;                       // the entry cell
+	int entryRow = 0;
 	int offsetX = 6000;                     // level rectangle origin (tiles); the row's OffsetX/OffsetY
 	int offsetY = 3000;
 	bool stamp = true;                      // false: leave the Act 5 branch to D2R (control run)
@@ -83,8 +95,14 @@ struct Config {
 };
 Config g_config;
 char g_status[400] = "off: not started";
-uint8_t g_mask[32];
-int g_blocks = 0;
+struct Cell {
+	uint8_t mask = 0;      // W 1, E 2, S 4, N 8
+	bool clearing = false;
+	bool voidCell = true;
+};
+Cell g_cell[8][8];
+int g_cols = 0, g_rows = 0;
+int g_blocks = 0;  // cols * rows, 0 = no layout
 
 // --- Resolved engine --------------------------------------------------------------------------------------------------
 using LevelFn = void (*)(uint8_t, void*) noexcept;
@@ -92,6 +110,9 @@ using StampFn = void (*)(uint8_t, void*, int32_t, int32_t, int32_t, int32_t, cha
 using GridReadFn = uint64_t (*)(void*, int32_t, int32_t) noexcept;
 using ReseedFn = void (*)(void*, int32_t) noexcept;
 using ActLookupFn = int8_t (*)(uint8_t, int32_t) noexcept;
+using VoidSetFn = void (*)(void*, int32_t, int32_t) noexcept;
+using PlayerTickFn = uint64_t (*)(void*, void*) noexcept;
+using OpenPortalFn = int32_t (*)(void*, void*, uint32_t, int32_t, int32_t) noexcept;
 
 const D2RL::PluginContext* g_context = nullptr;
 const uint8_t* g_addr[PartCount];       // found address, or null
@@ -101,6 +122,10 @@ LevelFn g_levelBuild = nullptr, g_outdoorEntry = nullptr, g_act5 = nullptr, g_ac
 StampFn g_stamp = nullptr;
 GridReadFn g_gridRead = nullptr;
 ReseedFn g_reseed = nullptr;
+VoidSetFn g_voidSet = nullptr;
+PlayerTickFn g_tickOrig = nullptr;
+OpenPortalFn g_openPortal = nullptr;
+std::atomic<bool> g_portalRequested{false};
 ActLookupFn g_actLookup = nullptr;      // D2RLoader thunk into D2RCore, followed from 0x3ee320
 const uint8_t* g_actThunk = nullptr;
 const uint8_t* g_outdoorThunk = nullptr;  // D2RLoader thunk, followed from 0x3271c0
@@ -256,9 +281,9 @@ void LogGrid(const void* level) noexcept {
 	if (grid == nullptr || g_gridRead == nullptr) return;
 	const int w = F<int32_t>(grid, GridCellsW), h = F<int32_t>(grid, GridCellsH);
 	plog::Info("[%s] grid block %p: %dx%d cells, neighbours %p", Side(level), static_cast<const void*>(grid), w, h, F<void*>(grid, GridNeighbours));
-	if (w <= 0 || h <= 0 || w > 200 || h > 64) return;
+	if (w <= 0 || h <= 0 || w > 200 || h > 200) return;
 	for (int y = 0; y < h; y++) {
-		char row[256];
+		char row[256] = {};
 		int used = 0;
 		for (int x = 0; x < w && used < 250; x++) {
 			const uint64_t flags = g_gridRead(const_cast<uint8_t*>(grid) + GridFlags, x, y);
@@ -271,45 +296,77 @@ void LogGrid(const void* level) noexcept {
 }
 
 // --- The S1 build ---------------------------------------------------------------------------------------------------------
-void ParseLine(const char* text) noexcept {
-	g_blocks = 0;
-	std::memset(g_mask, 0, sizeof(g_mask));
-	uint8_t mask = 0;
+void ParseLayout(const char* text) noexcept {
+	g_cols = g_rows = g_blocks = 0;
+	for (auto& r : g_cell) for (Cell& c : r) c = Cell();
+	int col = 0, row = 0;
+	Cell cur;
 	bool any = false;
-	for (const char* c = text;; c++) {
-		if (*c == ',' || *c == '\0') {
-			if (any && g_blocks < 32) g_mask[g_blocks++] = mask;
-			mask = 0;
+	for (const char* p = text;; p++) {
+		if (*p == ',' || *p == '/' || *p == '\0') {
+			if (any && row < 8 && col < 8) {
+				g_cell[row][col] = cur;
+				if (col + 1 > g_cols) g_cols = col + 1;
+				if (row + 1 > g_rows) g_rows = row + 1;
+			}
+			cur = Cell();
 			any = false;
-			if (*c == '\0') break;
+			if (*p == '\0') break;
+			if (*p == '/') { row++; col = 0; } else col++;
 			continue;
 		}
 		any = true;
-		switch (*c) {  // the native jungle's bits: W 1, E 2, S 4, N 8
-			case 'W': mask |= 1; break;
-			case 'E': mask |= 2; break;
-			case 'S': mask |= 4; break;
-			case 'N': mask |= 8; break;
+		switch (*p) {  // the native jungle's bits: W 1, E 2, S 4, N 8
+			case 'W': cur.mask |= 1; cur.voidCell = false; break;
+			case 'E': cur.mask |= 2; cur.voidCell = false; break;
+			case 'S': cur.mask |= 4; cur.voidCell = false; break;
+			case 'N': cur.mask |= 8; cur.voidCell = false; break;
+			case '*': cur.clearing = true; break;
 			default: break;
 		}
 	}
+	g_blocks = g_cols * g_rows;
 }
 
-// 0x3fe2e0 for the slot: stamp the jungle line, piece = 0x211 + mask (LvlPrest 530-544), one 32x32-tile block = 4x4 cells.
-void StampLine(uint8_t dataFlag, void* level) noexcept {
-	for (int i = 0; i < g_blocks; i++) {
-		if (g_mask[i] == 0) {
-			plog::Warn("[%s] block %d has mask 0 (LvlPrest 529, Act 3 Town): skipped", Side(level), i);
-			continue;
+// LvlPrest row for a cell: path piece 0x211 + mask (530..544), or a Pygmy clearing (595..604; order W E EW S SW SE N NW NE NS).
+auto PieceFor(const Cell& c) noexcept -> int {
+	if (!c.clearing) return 0x211 + c.mask;
+	static const int order[16] = {-1, 0, 1, 2, 3, 4, 5, -1, 6, 7, 8, -1, 9, -1, -1, -1};
+	return order[c.mask & 15] >= 0 ? 595 + order[c.mask & 15] : 0;
+}
+
+// 0x3fe2e0 for the slot: stamp the layout (one 32x32-tile block = 4x4 grid cells), then mark the void blocks.
+void StampLayout(uint8_t dataFlag, void* level) noexcept {
+	int stamped = 0, voided = 0;
+	for (int r = 0; r < g_rows; r++) {
+		for (int c = 0; c < g_cols; c++) {
+			const Cell& cell = g_cell[r][c];
+			if (cell.voidCell) continue;
+			const int piece = PieceFor(cell);
+			if (piece == 0) {
+				plog::Warn("[%s] cell (%d,%d) has no piece (mask %d clearing %d): skipped", Side(level), c, r, cell.mask, cell.clearing ? 1 : 0);
+				continue;
+			}
+			g_stamp(dataFlag, level, c * 4, r * 4, piece, -1, 0);
+			stamped++;
 		}
-		g_stamp(dataFlag, level, i * 4, 0, 0x211 + g_mask[i], -1, 0);
 	}
-	plog::Info("[%s] stamped %d jungle blocks on level %d", Side(level), g_blocks, F<int32_t>(level, LevelId));
+	if (g_config.voidMark && g_voidSet != nullptr) {
+		for (int r = 0; r < g_rows; r++) {
+			for (int c = 0; c < g_cols; c++) {
+				if (!g_cell[r][c].voidCell) continue;
+				for (int dy = 0; dy < 4; dy++) for (int dx = 0; dx < 4; dx++) g_voidSet(level, c * 4 + dx, r * 4 + dy);
+				voided++;
+			}
+		}
+	}
+	plog::Info("[%s] stamped %d blocks, marked %d void blocks (void %s) on level %d", Side(level), stamped, voided, g_config.voidMark ? "0x100" : "untouched",
+	           F<int32_t>(level, LevelId));
 }
 
 void Act5Hook(uint8_t dataFlag, void* level) noexcept {
 	if (IsSlot(level) && t_slotLevel == level && g_config.stamp) {
-		StampLine(dataFlag, level);
+		StampLayout(dataFlag, level);
 		return;
 	}
 	g_act5(dataFlag, level);
@@ -340,6 +397,35 @@ void RoomsHook(uint8_t dataFlag, void* level) noexcept {
 	g_rooms(dataFlag, level);
 }
 
+// Gives the room nearest the entry cell's centre the flags 0x30000 (the level-entry finder's first choice, RE doc section 5 Q3) and takes the bits off all others.
+void MarkArrival(void* level) noexcept {
+	if (!g_config.arrivalMark) {
+		plog::Info("[%s] arrival mark off: the game's own choice", Side(level));
+		return;
+	}
+	const int lx = F<int32_t>(level, LevelX), ly = F<int32_t>(level, LevelY);
+	const int x0 = lx + g_config.entryCol * 32, y0 = ly + g_config.entryRow * 32, cx = x0 + 16, cy = y0 + 16;
+	void* best = nullptr;
+	int bestD = 1 << 30, n = 0, inCell = 0;
+	for (void* r = F<void*>(level, LevelFirstRoom); r != nullptr && n < 4000; r = F<void*>(r, RoomNext), n++) {
+		const int rx = F<int32_t>(r, RoomX), ry = F<int32_t>(r, RoomY);
+		if (rx < x0 || rx >= x0 + 32 || ry < y0 || ry >= y0 + 32) continue;
+		inCell++;
+		const int dx = rx + 4 - cx, dy = ry + 4 - cy, d = dx * dx + dy * dy;
+		if (d < bestD) { bestD = d; best = r; }
+	}
+	n = 0;
+	for (void* r = F<void*>(level, LevelFirstRoom); r != nullptr && n < 4000; r = F<void*>(r, RoomNext), n++) {
+		uint32_t& flags = F<uint32_t>(r, 0x50);
+		if (r == best) flags |= 0x30000u; else flags &= ~0x30000u;
+	}
+	if (best != nullptr)
+		plog::Info("[%s] arrival mark: room at tile (%d,%d) flagged 0x30000 (entry cell (%d,%d), %d rooms in it, level-relative (%d,%d))", Side(level), F<int32_t>(best, RoomX),
+		           F<int32_t>(best, RoomY), g_config.entryCol, g_config.entryRow, inCell, F<int32_t>(best, RoomX) - lx, F<int32_t>(best, RoomY) - ly);
+	else
+		plog::Warn("[%s] arrival mark: no room in entry cell (%d,%d)", Side(level), g_config.entryCol, g_config.entryRow);
+}
+
 void BuildSlot(uint8_t dataFlag, void* level) noexcept {
 	const int id = F<int32_t>(level, LevelId);
 	uint8_t* drlg = F<uint8_t*>(level, LevelDrlg);
@@ -353,8 +439,8 @@ void BuildSlot(uint8_t dataFlag, void* level) noexcept {
 	// already placed it from the row's fixed offsets (logged above). Origin from config, size from the line.
 	F<int32_t>(level, LevelX) = g_config.offsetX;
 	F<int32_t>(level, LevelY) = g_config.offsetY;
-	F<int32_t>(level, LevelW) = g_blocks * 32;
-	F<int32_t>(level, LevelH) = 32;
+	F<int32_t>(level, LevelW) = g_cols * 32;
+	F<int32_t>(level, LevelH) = g_rows * 32;
 
 	// The same seed the original draws: the level RNG decides each piece's file.
 	g_reseed(static_cast<uint8_t*>(level) + LevelSeed, static_cast<int32_t>(F<uint32_t>(drlg, DrlgSeedBase)) + id);
@@ -369,6 +455,7 @@ void BuildSlot(uint8_t dataFlag, void* level) noexcept {
 	g_levelBuild(dataFlag, level);
 	F<int32_t>(level, LevelDrlgType) = 3;
 
+	MarkArrival(level);
 	LogGrid(level);
 	LogRooms(level, "after build");
 }
@@ -394,7 +481,11 @@ void ReadConfig(const D2RL::PluginContext* ctx) noexcept {
 		int v = 0;
 		char s[64];
 		if (std::sscanf(line, " level = %d", &v) == 1) g_config.level = v;
-		else if (std::sscanf(line, " line = \"%63[^\"]\"", s) == 1) std::snprintf(g_config.line, sizeof(g_config.line), "%s", s);
+		else if (std::sscanf(line, " layout = \"%255[^\"]\"", g_config.layout) == 1) {}
+		else if (std::sscanf(line, " void = \"%63[^\"]\"", s) == 1) g_config.voidMark = std::strncmp(s, "mark", 4) == 0;
+		else if (std::sscanf(line, " arrival = \"%63[^\"]\"", s) == 1) g_config.arrivalMark = std::strncmp(s, "mark", 4) == 0;
+		else if (std::sscanf(line, " entry_col = %d", &v) == 1) g_config.entryCol = v;
+		else if (std::sscanf(line, " entry_row = %d", &v) == 1) g_config.entryRow = v;
 		else if (std::sscanf(line, " offset_x = %d", &v) == 1) g_config.offsetX = v;
 		else if (std::sscanf(line, " offset_y = %d", &v) == 1) g_config.offsetY = v;
 		else if (std::sscanf(line, " stamp = %s", s) == 1) g_config.stamp = std::strncmp(s, "true", 4) == 0;
@@ -529,7 +620,7 @@ void CollisionDump(const D2RL::PluginContext* ctx, void* unit, uint32_t mask) no
 		return;
 	}
 	const int x0 = g_config.offsetX * 5, y0 = g_config.offsetY * 5;
-	const int w = g_blocks * 32 * 5, h = 32 * 5;
+	const int w = g_cols * 32 * 5, h = g_rows * 32 * 5;
 	wchar_t exe[MAX_PATH];
 	GetModuleFileNameW(nullptr, exe, MAX_PATH);
 	std::wstring dir(exe);
@@ -555,6 +646,38 @@ void CollisionDump(const D2RL::PluginContext* ctx, void* unit, uint32_t mask) no
 	}
 	std::fclose(f);
 	Say(ctx, "collision dump mask 0x%x: %d of %d subtiles blocked", mask, blocked, w * h);
+}
+
+// --- S2: portal request and arrival log (game thread, once per frame per player) --------------------------------------------------
+constexpr uint32_t PortalKey = 0x53503244;  // 'SP2D'
+void TickLog(void* unit) noexcept;
+auto TickHook(void* game, void* unit) noexcept -> uint64_t {
+	const uint64_t result = g_tickOrig != nullptr ? g_tickOrig(game, unit) : 0;
+	if (unit != nullptr && F<int32_t>(unit, 0) == 0) {
+		if (g_portalRequested.exchange(false) && g_openPortal != nullptr) {
+			const int32_t opened = g_openPortal(game, unit, PortalKey, g_config.level, 8);
+			plog::Info("OpenRedPortal(level %d) returned %d", g_config.level, opened);
+			if (g_context != nullptr) g_context->WriteConsoleMessage(opened != 0 ? "S2 spike: portal opened" : "S2 spike: the game would not open a portal");
+		}
+		TickLog(unit);
+	}
+	return result;
+}
+
+std::atomic<bool> g_inRect{false};
+void TickLog(void* unit) noexcept {
+	int x = 0, y = 0;
+	if (g_cols <= 0 || !ReadPos(unit, &x, &y)) return;
+	const int tx = x / 5, ty = y / 5, rx = tx - g_config.offsetX, ry = ty - g_config.offsetY;
+	const bool inside = rx >= 0 && ry >= 0 && rx < g_cols * 32 && ry < g_rows * 32;
+	if (inside && !g_inRect.exchange(true)) {
+		const int cx = rx / 32, cy = ry / 32;
+		plog::Info("ARRIVAL first position in the slot rect: subtile (%d,%d) tile (%d,%d) level-relative tile (%d,%d) = cell (%d,%d), tile in cell (%d,%d); entry cell is (%d,%d): %s",
+		           x, y, tx, ty, rx, ry, cx, cy, rx % 32, ry % 32, g_config.entryCol, g_config.entryRow,
+		           (cx == g_config.entryCol && cy == g_config.entryRow) ? "IN THE ENTRY CELL" : "NOT in the entry cell");
+	} else if (!inside) {
+		g_inRect = false;
+	}
 }
 
 auto ProbeCommand2(D2R::Game::Client* client, const D2RL::PluginContext* ctx, const char* args) noexcept -> bool {
@@ -588,6 +711,11 @@ auto ProbeCommand2(D2R::Game::Client* client, const D2RL::PluginContext* ctx, co
 			    static_cast<long long>(g_collide != nullptr ? g_collide(unit, x, y, mask) : -1));
 			if (std::strstr(args, "dump") != nullptr) CollisionDump(ctx, unit, mask);
 		}
+		return true;
+	}
+	if (std::strncmp(args, "portal", 6) == 0) {
+		g_portalRequested = true;
+		Say(ctx, "S2 spike: portal to level %d requested (served on the next player tick)", g_config.level);
 		return true;
 	}
 	if (std::strncmp(args, "peek", 4) == 0) {
@@ -728,7 +856,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		           context->buildVersion != nullptr ? context->buildVersion : "(null)", context->buildName != nullptr ? context->buildName : "(null)",
 		           context->abiVersion, context->contextSize, loaderExe);
 	}
-	if (g_config.level >= 0) ParseLine(g_config.line);
+	if (g_config.level >= 0) ParseLayout(g_config.layout);
 
 	// S0 byte checks, before any hook of ours: each signature must match exactly once.
 	bool all = true;
@@ -782,12 +910,16 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		};
 		const bool counting = hook(Act1, reinterpret_cast<void*>(Act1Hook), &g_act1) && hook(OutdoorEntry, reinterpret_cast<void*>(OutdoorEntryHook), &g_outdoorEntry) &&
 		                      hook(Rooms, reinterpret_cast<void*>(RoomsHook), &g_rooms);
+		g_voidSet = reinterpret_cast<VoidSetFn>(const_cast<uint8_t*>(g_addr[VoidSet]));
+		g_openPortal = reinterpret_cast<OpenPortalFn>(const_cast<uint8_t*>(g_addr[OpenPortal]));
+		const bool tick = hook(PlayerTick, reinterpret_cast<void*>(TickHook), &g_tickOrig);
+		plog::Info("player tick hook %s; void setter %p; open portal %p", tick ? "on" : "FAILED", static_cast<const void*>(g_addr[VoidSet]), static_cast<const void*>(g_addr[OpenPortal]));
 		bool slot = false;
 		if (counting && g_config.build && g_config.level >= 0 && g_blocks > 0 && g_reseed != nullptr && g_actLookup != nullptr) {
 			slot = hook(LevelBuild, reinterpret_cast<void*>(LevelBuildHook), &g_levelBuild) && hook(Act5, reinterpret_cast<void*>(Act5Hook), &g_act5);
 		}
 		std::snprintf(g_status, sizeof(g_status), "byte checks all pass; counting hooks %s; slot level %d line %s (%d blocks): %s", counting ? "on" : "FAILED",
-		              g_config.level, g_config.line, g_blocks, slot ? "build hooks on" : "build hooks off");
+		              g_config.level, g_config.layout, g_blocks, slot ? "build hooks on" : "build hooks off");
 	} else {
 		std::snprintf(g_status, sizeof(g_status), "off: a byte check failed (see log); nothing hooked");
 	}
