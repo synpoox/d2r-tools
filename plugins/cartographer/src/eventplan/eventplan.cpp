@@ -48,6 +48,35 @@ int centreY(const Rect &r) { return r.y + r.h / 2; }
 
 } // namespace
 
+std::string_view superClassOf(const SpawnTable &table, int superRow) {
+	if (superRow < 0 || static_cast<size_t>(superRow) >= table.supers.size()) {
+		return {};
+	}
+	return table.supers[static_cast<size_t>(superRow)].cls;
+}
+
+ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, std::string_view gameClassId) {
+	if (name.empty()) {
+		return ClassCheck::NoReference;
+	}
+	int s = findSuper(table, name, true);
+	if (s < 0) {
+		s = findSuper(table, name, false);
+	}
+	if (s < 0) {
+		return ClassCheck::NoReference;
+	}
+	const std::string_view cls = superClassOf(table, s);
+	if (cls.empty() || gameClassId.empty()) {
+		return ClassCheck::NoReference;
+	}
+	return same(cls, gameClassId, false) ? ClassCheck::Agrees : ClassCheck::Differs;
+}
+
+bool idRowAccepted(const std::vector<int> &rowsWithId, int got) {
+	return std::find(rowsWithId.begin(), rowsWithId.end(), got) != rowsWithId.end();
+}
+
 Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn) {
 	Resolved out;
 	if (spawn.empty()) {
