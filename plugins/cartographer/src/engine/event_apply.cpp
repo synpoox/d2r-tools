@@ -646,7 +646,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		if (!state->tracker) {
 			std::optional<ep::Rect> plan;
-			const bool outdoor = state->level == OutdoorSlotLevelId();  // the Outdoor slot level: its plan's rooms (issue #145)
+			const bool outdoor = !state->maze && state->level == OutdoorSlotLevelId();  // the Outdoor slot level: its plan's rooms (issue #145)
 			if (outdoor) {
 				const MazeEventRect m = OutdoorEventRoom();
 				if (m.known && m.levelId == state->level) {

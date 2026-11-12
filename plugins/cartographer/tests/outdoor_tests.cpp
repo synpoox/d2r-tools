@@ -1007,6 +1007,7 @@ TEST_CASE("the entry room is the room at the entrance cell's centre, and the bos
 			const int br = chooseCellRoom(b, rooms);
 			REQUIRE(br >= 0);
 			CHECK(br != m.room);
+			if (plan.stamps.event.known) CHECK(br != chooseCellRoom(plan.stamps.event, rooms));
 		}
 		if (plan.stamps.event.known) CHECK(chooseCellRoom(plan.stamps.event, rooms) >= 0);
 	}
@@ -1021,7 +1022,17 @@ TEST_CASE("the arrival mark moves: other marked rooms are cleared, and a build t
 	rooms[1].flags = 0x20000 | 4;
 	const ArrivalMark m = planArrival(plan.stamps, rooms);
 	REQUIRE(m.mark);
-	CHECK(m.clear.size() >= 1);
+	CHECK(m.clear == std::vector<int>({0, 1}));
+
+	// An entrance cell with no room in it: the game keeps its own arrival.
+	std::vector<BuiltRoom> hollow;
+	for (const BuiltRoom &r : rooms) {
+		const TileRect &e = plan.stamps.entrance;
+		if (!(r.x >= e.x && r.y >= e.y && r.x + r.w <= e.x + e.w && r.y + r.h <= e.y + e.h)) hollow.push_back(r);
+	}
+	const ArrivalMark none = planArrival(plan.stamps, hollow);
+	CHECK(!none.mark);
+	CHECK(none.why.find("the entrance cell holds no room") != std::string::npos);
 
 	std::vector<BuiltRoom> outside = rooms;
 	outside.push_back({plan.stamps.originX - 8, plan.stamps.originY, 8, 8, 0});

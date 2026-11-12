@@ -333,22 +333,22 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH), Read<uint32_t>(room, RoomFlags)});
 	}
 	const int id = Read<int32_t>(level, LvlId);
-	MazeEventRect event, boss;
-	if (asPlanned) {
-		event = ToRect(level, rooms, co::chooseCellRoom(plan.event, rects));
-		boss = ToRect(level, rooms, co::chooseCellRoom(plan.boss, rects));
+	if (!asPlanned) {
+		// The level is built twice per entry (server, then client). Whatever an earlier build recorded stays: a build that is not the plan must not replace it.
+		plog::Info("outdoor arrival: left to the game, because the build is not the plan");
+		return;
 	}
+	const MazeEventRect event = ToRect(level, rooms, co::chooseCellRoom(plan.event, rects));
+	const MazeEventRect boss = ToRect(level, rooms, co::chooseCellRoom(plan.boss, rects));
 	plog::Info("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_eventRoom = event;
-		g_bossRoom = boss;
-		g_arrival = {};
-		g_arrivalLogged = false;
-	}
-	if (!asPlanned) {
-		plog::Info("outdoor arrival: left to the game, because the build is not the plan");
-		return;
+		if (event.known) {
+			g_eventRoom = event;  // a known room is never replaced by an unknown one
+		}
+		if (boss.known) {
+			g_bossRoom = boss;
+		}
 	}
 	for (int i = ArrivalFinderPart; i <= ArrivalFlagTestPart; ++i) {
 		if (!g_parts[i].status.on) {
@@ -369,6 +369,7 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_arrival = {true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h};
+		g_arrivalLogged = false;
 	}
 	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
@@ -575,8 +576,12 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 		fact = g_arrival;
 	}
 	const void* drlg = Read<const void*>(room, ServerRoomDrlg);
+	if (drlg == nullptr) {
+		plog::Info("[outdoor probe] arrival: the player's server room %p has no DRLG room", room);
+		return;
+	}
 	const int32_t x = Read<int32_t>(drlg, RoomX), y = Read<int32_t>(drlg, RoomY), w = Read<int32_t>(drlg, RoomW), h = Read<int32_t>(drlg, RoomH);
-	if (drlg == nullptr || w <= 0 || h <= 0) {
+	if (w <= 0 || h <= 0) {
 		plog::Info("[outdoor probe] arrival: the player's server room %p has no readable DRLG room (%p)", room, drlg);
 		return;
 	}

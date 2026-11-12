@@ -553,7 +553,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		g_firstLogged = true;  // once per game, and only once the player id is known: settles whether LocalPlayerReady.playerId is the unit id
 		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), known);
 	}
-	if (known != NoPlayer && MazeSteeringLive() && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+	if (known != NoPlayer && (MazeSteeringLive() || OutdoorBuildLive()) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MazeArrivalCheck(unit);
 	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
