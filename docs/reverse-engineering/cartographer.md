@@ -1166,6 +1166,14 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 
 - The Outdoor slot's levels.txt row needs `Vis0` to `Vis7` = 0. With `-1` the game crashes at image `+0x3268fb`. The installer writes the row (issue #144) and is not changed here; this is recorded for that change.
 
+### Entry, boss and event rooms (issues #143 and #145): written, not verified in game
+
+- After a build that matched the plan, `ArrangeRooms` reads the level's room list and reduces three plan cells to one room each with `chooseCellRoom` (the room wholly inside the cell nearest its centre; a cell is 32 x 32 tiles, a room 8 x 8): the entrance cell, the event cell and the boss cell. The S2 spike (PR #168) saw the arrival land in the entry cell only when the spike set `0x30000` on a room of it.
+- Arrival: `planArrival` gives the entrance cell's room `0x30000` in room `+0x50` and clears the bits on every other room, as the maze `MarkArrival` does (same three guard parts `ArrivalFinder`, `ArrivalRoomFinder`, `ArrivalFlagTest`, checked only; a missing one leaves the arrival to the game). Refused, with the reason in the log, when the build is not the plan, a room lies outside the plan's level rectangle or the cell holds no room. `OutdoorProbe = 1` logs the player's first room in the slot level and whether it is in the entrance cell (`[outdoor probe] arrival`), driven from the same tick as the maze probe.
+- Boss and event: the chosen rooms' exact DRLG rects are what `OutdoorBossRoom` / `OutdoorEventRoom` return; `event_apply.cpp` uses them for the Outdoor slot level exactly as it uses the maze's (the tracker compares the room rect), so the map Boss (the `bosses.txt` entry, one monster at the room centre) and the event go in that one room. No event cell: the event falls back to the distance rule.
+- Not done: population per clearing. The S2 spike's clearing monsters came from rows cloned from Act 5 row 111 (the level's own monster data), so the layout does not decide them; the slot level's `Monsters`/`Density` (section 15) are the only control for now.
+- Needs a game: the portal arrival without a manual mark, the Boss standing in the boss clearing (server room scale), and the event room firing there.
+
 ### Open
 
 - The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142; the S2 spike (section 16) saw the void edge as acceptable in game (dark rock, no hole). The whole feature stays off until the builder itself is checked in game.

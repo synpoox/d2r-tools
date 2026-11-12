@@ -26,5 +26,6 @@
 - `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
 - Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
+- Outdoor maps (off, not checked in game): you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
 - Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
