@@ -849,3 +849,78 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 6. Q10: a 360 x 360 outdoor row (build, walk, automap).
 7. Q11: a tile set from a different act than the slot's.
 8. Q12: the file path actually opened for a jungle DS1.
+
+## 10. Red portal tooltip and area name (issue #90)
+
+Static answers for issue #90: show each map's own `Name` on the red portal tooltip and as the area name inside the map, instead of the slot
+level's string ("Colossal Summit"). Read from the build 93847 dump with `dump_dis.py` (Capstone); nothing was run in a game and no code changed.
+Each claim is marked **static** (read from bytes or tables), **inference** (follows from static facts, not observed) or **needs game** (with the
+exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5da800` with a level id only; no string is passed (static).
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer (issue #90): per-map name on the portal tooltip and in the map; no hook exists yet |
+| Module | `D2R.exe` (`0x3e2b736` and `0x3e2b730` are D2RLoader `FF 25` thunks into `D2RCore.dll`: call, never hook) |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the dump `D2RLoader_6ab3782c_dump.exe` (same as sections 1a to 8) |
+| Location | RVAs in the table below. Levels row: `0x18c` bytes, vector at `tables + 0x1460` (count `+0x1468`), `tables` from `0x300a90(dataFlag)`. String fields: Waypoint at `+0xec`, **LevelName `char[40]` at `+0xfd`**, LevelWarp `+0x125`, LevelEntry `+0x14d`. LevelName is a text key (a string), not a numeric id (static: loader descriptor table `{+0 name, +8 type, +0xc size, +0x10 offset}`). Objects row stride `0x168`, table `+0x1528`, SubClass `+0x127` (bit 4 = portal; objects 59 and 60 have SubClass 4 in the 3.3.0 `objects.txt`) |
+| Guard | None added: no signature is written to `part_signatures.h`. Each masked prefix below was checked unique on the dump (a byte search with `??` as a wildcard, the same test as `pat`). Where a short prefix matched siblings it was extended until it matched once |
+| Rule | The 14-byte rule of section 6 (a 14-byte patch at the entry, rounded up to whole instructions, must contain no relative operand): "hookable" passes, "call-only" does not. No hook is proposed or written here |
+| Evidence | `dis <rva> [count]` for each function; `pat "<hex>"` for uniqueness; a scan of `E8` targets for caller counts |
+| Validation | Static only. Not run in a game; not checked on Steam build 94995 |
+| Failure mode | Not applicable (no code). A future hook would fail open: if the prefix does not match exactly once, leave the names alone |
+
+### Parts
+
+| RVA | Role | Masked prefix (1 match each) | Hook class |
+|---|---|---|---|
+| `0x32c4a0` | Levels row getter `(dataFlag, levelId) -> row*`; 46 callers. Three sibling getters (`0x331e50`, `0x331f50`, `0x332050`) share its first 46 bytes, so the prefix is extended to 82 bytes | `48 89 5C 24 08 55 56 57 48 83 EC 30 48 63 DA 0F B6 F1 E8 ?? ?? ?? ?? 48 8B E8 85 DB 7E 34 40 0F B6 CE E8 ?? ?? ?? ?? 48 8B B8 68 14 00 00 4C 63 C7 4C 3B C7 75 04 85 FF 79 14 48 8D 4C 24 58 C6 44 24 58 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 3B DF 7C 18` | hookable (15-byte cut ends at `48 63 DA`; first relative operand at `+0x12`) |
+| `0xc7a30` | LevelName text getter: `E8` to the row getter, then reads the key at `row + 0xfd`; 11 callers | `48 83 EC 38 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8D 88 FD 00 00 00 80 39 00` | call-only (relative `call` at `+4`) |
+| `0xc17e0` | Object hover text builder `(out buf, unit)`; the portal tooltip is built here. One caller, `0xc0916`, inside `0xc0420`. `.pdata` continues at `0xc182a` (the portal branch is in the continuation chunk) | `40 55 56 41 56 48 8D AC 24 20 FF FF FF 48 81 EC E0 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 D0 00 00 00` | hookable (20-byte cut, no relative operand) |
+| `0xc0420` | Unit label builder, calls `0xc17e0`; 3 callers, all in `0x880578` | `48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D AC 24 10 F6 FF FF 48 81 EC F0 0A 00 00` | hookable (15-byte cut) |
+| `0x14751e0` | Automap info text builder (string "DesecratedAutomapLevel"); no direct `E8` caller (called indirectly; inference) | `4C 8B DC 55 53 57 49 8D AB 28 F9 FF FF 48 81 EC C0 07 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4` | hookable (20-byte cut, no relative operand) |
+| `0x34ad40` | Object data read, returns `[unit + 0x10]`. Its tail carries a loader patch (`E9 rel32` after `48 8B 43 10`), so this part is loader-modified in the dump (static). The shorter prefix also matches `0x34acf0` and `0x34adf0`, so the tail is part of the key | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 13 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 83 3B 02 74 14 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 43 10 E9` | call-only (relative `jne` inside the 14-byte cut; loader-patched tail) |
+| `0x38fd00` | Objects row getter `(id)`, stride `0x168` | `48 89 5C 24 08 48 89 74 24 20 57 48 83 EC 30 8B DA E8 ?? ?? ?? ?? 48 8B F0 8B FB 48 3B 98 30 15 00 00 72 14` | hookable (15-byte cut ends at `48 83 EC 30`) |
+| `0x1e9b40` | Waypoint panel builder (not a path for the portal) | `48 89 74 24 20 55 57 41 54 41 55 41 56 48 8D AC 24 80 FD FF FF 48 81 EC 80 03 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4` | hookable (20-byte cut, no relative operand) |
+| `0x3e2b736` | Text lookup by key (`string_view*`), thunk into `D2RCore.dll`; 1217 callers | thunk (`FF 25 rel32`), not signable | call-only |
+| `0x3e2b730` | Text lookup by numeric id (`0x150d` is the missing-text id), thunk into `D2RCore.dll` | thunk, not signable | call-only |
+
+### Q1. Where does the red portal tooltip get its text?
+
+- **Static.** In `0xc17e0` (continuation chunk at `0xc182a`; the portal branch is at `0xc189f`). When the object's SubClass (`+0x127`) has bit 4 set, the builder gets the destination level through `0x34ad40` (`[unit + 0x10]`), reads the levels row, and reads the **LevelName key inline at `row + 0xfd`**. It looks the key up through `0x3e2b736`, then copies the result with `0x1227840` into the output buffer. A second branch at `0xc1a5c` (SubClass bit `0x40`) is another object kind.
+- So yes, it is the target level's LevelName lookup, but it does **not** go through the LevelName getter `0xc7a30`. A hook on `0xc7a30` would not change the portal tooltip. The callers of `0xc7a30` found are the automap info builder (`0x147535b`, inside `0x14751e0`) and the party "LocationText" tooltip (`0x1471dcd`, inside `0x1471bc0`).
+- That the red portal object takes the SubClass-4 branch is inference (objects 59 and 60 have SubClass 4 in `objects.txt`; `portal.cpp` opens the portal through `OpenRedPortal`, which was not traced to its object id). **Needs game:** count hits on `0xc189f` while hovering the red portal.
+
+### Q2. Where does the area name shown on entering a level come from, and the automap title?
+
+- **Automap title and party text: static.** `0x14751e0` (automap info) and `0x1471bc0` (party location) call `0xc7a30`, so a LevelName-getter hook reaches them. The progress and location list printer `0x13b1100` prints a group (kind 0) or a level (kind 1) from the levels row and the level group row (`0xc7a00` / `0x32c5a0`, table `tables + 0x1480`), also by key.
+- **Area name banner on entering a level: not found.** No C++ reader of `row + 0xfd` outside the functions above turned up (scan of every caller of the row getter for `0xfd]`). The banner is probably driven from the layout or from `D2RCore.dll` (inference). **Needs game:** enter the slot level with a log on `0xc7a30` and on `0x3e2b736` calls; if neither fires when the banner shows, the banner is in D2RCore and only a text replacement can change it.
+
+### Q3. Does the server or the client know the target? Is a client-side hook enough in single player?
+
+- **Inference** from the static reads: the tooltip builder reads the destination level id from the object (`[unit + 0x10]`) and then the levels row itself; no server text is involved. The client therefore decides the text, and in single player the client and server share the process, so a hook in the client builder is enough. Nothing in the dump suggests the text is checked against the server.
+- The slot level id is the same for every map, so the text cannot be told apart by level id alone: the hook must know the active map's `Name`. The plugin already has it (the draw).
+- **Needs game:** open two different maps in a row and hover the portal; if the text does not change, a cache is involved.
+
+### Q4. Safest hook point for the slot level id only
+
+- **Slot level key is shared (static).** After PR #91 the slot level keeps Colossal Summit's name string, so a hook keyed on the text key (`0x3e2b736`) would also change the real Colossal Summit unless the slot gets a unique key first.
+- **Options.**
+  1. **`0xc7a30` (LevelName getter).** Call-only (relative `call` at `+4`; the 24-byte prefix is unique). It covers the automap title and the party text, and **misses the portal tooltip** (Q1). Not sufficient on its own.
+  2. **`0x3e2b736` (key lookup thunk).** Call-only and a thunk into D2RCore with 1217 callers: a hot path, and the key alone does not say which level it is for. Not recommended.
+  3. **`0xc17e0` (portal tooltip builder, hookable).** Wrap it: call the original, then if the unit's destination (`0x34ad40`) is the slot level id, overwrite the output buffer with the plugin's name. It sees the destination and runs only when the tooltip is built. It must keep any owner suffix the builder appends (**needs game:** compare with a stock portal tooltip). Covers the portal only.
+  4. **Write the slot row's key.** Write the map's key into the slot row's `+0xfd` when the map opens; no code hook, and it would change the portal, automap and party text together. Needs the levels row to be writable and found (row getter `0x32c4a0`, hookable, or through the table); it is outside the SDK's read-only data table contract (`data_tables.h` rows are read-only, game-thread-only). **Needs game:** write a different key (at most 39 characters) at the slot row's `+0xfd` and hover the portal; check the page is writable.
+- **Recommendation (inference):** option 3 for the tooltip; the automap title through option 1, or option 4 if the writable-row check passes. If the banner is in D2RCore (Q2), only option 4 or a text replacement reaches it.
+
+### Q5. Does the SDK offer a string or localisation route that avoids an engine hook?
+
+- **Static (SDK pin 717f727).** `LocalizationService` is lookup-only: it resolves a key to text and does not replace an engine string. A plugin's strings live in the plugin id's namespace, and a LevelName key is `char[40]`, so `plugin-id:Key` must fit 39 characters. `ResourceService::registerResource` can register `data/.../d2rloader/<plugin-id>/...` bytes at runtime, which could carry strings (unverified that a runtime-registered string file is read by the lookup). `SharedEventService` has an item tooltip event and UI-message listeners only; there is no area name or portal tooltip event.
+- So the SDK has no per-map area or portal text route (static). A string table can give the slot level one fixed name, not a per-map name, unless the plugin rewrites the registered string at each map open (**needs game:** register, replace the resource at the next map open, and check the tooltip updates).
+
+### Needs game
+
+1. Does the red portal tooltip run `0xc189f`? Count hits while hovering the red portal.
+2. Does the area name banner call `0xc7a30` or `0x3e2b736`? Log both when entering the slot level.
+3. Is the slot row writable? Write a different key at `+0xfd` and re-hover.
+4. Does the portal tooltip keep an owner suffix? Compare a stock portal tooltip with a hooked one.
+5. Does the text cache between two maps? Open two different maps in a row.
