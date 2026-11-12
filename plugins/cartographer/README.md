@@ -60,7 +60,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 the built-in preset map opens.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
-without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off.
+without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
 
 ## Tested
 

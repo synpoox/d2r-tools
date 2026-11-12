@@ -412,7 +412,9 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 					part.address = nullptr;
 				}
 			}
-			if (part.address != nullptr && isOverride) {
+			// Only a hooked part must start at a .pdata function: a called-only part can be a leaf with no .pdata entry
+			// (RoomLevelId, 0x2efc10, is one), so it needs a unique match only.
+			if (part.address != nullptr && isOverride && part.hookSize > 0) {
 				bool known = false;
 				if (!IsFunctionEntry(context->exeBase, part.address, &known)) {
 					why = known ? "the signature from signatures.txt does not match at the start of a function"
