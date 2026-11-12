@@ -46,6 +46,7 @@ constexpr int DrlgLevelList = 0x868;
 constexpr int ServerRoomDrlg = 0x18;  // a server room's DRLG room (UnitRoom's result; section 5, "Arrival room")
 constexpr int RoomPiece = 0x40;       // piece*: {id +0, file +4, flags +0x10}
 constexpr int RoomNext = 0x48;
+constexpr int RoomFlags = 0x50;       // uint32; bits 16 and 17 (cm::kArrivalFlags) make the level-entry finder pick the room
 constexpr int RoomX = 0x60, RoomY = 0x64, RoomW = 0x68, RoomH = 0x6c;
 constexpr int PieceId = 0x00, PieceFlags = 0x10;
 constexpr uint32_t PieceFixed = 2;
@@ -61,7 +62,11 @@ using AddRoomFn = void* (*)(void* room, int32_t dir, int32_t merge) noexcept;
 using LinkFn = uint64_t (*)(void* a, void* b, int32_t dir) noexcept;
 using PickFn = uint64_t (*)(void* room, int32_t clearFixed) noexcept;
 
-enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAddRoom, MazeLinkRooms, MazePiecePicker, MazePartCount };
+enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAddRoom, MazeLinkRooms, MazePiecePicker,
+                  // Only checked, never called or hooked: the level-entry finder, its first-room-with-flags helper and the flag test. They gate
+                  // MarkArrival alone; a missing one leaves the arrival to the game and does not turn the steering off.
+                  ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest, MazePartCount };
+constexpr int MazeSteerParts = ArrivalFinder;  // the parts the steering needs
 
 Part g_parts[MazePartCount] = {
 	{"LevelBuild", sig::LevelBuild, 14, true, nullptr, {}, {}},
@@ -71,6 +76,9 @@ Part g_parts[MazePartCount] = {
 	{"MazeAddRoom", sig::MazeAddRoom, 0, true, nullptr, {}, {}},
 	{"MazeLinkRooms", sig::MazeLinkRooms, 0, true, nullptr, {}, {}},
 	{"MazePiecePicker", sig::MazePiecePicker, 0, true, nullptr, {}, {}},
+	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
+	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
+	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
 };
 
 LevelBuildFn g_levelOriginal = nullptr;
@@ -363,6 +371,45 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 	plog::Info("[maze probe] %s: level rect now origin (%d,%d) size (%d,%d); the plan asked for %d x %d", when, Read<int32_t>(level, LvlOriginX), Read<int32_t>(level, LvlOriginY),
 	           Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY), plan.levelTilesX, plan.levelTilesY);
 	ProbeShape(level, ts, plan, when, minX, minY);
+}
+
+// The arrival: the game's level-entry finder (0x3da650) takes the first room whose flags (+0x50) hold bit 16 or 17, and the
+// maze pieces carry none, so the player lands wherever the finder's fallbacks put them (docs/reverse-engineering/cartographer.md
+// section 5, "Arrival room: why the player arrives elsewhere"). Give the room in the middle of the planned entrance cell those
+// bits and take them off every other room. Does nothing, and says why, when a guard part is missing or the rooms do not match the
+// plan; the game then arrives as it always did.
+void MarkArrival(const void* level, const cm::Plan& plan, int unit) noexcept {
+	static const char* const names[] = {"ArrivalFinder", "ArrivalRoomFinder", "ArrivalFlagTest"};
+	for (int i = ArrivalFinder; i <= ArrivalFlagTest; ++i) {
+		if (!g_parts[i].status.on) {
+			plog::Info("maze arrival: left to the game, because the part %s was not found", names[i - ArrivalFinder]);
+			return;
+		}
+	}
+	std::vector<void*> rooms;
+	std::vector<cm::RoomRect> rects;
+	for (void* room = Read<void*>(level, LvlFirstRoom); room != nullptr && rooms.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98);
+	     room = Read<void*>(room, RoomNext)) {
+		rooms.push_back(room);
+		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH),
+		                 Read<uint32_t>(room, RoomFlags)});
+	}
+	const cm::ArrivalMark mark = cm::planArrival(plan, unit, rects);
+	if (!mark.mark) {
+		plog::Info("maze arrival: left to the game, because %s", mark.why.c_str());
+		return;
+	}
+	const auto flagsOf = [&](int i) { return Read<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags); };
+	Write<uint32_t>(rooms[static_cast<size_t>(mark.room)], RoomFlags, flagsOf(mark.room) | cm::kArrivalFlags);
+	for (const int i : mark.clear) {
+		Write<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags, flagsOf(i) & ~cm::kArrivalFlags);
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_entrance = {true, mark.originX, mark.originY, Read<int32_t>(level, LvlId), mark.minX, mark.minY, unit};
+	}
+	plog::Info("maze arrival: room %d of %d (at %d,%d) marked as the level entry, in plan cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
+	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, mark.cellX, mark.cellY, static_cast<int>(mark.clear.size()));
 }
 
 // The plan's event room: the rect of its DRLG room, which the event spawn compares with the room the game populates.
@@ -673,6 +720,11 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 				plog::Info("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
 			}
 			ProbeRooms(level, ctx.prep.plan->tileset, plan, "after the slot build");
+			if (!ctx.fellBack && problem.empty()) {
+				MarkArrival(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
+			} else {
+				plog::Info("maze arrival: left to the game, because the build is not the plan");
+			}
 			RecordEventRoom(level, ctx.rooms, plan);
 		} catch (...) {
 		}
@@ -834,8 +886,8 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 		ResolvePart(context, overrides, ranges, count, part);
 	}
 	bool allOn = true;
-	for (const Part& part : g_parts) {
-		allOn = allOn && part.status.on;
+	for (int i = 0; i < MazeSteerParts; ++i) {
+		allOn = allOn && g_parts[i].status.on;
 	}
 	if (!allOn) {
 		// Nothing is hooked: one missing part turns only the maze steering off, and a half-installed set could not be taken out.

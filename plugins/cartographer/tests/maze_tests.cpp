@@ -909,3 +909,122 @@ TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English
 	CHECK(slotTypeProblem(cave, 5, "C").find("neither Cave") != std::string::npos);
 	CHECK(slotTypeProblem(cave, -1, "C").find("could not read the LevelType") != std::string::npos);
 }
+
+// --- the arrival room ----------------------------------------------------------------------------------------------
+
+namespace {
+
+// The rooms the game builds from a plan: every cell is 3 x 3 engine rooms of unit / 3 tiles, listed in reverse so the first
+// room of the list is nowhere near the entrance. `flagged` gets kArrivalFlags the way the DS1 loader's pieces would.
+std::vector<RoomRect> builtRects(const Plan &plan, int unit, int baseX, int baseY, int flagged = -1)
+{
+	int minX = plan.rooms[0].dx, minY = plan.rooms[0].dy;
+	for (const Room &r : plan.rooms) {
+		minX = std::min(minX, r.dx);
+		minY = std::min(minY, r.dy);
+	}
+	std::vector<RoomRect> out;
+	for (const Room &r : plan.rooms) {
+		for (int j = 0; j < 3; ++j) {
+			for (int i = 0; i < 3; ++i) {
+				out.push_back({baseX + (r.dx - minX) * unit + i * unit / 3, baseY + (r.dy - minY) * unit + j * unit / 3, unit / 3, unit / 3, 0});
+			}
+		}
+	}
+	std::reverse(out.begin(), out.end());
+	if (flagged >= 0) out[static_cast<size_t>(flagged)].flags = kArrivalFlags;
+	return out;
+}
+
+} // namespace
+
+TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for every shape including loops")
+{
+	const Tileset tiles[] = {caveTileset(), cryptTileset()};
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	int marked = 0;
+	for (const Tileset &ts : tiles) {
+		for (const layout::Shape shape : shapes) {
+			for (int seed = 1; seed <= 60; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), static_cast<uint64_t>(seed));
+				if (!sp.plan.steer) continue;
+				const std::vector<RoomRect> rects = builtRects(sp.plan, ts.roomTiles, 1000, 2000, seed % 7);
+				const ArrivalMark m = planArrival(sp.plan, ts.roomTiles, rects);
+				INFO(ts.name << " seed " << seed);
+				REQUIRE(m.mark);
+				++marked;
+				const RoomRect &r = rects[static_cast<size_t>(m.room)];
+				const Room &e = sp.plan.rooms[static_cast<size_t>(sp.plan.entrance.room)];
+				int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+				for (const Room &o : sp.plan.rooms) {
+					minX = std::min(minX, o.dx);
+					minY = std::min(minY, o.dy);
+				}
+				const int third = ts.roomTiles / 3;
+				CHECK(r.x == 1000 + (e.dx - minX) * ts.roomTiles + third);  // the middle room of the 3 x 3
+				CHECK(r.y == 2000 + (e.dy - minY) * ts.roomTiles + third);
+				CHECK(m.originX == 1000 + (e.dx - minX) * ts.roomTiles);
+				CHECK(m.originY == 2000 + (e.dy - minY) * ts.roomTiles);
+				for (const int c : m.clear) {
+					CHECK(c != m.room);
+					CHECK((rects[static_cast<size_t>(c)].flags & kArrivalFlags) != 0);
+				}
+			}
+		}
+	}
+	CHECK(marked > 200);
+}
+
+TEST_CASE("arrival: a room that already carries the mark is cleared, and the marked room is never in the clear list")
+{
+	const Tileset cave = caveTileset();
+	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 3);
+	REQUIRE(sp.plan.steer);
+	std::vector<RoomRect> rects = builtRects(sp.plan, 24, 0, 0);
+	const ArrivalMark first = planArrival(sp.plan, 24, rects);
+	REQUIRE(first.mark);
+	CHECK(first.clear.empty());
+	rects[0].flags = kArrivalFlags;
+	rects[1].flags = 0x10000;
+	rects[static_cast<size_t>(first.room)].flags = 0x20000 | 0x4;
+	const ArrivalMark again = planArrival(sp.plan, 24, rects);
+	REQUIRE(again.mark);
+	CHECK(again.room == first.room);
+	REQUIRE(again.clear.size() == 2);
+	CHECK(again.clear[0] == 0);
+	CHECK(again.clear[1] == 1);
+}
+
+TEST_CASE("arrival: the level is left to the game, with a reason, when nothing can be proven")
+{
+	const Tileset cave = caveTileset();
+	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Winding, layout::Size::Small), 5);
+	REQUIRE(sp.plan.steer);
+	const std::vector<RoomRect> good = builtRects(sp.plan, 24, 0, 0);
+	REQUIRE(planArrival(sp.plan, 24, good).mark);
+
+	Plan notSteered = sp.plan;
+	notSteered.steer = false;
+	CHECK(!planArrival(notSteered, 24, good).mark);
+	CHECK(!planArrival(sp.plan, 24, {}).mark);
+	CHECK(!planArrival(sp.plan, 0, good).mark);
+	Plan noEntrance = sp.plan;
+	noEntrance.entrance.room = -1;
+	CHECK(!planArrival(noEntrance, 24, good).mark);
+
+	// A built box that is not the plan's box: a wing of the maze is missing, so the cells do not line up.
+	std::vector<RoomRect> narrow = good;
+	narrow.erase(std::remove_if(narrow.begin(), narrow.end(), [&](const RoomRect &r) { return r.x >= (sp.plan.widthRooms - 1) * 24; }), narrow.end());
+	const ArrivalMark m = planArrival(sp.plan, 24, narrow);
+	CHECK(!m.mark);
+	CHECK(m.why.find("span the plan's box") != std::string::npos);
+
+	// The entrance cell holds no room.
+	std::vector<RoomRect> hole;
+	const ArrivalMark ok = planArrival(sp.plan, 24, good);
+	for (const RoomRect &r : good) {
+		if (r.x < ok.originX || r.x >= ok.originX + 24 || r.y < ok.originY || r.y >= ok.originY + 24) hole.push_back(r);
+	}
+	const ArrivalMark none = planArrival(sp.plan, 24, hole);
+	CHECK(!none.mark);
+}

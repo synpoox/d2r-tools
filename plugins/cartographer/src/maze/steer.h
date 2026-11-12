@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "maze.h"
 
@@ -136,5 +137,33 @@ int pieceAfterWalk(const Plan &plan, int roomIndex);
 
 // A reserved room is fixed after the walk (Room::Fix::AfterWalk); the placed entrance is not (ByPlacer).
 bool fixAfterWalk(const Plan &plan, int roomIndex);
+
+// --- the arrival room ---------------------------------------------------------------------------------------------
+
+// The game's level-entry finder (0x3da650; docs/reverse-engineering/cartographer.md section 5, "Arrival room: why the player
+// arrives elsewhere") takes the first room of the level whose flags (room +0x50) hold any of kArrivalFlags. After the
+// build the hook gives the room in the middle of the plan's entrance cell these bits and clears them on every other room,
+// so the finder's first answer is the entrance whatever the tileset's own pieces carry.
+constexpr uint32_t kArrivalFlags = 0x30000;
+
+struct RoomRect {
+	int32_t x = 0, y = 0, w = 0, h = 0;  // tiles
+	uint32_t flags = 0;                  // room +0x50
+};
+
+struct ArrivalMark {
+	bool mark = false;       // false: change nothing, `why` says why (the level keeps the game's own arrival)
+	std::string why;
+	int room = -1;           // index into the rects: the room to give kArrivalFlags
+	std::vector<int> clear;  // indexes of the other rooms that carry any of kArrivalFlags
+	int cellX = 0, cellY = 0;          // the entrance cell in the plan, cells from the plan's top-left cell
+	int32_t originX = 0, originY = 0;  // the entrance cell's top-left corner, tiles
+	int32_t minX = 0, minY = 0;        // the built rooms' box corner, tiles
+};
+
+// `rects` are the rooms the build made, `unit` the plan cell size in tiles (the tileset's roomTiles). The entrance cell is
+// the plan's `entrance.room`, which every plan has, also the loops that place no special entrance piece. The built box
+// must be the plan's (in cells) and the cell must hold a room; the room nearest the cell's centre is chosen.
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects);
 
 } // namespace cartographer::maze

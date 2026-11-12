@@ -35,6 +35,9 @@ SIGNATURES = [
     ("OverlapCheckA", 0x360520, "40 53 57 48 83 EC 38 48 8B DA 48 8D 44 24 60 48 8D 54 24 58 48 89 44 24 20", 0, 38),
     ("OverlapCheckB", 0x360470, "8B 01 4C 8B D1 44 8B 0A 41 3B C1 7D ?? 44 2B 49 08 44 2B C8 EB ?? 2B 42 08", 0, 11),
     ("OverlapCheckC", 0x360C80, "48 8B 41 10 4D 8B D8 4C 8B D2 48 85 C0 74 ?? 49 3B C2 74 ?? 49 3B C3 74 ??", 0, 13),
+    ("ArrivalFinder", 0x3DA650, "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ??", 0, 99),  # only checked, never hooked
+    ("ArrivalRoomFinder", 0x3DAD90, "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48", 0, 99),  # only checked, never hooked
+    ("ArrivalFlagTest", 0x3612D0, "8B 41 50 25 00 00 03 00 C3 CC CC CC CC CC CC CC 4C 8B DC 56 57 41 56 48 83 EC 30", 0, 99),  # only checked, never hooked
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000

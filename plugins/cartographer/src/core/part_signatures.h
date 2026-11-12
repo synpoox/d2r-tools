@@ -45,6 +45,12 @@ inline constexpr const char* MazeRingGrower = "89 54 24 10 55 53 56 57 41 54 41 
 inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 48 63 EA 48 8B F9 48 8B 89 90 00 00 00";
 inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
+// The arrival room (cartographer.md section 5, "Arrival room"). All three are only checked, never called or hooked: the level-entry
+// finder, its first-room-with-flags helper, and the flag test (room +0x50 and 0x30000). They guard the hook that gives the
+// planned entrance cell's room those flags; if one is not found the arrival is left to the game.
+inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ??";
+inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
+inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3 CC CC CC CC CC CC CC 4C 8B DC 56 57 41 56 48 83 EC 30";
 
 // Map events (cartographer.md section 9). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
 // room, from both activation paths, so the original is called first and the event spawns after the room is populated.
