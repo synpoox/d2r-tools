@@ -104,6 +104,58 @@ TEST_CASE("weights: zero is never drawn, heavy rows come first more often")
 	CHECK(heavy < 3800);
 }
 
+TEST_CASE("all weights zero draws nothing")
+{
+	std::vector<PoolRow> pool = {{Target::Monsters, "a", 1, 1, 0}, {Target::Players, "b", 1, 1, -4}};
+	Settings s;
+	s.properties = 3;
+	CHECK(drawMapStats(1, MapRow{}, s, pool).empty());
+}
+
+TEST_CASE("removal reweights later draws")
+{
+	// heavy:9, light:1, other:1. Heavy first (~9/11); then light and other are equally likely second.
+	std::vector<PoolRow> pool = {
+		{Target::Monsters, "heavy", 1, 1, 9}, {Target::Monsters, "light", 1, 1, 1}, {Target::Monsters, "other", 1, 1, 1}};
+	Settings s;
+	s.properties = 2;
+	int heavyFirst = 0, lightSecondAfterHeavy = 0, otherSecondAfterHeavy = 0, heavySecondAfterLight = 0, lightFirst = 0;
+	for (uint64_t seed = 0; seed < 6000; ++seed) {
+		const auto r = drawMapStats(seed, MapRow{}, s, pool);
+		REQUIRE(r.size() == 2);
+		REQUIRE(r[0].stat != r[1].stat);
+		if (r[0].stat == "heavy") {
+			++heavyFirst;
+			lightSecondAfterHeavy += r[1].stat == "light";
+			otherSecondAfterHeavy += r[1].stat == "other";
+		} else if (r[0].stat == "light") {
+			++lightFirst;
+			heavySecondAfterLight += r[1].stat == "heavy";
+		}
+	}
+	CHECK(heavyFirst > 4800); // expected 4909
+	CHECK(heavyFirst < 5000);
+	CHECK(lightSecondAfterHeavy + otherSecondAfterHeavy == heavyFirst);
+	CHECK(lightSecondAfterHeavy > heavyFirst * 0.44);
+	CHECK(lightSecondAfterHeavy < heavyFirst * 0.56);
+	// Light first leaves heavy:9 vs other:1, so heavy is ~90% of those second draws.
+	REQUIRE(lightFirst > 300);
+	CHECK(heavySecondAfterLight > lightFirst * 0.82);
+	CHECK(heavySecondAfterLight < lightFirst * 0.97);
+}
+
+TEST_CASE("huge Min and Max are bounded, not undefined")
+{
+	std::vector<PoolRow> pool = {{Target::Players, "x", -2000000000, 2000000000, 1}};
+	Settings s;
+	s.properties = 1;
+	for (uint64_t seed = 0; seed < 200; ++seed) {
+		const int v = drawMapStats(seed, MapRow{}, s, pool)[0].value;
+		CHECK(v >= -500000000);
+		CHECK(v <= 500000000);
+	}
+}
+
 TEST_CASE("deterministic and seed dependent")
 {
 	const auto pool = testPool();
@@ -140,7 +192,7 @@ TEST_CASE("missing mapstats.txt uses the built-in pool")
 TEST_CASE("ItemStats modes")
 {
 	const auto pool = testPool();
-	const std::vector<Property> item = {{Target::Monsters, "maxhp%", 33}, {Target::Players, "fireresist", -7}};
+	const std::vector<Property> item = {{Target::Monsters, "item_maxhp_percent", 33}, {Target::Players, "fireresist", -7}};
 	Settings s;
 	// Off: the item's stats are ignored.
 	s.itemStats = false;
@@ -163,5 +215,5 @@ TEST_CASE("golden draws")
 	CHECK(dump(drawMapStats(1, MapRow{}, s, pool)) == "M:i=28 P:d=18 P:f=24 M:g=22 ");
 	CHECK(dump(drawMapStats(12345, MapRow{}, s, pool)) == "M:a=11 M:e=17 M:c=12 P:h=23 ");
 	Settings d;
-	CHECK(dump(drawMapStats(0xDEADBEEFCAFEull, MapRow{}, d, {})) == "P:lightresist=-33 M:damagepercent=56 M:maxhp%=59 P:fireresist=-18 P:hpregen=-13 P:item_slow=24 ");
+	CHECK(dump(drawMapStats(0xDEADBEEFCAFEull, MapRow{}, d, {})) == "M:coldresist=17 M:fireresist=20 M:item_maxhp_percent=59 P:coldresist=-18 P:poisonresist=-21 P:fireresist=-32 ");
 }
