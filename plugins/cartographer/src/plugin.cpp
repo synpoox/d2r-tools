@@ -366,6 +366,9 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::StatApplyPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			for (const std::string& line : carto::StatApplyStateReport()) {
+				Say(command, line);
+			}
 			Say(command, "Cartographer " + carto::EventsSummary() + ". These parts are settled at load; fix and restart to change them.");
 			for (const carto::PartStatus& part : carto::EventPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);

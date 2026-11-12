@@ -302,6 +302,9 @@ auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {
 			}
 			const sp::StatePick pick = sp::pickPlayerState(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount);
 			if (pick.state < 0) {
+				for (const std::string& line : sp::explainNoPick(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount)) {
+					plog::Warn("statprobe: no state picked, bank %u: %s", bank, line.c_str());
+				}
 				*why = "no state of the " + std::to_string(states.rowCount) + " in the table has every column empty and is unused; none is picked";
 				return -1;
 			}
@@ -622,6 +625,42 @@ auto StatApplyPartStatuses() -> std::vector<PartStatus> {
 
 auto StatApplySummary() -> std::string {
 	return "map stats: " + SummaryNow();
+}
+
+auto StatApplyStateReport() -> std::vector<std::string> {
+	namespace Tables = D2RL::DataTables;
+	std::vector<std::string> out;
+	if (g_dataTables == nullptr || g_context == nullptr) {
+		out.push_back("player stat state: D2RLoader has no DataTable service of the expected version");
+		return out;
+	}
+	// Read-only, no unit needed: the SDK views are read here without the data tables base cross-check that a pick at run time makes.
+	for (uint32_t bank = 1; bank <= 3; ++bank) {
+		Tables::TableView states{};
+		states.structSize = Tables::TableViewSize;
+		Tables::TableView skills{};
+		skills.structSize = Tables::TableViewSize;
+		if (g_dataTables->getTable(g_context, static_cast<Tables::Bank>(bank), Tables::TableId::States, &states) != Tables::Result::Success ||
+		    !Tables::HasTableViewField(&states, Tables::TableViewRequiredSize) || states.rowSize != sp::kStateRowSize || states.rows == nullptr ||
+		    g_dataTables->getTable(g_context, static_cast<Tables::Bank>(bank), Tables::TableId::Skills, &skills) != Tables::Result::Success ||
+		    !Tables::HasTableViewField(&skills, Tables::TableViewRequiredSize) || skills.rowSize != sp::kSkillRowSize || (skills.rows == nullptr && skills.rowCount != 0)) {
+			continue;
+		}
+		const sp::StatePick pick = sp::pickPlayerState(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount);
+		const std::string head = "player stat state, bank " + std::to_string(bank) + " (" + std::to_string(states.rowCount) + " states): ";
+		if (pick.state >= 0) {
+			out.push_back(head + "state " + std::to_string(pick.state) + " would be picked");
+			continue;
+		}
+		out.push_back(head + "none would be picked");
+		for (const std::string& line : sp::explainNoPick(static_cast<const uint8_t*>(states.rows), states.rowCount, static_cast<const uint8_t*>(skills.rows), skills.rowCount)) {
+			out.push_back("  " + line);
+		}
+	}
+	if (out.empty()) {
+		out.push_back("player stat state: no bank gave a states and skills table of the expected row sizes");
+	}
+	return out;
 }
 
 }  // namespace carto
