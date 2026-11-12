@@ -215,4 +215,49 @@ bool onRejected(ConnectSchedule &s, bool hostUnavailable) {
 	return !s.done;
 }
 
+const char *describe(Skip s)
+{
+	switch (s) {
+	case Skip::None: return "applied";
+	case Skip::SlotMismatch: return "this client's slot level for the map is not the host's (the tables or the mod differ)";
+	case Skip::KindMismatch: return "the host's map kind (maze or preset) is not this client's (maps.txt differs)";
+	case Skip::SettingOff: return "MapNames is off here";
+	case Skip::NotMaze: return "a preset map has no layout seed";
+	case Skip::NoSeed: return "the host sent no layout seed";
+	case Skip::SteeringOff: return "the maze steering is off here";
+	case Skip::TilesetMismatch: return "this client's Maze slot builds the other tileset";
+	case Skip::AlreadyBuilt: return "the slot level was already built here before the host's map arrived, so its layout is not changed";
+	}
+	return "?";
+}
+
+ApplyPlan decideApply(const MapIdentity &id, const ApplyFacts &f)
+{
+	ApplyPlan p;
+	if (!f.slotLevelMatches) {
+		p.namesWhy = p.mazeWhy = Skip::SlotMismatch;
+		return p;
+	}
+	if (id.maze != f.clientMazeMap) {
+		p.namesWhy = p.mazeWhy = Skip::KindMismatch;
+		return p;
+	}
+	p.names = f.namesSetting;
+	p.namesWhy = f.namesSetting ? Skip::None : Skip::SettingOff;
+	if (!id.maze) {
+		p.mazeWhy = Skip::NotMaze;
+	} else if (id.seed == 0) {
+		p.mazeWhy = Skip::NoSeed;
+	} else if (!f.mazeSteeringLive) {
+		p.mazeWhy = Skip::SteeringOff;
+	} else if (!f.tilesetFits) {
+		p.mazeWhy = Skip::TilesetMismatch;
+	} else if (f.slotBuilt) {
+		p.mazeWhy = Skip::AlreadyBuilt;
+	} else {
+		p.maze = true;
+	}
+	return p;
+}
+
 }  // namespace cartographer::mapsync

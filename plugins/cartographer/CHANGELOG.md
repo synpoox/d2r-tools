@@ -4,6 +4,7 @@
 
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
 - When a host opens a map, joined TCP/IP clients are told which map it is; they check it against their own `maps.txt` and log it (nothing else uses it yet; written and unit tested, not verified in game).
+- A TCP/IP client now shows the host's map name (with `MapNames=1`) and builds the host's maze layout, where its own tables fit (#130; written and unit tested, not verified in game).
 - Small preset maps now get their event, in the first room far enough from where you arrive, and the banner names an event only after it has spawned (#115, #121; written, not verified in game).
 - Boss `Drop` rolls an extra treasure class when the boss dies and Ambush events spawn their waves when you reach the event room (both seen working in game once); Treasure monsters spawn and the flee call runs (that they flee is not confirmed).
 - Shrine and Treasure chest events now find a spot inside a small event room, and an `objects.txt` name works on the stock file (it has a marker line the game skips); written and unit tested, not verified in game (#135).

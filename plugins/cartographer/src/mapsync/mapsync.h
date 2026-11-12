@@ -93,6 +93,57 @@ private:
 	std::optional<MapIdentity> current_;
 };
 
+// --- The client applies the identity ------------------------------------------------------------------------------------
+
+// What the client's engine glue found out about its own side of an accepted identity. Plain facts; the decision is below.
+struct ApplyFacts {
+	bool slotLevelMatches = false;  // the client's own slots.txt gives this map's slot the same level id the host sent
+	bool clientMazeMap = false;     // the client's own maps.txt row is a Cave or Crypt map
+	bool namesSetting = false;      // MapNames=1 in the client's cartographer.txt
+	bool mazeSteeringLive = false;  // every maze part is on and the hooks are in
+	bool tilesetFits = false;       // the client's Maze slot level can build this map's tileset
+	bool slotBuilt = false;         // the client's slot level was already built (with or without a map open) in this game
+};
+
+enum class Skip {
+	None,             // this half runs
+	SlotMismatch,     // the client's slot level for this map is not the host's: the tables or the mod differ
+	KindMismatch,     // the host says maze and the client's row is not (or the other way round)
+	SettingOff,       // MapNames is off on this client
+	NotMaze,          // a preset map has no layout to apply
+	NoSeed,           // a maze identity with seed 0: the host had no plan to give
+	SteeringOff,      // the client's maze steering is off
+	TilesetMismatch,  // the client's Maze slot builds the other tileset
+	AlreadyBuilt,     // the client built the slot level before the identity arrived; it is not rebuilt
+};
+const char *describe(Skip s);
+
+// Which halves of the identity the client applies: the map's name (MapNames) and the maze layout seed.
+struct ApplyPlan {
+	bool names = false;
+	Skip namesWhy = Skip::None;
+	bool maze = false;
+	Skip mazeWhy = Skip::None;
+};
+// A slot or kind mismatch skips both halves (the client's tables do not describe the host's map). Pure.
+ApplyPlan decideApply(const MapIdentity &id, const ApplyFacts &facts);
+
+// Applies each opening once: a resend of the same identity, or an older opening, is not applied again. Cleared when a game starts or ends.
+class AppliedOpening {
+public:
+	// True the first time `opening` is seen, or when it is newer than the last applied one.
+	bool take(uint16_t opening)
+	{
+		if (last_ && opening <= *last_) return false;
+		last_ = opening;
+		return true;
+	}
+	void clear() { last_.reset(); }
+
+private:
+	std::optional<uint16_t> last_;
+};
+
 // --- The host's clients ------------------------------------------------------------------------------------------------
 
 // The peers that said hello, at most kMaxPeers (a game holds 8 players; the cap only bounds a flood). When full, the oldest
