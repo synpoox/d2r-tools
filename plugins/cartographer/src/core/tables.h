@@ -76,7 +76,7 @@ struct BossDef {
 };
 
 // The most entries bosses.txt may have. The game keeps a once-per-game "already spawned" bit per superuniques row in a bitmap of
-// unknown length (docs/reverse-engineering/cartographer.md), so the number of added rows is kept small.
+// unknown length (docs/reverse-engineering/cartographer/01-addresses.md), so the number of added rows is kept small.
 inline constexpr size_t MaxBosses = 16;
 
 // The superuniques.txt key of the entry called `name`: BossKeyPrefix plus EscapeKeyBytes(name), ASCII only (install.ps1 Get-BossEscaped).
@@ -98,7 +98,7 @@ struct Settings {
 	int eventChance = DefaultEventChance;
 	int itemStats = 0;
 	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
-	int mapNames = 0;   // MapNames: 1 shows a map's own Name on the portal tooltip, the automap title and the entry banner (written, not verified in game)
+	int mapNames = 1;   // MapNames: 0 turns off a map's own Name on the portal tooltip, the automap title and the entry banner (on by default; seen in game in single player, multiplayer unverified)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
 	int outdoorBuild = 0;  // 1: the Outdoor slot level is built from the plan (hooks live); 0 (the default) leaves it to the game. Off until the game checks of issue #89 and #142 pass
 	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)

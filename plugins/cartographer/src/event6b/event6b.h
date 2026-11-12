@@ -1,6 +1,6 @@
 // Cartographer events, phase 6b (Shrine, Boss Drop, Ambush, Treasure): the small decisions that need no game. Pure C++ on plain
 // values: no engine, no SDK. The engine part (src/engine/event_6b.cpp) reads the game and calls these.
-// Notes and evidence: docs/reverse-engineering/cartographer.md section 13.
+// Notes and evidence: docs/reverse-engineering/cartographer/13-ambush-treasure-shrine.md.
 #pragma once
 #include <cstddef>
 #include <cstdint>

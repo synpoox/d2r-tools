@@ -1,6 +1,5 @@
 #include "outdoor_plan.h"
 
-#include <cctype>
 #include <optional>
 #include <utility>
 
@@ -9,12 +8,6 @@
 namespace cartographer::outdoor {
 
 namespace {
-
-std::string lower(std::string_view text) {
-	std::string out(text);
-	for (char &c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-	return out;
-}
 
 std::string joinErrors(const std::vector<std::string> &errors) {
 	std::string out = errors.empty() ? std::string("unknown problem") : errors.front();
@@ -38,14 +31,14 @@ const Catalogue &builtinJungleCatalogue() {
 }
 
 bool outdoorTilesetKnown(std::string_view tileset) {
-	const std::string name = lower(tileset);
+	const std::string name = lowerAscii(tileset);
 	return name == "jungle" || name == "snow";
 }
 
 std::string planCacheKey(const MapRequest &request) {
 	const StampOptions &o = request.options;
 	std::string key = std::to_string(request.seed);
-	key += '|' + lower(request.tileset) + '|' + lower(request.shape) + '|' + lower(request.size);
+	key += '|' + lowerAscii(request.tileset) + '|' + lowerAscii(request.shape) + '|' + lowerAscii(request.size);
 	key += '|' + std::to_string(o.macroTiles) + ',' + std::to_string(o.gridTiles) + ',' + std::to_string(o.originX) + ',' + std::to_string(o.originY);
 	key += ',' + std::to_string(o.maxMacroCells) + ',' + std::to_string(o.maxTilesX) + ',' + std::to_string(o.maxTilesY);
 	key += o.pinFiles ? ",pin" : ",free";
@@ -64,7 +57,7 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	if (!outdoorTilesetKnown(request.tileset)) {
 		return fail("Cartographer has no outdoor pieces for the tileset '" + request.tileset + "'. Use Jungle or Snow.");
 	}
-	if (lower(request.tileset) == "snow") {
+	if (lowerAscii(request.tileset) == "snow") {
 		// Snow is lines of fence pieces, not a layout of exit-mask pieces: only the stamps reach the hook and the grid comparison.
 		int cellsW = 0, cellsH = 0;
 		if (!snow::snowSizeCells(request.size, &cellsW, &cellsH)) {
@@ -159,6 +152,27 @@ void PlanCache::clear() {
 size_t PlanCache::size() const {
 	std::lock_guard<std::mutex> guard(lock_);
 	return plans_.size();
+}
+
+bool pickFarthestCell(const std::vector<GridCell> &candidates, const std::vector<GridCell> &anchors, layout::Pcg32 &rng, GridCell &out) {
+	int top = -1, ties = 0;
+	bool found = false;
+	for (const GridCell &c : candidates) {
+		int v = -1;  // squared distance to the nearest anchor
+		for (const GridCell &a : anchors) {
+			const int d = (c.x - a.x) * (c.x - a.x) + (c.y - a.y) * (c.y - a.y);
+			if (v < 0 || d < v) v = d;
+		}
+		if (v > top) {
+			top = v;
+			ties = 1;
+			out = c;
+			found = true;
+		} else if (v == top && rng.below(static_cast<uint32_t>(++ties)) == 0) {
+			out = c;
+		}
+	}
+	return found;
 }
 
 LevelRect levelRectOf(const StampPlan &plan) {

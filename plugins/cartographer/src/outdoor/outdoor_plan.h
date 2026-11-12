@@ -22,6 +22,7 @@
 
 #include "layout.h"
 #include "outdoor.h"
+#include "rng.h"
 #include "stamp.h"
 
 namespace cartographer::outdoor {
@@ -106,6 +107,21 @@ struct GridSample {
 	std::vector<uint64_t> flags;
 };
 std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &grid, GridCounts *counts = nullptr);
+
+// --- Picking a room cell on a grid of cells (shared by the tilesets) ---------------------------------------------------
+
+// A cell of a tileset's cell grid.
+struct GridCell {
+	int x = 0;
+	int y = 0;
+	bool operator==(const GridCell &o) const { return x == o.x && y == o.y; }
+	bool operator!=(const GridCell &o) const { return !(*this == o); }
+};
+
+// The candidate whose squared distance (in cells) to the nearest anchor is greatest. Among equal scores the pick is the rng's: a reservoir over the
+// ties, one draw per further tie, in candidate order. With one anchor this is "farthest from it"; with two (entrance and boss) it maximises the
+// distance to the nearer one. A tileset supplies only its candidate cells and anchors. Returns false (and leaves `out`) when there are no candidates.
+bool pickFarthestCell(const std::vector<GridCell> &candidates, const std::vector<GridCell> &anchors, layout::Pcg32 &rng, GridCell &out);
 
 // --- Rooms of the built level: the entry, event and boss rooms --------------------------------------------------------
 

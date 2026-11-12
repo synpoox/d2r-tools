@@ -97,6 +97,18 @@ TEST_CASE("autocheck: a stage times out only after the limit and never when the 
 	CHECK_FALSE(timedOut(5000, 100, 500));
 }
 
+TEST_CASE("autocheck: the arrival result reads as pass, fail, unreadable or not yet") {
+	CHECK_FALSE(arrivalVerdict(0, true).settled);
+	CHECK(arrivalVerdict(1, true).settled);
+	CHECK(arrivalVerdict(1, true).pass);
+	CHECK(arrivalVerdict(1, true).detail == "ARRIVAL IS IN THE ENTRANCE CELL");
+	CHECK(arrivalVerdict(2, true).settled);
+	CHECK_FALSE(arrivalVerdict(2, true).pass);
+	CHECK_FALSE(arrivalVerdict(3, true).pass);
+	CHECK(arrivalVerdict(3, true).detail.find("[outdoor probe] arrival") != std::string::npos);
+	CHECK(arrivalVerdict(3, false).detail.find("[maze probe] arrival") != std::string::npos);
+}
+
 TEST_CASE("autocheck: an item that does not apply is written N/A and counted apart from pass") {
 	Checklist list;
 	list.record(Item::Open, true, "");

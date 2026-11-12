@@ -102,13 +102,9 @@ Resolved resolveSpawn(const SpawnTable &table, std::string_view spawn) {
 	return out;
 }
 
-std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) {
-	scale = std::max(1, scale);
-	const int inset = kEdgeInset * scale, gap = kSpotGap * scale;
+// One pass of the grid: `inset` clear of the edge, spots `gap` apart (both in the room's own units). The centre is always first.
+static std::vector<Spot> placeOnGrid(const Rect &room, int n, uint64_t seed, int inset, int gap) {
 	std::vector<Spot> out;
-	if (n <= 0 || room.w <= 0 || room.h <= 0) {
-		return out;
-	}
 	Rect in = room;
 	if (room.w > 2 * inset + 1 && room.h > 2 * inset + 1) {
 		in = {room.x + inset, room.y + inset, room.w - 2 * inset, room.h - 2 * inset};
@@ -143,6 +139,23 @@ std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) 
 		}
 		if (apart) {
 			out.push_back({c.x, c.y});
+		}
+	}
+	return out;
+}
+
+std::vector<Spot> placements(const Rect &room, int n, uint64_t seed, int scale) {
+	scale = std::max(1, scale);
+	if (n <= 0 || room.w <= 0 || room.h <= 0) {
+		return {};
+	}
+	std::vector<Spot> out = placeOnGrid(room, n, seed, kEdgeInset * scale, kSpotGap * scale);
+	if (static_cast<int>(out.size()) < n) {
+		// An outdoor event room is one 8 x 8 tile room: the usual spacing fits only 4 spots. Pack tighter (one tile) before giving spots up.
+		// The tight pass replaces the whole layout (a Horde of 6 becomes a 3 x 3 block around the centre); it is not added to the normal one.
+		std::vector<Spot> tight = placeOnGrid(room, n, seed, kTightInset * scale, kTightGap * scale);
+		if (tight.size() > out.size()) {
+			out = std::move(tight);
 		}
 	}
 	return out;
@@ -229,6 +242,7 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 	                  : event.kind == events::Kind::Ambush   ? std::max(0, event.waveSize)
 	                  : event.kind == events::Kind::Treasure ? 1
 	                                                         : std::max(0, event.hordeSize);
+	plan.requested = total;
 	const std::vector<Spot> spots = placements(room, total, seed, scale);
 	for (size_t i = 0; i < spots.size(); ++i) {
 		Spawn s;
