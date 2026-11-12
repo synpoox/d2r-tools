@@ -428,7 +428,6 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	row.properties = map.properties;
 	const auto drawn = cartographer::stats::drawMapStats(seed, row, settings, tables->pool);
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
-	g_playerSetting = tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
 	plog::Info("map stats for '%s' (seed %llu, slot level %d): %zu drawn, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,
 	           drawn.size(), sp::describe(*plan).c_str());
@@ -479,11 +478,9 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 			hasList = g_lists.find(id) != 0;
 		}
 		const bool inMap = plan != nullptr && slot > 0 && UnitLevelId(unit) == slot;
-		switch (sp::decidePlayer(plan != nullptr && !plan->players.empty(), inMap, hasList)) {
+		switch (sp::decidePlayer(plan != nullptr && !plan->players.empty(), inMap, hasList, g_playerSetting.load())) {
 		case sp::PlayerAction::Apply:
-			if (g_playerSetting.load()) {
-				ApplyToPlayer(unit, id, *plan, generation);
-			}
+			ApplyToPlayer(unit, id, *plan, generation);
 			break;
 		case sp::PlayerAction::Remove:
 			RemoveFromPlayer(unit, id);

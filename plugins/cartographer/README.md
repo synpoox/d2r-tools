@@ -25,7 +25,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   player leaves the map level, but a Save and Exit inside the map, or an autosave there, may save the character while they
   are still on it. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
-  (and `level` on monsters); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
+  (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill or state number are refused on both); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
   (`Level`, `Density`, ...), `ItemStats`, the panel and events are not applied yet. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.

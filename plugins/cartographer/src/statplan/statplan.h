@@ -84,10 +84,11 @@ uint64_t mixSeed(uint64_t clock, uint32_t playerId, uint32_t openings);
 // What to do with a player's stat list on this tick.
 enum class PlayerAction { None, Apply, Remove };
 
+// settingOn: PlayerStats is 1; with it off a list already on the player is removed on the next tick.
 // planHasPlayers: the active map has player entries. inMap: the player stands in the slot level. hasList: the plugin
 // put a list on this player and has not removed it. A list is removed whenever the map no longer applies, whatever
 // the reason (left the level, map closed, plan replaced).
-PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList);
+PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool settingOn);
 
 // Whether a monster that just spawned in `levelId` gets the monster stats.
 bool monsterGetsStats(bool planActive, int levelId, int slotLevel);

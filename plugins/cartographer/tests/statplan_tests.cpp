@@ -31,15 +31,26 @@ StatIds testIds()
 
 } // namespace
 
-TEST_CASE("itemstatcost: ids come from the *ID column, blank lines are skipped")
+TEST_CASE("itemstatcost: ids are row numbers, blank lines are skipped")
 {
 	const StatIds ids = testIds();
 	CHECK(ids.loaded);
-	CHECK(ids.find("item_maxhp_percent") == 76);
-	CHECK(ids.find("fireresist") == 39);
-	CHECK(ids.find("damagepercent") == 25);
+	CHECK(ids.find("item_maxhp_percent") == 1);
+	CHECK(ids.find("fireresist") == 2);
+	CHECK(ids.find("damagepercent") == 4); // a blank line is not a row
 	CHECK(ids.find("nope") == -1);
 	CHECK(ids.find("FIRERESIST") == -1); // names must match exactly
+}
+
+TEST_CASE("itemstatcost: the *ID column is a comment, the row number wins (vanilla row 212 says 213)")
+{
+	std::string text = "Stat\t*ID\n";
+	for (int i = 0; i < 212; ++i) text += "filler" + std::to_string(i) + "\t" + std::to_string(i) + "\n";
+	text += "passive_mastery_gethit_rate\t213\n"; // row 212
+	text += "passive_mastery_attack_speed\t213\n"; // row 213
+	const StatIds ids = parseItemStatCost(text);
+	CHECK(ids.find("passive_mastery_gethit_rate") == 212);
+	CHECK(ids.find("passive_mastery_attack_speed") == 213);
 }
 
 TEST_CASE("itemstatcost: without an *ID column the row number is the id")
@@ -74,13 +85,13 @@ TEST_CASE("buildPlan splits by target and resolves ids")
 	const Plan plan = buildPlan(props, testIds());
 	REQUIRE(plan.monsters.size() == 2);
 	REQUIRE(plan.players.size() == 1);
-	CHECK(plan.monsters[0].stat == 76);
+	CHECK(plan.monsters[0].stat == 1);
 	CHECK(plan.monsters[0].value == 30);
-	CHECK(plan.monsters[1].stat == 25);
-	CHECK(plan.players[0].stat == 39);
+	CHECK(plan.monsters[1].stat == 4);
+	CHECK(plan.players[0].stat == 2);
 	CHECK(plan.players[0].value == -20);
 	CHECK(plan.skipped.empty());
-	CHECK(describe(plan) == "monsters: item_maxhp_percent(76)=+30, damagepercent(25)=+15; players: fireresist(39)=-20");
+	CHECK(describe(plan) == "monsters: item_maxhp_percent(1)=+30, damagepercent(4)=+15; players: fireresist(2)=-20");
 }
 
 TEST_CASE("buildPlan skips what it cannot resolve, with a reason")
@@ -153,13 +164,16 @@ TEST_CASE("checkPoolStats warns about unknown stats, only for rows that can be d
 
 TEST_CASE("the player's list goes on in the map, off when it no longer applies")
 {
-	CHECK(decidePlayer(true, true, false) == PlayerAction::Apply);
-	CHECK(decidePlayer(true, true, true) == PlayerAction::None);
-	CHECK(decidePlayer(true, false, true) == PlayerAction::Remove);  // left the level
-	CHECK(decidePlayer(false, true, true) == PlayerAction::Remove);  // map closed
-	CHECK(decidePlayer(false, false, true) == PlayerAction::Remove);
-	CHECK(decidePlayer(true, false, false) == PlayerAction::None);
-	CHECK(decidePlayer(false, true, false) == PlayerAction::None);   // a map with no player stats
+	CHECK(decidePlayer(true, true, false, true) == PlayerAction::Apply);
+	CHECK(decidePlayer(true, true, true, true) == PlayerAction::None);
+	CHECK(decidePlayer(true, false, true, true) == PlayerAction::Remove);  // left the level
+	CHECK(decidePlayer(false, true, true, true) == PlayerAction::Remove);  // map closed
+	CHECK(decidePlayer(false, false, true, true) == PlayerAction::Remove);
+	CHECK(decidePlayer(true, false, false, true) == PlayerAction::None);
+	CHECK(decidePlayer(false, true, false, true) == PlayerAction::None);   // a map with no player stats
+	// PlayerStats switched to 0 on reload: nothing new, and a list that is on comes off while still in the map
+	CHECK(decidePlayer(true, true, false, false) == PlayerAction::None);
+	CHECK(decidePlayer(true, true, true, false) == PlayerAction::Remove);
 }
 
 TEST_CASE("monsters get stats only in the slot level while a map is active")
@@ -224,18 +238,36 @@ TEST_CASE("buildPlan refuses player stats the game bakes into the saved base val
 	}
 }
 
-TEST_CASE("the refused stats are fine on monsters, except level")
+TEST_CASE("on monsters level and the current values are refused, the rest is fine")
 {
 	StatIds ids;
 	ids.loaded = true;
-	ids.byName = {{"gold", 14}, {"level", 12}, {"hitpoints", 6}};
-	const Plan plan = buildPlan({{Target::Monsters, "gold", 5}, {Target::Monsters, "hitpoints", 5}, {Target::Monsters, "level", 5}}, ids);
+	ids.byName = {{"gold", 14}, {"level", 12}, {"hitpoints", 6}, {"mana", 8}, {"stamina", 10}, {"maxhp", 7}, {"renamed", 6}};
+	const Plan plan = buildPlan({{Target::Monsters, "gold", 5}, {Target::Monsters, "maxhp", 5}, {Target::Monsters, "level", 5},
+	                             {Target::Monsters, "hitpoints", 5}, {Target::Monsters, "mana", 5}, {Target::Monsters, "stamina", 5},
+	                             {Target::Monsters, "renamed", 5}}, ids);
 	CHECK(plan.monsters.size() == 2);
-	REQUIRE(plan.skipped.size() == 1);
-	CHECK(plan.skipped[0].stat == "level");
-	CHECK(plan.skipped[0].why.find("refused on monsters") != std::string::npos);
+	REQUIRE(plan.skipped.size() == 5);
+	for (const Skipped &s : plan.skipped) CHECK(s.why.find("refused on monsters") != std::string::npos);
+	CHECK(plan.skipped[1].why.find("current value") != std::string::npos);
 	CHECK(refusedReason(Target::Players, "fireresist", 39).empty());
+	CHECK_FALSE(refusedReason(Target::Monsters, "hitpoints", 6).empty());
 	CHECK_FALSE(refusedReason(Target::Players, "x", 12).empty()); // by id alone
+}
+
+TEST_CASE("stats that need a skill or state number are refused on both targets")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"state", 100}, {"item_aura", 101}, {"item_charged_skill", 102}, {"item_skillonhit", 103}, {"item_skillondeath", 104}, {"fireresist", 39}};
+	std::vector<Property> props;
+	for (const Target t : {Target::Monsters, Target::Players})
+		for (const char *n : {"state", "item_aura", "item_charged_skill", "item_skillonhit", "item_skillondeath", "fireresist"}) props.push_back({t, n, 5});
+	const Plan plan = buildPlan(props, ids);
+	CHECK(plan.monsters.size() == 1);
+	CHECK(plan.players.size() == 1);
+	REQUIRE(plan.skipped.size() == 10);
+	for (const Skipped &s : plan.skipped) CHECK(s.why.find("skill or state number") != std::string::npos);
 }
 
 TEST_CASE("checkPoolStats names each refused row")

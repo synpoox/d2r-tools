@@ -85,20 +85,26 @@ StatIds parseItemStatCost(std::string_view text)
 	const int cStat = table.Column("Stat");
 	if (cStat < 0) return out;
 	out.loaded = true;
-	const int cId = table.Column("*ID");
-	int ordinal = 0; // the game counts data rows from 0
+	// The stat id is the row number: the game counts data rows from 0. A column that starts with '*' (such as
+	// *ID) is a comment to the game, and vanilla has one wrong (row 212 says 213), so it is not read.
+	int ordinal = 0;
 	for (const carto::TsvRow &row : table.rows) {
-		const int rowId = ordinal++;
+		const int id = ordinal++;
 		const std::string name = table.Cell(row, cStat);
 		if (name.empty()) continue;
-		int id = rowId;
-		if (cId >= 0) {
-			int explicitId = 0;
-			if (parseInt(table.Cell(row, cId), &explicitId)) id = explicitId;
-		}
 		out.byName.emplace_back(name, id);
 	}
 	return out;
+}
+
+// Stats whose value needs a skill or state number (the stat's layer). The map table has no way to give one yet, and
+// the plugin sets layer 0, which would name skill or state 0.
+static bool needsParam(std::string_view stat)
+{
+	static const char *const kNames[] = {"state", "item_aura", "item_charged_skill", "item_singleskill", "item_nonclassskill", "item_addskill_tab"};
+	for (const char *n : kNames)
+		if (stat == n) return true;
+	return stat.substr(0, 11) == "item_skillo"; // item_skillonattack, item_skillonkill, item_skillondeath, ...
 }
 
 std::string refusedReason(Target target, std::string_view stat, int id)
@@ -108,11 +114,15 @@ std::string refusedReason(Target target, std::string_view stat, int id)
 	bool listed = false;
 	for (const char *n : kNames) listed = listed || stat == n;
 	for (const int i : kIds) listed = listed || id == i;
+	if (needsParam(stat))
+		return "'" + std::string(stat) + "' is refused: it needs a skill or state number, and a map stat cannot give one yet.";
 	if (!listed) return "";
 	const bool isLevel = stat == "level" || id == 12;
 	if (target == Target::Monsters) {
-		if (!isLevel) return ""; // a monster is never saved
-		return "'" + std::string(stat) + "' is refused on monsters: the game writes the monster's level itself while it sets the monster up.";
+		if (isLevel) return "'" + std::string(stat) + "' is refused on monsters: the game writes the monster's level itself while it sets the monster up.";
+		const bool current = stat == "hitpoints" || stat == "mana" || stat == "stamina" || id == 6 || id == 8 || id == 10;
+		if (!current) return ""; // a monster is never saved
+		return "'" + std::string(stat) + "' is refused on monsters: it is the current value, which the game rewrites on every hit and regeneration, so the map's amount would be added again each time. Use the maximum stat instead.";
 	}
 	return "'" + std::string(stat) + "' is refused on players: the game reads it as a total and writes it back as the saved base value, so the map's value would stay in the character.";
 }
@@ -198,9 +208,9 @@ uint64_t mixSeed(uint64_t clock, uint32_t playerId, uint32_t openings)
 	return mix(mix(clock) ^ ((static_cast<uint64_t>(playerId) << 32) | openings));
 }
 
-PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList)
+PlayerAction decidePlayer(bool planHasPlayers, bool inMap, bool hasList, bool settingOn)
 {
-	const bool wanted = planHasPlayers && inMap;
+	const bool wanted = planHasPlayers && inMap && settingOn;
 	if (wanted && !hasList) return PlayerAction::Apply;
 	if (!wanted && hasList) return PlayerAction::Remove;
 	return PlayerAction::None;
