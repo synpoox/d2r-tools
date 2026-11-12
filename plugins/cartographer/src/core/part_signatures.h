@@ -105,9 +105,7 @@ inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF
 inline constexpr const char* LevelsRow = "48 89 5C 24 08 55 56 57 48 83 EC 30 48 63 DA 0F B6 F1 E8 ?? ?? ?? ?? 48 8B E8 85 DB 7E 34 40 0F B6 CE E8 ?? ?? ?? ?? 48 8B B8 68 14 00 00 4C 63 C7 4C 3B C7 75 04 85 FF 79 14 48 8D 4C 24 58 C6 44 24 58 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 3B DF 7C 18";
 
 // Phase 6b second half: Ambush and Treasure (cartographer/13-ambush-treasure-shrine.md). ChestOperate (the chest operate handler, objects OperateFn 4, 0x58e2f0; one pointer to the operate context) is hooked (the hook cuts
-// the first 16 bytes: four whole instructions, no relative operand; the signature runs to 20 and matches once). The click path (0x593630) and the skill path (0x592c40) both end here; 0x592c40 alone is NOT reached by a click (issue #220). The rest are only
-// called: FleeSetup is the engine's scare setup; FleeBlock and FleeTarget are the two checks it makes first (called only to log what they
-// say); TcLookup gives the compiled treasure class for an index and TcRoller rolls it.
+// the first 16 bytes: four whole instructions, no relative operand; the signature runs to 20 and matches once). The click path (0x593630) and the skill path (0x592c40) both end here; 0x592c40 alone is NOT reached by a click (issue #220). The flee parts (scare setup and its two checks) are no longer used (#269).
 inline constexpr const char* ChestOperate = "48 89 4C 24 08 55 48 8B EC 48 81 EC 80 00 00 00 48 8B 49 08";
 // The chest's lock (cartographer/19-chest-lock.md). Both are only called: ObjectFlagsGet (unit) returns the object data's flag word, whose low
 // byte has the locked bit (0x80); ObjectFlagsSet (unit, byte) writes that byte. Each is a small wrapper that jumps on to the body; the jump target is masked.

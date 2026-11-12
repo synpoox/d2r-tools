@@ -1,6 +1,6 @@
 ## 8a. Outdoor build hook (issue #141)
 
-Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks themselves have never run in a game.
+Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks ran in game on 2026-11-12 (single player, Hell): Jungle and Snow maps built as planned in every game, with arrival in the entrance cell and the Boss and events in their planned rooms (outdoor-check-2, outdoor-check-3, snow-check-1, map-item-type-check in `docs/cartographer/checks/`). The edges and void cells (#142) are still open.
 
 ### Hook lengths (derived 2026-11-12)
 
@@ -22,37 +22,37 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 - Then: write the rectangle (origin from the slot row, size from the plan; both are 0 for a slot when the build starts, section 4 S1), reseed (`[level+0x1e4] = int32(drlg[0x860]) + levelId`, `[level+0x1e8] = 0x29a`), call `OutdoorEntry`. Its Act 5 branch reaches our `OutdoorAct5Builder` hook, which, only when the thread's build context names this level, calls `PieceStamp(dataFlag, level, cx, cy, lvlPrest, file, 0)` per stamp and `VoidCell(level, x, y)` per void cell. Then the level type is set to 0 (no branch of the dispatch matches, so only the native tail runs, section 4 S1), the original `LevelBuild` runs, and type 3 is restored.
 - Afterwards the built grid is read back (`+0x08` piece grid, `+0x58` flag grid through the row index) and compared with the plan (`compareGrid`); a difference is logged, not repaired. If the Act 5 branch was not taken (the slot level is not in Act 5 in `levels.txt`) the plan was not stamped, and the log says so.
 - The plan is cached by (seed, tileset, shape, size, origin, limits, options), four entries, so the host's and a client's builds of one map share one computation. Failed plans are cached.
-- `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. Both settings default to 0.
+- `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. It defaults to 0.
 
-### After our build, and what is not hooked when the setting is off
+### After our build, and what is not hooked without an Outdoor slot
 
 - **Second reseed.** The original's prologue (`0x3271e2..0x3271f0`) reseeds the level RNG again after our build returns control to it, so the level RNG ends at the fresh seed, not where a generator left it. The tail does not read it (section 8 Q5); the last fallback of `0x3da650` does. It is the same on the host and on a client.
-- **No Outdoor slot installs nothing.** `InstallOutdoorHooks` finds the parts (for `cartographer check`) but hooks neither `0x3fe2e0` nor, when the maze steering did not take it, `0x3271c0`, when slots.txt has no Outdoor slot (one log line says so). The game then runs as without the outdoor code. (The `OutdoorBuild` setting that used to switch this off is gone: outdoor maps are always built.)
+- **No Outdoor slot installs nothing.** `InstallOutdoorHooks` finds the parts (for `cartographer check`) but hooks neither `0x3fe2e0` nor, when the maze steering did not take it, `0x3271c0`, when slots.txt has no Outdoor slot (one log line says so). The game then runs as without the outdoor code. Outdoor maps are built only when a map is opened.
 - **Act 5 only.** `PrepareSlot` refuses, before any write or engine call, unless the Outdoor slot row in levels.txt has `Act` = 4 (Act 5) and an id above 137 (a vanilla level or a town is never rebuilt). Otherwise `0x3ee320` would dispatch to a vanilla Act 1-4 builder (`0x3ee484..0x3ee4db`) on our level and rectangle. A missing `Act` column also refuses. The game then builds the level itself.
 
 ### Slot row requirements (found by the outdoor spike, PR #168)
 
 - The Outdoor slot's levels.txt row needs `Vis0` to `Vis7` = 0. With `-1` the game crashes at image `+0x3268fb`. The installer writes the row (issue #144) and is not changed here; this is recorded for that change.
 
-### Entry, boss and event rooms (issues #143 and #145): written, not verified in game
+### Entry, boss and event rooms (issues #143 and #145): seen in game
 
 - After a build that matched the plan, `ArrangeRooms` reads the level's room list and reduces three plan cells to one room each with `chooseCellRoom` (the room wholly inside the cell nearest its centre; a cell is 32 x 32 tiles, a room 8 x 8): the entrance cell, the event cell and the boss cell. The S2 spike (PR #168) saw the arrival land in the entry cell only when the spike set `0x30000` on a room of it.
 - Arrival: `planArrival` gives the entrance cell's room `0x30000` in room `+0x50` and clears the bits on every other room, as the maze `MarkArrival` does (same three guard parts `ArrivalFinder`, `ArrivalRoomFinder`, `ArrivalFlagTest`, checked only; a missing one leaves the arrival to the game). Refused, with the reason in the log, when the build is not the plan, a room lies outside the plan's level rectangle or the cell holds no room. `OutdoorProbe = 1` logs the player's first room in the slot level and whether it is in the entrance cell (`[outdoor probe] arrival`), driven from the same tick as the maze probe.
 - Boss and event: the chosen rooms' exact DRLG rects are what `OutdoorBossRoom` / `OutdoorEventRoom` return; `event_apply.cpp` uses them for the Outdoor slot level exactly as it uses the maze's (the tracker compares the room rect), so the map Boss (the `bosses.txt` entry, one monster at the room centre) and the event go in that one room. No event cell: the event falls back to the distance rule.
 - Not done: population per clearing. The S2 spike's clearing monsters came from rows cloned from Act 5 row 111 (the level's own monster data), so the layout does not decide them; the slot level's `Monsters`/`Density` (section 15) are the only control for now.
-- Needs a game: the portal arrival without a manual mark, the Boss standing in the boss clearing (server room scale), and the event room firing there.
+- Seen in game (outdoor-check-2, outdoor-check-3, snow-check-1): 9 of 9 arrivals in the entrance cell, the map Boss spawned as a superunique in the boss room, and Horde and Treasure events fired in the event room.
 
 ### Open
 
-- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142; the S2 spike (section 16) saw the void edge as acceptable in game (dark rock, no hole). The whole feature stays off until the builder itself is checked in game.
+- The void marker is the `VoidCell` path (piece 0, flag `0x100`). Whether that leaves a walkable-free hole, or a fill ring is needed, is issue #142; the S2 spike (section 16) saw the void edge as acceptable in game (dark rock, no hole).
 - The entry room: whether the plan's entrance cell is where the player arrives is also #142 (section 16: a portal arrival landed in the entry cell, with a room flag the spike set).
-- A Jungle map opens through `portal.cpp` (#144, see "Opening an outdoor map" below); that path has not run in a game.
+- A Jungle map opens through `portal.cpp` (#144, see "Opening an outdoor map" below); that path ran in game from the item (map-item-type-check).
 - `VoidCell` and `OutdoorEntry` were only ever reached by the spike (a hooked entry, direct stamp calls); calling `VoidCell` directly is untested.
-- Nothing here has run in a game.
+- Not run in game: multiplayer, and the edges (#142).
 
 ### Opening an outdoor map (issue #144)
 
-A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 16). Desk work only; the open path has not run in a game. Multiplayer: the host sends the outdoor seed through map sync (see "Multiplayer layout sync" below). The installer sets `SubType` and `SubTheme` to -1 on the Outdoor row only (the Maze row is unchanged), so the Siege sub-level set of level 111 is not carried over. Before the portal opens, `OpenMapPortal` makes the plan (`OutdoorPlanProblem`, the same cached plan the build uses) and refuses with its reason if it fails, so the game's own Act 5 builder never runs on a Jungle-typed slot. After the slot level has been built with a map open (`OutdoorSlotBuilt`, a `SlotBuildState` like the maze's, cleared on leaving the game), or while it is being built, a second outdoor open is refused with a message. The installer's repair path for an existing "Cartographer Outdoor" row fixes Quest, LevelGroup, Entry, Warp, SubType, SubTheme and Vis (Act, DrlgType, LevelType, size and offsets are refused by the plugin at open instead).
+A Jungle map opens through the Outdoor slot from its item (`portal.cpp`: `OutdoorProblem`, then `OutdoorMapOpened` before the portal, `OutdoorMapCancelled` if none opens). `tools/install.ps1` writes the level "Cartographer Outdoor": Act 5, DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000), copied from level 111, Vis0..7 = 0, no lvlprest or lvlmaze row (none was needed by the spike, section 16). The open path ran in game from the item (map-item-type-check). Multiplayer: the host sends the outdoor seed through map sync (see "Multiplayer layout sync" below). The installer sets `SubType` and `SubTheme` to -1 on the Outdoor row only (the Maze row is unchanged), so the Siege sub-level set of level 111 is not carried over. Before the portal opens, `OpenMapPortal` makes the plan (`OutdoorPlanProblem`, the same cached plan the build uses) and refuses with its reason if it fails, so the game's own Act 5 builder never runs on a Jungle-typed slot. After the slot level has been built with a map open (`OutdoorSlotBuilt`, a `SlotBuildState` like the maze's, cleared on leaving the game), or while it is being built, a second outdoor open is refused with a message. The installer's repair path for an existing "Cartographer Outdoor" row fixes Quest, LevelGroup, Entry, Warp, SubType, SubTheme and Vis (Act, DrlgType, LevelType, size and offsets are refused by the plugin at open instead).
 
 ### Multiplayer layout sync (issue #146)
 

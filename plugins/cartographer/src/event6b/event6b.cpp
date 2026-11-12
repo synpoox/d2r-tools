@@ -398,5 +398,4 @@ const char *chestReasonName(ChestReason reason) {
 	return "";
 }
 
-
 } // namespace cartographer::event6b

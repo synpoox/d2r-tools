@@ -18,8 +18,8 @@ an ambush, a shrine or a treasure). MIT licensed.
   default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Outdoor map rooms** (Jungle and Snow, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
-- **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
-  placement are experimental).
+- **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
+  (its loot is not confirmed in game yet).
 - **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
 - **Multiplayer sync** (experimental): when the host opens a map, TCP/IP clients are told which map it is. Not on Battle.net.
 - **Console**: `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map's portal
@@ -44,14 +44,14 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
-   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
-   no items. The level is a Cave by default; add
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor and Snow levels and their slots to the mod's
+   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
+   no map items. The Maze level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
-4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
+4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`), for example a copy
    of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
@@ -120,7 +120,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
 | Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
-| Champions | Read and checked; not applied yet | 0 |
+| Champions | Read and checked, never applied: the game has no setting for it | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
 
@@ -132,7 +132,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
-| ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
+| ItemStats | `1` uses the map item's own stats as the map's properties (a player stat from the item was seen in game once; monster stats from an item not checked) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
 | AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS`, `FAIL` or `N/A` lines to the plugin log; for test slots only | 0 |
 | AutoCheckMap | The `Name` of the map `AutoCheck` opens, without its item; for test slots only | none |
@@ -176,7 +176,7 @@ minions) and the log says which path was taken. The same happens for a second sp
 Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
 
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`). A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
+and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`; PR #261).
 If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |
@@ -187,7 +187,7 @@ If you rename an entry while the game runs, its boss shows placeholder text unti
 | Minions | How many of the base monster come with the boss, 0 to 10 | 0 |
 
 Example row: `Shoreline Warden	zombie1	5,6	2` under the header `Name	Base	Mods	Minions`. The name, the mods
-and the minions come from the `superuniques.txt` row and have not been checked in game yet.
+and the minions come from the `superuniques.txt` row (name and mods seen on hover and the minions seen with the boss, single player, Hell).
 
 #### mapevents.txt
 
@@ -197,7 +197,7 @@ are no events.
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Shown to the player when the event starts | required |
-| Kind | `Boss`, `Ambush`, `Horde`, `Treasure` or `Shrine` (Shrine and Treasure chest placement are experimental) | required |
+| Kind | `Boss`, `Ambush`, `Horde`, `Treasure` or `Shrine` (a Treasure chest is placed unlocked; its loot is not confirmed in game) | required |
 | Spawn | A monster id, a unique monster name or an object name | required |
 | Count | Minions (Boss), wave size (Ambush) or horde size (Horde), 1 to 200 | 1 |
 | Waves | Number of waves, 1 to 50; Ambush only | 3 |
@@ -272,8 +272,7 @@ game. The installer adds that level next to the Maze level: Act 5, outdoor (Drlg
 (`-1` crashes the game). It needs no `lvlprest.txt` or `lvlmaze.txt` row. Running it again changes nothing, and the
 game's own rows are never edited. Restart the game afterwards.
 
-Outdoor maps are always built, like maze maps; there is no setting for them (an old `OutdoorBuild` line in `cartographer.txt`
-is ignored and noted in the report). If the Outdoor slot is missing, not the level the
+Like every map, an outdoor map is built only when you open it from its map item (or with `cartographer open`). If the Outdoor slot is missing, not the level the
 installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
@@ -281,7 +280,7 @@ A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through th
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
 is Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 
-Checked in single player: opening, arriving in the entrance clearing, the Boss, events, map stats and the entry banner. Not checked: the edges and void cells (issue #142) and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
+Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
 ## Status
 
@@ -289,10 +288,10 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character), and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
-- **Outdoor maps (Jungle and Snow)**: opening, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142) and multiplayer were not checked.
-- **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
-  banner text (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync, Nightmare
-  difficulty for mazes, and a second Crypt map in one game.
+  Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit), and `ItemStats=1` for a player stat.
+- **Outdoor maps (Jungle and Snow)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen.
+- **Experimental or not verified in game**: Treasure chest loot (the chest opened but dropped nothing in one game, #220), what a Boss `Drop` roll drops
+  (the roll runs when the Boss dies, 5 of 5 kills), the event
+  name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

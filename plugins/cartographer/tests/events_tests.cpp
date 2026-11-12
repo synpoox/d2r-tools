@@ -153,7 +153,7 @@ TEST_CASE("table defaults: Count 1, Waves 3, Weight 1")
 	}
 }
 
-TEST_CASE("Treasure is a fleeing monster or a chest, by what Spawn names")
+TEST_CASE("Treasure is a monster or a chest, by what Spawn names")
 {
 	auto form = [](NameKind k) {
 		auto e = decide({row("t", Kind::Treasure, "s", k)}, 100, 7, &kRoom);

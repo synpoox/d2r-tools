@@ -43,7 +43,7 @@ auto Event6bSummary() -> std::string;
 auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool;
 
 // A Boss event or a Treasure monster was accepted: resolve its Drop treasure class and arm the death hook. Does nothing without a Drop.
-// Remembers `player` as the unit a Treasure monster flees from. Game thread, at map open.
+// Game thread, at map open.
 void Event6bArmBossDrop(const cartographer::events::Event& event, int level, void* player);
 
 // Phase 6b, second half: Treasure and Ambush.
