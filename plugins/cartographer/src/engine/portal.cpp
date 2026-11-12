@@ -13,6 +13,7 @@
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
 #include "log.h"
+#include "hookguard.h"
 #include "steer.h"
 
 #include <windows.h>
@@ -559,14 +560,8 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 	const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&PlayerTickHook), reinterpret_cast<void**>(&g_tickOriginal));
-	const bool ok = hooked && g_tickOriginal != nullptr;
-	part.status.on = ok;
-	part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
+	const bool ok = HookOutcome(part, hooked, g_tickOriginal != nullptr);
 	g_consoleLive = ok;
-	if (hooked && !ok) {
-		// The hook cannot be taken out again and the plugin cannot call the game's mana step without an original.
-		plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's player mana step is skipped for every player until the game is restarted; restart it after removing what conflicts", part.name);
-	}
 	if (!ok) {
 		if (lifecycle->unregisterGameplayEventListener != nullptr) {
 			(void)lifecycle->unregisterGameplayEventListener(context, readyHandle);  // GameLeft stays
@@ -695,15 +690,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 		}
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
-		const bool ok = hooked && *original != nullptr;
-		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
-		if (hooked && !ok) {
-			// The hook cannot be taken out again, so the portal can never go live in this session and every item-spell use (or
-			// check) the hook sees is dropped, not only the map items; restart the game.
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the portal stays off for this session and every item-spell use is dropped (not only map items) until the game is restarted; restart it after removing what conflicts", part.name);
-		}
-		return ok;
+		return HookOutcome(part, hooked, *original != nullptr);
 	};
 	g_hooksIn = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal));
 	if (g_hooksIn) {
