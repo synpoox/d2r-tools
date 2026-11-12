@@ -132,7 +132,7 @@ TEST_CASE("EventRoomTracker: a planned room fires only on that rect, once") {
 	CHECK(t.populated() == 4);
 }
 
-TEST_CASE("EventRoomTracker: with no plan the first room is the entry and a farthest enough later room fires") {
+TEST_CASE("EventRoomTracker: with no plan the first room is the entry and a far enough later room fires") {
 	EventRoomTracker t(std::nullopt, 24);
 	CHECK_FALSE(t.planned());
 	CHECK_FALSE(t.onPopulated({0, 0, 8, 8}));    // entry
@@ -177,14 +177,38 @@ TEST_CASE("farthestRoom: the room farthest from the entry room, so a small map a
 	CHECK_FALSE(farthestRoom(entry, {entry}).has_value());
 	CHECK_FALSE(farthestRoom(entry, {{40, 40, 0, 4}}).has_value());  // no size
 	// a tie on the Chebyshev distance goes to the longer straight line, then to the earlier room
-	const auto t = farthestRoom({0, 0, 2, 2}, {{10, 0, 2, 2}, {10, 6, 2, 2}, {10, 6, 2, 2}});
+	const auto t = farthestRoom({0, 0, 2, 2}, {{10, 0, 2, 2}, {10, 6, 2, 2}});
 	REQUIRE(t.has_value());
 	CHECK(t->y == 6);
-	// fired by the tracker as the planned room, even though the full distance (24) never would be reached in this map
-	EventRoomTracker tr(farthest);
-	CHECK_FALSE(tr.onPopulated(entry));
-	CHECK_FALSE(tr.onPopulated({0, 8, 8, 4}));
-	CHECK(tr.onPopulated(*farthest));
+	// equal on both: the earlier room in the list wins, whichever way round
+	const auto first = farthestRoom({0, 0, 2, 2}, {{10, 6, 2, 2}, {6, 10, 2, 2}});
+	REQUIRE(first.has_value());
+	CHECK(first->x == 10);
+	const auto second = farthestRoom({0, 0, 2, 2}, {{6, 10, 2, 2}, {10, 6, 2, 2}});
+	REQUIRE(second.has_value());
+	CHECK(second->x == 6);
+}
+
+TEST_CASE("presetEventDistance: capped at the farthest room, so a small level still has a qualifying room") {
+	const Rect entry{8, 8, 8, 4};
+	const std::vector<Rect> rooms{{8, 8, 8, 4}, {0, 8, 8, 4}, {8, 24, 8, 4}};
+	// small level: the farthest room is 16 away, below minEventDistance(90, 90) = 24, so capped at 16
+	CHECK(minEventDistance(90, 90) == kMinEventDistance);
+	CHECK(presetEventDistance(90, 90, entry, rooms) == 16);
+	EventRoomTracker t(std::nullopt, presetEventDistance(90, 90, entry, rooms));
+	CHECK_FALSE(t.onPopulated(entry));
+	CHECK_FALSE(t.onPopulated({0, 8, 8, 4}));  // 8 away: too near
+	CHECK(t.onPopulated({8, 24, 8, 4}));       // the farthest room qualifies
+	// big level: the normal threshold applies (9 for 20 x 28) when the farthest room is beyond it, and a nearer room fires first
+	const std::vector<Rect> wide{{8, 8, 8, 4}, {8, 20, 8, 4}, {8, 60, 8, 4}};
+	CHECK(presetEventDistance(20, 28, entry, wide) == 9);
+	EventRoomTracker u(std::nullopt, presetEventDistance(20, 28, entry, wide));
+	CHECK_FALSE(u.onPopulated(entry));
+	CHECK(u.onPopulated({8, 20, 8, 4}));  // 12 away, not the farthest room
+	// the room list could not be read (or holds only the entry): the plain distance
+	CHECK(presetEventDistance(20, 28, entry, {}) == 9);
+	CHECK(presetEventDistance(20, 28, entry, {entry}) == 9);
+	CHECK(presetEventDistance(0, 0, entry, {}) == kMinEventDistance);
 }
 
 TEST_CASE("planEvent: a Boss is the lead plus minions, centre first") {
