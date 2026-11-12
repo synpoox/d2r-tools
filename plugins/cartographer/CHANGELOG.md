@@ -11,6 +11,7 @@
 - Every map is now generated; the Preset tileset is gone. Cave and Crypt maps are built from their layout; one Maze level serves one tileset.
 - A slot that names a level of the original game or a town is ignored and reported, so it can never change those levels.
 - Random map properties from `mapstats.txt` apply to the map's monsters; `PlayerStats=1` adds player properties (off by default, test characters only, experimental).
+- `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Small maps get their event in a room far enough from where you arrive.

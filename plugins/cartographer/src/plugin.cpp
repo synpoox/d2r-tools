@@ -12,6 +12,7 @@
 #include "event6b.h"
 #include "crash_guard.h"
 #include "engine/event_apply.h"
+#include "engine/item_stats.h"
 #include "engine/map_names.h"
 #include "engine/map_sync.h"
 #include "engine/maze_hooks.h"
@@ -384,6 +385,9 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const std::string& line : carto::StatApplyStateReport()) {
 				Say(command, line);
 			}
+			for (const carto::PartStatus& part : carto::ItemStatsPartStatuses()) {
+				Say(command, "part " + part.name + ": " + part.detail);
+			}
 			Say(command, "Cartographer " + carto::EventsSummary() + ". These parts are settled at load; fix and restart to change them.");
 			for (const carto::PartStatus& part : carto::EventPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
@@ -482,6 +486,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallPortal(context, g_overrides, &parts);
 		std::vector<carto::PartStatus> statParts;
 		(void)carto::InstallStatApply(context, g_overrides, &statParts);
+		std::vector<carto::PartStatus> itemParts;
+		(void)carto::InstallItemStats(context, g_overrides, &itemParts);
 		std::vector<carto::PartStatus> eventParts;
 		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
 		std::vector<carto::PartStatus> nameParts;
