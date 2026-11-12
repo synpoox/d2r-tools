@@ -11,7 +11,8 @@
     First run for a slot: takes the slot lock (d2rAI-toolkit game_slots.py lock, never --force), creates the slot's test
     mod (a modinfo.json with the slot's own savepath, and an excel folder seeded with copies of the vanilla tables
     install.ps1 needs: levels, lvlmaze, superuniques, monstats, monumod, and itemstatcost for the map stats; plus a
-    header-only d2rloader\core-ui\automap.txt, which the game needs at startup; only files the slot lacks), points
+    d2rloader\core-ui\automap.txt with one row, which the game needs at startup; only files the slot lacks, but an
+    automap.txt this script placed earlier is replaced when it has no data row or -CoreUiAutomap is given), points
     default_mod in the slot's d2rloader\config\d2rloader.toml at the test mod (-Restore sets the old value back), copies the DLL, the
     Cartographer tables and the test saves, runs install.ps1 on the test mod's excel folder, and optionally writes
     AutoCheck=1 / AutoCheckMap=<name> into the slot's cartographer.txt.
@@ -62,7 +63,7 @@
 .PARAMETER MapItemRows
     Overrides file: a header with code, name, base and the columns to change, one line per item (default: examples\first-map\map-items.txt in the plugin folder).
 .PARAMETER CoreUiAutomap
-    Optional file to seed d2rloader\core-ui\automap.txt from instead of the header-only default (copy only). Never point it
+    Optional file to seed d2rloader\core-ui\automap.txt from instead of the one-row default (copy only; replaces an automap.txt this script placed earlier). Never point it
     at slot 1 or the owner's own install.
 .PARAMETER VanillaData
     Extracted vanilla data folder holding hd\items\items.json and local\lng\strings\item-names.json (default:
@@ -117,9 +118,10 @@ $AllowedSlots = @(5, 6, 7, 11)
 # itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
 $SeedTables = @('levels.txt', 'lvlmaze.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
 # core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
-# game asserts at startup without the file. Cartographer adds no such level type, so a header-only file is seeded (no rows).
+# game asserts at startup without the file, and also when the file has a header but no row (issue #219). Cartographer adds no
+# such level type, so the seed is the header plus one row for level type 36 (nothing draws it).
 $defaultModRx = '(?m)^\uFEFF?([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
-$CoreUiAutomapHeader ="LevelType`tTileType`tStyle`tStartSequence`tEndSequence`tCelCount`tCel1`tCel2`tCel3`tCel4"
+$CoreUiAutomapSeed = "LevelType`tTileType`tStyle`tStartSequence`tEndSequence`tCelCount`tCel1`tCel2`tCel3`tCel4`r`n36`t0`t0`t0`t0`t1`t0`t0`t0`t0`r`n"
 
 function Say([string]$text) { Write-Host $text }
 function Plan([string]$text) { if ($WhatIf) { Write-Host "[WhatIf] $text" } else { Write-Host $text } }
@@ -325,6 +327,7 @@ if ($Tables -and -not (Test-Path -PathType Container $Tables)) { throw "No table
 if ($CoreUiAutomap) {
     if (-not (Test-Path -PathType Leaf $CoreUiAutomap)) { throw "No file at $CoreUiAutomap (-CoreUiAutomap)." }
     if (Test-Under (Get-Real $CoreUiAutomap) $p.installDir) { throw "-CoreUiAutomap ($CoreUiAutomap) is inside the owner's own install. Refused." }
+    if (@(Get-Content -LiteralPath $CoreUiAutomap | Where-Object { $_.Trim() }).Count -lt 2) { throw "-CoreUiAutomap ($CoreUiAutomap) has no data row (header only); core-ui crashes the game at startup without one. Refused." }
 }
 if ($Saves) {
     if (-not (Test-Path -PathType Container $Saves)) { throw "No saves folder at $Saves." }
@@ -374,7 +377,8 @@ $rowsWritten = New-Object System.Collections.Generic.List[object]
 $jsonAdded = New-Object System.Collections.Generic.List[object]
 # The slot's d2rloader.toml default_mod before this script set it to the test mod (file and original value).
 $defaultMod = $null
-if (-not $WhatIf -and (Test-Path -PathType Leaf $manifestPath)) {
+# Read-only, so -WhatIf loads it too and plans the same replace a real run would make.
+if (Test-Path -PathType Leaf $manifestPath) {
     try {
         $old = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
         if ("$($old.owner)" -eq $Owner -and [int]$old.slot -eq $Slot) {
@@ -453,17 +457,24 @@ try {
         }
     } else { Write-Warning "No ${tomlPath}: the slot's default mod was not checked." }
 
-    # core-ui's automap table (see $CoreUiAutomapHeader); only when the mod lacks it. -Restore removes it again (manifest).
+    # core-ui's automap table (see $CoreUiAutomapSeed). Placed when the mod lacks it; a file this script placed earlier is
+    # replaced when -CoreUiAutomap is given or when it has no data row (the old header-only seed crashes the game). A file
+    # the script did not place stays. -Restore removes it again (manifest).
     $coreAutomap = Join-Path $excel 'd2rloader\core-ui\automap.txt'
-    if (-not (Test-Path -PathType Leaf $coreAutomap)) {
-        $how = if ($CoreUiAutomap) { "copy of $CoreUiAutomap" } else { 'header only, no rows' }
+    $haveAutomap = Test-Path -PathType Leaf $coreAutomap
+    $seededByUs = $haveAutomap -and $placed.Contains($coreAutomap)
+    $noRows = $haveAutomap -and (@(Get-Content -LiteralPath $coreAutomap | Where-Object { $_.Trim() }).Count -lt 2)
+    if (-not $haveAutomap -or ($seededByUs -and ($CoreUiAutomap -or $noRows))) {
+        $how = if ($CoreUiAutomap) { "copy of $CoreUiAutomap" } else { 'one row, level type 36' }
         Plan "Test mod: seed d2rloader\core-ui\automap.txt ($how)"
         if (-not $WhatIf) {
             $null = New-Item -ItemType Directory -Force (Split-Path $coreAutomap -Parent)
-            if ($CoreUiAutomap) { Copy-Item -LiteralPath $CoreUiAutomap -Destination $coreAutomap } else { [System.IO.File]::WriteAllBytes($coreAutomap, $latin1.GetBytes($CoreUiAutomapHeader + "`r`n")) }
+            Clear-ReadOnly $coreAutomap
+            if ($CoreUiAutomap) { Copy-Item -LiteralPath $CoreUiAutomap -Destination $coreAutomap -Force } else { [System.IO.File]::WriteAllBytes($coreAutomap, $latin1.GetBytes($CoreUiAutomapSeed)) }
             Clear-ReadOnly $coreAutomap; $placed[$coreAutomap] = ''
         }
-    }
+    } elseif ($haveAutomap -and $noRows) { Write-Warning "d2rloader\core-ui\automap.txt in the slot has no data row and was not placed by this script: the game may crash at startup. Pass -CoreUiAutomap <file> or remove it." }
+    elseif ($haveAutomap -and $CoreUiAutomap) { Write-Warning "d2rloader\core-ui\automap.txt in the slot already has rows and was not placed by this script: -CoreUiAutomap was ignored. Remove that file to use it." }
 
     # 4. The DLL, the tables, the saves: only what changed.
     Say 'DLL:'
