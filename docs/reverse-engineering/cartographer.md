@@ -1,7 +1,7 @@
 # Cartographer native contracts (`cartographer`)
 
 **Status:** the nine maze rows in section 1a have byte signatures, checked statically against a build 93847 dump (no game
-evidence, no hook written); every other row is still a stub, not validated in this repo. Cartographer has no plugin code in `plugins/` yet.
+evidence, no hook written); every other row of sections 1 and 2 is still a stub, not validated in this repo. Section 3 records phase 1 (`plugins/cartographer`).
 **Date:** 2026-11-11 (carried over from pd2-resurrected research)
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
@@ -90,3 +90,43 @@ packed `D2R.exe` on disk cannot be checked (encrypted code).
 Signatures for `0x3e96d0`, `0x3f3970` and `0x86bc0` (the other rows have signatures in section 1a or, once #34 merges,
 section 3), contracts beyond the roles above, and any game validation of the maze rows. Until then no hook may be
 written from this page alone for the rows without a signature (AGENTS.md); the 1a rows are static only.
+
+## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
+
+**Date:** 2026-11-11. **Status:** code written and built; not installed into a game and not run in game. Nothing here is
+validated at a game level.
+
+Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
+sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`, and the portal hooks are
+not installed (fail open: the item then does what D2R does with an unknown spell). The portal is live only when all
+required parts are on. Hooks go in use-first: the use hook does nothing until the check hook is in, so no portal can open
+ungated. A signature for any part can be supplied without a rebuild in `signatures.txt` (columns `Part`, `Signature`),
+beside `maps.txt`; it replaces the built-in one.
+
+Build 93847, image stamp `0x6ab3782c`. The RVAs are evidence from pd2-resurrected `plugin/core-maps/map_open.cpp` and
+`plugin/common/pd2_engine.h`; the plugin does not use them.
+
+| Part | Role | RVA (evidence only) | Signature in the plugin | Required |
+|---|---|---|---|---|
+| ItemSpellCheck | Hooked. `(game, player, item, target) -> u64`; item spell 16 is the map | `0x5817f0` | entry bytes `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18` (15); uniqueness not verified, and if it matches more than once the part is off | yes |
+| ItemSpellUse | Hooked. `(game, player, item, target)`; runs the opening | `0x581680` | entry bytes `48 89 5C 24 18 48 89 6C 24 20 56 57 41 57` (14); uniqueness not verified | yes |
+| ItemRecord | Called. `(dataFlag, row) -> record`; record +0x80 code, +0x94 pSpell | `0x314110` | none yet | yes |
+| UnitClassOf | Called. `(unit, file, line) -> row` | `0x349860` | none yet | yes |
+| UnitRoom | Called. `(unit) -> room` | `0x34b440` | none yet | yes |
+| RoomLevelId | Called. `(room) -> level id` | `0x2efc10` | none yet | yes |
+| ClientMessage | Called. `(player, 0x15, player)`: "can't do that" | `0x491960` | none yet | yes |
+| OpenRedPortal | Called. `(game, player, key, level, max)`: red portal 60 by the player; counts openings per key and refuses at `max` (the one-map-per-game rule) | `0x5da800` | none yet | yes |
+| GameCounter | Called. `(game + 0x1aac8, &key) -> int*`; key `'MAPS'` (`0x4d415053`) | `0x5d88b0` | none yet | yes |
+| UnitStat | Called. `(unit, stat, 0) -> int`; stat 12 is the level | not in the registry; to be located from a dump | none yet | yes |
+| UnitCoords | Called. `(unit, int xy[2])` | `0x34a040` | none yet | no (spot check skipped) |
+| FindFreeSpot | Called. `(game, room, xy, 3, 0x400, &found, 5, 100)` | `0x517f90` | none yet | no (spot check skipped) |
+
+Game layout used: `game + 0x104` difficulty (u8), `game + 0x106` data flag (u8), `game + 0x1aac8` counters; item
+record `+0x80` code (4 letters), `+0x94` pSpell. Item spell 16 is free in vanilla D2R. The town is Harrogath, level 109.
+
+Guard: one signature match per part, and D2RLoader re-checks the copied entry bytes of the two hooks. Failure mode for
+every part: fail open, log the reason, leave the portal off. Coexistence: another plugin hooking the same dispatchers is
+not handled; D2RLoader refuses a second hook on the same bytes and the part then reports that.
+
+What remains: dump the running game (`d2rAI-toolkit/tools/dump_image.py`, read-only), record a unique signature for each
+"none yet" part, confirm the two entry signatures are unique, then run the game check listed in the plugin README.
