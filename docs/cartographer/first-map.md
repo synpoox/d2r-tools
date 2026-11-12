@@ -41,6 +41,9 @@ and change two things:
 - `code`: up to 4 characters that no other item uses. This guide uses `t20`.
 - `pSpell`: `16`.
 
+The example pack's `maps.txt` also has a second map that uses item `t21`, so if you copy the whole pack,
+`misc.txt` needs both `t20` and `t21`.
+
 Give it a name in your string tables so players can tell it apart. Cartographer adds no items of its own, so also decide
 how players get it (a drop, a shop or a cube recipe in your mod).
 
@@ -74,9 +77,9 @@ from the game's tables, like `Bishibosh` or `quillrat1`, must match exactly.
 ## 4. Start the game and check
 
 1. Start the game through D2RLoader, then press the console key and type `cartographer check`.
-2. It says how many maps loaded and lists the problems (the console shows the first 10; all of them are in `cartographer-report.txt`), for example "maps.txt row 3: tileset 'Jungel' is not known.
-   Did you mean 'Jungle'?". A bad row is skipped; the others still load. The same text is in `cartographer-report.txt`
-   in the plugin's log folder.
+2. It says how many maps loaded and lists the problems (the console shows the first 10), for example "maps.txt row 3:
+   tileset 'Jungel' is not known. Did you mean 'Jungle'?". A bad row is skipped; the others still load. All of them
+   are also in `cartographer-report.txt` in the plugin's log folder.
 3. Fix what it names and run `cartographer check` again; it re-reads your tables.
 
 The check also reports whether the portal is on. If a game part could not be found, the tables still load but the portal stays
@@ -98,8 +101,8 @@ not in town, character level too low, a map already open this game, no free spot
 - Add more maps: one row and one item each. Each row's `Item`, `Difficulty` and `MinCharLevel` work now.
 - Plan a boss, monsters, a size or a level: the optional columns in [tables.md](tables.md#mapstxt-required) are checked now
   and will apply once layouts are generated (later phases).
-- Random properties and events: `mapstats.txt` and `mapevents.txt` (examples in the same folder). The plugin does not read
-  these two yet.
+- Random properties, events and your own shapes: `mapstats.txt`, `mapevents.txt` and `shapes.txt` (examples in the same
+  folder). The plugin reads and checks them now, and `cartographer check` reports bad rows, but nothing applies them yet.
 - The defaults for every map: `cartographer.txt`. Its settings are checked, not applied yet.
 
 ## When something does not work

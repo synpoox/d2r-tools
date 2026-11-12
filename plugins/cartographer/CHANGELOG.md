@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reads the optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, reports bad rows, and lets a map's `Shape` name a `shapes.txt` row (read and checked only; not applied in game yet). An empty optional file gives a note, `mapstats.txt` needs `Min` and `Max` on every row, and a column named twice is reported.
 - New guide "Your first map in 5 minutes", a reference for every table column, and a small example set of tables in `examples/first-map`.
 - Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
 - Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.

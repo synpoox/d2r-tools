@@ -18,6 +18,10 @@ struct Tables {
 	std::vector<MapDef> maps;
 	Settings settings;
 	std::vector<Slot> slots;
+	// Optional tables, loaded and checked but not applied in game yet.
+	cartographer::layout::ShapeTable shapes;
+	std::vector<cartographer::stats::PoolRow> pool;  // empty: the built-in pool
+	std::vector<cartographer::events::Row> events;
 };
 
 // One engine part and what became of it.
