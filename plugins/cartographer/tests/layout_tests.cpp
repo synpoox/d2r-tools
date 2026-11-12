@@ -3,7 +3,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <string>
@@ -304,7 +303,6 @@ TEST_CASE("validateRules rejects impossible rules")
 
 TEST_CASE("a huge count in shapes.txt is an error, not a hang")
 {
-	const auto start = std::chrono::steady_clock::now();
 	auto errorsOf = [](const std::string &text) { return parseShapesTxt(text, "shapes.txt").errors; };
 	const std::vector<std::string> branches = errorsOf("Name\tMinBranches\tMaxBranches\tMinLoops\tMaxLoops\nX\t999999\t999999\t5\t9\n");
 	REQUIRE(branches.size() == 1);
@@ -323,11 +321,9 @@ TEST_CASE("a huge count in shapes.txt is an error, not a hang")
 	const std::vector<std::string> bad = errorsOf("Name\tMinPath\nX\tfive\n");
 	REQUIRE(bad.size() == 1);
 	CHECK(bad[0].find("whole number") != std::string::npos);
-	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
-	CHECK(ms < 5000);
 }
 
-TEST_CASE("shapes.txt: rows at the caps parse in under a second")
+TEST_CASE("shapes.txt: rows at the caps are answered")
 {
 	const std::string header =
 		"Name\tBase\tWidth\tHeight\tMinPath\tMaxPath\tMinBranches\tMaxBranches\tMinBranchLen\tMaxBranchLen\tMinLoops\tMaxLoops\tMinTurns\tMaxTurns\n";
@@ -348,12 +344,10 @@ TEST_CASE("shapes.txt: rows at the caps parse in under a second")
 		"X\tWinding\t2\t2\t4\t4\t1\t1\t1\t1\t1\t1\t\t\n",
 	};
 	for (const std::string &row : rows) {
-		const auto start = std::chrono::steady_clock::now();
 		const ParseResult p = parseShapesTxt(header + row);
-		const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 		INFO(row);
-		CHECK(ms < 1000);
-		(void)p; // accepted or rejected does not matter here, only that it answers quickly
+		// Accepted or rejected does not matter here, only that it answers (the work budget bounds the time, not a clock).
+		CHECK((p.ok() || !p.errors.empty()));
 	}
 }
 
@@ -375,11 +369,36 @@ TEST_CASE("a rule set that can't be built gives up on a budget and falls back")
 	r.width = r.height = 32;
 	r.branchesMin = r.branchesMax = 300;
 	r.branchLenMin = r.branchLenMax = 3;
-	const auto start = std::chrono::steady_clock::now();
 	const Layout l = generate(r, 1);
-	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 	CHECK(l.fallback);
-	CHECK(ms < 1000);
+	CHECK(l.attempt == kRetries);
+	// Pinned: the layout depends on the work charges, so a change to them shows up here.
+	CHECK(layoutHash(l) == 10216947217312690002ULL);
+}
+
+TEST_CASE("a Loop row with extra loops stays buildable under the work budget")
+{
+	Rules r = presetRules(Shape::Loop, Size::Small);
+	r.width = 11;
+	r.height = 9;
+	r.pathMin = 38;
+	r.pathMax = 40;
+	r.turnsMin = 0;
+	r.turnsMax = 11;
+	r.branchesMin = 0;
+	r.branchesMax = 5;
+	r.branchLenMin = r.branchLenMax = 1;
+	r.loopsMin = 2;
+	r.loopsMax = 4;
+	r.straightPct = 81;
+	r.bossRoom = true;
+	REQUIRE(validateRules(r).empty());
+	for (uint64_t seed = 1; seed <= 200; ++seed) {
+		const Layout l = generate(r, seed);
+		INFO("seed " << seed);
+		CHECK(l.rulesMet);
+		CHECK_FALSE(l.fallback);
+	}
 }
 
 TEST_CASE("shapes.txt: a valid table")

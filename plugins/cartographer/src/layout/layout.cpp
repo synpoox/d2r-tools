@@ -222,10 +222,9 @@ bool walkMain(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 
 // --- main path as a ring ------------------------------------------------------------------------------------------
 
-bool ringValid(const std::vector<Point> &ring, int w, int h, std::vector<int> &scratch, Work *work = nullptr)
+bool ringValid(const std::vector<Point> &ring, int w, int h, std::vector<int> &scratch)
 {
 	const int n = static_cast<int>(ring.size());
-	if (work) work->charge(static_cast<int64_t>(w) * h + 4 * n);
 	if (n < 4) return false;
 	scratch.assign(static_cast<size_t>(w) * h, -1);
 	for (int i = 0; i < n; ++i) {
@@ -290,6 +289,88 @@ bool flipRing(std::vector<Point> &ring, size_t i)
 	return true;
 }
 
+// The cells of a ring that is known to be valid, kept so a trial move can be judged by the few cells it touches. A ring is
+// valid when its cells are distinct, in the grid, each next to the following one, and every cell has exactly two used
+// neighbours (the ring neighbours): that is the same test ringValid makes, without walking the whole ring.
+class RingCells {
+public:
+	RingCells(int w, int h, const std::vector<Point> &ring) : w_(w), h_(h), cell_(static_cast<size_t>(w) * h, 0)
+	{
+		for (const Point &p : ring) cell_[idx(p)] = 1;
+	}
+	bool inside(Point p) const { return p.x >= 0 && p.y >= 0 && p.x < w_ && p.y < h_; }
+	bool used(Point p) const { return inside(p) && cell_[idx(p)]; }
+	void set(Point p, bool v) { cell_[idx(p)] = v ? 1 : 0; }
+	int degree(Point p) const
+	{
+		int n = 0;
+		for (int dir = 0; dir < 4; ++dir) n += used(step(p, dir)) ? 1 : 0;
+		return n;
+	}
+	// Every cell in `at` and every used cell next to one of them must have exactly two used neighbours.
+	bool settled(const Point *at, int count) const
+	{
+		for (int k = 0; k < count; ++k) {
+			if (used(at[k]) && degree(at[k]) != 2) return false;
+			for (int dir = 0; dir < 4; ++dir) {
+				const Point q = step(at[k], dir);
+				if (used(q) && degree(q) != 2) return false;
+			}
+		}
+		return true;
+	}
+
+private:
+	size_t idx(Point p) const { return static_cast<size_t>(p.y) * w_ + p.x; }
+	int w_, h_;
+	std::vector<uint8_t> cell_;
+};
+
+// Would bumpRing(ring, i, side) give a valid ring? Answers from the cells it changes; the ring is left as it was.
+bool bumpFits(RingCells &cells, const std::vector<Point> &ring, size_t i, int side)
+{
+	const size_t n = ring.size();
+	const Point p = ring[i], q = ring[(i + 1) % n], r = ring[(i + 2) % n];
+	const int dx = q.x - p.x, dy = q.y - p.y;
+	if (r.x - q.x != dx || r.y - q.y != dy) return false;
+	const int nx = side ? -dy : dy, ny = side ? dx : -dx;
+	const Point a{p.x + nx, p.y + ny}, b{q.x + nx, q.y + ny}, c{r.x + nx, r.y + ny};
+	if (!cells.inside(a) || !cells.inside(b) || !cells.inside(c)) return false;
+	if (cells.used(a) || cells.used(b) || cells.used(c)) return false;
+	cells.set(q, false);
+	cells.set(a, true);
+	cells.set(b, true);
+	cells.set(c, true);
+	const Point touched[] = {p, r, a, b, c};
+	const bool ok = cells.settled(touched, 5);
+	if (!ok) {
+		cells.set(a, false);
+		cells.set(b, false);
+		cells.set(c, false);
+		cells.set(q, true);
+	}
+	return ok;
+}
+
+// Would flipRing(ring, i) give a valid ring? As bumpFits.
+bool flipFits(RingCells &cells, const std::vector<Point> &ring, size_t i)
+{
+	const size_t n = ring.size();
+	const Point a = ring[(i + n - 1) % n], b = ring[(i + 1) % n], c = ring[i];
+	if (a.x == b.x || a.y == b.y) return false;
+	const Point f{a.x + b.x - c.x, a.y + b.y - c.y};
+	if (!cells.inside(f) || cells.used(f)) return false;
+	cells.set(c, false);
+	cells.set(f, true);
+	const Point touched[] = {f, a, b};
+	const bool ok = cells.settled(touched, 3);
+	if (!ok) {
+		cells.set(f, false);
+		cells.set(c, true);
+	}
+	return ok;
+}
+
 void commitPath(Grid &g, Draft &d, const std::vector<Point> &path, bool ring)
 {
 	d.path = path;
@@ -320,6 +401,10 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 	const int ox = rng.range(0, w - rw);
 	std::vector<Point> ring = rectRing(ox, oy, rw, rh);
 	std::vector<int> scratch;
+	// rectRing is valid except for a grid only two cells wide or high; then each trial is judged on the whole ring.
+	work.charge(static_cast<int64_t>(w) * h + 4 * static_cast<int64_t>(ring.size()));
+	const bool local = ringValid(ring, w, h, scratch);
+	RingCells cells(w, h, ring);
 	while (static_cast<int>(ring.size()) < len) {
 		// Push out the first segment that still fits, starting from a random one, so the ring only gets stuck when
 		// no segment can grow at all.
@@ -330,8 +415,17 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 		for (size_t k = 0; k < count * 2 && !grown && !work.over(); ++k) {
 			const size_t i = (start + k / 2) % count;
 			const int side = (sideFirst + static_cast<int>(k & 1)) & 1;
-			std::vector<Point> trial = bumpRing(ring, i, side);
-			if (ringValid(trial, w, h, scratch, &work)) { ring.swap(trial); grown = true; }
+			if (local) {
+				work.charge(40); // a trial touches a handful of cells
+				if (!bumpFits(cells, ring, i, side)) continue;
+				ring = bumpRing(ring, i, side);
+				work.charge(static_cast<int64_t>(ring.size()));
+				grown = true;
+			} else {
+				work.charge(static_cast<int64_t>(w) * h + 4 * static_cast<int64_t>(ring.size()));
+				std::vector<Point> trial = bumpRing(ring, i, side);
+				if (ringValid(trial, w, h, scratch)) { ring.swap(trial); grown = true; }
+			}
 		}
 		if (!grown) return false;
 	}
@@ -340,8 +434,14 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 	const int flips = rng.range(0, 24);
 	for (int t = 0; t < flips; ++t) {
 		const size_t i = rng.below(static_cast<uint32_t>(ring.size()));
-		std::vector<Point> trial(ring);
-		if (flipRing(trial, i) && ringValid(trial, w, h, scratch, &work)) ring.swap(trial);
+		if (local) {
+			work.charge(40);
+			if (flipFits(cells, ring, i)) flipRing(ring, i);
+		} else {
+			work.charge(static_cast<int64_t>(w) * h + 4 * static_cast<int64_t>(ring.size()));
+			std::vector<Point> trial(ring);
+			if (flipRing(trial, i) && ringValid(trial, w, h, scratch)) ring.swap(trial);
+		}
 	}
 
 	// Start anywhere on the ring, walking either way round.
