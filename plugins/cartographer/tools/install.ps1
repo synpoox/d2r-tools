@@ -610,6 +610,12 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------
+# Copied game tables are often Read-only: refuse before anything is written (and before any .bak is made).
+$locked = @($pending | ForEach-Object { $_.Path })
+$lockedSlots = Join-Path $ExcelDir 'd2rloader\cartographer\slots.txt'
+if (Test-Path $lockedSlots) { $locked += $lockedSlots }
+$locked = @($locked | Where-Object { (Get-Item -LiteralPath $_).IsReadOnly })
+if ($locked.Count -gt 0) { throw ('Nothing was written. Clear the Read-only attribute on these files, then run the installer again:' + [Environment]::NewLine + (($locked | ForEach-Object { "  $_" }) -join [Environment]::NewLine)) }
 Write-Pending
 
 # --- slots.txt --------------------------------------------------------------------------------------------------------
