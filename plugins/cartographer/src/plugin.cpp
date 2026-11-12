@@ -5,6 +5,7 @@
 // Console command "cartographer": "check" re-reads the tables and prints what is wrong; "open <Name>" opens a map without an item.
 #include <D2RLPlugin/api.h>
 
+#include "core/coexist.h"
 #include "core/tables.h"
 #include "core/text.h"
 #include "core/tsv.h"
@@ -48,6 +49,11 @@ auto Narrow(const std::wstring& s) -> std::string {
 		out.push_back(c < 0x80 ? static_cast<char>(c) : '?');
 	}
 	return out;
+}
+
+// core-maps and Cartographer are one-or-the-other (ADR-0001). Detected by module name; nothing is changed either way.
+auto CoreMapsNotice() -> std::string {
+	return carto::CoreMapsNotice(GetModuleHandleW(L"core-maps.dll") != nullptr);
 }
 
 auto ReadFile(const std::wstring& path, std::string* text) -> bool {
@@ -141,6 +147,10 @@ auto LoadAll() -> Loaded {
 	if (!names.haveItemSpells) {
 		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
 	}
+	const std::string coreMaps = CoreMapsNotice();
+	if (!coreMaps.empty()) {
+		loaded.report.Note("maps.txt", 0, coreMaps);
+	}
 	std::string text;
 	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt, mapstats.txt and mapevents.txt are all optional.
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::ShapesFile), &text)) {
@@ -200,6 +210,10 @@ void WriteReport(const Loaded& loaded) {
 	}
 	out << "Cartographer " << PluginVersion << " report\r\n";
 	out << loaded.tables->maps.size() << " map(s) loaded, " << loaded.report.Errors() << " problem(s).\r\n";
+	const std::string coreMaps = CoreMapsNotice();
+	if (!coreMaps.empty()) {
+		out << "WARNING: " << coreMaps << "\r\n";
+	}
 	out << loaded.tables->shapes.shapes.size() << " shape(s), " << loaded.tables->pool.size() << " property row(s) and " << loaded.tables->events.size() << " event(s) loaded (read and checked; not applied in game yet).\r\n\r\n";
 	for (const carto::Problem& p : loaded.report.problems) {
 		out << carto::Report::Line(p) << "\r\n";
@@ -241,6 +255,9 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			(void)carto::RescanPortal();
 			Say(command, std::string("Cartographer ") + PluginVersion + ": " + std::to_string(loaded.tables->maps.size()) + " map(s), " +
 			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : g_loadFailed ? "off; loading failed, see the plugin log." : carto::NeedsRestart() ? "off; a part it hooks was missing at load, so a restart is needed once it is fixed." : "off."));
+			if (const std::string coreMaps = CoreMapsNotice(); !coreMaps.empty()) {
+				Say(command, "WARNING: " + coreMaps);
+			}
 			int shown = 0;
 			for (const carto::Problem& p : loaded.report.problems) {
 				if (++shown > 10) {

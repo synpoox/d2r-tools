@@ -31,6 +31,8 @@ set of tables is in [`examples/first-map/`](examples/first-map/) (plain text, no
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
 - D2RLoader (tested with 1.3.1-beta)
+- Not `core-maps` (the PD2-Resurrected map plugin): use one or the other, never both. Both hook item spell 16 and the same
+  spawn functions. If `core-maps.dll` is loaded, `cartographer check` and `cartographer-report.txt` say so.
 - A mod (without one, no tables are read, so there are no maps and only the default settings apply), because the map level is added to the mod's tables (step 3 below).
 
 ## Installation
@@ -95,7 +97,7 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - Seen in game, cause not known: a town portal scroll used on the map level itself did nothing. No comparison without
   Cartographer was made (vanilla has no red portal to reach that level), so it is not known whether Cartographer is involved.
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
-  loaded next to Cartographer; run one or the other.
+  loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
   dropped (it opens nothing and is not passed to the game).
 - Not yet in game for `cartographer open <Name>`: leaving the game with the portal still open; repeating with
