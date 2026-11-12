@@ -27,9 +27,8 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   opening in Hell and a refusal (level gate) were seen in a game.
 - **Map properties** (monsters checked in game on cheat-spawned ones only; the player's stats showed on the character sheet in single player, from one run on the test character): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
-  monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
-  `cartographer.txt`; it is `0` by default and then nothing is attached to the player. **Turn `PlayerStats` on only on a
-  test character**: the stats apply and are removed when the player leaves the map level, and a Save and Exit inside the
+  monster that spawns in the map level. `Players` rows go on the player unless you set `PlayerStats` to `0` in
+  `cartographer.txt`; it is `1` by default (`0` attaches nothing to the player). The stats apply and are removed when the player leaves the map level, and a Save and Exit inside the
   map saved a test character without them (an autosave inside the map with `PlayerStats=1` is untested), and the character screen showed them inside the map and back to normal on leaving (single player, one run, test character; `cartographer check` prints the state it would use or, if none, why the closest rows were refused). Not checked: joining clients and multiplayer, more than 16 player stats, death and curses, and a save with the stats attached where the save writer is confirmed to run. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
   character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
   (on monsters `level`, `hitpoints`, `mana` and `stamina`; stats that need a skill, state or monster type number, such as `state`, `item_aura` and `item_skillon...`, are refused on both; the list is the Save Param Bits column of the vanilla 3.3.0 `itemstatcost.txt`); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
@@ -102,7 +101,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` and `EventChance` are used when a map opens (`Properties` checked in game for monsters); `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level (experimental, not verified in game); `Champions` is checked only | cartographer.txt |
 
-`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test slot only, see above), `MapNames` (1, see below) and
+`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (1; `0` turns it off, see above), `MapNames` (1, see below) and
 `Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but every
 map opens through the `Maze` slot (below); nothing opens without a mod and a `maps.txt`. The `Preset` tileset is gone: a `Preset` row is refused with "Preset maps are gone: use Cave or Crypt."
 A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, is a `Maze` slot on a level not named `Cartographer Maze`, or repeats another slot's level or name; unit tested, not run in game.
