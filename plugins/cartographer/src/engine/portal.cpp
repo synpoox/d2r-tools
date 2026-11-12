@@ -235,7 +235,7 @@ auto OutdoorProblem(const MapDef& map, const Tables& tables) -> std::string {
 		return "Cartographer: the outdoor build is not running, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
 	}
 	for (const Slot& slot : tables.slots) {
-		if (EqualsNoCase(slot.name, OutdoorSlot)) {
+		if (EqualsNoCase(slot.name, MapSlotName(map))) {
 			if (const std::string refusal = OutdoorSlotRefusal(slot); !refusal.empty()) {
 				return "Cartographer: " + refusal + ", so " + map.tileset + " maps cannot be built. Run tools\\install.ps1 and restart the game.";
 			}

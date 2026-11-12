@@ -226,6 +226,8 @@ outdoor code). With it at 0, a Jungle map's item says so and nothing opens. If t
 installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
+The installer also adds a second outdoor level for the coming Snow maps ("Cartographer Snow", LevelType 31, 192 x 192 tiles at
+(6000, 3600)) and its `OutdoorSnow` slot row. Snow maps are not buildable yet, so a Snow row in `maps.txt` is still refused.
 
 Not verified in game. Outdoor maps are not yet sent to other players in multiplayer, so use them in single player.
 

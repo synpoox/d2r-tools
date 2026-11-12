@@ -28,3 +28,4 @@
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
 - Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
+- `tools\install.ps1` also adds a `Cartographer Snow` level and an `OutdoorSnow` slot for the coming Snow maps (run it again; Snow maps do not open yet).
