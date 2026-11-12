@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-- When you enter a map, its name is shown on screen (with the event's name and message when one fired), and Boss and Horde events from `mapevents.txt` spawn in the event room (written and unit tested; not yet verified in game). Boss and Horde events need the mod to ship `monstats.txt` and `superuniques.txt`. Ambush, Treasure and Shrine events are not applied yet.
+- Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (written and unit tested; not yet verified in game).
+- When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (written and unit tested; not yet verified in game).
 - When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters (written and unit tested; not yet verified in game).
 - Player stats from a map are off by default; `PlayerStats=1` in `cartographer.txt` turns them on, for a test character only until saving inside a map is checked in game.
 - `mapstats.txt` rows for `gold`, `hitpoints`, `level` and similar stats the game saves are refused on players, `hitpoints`, `mana` and `stamina` also on monsters, stats that need a skill, state or monster type number on both, and `cartographer check` names them.

@@ -111,8 +111,10 @@ auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<st
 	return true;
 }
 
-// monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder
-// (the game's compiled tables carry no name the plugin can use yet). Empty when a table is missing.
+// monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns, read from the active mod's excel folder.
+// This is the fallback: at map open the game's own loaded tables are tried first (engine/event_apply.cpp). The row index is the
+// parsed row count, which is the game's row number only if the file has no blank lines (ParseTsv drops them): an assumption, unchecked.
+// Empty when a table is missing.
 auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 	cartographer::eventplan::SpawnTable out;
 	if (g_excelDir.empty()) {
@@ -214,10 +216,14 @@ auto LoadAll() -> Loaded {
 		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
 	}
 	loaded.tables->spawnNames = ReadSpawnNames();
-	// The spawn rows come from the mod's own monstats.txt and superuniques.txt; the plugin cannot read the game's compiled
-	// tables by name yet, so without them Boss and Horde events are refused (see the README).
-	if (!loaded.tables->events.empty() && (!loaded.tables->spawnNames.loaded() || loaded.tables->spawnNames.supers.empty())) {
-		loaded.report.Note("mapevents.txt", 0, "Boss and Horde events need the mod to ship monstats.txt and superuniques.txt in its excel folder, and one could not be read. Those events will not be spawned or announced.");
+	// Boss and Horde names are looked up in the game's loaded tables at map open; these two files are only the fallback for when that
+	// route is off (checked then, not here). Without monstats.txt that fallback has nothing; without superuniques.txt it has no superunique.
+	if (!loaded.tables->events.empty()) {
+		if (!loaded.tables->spawnNames.loaded()) {
+			loaded.report.Note("mapevents.txt", 0, "monstats.txt could not be read from the mod's excel folder. Boss and Horde events use the game's own tables when they check out (see the plugin log); otherwise they will not be spawned or announced.");
+		} else if (loaded.tables->spawnNames.supers.empty()) {
+			loaded.report.Note("mapevents.txt", 0, "superuniques.txt could not be read from the mod's excel folder. Boss and Horde events with a superunique name use the game's own tables when they check out (see the plugin log); otherwise only monsters from monstats.txt are spawned.");
+		}
 	}
 	text.clear();
 	std::vector<carto::MapDef> fromFile;

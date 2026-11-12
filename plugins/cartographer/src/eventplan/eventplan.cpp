@@ -1,7 +1,9 @@
 #include "eventplan.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
+#include <string>
 
 namespace cartographer::eventplan {
 
@@ -183,6 +185,102 @@ int spotScale(const Rect &server, const Rect &drlg) {
 	}
 	const int k = server.w / drlg.w;
 	return k == server.h / drlg.h ? k : 1;
+}
+
+ScaleKind scaleKind(const Rect &server, const Rect &drlg) {
+	if (server.w == drlg.w && server.h == drlg.h) {
+		return ScaleKind::Same;
+	}
+	return spotScale(server, drlg) > 1 ? ScaleKind::Multiple : ScaleKind::NotAMultiple;
+}
+
+const char *scaleKindName(ScaleKind kind) {
+	switch (kind) {
+	case ScaleKind::Same: return "the rects are the same size";
+	case ScaleKind::Multiple: return "the server rect is a whole multiple";
+	case ScaleKind::NotAMultiple: return "NOT a whole multiple, so 1 is a fallback";
+	}
+	return "";
+}
+
+std::optional<std::string_view> idText(const char *field, size_t fieldSize) {
+	if (field == nullptr) {
+		return std::nullopt;
+	}
+	for (size_t i = 0; i < fieldSize; ++i) {
+		if (field[i] == '\0') {
+			return std::string_view(field, i);
+		}
+	}
+	return std::nullopt;
+}
+
+bool idMatches(const char *field, size_t fieldSize, std::string_view name) {
+	const std::optional<std::string_view> text = idText(field, fieldSize);
+	return text && !text->empty() && !name.empty() && equalsNoCase(*text, name);
+}
+
+int findMonsterRow(const uint8_t *rows, uint64_t rowCount, uint32_t rowSize, std::string_view name) {
+	if (rows == nullptr || name.empty() || rowSize < kMonStatsIdSize) {
+		return -1;
+	}
+	for (uint64_t i = 0; i < rowCount && i <= static_cast<uint64_t>(INT32_MAX); ++i) {
+		if (idMatches(reinterpret_cast<const char *>(rows + i * rowSize), kMonStatsIdSize, name)) {
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
+std::string checkTable(const TableFacts &f, uint32_t wantRowSize) {
+	if (f.viewRowSize != wantRowSize) {
+		return "the SDK row size is " + std::to_string(f.viewRowSize) + ", not " + std::to_string(wantRowSize);
+	}
+	if (f.dtCount > 0xFFFFFFFFull || f.dtCount != f.viewCount) {
+		return "the game's row count " + std::to_string(f.dtCount) + " is not the SDK's " + std::to_string(f.viewCount);
+	}
+	if (f.viewCount == 0) {
+		return "the table has no rows";
+	}
+	if (f.viewRows == nullptr || f.dtRows == nullptr) {
+		return "a row pointer is null";
+	}
+	if (f.viewRows != f.dtRows) {
+		return "the SDK rows are not the game's rows for this data flag";
+	}
+	return {};
+}
+
+std::string checkRoundTrip(const RoundTrip &t) {
+	if (t.mapNull) {
+		return "the monstats name map is null";
+	}
+	if (t.checked <= 0) {
+		return "no monstats Id could be looked up";
+	}
+	if (t.wrong > 0) {
+		return std::to_string(t.wrong) + " of " + std::to_string(t.checked) + " monstats Ids did not map back to their own row (first: row " +
+		       std::to_string(t.firstWrongRow) + " gave " + std::to_string(t.firstWrongGot) + ")";
+	}
+	return {};
+}
+
+int superRowFromLookup(int32_t result, uint64_t rowCount) {
+	return result >= 0 && static_cast<uint64_t>(result) < rowCount ? result : -1;
+}
+
+const RouteVerdict *RouteCache::find(const RouteKey &key) const {
+	for (const auto &e : entries_) {
+		if (e.first == key) {
+			return &e.second;
+		}
+	}
+	return nullptr;
+}
+
+void RouteCache::store(const RouteKey &key, RouteVerdict verdict) {
+	entries_.erase(std::remove_if(entries_.begin(), entries_.end(), [&](const auto &e) { return e.first.revision != key.revision || e.first == key; }), entries_.end());
+	entries_.emplace_back(key, std::move(verdict));
 }
 
 bool superSeen(const uint8_t *bitmap, int row) {

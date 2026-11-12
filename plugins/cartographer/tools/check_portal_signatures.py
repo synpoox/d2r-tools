@@ -53,6 +53,9 @@ PARTS = [
     ("PopulateRoom", 0x50ACF0, 12, "48 8B 05", 12),
     ("SpawnMonster", 0x492CF0, 56, None, 0),
     ("SpawnSuperUnique", 0x499BA0, 34, None, 0),
+    # Event Spawn names from the game's tables (cartographer.md section 11)
+    ("DataTablesBase", 0x300A90, 16, "72", 0),
+    ("NameToRow", 0xA121F0, 13, "48 8B 05", 0),
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000
