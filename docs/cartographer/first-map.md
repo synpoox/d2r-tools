@@ -13,9 +13,10 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\` (from a release zip; to build it see
    [CONTRIBUTING.md](../../CONTRIBUTING.md)).
-2. Copy [`bosses.txt`](../../plugins/cartographer/examples/first-map/bosses.txt) to
+2. Copy `examples\first-map\bosses.txt` from the zip (also
+   [in the repo](../../plugins/cartographer/examples/first-map/bosses.txt)) to
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`. The installer reads it, so do this first.
-3. Run the installer from the repository's `plugins\cartographer` folder (it is not in the release zip):
+3. Run the installer from the unzipped plugin folder:
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`
 4. It adds three levels to `levels.txt`, a `lvlmaze.txt` row, the `cmap` item type to `itemtypes.txt` and a `superuniques.txt` row per boss (each table backed
    up once as `.bak`), and writes `slots.txt`. It is safe to run twice. Expect lines like:

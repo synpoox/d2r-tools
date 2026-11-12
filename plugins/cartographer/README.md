@@ -41,6 +41,22 @@ in [`examples/first-map/`](examples/first-map/).
 
 ## Installation
 
+1. Close the game.
+2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
+3. From the folder you unzipped, run
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
+   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
+   no items. The level is a Cave by default; add
+   `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
+   `.bin` table files the game reads those instead: rebuild or remove them first.
+   If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
+   to pick another spot (`-MazeOffsetX` and the like).
+4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
+   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
+   `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
+5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
+   the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
+   portal stays off and `cartographer check` says which part.
 Step by step, with the example tables: [Your first map](../../docs/cartographer/first-map.md).
 
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
@@ -157,8 +173,10 @@ the game returns no unit for it, the boss is spawned as a plain monster of its `
 minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
+Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
+
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game. A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
+and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`). A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
 If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |

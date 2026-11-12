@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
+- The download now includes the installer (`tools\install.ps1`) and the first-map example files.
 - Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
@@ -21,6 +22,7 @@
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
 - A map's `Boss` shows its `bosses.txt` Name in game (run `tools\install.ps1` again; not yet checked in game).
+- Tables are UTF-8, and an ANSI (Latin-1) save of `bosses.txt` works too, so accented Boss names show correctly.
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).

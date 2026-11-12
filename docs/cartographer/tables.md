@@ -25,6 +25,7 @@ General rules for every table:
 
 - Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt`, `mapstats.txt` and `mapevents.txt` say so in the report).
 - Blank lines are skipped. A leading byte order mark (what some editors add) is fine.
+- Text is UTF-8, in game and in the installer. A file that is not valid UTF-8 is read as Latin-1 (what an editor's "ANSI" save gives) and converted, with one note in the log and `check`; characters outside Latin-1 need UTF-8. A Boss `Name` gives the same key and the same shown name either way.
 - Each cell is trimmed of spaces at both ends.
 - An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
 - A column named twice in the header of `maps.txt`, `mapstats.txt`, `mapevents.txt` or `shapes.txt` is an error, but the file still loads and only the first one is used. (`cartographer.txt` is not checked for this.)

@@ -1,0 +1,3 @@
+# Extra files shipped in the release zip (paths relative to this folder; see docs/RELEASING.md).
+tools/install.ps1
+examples/first-map

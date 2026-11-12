@@ -26,3 +26,4 @@ New sections go in new files (the next free number, `18-<topic>.md`), and a new 
 - [17. AutoCheck: a game check the plugin runs by itself (issue #173)](cartographer/17-autocheck.md)
 - [18. Chest open never reached the hook (issue #220)](cartographer/18-chest-operate.md)
 - [19. Treasure chests are never locked (issue #220)](cartographer/19-chest-lock.md)
+- [20. `warpDefs` assert at map entry (issue #254)](cartographer/20-warpdefs-assert.md)

@@ -486,8 +486,8 @@ $BossKeyPrefix = 'cartoboss:'
 $MaxBosses = 16
 $BossNameKeyPrefix = 'cartographer:'  # the plugin's string namespace (its PluginInfo.id); src/mapname BossRowKey
 # The local key is ASCII only: 'boss_' then each byte of the Name, kept when it is A-Z a-z 0-9, else '_' and two uppercase hex digits
-# ('Shoreline Warden' -> 'boss_Shoreline_20Warden'). The same rule as src/mapname BossLocalKey. The Name was read as Latin-1, so a
-# character is a byte.
+# ('Shoreline Warden' -> 'boss_Shoreline_20Warden'). The same rule as src/mapname BossLocalKey. The Name is UTF-8 (a Latin-1 file is converted first) and held one
+# char per byte, so a character here is a byte.
 function Get-BossEscaped([string]$Name) {
     $sb = [System.Text.StringBuilder]::new()
     foreach ($ch in $Name.ToCharArray()) {
@@ -507,7 +507,17 @@ $bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
 # A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
 $bossLines = @()
 if (Test-Path $bossPath) {
-    $bossText = $bytes.GetString([System.IO.File]::ReadAllBytes($bossPath))
+    # Text tables are UTF-8; a file that is not valid UTF-8 is read as Latin-1 and converted (NormalizeTableText in src/core/text.h does
+    # the same, so the escaped key matches). $bossText keeps one char per UTF-8 byte, like the other tables here.
+    $bossRaw = [System.IO.File]::ReadAllBytes($bossPath)
+    $strictUtf8 = New-Object System.Text.UTF8Encoding($false, $true)
+    if ($bossRaw.Length -ge 3 -and $bossRaw[0] -eq 0xEF -and $bossRaw[1] -eq 0xBB -and $bossRaw[2] -eq 0xBF) { $bossRaw = [byte[]]@($bossRaw | Select-Object -Skip 3) }
+    try { [void]$strictUtf8.GetString($bossRaw) }
+    catch {
+        Write-Host 'bosses.txt: not valid UTF-8, so it was read as Latin-1 and converted. Save it as UTF-8 to keep characters outside Latin-1.'
+        $bossRaw = $utf8.GetBytes($bytes.GetString($bossRaw))
+    }
+    $bossText = $bytes.GetString($bossRaw)
     $bossLines = @($bossText -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
 }
 if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
