@@ -229,9 +229,9 @@ void ProbeShape(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 	}
 	int sizes[4][3] = {};  // distinct (w, h) and how many rooms have it
 	int distinct = 0, outside = 0, withPiece = 0, count = 0, fixedRooms = 0, sharedPieces = 0;
-	// The pieces the rooms point at, to find rooms that share one: collected here, sorted and counted after the walk (a static
-	// buffer, not the hook's stack; the probe runs on one thread at a time, under the level build).
-	static const void* pieces[MaxRooms];
+	// The pieces the rooms point at, to find rooms that share one: collected here, sorted and counted after the walk (a
+	// thread_local buffer, not the hook's stack).
+	thread_local static const void* pieces[MaxRooms];
 	int pieceCount = 0;
 	const void* room = Read<const void*>(level, LvlFirstRoom);
 	for (; room != nullptr && count < MaxRooms && Readable(room, 0x98); room = Read<const void*>(room, RoomNext), ++count) {
@@ -783,11 +783,20 @@ void MazeProbeArrival(void* room, int32_t levelId) {
 		return;
 	}
 	const bool haveCell = entrance.unit > 0 && entrance.levelId == levelId;
-	const int32_t cellX = haveCell ? entrance.minX + (x - entrance.minX) / entrance.unit * entrance.unit : 0;
-	const int32_t cellY = haveCell ? entrance.minY + (y - entrance.minY) / entrance.unit * entrance.unit : 0;
-	plog::Info("[maze probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d, in plan cell (%d,%d); the entrance cell is %s (%d,%d)%s", drlg,
-	           room, levelId, x, y, w, h, cellX, cellY, entrance.known ? "at" : "unknown, last seen at", entrance.x, entrance.y,
-	           entrance.known && haveCell ? (cellX == entrance.x && cellY == entrance.y ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
+	// Integer division rounds toward zero, so a room left of or above the box would land in cell 0: say it is outside instead.
+	const bool outsideBox = haveCell && (x < entrance.minX || y < entrance.minY);
+	const bool inCell = haveCell && !outsideBox;
+	const int32_t cellX = inCell ? entrance.minX + (x - entrance.minX) / entrance.unit * entrance.unit : 0;
+	const int32_t cellY = inCell ? entrance.minY + (y - entrance.minY) / entrance.unit * entrance.unit : 0;
+	char cell[64];
+	if (outsideBox) {
+		std::snprintf(cell, sizeof(cell), "outside the room box");
+	} else {
+		std::snprintf(cell, sizeof(cell), "(%d,%d)", cellX, cellY);
+	}
+	plog::Info("[maze probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d, in plan cell %s; the entrance cell is %s (%d,%d)%s", drlg,
+	           room, levelId, x, y, w, h, cell, entrance.known ? "at" : "unknown, last seen at", entrance.x, entrance.y,
+	           entrance.known && inCell ? (cellX == entrance.x && cellY == entrance.y ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
 }
 
 void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
