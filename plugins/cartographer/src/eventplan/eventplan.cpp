@@ -248,6 +248,30 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 	return plan;
 }
 
+SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, uint64_t seed, int scale) {
+	SpawnPlan plan;
+	if (boss.kind != events::NameKind::Monster && boss.kind != events::NameKind::Unique) {
+		plan.problem = "Boss '" + name + "' is not a monstats Id or a superuniques name";
+		return plan;
+	}
+	if (boss.classRow < 0) {
+		plan.problem = "Boss '" + name + "' has no monster to spawn (its Class is not in monstats.txt)";
+		return plan;
+	}
+	const std::vector<Spot> spots = placements(room, 1, seed, scale);
+	if (spots.empty()) {
+		plan.problem = "the boss room is too small to place anything";
+		return plan;
+	}
+	Spawn s;
+	s.spot = spots[0];
+	s.classRow = boss.classRow;
+	s.superUnique = boss.kind == events::NameKind::Unique;
+	s.row = s.superUnique ? boss.row : boss.classRow;
+	plan.spawns.push_back(s);
+	return plan;
+}
+
 int spotScale(const Rect &server, const Rect &drlg) {
 	if (drlg.w <= 0 || drlg.h <= 0 || server.w < drlg.w || server.h < drlg.h || server.w % drlg.w != 0 || server.h % drlg.h != 0) {
 		return 1;

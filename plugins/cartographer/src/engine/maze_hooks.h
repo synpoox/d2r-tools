@@ -79,6 +79,9 @@ struct MazeEventRect {
 };
 auto MazeEventRoom() -> MazeEventRect;
 
+// The plan's boss room (the far cell of the main path), in the same form and with the same lifetime. Not known when the layout has no boss room.
+auto MazeBossRoom() -> MazeEventRect;
+
 // The DRLG rects (tiles) of every room in `level`'s room list (level +0x10 first room, room +0x48 next), read through the guarded
 // walker. False, and `out` left empty, when the list cannot be read (no level, no first room, an unreadable room, or more than the
 // sanity bound). Game thread.
