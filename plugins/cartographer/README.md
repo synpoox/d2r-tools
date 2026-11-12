@@ -79,7 +79,7 @@ in [`examples/first-map/`](examples/first-map/).
 |---|---|---|
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
-| PlayerStats | `1` applies the map's player properties; test characters only | 0 |
+| PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
 | MapNames | `1` shows a map's own name on the portal, automap and banner (experimental) | 0 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
@@ -123,9 +123,12 @@ the game returns no unit for it, the boss is spawned as a plain monster of its `
 minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
+The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
+and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game.
+
 | Column | Meaning | Default |
 |---|---|---|
-| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It may not show correctly in game yet (the game turns the name into a string once, when it loads the table; a follow-up is open) | required |
+| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It is the name shown in game (see above) | required |
 | Base | A monster id from the game's `monstats.txt` that the boss is made from | required |
 | Mods | Up to 3 monster mod ids from `monumod.txt`, separated by commas (for example `5,6`: strong, fast) | none |
 | Minions | How many of the base monster come with the boss, 0 to 10 | 0 |
