@@ -228,6 +228,9 @@ outdoor code). With it at 0, a Jungle map's item says so and nothing opens. If t
 installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
+A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
+second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
+is Small, Medium or Large. A Snow map has no boss room yet.
 
 Not verified in game. In multiplayer (TCP/IP, experimental) the host sends the outdoor layout to clients; that has not been run in a game either.
 

@@ -525,10 +525,17 @@ TEST_CASE("slot DrlgType is read from levels.txt too, and the Outdoor slot is ch
 	CHECK(OutdoorSlotProblem(jungle, slots).empty());
 	MapDef snow = jungle;
 	snow.tileset = "Snow";
+	CHECK(OutdoorSlotProblem(snow, slots).empty());  // a Snow map is checked against the OutdoorSnow slot, which this table does not have
+	slots.push_back(slots[1]);                       // an OutdoorSnow slot on a level that has the Jungle LevelType
+	slots.back().name = SnowSlot;
 	const std::string wrong = OutdoorSlotProblem(snow, slots);
+	CHECK(wrong.find("OutdoorSnow") != std::string::npos);
 	CHECK(wrong.find("LevelType 21") != std::string::npos);
 	CHECK(wrong.find("needs 31") != std::string::npos);
 	CHECK(wrong.find("Shorelines") != std::string::npos);
+	slots.back().levelType = 31;
+	CHECK(OutdoorSlotProblem(snow, slots).empty());
+	CHECK(OutdoorSlotProblem(jungle, slots).empty());  // the Jungle map still looks at the Outdoor slot only
 
 	MapDef cave = jungle;
 	cave.tileset = "Cave";
@@ -1109,7 +1116,7 @@ TEST_CASE("the notice names core-maps and says to use one") {
 	CHECK(text.find("Remove one") != std::string::npos);
 }
 
-TEST_CASE("Jungle is a ready tileset and opens through the Outdoor slot; Cave and Crypt through the Maze slot") {
+TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave and Crypt through the Maze slot") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nDeep\tCave\tLoop\t\t\tt21\n", report);
 	REQUIRE(maps.size() == 2);
@@ -1120,7 +1127,29 @@ TEST_CASE("Jungle is a ready tileset and opens through the Outdoor slot; Cave an
 	CHECK(std::string(MapSlotName(maps[1])) == MazeSlot);
 	const auto ready = ReadyTilesetNames();
 	CHECK(std::find(ready.begin(), ready.end(), "Jungle") != ready.end());
-	CHECK(std::find(ready.begin(), ready.end(), "Snow") == ready.end());  // Snow has a LevelType but no catalogue yet
+	CHECK(std::find(ready.begin(), ready.end(), "Snow") != ready.end());
+	Report snowReport;
+	const auto snowMaps = Load("Frost\tSnow\tWinding\t\t\tt22\n", snowReport);
+	REQUIRE(snowMaps.size() == 1);
+	CHECK(snowReport.Errors() == 0);
+	CHECK(MapIsOutdoor(snowMaps[0]));
+	CHECK(std::string(MapSlotName(snowMaps[0])) == SnowSlot);
+}
+
+TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset is open and unbuilt") {
+	Report report;
+	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nFrost\tSnow\tWinding\t\t\tt22\nDeep\tCave\tLoop\t\t\tt21\n", report);
+	REQUIRE(maps.size() == 3);
+	const MapDef& jungle = maps[0];
+	const MapDef& snow = maps[1];
+	const MapDef& cave = maps[2];
+	CHECK(OutdoorOpenConflict(jungle, "").empty());        // nothing pending
+	CHECK(OutdoorOpenConflict(snow, "").empty());
+	CHECK(OutdoorOpenConflict(jungle, "Jungle").empty());  // the same slot replaces its own job
+	CHECK(OutdoorOpenConflict(snow, "Snow").empty());
+	CHECK(OutdoorOpenConflict(snow, "Jungle").find("Jungle map is already open") != std::string::npos);  // Jungle pending, then Snow
+	CHECK(OutdoorOpenConflict(jungle, "Snow").find("Snow map is already open") != std::string::npos);    // and the reverse
+	CHECK(OutdoorOpenConflict(cave, "Jungle").empty());    // a maze map has its own job
 }
 
 TEST_CASE("an Outdoor slot on a level the installer did not write is dropped; the installer's level is kept") {
@@ -1163,6 +1192,53 @@ TEST_CASE("the Outdoor level the installer writes passes the slot checks for a J
 	jungle.name = "Wild";
 	jungle.tileset = "Jungle";
 	CHECK(OutdoorSlotProblem(jungle, slots).empty());
-	jungle.tileset = "Snow";  // one Outdoor slot serves one tileset
+	jungle.tileset = "Snow";  // a Snow map needs the OutdoorSnow slot, not this one
+	CHECK(OutdoorSlotProblem(jungle, slots).empty());
+	CHECK(std::string(MapSlotName(jungle)) == SnowSlot);
+	jungle.tileset = "Jungle";
+	slots[0].levelType = 31;  // the Outdoor slot on a Snow LevelType: refused for a Jungle map
 	CHECK(!OutdoorSlotProblem(jungle, slots).empty());
+}
+
+TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the installer's Snow level passes the slot checks") {
+	// The rows tools\install.ps1 writes: Jungle 139 (LevelType 21, 384) and Snow 140 (LevelType 31, 192 x 192 at (6000, 3600)).
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tSizeX\tSizeY\tOffsetX\tOffsetY\n"
+	    "Cartographer Maze\t138\t4\t1\t3\t360\t360\t6000\t0\n"
+	    "Cartographer Outdoor\t139\t4\t3\t21\t384\t384\t6000\t3000\n"
+	    "Cartographer Snow\t140\t4\t3\t31\t192\t192\t6000\t3600\n";
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nOutdoor\t139\nOutdoorSnow\t140\n", report);
+	ValidateSlots(slots, levels, report);
+	ReadSlotLevelTypes(slots, levels);
+	REQUIRE(slots.size() == 3);
+	CHECK(report.Errors() == 0);
+	CHECK(SlotLevel(slots, SnowSlot) == 140);
+	CHECK(OutdoorSlotRefusal(slots[2]).empty());
+	CHECK(slots[2].levelType == 31);
+	CHECK(slots[2].sizeX == 192);
+	CHECK(slots[2].offsetY == 3600);
+	MapDef snow;
+	snow.name = "Frost";
+	snow.tileset = "Snow";
+	CHECK(OutdoorSlotProblem(snow, slots).empty());
+	snow.tileset = "Jungle";
+	CHECK(OutdoorSlotProblem(snow, slots).empty());
+
+	// The Snow slot on the Jungle level, or the Outdoor slot on the Snow level, is dropped with the name the slot needs.
+	Report swapped;
+	auto crossed = LoadSlots("Slot\tLevel\nOutdoorSnow\t139\nOutdoor\t140\n", swapped);
+	ValidateSlots(crossed, levels, swapped);
+	CHECK(crossed.empty());
+	CHECK(swapped.Errors() == 2);
+	CHECK(Joined(swapped).find("Cartographer Snow") != std::string::npos);
+	CHECK(Joined(swapped).find("Cartographer Outdoor") != std::string::npos);
+
+	// A vanilla level or a non-Act 5 level under the Snow name is refused by the same rule as the Outdoor slot, naming the slot.
+	auto other = LoadSlots("Slot\tLevel\nOutdoorSnow\t117\n", report);
+	ReadSlotLevelTypes(other, "Id\tAct\n117\t4\n");
+	CHECK(OutdoorSlotRefusal(other[0]).find("OutdoorSnow") != std::string::npos);
+	CHECK(OutdoorSlotRefusal(other[0]).find("vanilla") != std::string::npos);
+	CHECK(IsOutdoorSlotName("outdoorsnow"));
+	CHECK(OutdoorSlotLevelName("Maze").empty());
 }
