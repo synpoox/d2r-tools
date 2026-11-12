@@ -11,6 +11,7 @@
 #include "core/tsv.h"
 #include "crash_guard.h"
 #include "engine/event_apply.h"
+#include "engine/map_sync.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
 #include "engine/stat_apply.h"
@@ -369,6 +370,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::EventPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
 		}
@@ -460,6 +462,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallStatApply(context, g_overrides, &statParts);
 		std::vector<carto::PartStatus> eventParts;
 		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
+		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;
 		plog::Error("loading failed; the plugin stays loaded with the portal off");
@@ -469,6 +472,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	carto::UnloadMapSync();
 	crash_guard::Remove();
 	g_context = nullptr;
 }

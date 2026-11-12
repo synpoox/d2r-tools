@@ -1348,7 +1348,7 @@ outdoor builder are out of scope.
 | Field | Record |
 |---|---|
 | Date | 2026-11-12 |
-| Consumer | Cartographer phase 7 (multiplayer map sync); no code exists yet |
+| Consumer | Cartographer phase 7 (multiplayer map sync); part 1 (the host tells clients the open map) is built, see "What was built (issue #125)" at the end of this section |
 | Module | `D2R.exe`, D2R 3.3 build 93847, stamp `0x6ab3782c`, under D2RLoader 1.3.1 |
 | Location | The table below. Final addresses are found by byte signature |
 | Guard | Every prefix in the table below was re-run with an overlapping search over the dump's executable sections (`??` is a relative operand) and matches exactly once. The first draft's `0x86bc0` prefix matched 4 times and `0x490300` 3 times; both are now the longer unique forms. `0x4475c0` is not a hook target here (see Q4) |
@@ -1492,6 +1492,30 @@ Result: mostly **needs game**. The death path was read far enough to say which u
 `NetworkService` for the plan message (Q1); keep the maze hooks as they are on both sides (Q2) with the plan in the per-game cache before the client's first build; gate the
 portal entry at `0x58f680` until the client acks (Q3); spawn events on the host only and leave credit to the engine, verified by the Q4 checks. The unlocated pieces (LoadAct sender,
 retry behaviour, stat replication) are needs-game items and do not block writing the plugin code.
+
+### What was built (issue #125, phase 7 part 1): written, not verified in game
+
+The smallest slice section 12 supports: the host tells joined clients which map is open. Nothing here was run in a game.
+
+- **Route.** The SDK `NetworkService` only (Q1). One channel (`localChannelId` 1), compatibility token `"CART"` plus the wire version, so a host and a client on different message versions never connect. **No new native address, no hook, no new byte signature**: nothing was added to `part_signatures.h` or `tools/check_portal_signatures.py`. The gate `0x58f680`, the LoadAct sender and everything else marked unproven above is untouched.
+- **Messages** (little endian, `src/mapsync/mapsync.h`). `Hello` (client to host, 2 bytes: wire version, 0). `MapOpen` (host to client, 20 bytes): wire version, flags (bit 0 = maze map), `maps.txt` row (u16), hash of the map's name (u32, FNV-1a, case folded), slot level (u16), opening count (u16), layout seed (u64). Decoding refuses a wrong size or version, an unknown flag, a slot level or opening of 0, and a preset map that carries a seed. A preset map has no layout seed, so it sends 0; the per-player stat and event seeds are drawn on the host and are not sent.
+- **Host** (`src/engine/map_sync.cpp`). After a map opens through either path (item or console) the identity is stored and sent to every client that said hello. A client is known only from its `Hello`, not from the host's connection event: whether the host's `connectionState` callback fires per peer is not in the SDK text, so the code logs it and does not rely on it. A `Hello` queues a send through `runOnGameThread` (the pattern in the SDK `network-ping` sample), so a client that joins after the map opened is told too (late join). A peer that answers `NotConnected`, `StaleHandle` or `NotFound` is dropped. At most 16 clients are kept; when the list is full the oldest entry is dropped for a new client. The host's own process never connects to itself (the connect loop, the hello and an incoming `MapOpen` each re-check the server tick, so a late tick still wins).
+- **Client.** At `LocalPlayerReady` a connect loop starts on the UI thread (`runOnUiThread`, queued again each frame, since `runOnGameThread` is Unavailable on a remote client). It waits 3 s, then calls `connectToHost` every 1 s, up to 30 times, and stops at once if the server tick part has run (a host or single player: no connection is made), if the host rejects it for any reason but `HostUnavailable` (the reason is logged; `HostUnavailable` keeps the schedule running, as the SDK README says to retry), or on `Incompatible`, `WrongRole`, `Unsupported` or `OwnerInactive`. It also asks `getChannelInfo` before each attempt, so a missed connection event does not stall it. On connect it sends `Hello` once. A `MapOpen` is decoded, then checked against the client's own `maps.txt`: the row must exist and its name hash must match (else the table differs between host and client and the message is logged and dropped), and an older opening than the one kept is ignored. The kept identity (`MapSyncRemoteMap()`) is what later parts will read. Nothing else uses it yet.
+- **Fail open.** Every callback and the install are wrapped; a missing or short Network or Thread service, or a refused channel, turns only the sync off with a log line (`cartographer check` prints it). The portal and the map open do not depend on it. A client without the `PlayerTick` part never gets `LocalPlayerReady` from Cartographer and so does not start (the same part the console open needs).
+- **Single player and a host with no client.** `MapSyncMapOpened` finds no client and sends nothing (one log line); no connection is made because the server tick shows within a frame, long before the 3 s delay.
+- **Evidence.** `tools\build.ps1 -Plugin cartographer -Test`: build clean, 11 of 11 tests pass, including the new `mapsync_tests` (round trip, fixed wire bytes, every truncation and single-byte change, hello, the client's check with its refusals leaving the kept map unchanged, the client list limit (oldest dropped when full), the rejection rule, the connect schedule). `check_portal_signatures.py` and `check_maze_signatures.py` against `D2RLoader_6ab3782c_dump.exe` (`--stamp 0x6ab3782c`): all signatures ok, as before.
+- **Reading of the SDK that differs from the first draft of this section.** The README says local games and the TCP/IP host also connect "inside the same process", so `connectToHost` would succeed on a host and in single player; the code avoids that by connecting only when no server tick has run, which is an inference (a process that has the server ticks at once), not something the SDK states. Q3's "queue `getPeerPlayer` on each Connected event" was not built (the portal hold is out of scope here); the host's peer to player map stays a later item.
+
+#### Needs game (part 1)
+
+1. A remote TCP/IP client with Cartographer connects: how many `Busy` attempts, and the log line for it. A client with a different token, and a client without the plugin: the rejection reason shown, and that the join itself is refused.
+2. The host's `connectionState` callback: does it fire per client, with a peer handle (logged as `connection event`), and on which thread do the host and client message callbacks run?
+3. The `Hello` reaches the host, the reply reaches the client, and the log lines on both sides match (`told client`, `the host's open map`).
+4. A client that joins after the map was opened is told (late join); a client that leaves and rejoins.
+5. Whether the identity reaches a client before that client first builds the slot level (Q2, needs-game item 2).
+6. Whether `runOnUiThread` runs on a remote client at a rate that makes the 1 s retry work, and that the loop ends when the game is left.
+7. A host with two clients: both are told, and one leaving does not stop the other.
+8. Single player (also paused in the first seconds) and a host with no client are unchanged: no `map sync: ... connectToHost` line, no extra delay.
 
 ## 13. Ambush, Treasure and Shrine events: static checks (issue #102)
 

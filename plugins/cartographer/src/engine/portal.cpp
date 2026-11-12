@@ -1,5 +1,6 @@
 #include "portal.h"
 
+#include "map_sync.h"
 #include "maze_hooks.h"
 #include "scan.h"
 
@@ -194,6 +195,15 @@ void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tabl
 	}
 }
 
+// The map is open: tells the clients that have said hello which map it is (map_sync.cpp). Never lets a failure reach the game.
+void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game, int level, bool maze) noexcept {
+	try {
+		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : 0);
+	} catch (...) {
+		plog::Error("telling the clients about '%s' failed", map.name.c_str());
+	}
+}
+
 // A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
 // Preset slot.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
@@ -346,6 +356,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, player);
 		StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
+		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
 }
 
@@ -409,6 +420,7 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 	if (opened != 0) {
 		StartMapStats(*map, tables, game, unit);
 		StartMapEvents(*map, tables, game, unit, level, IsMazeMap(*map));
+		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
 }
 
@@ -471,9 +483,11 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		}
 		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
 		g_firstLogged = false;
+		MapSyncGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		StatApplyGameLeft();
 		EventsGameLeft();
+		MapSyncGameLeft();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
@@ -591,6 +605,7 @@ void SetFirstGameStartNotify(void (*notify)() noexcept) {
 
 void SetTables(std::shared_ptr<const Tables> tables) {
 	SetMazeTables(tables);
+	MapSyncSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_tables = std::move(tables);
 }
@@ -621,6 +636,10 @@ auto RescanPortal() -> bool {
 
 auto PortalLive() -> bool {
 	return g_live.load();
+}
+
+auto ServerTickSeen() -> bool {
+	return g_tickSeen.load();
 }
 
 auto NeedsRestart() -> bool {

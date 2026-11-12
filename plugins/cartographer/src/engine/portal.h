@@ -72,6 +72,9 @@ enum class OpenStart {
 auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> OpenStart;
 
 auto PortalLive() -> bool;
+
+// True once the player tick has run in this game: this process has the server (single player or a host). A remote client never sees it.
+auto ServerTickSeen() -> bool;
 auto PartStatuses() -> std::vector<PartStatus>;
 
 }  // namespace carto
