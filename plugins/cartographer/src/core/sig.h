@@ -8,7 +8,7 @@
 
 namespace carto {
 
-inline constexpr size_t MaxPattern = 192;
+inline constexpr size_t MaxPattern = 256;
 
 struct Pattern {
 	uint8_t bytes[MaxPattern];
