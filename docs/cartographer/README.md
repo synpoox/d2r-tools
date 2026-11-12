@@ -2,11 +2,11 @@
 
 > **Draft.** Cartographer is being built in phases. Most of what is described here does not work yet. The words and columns are the plan. Each feature is marked with the phase it lands in.
 
-Cartographer adds random maps to your mod. A player uses a map item in Harrogath. A red portal opens. Behind it is a new random level. Every game builds a new one.
+Cartographer adds random maps to your mod. A player uses a map's own item in Harrogath. A red portal opens. Behind it is a new random level. Every game builds a new one.
 
 Each game opens **one map**. After that, more maps are refused until the next game. A refused map item is kept, and the player is told why.
 
-You make a map by adding one line to one small table.
+You make a map by adding one line to one small table. Each map is opened by one item of its own; there is no generic map item and no random map.
 
 ## What you need
 
@@ -22,16 +22,17 @@ Make a file called `maps.txt` in your mod's `data/global/excel/d2rloader/cartogr
 It is a tab-separated table with a header row, like the game's own tables. Put this in it:
 
 ```
-Name	Tileset	Shape
-Shorelines	Jungle	Corridor
-Tunneling Depths	Cave	Loop
+Name	Tileset	Shape	Item
+Shorelines	Jungle	Corridor	t20
+Tunneling Depths	Cave	Loop	t21
 ```
 
-That is two maps. Three cells each is all a map needs.
+That is two maps. Four cells each is all a map needs.
 
 - **Name** is what the player sees when they enter.
 - **Tileset** is the kind of place. `Jungle` is outdoors. `Cave` is a maze of rooms.
 - **Shape** is how the path feels.
+- **Item** is the item code that opens this map (here `t20` opens Shorelines). Every map needs one, and no two maps share one. The item must be an item in `misc.txt` with item spell 16 (`pSpell`), such as a copy of a scroll. The item belongs to your mod; Cartographer adds none. An item that opens no map is an ordinary item.
 
 You do not pick indoor or outdoor. The tileset does that for you.
 
@@ -39,7 +40,7 @@ You do not pick indoor or outdoor. The tileset does that for you.
 
 1. Start a Hell game and go to Harrogath.
 2. Open the console and type `cartographer check`. It should say "2 maps loaded, no problems".
-3. Type `cartographer open Shorelines`. A portal opens. Walk in.
+3. Type `cartographer open Shorelines` (or use item `t20`). A portal opens. Walk in.
 
 You get a new, nearly straight jungle path. `Tunneling Depths` gives you a new cave that loops back on itself. Start another game and you get different ones.
 
@@ -59,16 +60,15 @@ Leave a cell blank, or leave a column out, and you get the default:
 | Chance of an event | 20% |
 | Difficulty | Hell |
 | Opens from | Harrogath |
-| Map item | Cartographer's own map item, which opens one of your maps at random |
 
 ## Step 3: tune it (optional)
 
 Add only the columns you care about:
 
 ```
-Name	Tileset	Shape	Size	Level	Boss
-Shorelines	Jungle	Corridor	Large	90	Bishibosh
-Tunneling Depths	Cave	Loop	Small		quillrat5
+Name	Tileset	Shape	Item	Size	Level	Boss
+Shorelines	Jungle	Corridor	t20	Large	90	Bishibosh
+Tunneling Depths	Cave	Loop	t21	Small		quillrat5
 ```
 
 The blank cell under `Level` for Tunneling Depths keeps level 85.
@@ -96,7 +96,7 @@ A tileset that is not ready is refused when the game loads, with a message that 
 |---|---|
 | `Size` | `Small`, `Medium` or `Large` |
 | `Level` | Monster level in the map |
-| `Item` | The map item that opens this map. Blank: Cartographer's own item |
+| `Item` | Required. The item code that opens this map, and only this map; no two maps share one. The item needs item spell 16 in `misc.txt` |
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |
 | `Monsters` | Up to 10 monster `Id`s, separated by commas, with the case matching. Blank: the tileset's own monsters |
 | `Difficulty` | `Normal`, `Nightmare` or `Hell` |

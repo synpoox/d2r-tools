@@ -1,6 +1,6 @@
 // Cartographer: D2RLoader plugin entry point. Reads maps.txt and cartographer.txt, writes cartographer-report.txt, and
-// opens a map through a map item (or "cartographer open <Name>"). Global: no mod needs to ship layouts; the installer
-// (tools\install.ps1) adds the item and the slot level to the mod's tables.
+// opens a map through the map's own item (or "cartographer open <Name>"). Global: no mod needs to ship layouts; the installer
+// (tools\install.ps1) adds the slot level to the mod's tables. The items belong to the mod.
 //
 // Console command "cartographer": "check" re-reads the tables and prints what is wrong; "open <Name>" opens a map without an item.
 #include <D2RLPlugin/api.h>
@@ -15,6 +15,7 @@
 #include <windows.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cwchar>
 #include <fstream>
 #include <memory>
@@ -83,6 +84,26 @@ auto ReadColumn(const std::wstring& file, const char* column, std::vector<std::s
 	return true;
 }
 
+// misc.txt code and pSpell for every item that has a code (a blank pSpell is 0). False when the table or a column is missing.
+auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out) -> bool {
+	std::string text;
+	if (!ReadFile(file, &text)) {
+		return false;
+	}
+	const carto::Tsv table = carto::ParseTsv(text);
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell");
+	if (cCode < 0 || cSpell < 0) {
+		return false;
+	}
+	for (const carto::TsvRow& row : table.rows) {
+		const std::string code = table.Cell(row, cCode);
+		if (!code.empty()) {
+			out->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
+		}
+	}
+	return true;
+}
+
 auto ReadGameNames() -> carto::GameNames {
 	carto::GameNames names;
 	if (g_excelDir.empty()) {
@@ -94,6 +115,7 @@ auto ReadGameNames() -> carto::GameNames {
 	for (const wchar_t* file : {L"\\misc.txt", L"\\weapons.txt", L"\\armor.txt"}) {
 		names.haveItems = ReadColumn(g_excelDir + file, "code", &names.itemCodes) && names.haveItems;
 	}
+	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells);
 	return names;
 }
 
@@ -102,13 +124,12 @@ struct Loaded {
 	std::shared_ptr<carto::Tables> tables = std::make_shared<carto::Tables>();
 };
 
-// Reads all three tables. A missing maps.txt or cartographer.txt is fine: the built-in map and the defaults apply.
+// Reads all three tables. A missing maps.txt or cartographer.txt is fine: there are no maps, and the defaults apply.
 auto LoadAll() -> Loaded {
 	Loaded loaded;
 	if (g_tableDir.empty()) {
-		// No mod: no tables are read. The built-in map and the defaults apply, and the portal has no level to open.
-		loaded.report.Note("maps.txt", 0, "no mod is active, so no tables were read. Only the built-in Preset map and the default settings apply.");
-		loaded.tables->maps = carto::MergeWithBuiltin({});
+		// No mod: no tables are read. There are no maps, and the portal has no level to open.
+		loaded.report.Note("maps.txt", 0, "no mod is active, so no tables were read. There are no maps; only the default settings apply.");
 		return loaded;
 	}
 	const carto::GameNames names = ReadGameNames();
@@ -120,7 +141,7 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
 		fromFile = carto::LoadMaps(text, names, loaded.report);
 	}
-	loaded.tables->maps = carto::MergeWithBuiltin(std::move(fromFile));
+	loaded.tables->maps = std::move(fromFile);
 	text.clear();
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SettingsFile), &text)) {
 		loaded.tables->settings = carto::LoadSettings(text, loaded.report);

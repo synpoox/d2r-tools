@@ -25,8 +25,8 @@ inline constexpr int DefaultEventChance = 20;
 inline constexpr int MaxMonsters = 10;
 inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
-// Cartographer's own map item: a cloned scroll with item spell 16, added by the installer (tools/install.ps1).
-inline constexpr const char* DefaultItemCode = "cmap";
+// The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
+inline constexpr int MapItemSpell = 16;
 // The slot (in slots.txt) that holds the built-in preset map. Later phases add slots for built layouts.
 inline constexpr const char* PresetSlot = "Preset";
 
@@ -37,6 +37,8 @@ struct GameNames {
 	std::vector<std::string> monsters;      // monstats.txt Id
 	std::vector<std::string> superUniques;  // superuniques.txt Superunique
 	std::vector<std::string> itemCodes;     // misc.txt, weapons.txt and armor.txt code
+	bool haveItemSpells = false;
+	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
 };
 
 struct MapDef {
@@ -63,14 +65,11 @@ struct Slot {
 	int level = 0;  // levels.txt Id
 };
 
-// The map every install has, so the item and "cartographer open" work before a maps.txt exists.
-auto BuiltinMap() -> MapDef;
-
 // Tilesets, shapes, sizes and difficulties as the author writes them.
 auto TilesetNames() -> std::vector<std::string>;
 auto ReadyTilesetNames() -> std::vector<std::string>;
 
-// maps.txt. Rows with a problem are left out and described in `report`. The built-in map is not added here.
+// maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
 auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> std::vector<MapDef>;
 
 // cartographer.txt (Setting, Value). Every setting has a default; a bad value keeps it.
@@ -79,15 +78,11 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// The maps the plugin offers: the built-in map unless maps.txt defines one with the same name, then maps.txt's rows.
-auto MergeWithBuiltin(std::vector<MapDef> fromFile) -> std::vector<MapDef>;
-
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;
 
-// The map a map item opens: maps whose Item is the item's code; for Cartographer's own item (or any item no map claims)
-// the maps with a blank Item. `roll` picks among them. nullptr when there is none.
-auto ChooseMap(const std::vector<MapDef>& maps, std::string_view itemCode, uint32_t roll) -> const MapDef*;
+// The map whose Item is `itemCode` (ignoring case), or nullptr: an item that opens no map is not a map item.
+auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -> const MapDef*;
 
 // The map called `name` (ignoring case), or nullptr.
 auto FindMap(const std::vector<MapDef>& maps, std::string_view name) -> const MapDef*;

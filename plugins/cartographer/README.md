@@ -1,9 +1,9 @@
 # Cartographer
 
-A D2RLoader plugin for Diablo II: Resurrected that opens a map from a map item: in Harrogath, in Hell, a red portal
+A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released).** The table loader, the gates, the item and the red portal to one built-in preset map
+**Status: phase 1 (not released).** The table loader, the gates, the items and the red portal
 are written and unit tested. Nothing has been run in a game yet. The engine parts the portal needs have byte signatures
 checked against a memory dump of build 93847 only; until they are checked in game, treat the portal as untested. If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
@@ -13,36 +13,38 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt` ("maps.txt row 3: tileset 'Jungel' is not known. Did you mean 'Jungle'?"); the rest load.
+- **One item, one map**: a map is opened only by the item named in its `Item` cell (for example `t20` opens Shorelines). There
+  is no generic map item and no random map; an item no map names is an ordinary item. The item belongs to your mod and needs
+  item spell 16 (`pSpell` in `misc.txt`); `cartographer check` names a map whose item is missing, unknown, shared or lacks it.
 - **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
-- **Console open**: `cartographer open <Name>` opens the portal itself, with no map item, through the same gates. It needs
+- **Console open**: `cartographer open <Name>` opens the named map's portal itself, with no item, through the same gates. It needs
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
   refuses and says so. Not tried in a game yet.
-- **Built-in preset map**: a map called `Preset` always exists, so a three-cell `maps.txt` row
-  (`Name`, `Tileset` = `Preset`, `Shape`) works from the start.
 
 ## Requirements
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
 - D2RLoader (not yet tested with any version)
-- A mod (without one, no tables are read and only the built-in map and defaults apply), because the map item and the map level are added to the mod's tables (step 3 below).
+- A mod (without one, no tables are read and only the built-in map and defaults apply), because the map level is added to the mod's tables (step 3 below).
 
 ## Installation
 
 1. Close the game.
-2. Copy `cartographer.dll` and the folder `d2rl-cartographer` (the map item's name) to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the map item `cmap` (a Scroll of Town Portal copy),
-   one level ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `misc.txt`,
-   `levels.txt` and `lvlprest.txt` (backing each up once as `.bak`) and writes `slots.txt`. Running
+2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds only what the slot level needs: one level
+   ("Cartographer Preset", a copy of Colossal Summit) and its level preset to the mod's `levels.txt` and `lvlprest.txt`
+   (backing each up once as `.bak`), and writes `slots.txt`. It adds no items. Running
    it again changes nothing. D2RLoader compiles the mod's `.txt` tables itself at start (no `-txt` needed). If the mod ships
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
-4. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
+4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy of a
+   scroll. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader. Check `cartographer-report.txt` in the plugin's log folder.
 
 ## Configuration
 
-`maps.txt` has one row per map, with a header row. Only `Name`, `Tileset` and `Shape` are needed; a blank cell means the
+`maps.txt` has one row per map, with a header row. Only `Name`, `Tileset`, `Shape` and `Item` are needed; a blank cell means the
 default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore case; names from the game's tables
 (monster ids, boss names, item codes) must match exactly.
 
@@ -53,7 +55,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` (not used by `Preset`) | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
-| Item | Item code that opens this map; blank maps are opened by the `cmap` item | blank |
+| Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
 | Difficulty | `Normal`, `Nightmare` or `Hell` | Hell |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
@@ -75,8 +77,8 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - Not yet: installed into a game, or opened in game. Game checks: all twelve parts found at load, `UnitStat` in particular (it is
   D2RLoader's thunk and must be in place when Cartographer loads; if it is not, `cartographer check` looks again for the called
   parts with the load-time `signatures.txt` and turns the portal on if all are now found; the two item hooks are written at
-  load only, so a missing hooked part needs a restart); the item name key `cartographer:CartographerMap` is 28 characters;
-  if `misc.txt` `namestr` has a fixed length, confirm the name is not cut off.
+  load only, so a missing hooked part needs a restart).
+- Not yet in game either: an item no map names is used like an ordinary item (the hooks pass it through).
 - Game check for `cartographer open <Name>`: the log line "first player unit seen by the tick" shows the same id as
   "local player ready"; the portal opens; step through it and back; leave the game with the portal still open; repeat with
   Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.

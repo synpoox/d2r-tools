@@ -13,7 +13,7 @@ The outdoor builder has its own plan: [cartographer-outdoor-builder.md](cartogra
 
 Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can drop in.
 
-1. **One map per game.** A map item used in Act 5 (Harrogath) opens a red portal into the game's map. Once a map is open, any further map is refused for the rest of the game.
+1. **One map per game.** A map's own item, used in Act 5 (Harrogath), opens a red portal into that map. There is no generic map item and no random map: each item opens exactly one map. Once a map is open, any further map is refused for the rest of the game.
 2. **Map stats:** monster, area and player stats.
 3. **Procedural layouts.** Each map has **one tileset** and a **shape**. Every game builds a new random layout from that tileset only, within that shape. For example, "Shorelines" is a jungle corridor: mostly straight, with few dead ends and corners.
 4. **Map events** can happen inside a map.
@@ -70,7 +70,7 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or a name from `shapes.txt` (§3.4) | Corridor |
 | `Size` | no | `Small`, `Medium` (default) or `Large` | Large |
 | `Level` | no | Monster level in the map (default 85) | 90 |
-| `Item` | no | Item code of the map item. Blank: the map can drop from Cartographer's own map item | `shm1` |
+| `Item` | yes | Item code that opens this map, and only this map. Unique across maps; the item needs item spell 16 (`pSpell`). An item no map names is an ordinary item | `t20` |
 | `Boss` | no | A monstats `Id` or superuniques `Name` placed at the end of the path. Blank: no boss | `fallenshaman1` |
 | `Monsters` | no | Up to 10 monstats `Id`s, comma-separated. Blank: the tileset's own monsters | `quillrat1,zombie3` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` (default) | |
@@ -158,9 +158,9 @@ Two columns, `Setting` and `Value`. Every setting has a default.
 
 ### 3.4 What ships ready-made, so authors never edit it
 
-- **The slot levels** (Act 5, unlinked) and **Cartographer's own map item**, which is usable and opens a random map from `maps.txt`.
+- **The slot levels** (Act 5, unlinked). The map items are not shipped: each belongs to the mod, with item spell 16, and is named in the map's `Item` cell.
   - **How they get into the game:** if D2RLoader can't add table rows from a plugin [V], the release ships a one-step installer.
-  - **What the installer does:** it adds these rows to the mod's `levels.txt` and `misc.txt`. It is safe to run twice.
+  - **What the installer does:** it adds these rows to the mod's `levels.txt` and `lvlprest.txt`. It is safe to run twice.
 - **The tileset catalogue** of pieces with their open sides, sizes and roles. Our tool generates it, and it ships inside the plugin; authors only use the tileset names.
 - **Shape and size presets.**
 - **Expert overrides.** An optional `shapes.txt` lets an expert define a new shape with the numeric rules: path length, straightness, turns, branches, branch length, loops, bounds and boss room. The README covers it in one "Advanced" section, after everything else.
@@ -201,9 +201,9 @@ A mod author wants two maps:
 **2. Write the maps.** Create `maps.txt` in the mod's `data/global/excel/d2rloader/cartographer/` folder. It is tab-separated, so spreadsheet tools and D2's table editors open it:
 
 ```
-Name	Tileset	Shape
-Shorelines	Jungle	Corridor
-Tunneling Depths	Cave	Loop
+Name	Tileset	Shape	Item
+Shorelines	Jungle	Corridor	t20
+Tunneling Depths	Cave	Loop	t21
 ```
 
 That is all. Both maps get the defaults:
@@ -211,16 +211,16 @@ That is all. Both maps get the defaults:
 - size Medium and monster level 85;
 - 6 random properties from the built-in pool, and a 20% chance of an event (none until `mapevents.txt` exists);
 - opened in Harrogath in Hell;
-- they drop as Cartographer's own map item, which opens one of the two at random.
+- each is opened by its own item (`t20` for Shorelines, `t21` for Tunneling Depths).
 
 **3. Test.** Start a Hell game and go to Harrogath. Type `cartographer check` in the console; it should report "2 maps loaded, no problems". Then type `cartographer open Shorelines` and walk in. Every new game gives a new straight jungle path, and `Tunneling Depths` a new cave ring.
 
 **4. Optional tuning.** Add only the columns you want:
 
 ```
-Name	Tileset	Shape	Size	Level	Boss
-Shorelines	Jungle	Corridor	Large	90	Bishibosh
-Tunneling Depths	Cave	Loop	Small		quillrat5
+Name	Tileset	Shape	Item	Size	Level	Boss
+Shorelines	Jungle	Corridor	t20	Large	90	Bishibosh
+Tunneling Depths	Cave	Loop	t21	Small		quillrat5
 ```
 
 A blank cell keeps the default; Tunneling Depths keeps level 85 here.
@@ -267,7 +267,7 @@ Each phase gets one issue and a PR, plus a game check in Hell on a level 90+ cha
 |---|---|---|---|
 | 0 | Glossary + ADR | Glossary entries for *slot level*, *layout graph*, *map record*. An ADR records: standalone, never loaded with core-maps, one map per game, and the §3.0 simplicity rules as a release requirement | ADR merged |
 | ✅ | Spikes | DRLG steering ([pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929)), level regeneration ([pd2-resurrected#930](https://github.com/synpoox/pd2-resurrected/pull/930)) | Done |
-| 1 | Skeleton | `plugin/cartographer` target, standalone (no `pd2_engine.h`). Table loader with the §3.0 checks, `cartographer-report.txt` and `cartographer check`. Slot rows, the default map item and the installer (or D2RLoader row injection), gates, the one-map rule, the portal, and one built-in preset map | A 2-cell `maps.txt` opens a map; a typo gives a plain-English error; a second open is refused |
+| 1 | Skeleton | `plugin/cartographer` target, standalone (no `pd2_engine.h`). Table loader with the §3.0 checks, `cartographer-report.txt` and `cartographer check`. Slot rows, the installer (or D2RLoader row injection), gates, the one-map rule and the portal | A 2-cell `maps.txt` opens a map; a typo gives a plain-English error; a second open is refused |
 | 2 | Layout graph | The pure generator, the shape and size presets, and `shapes.txt`. Unit tests in a new C++ test harness | 10k seeds per preset meet their rules |
 | 3 | Guided maze | Productise the [pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929) prototype: hooks, ring-grower no-op, special-room steer, cache, fallback, and the option C piece-set hook with `tilesets.txt` (§3.6) | `Cave`/`Corridor` and `Crypt`/`Branching` build in shape in 50 games and stay the same after an unload |
 | 4 | Own outdoor builder | [cartographer-outdoor-builder.md](cartographer-outdoor-builder.md), Act 3 jungle first | `Jungle`/`Corridor` (Shorelines) builds in shape in 50 games |

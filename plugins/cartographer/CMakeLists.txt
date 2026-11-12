@@ -1,8 +1,7 @@
-# Cartographer: opens a generated map from a map item in Harrogath (D2RLoader plugin).
+# Cartographer: opens a generated map from the map's own item in Harrogath (D2RLoader plugin).
 #
 # Build:  tools\build.ps1 -Plugin cartographer -Test (from the repo root)
 # Output: build/cartographer/Release/cartographer.dll -> copy it to <game>/d2rloader/plugins/
-#         with the companion folder d2rl-cartographer/ (the plugin's own strings) beside it.
 cmake_minimum_required(VERSION 3.29)
 project(cartographer LANGUAGES CXX RC)
 
