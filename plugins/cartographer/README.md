@@ -48,12 +48,45 @@ in [`examples/first-map/`](examples/first-map/).
    no items. The level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
+   The installer refuses a spot another level in `levels.txt` already uses (it says which, and `-MazeOffsetX` and the like pick another).
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
    of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
    portal stays off and `cartographer check` says which part.
+
+## Manual install
+
+`tools\install.ps1` is optional. It only makes the edits below, adds rows to the end of each table and never changes a
+game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\excel\`; column detail is in
+[docs/cartographer/tables.md](../../docs/cartographer/tables.md).
+
+1. **levels.txt**: add three rows at the end, each a copy of a game row with these cells changed. Give each the next free
+   `Id`, `Act` 4 (Act 5), `Depend` 0, `Position` 0, `Vis0` to `Vis7` 0, `Warp0` to `Warp7` -1, `Waypoint` 255, `Quest` 0,
+   `LevelGroup` Null, and empty `LevelEntry` and `LevelWarp`. Set `SizeX`, `SizeY` and the same two in every difficulty
+   column to the size below. Pick an `OffsetX`/`OffsetY` no other Act 5 level uses.
+
+   | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
+   |---|---|---|---|---|---|
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
+   | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
+   | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
+
+   The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
+   shows).
+2. **lvlmaze.txt**: copy the first row; set `Name` to `Cartographer Maze`, `Level` to the Maze row's `Id`, every
+   `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
+3. **superuniques.txt**: for each `bosses.txt` entry copy the `Bishibosh` row and set `Superunique` to `cartoboss:` plus
+   the `Name`, `Name` to `cartographer:boss_` plus the `Name`, `Class` to the entry's `Base`, `Mod1` to `Mod3` to its
+   `Mods` (0 when unused), `MinGrp` and `MaxGrp` to its `Minions`, and `hcIdx` to one more than the highest `hcIdx` in the
+   table (then one more for each further row). In both names, write every character that is not A-Z, a-z or 0-9 as `_` and
+   its two-digit **uppercase** hex code (`Shoreline Warden` becomes `Shoreline_20Warden`). Keep to the
+   [bosses.txt](#bossestxt) limits: at most 16 entries, `Mods` 1-255 (up to 3), `Minions` 0-10. Set the treasure class cells `TC`,
+   `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
+   `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
+4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
+   header `Slot` and `Level`, then rows `Maze`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
 
 ## Configuration
 

@@ -131,7 +131,7 @@ struct ArrivalFact {
 };
 ArrivalFact g_arrival;
 std::atomic<bool> g_arrivalLogged{false};
-std::atomic<int> g_arrivalResult{0};  // OutdoorArrivalResult: what the arrival probe found (AutoCheck reads it)
+std::atomic<int> g_arrivalResult{0};  // OutdoorArrivalResult: what the arrival probe found (AutoCheck reads it); reset in ArrangeRooms and OutdoorGameLeft
 cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
 
 // One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
@@ -239,7 +239,7 @@ auto SampleGrid(const void* level, const co::StampPlan& plan, co::GridSample* ou
 	return ok;
 }
 
-// --- Probes (OutdoorProbe = 1 in cartographer.txt): what the game does, for the checks that need a game ------------------------
+// --- Probes (OutdoorProbe = 1 in cartographer.txt, or AutoCheck for the arrival probe): what the game does, for the checks that need a game ------------------------
 
 void ProbeLevel(const void* level, const char* when) noexcept {
 	if (!g_probe.load()) {
@@ -696,7 +696,7 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 	}
 	const bool have = fact.known && fact.levelId == levelId;
 	const bool inCell = have && x >= fact.cellX && y >= fact.cellY && x + w <= fact.cellX + fact.cellW && y + h <= fact.cellY + fact.cellH;
-	g_arrivalResult = have ? (inCell ? 1 : 2) : 3;
+	g_arrivalResult = have ? (inCell ? 1 : 2) : 4;  // no entrance mark was placed: the arrival is the game's own
 	plog::Info("[outdoor probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d; the entrance cell is %s (%d,%d) %d x %d%s", drlg, room, levelId, x, y, w, h,
 	           have ? "at" : "unknown, last seen at", fact.cellX, fact.cellY, fact.cellW, fact.cellH,
 	           have ? (inCell ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");

@@ -38,6 +38,13 @@
 .PARAMETER ExcelDir
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
+.PARAMETER MazeOffsetX
+    Where the Maze level sits on the Act 5 map: OffsetX (default 6000) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
+    -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
+    level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
+    for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
+    (an overlap is warned about).
+
 .PARAMETER Tileset
     Cave (the default) or Crypt: the kind of maze the Maze level builds.
 
@@ -48,7 +55,13 @@
 param(
     [string]$ModDirectory,
     [string]$ExcelDir,
-    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave'
+    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
+    [int]$MazeOffsetX = 6000,
+    [int]$MazeOffsetY = 0,
+    [int]$OutdoorOffsetX = 6000,
+    [int]$OutdoorOffsetY = 3000,
+    [int]$SnowOffsetX = 6000,
+    [int]$SnowOffsetY = 3600
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,12 +73,12 @@ $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
-# tileset); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
+# tileset); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 6000,3600); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
 $OutdoorTilesets = @(
     # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
-    @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; OffsetX = '6000'; OffsetY = '3000'; Template = 111 },
+    @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
-    @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; OffsetX = '6000'; OffsetY = '3600'; Template = 117 }
+    @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 }
 )
 
 if (-not $ExcelDir) {
@@ -140,6 +153,47 @@ function Set-CellIf($t, $cells, [string]$column, [string]$value) {
     if ($i -ge 0) { $cells[$i] = $value }
 }
 
+# The first other level of the same act whose rectangle (OffsetX/OffsetY and the largest SizeX/SizeY of the three difficulties) overlaps the
+# given square, as text, or '' when none does. The row named $name is the one being checked and is skipped.
+function Find-LevelOverlap($t, [string]$name, [int]$offX, [int]$offY, [int]$size) {
+    $nameC = Column $t 'Name'; $actC = Column $t 'Act'; $idC = Column $t 'Id'
+    $oxC = Column $t 'OffsetX'; $oyC = Column $t 'OffsetY'
+    $sizeCols = @($t.Header | Where-Object { $_ -match '^Size[XY]' } | ForEach-Object { [array]::IndexOf($t.Header, $_) })
+    for ($i = 1; $i -lt $t.Lines.Count; $i++) {
+        $c = $t.Lines[$i] -split "`t"
+        if ($c.Count -le [Math]::Max([Math]::Max($nameC, $actC), [Math]::Max($oxC, $oyC)) -or $c[$nameC] -eq $name -or $c[$actC] -ne $ActFive) { continue }
+        $ox = 0; $oy = 0
+        if (-not [int]::TryParse($c[$oxC], [ref]$ox) -or -not [int]::TryParse($c[$oyC], [ref]$oy)) { continue }
+        $w = 0; $h = 0
+        foreach ($sc in $sizeCols) {
+            $v = 0
+            if ($sc -lt $c.Count -and [int]::TryParse($c[$sc], [ref]$v)) {
+                if ($t.Header[$sc] -match '^SizeX') { if ($v -gt $w) { $w = $v } } elseif ($v -gt $h) { $h = $v }
+            }
+        }
+        if ($w -le 0 -or $h -le 0) { continue }
+        if ($offX -lt $ox + $w -and $ox -lt $offX + $size -and $offY -lt $oy + $h -and $oy -lt $offY + $size) {
+            $id = if ($c.Count -gt $idC) { $c[$idC] } else { '?' }
+            return "'$($c[$nameC])' (level $id, x $ox..$($ox + $w), y $oy..$($oy + $h))"
+        }
+    }
+    ''
+}
+# The row's own spot overlapping something else: a warning, nothing is moved.
+function Warn-LevelOverlap($t, [string]$name, $cells) {
+    $ox = 0; $oy = 0; $size = 0
+    if ([int]::TryParse($cells[(Column $t 'OffsetX')], [ref]$ox) -and [int]::TryParse($cells[(Column $t 'OffsetY')], [ref]$oy) -and
+        [int]::TryParse($cells[(Column $t 'SizeX')], [ref]$size)) {
+        $hit = Find-LevelOverlap $t $name $ox $oy $size
+        if ($hit) { Write-Host "levels.txt: warning: '$name' (x $ox..$($ox + $size), y $oy..$($oy + $size)) overlaps $hit. It was not moved; change its OffsetX and OffsetY by hand." }
+    }
+}
+# The refusal text for a level that would overlap another.
+function Write-OverlapRefusal([string]$name, [string]$param, [int]$offX, [int]$offY, [int]$size, [string]$hit) {
+    Write-Host "levels.txt: NOT added '$name': its spot (x $offX..$($offX + $size), y $offY..$($offY + $size)) overlaps $hit."
+    Write-Host "levels.txt: to fix, run the installer again with another spot (-${param}OffsetX and -${param}OffsetY, for example -${param}OffsetY 9000), or move the other level by hand. Nothing was written for '$name'."
+}
+
 foreach ($name in 'levels.txt', 'lvlmaze.txt') {
     if (-not (Test-Path (Join-Path $ExcelDir $name))) { throw "Missing $(Join-Path $ExcelDir $name). This mod does not carry that table, so nothing was changed." }
 }
@@ -158,6 +212,7 @@ if ($existing -ge 0) {
     }
     # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
     $cells = Cells $levels $levels.Lines[$existing]
+    Warn-LevelOverlap $levels $LevelName $cells
     $before = $cells -join "`t"
     Set-CellIf $levels $cells 'Quest' '0'
     Set-CellIf $levels $cells 'LevelGroup' $NoGroup
@@ -197,55 +252,61 @@ if ($existing -ge 0) {
             [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
     }
     if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $LevelType ($Tileset) to copy." }
-    $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
-    $maxId = 0
-    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-        $cells = $levels.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
+    $levelId = $null
+    $hit = Find-LevelOverlap $levels $LevelName $MazeOffsetX $MazeOffsetY ([int]$MazeSize)
+    if ($hit) { Write-OverlapRefusal $LevelName 'Maze' $MazeOffsetX $MazeOffsetY ([int]$MazeSize) $hit }
+    else {
+        $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
+        $maxId = 0
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $cells = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
+        }
+        $levelId = $maxId + 1
+        $cells = Cells $levels $levels.Lines[$templateRow]
+        Set-Cell $levels $cells 'Name' $LevelName
+        Set-Cell $levels $cells 'Id' "$levelId"
+        Set-Cell $levels $cells 'Act' $ActFive
+        Set-Cell $levels $cells 'DrlgType' '1'
+        Set-Cell $levels $cells 'LevelType' $LevelType
+        Set-Cell $levels $cells 'Depend' '0'
+        Set-Cell $levels $cells 'OffsetX' "$MazeOffsetX"
+        Set-Cell $levels $cells 'OffsetY' "$MazeOffsetY"
+        Set-CellIf $levels $cells 'Position' '0'
+        for ($n = 0; $n -lt 8; $n++) {
+            Set-Cell $levels $cells "Vis$n" '0'
+            Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
+        }
+        $sized = 0
+        foreach ($h in $levels.Header) {
+            if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $MazeSize; $sized++ }
+        }
+        if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
+        Set-Cell $levels $cells 'Waypoint' '255'
+        # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
+        Set-CellIf $levels $cells 'Quest' '0'
+        Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+        Set-CellIf $levels $cells 'LevelEntry' ''
+        Set-CellIf $levels $cells 'LevelWarp' ''
+        # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
+        $levels.Lines.Add($cells -join "`t")
+        Save-Table $levels
+        Write-Host "levels.txt: added '$LevelName' as level $levelId ($Tileset, copied from level $templateId)."
     }
-    $levelId = $maxId + 1
-    $cells = Cells $levels $levels.Lines[$templateRow]
-    Set-Cell $levels $cells 'Name' $LevelName
-    Set-Cell $levels $cells 'Id' "$levelId"
-    Set-Cell $levels $cells 'Act' $ActFive
-    Set-Cell $levels $cells 'DrlgType' '1'
-    Set-Cell $levels $cells 'LevelType' $LevelType
-    Set-Cell $levels $cells 'Depend' '0'
-    Set-Cell $levels $cells 'OffsetX' '6000'
-    Set-Cell $levels $cells 'OffsetY' '0'
-    Set-CellIf $levels $cells 'Position' '0'
-    for ($n = 0; $n -lt 8; $n++) {
-        Set-Cell $levels $cells "Vis$n" '0'
-        Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
-    }
-    $sized = 0
-    foreach ($h in $levels.Header) {
-        if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $MazeSize; $sized++ }
-    }
-    if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
-    Set-Cell $levels $cells 'Waypoint' '255'
-    # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
-    Set-CellIf $levels $cells 'Quest' '0'
-    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
-    Set-CellIf $levels $cells 'LevelEntry' ''
-    Set-CellIf $levels $cells 'LevelWarp' ''
-    # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
-    $levels.Lines.Add($cells -join "`t")
-    Save-Table $levels
-    Write-Host "levels.txt: added '$LevelName' as level $levelId ($Tileset, copied from level $templateId)."
 }
 if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
     Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
 }
 
 # One new outdoor level (Act 5, DrlgType 3) copied from a plain Act 5 outdoor row; an existing row of that name is only repaired. Returns the level id.
-function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [string]$offX, [string]$offY, [int]$wantTemplate, [string]$tilesetName) {
+function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param) {
     $existingRow = Find-Row $levels 'Name' $name
     if ($existingRow -ge 0) {
         $newId = [int](($levels.Lines[$existingRow] -split "`t")[$idCol])
         Write-Host "levels.txt: '$name' is already there (level $newId)."
         $cells = Cells $levels $levels.Lines[$existingRow]
+        Warn-LevelOverlap $levels $name $cells
         $before = $cells -join "`t"
         Set-CellIf $levels $cells 'Quest' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
@@ -276,6 +337,8 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [strin
             }
         }
         if ($templateRow -lt 0) { throw 'levels.txt has no Act 5 outdoor level (DrlgType 3) to copy.' }
+        $hit = Find-LevelOverlap $levels $name $offX $offY ([int]$size)
+        if ($hit) { Write-OverlapRefusal $name $param $offX $offY ([int]$size) $hit; return $null }
         $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
         $maxId = 0
         for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
@@ -291,8 +354,8 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [strin
         Set-Cell $levels $cells 'DrlgType' '3'
         Set-Cell $levels $cells 'LevelType' $type
         Set-Cell $levels $cells 'Depend' '0'
-        Set-Cell $levels $cells 'OffsetX' $offX
-        Set-Cell $levels $cells 'OffsetY' $offY
+        Set-Cell $levels $cells 'OffsetX' "$offX"
+        Set-Cell $levels $cells 'OffsetY' "$offY"
         Set-CellIf $levels $cells 'Position' '0'
         Set-CellIf $levels $cells 'SubType' '-1'    # the template's sub-level set (decoration) is not carried over
         Set-CellIf $levels $cells 'SubTheme' '-1'
@@ -317,15 +380,19 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [strin
     $newId
 }
 
-# --- levels.txt: one level per outdoor tileset ------------------------------------------------------------------------
+# --- levels.txt: one level per outdoor tileset (Jungle, Snow) -----------------------------------------------------------
 $outdoorIds = @{}
 foreach ($t in $OutdoorTilesets) {
-    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $t.OffsetX $t.OffsetY $t.Template $t.Tileset
+    $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
+    $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
+    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param
 }
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
 $mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
-if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
+if ($null -eq $levelId) {
+    Write-Host 'lvlmaze.txt: no Maze level, so no maze row.'
+} elseif ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
     Write-Host "lvlmaze.txt: level $levelId already has its maze row."
 } else {
     if ($mazes.Lines.Count -lt 2) { throw 'lvlmaze.txt has no row to copy.' }
@@ -531,6 +598,7 @@ if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -
     $slotRows = @(,@('Maze', $levelId))
     foreach ($t in $OutdoorTilesets) { $slotRows += ,@($t.Slot, $outdoorIds[$t.Slot]) }
     foreach ($row in $slotRows) {
+        if ($null -eq $row[1]) { continue }  # refused above: keep whatever the row says
         $at = -1
         for ($i = 1; $i -lt $slotLines.Count; $i++) { if (($slotLines[$i] -split "`t")[0] -eq $row[0]) { $at = $i; break } }
         if ($at -lt 0) { $slotLines.Add("$($row[0])`t$($row[1])") }
@@ -538,7 +606,10 @@ if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -
     }
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
-    $slotLines.Clear(); $slotLines.Add("Slot`tLevel"); $slotLines.Add("Maze`t$levelId"); foreach ($t in $OutdoorTilesets) { $slotLines.Add("$($t.Slot)`t$($outdoorIds[$t.Slot])") }
+    $slotLines.Clear(); $slotLines.Add("Slot`tLevel")
+    $slotRows = @(,@('Maze', $levelId))
+    foreach ($t in $OutdoorTilesets) { $slotRows += ,@($t.Slot, $outdoorIds[$t.Slot]) }
+    foreach ($row in $slotRows) { if ($null -ne $row[1]) { $slotLines.Add("$($row[0])`t$($row[1])") } }
 }
 if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0) {
     Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
@@ -546,7 +617,8 @@ if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0
 $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
-    Write-Host ("slots.txt: Maze is level $levelId, " + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) is level $($outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
+    $shown = { param($id) if ($null -ne $id) { $id } else { '(not added)' } }
+    Write-Host ("slots.txt: Maze is level $(& $shown $levelId), " + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) is level $(& $shown $outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
