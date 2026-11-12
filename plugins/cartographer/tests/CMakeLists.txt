@@ -21,6 +21,18 @@ foreach(test_source IN LISTS cartographer_core_tests)
 	target_compile_definitions(${test_name} PRIVATE CARTOGRAPHER_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../examples/first-map")
 endforeach()
 
+# Snow plan tests: snow_plan.cpp lives in the outdoor core, so the glob above (tests/<core>_tests.cpp) does not name it.
+add_executable(snow_tests snow_tests.cpp)
+target_link_libraries(snow_tests PRIVATE cartographer_outdoor)
+target_include_directories(snow_tests PRIVATE ../third_party/doctest)
+if(MSVC)
+	target_compile_options(snow_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
+	set_property(TARGET snow_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+else()
+	target_compile_options(snow_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+endif()
+add_test(NAME snow_tests COMMAND snow_tests)
+
 # Catalogue tool tests (Python). Kept separate so it survives PR #42's CMake restructure.
 # CARTOGRAPHER_NO_DATA=1: CI has no game data.
 find_package(Python3 COMPONENTS Interpreter)

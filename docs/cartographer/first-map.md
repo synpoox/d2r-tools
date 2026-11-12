@@ -5,8 +5,8 @@ Every file used here is in [`plugins/cartographer/examples/first-map/`](../../pl
 Every column is explained in [tables.md](tables.md).
 
 > **Not tried in a game yet.** The steps match what the plugin checks today (unit tested), but nobody has opened a
-> map in game. Today only the `Cave` and `Crypt` tilesets are built; `Jungle` and the others are known names that are refused
-> with a message until they are ready.
+> map in game. Today the `Cave` and `Crypt` tilesets are built, and `Jungle` when `OutdoorBuild = 1`; the other tilesets are known names
+> that are refused with a message until they are ready.
 
 ## What works today
 
@@ -42,8 +42,9 @@ and change two things:
 - `code`: up to 4 characters that no other item uses. This guide uses `t20`.
 - `pSpell`: `16`.
 
-The example pack's `maps.txt` also has a second map that uses item `t21`, so if you copy the whole pack,
-`misc.txt` needs both `t20` and `t21`.
+The example pack's `maps.txt` also has two more maps, one that uses item `t21` and a Jungle map that uses item `t22`, so
+if you copy the whole pack, `misc.txt` needs `t20`, `t21` and `t22`. The Jungle map also needs `OutdoorBuild = 1` in
+`cartographer.txt`; until then it is refused when you use its item.
 
 Give it a name in your string tables so players can tell it apart. Cartographer adds no items of its own, so also decide
 how players get it (a drop, a shop or a cube recipe in your mod).

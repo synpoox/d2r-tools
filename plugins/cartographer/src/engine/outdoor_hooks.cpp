@@ -96,6 +96,7 @@ SlotGeometry g_geometry;
 std::string g_slotRefusal;  // OutdoorSlotRefusal of the Outdoor slot row; empty when the slot may be built
 uint64_t g_nextJobId = 1;
 co::PlanCache g_cache(4);
+cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
 
 // One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
 struct BuildCtx {
@@ -242,6 +243,8 @@ void ProbeRooms(const void* level, int originX, int originY) noexcept {
 
 // --- The plan --------------------------------------------------------------------------------------------------------
 
+auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan>;
+
 // The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
 auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	std::shared_ptr<const Job> job;
@@ -271,6 +274,12 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		*why = "the Outdoor slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
 		return nullptr;
 	}
+	return PlanForJob(*job, geometry, level, why);
+}
+
+// The plan for `job` on the slot geometry (cached by request). Null, with a reason, when the plan failed. `level` is only for the log line. May throw.
+auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
+	const Job* job = &jobRef;
 	co::MapRequest request;
 	request.tileset = job->tileset;
 	request.shape = job->shape;
@@ -288,7 +297,7 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		return nullptr;
 	}
 	if (built) {
-		plog::Info("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", Read<int32_t>(level, LvlId),
+		plog::Info("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(),
 		           job->name.c_str(), job->tileset.c_str(), job->shape.c_str(), job->size.c_str(), static_cast<unsigned long long>(job->seed), static_cast<int>(plan->stamps.stamps.size()),
 		           static_cast<int>(plan->stamps.voidCells.size()), plan->stamps.tilesW, plan->stamps.tilesH, plan->stamps.originX, plan->stamps.originY,
 		           static_cast<unsigned long long>(plan->hash));
@@ -441,7 +450,49 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 	if (!g_live.load(std::memory_order_relaxed) || !g_enabled.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
 		return false;  // every other level runs the game's own build, untouched
 	}
-	return BuildSlotLevel(dataFlag, level, original, result);
+	bool hadJob = false;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		hadJob = g_job != nullptr;
+	}
+	g_slotState.begin();
+	const bool ours = BuildSlotLevel(dataFlag, level, original, result);
+	g_slotState.end(hadJob);
+	return ours;
+}
+
+auto OutdoorSlotBuilt() -> bool {
+	return g_slotState.blocked();
+}
+
+auto OutdoorPlanProblem() -> std::string {
+	try {
+		std::shared_ptr<const Job> job;
+		SlotGeometry geometry;
+		std::string refusal;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			job = g_job;
+			geometry = g_geometry;
+			refusal = g_slotRefusal;
+		}
+		if (job == nullptr) {
+			return "Cartographer: no outdoor map is open.";
+		}
+		if (!refusal.empty()) {
+			return "Cartographer: " + refusal + ", so " + job->name + " cannot be built.";
+		}
+		if (!geometry.known) {
+			return "Cartographer: levels.txt could not be read for the Outdoor slot level's size, so " + job->name + " cannot be built.";
+		}
+		std::string why;
+		if (PlanForJob(*job, geometry, nullptr, &why) == nullptr) {
+			return "Cartographer: " + job->name + " cannot be built: " + why;
+		}
+		return {};
+	} catch (...) {
+		return "Cartographer: the outdoor map could not be planned.";
+	}
 }
 
 auto OutdoorBuildLive() -> bool {
@@ -513,6 +564,7 @@ void OutdoorGameLeft() {
 		g_job.reset();
 	}
 	g_cache.clear();
+	g_slotState.clear();
 }
 
 void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {

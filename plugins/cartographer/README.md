@@ -82,6 +82,8 @@ in [`examples/first-map/`](examples/first-map/).
 | PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
 | MapNames | `1` shows a map's own name on the portal, automap and banner (experimental) | 0 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
+| OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
+| OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
 | AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS`, `FAIL` or `N/A` lines to the plugin log; for test slots only | 0 |
@@ -209,6 +211,23 @@ The installer adds, to the mod's tables, a level "Cartographer Maze" copied from
 set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with its `lvlmaze.txt` row and the `Maze` row of
 `slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
+
+## Outdoor slot (Jungle)
+
+A map with Tileset `Jungle` is an outdoor map. It opens through the `Outdoor` slot (a second row in `slots.txt`, level
+"Cartographer Outdoor") instead of the Maze slot, from its item and the same red portal from Harrogath, in Hell, once per
+game. The installer adds that level next to the Maze level: Act 5, outdoor (DrlgType 3), Jungle (LevelType 21), 384 x 384 tiles at
+(6000, 3000), copied from a plain Act 5 outdoor level with no quest, no level group, no warps and `Vis0`..`Vis7` = 0
+(`-1` crashes the game). It needs no `lvlprest.txt` or `lvlmaze.txt` row. Running it again changes nothing, and the
+game's own rows are never edited. Restart the game afterwards.
+
+An outdoor map opens only while `OutdoorBuild` is `1` in `cartographer.txt` (default 0, so the game runs as without the
+outdoor code). With it at 0, a Jungle map's item says so and nothing opens. If the Outdoor slot is missing, not the level the
+installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
+plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
+`examples/first-map` has one Jungle row (item `t22`).
+
+Not verified in game. Outdoor maps are not yet sent to other players in multiplayer, so use them in single player.
 
 ## Status
 

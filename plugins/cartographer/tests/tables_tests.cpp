@@ -791,7 +791,7 @@ auto ExampleNames() -> GameNames {
 	n.monsters.push_back("quillrat1");
 	n.superUniques.push_back("Bishibosh");
 	n.haveItemSpells = true;
-	n.itemSpells = {{"t20", 16}, {"t21", 16}};
+	n.itemSpells = {{"t20", 16}, {"t21", 16}, {"t22", 16}};
 	return n;
 }
 
@@ -803,7 +803,7 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, nullptr, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
 	REQUIRE(bosses.size() == 1);
-	REQUIRE(maps.size() == 2);
+	REQUIRE(maps.size() == 3);
 	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
@@ -844,7 +844,7 @@ TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats a
 	CHECK(events[0].weight == 2);
 	CHECK(events[1].drop.empty());
 	CHECK(events[2].drop == "Act 5 (H) Super C");
-	CHECK(maps.size() == 2);
+	CHECK(maps.size() == 3);
 }
 
 TEST_CASE("shapes.txt: a good row loads, a bad row is reported with its line and skipped") {
@@ -1107,4 +1107,62 @@ TEST_CASE("the notice names core-maps and says to use one") {
 	const std::string text = carto::CoreMapsNotice(true);
 	CHECK(text.find("core-maps") != std::string::npos);
 	CHECK(text.find("Remove one") != std::string::npos);
+}
+
+TEST_CASE("Jungle is a ready tileset and opens through the Outdoor slot; Cave and Crypt through the Maze slot") {
+	Report report;
+	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nDeep\tCave\tLoop\t\t\tt21\n", report);
+	REQUIRE(maps.size() == 2);
+	CHECK(report.Errors() == 0);
+	CHECK(MapIsOutdoor(maps[0]));
+	CHECK(std::string(MapSlotName(maps[0])) == OutdoorSlot);
+	CHECK(!MapIsOutdoor(maps[1]));
+	CHECK(std::string(MapSlotName(maps[1])) == MazeSlot);
+	const auto ready = ReadyTilesetNames();
+	CHECK(std::find(ready.begin(), ready.end(), "Jungle") != ready.end());
+	CHECK(std::find(ready.begin(), ready.end(), "Snow") == ready.end());  // Snow has a LevelType but no catalogue yet
+}
+
+TEST_CASE("an Outdoor slot on a level the installer did not write is dropped; the installer's level is kept") {
+	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Outdoor\t139\t21\nSomeone's Level\t140\t21\n";
+	Report bad;
+	auto other = LoadSlots("Slot\tLevel\nOutdoor\t140\n", bad);
+	ValidateSlots(other, levels, bad);
+	CHECK(other.empty());
+	CHECK(Joined(bad).find("Cartographer Outdoor") != std::string::npos);
+	CHECK(bad.Errors() == 1);
+	Report good;
+	auto both = LoadSlots("Slot\tLevel\nMaze\t138\nOutdoor\t139\n", good);
+	ValidateSlots(both, levels, good);
+	CHECK(good.Errors() == 0);
+	CHECK(SlotLevel(both, OutdoorSlot) == 139);
+	CHECK(SlotLevel(both, MazeSlot) == 138);
+	Report swapped;
+	auto crossed = LoadSlots("Slot\tLevel\nMaze\t139\n", swapped);  // the Outdoor level under the Maze name: refused by the Maze name rule
+	ValidateSlots(crossed, levels, swapped);
+	CHECK(crossed.empty());
+}
+
+TEST_CASE("the Outdoor level the installer writes passes the slot checks for a Jungle map") {
+	// The row tools\install.ps1 writes: id 139, Act 5 (4), DrlgType 3, LevelType 21, 384 x 384 at (6000, 3000).
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tSizeX\tSizeY\tOffsetX\tOffsetY\n"
+	    "Cartographer Outdoor\t139\t4\t3\t21\t384\t384\t6000\t3000\n";
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t139\n", report);
+	ValidateSlots(slots, levels, report);
+	ReadSlotLevelTypes(slots, levels);
+	REQUIRE(slots.size() == 1);
+	CHECK(report.Errors() == 0);
+	CHECK(OutdoorSlotRefusal(slots[0]).empty());
+	CHECK(slots[0].haveGeometry);
+	CHECK(slots[0].sizeX == 384);
+	CHECK(slots[0].offsetX == 6000);
+	CHECK(slots[0].offsetY == 3000);
+	MapDef jungle;
+	jungle.name = "Wild";
+	jungle.tileset = "Jungle";
+	CHECK(OutdoorSlotProblem(jungle, slots).empty());
+	jungle.tileset = "Snow";  // one Outdoor slot serves one tileset
+	CHECK(!OutdoorSlotProblem(jungle, slots).empty());
 }
