@@ -236,3 +236,5 @@ No new address. Two changes so the map's effects never reach a vanilla level.
 - **Restored hook.** D2RLoader still lists a restored range as hooked for the session (diagnostics show it with call-through No) and refuses other plugins that entry; on unload it restores the same original bytes.
 
 **Needs game:** `PlayerStats=1`, leave the map for a vanilla level, confirm the sheet stats are gone and read the list flags in the `entered the map` probe line; a save and an autosave inside the map before `PlayerStats` can default on (it stays off).
+
+Note (issue #220): clicks never reach `0x592c40`; the chest hook is now on the handler `0x58e2f0`. See [section 18](18-chest-operate.md).

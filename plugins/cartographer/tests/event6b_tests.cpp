@@ -325,6 +325,17 @@ TEST_CASE("decideChest: roll once when the chest's mode changed during the call"
 	CHECK(std::string(chestReasonName(ChestReason::NotOpened)).find("mode") != std::string::npos);
 }
 
+TEST_CASE("unlockChest: clears only the locked bit") {
+	ChestUnlock locked = unlockChest(0x83);
+	CHECK(locked.change);
+	CHECK(locked.value == 0x03);
+	ChestUnlock open = unlockChest(0x05);
+	CHECK_FALSE(open.change);
+	CHECK(open.value == 0x05);
+	CHECK(unlockChest(0xff).value == 0x7f);
+	CHECK_FALSE(unlockChest(0x00).change);
+}
+
 TEST_CASE("describeFleeChecks: says which check would stop the flee") {
 	CHECK(describeFleeChecks(0, 1).find("should set the flee") != std::string::npos);
 	CHECK(describeFleeChecks(1, 1).find("will return without") != std::string::npos);

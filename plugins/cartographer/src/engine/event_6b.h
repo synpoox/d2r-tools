@@ -48,7 +48,7 @@ void Event6bArmBossDrop(const cartographer::events::Event& event, int level, voi
 
 // Phase 6b, second half: Treasure and Ambush.
 //   * Treasure: a Spawn that is a monster is spawned and made to flee (the game's flee setup, 0x597030); its death rolls Drop like a Boss's.
-//     Any other Spawn is an objects.txt chest, placed like a Shrine; when it is opened (a hook on the object operate dispatcher, 0x592c40)
+//     Any other Spawn is an objects.txt chest, placed like a Shrine; when it is opened (a hook on the chest operate handler, 0x58e2f0)
 //     the Drop is rolled with the chest roller (0x4404f0).
 //   * Ambush: when the local player is in the event room, `Waves` waves of `Count` x `Spawn` are spawned one after another; a wave ends when
 //     all its units died (the SDK monster death listener, by unit id) or on a time-out.

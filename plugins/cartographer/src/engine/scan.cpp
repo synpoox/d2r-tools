@@ -154,7 +154,7 @@ static const char* HookConsequence(const char* name) noexcept {
 	if (n == "LevelBuild") return "EVERY level build is skipped (not only the maze), so no level will load";
 	if (n == "OutdoorAct5Builder") return "the game's Act 5 outdoor builder is skipped";
 	if (n == "DeathDrop") return "the game's own monster drop is skipped for EVERY monster";
-	if (n == "OperateObject") return "the game's object use is skipped for EVERY object";
+	if (n == "ChestOperate") return "the game's chest use is skipped for EVERY chest";
 	if (n == "PopulateRoom") return "the game's own room population is skipped for EVERY room";
 	if (n == "PlayerTick") return "the game's player mana step is skipped for every player";
 	if (n == "ItemSpellUse" || n == "ItemSpellCheck") return "every item-spell use is dropped (not only map items)";
