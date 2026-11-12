@@ -80,7 +80,7 @@ PARTS = [
     ("FleeTarget", 0x34C730, 28, None, 0),
     ("TcLookup", 0x397290, 18, None, 0),
     ("TcRoller", 0x4404F0, 12, None, 0),
-    # AutoCheck (cartographer.md section 16): the unit mover and the two room parts, only called.
+    # AutoCheck (cartographer.md section 17): the unit mover and the two room parts, only called.
     ("UnitMove", 0x491CA0, 25, "48 8B 05", 0),
     # The two parts the console command 'goto' calls to reach x,y (RoomAtTile is a thunk: its jmp is the first relative operand).
     ("RoomAtTile", 0x2F0810, 4, "E9", 0),

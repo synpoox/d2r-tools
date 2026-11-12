@@ -30,13 +30,13 @@ constexpr uint64_t BossWaitMovedMs = 20000;    // after the player was put in th
 constexpr uint64_t BossWaitManualMs = 120000;  // when the player must walk there
 constexpr uint64_t StatGraceMs = 1500;         // after the Boss: its stat list is put on in the same call, this only lets the tick settle
 
-constexpr int GameActsOffset = 0x190;      // on the game: {pointer to the act pointers, count} (read from the 'goto' handler, cartographer.md section 16)
+constexpr int GameActsOffset = 0x190;      // on the game: {pointer to the act pointers, count} (read from the 'goto' handler, cartographer.md section 17)
 constexpr int GameDataFlagOffset = 0x106;  // uint8 on the game, what the engine's own room lookups read
 constexpr uint64_t MaxActs = 8;
 
 using Game = void;
 using Unit = void;
-// (game, unit, room, x, y, 0, 0): puts the unit at a subtile position in `room` (cartographer.md section 16). 0 when it could not.
+// (game, unit, room, x, y, 0, 0): puts the unit at a subtile position in `room` (cartographer.md section 17). 0 when it could not.
 using UnitMoveFn = int32_t (*)(Game*, Unit*, void* room, int32_t x, int32_t y, int32_t a6, int32_t a7) noexcept;
 // (dataFlag, act, tileX, tileY): the room holding that tile of the act's levels. Not read-only: it can find or build a level of that act.
 using RoomAtTileFn = void* (*)(uint32_t dataFlag, void* act, int32_t tileX, int32_t tileY) noexcept;
@@ -139,7 +139,7 @@ void Finish(const std::string& reason) noexcept {
 		}
 	}
 	Line(ac::doneLine(g_run.list));
-	// No native call for leaving a game was found (cartographer.md section 16): the checker leaves with Save and Exit.
+	// No native call for leaving a game was found (cartographer.md section 17): the checker leaves with Save and Exit.
 	Line("AUTOCHECK LEAVE not done: no native call to leave a game was found; Save and Exit to finish");
 	Enter(Phase::Done);
 }

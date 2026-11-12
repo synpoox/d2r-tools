@@ -6,7 +6,7 @@
 //
 // Fails open: a part that is not found fails its own item and the rest go on. Two steps have no native call yet (walking into the
 // portal and leaving the game); they are left to whoever runs the check and logged as such (docs/reverse-engineering/cartographer.md
-// section 16). The pure parts (checklist, result lines, setting, stand point) are in src/autocheck.
+// section 17). The pure parts (checklist, result lines, setting, stand point) are in src/autocheck.
 #pragma once
 
 #include "engine/portal.h"

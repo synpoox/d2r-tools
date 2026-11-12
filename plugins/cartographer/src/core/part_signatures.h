@@ -115,7 +115,7 @@ inline constexpr const char* FleeTarget = "48 89 5C 24 10 48 89 6C 24 18 48 89 7
 inline constexpr const char* TcLookup = "48 89 5C 24 08 55 56 57 48 83 EC 30 41 8B D8";
 inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 
-// AutoCheck (issue #173; cartographer.md section 16). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
+// AutoCheck (issue #173; cartographer.md section 17). UnitMove (game, unit, room or null, x, y, 0, 0) puts a unit at a subtile position in the
 // level it is in (a null room is only looked up among the unit's own room and its neighbours, so the check passes the boss room); only called.
 // RoomAtTile (dataFlag, act, tileX, tileY) is the engine's tile-to-room lookup over one act (a thunk: it loads act+0x70 and jumps on; it can find or build a level, so it is called once, on the slot's act), and
 // RoomBringUp (game, room) brings a room up (builds and populates it): the two the console command 'goto' uses to reach x,y. Only called.
