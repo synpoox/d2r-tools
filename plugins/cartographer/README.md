@@ -15,11 +15,12 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 - **One item, one map**: a map is opened only by the item named in its `Item` cell (for example `t20` opens Shorelines). There
   is no generic map item and no random map; an item no map names is an ordinary item. The item belongs to your mod and needs
   item spell 16 (`pSpell` in `misc.txt`); `cartographer check` names a map whose item is missing, unknown, shared or lacks it.
-- **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map is
-  meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
+- **One map per game**: using a map item in Harrogath in Hell is meant to open a red portal, once per game. A refused map
+  stays in your inventory; the reason is in the log and the console, and on screen you see "I can't use this yet." Both
+  opening in Hell and a refusal (level gate) were seen in a game.
 - **Console open**: `cartographer open <Name>` opens the named map's portal itself, with no item, through the same gates. It needs
   the `PlayerTick` part (`cartographer check` shows it); without it, or in a game you joined over TCP/IP, the command
-  refuses and says so. Not tried in a game yet.
+  refuses and says so. Opening in town was seen in a game; the TCP/IP refusal was not.
 
 ## Your first map
 
@@ -125,14 +126,19 @@ Not run in game: every point above is expected behaviour, checked only by unit t
   - `cartographer open <Name>` opens the portal with no item in town, and refuses outside town ("only be opened in town");
   - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
     (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);
-  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
-- Not exercised in game: a Hell-difficulty open that succeeds, the character level gate, the "no free spot" gate, an ordinary
-  spell-16 item that no map names compared with vanilla, and the spell-16 use with no matching check (below).
-- Seen in game, cause not known: a town portal scroll used on the map level itself did nothing. No comparison without
-  Cartographer was made (vanilla has no red portal to reach that level), so it is not known whether Cartographer is involved.
+  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded;
+  - (Hell game) a map open in Hell, `Gated` (character level 20): refused at level 1 (log "needs character level 20 (you are 1)", item kept),
+    opened at level 25;
+  - (Hell game) an item with spell 16 that no map names does nothing and is kept, as with Cartographer unloaded;
+  - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
+  - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
+  - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+- Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
+  succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
+  forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
-  dropped (it opens nothing and is not passed to the game).
-- Not yet in game for `cartographer open <Name>`: leaving the game with the portal still open; repeating with
-  Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.
+  dropped (it opens nothing and is not passed to the game). The game's only direct caller of the use handler runs it only
+  after the check passed (static reading), so this case is defensive and no in-game test is planned.
+- Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
