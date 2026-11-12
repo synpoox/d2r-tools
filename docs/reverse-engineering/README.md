@@ -20,8 +20,9 @@ record them here first, then copy them there.
   and regen interception points.
 - [Player Bars](player-bars.md): life and mana reads, screen shift, orb widgets, native bars.
 - [DPS Counter](dps-counter.md): the server damage apply `0x44a9b0` (hooked) and the missile owner.
-- [Cartographer](cartographer.md): stub of native addresses from the pd2-resurrected research (maze steering, outdoor
-  builder, level regeneration); nothing validated here yet, so it has no index row below until the S0 probe produces byte signatures. Docs: [docs/cartographer/](../cartographer/README.md).
+- [Cartographer](cartographer.md): native addresses for the outdoor level builder, signed and exercised live by the throwaway
+  spike (index rows below), plus stubs from the pd2-resurrected research (maze steering, level regeneration) that have no
+  signatures or index rows yet. Docs: [docs/cartographer/](../cartographer/README.md).
 
 The pre-registry documents above (all except Quick NPC and the Cartographer stub) keep their original format; bring each to the
 [recording format](#recording-format) and add its useful rows to the index below when its plugin is next changed.
@@ -73,6 +74,9 @@ Plugins do not gate on this image: there is no version check, and addresses here
 | D2R.exe | `0x43b2b0` / `0x48b890` | Schedule event 8 (key -1 right skill, or skill id) / remove timer events by key | [better-auras.md](better-auras.md#2-aura-system-server) |
 | D2R.exe | `0x438a70` (hook at `0x438a7a`) | Server skill select `(unit, isLeft, skill, a4)`: tears down the old right-skill aura | [better-auras.md](better-auras.md#1-interception-points) |
 | D2R.exe | `0x43b680` | Start the right-skill aura `(game, unit, skill)`; proposed hook | [better-auras.md](better-auras.md#1-interception-points) |
+| D2R.exe | `0x3271c0` | Level build `(dataFlag, level)`: dispatches on level type; type 3 goes to D2RCore. Hooked and replaced for a slot level in the Cartographer spike (signed) | [cartographer.md](cartographer.md#1-addresses) |
+| D2R.exe | `0x3ee320` / `0x3fe2e0` / `0x3ecfc0` / `0x3ee780` | Outdoor grid builder / Act 5 grid allocation / piece stamp `(dataFlag, level, cx, cy, lvlprest, file, 0)` / grid to preset rooms (signed) | [cartographer.md](cartographer.md#3-outdoor-s0-and-s1-spike-results-issue-22) |
+| D2R.exe | `0x3e2b5ce` -> `D2RCore.dll` | D2RLoader `FF 25` stub taken by `0x3271c0` for type 3; the act lookup stub `0x3e2b5c8` is the same kind (found by following calls, not signed) | [cartographer.md](cartographer.md#3-outdoor-s0-and-s1-spike-results-issue-22) |
 | D2R.exe | `0x42e600` / `0x42e350` | Player regen tick (every frame; hpregen 74) / mana step (manarecovery 26); `0x42e600` proposed hook | [better-auras.md](better-auras.md#4-player-regen) |
 
 This table is an index. The feature documents hold the guards and evidence; an entry here is not enough to justify
