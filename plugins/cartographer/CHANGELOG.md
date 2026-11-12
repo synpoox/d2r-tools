@@ -3,7 +3,7 @@
 ## Unreleased
 
 - `MapNames=1` shows a map's own name on its portal, automap and entry banner (off by default; not verified in game).
-- Small preset maps now get their event, and the banner names an event only after it has spawned (#115; written, not verified in game).
+- Small preset maps now get their event, in the first room far enough from where you arrive, and the banner names an event only after it has spawned (#115, #121; written, not verified in game).
 - Shrine events place an object from `objects.txt` and a Boss `Drop` rolls an extra treasure class when the boss dies (written and unit tested; not yet verified in game).
 - Ambush events spawn their waves when you reach the event room, and Treasure events spawn a fleeing monster or a chest that rolls `Drop` (written and unit tested; not yet verified in game).
 - Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (checked in game with a superunique name only).

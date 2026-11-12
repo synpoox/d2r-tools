@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, and the hooks were run in game for Cave maps (see Tested); Crypt has not been run in game.** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, and the hooks were run in game for Cave and Crypt maps (see Tested).** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -34,7 +34,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   spawn, the event's `Name` and `Message` (on screen through D2RLoader's overlay, else in the console). A `Boss` event
   spawns its `Spawn` (a `monstats.txt` `Id` or a `superuniques.txt` name) at the centre of the event room with `Count`
   minions of its class; a `Horde` spawns `Count` of it. In a Cave or Crypt map the event room is the layout's reserved
-  event cell; in other maps it is the first room the game fills that is a third of the level's larger side (at most 24 tiles) from the first one, so a small map still gets its event (written, not verified in game; #115). The banner names the event only once it has spawned, so it can follow the map's name by a moment. A superunique
+  event cell; in other maps it is the first room the game fills that is a third of the level's larger side (at most 24 tiles) from the first room, or the farthest room of the level if that is nearer, so a small map always gets its event and a player who walks the map meets it (if the room list cannot be read, only the third-of-the-side rule is used; written, not verified in game; #115, #121). The banner names the event only once it has spawned, so it can follow the map's name by a moment. A superunique
   can only exist once per game, so a second one spawns as its plain class. The `Spawn` name is looked up in the game's own loaded tables when the map opens (checked in game with a superunique name, Bishibosh; a plain `monstats.txt` Id was not looked up live); if that route fails its self-check, the plugin log says why and the mod's `monstats.txt` and `superuniques.txt` in its excel folder are used instead. With that fallback, a missing `monstats.txt` means no Boss or Horde events and a missing `superuniques.txt` means no superunique names (plain monsters still spawn); `cartographer check` and the report say so. A Boss `Drop` (a treasure class name) is rolled once more when the event's boss dies, and a `Shrine` places the objects.txt row named in `Spawn` (a name used by one line only, or a row number) at a free spot in the event room; both are written and unit tested, not verified in game. An `Ambush` is announced when its first wave spawns, and spawns `Waves` waves of `Count` x `Spawn` one after another once a player is in the event room (a wave ends when all its monsters died or after a time-out). A `Treasure` whose `Spawn` is a monster spawns it and makes it flee, and its death rolls `Drop`; any other `Spawn` is an objects.txt chest, placed like a Shrine, that rolls `Drop` when opened; all written and unit tested, not verified in game. The room populator and the two spawn
   functions are found by byte signature at load; a part that is not found once turns the spawns off (`cartographer check`
   says which) while the map and its entry message still work. The log gets `eventprobe:` lines for the checks in
@@ -134,7 +134,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Run in game for Cave maps (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. Not run in game: a Crypt slot, Nightmare and Hell, and the arrival room check (the probe is rewritten, not yet run).
+Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. The player did not arrive in the planned entrance cell in the 5 games with an arrival line (tracked in an issue). Not run in game: Nightmare and Hell, and a second map in the same game on the Crypt slot.
 
 ## Tested
 
@@ -161,12 +161,13 @@ Run in game for Cave maps (see Tested): the plan, the steered build, the tileset
   - (Hell game) Better Auras loaded alongside: both load, the map still opens;
   - map events (2026-11-12, one operator run, Normal, 100 percent chance, the minimum event distance lowered to 12 for the test map): a Boss spawned 5 of 5 in the event room (one superunique, once-per-game bit set), a Horde of 3 spawned, their names come from the game's own tables, and the map's stats reach them; the banner is logged as drawn but its text was not seen on screen; nothing carries over to a new game. Not run: the txt fallback, a repeated `Id`, a second superunique in one game, the maze event room.
   - (2026-11-12, Normal) the portal tooltip in Harrogath reads "Colossal Summit" (not "Missing String"), with no owner suffix in single player; the entry banner reads "Entering The Colossal Summit", the automap title "Colossal Summit", the return portal "Harrogath"; leaving and entering again works. The map's own `Name` is not shown on the portal tooltip, the game's entry banner or the automap (issue #90); Cartographer's own overlay banner was not looked for in this run; details in `docs/reverse-engineering/cartographer.md` section 10.
-- In game, the maze slot (Cave level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
+- In game, the maze slot (Cave or Crypt level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
   - 46 games in a row, each with a new game and a Cave map (`Corridor`, `Winding` and `Loop` in turn): the slot built the planned shape (built room grid equal to the plan), no crash, no error line;
   - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;
   - a slot too small for the plan (60 x 60) logs the reason and the game's own maze is built, no crash;
   - entering the slot with no map opened builds the game's own maze;
-  - not checked: which room the player arrives in (the probe cannot tell), a Crypt slot, Nightmare and Hell.
+  - (second run, 2026-11-12) 3 Crypt maps (`Branching`, `Corridor`, `Loop`) built as planned with no crash, and a Cave map on a Crypt slot is refused; in 5 games with an arrival line the player did not arrive in the planned entrance cell; every game logged WARN lines that monster map stats were skipped (no `itemstatcost.txt` in the test mod) (tracked in an issue, not fixed);
+  - not checked: Nightmare and Hell, a second map in the same game on the Crypt slot.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
