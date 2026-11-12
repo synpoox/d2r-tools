@@ -161,7 +161,19 @@ auto StringsJson(const std::vector<std::string>& names) -> std::string {
 }
 
 auto BossLocalKey(const std::string& name) -> std::string {
-	return "boss_" + name;
+	static const char* Hex = "0123456789ABCDEF";
+	std::string key = "boss_";
+	for (const char ch : name) {
+		const auto byte = static_cast<unsigned char>(ch);
+		if ((byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9')) {
+			key += ch;
+		} else {
+			key += '_';
+			key += Hex[byte >> 4];
+			key += Hex[byte & 15];
+		}
+	}
+	return key;
 }
 
 auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::string {
