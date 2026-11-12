@@ -5,7 +5,7 @@ project(cartographer LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# CARTOGRAPHER_SDK_DIR only exists so toolsuild.ps1 finds the SDK path it looks for; nothing here uses it yet.
+# CARTOGRAPHER_SDK_DIR only exists so tools\build.ps1 finds the SDK path it looks for; nothing here uses it yet.
 set(CARTOGRAPHER_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/PluginSDK" CACHE PATH "PluginSDK checkout")
 option(CARTOGRAPHER_TESTS "Build the host unit tests" OFF)
 

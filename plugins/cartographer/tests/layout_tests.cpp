@@ -263,20 +263,21 @@ TEST_CASE("checkLayout catches broken layouts")
 		if (m.find("not connected") != std::string::npos) sawSplit = true;
 	CHECK(sawSplit);
 
-	// A side room that is not a dead end: link a branch's last cell to a cell next to it that is not its own.
-	// Simplest stand-in: give the end of a branch a second exit by cutting it into the ring of rooms is layout-specific,
-	// so check the rule through the checker on a loop-branch relabelled as a plain branch.
+	// A side room that is not a dead end: take an extra loop and file it as a plain side room. Its last cell still
+	// links back into the layout, so the checker must complain.
 	Rules loopy = presetRules(Shape::Sprawl, Size::Large);
-	for (uint64_t seed = 1; seed <= 200; ++seed) {
+	bool sawLoop = false;
+	for (uint64_t seed = 1; seed <= 200 && !sawLoop; ++seed) {
 		Layout l = generate(loopy, seed);
 		REQUIRE(checkLayout(l, loopy).empty());
 		if (l.loops.empty()) continue;
+		sawLoop = true;
 		l.branches.push_back(l.loops[0]);
 		l.branches.back().closes = false;
 		l.loops.erase(l.loops.begin());
 		CHECK_FALSE(checkLayout(l, loopy).empty());
-		break;
 	}
+	REQUIRE(sawLoop);
 }
 
 TEST_CASE("validateRules rejects impossible rules")
@@ -309,6 +310,9 @@ TEST_CASE("a huge count in shapes.txt is an error, not a hang")
 	REQUIRE(branches.size() == 1);
 	CHECK(branches[0].find("MaxBranches") != std::string::npos);
 	CHECK(errorsOf("Name\tMinLoops\tMaxLoops\nX\t1\t999999\n").size() == 1);
+	// Leading zeros are not extra digits: "0000008" is 8, not "too large".
+	CHECK(errorsOf("Name\tMinPath\nX\t0000010\n").empty());
+	CHECK(errorsOf("Name\tMinPath\nX\t00000000000000000008\n").empty());
 	CHECK(errorsOf("Name\tLoop\tWidth\tHeight\tMinPath\tMaxPath\nX\t1\t32\t32\t500\t600\n").size() == 1);
 	CHECK(errorsOf("Name\tLoop\tWidth\tHeight\tMinPath\tMaxPath\nX\t1\t32\t32\t500\t512\n").size() == 1);
 	const std::vector<std::string> big = errorsOf("Name\tMinPath\nX\t99999999\n");
@@ -321,6 +325,61 @@ TEST_CASE("a huge count in shapes.txt is an error, not a hang")
 	CHECK(bad[0].find("whole number") != std::string::npos);
 	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
 	CHECK(ms < 5000);
+}
+
+TEST_CASE("shapes.txt: rows at the caps parse in under a second")
+{
+	const std::string header =
+		"Name\tBase\tWidth\tHeight\tMinPath\tMaxPath\tMinBranches\tMaxBranches\tMinBranchLen\tMaxBranchLen\tMinLoops\tMaxLoops\tMinTurns\tMaxTurns\n";
+	// Fields after Base: Width Height MinPath MaxPath MinBranches MaxBranches MinBranchLen MaxBranchLen MinLoops MaxLoops MinTurns MaxTurns
+	const std::vector<std::string> rows = {
+		"X\tBranching\t32\t32\t\t\t512\t512\t512\t512\t\t\t\t\n",
+		"X\tBranching\t32\t32\t\t\t0\t512\t1\t512\t\t\t\t\n",
+		"X\tBranching\t32\t32\t\t\t1\t512\t512\t512\t\t\t\t\n",
+		"X\tSprawl\t32\t32\t200\t200\t0\t512\t1\t512\t0\t512\t\t\n",
+		"X\tSprawl\t32\t32\t200\t200\t512\t512\t1\t1\t\t\t\t\n",
+		"X\tSprawl\t32\t32\t200\t200\t100\t512\t100\t512\t100\t512\t\t\n",
+		"X\tSprawl\t32\t32\t\t\t\t\t\t\t512\t512\t\t\n",
+		"X\tLoop\t32\t32\t200\t200\t\t\t\t\t\t\t\t\n",
+		"X\tLoop\t32\t32\t200\t200\t100\t512\t1\t512\t0\t512\t\t\n",
+		"X\tWinding\t32\t32\t900\t1024\t\t\t\t\t\t\t0\t999\n",
+		"X\tWinding\t32\t32\t4\t1024\t0\t512\t1\t512\t\t\t\t\n",
+		"X\tWinding\t32\t32\t1024\t1024\t512\t512\t512\t512\t512\t512\t999\t999\n",
+		"X\tWinding\t2\t2\t4\t4\t1\t1\t1\t1\t1\t1\t\t\n",
+	};
+	for (const std::string &row : rows) {
+		const auto start = std::chrono::steady_clock::now();
+		const ParseResult p = parseShapesTxt(header + row);
+		const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+		INFO(row);
+		CHECK(ms < 1000);
+		(void)p; // accepted or rejected does not matter here, only that it answers quickly
+	}
+}
+
+TEST_CASE("validateRules refuses side rooms that can't fit")
+{
+	Rules r = presetRules(Shape::Winding, Size::Small); // 6 x 6 = 36 cells
+	r.pathMin = r.pathMax = 10;
+	r.branchesMin = r.branchesMax = 6;
+	r.branchLenMin = r.branchLenMax = 5; // 30 cells asked for, 26 free
+	CHECK_FALSE(validateRules(r).empty());
+	r.branchLenMin = r.branchLenMax = 2; // 12 cells
+	CHECK(validateRules(r).empty());
+}
+
+TEST_CASE("a rule set that can't be built gives up on a budget and falls back")
+{
+	// Far too many side rooms to place: generate() must still answer at once, with the fallback.
+	Rules r = presetRules(Shape::Branching, Size::Large);
+	r.width = r.height = 32;
+	r.branchesMin = r.branchesMax = 300;
+	r.branchLenMin = r.branchLenMax = 3;
+	const auto start = std::chrono::steady_clock::now();
+	const Layout l = generate(r, 1);
+	const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+	CHECK(l.fallback);
+	CHECK(ms < 1000);
 }
 
 TEST_CASE("shapes.txt: a valid table")

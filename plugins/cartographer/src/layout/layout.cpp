@@ -30,6 +30,17 @@ int dirBetween(Point a, Point b)
 
 int popcount4(uint8_t m) { return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1); }
 
+// The work one generate() may spend, in cells touched. A rule set that is too tight to build used to spin for tens of
+// seconds; once the budget is gone every step fails fast and generate() falls back. The cost of a try depends only on
+// the rules and the seed, so the result stays deterministic. The presets use a small fraction of it.
+constexpr int64_t kWorkBudget = 1500000;
+
+struct Work {
+	int64_t used = 0;
+	void charge(int64_t n) { used += n; }
+	bool over() const { return used > kWorkBudget; }
+};
+
 // The working grid of one try: which cells are used and how they are linked.
 class Grid {
 public:
@@ -121,28 +132,28 @@ bool isReserved(const Draft &d, Point p)
 }
 
 // Every used cell that a side branch may hang from, in row-major order.
-std::vector<Point> eligibleRoots(const Grid &g, const Draft &d)
+std::vector<Point> eligibleRoots(const Grid &g, const Draft &d, Work &work)
 {
+	work.charge(static_cast<int64_t>(g.width()) * g.height() + static_cast<int64_t>(d.branches.size()));
+	// The last cell of a side room stays a dead end: nothing hangs from it or loops into it.
+	std::vector<uint8_t> deadEnd(static_cast<size_t>(g.width()) * g.height(), 0);
+	for (const Branch &b : d.branches)
+		if (!b.cells.empty()) deadEnd[static_cast<size_t>(b.cells.back().y) * g.width() + b.cells.back().x] = 1;
 	std::vector<Point> out;
 	for (int y = 0; y < g.height(); ++y)
 		for (int x = 0; x < g.width(); ++x) {
 			const Point p{x, y};
-			if (g.used(p) && !isReserved(d, p) && g.degree(p) < 4) out.push_back(p);
+			if (g.used(p) && !isReserved(d, p) && g.degree(p) < 4 && !deadEnd[static_cast<size_t>(y) * g.width() + x]) out.push_back(p);
 		}
-	// The last cell of a side room stays a dead end: nothing hangs from it or loops into it.
-	for (const Branch &b : d.branches) {
-		if (b.cells.empty()) continue;
-		const Point end = b.cells.back();
-		out.erase(std::remove(out.begin(), out.end(), end), out.end());
-	}
 	return out;
 }
 
 // --- main path as a walk ------------------------------------------------------------------------------------------
 
-bool walkMain(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
+bool walkMain(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 {
 	const int w = g.width(), h = g.height();
+	work.charge(static_cast<int64_t>(w) * h);
 	const int len = rng.range(r.pathMin, std::min(r.pathMax, w * h));
 
 	// The entrance is on the border of the grid, looking inward along the roomier directions.
@@ -211,9 +222,10 @@ bool walkMain(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 
 // --- main path as a ring ------------------------------------------------------------------------------------------
 
-bool ringValid(const std::vector<Point> &ring, int w, int h, std::vector<int> &scratch)
+bool ringValid(const std::vector<Point> &ring, int w, int h, std::vector<int> &scratch, Work *work = nullptr)
 {
 	const int n = static_cast<int>(ring.size());
+	if (work) work->charge(static_cast<int64_t>(w) * h + 4 * n);
 	if (n < 4) return false;
 	scratch.assign(static_cast<size_t>(w) * h, -1);
 	for (int i = 0; i < n; ++i) {
@@ -287,7 +299,7 @@ void commitPath(Grid &g, Draft &d, const std::vector<Point> &path, bool ring)
 	if (ring) g.link(path.back(), path.front());
 }
 
-bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
+bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 {
 	const int w = g.width(), h = g.height();
 	int len = rng.range(r.pathMin, r.pathMax);
@@ -315,11 +327,11 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 		const size_t start = rng.below(static_cast<uint32_t>(count));
 		const int sideFirst = static_cast<int>(rng.below(2));
 		bool grown = false;
-		for (size_t k = 0; k < count * 2 && !grown; ++k) {
+		for (size_t k = 0; k < count * 2 && !grown && !work.over(); ++k) {
 			const size_t i = (start + k / 2) % count;
 			const int side = (sideFirst + static_cast<int>(k & 1)) & 1;
 			std::vector<Point> trial = bumpRing(ring, i, side);
-			if (ringValid(trial, w, h, scratch)) { ring.swap(trial); grown = true; }
+			if (ringValid(trial, w, h, scratch, &work)) { ring.swap(trial); grown = true; }
 		}
 		if (!grown) return false;
 	}
@@ -329,7 +341,7 @@ bool buildRing(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 	for (int t = 0; t < flips; ++t) {
 		const size_t i = rng.below(static_cast<uint32_t>(ring.size()));
 		std::vector<Point> trial(ring);
-		if (flipRing(trial, i) && ringValid(trial, w, h, scratch)) ring.swap(trial);
+		if (flipRing(trial, i) && ringValid(trial, w, h, scratch, &work)) ring.swap(trial);
 	}
 
 	// Start anywhere on the ring, walking either way round.
@@ -378,16 +390,19 @@ void rollback(Grid &g, const std::vector<Point> &cells)
 	for (size_t i = cells.size(); i-- > 0;) g.remove(cells[i]);
 }
 
-bool addBranches(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
+bool addBranches(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 {
 	const int want = rng.range(r.branchesMin, r.branchesMax);
 	for (int b = 0; b < want; ++b) {
+		// A failed try is rolled back, so the roots only change when a room is placed: list them once per room.
+		const std::vector<Point> roots = eligibleRoots(g, d, work);
 		for (int tries = 0; tries < 30; ++tries) {
-			const std::vector<Point> roots = eligibleRoots(g, d);
+			if (work.over()) return false;
 			if (roots.empty()) return static_cast<int>(d.branches.size()) >= r.branchesMin; // nothing to hang a room on
 			const Point root = roots[rng.below(static_cast<uint32_t>(roots.size()))];
 			const int len = rng.range(r.branchLenMin, r.branchLenMax);
 			std::vector<Point> cells = growBranch(g, rng, root, len);
+			work.charge(static_cast<int64_t>(cells.size()) * 4 + 4);
 			if (static_cast<int>(cells.size()) >= r.branchLenMin) {
 				Branch br;
 				br.root = root;
@@ -402,9 +417,8 @@ bool addBranches(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
 }
 
 // One extra loop: a branch that walks toward a target cell and links into it.
-bool growLoop(Grid &g, Pcg32 &rng, Draft &d)
+bool growLoop(Grid &g, Pcg32 &rng, Draft &d, const std::vector<Point> &roots, Work &work)
 {
-	const std::vector<Point> roots = eligibleRoots(g, d);
 	if (roots.size() < 2) return false;
 	const Point root = roots[rng.below(static_cast<uint32_t>(roots.size()))];
 	const Point target = roots[rng.below(static_cast<uint32_t>(roots.size()))];
@@ -413,6 +427,7 @@ bool growLoop(Grid &g, Pcg32 &rng, Draft &d)
 	std::vector<Point> cells;
 	Point cur = root;
 	for (;;) {
+		work.charge(8);
 		int legal[4];
 		int count = 0;
 		for (int dir = 0; dir < 4; ++dir) {
@@ -449,12 +464,14 @@ bool growLoop(Grid &g, Pcg32 &rng, Draft &d)
 	return false;
 }
 
-bool addLoops(Grid &g, Pcg32 &rng, const Rules &r, Draft &d)
+bool addLoops(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 {
 	const int want = rng.range(r.loopsMin, r.loopsMax);
 	for (int l = 0; l < want; ++l) {
+		// As with side rooms: a failed try is rolled back, so the roots are listed once per loop.
+		const std::vector<Point> roots = eligibleRoots(g, d, work);
 		bool grown = false;
-		for (int tries = 0; tries < 40 && !grown; ++tries) grown = growLoop(g, rng, d);
+		for (int tries = 0; tries < 40 && !grown && !work.over(); ++tries) grown = growLoop(g, rng, d, roots, work);
 		if (!grown) break; // a whole round of tries failed: more loops won't fit either
 	}
 	return static_cast<int>(d.loops.size()) >= r.loopsMin;
@@ -722,6 +739,10 @@ std::string validateRules(const Rules &r)
 	if (r.branchesMax > cellCap) return "MaxBranches is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
 	if (r.loopsMax > cellCap) return "MaxLoops is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
 	if (r.branchLenMax > cellCap) return "MaxBranchLen is more than the Width x Height grid can hold (at most " + std::to_string(cellCap) + ").";
+	// The side rooms and loops can't need more cells than the grid has beside the main path (loops take two or more).
+	const int freeCells = r.width * r.height - r.pathMin;
+	if (static_cast<int64_t>(r.branchesMin) * r.branchLenMin + static_cast<int64_t>(r.loopsMin) * 2 > freeCells)
+		return "MinBranches x MinBranchLen (plus 2 cells per MinLoops) is more cells than the grid has beside the main path (" + std::to_string(freeCells) + ").";
 	if (r.eventPct < 1 || r.eventPct > 99) return "The event room position must be between 1 and 99 percent.";
 	if (r.loop) {
 		bool evenFits = false;
@@ -740,26 +761,39 @@ std::string validateRules(const Rules &r)
 
 constexpr int kRestarts = 4; // restarts inside one try when it gets stuck
 
-std::optional<Layout> generateAttempt(const Rules &r, uint64_t attemptSeed)
+namespace {
+
+std::optional<Layout> attemptWithin(const Rules &r, uint64_t attemptSeed, Work &work)
 {
 	// A walk or a side room can paint itself into a corner; a few quick restarts from the same stream are cheaper than
 	// spending one of the kRetries on it.
 	Pcg32 rng(attemptSeed);
 	for (int restart = 0; restart < kRestarts; ++restart) {
+		if (work.over()) break;
 		Grid g(r.width, r.height);
+		work.charge(static_cast<int64_t>(r.width) * r.height);
 		Draft d;
 		if (r.loop) {
-			if (!buildRing(g, rng, r, d)) continue;
+			if (!buildRing(g, rng, r, d, work)) continue;
 		} else {
-			if (!walkMain(g, rng, r, d)) continue;
+			if (!walkMain(g, rng, r, d, work)) continue;
 			d.ring = false;
 		}
 		reserveRooms(r, d);
-		if (!addBranches(g, rng, r, d)) continue;
-		if (!addLoops(g, rng, r, d)) continue;
+		if (!addBranches(g, rng, r, d, work)) continue;
+		if (!addLoops(g, rng, r, d, work)) continue;
+		work.charge(static_cast<int64_t>(r.width) * r.height);
 		return assemble(g, d);
 	}
 	return std::nullopt;
+}
+
+} // namespace
+
+std::optional<Layout> generateAttempt(const Rules &r, uint64_t attemptSeed)
+{
+	Work work;
+	return attemptWithin(r, attemptSeed, work);
 }
 
 Layout generateFallback(const Rules &r, uint64_t seed)
@@ -784,8 +818,11 @@ Layout generateFallback(const Rules &r, uint64_t seed)
 Layout generate(const Rules &r, uint64_t seed)
 {
 	if (validateRules(r).empty()) {
+		Work work;
 		for (int k = 0; k < kRetries; ++k) {
-			std::optional<Layout> l = generateAttempt(r, splitmix64(seed ^ static_cast<uint64_t>(k)));
+			if (work.over()) break;
+			std::optional<Layout> l = attemptWithin(r, splitmix64(seed ^ static_cast<uint64_t>(k)), work);
+			work.charge(static_cast<int64_t>(r.width) * r.height * 4);
 			if (l && checkLayout(*l, r).empty()) {
 				l->seed = seed;
 				l->attempt = k;
@@ -1037,6 +1074,7 @@ bool parseInt(std::string_view s, int &out, bool &tooLarge)
 	if (i >= s.size()) return false;
 	for (size_t k = i; k < s.size(); ++k)
 		if (s[k] < '0' || s[k] > '9') return false;
+	while (i + 1 < s.size() && s[i] == '0') ++i; // leading zeros don't count: "0000005" is 5
 	if (s.size() - i > 6) { tooLarge = true; return false; }
 	int v = 0;
 	for (; i < s.size(); ++i) {
