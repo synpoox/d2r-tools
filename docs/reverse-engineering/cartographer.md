@@ -102,8 +102,8 @@ parts found by signature at load, the three hooks installed, the item opened its
 returned, a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
 `LocalPlayerReady.playerId`. A second pass on 2026-11-12 (Hell game, level-1 then level-25 Barbarian) settled more; the
 per-check levels are in "Game checks of 2026-11-12" at the end of this section. Still not validated in game: the free-spot
-refusal (tried, not reproduced), the spell-16 use with no matching check, and the TCP/IP client refusal; what would settle
-each is in that table.
+refusal (tried, not reproduced) and the TCP/IP client refusal (what would settle each is in that table); the spell-16 use
+with no matching check is not reachable through its one direct caller and stays unit tested only.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
 sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
@@ -162,7 +162,8 @@ first, then serves a posted console request when the unit is a player (`+0` == 0
 with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
 `cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
 The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
-checks in the plugin README. In game the console `open` worked in a Normal-difficulty game (section 3, Game checks); the TCP/IP client refusal was not exercised.
+checks in the plugin README. In game the console `open` worked in a
+Normal-difficulty game (section 3, Game checks); the TCP/IP client refusal was not exercised.
 
 Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the nearest `.pdata` entry before it starts at `0x2efb70`, a different function). The plugin checks `.pdata` only for hooked parts overridden in `signatures.txt`, so `RoomLevelId` needs only a unique match. None looks wrong. Findings per part:
 
@@ -215,9 +216,9 @@ Levels: live = seen in the running game; static = read from the dump only; tried
 | Open a map in Hell | live | `t21` in Harrogath opened `Gated` through level 138; a red portal appeared, the scroll was consumed, the portal led to level 138 and back. |
 | Level gate refuses | live | Level 1 using `Gated` (needs 20): log "Gated needs character level 20 (you are 1)", item kept. On screen the player sees only "cartos says: I can't use this yet."; the Cartographer wording is in the log and console. |
 | Level gate allows | live | After `cheat level 25` the same item opened the portal. This exercises `UnitStat` (`0x2f5020`) on its success path only. |
-| Free-spot gate | tried, refusal not reproduced | `cheat mspawn zombie1,100` around the player did not stop the spot search; the portal opened (kept as evidence). A refusal was never seen, so `FindFreeSpot` (`0x517f90`) has only its success path exercised. Static reading is in "Free-spot search" below: the mask tests a collision bit, not a monster crowd, and the search runs out to about 99 subtiles, so a refusal needs every window in that area blocked. What would settle it: a debug build that forces `found == nullptr` once, or a spot where collision bit `0x400` is set on every window out to that radius (none known). Until then the refusal is unit tested only (`CheckGates` -> `NoSpot`). |
+| Free-spot gate | tried, refusal not reproduced | `cheat mspawn zombie1,100` around the player did not stop the spot search; the portal opened (kept as evidence). A refusal was never seen, so `FindFreeSpot` (`0x517f90`) has only its success path exercised. Static reading is in "Free-spot search" below: the mask tests a collision bit, not a monster crowd, and the search runs out to about 99 subtiles, so a refusal needs every tested window in that area blocked. What would settle it: a debug build that forces `found == nullptr` once, or a spot where collision bit `0x400` is set on every window out to that radius (none known). Until then the refusal is unit tested only (`CheckGates` -> `NoSpot`). |
 | Spell-16 item no map names | live | `t22` (spell 16, in no `maps.txt` row): no log line, no message, not consumed, the same as with Cartographer unloaded. |
-| Spell-16 use with no matching check | not done | Needs an item use that skips `ItemSpellCheck`. Static: a path exists, but its trigger is not decoded (see "Callers of ItemSpellUse" below). What would settle it: decode the two conditions at `0x4f580d` and `0x4f5816`, then perform that use in game on a spell-16 item no map names. Until then unit tested only. |
+| Spell-16 use with no matching check | not done | Static: the only direct caller (`0x4f591e`) runs the use only after `ItemSpellCheck` returned nonzero (see "Callers of ItemSpellUse" below), so the case is not reachable through it. It is defensive code, unit tested only, with no in-game test planned; only an indirect caller (none searched) could reach it. |
 | Leave game with a portal open, next game | live | Save and Exit from level 138 with the portal open: clean exit, no crash. In the next game `Shorelines` opened (the per-game `'MAPS'` counter was fresh) and the tick logged its first player unit again. Whether that open used the item or `cartographer open` was not recorded, so the console path after a game change is not shown. |
 | TCP/IP client refused | not done | Needs a second game instance joined as a TCP/IP client, then `cartographer open <Name>`; not run. The refusal is in the code (no tick seen) and the unit tests. |
 | Town portal scroll on the map level | live | `tsc` used in level 138 did nothing: not consumed, no portal, no log line. With Cartographer unloaded the same scroll did the same, so this is vanilla behaviour with a preset-level slot, not Cartographer. |
@@ -231,32 +232,33 @@ Only `NoSpot` has never been seen refusing.
 
 Free-spot search (static, read-only, `python -I plugins/cartographer/tools/dump_dis.py C:\ghidra-work\D2RLoader_6ab3782c_dump.exe
 --stamp 0x6ab3782c dis <rva>`; dump, not game): `FindFreeSpot` (`0x517f90`) takes the `0x400` as its fifth argument and
-passes it, with a 7 by 7 window (`3 * 2 + 1`), to `0x364b20`, then `0x365f80`, then `0x3666c0`. That last function ANDs
+passes it, with a 7 by 7 window (`3 * 2 + 1`), to `0x364b20` (its seventh argument, `5`, is never read), then `0x365f80`, then `0x3666c0`. That last function ANDs
 each 16-bit entry of the room's collision grid (`[room_coll + 0x20]`, one `u16` per subtile) with the mask and ORs the
 results; a nonzero result means the window is blocked. So `0x400` is bit `0x400` of the per-subtile collision word, not a
 unit count: zombies would matter only if their presence sets that bit, which the 100-zombie run suggests it does not.
-The search spirals outward from the player in rings up to the eighth argument (100), moving into neighbouring rooms, and sets
-`found` to null only when every window up to that radius is blocked or no room exists. What bit `0x400` means (its engine
+The search spirals outward from the player in rings (candidates step by 2 subtiles; windows whose corner is outside the room are skipped) up to the eighth argument (100), moving into neighbouring rooms, and sets
+`found` to null only when every tested window up to that radius is blocked or no room exists. What bit `0x400` means (its engine
 name) is not established by this dump. The exact in-game check that would reproduce a refusal: stand where bit `0x400` is
 set on every 7 by 7 window out to about 99 subtiles (about 20 tiles) of the player. Harrogath has no such spot that we know
 of, so a forced `found == nullptr` in a debug build is the practical route. Not run.
 
 Callers of ItemSpellUse (static, dump; `0x581680` and `0x5817f0` found by scanning every `E8` and `E9` in `.text`): each has
 exactly one direct caller, both inside one large function (the item-use handler; `0x4f45eb` is its shared tail):
-`ItemSpellCheck` at `0x4f52c6`, `ItemSpellUse` at `0x4f591e`. The `0x4f591e` call is reached from `0x4f580d` (`jne`, when
-`[record + 4]` of the row from `0x300ae0(dataFlag, ...)` is not `1`) and `0x4f5816` (`jne`, when `r14b` is nonzero), and
-neither path goes through `0x4f52c6`. So the code has a way to run the use handler without the check; a spell-16 item
-reaching it with no map named would be dropped by Cartographer's hook. Which game action sets those conditions was not
-decoded (no vtable or indirect callers were searched either), so no in-game trigger is named and the case stays unit tested
-only.
+`ItemSpellCheck` at `0x4f52c6`, `ItemSpellUse` at `0x4f591e`. The use block `0x4f590f` is reached only from `0x4f580d` and
+`0x4f5816` (both `jne`), in block `0x4f57f4`. That block is reached only from `0x4f55f9` and `0x4f562c`, both in block
+`0x4f55f0`, which is reached only from `0x4f5470`, in block `0x4f5438`, which is reached only from `0x4f52cd`: the
+`test al, al; jne` right after `call 0x5817f0` at `0x4f52c6`. So the use runs only after `ItemSpellCheck` returned nonzero.
+The two jumps at `0x4f580d` (`[record + 4]` of the row from `0x300ae0(dataFlag, ...)` compared with `r13d`) and `0x4f5816`
+(`r14b` nonzero) choose between the use and the other branch (`0x4f581c`); they do not skip the check. Through this caller
+the "use with no matching check" case is therefore not reachable (static); it is defensive code in Cartographer's hook, and
+it stays unit tested only. Indirect callers (vtable or function pointer) were not searched.
 
 Portal label: the red portal's tooltip read "Missing String" when the player stood in Harrogath and "Harrogath" inside level
 138. Likely cause: the installer sets level 138's `LevelName` to "Cartographer Preset" and adds no string for that key, so every
 installer user would see it; not verified in game. Tracked in #87.
 
-What remains: the free-spot refusal, the spell-16 use with no matching check and the TCP/IP client refusal (each row above
-says what would settle it). The hook
-entries and `UnitStat`'s thunk are checked in the dump and by the game running through them.
+What remains: the free-spot refusal and the TCP/IP client refusal (each row above says what would settle it); the spell-16
+use with no matching check stays unit tested only. The hook entries and `UnitStat`'s thunk are checked in the dump and by the game running through them.
 
 ## 4. Outdoor S0 and S1 spike results (issue #22)
 

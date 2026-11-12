@@ -107,6 +107,6 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
   loaded next to Cartographer; run one or the other (see Requirements).
 - Expected, unit tested only and not verified in game: the spell-16 use with no matching check, whose code names a map, is
-  dropped (it opens nothing and is not passed to the game). The game's code has a path to the use handler that skips the
-  check, but which action takes it is not decoded, so no in-game test is named yet.
+  dropped (it opens nothing and is not passed to the game). The game's only direct caller of the use handler runs it only
+  after the check passed (static reading), so this case is defensive and no in-game test is planned.
 - Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
