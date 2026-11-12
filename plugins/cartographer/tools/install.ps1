@@ -13,6 +13,7 @@
     any other row is kept.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
+                    The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
@@ -248,6 +249,18 @@ if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
 # length (docs/reverse-engineering/cartographer.md), so the number of added rows stays small.
 $BossKeyPrefix = 'cartoboss:'
 $MaxBosses = 16
+$BossNameKeyPrefix = 'cartographer:'  # the plugin's string namespace (its PluginInfo.id); src/mapname BossRowKey
+# The local key is ASCII only: 'boss_' then each byte of the Name, kept when it is A-Z a-z 0-9, else '_' and two uppercase hex digits
+# ('Shoreline Warden' -> 'boss_Shoreline_20Warden'). The same rule as src/mapname BossLocalKey. The Name was read as Latin-1, so a
+# character is a byte.
+function Get-BossLocalKey([string]$Name) {
+    $sb = [System.Text.StringBuilder]::new('boss_')
+    foreach ($ch in $Name.ToCharArray()) {
+        if (($ch -ge 'A' -and $ch -le 'Z') -or ($ch -ge 'a' -and $ch -le 'z') -or ($ch -ge '0' -and $ch -le '9')) { [void]$sb.Append($ch) }
+        else { [void]$sb.Append('_').Append(([int]$ch -band 0xFF).ToString('X2')) }
+    }
+    $sb.ToString()
+}
 $bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
 # A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
 $bossLines = @()
@@ -365,7 +378,9 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             $cells = Cells $supers $templateLine
             Set-Cell $supers $cells 'hcIdx' "$($maxHc + $rows.Count + 1)"
             Set-Cell $supers $cells 'Superunique' $key
-            Set-Cell $supers $cells 'Name' $bossName
+            # Name is a string key, resolved once when the game loads the table: the plugin registers the text of $BossNameKeyPrefix<local key>
+            # (its own string namespace) from bosses.txt while it loads. Vanilla rows and strings are never touched.
+            Set-Cell $supers $cells 'Name' ($BossNameKeyPrefix + (Get-BossLocalKey $bossName))
             Set-Cell $supers $cells 'Class' $bossBase
             for ($n = 0; $n -lt 3; $n++) { Set-Cell $supers $cells "Mod$($n + 1)" $(if ($n -lt $mods.Count) { "$($mods[$n])" } else { '0' }) }
             Set-Cell $supers $cells 'MinGrp' "$minions"
@@ -420,4 +435,4 @@ if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf
 } else {
     Write-Host 'slots.txt: already up to date.'
 }
-Write-Host 'Done. Restart the game so it reads the tables. If the mod ships .bin table files, rebuild them from the edited .txt (the game ignores the .txt then).'
+Write-Host 'Done. Restart the game so it reads the tables. If the mod ships .bin table files, rebuild them from the edited .txt with D2RLoader and Cartographer active (the game ignores the .txt then).'
