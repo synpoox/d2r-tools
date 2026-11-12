@@ -16,7 +16,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `Sprawl`) through a `Maze` slot you add by hand (see below).
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are off by
   default (`PlayerStats`, test characters only, experimental).
-- **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze (`Monsters` is not used yet).
+- **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
   placement are experimental).
 - **Map names** (off by default, experimental): `MapNames=1` shows a map's own name on its portal, automap and entry banner.
