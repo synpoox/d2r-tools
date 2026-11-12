@@ -43,7 +43,8 @@ in [`examples/first-map/`](examples/first-map/).
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. From the folder you unzipped, run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
+3. From the folder you unzipped, run
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
    no items. The level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own

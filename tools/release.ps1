@@ -59,11 +59,16 @@ foreach ($p in $man.plugins.PSObject.Properties) {
         foreach ($line in [IO.File]::ReadAllLines($extra)) {
             $rel = $line.Trim()
             if (-not $rel -or $rel.StartsWith('#')) { continue }
-            $src = [IO.Path]::GetFullPath((Join-Path $dir $rel))
-            if (-not $src.StartsWith($dir.TrimEnd('') + '') -or -not (Test-Path $src)) { throw "$name`: release-files.txt names '$rel', which is not a file or folder inside the plugin" }
+            $src = if ([IO.Path]::IsPathRooted($rel)) { $null } else { [IO.Path]::GetFullPath((Join-Path $dir $rel)) }
+            if (-not $src -or -not $src.StartsWith($dir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path $src)) { throw "$name`: release-files.txt names '$rel', which is not a file or folder inside the plugin" }
             $to = Join-Path $stage $rel
-            New-Item -ItemType Directory -Force (Split-Path $to -Parent) | Out-Null
-            Copy-Item $src -Destination $to -Recurse
+            if (Test-Path -PathType Container $src) {
+                New-Item -ItemType Directory -Force $to | Out-Null
+                Copy-Item (Join-Path $src '*') -Destination $to -Recurse -Force
+            } else {
+                New-Item -ItemType Directory -Force (Split-Path $to -Parent) | Out-Null
+                Copy-Item $src -Destination $to -Force
+            }
         }
     }
     $zip = Join-Path $out "$name-$ver.zip"
