@@ -1,7 +1,7 @@
 # Cartographer native contracts (`cartographer`)
 
 **Status:** the nine maze rows in section 1a and the twelve phase 1 parts in section 3 have byte signatures, checked statically against a build 93847 dump (no game
-evidence, no hook written); every other row of sections 1 and 2 is still a stub, not validated in this repo.
+evidence; the portal hooks are written, not validated in game); every other row of sections 1 and 2 is still a stub, not validated in this repo.
 **Date:** 2026-11-11 (carried over from pd2-resurrected research)
 **Consumer:** Cartographer (planned `plugins/cartographer`; epic synpoox/d2r-tools#19). Plans:
 [cartographer-plugin.md](../cartographer/plans/cartographer-plugin.md),
@@ -98,10 +98,11 @@ against a dump of the running image (static). Not installed into a game and not 
 a game level.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
-sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`, and the portal hooks are
-not installed (fail open: the item then does what D2R does with an unknown spell). The portal is live only when all
-required parts are on. Hooks go in use-first: the use hook does nothing until the check hook is in, so no portal can open
-ungated. A signature for any part can be supplied without a rebuild in `signatures.txt` (columns `Part`, `Signature`),
+sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
+written at load, and only then, whenever their own two parts resolve; until every required part is on they pass straight
+through to the game (fail open: the item does what D2R does with an unknown spell). The portal is live only when all
+required parts are on, and `cartographer check` can turn it on later by re-finding the called parts. The use hook goes
+in first and acts only while the portal is live, so no portal can open ungated. A signature for any part can be supplied without a rebuild in `signatures.txt` (columns `Part`, `Signature`),
 beside `maps.txt`; it replaces the built-in one.
 
 Build 93847, image stamp `0x6ab3782c`. The RVAs are evidence from pd2-resurrected `plugin/core-maps/map_open.cpp` and
@@ -136,15 +137,35 @@ does not use them. The signatures are in `plugins/cartographer/src/core/part_sig
 | UnitStat | Called. `(unit, stat, layer) -> int`; stat 12 is the level | `0x2f5020` (d2rAI-toolkit `rvas_93847.h`; pd2-resurrected: a jump into D2RCore) | `FF 25 ?? ?? ?? ?? 90 90 90 90 48 89 74 24 20 57 48 83 EC 20 41 0F B7 E8 8B FA` | 0 | 26 / n/a (called) | yes |
 | UnitCoords | Called. `(unit, int xy[2])` | `0x34a040` | `48 89 5C 24 10 57 48 83 EC 20 48 8B FA 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 85 FF 75 ?? 48 8D 4C 24 30 40 88 7C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 8B 0B 83 E9 02 74 ?? 83 E9 02 74 ?? 83 F9 01 74 ?? 48 8B 4B 38 48 85 C9` | 0 | 89 / n/a (called) | no (spot check skipped) |
 | FindFreeSpot | Called. `(game, room, xy, 3, 0x400, &found, 5, 100)` | `0x517f90` | `48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 90 00 00 00 48 8B 05 ?? ?? ?? ??` | 0 | 30 / n/a (called) | no (spot check skipped) |
+| PlayerTick | Hooked (issue #40). The player mana step `(game, player) -> al`; the server runs it once per frame for every live player, so the console command gets a game and a player there. Optional: the map item does not need it | `0x42e350` | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? 48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??` (81 bytes, `??` on every rel32; hook cuts the first 14: five whole instructions, no relative operand) | 0 | 14 hook bytes (first 14 of the signature, no `??`) | no (console command only) |
 
-Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the range containing it starts at `0x2efb70`), so `signatures.txt` cannot move it onto a `.pdata` check and it needs only a unique match. None looks wrong. Findings per part:
+PlayerTick evidence (static, read-only, against `D2RLoader_6ab3782c_dump.exe`, a memory-layout dump made by
+d2rAI-toolkit `tools/dump_image.py`): the 81-byte signature has 1 match (RVA `0x42e350`; its first 14 bytes alone match 15
+places, so the whole signature is used). It runs past the prologue into the body (null check of the player, the
+`8D 53 55` = state 0x55 test), so another function cannot become the unique match by register allocation alone.
+Reproduce: read the dump file, convert the signature to a regex (`??` = `.`, with `re.S`) and `finditer` over all bytes:
+one match at `0x42e350`. The call at `0x42e74d` (`E8 FE FB FF FF`) resolves to `0x42e350` too. `rdx` is the player and `rcx`
+the game (saved to `rdi`/`r15` at entry). Its only caller is the player regen tick `0x42e600` (better-auras.md section 4),
+which reaches it on every path for a live player (`0x42e74d`). `0x42e600` itself is hooked by Better Auras, and a second
+hook on the same entry is refused, so the tick part uses `0x42e350` instead. Contract: the hook calls the original
+first, then serves a posted console request when the unit is a player (`+0` == 0) whose unit id (`+8`) equals the
+`playerId` of the SDK's `LocalPlayerReady` event, using the SDK event as the source of "which player is local". That
+`playerId` is the unit id is an assumption (not documented by the SDK): if it is wrong, the request is dropped after 10 s
+with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
+`cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
+The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
+checks in the plugin README. Not validated in game.
+
+Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the nearest `.pdata` entry before it starts at `0x2efb70`, a different function). The plugin checks `.pdata` only for hooked parts overridden in `signatures.txt`, so `RoomLevelId` needs only a unique match. None looks wrong. Findings per part:
 
 - **ItemSpellCheck, ItemSpellUse:** the 15 and 14 entry bytes recorded earlier were not unique (3140 and 11 matches in the
   executable sections), so with them both parts would have stayed off. Extended to 30 and 24 bytes, each unique; the hook
   sizes are unchanged and inside the max patch length.
 - **UnitStat (load timing):** the parts are looked up once at plugin load, so the thunk must already be in place then; the dump
   shows it only in a running process. If it is not, the part and the portal stay off until `cartographer check` looks again
-  (it re-scans missing parts while no hook has been tried). Put "UnitStat found at load" on the in-game checklist.
+  (it re-scans all called parts with the load-time overrides and turns the portal on if every required part is found; it never
+  writes code: the two item hooks are installed at load when their own parts resolve, and pass through to the game until the
+  portal is on, so a missing hooked part needs a restart). Put "UnitStat found at load" on the in-game checklist.
 - **UnitStat:** `0x2f5020` is a D2RLoader thunk, `jmp [rip+x]` plus four NOPs, into D2RCore (pd2-resurrected found the same);
   the bytes after it are the dead original body, and calling the thunk is the way to read a stat. The signature covers the
   thunk and the start of the dead body, so it exists only while D2RLoader's thunk is in place; without it the part is off.
