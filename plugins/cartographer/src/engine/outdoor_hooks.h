@@ -10,6 +10,7 @@
 // Notes and evidence: docs/reverse-engineering/cartographer.md section 8a.
 #pragma once
 
+#include "maze_hooks.h"
 #include "portal.h"
 #include "scan.h"
 
@@ -56,6 +57,16 @@ void OutdoorGameLeft();
 
 // The Outdoor slot level id, or -1.
 auto OutdoorSlotLevelId() -> int;
+
+// The rooms of the built Outdoor slot level at the centres of the plan's event and boss cells (the exact DRLG rect of one room each, which the
+// map events compare with the room the game populates), in the maze's form. Known once the slot build ran as planned; cleared when the game is
+// left. Not known when the layout has no such cell. Any thread.
+auto OutdoorEventRoom() -> MazeEventRect;
+auto OutdoorBossRoom() -> MazeEventRect;
+
+// OutdoorProbe: where the local player first stands in the Outdoor slot level, compared with the entrance cell (as MazeProbeArrival). Game thread.
+auto OutdoorArrivalPending() -> bool;
+void OutdoorProbeArrival(void* room, int32_t levelId);
 
 // Called by the level-build hook for every level. Returns true, with the game's result in *result, when it built the Outdoor slot level (the
 // caller returns *result); false when it left the build alone (not the slot, the setting is off, a part or the plan is missing, or the level is

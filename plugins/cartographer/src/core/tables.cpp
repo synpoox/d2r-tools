@@ -344,7 +344,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 }
 
 auto BossKey(std::string_view name) -> std::string {
-	return std::string(BossKeyPrefix) + std::string(name);
+	return std::string(BossKeyPrefix) + EscapeKeyBytes(name);
 }
 
 auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {

@@ -22,6 +22,24 @@ inline auto Lower(std::string_view s) -> std::string {
 	return out;
 }
 
+// Keeps A-Z a-z 0-9 and writes every other byte as '_' and two uppercase hex digits ("a b" -> "a_20b"): ASCII only, one-to-one.
+// The boss string key and the superuniques row key are built with it; tools/install.ps1 (Get-BossEscaped) does the same.
+inline auto EscapeKeyBytes(std::string_view s) -> std::string {
+	static const char* Hex = "0123456789ABCDEF";
+	std::string out;
+	for (const char ch : s) {
+		const auto byte = static_cast<unsigned char>(ch);
+		if ((byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9')) {
+			out += ch;
+		} else {
+			out += '_';
+			out += Hex[byte >> 4];
+			out += Hex[byte & 15];
+		}
+	}
+	return out;
+}
+
 inline auto Trim(std::string_view s) -> std::string {
 	size_t a = 0, b = s.size();
 	while (a < b && (s[a] == ' ' || s[a] == '\t' || s[a] == '\r' || s[a] == '\n')) {

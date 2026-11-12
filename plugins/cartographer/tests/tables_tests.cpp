@@ -172,6 +172,15 @@ TEST_CASE("bosses.txt rows load with their mods and minions") {
 	CHECK(bosses[1].minions == 0);
 }
 
+TEST_CASE("a bosses.txt Name is trimmed of space, tab, CR and LF only (tools/install.ps1 does the same)") {
+	Report report;
+	const auto bosses = LoadBosses("Name\tBase\n  Pad\xA0 \tzombie1\n\xA0Lead\tzombie1\n", Names(), report);
+	REQUIRE(bosses.size() == 2);
+	CHECK(bosses[0].name == "Pad\xA0");  // a trailing non-breaking space stays, so the installer's key matches
+	CHECK(BossKey(bosses[0].name) == "cartoboss:Pad_A0");
+	CHECK(bosses[1].name == "\xA0Lead");
+}
+
 TEST_CASE("a bosses.txt entry named like a vanilla boss or monster, or with a bad cell, is skipped") {
 	Report report;
 	const auto bosses = LoadBosses(
@@ -219,7 +228,9 @@ TEST_CASE("a Boss that names a cartoboss: key gets its own refusal") {
 }
 
 TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
-	CHECK(BossKey("The Drowned King") == "cartoboss:The Drowned King");
+	CHECK(BossKey("The Drowned King") == "cartoboss:The_20Drowned_20King");
+	CHECK(BossKey("King: a_b \"x\" Ren\xE9") == "cartoboss:King_3A_20a_5Fb_20_22x_22_20Ren_E9");  // ASCII only, one-to-one
+	CHECK(BossKey("a_b") != BossKey("a b"));
 	for (const std::string& vanilla : Names().superUniques) {
 		CHECK(BossKey(vanilla) != vanilla);
 	}
