@@ -250,7 +250,13 @@ A blank cell keeps the default; Tunneling Depths keeps level 85 here.
 
 **What the load check verifies for option C:** all 15 rows exist, the DS1 files exist, every piece has the same size, and the HD presets exist.
 
-**Special rooms.** Maze maps need no level exits, so the vanilla Prev, Next and Down rooms are never placed. The entrance is the portal room at the start of the path. The end of the path holds the boss and the reserved event room, built from ordinary mask pieces.
+**Special rooms.** Owner decision: a Cartographer map has an entrance (the portal) and no exit. A maze has one special room, the entrance: the portal room at the start of the path, made from the tileset's Prev piece when that end is a one-exit dead end (a ring's entrance stays an ordinary mask room). No Next or Down room is placed or steered: the slot's code still calls for them, and the steering hook answers every such call with a suppression, so the order and number of the slot's calls cannot move the entrance or place another special room. The end of the path holds the boss and the reserved event room, built from ordinary mask pieces. There is no switch for this.
+
+**To verify in the engine [V] (maze slot, before the hooks ship).**
+- The largest level size the engine accepts. The core asks for up to 360 tiles on an axis (15 Cave rooms across), and most Large Cave Corridor plans reach it. If the engine caps lower, Large Cave maps mostly fall back.
+- A level origin (`OffsetX/OffsetY`, level +0x24/+0x28) clear of the act's other levels, so that a 360 x 360 level does not overlap them in world coordinates.
+- The hook clamps `Tileset::maxLevelTiles` to the verified value before it writes the size.
+- After the slot's case returns, the hook checks that the Prev call came when the plan places the entrance. If it did not, the room is still an ordinary piece, so the hook logs it and falls back.
 
 ## 4. Map stats and events: how they work
 
