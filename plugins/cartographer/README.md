@@ -159,8 +159,10 @@ the game returns no unit for it, the boss is spawned as a plain monster of its `
 minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
+Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
+
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
-and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game. A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
+and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`). A row the installer writes but the plugin refuses (for example after `bosses.txt` was edited following the install) gets an unregistered key, which is harmless.
 If you rename an entry while the game runs, its boss shows placeholder text until you rerun the installer and restart the game.
 
 | Column | Meaning | Default |

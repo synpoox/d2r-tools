@@ -80,6 +80,20 @@ auto ReadFile(const std::wstring& path, std::string* text) -> bool {
 	return true;
 }
 
+// A Cartographer table (d2rloader\cartographer) as UTF-8: a file that is not valid UTF-8 is taken as Latin-1 and converted, with one note.
+auto ReadTable(const std::wstring& path, const char* name, std::string* text, carto::Report& report) -> bool {
+	std::string raw;
+	if (!ReadFile(path, &raw)) {
+		return false;
+	}
+	bool latin1 = false;
+	*text = carto::NormalizeTableText(raw, &latin1);
+	if (latin1) {
+		report.Note(name, 0, "the file is not valid UTF-8, so it was read as Latin-1 and converted. Save it as UTF-8 to keep characters outside Latin-1.");
+	}
+	return true;
+}
+
 // One column of a game table, as a list of cells. False when the table or the column is missing.
 auto ReadColumn(const std::wstring& file, const char* column, std::vector<std::string>* out) -> bool {
 	std::string text;
@@ -231,11 +245,11 @@ auto LoadAll() -> Loaded {
 	}
 	std::string text;
 	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt, mapstats.txt and mapevents.txt are all optional.
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::ShapesFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::ShapesFile), carto::ShapesFile, &text, loaded.report)) {
 		loaded.tables->shapes = carto::LoadShapes(text, loaded.report);
 	}
 	text.clear();
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapStatsFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapStatsFile), carto::MapStatsFile, &text, loaded.report)) {
 		loaded.tables->pool = carto::LoadMapStats(text, loaded.report);
 	}
 	// The stat names are checked against itemstatcost.txt, which also gives the ids the game is asked for.
@@ -253,7 +267,7 @@ auto LoadAll() -> Loaded {
 		}
 	}
 	text.clear();
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapEventsFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapEventsFile), carto::MapEventsFile, &text, loaded.report)) {
 		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
 	}
 	loaded.tables->spawnNames = ReadSpawnNames();
@@ -280,22 +294,22 @@ auto LoadAll() -> Loaded {
 		}
 	}
 	text.clear();
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::BossesFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::BossesFile), carto::BossesFile, &text, loaded.report)) {
 		loaded.tables->bosses = carto::LoadBosses(text, names, loaded.report);
 	}
 	text.clear();
 	std::vector<carto::MapDef> fromFile;
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapsFile), carto::MapsFile, &text, loaded.report)) {
 		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses);
 	}
 	loaded.tables->maps = std::move(fromFile);
 	text.clear();
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SettingsFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::SettingsFile), carto::SettingsFile, &text, loaded.report)) {
 		loaded.tables->settings = carto::LoadSettings(text, loaded.report);
 	}
 	carto::StatApplySetPlayerStats(loaded.tables->settings.playerStats != 0);
 	text.clear();
-	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SlotsFile), &text)) {
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::SlotsFile), carto::SlotsFile, &text, loaded.report)) {
 		loaded.tables->slots = carto::LoadSlots(text, loaded.report);
 	} else {
 		loaded.report.Error(carto::SlotsFile, 0, "the file is missing, so the map item has no level to open. Run tools\\install.ps1 and restart the game.");

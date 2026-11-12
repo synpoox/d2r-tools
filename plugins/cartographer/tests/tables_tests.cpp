@@ -236,6 +236,42 @@ TEST_CASE("a Boss that names a cartoboss: key gets its own refusal") {
 	CHECK(text.find("vanilla") == std::string::npos);
 }
 
+TEST_CASE("table text is UTF-8: Latin-1 and UTF-8 files with the same Boss name give the same name and key") {
+	const std::string utf8 = "Name\tBase\nG\xC3\xA9rard \xC3\x96stberg\tzombie1\nR\xC3\xB6n\xC3\xA9, Jr.\tskeleton1\n";
+	const std::string latin1 = "Name\tBase\nG\xE9rard \xD6stberg\tzombie1\nR\xF6n\xE9, Jr.\tskeleton1\n";
+	bool fromLatin1 = true;
+	CHECK(NormalizeTableText(utf8, &fromLatin1) == utf8);
+	CHECK_FALSE(fromLatin1);
+	CHECK(NormalizeTableText(latin1, &fromLatin1) == utf8);
+	CHECK(fromLatin1);
+	Report a, b;
+	const auto fromUtf8 = LoadBosses(NormalizeTableText(utf8), Names(), a);
+	const auto fromAnsi = LoadBosses(NormalizeTableText(latin1), Names(), b);
+	REQUIRE(fromUtf8.size() == 2);
+	REQUIRE(fromAnsi.size() == 2);
+	CHECK(fromAnsi[0].name == "G\xC3\xA9rard \xC3\x96stberg");
+	CHECK(fromAnsi[0].name == fromUtf8[0].name);
+	CHECK(fromAnsi[1].name == fromUtf8[1].name);
+	CHECK(BossKey(fromAnsi[0].name) == "cartoboss:G_C3_A9rard_20_C3_96stberg");
+	CHECK(BossKey(fromAnsi[1].name) == BossKey(fromUtf8[1].name));
+}
+
+TEST_CASE("table text: a UTF-8 byte order mark is dropped, invalid UTF-8 takes the Latin-1 path, ASCII is untouched") {
+	bool fromLatin1 = true;
+	CHECK(NormalizeTableText("\xEF\xBB\xBFName\n", &fromLatin1) == "Name\n");
+	CHECK_FALSE(fromLatin1);
+	CHECK(NormalizeTableText("plain\ttext\n", &fromLatin1) == "plain\ttext\n");
+	CHECK_FALSE(fromLatin1);
+	CHECK(NormalizeTableText("", &fromLatin1).empty());
+	CHECK(IsValidUtf8("\xC3\xA9\xE2\x82\xAC\xF0\x9F\x98\x80"));
+	for (const char* bad : {"\xE9", "\xC3", "\xC3(", "\xC0\x80", "\xE0\x80\x80", "\xED\xA0\x80", "\xF4\x90\x80\x80", "\xFF", "\x80", "ab\xE2\x82"}) {
+		CHECK_FALSE(IsValidUtf8(bad));
+	}
+	CHECK(NormalizeTableText("Ren\xE9", &fromLatin1) == "Ren\xC3\xA9");
+	CHECK(fromLatin1);
+	CHECK(NormalizeTableText("\xA0", &fromLatin1) == "\xC2\xA0");  // a lone Latin-1 non-breaking space
+}
+
 TEST_CASE("a boss entry's superuniques key can never equal a vanilla row") {
 	CHECK(BossKey("The Drowned King") == "cartoboss:The_20Drowned_20King");
 	CHECK(BossKey("King: a_b \"x\" Ren\xE9") == "cartoboss:King_3A_20a_5Fb_20_22x_22_20Ren_E9");  // ASCII only, one-to-one
