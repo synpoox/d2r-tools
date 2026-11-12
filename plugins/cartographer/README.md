@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released).** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written and unit tested but not yet run in game.** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -60,7 +60,7 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Preset` for now; the other tileset names are accepted but refused until they are built | required |
+| Tileset | `Preset`, `Cave` or `Crypt` (maze, needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` (not used by `Preset`) | required |
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
@@ -71,11 +71,24 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Properties, EventChance, Density, Champions, Uniques | Numbers, kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0) and
-`Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
+`Town` (`Harrogath`, the only town supported) and `MazeProbe` (0; 1 logs `[maze probe]` lines about the maze the game builds). Phase 1 reads and checks the map columns beyond the table above, but every
 map in `maps.txt` opens through the one map level (`Preset` slot); nothing opens without a mod and a `maps.txt`.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
+
+## Maze slot (Cave and Crypt, manual setup)
+
+A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, and the plugin builds that level from the map's layout
+instead of the game's random maze. `tools\install.ps1` does not add it yet; add it by hand:
+
+- `slots.txt`: a row named `Maze` pointing at the new level.
+- `levels.txt`: a new level in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` up to 360 in
+  all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` about 6000, and a matching `lvlmaze.txt` row.
+- Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
+  plan cannot be built or the engine refuses a step, that build falls back to the game's own maze and the reason is logged.
+
+Not run in game: every point above is expected behaviour, checked only by unit tests and a clean build.
 
 ## Tested
 

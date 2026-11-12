@@ -94,9 +94,23 @@ TEST_CASE("a typo gets a plain-English message with a suggestion and the row num
 
 TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
 	Report report;
-	const auto maps = Load("Cave One\tCave\tWinding\t\t\tt20\n", report);
+	const auto maps = Load("Lava One\tLava\tWinding\t\t\tt20\n", report);
 	CHECK(maps.empty());
 	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
+}
+
+TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazeProbe") {
+	Report report;
+	const auto maps = Load("Cave One\tcave\tWinding\t\t\tt20\nCrypt One\tCrypt\tLoop\t\t\tt21\n", report);
+	CHECK(maps.size() == 2);
+	CHECK(maps[0].tileset == "Cave");
+	CHECK(report.Errors() == 0);
+	Report settingsReport;
+	CHECK(LoadSettings("", settingsReport).mazeProbe == 0);
+	CHECK(LoadSettings("Setting\tValue\nMazeProbe\t1\n", settingsReport).mazeProbe == 1);
+	CHECK(settingsReport.Errors() == 0);
+	CHECK(LoadSettings("Setting\tValue\nMazeProbe\t5\n", settingsReport).mazeProbe == 0);
+	CHECK(settingsReport.Errors() == 1);
 }
 
 TEST_CASE("bad numbers, shapes, bosses, items and duplicates skip only their row") {
@@ -319,12 +333,27 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
-	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick};
+	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
+	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);
 		CHECK(ParsePattern(text, &p));
 		CHECK(p.size >= 24);  // a lower bound only: uniqueness in the game is shown by tools/check_portal_signatures.py
+	}
+}
+
+TEST_CASE("signatures: the hooked maze parts pin every byte their hook cuts") {
+	const struct { const char* text; uint32_t cut; } hooked[] = {
+		{sig::LevelBuild, 14}, {sig::MazeWalk, 18}, {sig::MazeEntranceExit, 17}, {sig::MazeRingGrower, 14}};
+	for (const auto& h : hooked) {
+		Pattern p{};
+		INFO(h.text);
+		REQUIRE(ParsePattern(h.text, &p));
+		REQUIRE(p.size >= h.cut);
+		for (uint32_t i = 0; i < h.cut; ++i) {
+			CHECK(!p.wild[i]);
+		}
 	}
 }
 

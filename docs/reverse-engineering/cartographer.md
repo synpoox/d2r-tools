@@ -89,6 +89,19 @@ Re-check on a new build: write a memory-layout image with d2rAI-toolkit's `tools
 D2RLoader), then `python -I plugins/cartographer/tools/check_maze_signatures.py <image> --stamp <stamp>`. The
 packed `D2R.exe` on disk cannot be checked (encrypted code).
 
+### Hooked maze signatures (issue #78)
+
+Two more rows, for the hooks of `plugins/cartographer/src/engine/maze_hooks.cpp`. Static evidence only (the dump of section 1a,
+`check_maze_signatures.py`: unique, resolving to the RVA); not run in game.
+
+| RVA | Role | Signature (offset 0 = function entry) | Hook cut / max patch bytes |
+|---|---|---|---|
+| `0x3271c0` | Level build (writes the slot level's size, then runs the original) | `48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2` | 14 / 48 |
+| `0x3e96d0` | Maze walk (steered for the slot level) | `48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18` | 18 / 50 |
+
+Hook cuts (whole instructions, all exact bytes): `0x3271c0` 14, `0x3e96d0` 18, `0x3eb850` 17, `0x3e9820` 14. The rows `0x3e77a0`,
+`0x360bb0` and `0x3eb960` are only called. All seven must be found or the maze steering stays off (fail open, logged per part).
+
 ## 2. Not yet recorded
 
 Signatures for `0x3e96d0`, `0x3f3970` and `0x86bc0` (the other rows have signatures in section 1a or, for the outdoor rows, section 4, or are found from a signed function by following its calls, as `0x367110`, `0x3e2b5ce` and `0x3e2b5c8` are), contracts beyond the roles above, and any game validation of the maze rows. Until then no hook may be
@@ -364,6 +377,15 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 - **Write (static):** in the `0x3271c0` build hook, before calling the original, write the size `+0x2c/+0x30` of the slot's level; leave the origin `+0x24/+0x28` at the row's values (the world lookup can build the level from the allocation-time rect, Q2). The first room is positioned from `+0x2c/+0x30` in `0x3e69e0`, which runs after the hook, and the values survive a teardown. This matches the pd2-resurrected note "write per-level fields in the 0x3271c0 hook before the original runs".
 - **Also set the table row:** the declared rect is what the world lookup uses (Q2) and `0x327650` runs once, so give the slot row the maximum size in all three difficulty columns (and the chosen offsets) so the allocation-time rect already fits any plan; the hook never needs to move the origin. A rect that grows after allocation could newly overlap another level between lookups (needs game, Q2).
 - **Evidence level:** static. **Needs game:** the Q1 logs, plus the first room's x/y equal to `(size - roomW)/2 + origin` before `0x327880` and the final bounding box at the origin.
+
+### Status after issue #78
+
+The maze steering hooks now depend on these answers; none is game-validated yet (the code logs the reason and falls back to
+the game's own maze when a step fails): the size written at `+0x2c/+0x30` in the `0x3271c0` hook before the original (Q4), the
+slot row's declared rect as the lookup rect (Q2), the suppressed second `0x3eb850` call and the rotation counter kept in 0..3
+(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). Also unverified: whether `0x3271c0` runs
+before the plan exists, whether the add-room checks (`0x360c80`) reject adjacent but unlinked plan cells, whether the piece
+struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for every room. `MazeProbe=1` logs the data to check.
 
 ### Left for the game
 

@@ -21,6 +21,7 @@
 #include "layout.h"
 #include "maze.h"
 #include "rng.h"
+#include "steer.h"
 
 using namespace cartographer;
 using namespace cartographer::maze;
@@ -685,4 +686,175 @@ TEST_CASE("a plan is built from a hand-made layout: a Loop closes with a link st
 	CHECK(!p.entrance.place); // two exits, so the entrance stays an ordinary room
 	CHECK(p.widthRooms == 3);
 	CHECK(p.heightRooms == 3);
+}
+
+// --- the pure part of the hooks (steer.h) --------------------------------------------------------------------------
+
+namespace {
+
+// The Cave Prev group as the game's table lists it, N E S W: {from, to, file, dir}.
+Group caveGroup()
+{
+	return Group{{{60, 86, -1, 3}, {54, 84, -1, 0}, {56, 85, -1, 1}, {53, 83, -1, 2}}};
+}
+
+Plan steeringCavePlan(const Tileset &ts)
+{
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Medium);
+	for (uint64_t seed = 1; seed < 200; ++seed) {
+		const SeedPlan sp = planForSeed(ts, r, seed);
+		if (sp.plan.steer && sp.plan.entrance.place) return sp.plan;
+	}
+	return Plan{};
+}
+
+} // namespace
+
+TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
+{
+	Tileset t;
+	REQUIRE(builtinTileset("cave", t));
+	CHECK(t.roomTiles == 24);
+	CHECK(t.pieceBase == 52);
+	CHECK(t.prev.piece[3] == 86);
+	REQUIRE(builtinTileset("CRYPT", t));
+	CHECK(t.roomTiles == 8);
+	CHECK(!builtinTileset("Lava", t));
+	CHECK(!builtinTileset("", t));
+}
+
+TEST_CASE("the slot row's declared size clamps the tileset and a row below one room is refused")
+{
+	Tileset cave;
+	REQUIRE(builtinTileset("Cave", cave));
+	const SlotFit big = clampToSlot(cave, 1000, 1000);
+	REQUIRE(big.ok);
+	CHECK(big.tileset.maxLevelTiles == kMaxLevelTiles); // never more than the allowed maximum
+	const SlotFit small = clampToSlot(cave, 200, 360);
+	REQUIRE(small.ok);
+	CHECK(small.tileset.maxLevelTiles == 200); // the smaller declared side
+	CHECK(maxCapacity(small.tileset).across() == 7);
+	const SlotFit tiny = clampToSlot(cave, 20, 20);
+	CHECK(!tiny.ok);
+	CHECK(tiny.reason.find("less than one Cave room") != std::string::npos);
+	CHECK(!clampToSlot(cave, 0, 0).ok);
+	// A plan on the clamped tileset never asks for more than the row declares.
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
+	for (uint64_t seed = 1; seed <= 100; ++seed) {
+		const SeedPlan sp = planForSeed(small.tileset, r, seed);
+		if (!sp.plan.steer) continue;
+		CHECK(sp.plan.levelTilesX <= 200);
+		CHECK(sp.plan.levelTilesY <= 200);
+	}
+}
+
+TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot size bounds it; bad input gives a reason")
+{
+	const layout::ShapeTable none;
+	const MapPlan a = planForMap("Cave", none, "Winding", "Medium", 12345, 360, 360);
+	const MapPlan b = planForMap("cave", none, "winding", "medium", 12345, 360, 360);
+	REQUIRE(a.steer);
+	REQUIRE(b.steer);
+	CHECK(a.hash == b.hash);
+	CHECK(a.seedPlan.plan.levelTilesX <= 360);
+	const MapPlan c = planForMap("Cave", none, "Winding", "Large", 777, 200, 200);
+	if (c.steer) {
+		CHECK(c.seedPlan.plan.levelTilesX <= 200);
+		CHECK(c.seedPlan.plan.levelTilesY <= 200);
+	} else {
+		CHECK(!c.reason.empty());
+	}
+	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
+	CHECK(planForMap("Lava", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
+	CHECK(mixSeed(1, 2) != mixSeed(2, 1));
+	CHECK(mixSeed(1, 2) == mixSeed(1, 2));
+}
+
+TEST_CASE("the rotation counter stays in 0..3 whatever the call did")
+{
+	CHECK(rotationAfter(0) == 1);
+	CHECK(rotationAfter(3) == 0);
+	for (uint32_t r = 0; r < 4; ++r) CHECK(rotationAfter(r) < 4);
+}
+
+TEST_CASE("the entrance call is redirected to the plan's table entry and every other call is suppressed")
+{
+	Tileset cave;
+	REQUIRE(builtinTileset("Cave", cave));
+	const Plan plan = steeringCavePlan(cave);
+	REQUIRE(plan.steer);
+	REQUIRE(plan.entrance.place);
+	const Group group = caveGroup();
+	// Whichever rotation the game rolled, the Prev call lands on the entry the plan wants.
+	for (uint32_t rot = 0; rot < 4; ++rot) {
+		SpecialState st;
+		const SpecialAnswer a = answerSpecial(cave, plan, st, &group, rot);
+		REQUIRE(a.kind == SpecialAnswer::Kind::Redirect);
+		CHECK(group[static_cast<size_t>(a.index)].from == plan.entrance.fromPiece);
+		CHECK(group[static_cast<size_t>(a.index)].to == plan.entrance.toPiece);
+		CHECK(st.placed);
+		CHECK(specialProblem(plan, st).empty());
+		// A second Prev call is suppressed: the entrance never moves.
+		CHECK(answerSpecial(cave, plan, st, &group, rotationAfter(rot)).kind == SpecialAnswer::Kind::Suppress);
+	}
+	// A Down group call (to 91..94) is suppressed, and does not count as a Prev call.
+	const Group down{{{60, 94, -1, 3}, {54, 92, -1, 0}, {56, 93, -1, 1}, {53, 91, -1, 2}}};
+	SpecialState st;
+	CHECK(answerSpecial(cave, plan, st, &down, 1).kind == SpecialAnswer::Kind::Suppress);
+	CHECK(st.prevCalls == 0);
+	CHECK(!st.placed);
+	CHECK(!specialProblem(plan, st).empty()); // the entrance was never asked for: a fallback to report
+	// Down first, then Prev: the entrance is still placed.
+	CHECK(answerSpecial(cave, plan, st, &group, 2).kind == SpecialAnswer::Kind::Redirect);
+	CHECK(specialProblem(plan, st).empty());
+}
+
+TEST_CASE("a table that cannot be read or lacks the plan's entry places nothing and says why")
+{
+	Tileset cave;
+	REQUIRE(builtinTileset("Cave", cave));
+	const Plan plan = steeringCavePlan(cave);
+	REQUIRE(plan.entrance.place);
+	const Group group = caveGroup();
+	SpecialState a;
+	CHECK(answerSpecial(cave, plan, a, &group, 4).kind == SpecialAnswer::Kind::Suppress);
+	CHECK(!specialProblem(plan, a).empty());
+	SpecialState b;
+	CHECK(answerSpecial(cave, plan, b, nullptr, 0).kind == SpecialAnswer::Kind::Suppress);
+	CHECK(!b.placed);
+	Group wrong = group;
+	for (TableEntry &e : wrong) e.from = 1; // no entry starts at the piece the plan wants
+	SpecialState c;
+	CHECK(answerSpecial(cave, plan, c, &wrong, 0).kind == SpecialAnswer::Kind::Suppress);
+	CHECK(specialProblem(plan, c).find("no entry from piece") != std::string::npos);
+	// A plan that does not steer leaves every call to the game.
+	Plan off;
+	SpecialState d;
+	CHECK(answerSpecial(cave, off, d, &group, 0).kind == SpecialAnswer::Kind::Original);
+}
+
+TEST_CASE("the private LvlMaze row and the piece every room has after the walk")
+{
+	Tileset cave;
+	REQUIRE(builtinTileset("Cave", cave));
+	const Plan plan = steeringCavePlan(cave);
+	REQUIRE(plan.steer);
+	const auto row = lvlMazeRow(138, plan);
+	CHECK(row[0] == 138);
+	CHECK(row[1] == plan.lvlMaze.rooms);
+	CHECK(row[2] == row[1]);
+	CHECK(row[3] == row[1]);
+	CHECK(row[4] == 24);
+	CHECK(row[5] == 24);
+	CHECK(row[6] == 0);
+	for (size_t i = 0; i < plan.rooms.size(); ++i) {
+		const int idx = static_cast<int>(i);
+		CHECK(pieceAfterWalk(plan, idx) == cave.pieceBase + plan.rooms[i].mask);
+		CHECK(fixAfterWalk(plan, idx) == (plan.rooms[i].fix == Room::Fix::AfterWalk));
+	}
+	CHECK(pieceAfterWalk(plan, -1) == 0);
+	CHECK(!fixAfterWalk(plan, 9999));
 }
