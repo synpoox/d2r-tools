@@ -806,7 +806,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		return;
 	}
 	if (path == BossPath::PlainMonster) {
-		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
+		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
 	}
 	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24}, state.seed);  // a stand-in room
 	if (!check.problem.empty()) {
