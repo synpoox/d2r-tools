@@ -289,7 +289,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit), and `ItemStats=1` for a player stat.
-- **Outdoor maps (Jungle and Snow)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow walls and multiplayer were not checked.
+- **Outdoor maps (Jungle and Snow)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen.
 - **Experimental or not verified in game**: Treasure chest loot (the chest opened but dropped nothing in one game, #220), what a Boss `Drop` roll drops
   (the roll runs when the Boss dies, 5 of 5 kills), the event
   name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
