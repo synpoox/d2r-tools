@@ -103,7 +103,7 @@ This file is **one shared pool of random properties**. Every map that opens draw
 | Column | What to put | Example |
 |---|---|---|
 | `Target` | `Monsters` or `Players` | Monsters |
-| `Stat` | An itemstatcost `Stat` name | `maxhp%` |
+| `Stat` | An itemstatcost `Stat` name | `item_maxhp_percent` |
 | `Min`, `Max` | The rolled value range | 10, 20 |
 | `Weight` | How often it's drawn compared with the others (default 1) | 3 |
 
