@@ -208,7 +208,7 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		const MapDef& map = tables->maps[id.mapIndex];
 		const bool maze = MapIsMaze(map);
 		const bool outdoor = !maze && MapIsOutdoor(map);
-		const int slotLevel = SlotLevel(tables->slots, outdoor ? OutdoorSlot : MazeSlot);
+		const int slotLevel = SlotLevel(tables->slots, MapSlotName(map));
 		ms::ApplyFacts facts;
 		facts.slotLevelMatches = slotLevel > 0 && slotLevel == static_cast<int>(id.slotLevel);
 		facts.clientMazeMap = maze;
@@ -251,7 +251,7 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 			// The client plans from its own maps.txt row and the host's seed; the plan is a pure function of those (section 8a), so it equals the host's.
 			OutdoorMapOpened(map, *tables, 0, id.seed);
 			note += "outdoor layout seed applied";
-			plog::Info("map sync: the host's map '%s': the next build of the Outdoor slot level here uses the host's layout seed", map.name.c_str());
+			plog::Info("map sync: the host's map '%s': the next build of the outdoor slot level here uses the host's layout seed", map.name.c_str());
 		} else if (id.outdoor) {
 			note += std::string("outdoor layout skipped: ") + ms::describe(plan.outdoorWhy);
 			plog::Warn("map sync: the host's map '%s': the outdoor layout is not applied here: %s", map.name.c_str(), ms::describe(plan.outdoorWhy));

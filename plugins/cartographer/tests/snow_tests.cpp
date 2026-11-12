@@ -158,7 +158,7 @@ TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
 	CHECK_FALSE(snowSizeCells("Huge", &w, &h));
 }
 
-TEST_CASE("10000 seeds in both orientations plan, pass the check and chain their fence sockets")
+TEST_CASE("5000 seeds in both orientations plan, pass the check and chain their fence sockets")
 {
 	int horizontal = 0, vertical = 0;
 	for (uint64_t seed = 0; seed < 5000; ++seed) {
@@ -323,48 +323,57 @@ TEST_CASE("the independent check catches a broken plan")
 		const int wrong = cur->start == 'a' ? 988 : 987; // BB or AA
 		p.grid[at] = wrong;
 		p.stamps.stamps[at].lvlPrest = wrong;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a cap where a run belongs
 		SnowPlan p = good;
 		p.grid[3] = 995;
 		p.stamps.stamps[3].lvlPrest = 995;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a jungle piece
 		SnowPlan p = good;
 		p.grid[2] = 530;
 		p.stamps.stamps[2].lvlPrest = 530;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a stamp that disagrees with the grid
 		SnowPlan p = good;
 		p.stamps.stamps[4].lvlPrest = p.stamps.stamps[4].lvlPrest == 987 ? 991 : 987;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a stamp moved off the 16-tile grid
 		SnowPlan p = good;
 		p.stamps.stamps[5].cx += 1;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a file index on an unpinned plan, and one out of range
 		SnowPlan p = good;
 		p.stamps.stamps[5].file = 0;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a missing stamp
 		SnowPlan p = good;
 		p.stamps.stamps.pop_back();
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // the entrance rectangle on the wrong cell
 		SnowPlan p = good;
 		p.stamps.entrance.x += 16;
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a void list on a full rectangle
 		SnowPlan p = good;
 		p.stamps.voidCells.push_back({0, 0});
+		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // checked against a different request
@@ -378,7 +387,63 @@ TEST_CASE("golden plan")
 {
 	const SnowPlan p = planSnowMap(request(2026, 8, 5, Orientation::Horizontal));
 	REQUIRE(p.ok);
-	if (goldenMode()) std::printf("GOLDEN_HORIZONTAL:\n%s\nhash %016llx\n", snowPlanAscii(p).c_str(), static_cast<unsigned long long>(p.hash));
+	if (goldenMode()) std::printf("GOLDEN_HORIZONTAL:\n%s\nhash %llu\n", snowPlanAscii(p).c_str(), static_cast<unsigned long long>(p.hash));
 	CHECK(snowPlanAscii(p) == GOLDEN_HORIZONTAL);
 	CHECK(p.hash == GOLDEN_HORIZONTAL_HASH);
+}
+
+TEST_CASE("the check re-derives the orientation, the macro origin and the hash")
+{
+	SnowRequest r;
+	r.seed = 11;
+	r.cellsW = 8;
+	r.cellsH = 5;
+	const SnowPlan good = planSnowMap(r);
+	REQUIRE(good.ok);
+	REQUIRE(checkSnowPlan(r, good).empty());
+	{ // an internally consistent plan of the other orientation, when the seed decides
+		SnowRequest fixed = r;
+		fixed.autoOrientation = false;
+		fixed.orientation = good.orientation == Orientation::Horizontal ? Orientation::Vertical : Orientation::Horizontal;
+		const SnowPlan other = planSnowMap(fixed);
+		REQUIRE(other.ok);
+		CHECK(checkSnowPlan(fixed, other).empty());
+		CHECK_FALSE(checkSnowPlan(r, other).empty());
+	}
+	{
+		SnowPlan p = good;
+		p.stamps.macroMinX = 1;
+		p.hash = stampPlanHash(p.stamps);
+		CHECK_FALSE(checkSnowPlan(r, p).empty());
+	}
+	{
+		SnowPlan p = good;
+		p.hash ^= 1;
+		CHECK_FALSE(checkSnowPlan(r, p).empty());
+	}
+}
+
+TEST_CASE("an automatic orientation takes the one that fits the size")
+{
+	// 2 x 5 cells has no horizontal line of 3 cells but a vertical line of 5; 5 x 2 is the reverse. Whatever the seed picks, both plan.
+	for (uint64_t seed = 0; seed < 64; ++seed) {
+		SnowRequest tall;
+		tall.seed = seed;
+		tall.cellsW = 2;
+		tall.cellsH = 5;
+		const SnowPlan a = planSnowMap(tall);
+		REQUIRE_MESSAGE(a.ok, a.reason);
+		CHECK(a.orientation == Orientation::Vertical);
+		SnowRequest wide = tall;
+		wide.cellsW = 5;
+		wide.cellsH = 2;
+		const SnowPlan b = planSnowMap(wide);
+		REQUIRE_MESSAGE(b.ok, b.reason);
+		CHECK(b.orientation == Orientation::Horizontal);
+		CHECK(checkSnowPlan(tall, a).empty());
+	}
+	SnowRequest neither;
+	neither.cellsW = 2;
+	neither.cellsH = 2;
+	CHECK_FALSE(planSnowMap(neither).ok);
 }
