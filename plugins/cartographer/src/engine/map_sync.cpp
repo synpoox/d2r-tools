@@ -217,7 +217,10 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		std::string note;
 		if (plan.names) {
 			const int flag = MazeLevelDataFlag();
-			if (flag < 0) {
+			if (flag < 0 && !facts.mazeSteeringLive) {
+				note += "name skipped: the data flag is not available because the LevelBuild hook is off (not all maze parts are hooked); ";
+				plog::Warn("map sync: '%s' keeps the slot level's name: the data flag is not available because the LevelBuild hook is off (not all maze parts are hooked)", map.name.c_str());
+			} else if (flag < 0) {
 				note += "name skipped: no level build has been seen here yet, so the data flag of this client's tables is unknown; ";
 				plog::Warn("map sync: '%s' keeps the slot level's name: no level build has been seen yet, so the data flag is unknown", map.name.c_str());
 			} else if (MapNamesBeforeOpen(map, *tables, slotLevel, static_cast<uint32_t>(flag))) {
@@ -235,8 +238,8 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 				note += "layout seed applied";
 				plog::Info("map sync: the host's map '%s': the next build of the Maze slot level here uses the host's layout seed", map.name.c_str());
 			} else {
-				note += "layout skipped: the slot level was built here first, or steering went off";
-				plog::Warn("map sync: the host's map '%s': the layout seed was not applied (the slot level was built first, or steering went off)", map.name.c_str());
+				note += "layout skipped: the slot level was built here first";
+				plog::Warn("map sync: the host's map '%s': the layout seed was not applied (a slot level build had already started here)", map.name.c_str());
 			}
 		} else {
 			note += std::string("layout skipped: ") + ms::describe(plan.mazeWhy);

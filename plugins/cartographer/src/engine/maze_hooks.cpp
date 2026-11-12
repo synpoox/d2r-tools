@@ -622,6 +622,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
 			std::lock_guard<std::mutex> lock(g_lock);
 			hadJob = g_job != nullptr;
+			// Marked as running in the same hold that reads the job, so a remote apply (MazeRemoteMapOpened) sees this build or this build sees its job.
+			g_slotState.begin();
 			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
 			ctx.orig.sizeX = size.x;
 			ctx.orig.sizeY = size.y;
@@ -661,7 +663,6 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	}
 	BuildCtx* previous = t_ctx;
 	t_ctx = ctx.steer ? &ctx : nullptr;
-	g_slotState.begin();
 	const uint64_t result = g_levelOriginal(dataFlag, level);
 	g_slotState.end(hadJob);
 	t_ctx = previous;
@@ -708,8 +709,9 @@ void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
 namespace {
 
 // Makes `map` the map the next slot build uses. `seedSalt` is mixed with the job id into the layout seed; when `fixedSeed` is non-zero it is
-// the seed as it is (a client takes the host's).
-void SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed) {
+// the seed as it is (a client takes the host's). With `requireNoBuild` the job is installed only if no slot build has started, tested under the
+// same lock hold as the install; returns whether it was installed.
+auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed, bool requireNoBuild) -> bool {
 	auto job = std::make_shared<Job>();
 	job->name = map.name;
 	job->tileset = map.tileset;
@@ -717,6 +719,9 @@ void SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	job->size = map.size;
 	job->shapes = tables.shapes;
 	std::lock_guard<std::mutex> lock(g_lock);
+	if (requireNoBuild && g_slotState.ranAny()) {
+		return false;
+	}
 	job->id = g_nextJobId++;
 	job->seed = fixedSeed != 0 ? fixedSeed : cm::mixSeed(seedSalt, job->id);
 	g_job = job;
@@ -726,20 +731,20 @@ void SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	g_arrivalLogged = false;
 	plog::Info("maze map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
+	return true;
 }
 
 }  // namespace
 
 void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt) {
-	SetJob(map, tables, seedSalt, 0);
+	SetJob(map, tables, seedSalt, 0, false);
 }
 
 auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostSeed) -> bool {
-	if (hostSeed == 0 || !g_live.load() || g_slotState.ranAny()) {
-		return false;  // no plan to take, steering off, or the slot level exists already: it is not rebuilt
+	if (hostSeed == 0 || !g_live.load()) {
+		return false;  // no plan to take, or steering off
 	}
-	SetJob(map, tables, 0, hostSeed);
-	return true;
+	return SetJob(map, tables, 0, hostSeed, true);  // false when the slot level exists already: it is not rebuilt
 }
 
 auto MazeSlotRanAny() -> bool {
