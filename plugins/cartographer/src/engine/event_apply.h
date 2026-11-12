@@ -27,8 +27,9 @@ namespace carto {
 auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
 // A map was opened for `playerId` through slot level `level` (`maze`: a Cave or Crypt map, whose event room comes from the
-// plan). Decides the event and arms the entry message. Game thread.
-void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze);
+// plan; `player` is the player unit, whose data flag picks the game's tables). Decides the event, resolving its Spawn name from the
+// game's loaded tables when they check out (else from the mod's .txt files), and arms the entry message. Game thread.
+void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player);
 
 // Called from the portal's player tick hook (game thread), after the game's own tick: shows the entry message.
 void EventsPlayerTick(void* game, void* unit, uint32_t localPlayer) noexcept;

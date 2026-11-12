@@ -188,7 +188,7 @@ void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& table
 // The map is open: decides its event and arms the entry message (event_apply.cpp). Never lets a failure reach the game.
 void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player, int level, bool maze) noexcept {
 	try {
-		EventsMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), level, maze);
+		EventsMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), level, maze, player);
 	} catch (...) {
 		plog::Error("deciding the map's event failed; '%s' opens without one", map.name.c_str());
 	}

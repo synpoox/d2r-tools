@@ -54,4 +54,10 @@ inline constexpr const char* PopulateRoom = "4C 8B DC 53 56 48 81 EC B8 00 00 00
 inline constexpr const char* SpawnMonster = "4C 8B DC 48 83 EC 68 8B 84 24 90 00 00 00 45 33 D2 4D 89 53 F0 45 89 53 D8 89 44 24 38 8B 84 24 98 00 00 00 89 44 24 3C 8B 84 24 A0 00 00 00 49 89 53 C0 89 44 24 4C";
 inline constexpr const char* SpawnSuperUnique = "40 55 53 56 57 41 56 41 57 48 8D AC 24 48 FF FF FF 48 81 EC B8 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4";
 
+// Event Spawn names from the game's loaded tables (cartographer.md section 11); both only called. DataTablesBase (dataFlag) returns the
+// data tables base, three sibling accessors share its first 40 bytes so the signature runs to the tail. NameToRow (map, name, logOnMiss)
+// returns the row, exactly -1 on a miss.
+inline constexpr const char* DataTablesBase = "48 83 EC 28 0F B6 C1 48 89 44 24 38 48 83 F8 04 72 19 48 8D 44 24 38 48 8D 4C 24 40 48 89 44 24 40 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 44 24 38 48 8D 0D ?? ?? ?? ?? 48 03 C0 48 8B 04 C1 48 83 C4 28 C3";
+inline constexpr const char* NameToRow = "40 55 56 57 41 54 48 8B EC 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E8 44 89 45 AC";
+
 }  // namespace carto::sig
