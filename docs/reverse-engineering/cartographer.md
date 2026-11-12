@@ -30,7 +30,7 @@ from the loaded image and logged by the outdoor spike at load (section 4). Coexi
 | RVA | Role (per the plans) | Evidence pointer |
 |---|---|---|
 | `0x3271c0` | Level build `(dataFlag, level)`: reseeds `+0x1e4`, dispatches on level `+0x00` (type 3 goes to the D2RCore stub), runs the tail. Signed; hooked and replaced for the slot level in the spike (§4) | outdoor plan §2; §4 |
-| `0x3e96d0` | Maze random walk `(level)`: adds rooms until the room count is reached. Replaced for the map level. Signature recorded in section 1a; hooked by Cartographer (not run in game) | drlg-steering.md; steer-proto |
+| `0x3e96d0` | Maze random walk `(level)`: adds rooms until the room count is reached. Replaced for the map level. Signature recorded in section 1a; hooked by Cartographer (run in game 2026-11-12, section 5) | drlg-steering.md; steer-proto |
 | `0x3eb850` | Maze entrance and exit placer `(level, int[4], int*)`. Steered | drlg-steering.md; steer-proto |
 | `0x3eb960` | Maze piece picker `(room, clearFixed)`: piece = tileset base + exit mask (base hardcoded). Planned hook for the piece set | drlg-steering.md section 2.3; steer-proto |
 | `0x3e9820` | Maze ring grower. No-op in the planned steering for more tilesets | drlg-steering.md |
@@ -99,7 +99,7 @@ Two more rows, for the hooks of `plugins/cartographer/src/engine/maze_hooks.cpp`
 | `0x3271c0` | Level build (writes the slot level's size, then runs the original) | `48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2` | 14 / 48 |
 | `0x3e96d0` | Maze walk (steered for the slot level) | `48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 81 C8 01 00 00 48 8B F9 48 8B 41 18` | 18 / 50 |
 
-Hook cuts (whole instructions, all exact bytes): `0x3271c0` 14, `0x3e96d0` 18, `0x3eb850` 17, `0x3e9820` 14. Cartographer hooks these four (written, not run in game).
+Hook cuts (whole instructions, all exact bytes): `0x3271c0` 14, `0x3e96d0` 18, `0x3eb850` 17, `0x3e9820` 14. Cartographer hooks these four (run in game 2026-11-12, section 5).
 
 **One hook on `0x3271c0`, two users.** The outdoor builder plan also needs the level build. The loader refuses a second `InstallInlineHook` on the same entry (its guard no longer matches), so the outdoor work must not install its own: it will share this one hook, which dispatches by level (the maze slot to the maze code, the outdoor slot to the outdoor code, every other level to the original). The rows `0x3e77a0`,
 `0x360bb0` and `0x3eb960` are only called. All seven must be found or the maze steering stays off (fail open, logged per part).
@@ -375,7 +375,7 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 | Guard | The section 1a rows keep their signatures. The functions in the table below are unsigned, read-only evidence, except `0x3271c0`, which is already signed in sections 1 and 4 (its row is listed for the masked prefix only). Section 1a repeats the same function's first 24 bytes as the maze hooks' own signature (`sig::LevelBuild`): it is the same prefix as section 4's, not a different one, kept so the maze parts check themselves without the portal parts. The others were followed from signed functions or from the level build `0x3271c0`. The masked prefix shown for each matched exactly once across `.text`, `.maho`, `.koishi` and `.btext` of the dump (relative displacements and RIP-relative operands masked), so it can become a signature later; none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
 | Contract | See the answers below |
 | Evidence | Disassembly (Capstone) of the functions named, over the dump (the Ghidra decompile was only a reading aid and is not needed). Reproduce a listing with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]`, and a prefix match with `... pat "<hex with ??>"` (read-only; refuses a different stamp; needs `capstone`). Example: `dis 0x32751e 3` shows `mov rdx, rbx / movzx ecx, r12b / call 0x3271c0` |
-| Validation | Static only. No game. The hooks built on it are written but not run in a game. Not checked on Steam build 94995 |
+| Validation | Static, then the guided maze hooks were run in game on build 93847 on 2026-11-12 ("Game checks of 2026-11-12" below; probe lines `[maze probe]`, 46 consecutive clean games). Not checked on Steam build 94995 |
 | Failure mode | Fail open: a hook built on this leaves the maze off if a signature or guard does not match, as in section 1a |
 | Coexistence | No new patch is proposed on this page |
 
@@ -431,16 +431,60 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 
 ### Status after issue #78
 
-The maze steering hooks now depend on these answers; none is game-validated yet (the code logs the reason and falls back to
+The maze steering hooks now depend on these answers; checked in game on 2026-11-12 on a Cave slot at Normal difficulty (next subsection) (the code logs the reason and falls back to
 the game's own maze when a step fails): the size written at `+0x2c/+0x30` in the `0x3271c0` hook before the original (Q4), the
 slot row's declared rect as the lookup rect (Q2), the suppressed second `0x3eb850` call and the rotation counter kept in 0..3
-(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Also unverified: whether `0x3271c0` runs
-before the plan exists, whether the add-room checks (`0x360c80`) reject adjacent but unlinked plan cells, whether the piece
-struct is per room (fixed-flag writes), and `clearFixed=1` in `0x3eb960` for every room. `MazeProbe=1` logs the data to check.
+(Q3), a private LvlMaze row (never freed) behind `+0x18`, and 360 x 360 accepted (Q1). The declared size is recorded once per game, per level id, before the first write; every plan is limited to that record (the hook overwrites the level's `+0x2c/+0x30` with the plan's size, which survives a teardown). On a fallback, and on any later unsteered build, the declared size and the level's own row pointer are put back first, so the game's walk runs against the level it was written for (after a fallback mid-walk it finishes from the plan's rooms already built). Checked in game on 2026-11-12 (Cave slot, Normal; next subsection): whether `0x3271c0` runs
+before the plan exists and whether the piece struct is per room (fixed-flag writes). Shown only indirectly: that the add-room
+checks (`0x360c80`) reject adjacent but unlinked plan cells (the built grids equal the planned ones, but a rejection is not logged)
+and `clearFixed=1` in `0x3eb960` for every room (no room has the Fixed flag afterwards; the argument was not observed). `MazeProbe=1` logs the data to check.
+
+### Game checks of 2026-11-12 (issues #78 and #62)
+
+Run in a test slot (D2R build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty,
+Barbarian; the character was often killed on arrival by Dark Rangers, which does not matter for the build). The mod's tables were brought to a clean Cartographer state first: vanilla `levels.txt`, `lvlprest.txt`, `lvlmaze.txt`
+and `misc.txt` (five map item rows), then `tools\install.ps1`, then one Cave level added by hand (level 139, DrlgType 1, LevelType 3,
+Act 5, 360 x 360 in all three columns, Depend 0, Position 0, OffsetX 6000, OffsetY 0, `lvlmaze.txt` row `Cartographer Maze 139 4 4 4 24 24 500`), `slots.txt` `Maze 139`, `MazeProbe 1`. `maps.txt` had `CaveCorridor` (Small), `CaveWinding` (Medium), `CaveLoop`
+(Large) and `CryptBranching` (Medium, the wrong tileset on purpose). Levels: **live** = seen in the running game through the
+`[maze probe]` log lines; **static** = read only; **not done**.
+
+Probe facts the numbers rely on: one plan cell is `roomTiles` (Cave 24) tiles and becomes 3 x 3 engine rooms of 8 x 8, so a plan of
+N cells gives 9 N engine rooms. The new probe lines print the built and the planned room grid one character per plan cell, the
+engine's room sizes, and how many piece structs the rooms have.
+
+| # | Check | Level | Result |
+|---|---|---|---|
+| 1 | Probe: slot rect and levels, room count and box, `rot` after each `0x3eb850` call, map in the planned shape | live | Slot rect `139:(6000,0)+(360,360)` clear of the other seven levels of the act. Built room grid equals the planned grid for `CaveCorridor` (5 x 5 box, 9 cells), `CaveWinding` (9 x 7, 26 cells) and `CaveLoop` (10 x 6, 28 cells): 81, 234 and 252 rooms, all 8 x 8, none outside the grid. `rot` after every call stayed in 0..3 (`3 -> 3`, `3 -> 0`; `2 -> 3`, `3 -> 0`; `3 -> 1`, `1 -> 2`). The character stood on the map level and walked (a Cave map). **Not usable: arrival versus entrance room.** The arrival probe read a room at (0,0) of size 0 x 0 (`UnitRoom` gives the server room, not the DRLG room), and the entrance was counted once per sub-room (9 entrance rooms for one entrance cell), so the "entrance known" test (exactly one) never held. Probe limits, not engine findings. Fixed in the probe after the run (see "Arrival room"; built, not yet checked in game) |
+| 2 | Does `0x3271c0` run for the slot before a map job exists, is the slot left usable | live | Not on its own: with a map opened the first call for the slot comes at the open (rooms 0 before it), and again on entering after the teardown with the same plan and seed. With no map opened (`cheat goto 139,...` straight from town) the hook ran for the slot, logged "building the game's own maze: no maze map was opened in this game", and the character stood in a normal Cave level. So a lazy build without a job is possible and is handled |
+| 3 | Add-room checks (`0x360c80`) reject adjacent but unlinked cells | live, partly | Every built grid equals the planned grid cell for cell, no room was added or moved (252 = 28 x 9 for the Loop, 234 = 26 x 9, 81 = 9 x 9), for shapes whose planned cells touch without a link (the Loop and the Winding). The probe does not print piece masks, so a rejected candidate is not logged on its own; this is the evidence that no unlinked neighbour was added |
+| 4 | Piece struct per room; `clearFixed` | live | Per room: 81 of 81, 234 of 234 and 252 of 252 rooms have their own piece struct (no two rooms share one). After the build no room has the Fixed flag set (0 of 252). `clearFixed=1` was not observed as a call argument; the 0 Fixed rooms are the evidence it holds |
+| 5 | The suppressed Down call builds cleanly | live | Yes, in every game: the second `0x3eb850` call is answered by the hook, the build ends "built as planned (N rooms, ...)" with no crash_guard entry and no new crash file (the crash-report folder stayed at the 6 files it had before the run) |
+| 6 | Level `+0x2c/+0x30` and private row writes accepted; 360 x 360 accepted | live | Yes. 360 x 360 in all three columns is accepted at load and allocation; the hook wrote the plan size (for example 216 x 216, 264 x 168), the level rect then read back as the plan size and the walk finished; the private row behind `+0x18` was accepted |
+| 7 | A mismatched tileset, then reopen in the same game | live | `CryptBranching` on the Cave slot: the load gives a warning (the map is listed with a problem); `cartographer open CryptBranching` refuses with "the Maze slot level is a Cave level (LevelType 3), so it cannot build the Crypt map" and no portal; repeating the open is refused the same way; after a Cave map had been built, opening another map in the same game is refused ("already built ... Leave the game and start a new one") |
+| 8 | Forced plan failure falls back to the game's maze | live | Slot rect set to 60 x 60 (all three columns), `CaveLoop` opened: log "building the game's own maze: Cave levels hold at most 1 by 1 rooms, which is too small for this shape. Use a smaller size or a simpler shape."; the portal opened, the character entered a Cave level, no crash, no new crash file |
+| 9 | Leave the game, new game: the maze map opens again | live | Yes, at every one of the games below: Save and Exit, new game, a map opened and built with the new seed and plan (also a different map each time, because the previous plan does not carry over) |
+| 10 | The 50-games check | live, 46 of 50 games run | 46 consecutive games in one session, one per game: Save and Exit (or die and Continue), start a new game, `cartographer open <Name>` cycling `CaveCorridor`, `CaveWinding`, `CaveLoop` (16, 15 and 15 games), enter the portal. Every game: "built as planned", the built grid equal to the planned grid, no crash-report file, no error line in `cartographer.log`. A few earlier games with the same checks, from a first version of the script that failed to leave the game every other time, are not counted. Each game was judged from the log (`built as planned`, grids equal, crash folder), not from a screenshot |
+
+Not covered by these runs: a Crypt slot (the slot was Cave; the Crypt refusal was exercised only as the tileset mismatch), Hell or
+Nightmare difficulty, a TCP/IP client, the slot with an engine-side Fixed flag (none was set), and the arrival room (see 1).
+Frames per second and load time were not measured.
+
+### Arrival room (issue #99 item 1): built, not yet checked in game
+
+The arrival probe (`MazeProbeArrival`, `MazeProbe=1`) now reads the player's DRLG room through the server room, and the entrance is counted once per plan cell. Static reading of the dump (build 93847, `dump_dis.py ... dis <rva>`):
+
+| Step | Offset | Evidence |
+|---|---|---|
+| unit to path | unit `+0x38` | `0x34b440` (`UnitRoom`): `mov rcx, [rbx+0x38]` at `0x34b472`, for unit types other than 2, 4 and 5 (those read `[[unit+0x38]]` at `0x34b48d`/`0x34b491`) |
+| path to server room | path `+0x20` | `0x34b480` jumps to `0x341c30`: `mov rax, [rcx+0x20]` / `ret`. This is what `UnitRoom` returns, and what the probe received before |
+| server room to DRLG room | server room `+0x18` | `0x2efc10` (`RoomLevelId`): `mov rcx, [rcx+0x18]` at `0x2efc18`, then `jmp 0x360fc0`. Also recorded in sections 6 and 9. In the #97 run `RoomLevelId(room) == slot` held for the player's room (that check let the arrival line print), and the allocator `0x361140` writes the level at `+0x90` (at `0x361190`) |
+| DRLG room to level | DRLG room `+0x90`, level `+0x1f8` | `0x360fc0`: `mov rax, [rcx+0x90]` / `mov eax, [rax+0x1f8]`. So the pointer at server `+0x18` is the DRLG room, and the DRLG room has the `+0x60/+0x64/+0x68/+0x6c` rect of the level's room list (section 5 header) |
+
+So the old read took `+0x60..` of the server room, which is not a tile rect (hence 0,0 and 0 x 0). The probe reads `+0x18` of the room `UnitRoom` returned, then `+0x60..+0x6c` of that, every pointer through `Read`/`Readable` (a wrong layout logs zeros, not a fault), and only while `MazeProbe=1`. The arrival is placed in a plan cell as `(pos - box min) / roomTiles`, the box and cell size being those of the post-build room walk; the entrance is the one cell holding Prev-piece rooms (all nine of its sub-rooms carry it). The log line says `ARRIVAL IS IN THE ENTRANCE CELL` or `arrival is NOT in the entrance cell`, and only when exactly one entrance cell was found. **Needs game:** one maze game with `MazeProbe=1`: `entrance: 1 cell(s) (9 engine rooms ...)` after the build, an arrival line with a non-zero size 8 x 8 and the entrance verdict.
 
 ### Left for the game
 
-See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size.
+See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Items 1 to 3 were settled in game on 2026-11-12 (above); the arrival room of item 3 was not (probe limit, check 1; probe rewritten, see "Arrival room").
 
 1. The whole game accepting a 360 x 360 maze level (Q1, size and lopsided checks).
 2. The origin being clear of every other level's rect, including outdoor levels (Q2 log).
@@ -976,6 +1020,83 @@ exact check). The portal is opened by `portal.cpp` through `OpenRedPortal` `0x5d
 4. What does the owner suffix `" (%s)"` look like in single player (the `0x8d4b0` global decides whether it is appended)? Compare a stock portal tooltip with a hooked one.
 5. Does the text cache between two maps? Open two different maps in a row.
 
+## 11. Event Spawn names from the game's compiled tables (issue #95)
+
+**Status:** static research only, from the build 93847 dump; **nothing was run in a game and no code was changed**. Context: section 9 resolves an event's `Spawn` against the mod's `monstats.txt` `Id` and `superuniques.txt` `Superunique` columns (`ReadSpawnNames`, `plugins/cartographer/src/plugin.cpp`); issue #95 asks whether the game's own loaded tables can do it, so a mod that ships those tables in another form (or none) still resolves. Labels: **static** is read from the dump; **inference** is reasoned from it; **needs game** is a check to run.
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer event `Spawn` resolution (a future change to `ReadSpawnNames`) |
+| Module | `D2R.exe` |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the dump `D2RLoader_6ab3782c_dump.exe` |
+| Location | Data tables base `0x300a90(dataFlag)` (cl, below 4). MonStats row getter `0x976e0 (dataFlag, index)`, SuperUniques row getter `0x397220 (dataFlag, index)`. Name to row lookup `0xa121f0 (map, name, logOnMiss) -> row, exactly -1 on a miss (set at 0xa12385)`. Engine resolvers `0x3a9050 (dataFlag, name, out)` and `0x3a9150`. Table fields (with `dt` the base): `dt+0xf58` monstats row vector (64-bit count at `+0xf60`, row size `0x1fc`), `dt+0xf70` monstats name map pointer, `dt+0x1078` superuniques row vector (64-bit count at `+0x1080`, row size `0x3c`), `dt+0x1090` superuniques name map pointer; also `dt+0xf90` monsounds and `dt+0xfd0` monplace maps |
+| Which hook | None. The route is reading rows (SDK) and, for superuniques, one call-only lookup |
+| Guard | Masked prefixes below, each unique by `pat`. `0x976e0` is hookable (15-byte cut, no relative operand) and `0x300a90` hookable (16 bytes); `0x397220` (relative `call` inside the first 14 bytes), `0xa121f0` (`mov rax,[rip+..]` at +13) and `0x3a9050` / `0x3a9150` (`je rel32` at +3) are call-only |
+| Contract | See Q1 to Q4. In short: re-read `*(dt+0x1090)` on every call, never cache it, skip the call when it is null, reject an empty name, treat exactly -1 as a miss, call on the game thread (the thread of `EventsMapOpened` is not shown, Q4) |
+| Evidence | `dump_dis.py ... dis` of the getters, of the monstats and superuniques table loaders (found by the unique store of the monstats row size, `0x1fc`, to `[rsp+0x28]` at `0x3a0af9`; the superuniques store of `0x3c` at `0x3a2173` is **not** unique, the same `C7 44 24 28 3C 00 00 00` bytes match 5 sites: `0x3a2173`, `0x5bec88`, `0x5befb1`, `0x5cfa94`, `0x1b6ffd3`; that loader was found through its descriptor strings instead) and of the resolvers; `pat` for every other prefix |
+| Validation | Static only. **Not run in a game** |
+| Failure mode | If a guard does not match, or the self-check of Q4 fails, keep the `.txt` route of section 9 as it is today |
+| Where it runs | Not in `LoadAll()` (`plugin.cpp` `ReadSpawnNames`, which runs at load and `Reload()`, possibly off the game thread and before the tables exist). The lookup belongs in `EventsMapOpened` (`engine/event_apply.cpp`), before the call to `resolveSpawn` at line 411, with the `dataFlag` read from the player unit (`StartMapEvents` has it at `engine/portal.cpp:191`); not inside the pure `resolveSpawn` (`eventplan/eventplan.cpp:49`), which has no unit. See Q4 |
+| Coexistence | No hooks. A call-only use of `0xa121f0` reads a hash map on the game thread |
+
+Masked prefixes (all checked unique on the dump with `pat`; `??` is a relative or absolute operand):
+
+| Address | Role | Prefix | Class |
+|---|---|---|---|
+| `0x976e0` | MonStats row getter | `48 89 5C 24 08 48 89 74 24 20 57 48 83 EC 30 48 63 F2 E8 ?? ?? ?? ?? 48 8B F8 48 8B DE 85 F6 78 09 48 3B 98 60 0F 00 00 72 18` (the shorter form up to `48 8B F8` matches 14 sites) | hookable |
+| `0x397220` | SuperUniques row getter | `40 53 48 83 EC 30 48 63 DA E8 ?? ?? ?? ?? 48 8B CB 48 3B 98 80 10 00 00` | call-only |
+| `0xa121f0` | name to row lookup | `40 55 56 57 41 54 48 8B EC 48 83 EC 78 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E8 44 89 45 AC` | call-only |
+| `0x3a9050` | by-name resolver (MonPreset `Place`) | `4D 85 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24 10 57 48 83 EC 20 33 C0 41 C6 40 01 00 66 41 89 40 02` | call-only |
+| `0x3a9150` | by-name resolver (MonPet `monster`) | `4D 85 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 40 49 63 D9 49 8B F0` | call-only |
+| `0x300a90` | data tables base `(dataFlag)` | `48 83 EC 28 0F B6 C1 48 89 44 24 38 48 83 F8 04 72 19 48 8D 44 24 38 48 8D 4C 24 40 48 89 44 24 40 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 44 24 38 48 8D 0D ?? ?? ?? ?? 48 03 C0 48 8B 04 C1 48 83 C4 28 C3` (three sibling accessors share the first 40 bytes; the tail tells them apart) | hookable |
+
+### Q1. Compiled monstats record: where is the `Id`, and how does the game look a row up by `Id`?
+
+- **Row and getter (static).** `0x976e0` calls `0x300a90`, compares the index with the 64-bit count at `dt+0xf60`, and returns `[dt+0xf58] + index * 0x1fc`.
+- **The `Id` text is stored inline in the row (static plus inference).** The loader (chunk `0x39db7f`) describes its columns in 0x20-byte entries `{name, type, size, row offset, extra}`. The `Id` entry has type `0x13` and size `0x2f`, row offset 0, and `extra` is the address of the map slot `dt+0xf70` (not the map itself). Reading: a 47-character key plus the terminator, in a 48-byte field at row `+0`. The type, the size and the offset are static; that type `0x13` means "inline key text" is **inference** (it fits the toolkit's `knowledge/tables.md` note of a 47-character `Id` key, and the flag bytes at `+0x3c/+0x3e/+0x3f` in `monster-count-addresses.md`, which sit just after it). No hash or string-table index of the `Id` is stored in the row.
+- **Who fills the map (inference, not in the dump).** Both table loaders (monstats and superuniques) hand their descriptor arrays to `0x3e2b544`, a D2RLoader `FF 25` thunk (`FF 25 4E F6 FF FF`, in `.maho`; the same kind as `0x3e2b5c8` in section 1) into `D2RCore.dll`. The rows, and the inserts into the maps behind `*(dt+0xf70)` and `*(dt+0x1090)`, happen in D2RCore, so the fill depends on D2RLoader's D2RCore, not on `D2R.exe`. That the map holds `Id` to row index, and that the stored keys are lower-cased, are therefore **inference** from the descriptors and from how the lookup is used. **Static in `D2R.exe`:** map creation (`0xa11fa0`, stored at `0x3a0a83` for monstats and `0x3a2103` for superuniques; it initialises the default `[map+0x3c]` to -1), the registration (the descriptor `extra` is the slot address) and the lookup.
+- **Lookup by name (static).** `0xa121f0(rcx = map, rdx = name, r8d = logOnMiss)` lower-cases only the query (`0xa25650`), hashes it, compares exactly (`0x12d3ee0`) and returns `[node+0x30]` in `eax`. So case-insensitivity holds only if D2RCore inserted lower-cased keys (inference above). A miss returns exactly -1 (`0xa12385`; every caller does `test eax,eax; js`); `logOnMiss = 0`, or a name starting with `*`, skips the log. A null name **or an empty string** returns the map's default `[map+0x3c]` (-1 as initialised by `0xa11fa0`; whether D2RCore changes it is unknown), so the plugin must reject an empty `Spawn` before calling. A name longer than 15 characters makes the lookup allocate a temporary string from the game allocator (`0x76210`, freed through `0x12063c0` at `0xa123cf`): fine on the game thread, one more reason not to call it elsewhere. The same function serves monsounds (`dt+0xf90`), superuniques (`dt+0x1090`) and monplace (`dt+0xfd0`).
+- **The engine's own by-name users (static).** `0x3a9050` (MonPreset `Place`) and `0x3a9150` (MonPet `monster`) call `0xa121f0` for superuniques, then monstats, then (`0x3a9050` only) monplace, and store a kind (2, 1, 0) and the row in a small out record. They are load-time callbacks and log on a miss, so they are not proposed. They store the kind differently: `0x3a9150` as a `u16` at `+0` with the row at `+2`, `0x3a9050` as a byte at `+1`. I did not find the cheat or console `mspawn` resolver in `D2R.exe` (the toolkit's `cheat-commands.md` says the same); it is probably in D2RCore (inference).
+- **A runtime caller (inference on what it is).** `0x409bbc`, inside the chunk of `0x409ad0`, calls `0xa121f0(*(dt+0xf70), name, 0)` with `dt = 0x300a90(byte [r14+0x106])`, at runtime and not at load. Its AI-mode name table at `0x1d14e20` holds "regular", "idle", "wandering" and others, so it looks like a runtime spawn text parser; what it parses is inference. It is the evidence that the map outlives the load. The engine's other runtime caller guards the map first: `0x36005c` does `mov rcx,[rbx+0xf70]; test rcx,rcx; je` before the call.
+- **Null map (static).** `0xa121f0` with a null map is a crash, not an assert: it calls `0xa0ffc0`, may `int3`, then falls through to `cmp [rsi+0x20]` on null, an access violation. `0x3a9050` does no null check either (it loads `[dt+0x1090]` and calls). Each table load stores a new map from `0xa11fa0`, so a cached pointer goes stale after a reload. **Contract:** re-read `*(dt+0xf70)` / `*(dt+0x1090)` on every call, never cache the pointer, and skip the call when it is null, as the game's own caller does at `0x36005c`.
+- **Needs game:** that the map is still alive and filled after the load (the lookup is called outside the loader); `0x409bbc` above is the inference for "yes".
+
+### Q2. The same for superuniques (`Name` key, `Class` field)
+
+- **Row and getter (static).** `0x397220` returns `[dt+0x1078] + index * 0x3c`, with a null return for an index past the 64-bit count at `+0x1080`.
+- **The `Superunique` key is not in the row (static).** The loader marks the key column type `0x11` (size 0, lookup only) and registers it into the map at `*(dt+0x1090)`; the row has no key text. So the name cannot be found by reading rows: only through the map with `0xa121f0`, or from the txt file.
+- **Fields in the row (static, from the loader and two consumers).** `Name` is a string-table index, a `u16` at `+2` (descriptor type `0x18`, through the string-table callback `0x308be0`). `Class` is at `+8`, resolved at load through the monstats map into a monstats row index (inference for the exact width; the consumers of `+8` treat it as a monstats row). The `u16` at `+0` is unproven (inference: the row's own id).
+- **Lookup by name (static).** `0xa121f0(*(dt+0x1090), name, 0)`, as in Q1.
+
+### Q3. Does the SDK `DataTableService` give enough, the row count plus a raw row pointer, to read those fields without engine calls?
+
+- **MonStats: yes.** `getTable(ctx, bank, TableId::MonStats, &view)` (22; `bank` is the `Bank` the data flag maps to, see Q4) gives `{rows, rowCount, rowSize}`. Check `rowSize == 0x1fc` (the header says to check it before casting), then compare the 48-byte inline `Id` at row `+0` with the name, case-insensitively, over `rowCount` rows. No engine call of its own (picking the `Bank` with the data flag calls `0x300a90`, see Q4). **Inference:** the SDK's `rows` is the same vector as `dt+0xf58`; the rowSize check is the guard. A linear scan once per map open is cheap.
+- **SuperUniques: not for the name.** `getTable(ctx, bank, TableId::SuperUniques, &view)` (28) gives `0x3c`-byte rows, but the key is not in them (Q2). Once the row is known they give `Class` (`+8`) and `Name` (`+2`). `findRowById` supports neither table (`data_tables.h`).
+- Rows are read-only, game-thread-only and expire on the next table load (the header's contract), which suits a once-per-map-open read. Off the captured game thread the SDK returns `Busy`.
+- `Class` is at most 4 bytes: the next descriptor sits at `+0xc` (type 2). MonSound (type `0x15`, `+0x1c`, `dt+0xf90`) follows the same index-through-a-map pattern.
+
+### Q4. The safest route, and its guard
+
+- **Recommendation (inference).** Keep the section 9 `.txt` route as the fallback and put the game's tables first:
+  1. **Monstats `Id`:** the SDK table (no engine call, no signature), guarded by `rowSize == 0x1fc` and non-null `rows` for a non-zero count.
+  2. **Superuniques `Name`:** one call-only lookup, `0xa121f0(*(dt+0x1090), name, 0)` with `dt = 0x300a90(dataFlag)`, found by the unique prefixes above, skipped when `*(dt+0x1090)` is null and with an empty name rejected first. It needs struct offsets, so it is guarded by the self-check below. If the SDK later offers a name lookup for these tables, use that instead.
+  3. **Class and display name:** after the row is known, read `Class` (`+8`) and `Name` (`+2`) from the SDK rows (`rowSize == 0x3c`).
+- **Where it runs.** Not in `LoadAll()`: that runs at plugin load and `Reload()` (possibly from the console thread), before the tables exist, and `ReadSpawnNames` is only the txt route. The lookup runs at map open, in `EventsMapOpened` (`engine/event_apply.cpp`) before the `resolveSpawn` call at line 411, with the `dataFlag` read from the player unit (`engine/portal.cpp:191` passes the player in; the byte is at `UnitDataFlagOffset`, `engine/stat_apply.cpp:111`); `resolveSpawn` (`eventplan/eventplan.cpp:49`) stays pure. The self-check needs a unit, so a `DataTablesLoaded` listener can only mark the revision as changed. The result is cached per (`DataTablesLoaded` revision, unit `dataFlag`), not per revision alone: a Classic game and a LoD/RotW game can follow each other with no table reload, and the same revision then pairs a different `dt`. The map pointer is never cached.
+- **Which table, and how the two keys pair.** `dt = 0x300a90(dataFlag)` takes a `dataFlag` below 4. The plugin already reads it from the unit as a byte at `UnitDataFlagOffset` `0x1bd` (`stat_apply.cpp:111`; the game's own helper is `0x34a0e0`). The SDK `getTable` takes a `Bank` (`Classic` 1, `Lod` 2, `Rotw` 3, `data_tables.h`). The header does not say how a data flag maps to a `Bank`, so the pairing is **not shown statically**; the self-check below proves it: use the `Bank` whose view matches the `dt` of the unit's data flag, and if none matches, the route stays off.
+- **Self-check (the guard that matters), per revision.** With `dt = 0x300a90(dataFlag)` and `view` from `getTable(ctx, bank, TableId::MonStats, &view)`, require `view.rows == *(dt+0xf58)` and `view.rowCount == *(dt+0xf60)` (the counts at `+0xf60` and `+0x1080` are 64-bit; the SDK `rowCount` is 32-bit, so read them as 64-bit and compare after checking they fit); with the SuperUniques view, require `view.rows == *(dt+0x1078)` and `view.rowCount == *(dt+0x1080)`. This proves the bank / data flag pairing and the `dt` offsets directly, with no engine call. Then, before trusting `0xa121f0`, look up every monstats row's own `Id` through `*(dt+0xf70)` and require the returned index to equal the row's index (duplicates in different case aside). A mismatch or a null map turns the superunique route off and logs why. Do not call `0x3a9050` / `0x3a9150` (they log on a miss and are load-time callbacks) or the row getters (the SDK already gives the rows).
+- **No hook is needed.** Which thread runs `EventsMapOpened`, and whether it is the thread the SDK treats as the captured game thread, is not shown; see Needs game.
+
+### Needs game
+
+1. Does `*(dt+0xf70)` resolve a stock `Id` to its row index at map open (the self-check), and `*(dt+0x1090)` a stock superunique name? Log the index and compare with the SDK row.
+2. Is the miss value exactly -1 at runtime, with `logOnMiss = 0` printing nothing, and does an empty name return -1?
+3. Does the 48-byte `Id` at monstats row `+0` match `monstats.txt` for a mod that renames monsters, and is `Class` at superuniques `+8` a monstats row index (compare with the txt's `Class`)?
+4. What is the `u16` at superuniques row `+0`?
+5. Does `getTable` return `Busy` on the thread that runs `EventsMapOpened` (the server player tick)? If so, a `DataTablesLoaded` listener cannot do the self-check on its own (it needs a unit for the `dataFlag`); it can only mark the revision as changed, and the check and rows must wait for a thread where `getTable` succeeds, or the route stays off.
+6. Does the self-check (`view.rows == *(dt+0xf58)` and the same for `+0x1078`) pass for the `Bank` the unit's data flag implies, and which pairing is it?
+7. Does a stock monster `Id` resolve with a lower-case and an upper-case query alike (proves D2RCore inserts lower-cased keys)?
+
 ## 12. Multiplayer map sync engine checks (issue #98)
 
 Desk research for phase 7 (multiplayer): four questions about syncing a drawn map to a TCP/IP or open-game client. Read from the build 93847 dump
@@ -990,11 +1111,11 @@ outdoor builder are out of scope.
 | Consumer | Cartographer phase 7 (multiplayer map sync); no code exists yet |
 | Module | `D2R.exe`, D2R 3.3 build 93847, stamp `0x6ab3782c`, under D2RLoader 1.3.1 |
 | Location | The table below. Final addresses are found by byte signature |
-| Guard | Each prefix below matched exactly once in the dump's executable sections (`??` is a relative operand) |
+| Guard | Every prefix in the table below was re-run with an overlapping search over the dump's executable sections (`??` is a relative operand) and matches exactly once. The first draft's `0x86bc0` prefix matched 4 times and `0x490300` 3 times; both are now the longer unique forms. `0x4475c0` is not a hook target here (see Q4) |
 | Evidence | `dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]` and `pat "<hex>"`; callers found by scanning `E8`/`E9` targets. SDK headers `network.h`, `lifecycle.h`, `lifecycle_events.h`, `threads.h` and `examples/network-ping` |
 | Validation | None in a game. Static and SDK reading only |
 | Failure mode | If a check below fails, multiplayer stays off for Cartographer: the plugin refuses to open a map for a remote client and logs why |
-| Coexistence | The packet table entries that are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150) are not touched. `NetworkService` is the loader's own route and needs no hook |
+| Coexistence | The packet table entries that are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150) are not touched. `NetworkService` is the loader's own route and needs no hook. `0x44db20` is already hooked by Monster Count and Better Auras, so any Q4 fallback hook there must chain, not replace |
 
 | RVA | Role | Prefix |
 |---|---|---|
@@ -1002,15 +1123,15 @@ outdoor builder are out of scope.
 | `0x592c40` | Object operate dispatcher (table `0x23a51c0`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 50 48 8B F1` |
 | `0x129930` | Client packet `0x03` (LoadAct) handler | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 8B 79 02` |
 | `0x129b80` | Client packet `0x07` handler (lazy room build trigger) | `48 89 5C 24 10 48 89 6C 24 18 56 57 41 56 48 83 EC 30 0F B7 69 01` |
-| `0x86bc0` | Client act load (`isClient = 1`, seed from the packet) | `48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 81 EC A0 00 00 00 48 8B 05 ?? ?? ?? ??` |
+| `0x86bc0` | Client act load (`isClient = 1`, seed from the packet) | `48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 81 EC A0 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 98 00 00 00 44 8B A4 24 00 01 00 00` |
 | `0x86e20` | Client unit placement (second lazy room build trigger) | `48 89 5C 24 18 55 57 41 54 41 56 41 57 48 83 EC 40 48 8B D9` |
 | `0x2ef1c0` | Act creation (runs the DRLG for the act) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 50 44 0F B6 F1` |
 | `0x48aa50` | Server act creation (`isClient = 0`, seed from `game + 0x12c`) | `48 89 5C 24 18 48 89 6C 24 20 56 57 41 56 48 83 EC 60 0F B6 EA` |
 | `0x2ef320` | World room lookup stub, tail-jumps to `0x328680` (callers `0x86ebe`, `0x86f98`, `0x129bf1`) | `48 8B 44 24 30 48 85 C0 ?? ?? 48 8B 40 18 48 8B 52 70 48 89 44 24 30 ?? ?? ?? ?? ?? CC CC CC CC 48 89 5C 24 08` |
 | `0x4817f0` | Server send `(clientCtx, buf, len)` | `40 55 56 57 48 83 EC 40 49 8B E8 48 8B F2` |
 | `0x44db20` | Unit death (`D2Game\src\Unit\SUnitDmg.cpp`) | `48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 41 56 41 57 48 83 EC 50 48 8B E9` |
-| `0x4475c0` | Called from the death path; returns 0 unless the unit at `[arg2 + 8]` is type 1 (a player) | `40 53 55 56 41 55 48 83 EC 38 48 8B 5A 08` |
-| `0x490300` | Missile owner resolver | `48 89 74 24 18 57 48 83 EC 20 48 8B FA 48 8B F1 48 85 D2 ?? ?? 48 8D 4C 24 38 88 54 24 38` |
+| `0x4475c0` | `(game, info, flag)`, called from the death path and 47 other places; returns 0 unless the unit at `[info + 8]` (the victim) has type 1 (a monster; a player is 0) | `40 53 55 56 41 55 48 83 EC 38 48 8B 5A 08` |
+| `0x490300` | Missile owner resolver | `48 89 74 24 18 57 48 83 EC 20 48 8B FA 48 8B F1 48 85 D2 75 20 48 8D 4C 24 38 88 54 24 38 E8 ?? ?? ?? ?? 84 C0 74 1F CC` (the longer form recorded in [dps-counter.md](dps-counter.md)) |
 
 Already recorded elsewhere and relied on here: maze level build `0x3271c0` and room lookup `0x327400` (section 5), spawn calls `0x492cf0` and `0x499ba0` and the room
 populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game + 0x1d8` (section 6).
@@ -1023,14 +1144,14 @@ populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game 
   the pattern to copy. No engine address or hook is needed for it.
 - **SDK limits.** Not available on Battle.net (out of scope). Plugin roles are Client, Server or Shared; Cartographer is Shared with native hooks, and Shared
   plugins must match between host and client. `runOnGameThread` returns Unavailable on a remote TCP/IP client (`threads.h`: a remote client has no local
-  authoritative game thread), so client side work has to run from a hook or a tick the plugin already owns, not from a hop the SDK cannot give.
+  authoritative game thread), so client side work has to run from a hook or a tick the plugin already owns, not from a hop the SDK cannot give. `connectToHost` is called only after entering a game and may return `Busy` on a TCP client until the host's transport packet has arrived, so the client retries; the plan cannot reach the client earlier than that. Per the SDK README, Shared plugins must match in TCP/IP before a client can join at all, so a client without the plugin never gets as far as a map (this mostly answers Q3.3; the rest is the match check itself, **SDK**).
 - **Static (fallback, the game's own packet path).** The client packet handler table is at RVA `0x22bbc40`, stride `0x18`, entries `{handler, size, 0}`,
-  index = classic packet id. Seven entries are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150); the loader's own transport packet id was not
+  index = classic packet id. Entries are not always `{handler, size, 0}`: ids 12 to 16, 23, 36, 76, 77, 103 to 109, 113 and 114 hold the stub `0x78d20` in the first field and the real handler in the third (**static**). Seven entries are D2RLoader thunks into D2RCore (ids 6, 24, 96, 130, 135, 149, 150); the loader's own transport packet id was not
   located (D2RCore is not in the dump). The server sends with `0x4817f0(clientCtx, buf, len)`. A plugin-made packet would need a free packet id, a handler table
   entry and a size, which collides with the loader's thunks and with other plugins. **Not recommended**; consider it only if the SDK route fails a check below.
 - **Needs game.**
-  1. A Shared plugin with a channel on a host and one remote TCP/IP client: does the connection complete, and what does the connection event say when the client
-     lacks the plugin or has a different compatibility token (reject reason)?
+  1. A Shared plugin with a channel on a host and one remote TCP/IP client: does the connection complete, and how many `Busy` retries does `connectToHost` take on a TCP client, and what does the connection event say when the client
+     has a different compatibility token (reject reason)? (A client without the plugin is expected to be refused at join by the SDK's Shared rule; confirm.)
   2. A host to client message of 224 bytes: is it delivered intact, and on which thread does the client callback run?
   3. Does the host see the client's reply on its server thread, and can `getPeerPlayer` be called there?
 - **Recommended route.** `NetworkService`, one channel, a token derived from the plugin's wire version. The host sends the map plan (seed, map id, a few bytes)
@@ -1044,7 +1165,8 @@ populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game 
   property the plan cache in `maze_hooks.cpp` ("per game, so the server's build and the client's build get the same plan") relies on.
 - **Static: client rooms are built lazily.** On the client a room is built through `0x2ef320` -> `0x328680` -> `0x327400` -> `0x3271c0` when the client needs it. Two
   triggers were found: the packet `0x07` handler `0x129b80` and the unit placement function `0x86e20` (the stub's callers are `0x129bf1`, `0x86ebe`, `0x86f98`).
-  Other triggers may exist (not searched exhaustively).
+  `0x3271c0` itself has exactly 5 direct callers (`0x32705e`, `0x327525`, `0x3609cf`, `0x3da6c3`, `0x3dd5f6`; E8/E9 scan, **static**). Which of them can run on a client was not worked out beyond the two
+  triggers above, so "other triggers" is bounded by those 5 plus any indirect call; classify the other three before relying on "plan before the first lazy build".
 - **Static consequence.** `LevelBuild` (`0x3271c0`) and the maze hooks run on **both** the server and the client, each against its own DRLG instance. In single player
   both DRLGs live in one process, so the hook runs twice for one level (already true today). In a TCP/IP game it runs once per DRLG: the host has both, a remote client
   has only the client DRLG. A remote client therefore has the plan only if the plugin put it there before the first lazy build, i.e. before the packet `0x03` / `0x07`
@@ -1060,52 +1182,70 @@ populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game 
   2. Does the remote client reach `0x3271c0` for the slot level before or after the plugin message arrives? If before, it builds the stock slot layout.
   3. Does the lazy build ever run on a thread other than the client main thread?
   4. Log `0x4817f0` ids when a client enters an act and when it enters the slot level, to find the LoadAct sender.
+  5. Log which of the 5 callers of `0x3271c0` fire on a remote client for the slot level.
 
 ### Q3. How can the portal entry be held until a client confirms?
 
 - **Static: the gate point is the server portal operate.** Objects 59 and 60 (the red portal) use OperateFn 15, slot 15 of the table at `0x23a51c0`, which is the
-  server function `0x58f680`, reached through the dispatcher `0x592c40`. It runs where the object is operated (the host). Its refusal paths return 0 (for example at
-  `0x58fcd4`), the existing way the game declines an operate.
+  server function `0x58f680`, reached through the dispatcher `0x592c40`. It runs where the object is operated (the host). It takes one pointer, the operate context the
+  dispatcher builds on its stack (`lea rcx, [rsp+0x20]; call rdi` at `0x592cbf`): `[ctx + 8]` is the object (its `[unit + 0xc]`, read through `0x34ab60`, must be 2, `0x58f69c`)
+  and `[ctx + 0x10]` is the operating player (`0x34b9d0` must return 0, a player, `0x58f6b5`). Its refusal path at `0x58fcd4` calls `0x491960(player, 0x14, ...)` and
+  returns 0 (`r15d`), the existing way the game declines an operate; that call is probably what the client sees (**inference**, callee unread).
 - **Inference (route).** Hook `0x58f680` (the 13-byte prefix above is unique). For the red portal and a client the plugin has not marked as synced: send the plan over
   `NetworkService` (Q1), return 0, and when the client acks, mark it synced and let the next click through (or call the original). Hooking the dispatcher `0x592c40`
   also works but sees every object operate.
+- **Route: player to peer.** The gate sees a player unit, but `sendToClient` needs a `PeerHandle`, and `getPeerPlayer` resolves peer to player only from a scheduled host
+  game-thread callback (**SDK**). So on each Connected event the host queues `getPeerPlayer` and keeps a player id to peer map; a player with no entry is treated as not synced
+  (the gate refuses, or the host's own player skips it).
 - **Needs game.**
-  1. The register layout of `0x58f680` (which holds the operating player and which the portal unit) was read for the refusal path only; confirm it.
-  2. Does a refused operate show the player anything, and does the client retry or must the player click again? A "waiting for client" line through section 9's chat
+  1. The context layout above (object `[ctx + 8]`, player `[ctx + 0x10]`) is **static**; confirm in a game by logging both at the hook.
+  2. Does a refused operate (the `0x491960(player, 0x14)` call) show the player anything, and does the client retry or must the player click again? A "waiting for client" line through section 9's chat
      path (`0x477a30`) is the likely feedback.
-  3. A client that never acks (not running the plugin): timeout, then stock behaviour or refusal? A Shared plugin must match, so the connection event (Q1) may already
-     have told the host.
+  3. A client that never acks (not running the plugin): timeout, then stock behaviour or refusal? A Shared plugin must match to join (Q1), so this is
+     mostly a client that connected but never acks (version skew or a lost message).
   4. The host's own player can skip the wait (same process, the plan is already there).
 - **Recommended route.** Gate at `0x58f680` with an ack from `NetworkService`, one pending entry per portal and client, with a timeout.
 
 ### Q4. What does kill credit need for monsters spawned by map events in multiplayer?
 
-- **Static: where credit is decided.** `0x44db20` is the unit death function. The killer is resolved in the block `0x44dc00` to `0x44dd01`: unit types through `0x34ab60` and
-  `0x34b9d0`, then `0x588b00(killer, victim, ...)` and `0x4471e0(victim, 0, &out)`, owner fields of the killer (`[killer + 0x38]`, `0x341a30`, `0x341a20`, `0x349b70`), and
-  the block ends in `0x4475c0(player, &out, 1, ...)` (call at `0x44dcfc`), which returns 0 unless the unit in its second argument is type 1 (a player). This has the shape of "find the
-  player the kill counts for, then run their kill side effects" (**inference**: the callees were not read in full).
+Result: mostly **needs game**. The death path was read far enough to say which unit is which, not far enough to say who is credited.
+
+- **Static: the death function.** `0x44db20(game, victim, killer, flag)` (`rbp = game`, `rbx = victim`, `rdi = killer`, `r14d = flag`). In the block `0x44dc01` to `0x44dd01`:
+  `0x34ab60(victim)` returns `[unit + 0xc]`, which is not the unit type (probably the mode); the block is skipped when it is 0 or 0x11 (`0x44dc09`, `0x44dc19`). Then
+  `0x588b00(killer, victim, game)` when the killer is non-null, and a check that `0x34b9d0(victim)` returns 1 (`0x44dc3d`; `0x34b9d0` returns `[unit + 0]`, the unit type, and
+  type 0 is a player, type 1 a monster, as `0x58f680` requires a type 0 operator). So the rest of the block runs for **monster victims only**.
+- **Static: the death info record.** `0x4471e0(victim, 0, &out)` fills `out` (`dword +0 = 0`, `qword +8 = victim`, written at `0x447276`); `[rsp + 0x30]` (`out + 0x10`) is set to the
+  killer at `0x44dcf4`. The killer owner fields (`[killer + 0x38]`, `0x341a30`, `0x341a20`, `0x349b70`, `0x34ae80`, `0x341950`) are resolved just before.
+  The call at `0x44dcfc` is `0x4475c0(game, &out, 1)`, where the first argument is the game, not a player.
+- **Static: `0x4475c0`.** It loads the unit at `[info + 8]` (the victim) and returns 0 unless its type is 1 (a monster) (`0x4475df`, `0x447600`); the rest of the body (stat `0x36` is read at `0x447630`)
+  was not read, and it has 48 call sites, so it is a general routine, not something specific to this path. It is **not** shown to select a player, and nothing here says
+  who is credited with experience or drops. The earlier "find the player the kill counts for" reading did not follow from the bytes and is withdrawn.
 - **SDK.** The `MonsterDeath` listener (server thread) gives the killer identity only, with no owner resolution (a missile or minion shows as itself), so it is not a credit
   mechanism.
 - **Static: spawn path.** The map events spawn through `0x492cf0` / `0x499ba0` (section 9). The victim is an ordinary server monster made by the game's spawn core; nothing in
-  the death path was found that checks how it was spawned.
+  the death block was found that checks how it was spawned.
 - **Static: bosses.** The superunique spawn is gated by the once-per-game bitmap at `game + 0x1d8` (per game, not per player), so one superunique can be spawned once per game: a
   design limit for several maps in one game, not a credit item.
-- **Inference.** Monsters spawned on the host are real server units and replicate through the normal unit packets, so credit, experience, drops and quest flags are decided
+- **Inference (unverified).** Monsters spawned on the host are real server units and replicate through the normal unit packets, so credit, experience, drops and quest flags are probably decided
   server side and need no plugin message. What is open is display: the plugin's monster stats (section 7) are applied on the server unit, and whether a client shows them depends
   on whether those stats replicate.
 - **Needs game.**
-  1. Kill a map event monster as a non-host client, directly, with a minion and with a missile: experience, kill count and drop owner.
+  1. Kill a map event monster as a non-host client, directly, with a minion and with a missile: experience, kill count and drop owner (this is the only way to settle credit).
   2. Do the monster stats from section 7 reach a remote client's display (health bar, hover text), or only the server's numbers?
   3. Does the monster level override (section 6) change the experience award for a client far from the monster?
 - **Recommended route.** Spawn on the host only through the section 9 calls and leave credit to the engine, verified by the three checks. If credit is wrong for minions or
-  missiles, resolve the owner with `0x490300` and the owner chain of the `0x44dc00` block before touching `0x4475c0`.
+  missiles, read the rest of `0x4475c0` and the owner chain of the block above (and `0x490300` for missiles) before touching anything; a hook on `0x44db20` is the fallback and must chain with Monster Count and Better Auras.
 
 ### Needs game (summary)
 
 1. Q1: channel connect and reject behaviour with a remote TCP/IP client; 224 byte delivery; callback threads.
 2. Q2: `0x3271c0` hit order on host and remote client for the slot level; does the plan arrive before the remote client's first lazy build; the LoadAct sender.
-3. Q3: `0x58f680` register layout; refusal feedback and retry; a client that never acks; the host's own player.
+3. Q3: `0x58f680` context fields (confirm `[ctx + 8]` and `[ctx + 0x10]`); refusal feedback and retry; a client that never acks; the host's own player; the player to peer map.
 4. Q4: credit and drops for a remote client (own attack, minion, missile); stat replication to clients' displays; range effects.
+5. Ack content: the client solves the layout from its own tables, so its ack should carry a hash of the solved plan and the host can refuse a client whose `maps.txt` or pieces differ (the phase 7 done check, two clients show the same layout).
+6. A client that joins, or rejoins, after the map was opened.
+7. The client's plan cache surviving the level rebuild on a later visit (plan section 1, pd2-resurrected#930).
+8. Which of the 5 callers of `0x3271c0` run on a remote client.
 
 ### Recommended route (all four)
 

@@ -3,7 +3,7 @@
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item: in Harrogath, in Hell, a red portal
 leads to a level built from your `maps.txt`. MIT licensed.
 
-**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, the hooks are built only and have not run in game.** The table loader, the gates, the items and the red portal
+**Status: phase 1 (not released); the maze steering for Cave and Crypt maps is written: its steering decisions are unit tested, and the hooks were run in game for Cave maps (see Tested); Crypt has not been run in game.** The table loader, the gates, the items and the red portal
 are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
@@ -134,7 +134,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Not run in game: every point above is expected behaviour, checked only by unit tests (the steering decisions) and a clean build.
+Run in game for Cave maps (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. Not run in game: a Crypt slot, Nightmare and Hell, and the arrival room check (the probe is rewritten, not yet run).
 
 ## Tested
 
@@ -159,6 +159,12 @@ Not run in game: every point above is expected behaviour, checked only by unit t
   - (Hell game) a town portal scroll used on the map level does nothing, with or without Cartographer (vanilla behaviour on that level);
   - (Hell game) Save and Exit from the map level with the portal open is clean, and the next game opens a map again (the open was not recorded as item or console);
   - (Hell game) Better Auras loaded alongside: both load, the map still opens.
+- In game, the maze slot (Cave level 139, 360 x 360, OffsetX 6000, same build and tools; log lines checked by hand with `MazeProbe` on, results in `docs/reverse-engineering/cartographer.md` section 5):
+  - 46 games in a row, each with a new game and a Cave map (`Corridor`, `Winding` and `Loop` in turn): the slot built the planned shape (built room grid equal to the plan), no crash, no error line;
+  - a map of the other tileset (`Crypt` on a Cave slot) is refused when opened, and a second map in the same game is refused;
+  - a slot too small for the plan (60 x 60) logs the reason and the game's own maze is built, no crash;
+  - entering the slot with no map opened builds the game's own maze;
+  - not checked: which room the player arrives in (the probe cannot tell), a Crypt slot, Nightmare and Hell.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer.md`, section 3, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).
