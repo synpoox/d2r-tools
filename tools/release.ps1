@@ -52,11 +52,12 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     $stage = Join-Path $out "_stage\$name-$ver"
     New-Item -ItemType Directory -Force $stage | Out-Null
     $dlls | Copy-Item -Destination $stage
+    Get-ChildItem $dist -Directory -Filter 'd2rl-*' -ErrorAction SilentlyContinue | Copy-Item -Destination $stage -Recurse
     Copy-Item (Join-Path $dir 'README.md'), (Join-Path $dir 'CHANGELOG.md') -Destination $stage
     $zip = Join-Path $out "$name-$ver.zip"
     Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
     New-Item -ItemType Directory -Force (Join-Path $bundle $name) | Out-Null
-    Copy-Item (Join-Path $stage '*') -Destination (Join-Path $bundle $name)
+    Copy-Item (Join-Path $stage '*') -Destination (Join-Path $bundle $name) -Recurse
     $files += $zip
 
     $changes += "###### $display $ver`n`n$($sec.Body)"

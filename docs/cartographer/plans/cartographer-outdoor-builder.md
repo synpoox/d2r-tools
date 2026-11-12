@@ -6,7 +6,7 @@
 
 Each claim is labelled:
 
-- **[K]** known: from the research docs, or from decompiles in `C:\ghidra-work\decomp`.
+- **[K]** known: from the research docs, or from the author's local decompiles (not in the repo).
 - **[A]** assumption.
 - **[V]** still to verify, in Ghidra or in game.
 
@@ -76,7 +76,7 @@ The LvlPrest ids and sizes quoted are checked against vanilla `lvlprest.txt` (93
 
 ### 1.7 Monsters
 
-D2Game populates the rooms from the slot's levels.txt row, plus each DS1's own preset units [K: the regen spike saw fresh monsters]. Cartographer may write the slot row's mon columns when the map opens. Superuniques are not used. [V] Jungle blocks have `Populate` 1 [K, checked in lvlprest.txt].
+D2Game populates the rooms from the slot's levels.txt row, plus each DS1's own preset units [K: the regen spike saw fresh monsters]. Cartographer may write the slot row's mon columns when the map opens. [A] For the slot level, D2Game's population places no superuniques; a `Boss` superunique is spawned by Cartographer, not by D2Game. Jungle blocks have `Populate` 1 [K, checked in lvlprest.txt].
 
 ## 2. Integration with D2RLoader's D2RCore
 
@@ -226,4 +226,4 @@ Total about 24–25 days for jungle plus snow, before families 3–5.
 - `plugin/cartographer-steer-spike/plugin.cpp` on pd2-resurrected branch [`spike/cartographer-steer-proto`](https://github.com/synpoox/pd2-resurrected/tree/spike/cartographer-steer-proto): the pattern for the `0x3271c0` hook and its byte checks
 - `third_party/PluginSDK/include/D2RLPlugin/hooks.h`
 - `d2rAI-toolkit/d2r-data/93847/data/global/excel/lvlprest.txt`: input for the catalogue tool
-- Decompiles in `C:\ghidra-work\decomp\`: `0x3271c0`, `0x3ee320`, `0x3ee780`, `0x3ecfc0`, `0x3f0490`, `0x3fd170`
+- Local decompiles (not in the repo) of `0x3271c0`, `0x3ee320`, `0x3ee780`, `0x3ecfc0`, `0x3f0490`, `0x3fd170`

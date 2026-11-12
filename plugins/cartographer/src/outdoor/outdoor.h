@@ -3,7 +3,8 @@
 // Takes a layout from src/layout/ and the tileset catalogue (tools/catalogue.tsv, as plain structs) and picks one
 // catalogue piece for every used macro-cell. The piece's four edge sockets must match the cell's facing bits: an exit
 // (a set mask bit) needs a walkable path socket 'p' on that side, no exit needs a closed socket 'x'. The #22 spike
-// showed that a jungle exit is a walkable path, so the layout graph maps 1:1 onto the Act 3 jungle mask pieces.
+// suggested that a jungle exit is a walkable path, so the layout graph would map 1:1 onto the Act 3 jungle mask
+// pieces; that is not proven yet and needs an in-game check.
 //
 // Which pieces a cell may use depends on its role (the first group that has a match wins):
 //   Entrance       entry, then path
@@ -41,6 +42,7 @@ struct Piece {
 	PieceRole role = PieceRole::Path;
 	int weight = 1; // 0 or less: never picked
 	std::string tags;
+	std::string check; // the catalogue's check column, lower case: ok, n/a, variants or empty (other values are skipped)
 	std::vector<std::string> ds1; // DS1 variants of the preset, as listed in the catalogue
 	uint8_t openMask = 0; // layout::kWest..kNorth bits of the 'p' sockets; only meaningful for a 1 x 1 piece
 };
@@ -57,7 +59,9 @@ struct LoadResult {
 
 // Header-driven: columns are found by name, so their order does not matter and extra columns are ignored.
 // Required: tileset, lvlprest, w, h, edgeN, edgeE, edgeS, edgeW, role, weight. Optional: builder, leveltype, name,
-// tags, ds1 (';'-separated). Rows that cannot be used are skipped with a warning. `fileName` only appears in messages.
+// tags, check, ds1 (';'-separated). Rows that cannot be used are skipped with a warning, and so is a row whose check
+// is not ok, n/a or empty; a 'variants' row is kept but gets no DS1 variant. A UTF-8 byte order mark is accepted.
+// `fileName` only appears in messages.
 LoadResult parseCatalogue(std::string_view text, std::string_view fileName = "catalogue.tsv");
 LoadResult loadCatalogueFile(const std::string &path);
 

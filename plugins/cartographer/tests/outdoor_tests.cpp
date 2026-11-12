@@ -1,6 +1,6 @@
 // Host tests for the Cartographer outdoor piece-picker. No game, no SDK: the picker is pure C++.
 // Catalogue data: tests/fixtures/jungle_catalogue.tsv holds the Jungle rows of tools/catalogue.tsv (PR #28, commit
-// f62af4f): derived rows, no game files.
+// 13d6e91): derived rows, no game files.
 #define _CRT_SECURE_NO_WARNINGS
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
@@ -310,4 +310,22 @@ TEST_CASE("picks are stable: same inputs give the same picks, and goldens do not
 		}
 	if (std::getenv("CARTOGRAPHER_GOLDEN")) std::printf("GOLDEN_HASHES %s\n", hashes.c_str());
 	CHECK(hashes == GOLDEN_HASHES);
+}
+
+TEST_CASE("check column: bad rows are skipped with a warning, variants rows get no DS1 variant, a BOM is accepted")
+{
+	const std::string text =
+		"\xEF\xBB\xBF"
+		"tileset\tlvlprest\tw\th\tedgeN\tedgeE\tedgeS\tedgeW\trole\tweight\tcheck\tds1\n"
+		"T\t1\t1\t1\tx\tp\tx\tx\tpath\t1\tok\ta.ds1;b.ds1\n"
+		"T\t2\t1\t1\tx\tp\tx\tp\tpath\t1\tvariants\tc.ds1;d.ds1\n"
+		"T\t3\t1\t1\tx\tx\tx\tp\tpath\t1\tmismatch\te.ds1\n"
+		"T\t4\t1\t1\tx\tx\tx\tp\tpath\t1\t\te.ds1\n";
+	const LoadResult cat = parseCatalogue(text);
+	REQUIRE(cat.catalogue.pieces.size() == 3); // the 'mismatch' row is skipped
+	CHECK(cat.warnings.size() == 1);
+	CHECK(cat.catalogue.pieces[1].ds1.empty());
+	const PickResult r = pickPieces(s1Line(), cat.catalogue, "T", 3);
+	REQUIRE(r.ok());
+	CHECK(r.at(1, 0).ds1Variant == -1);
 }

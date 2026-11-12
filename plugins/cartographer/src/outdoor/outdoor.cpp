@@ -19,6 +19,7 @@ using layout::kWest;
 // Edge order of Piece::edge and its mask bits.
 constexpr uint8_t kEdgeBit[4] = {kNorth, kEast, kSouth, kWest};
 constexpr int dxOf[4] = {0, 1, 0, -1}; // N E S W
+constexpr int kMaxWeight = 1000000; // keeps the weight total in 64 bits for any catalogue size
 constexpr int dyOf[4] = {-1, 0, 1, 0};
 
 std::string lower(std::string_view s)
@@ -129,7 +130,8 @@ const char *roomName(layout::Role r)
 
 bool pickable(const Piece &p, const std::string &tilesetLower)
 {
-	return p.w == 1 && p.h == 1 && p.weight > 0 && p.role != PieceRole::Border && p.role != PieceRole::Filler &&
+	const bool checked = p.check.empty() || p.check == "ok" || p.check == "n/a" || p.check == "variants";
+	return checked && p.w == 1 && p.h == 1 && p.weight > 0 && p.role != PieceRole::Border && p.role != PieceRole::Filler &&
 		lower(p.tileset) == tilesetLower;
 }
 
@@ -177,11 +179,11 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		res.warnings.push_back(file + " line " + std::to_string(line) + ": " + msg);
 	};
 
-	enum { Tileset, Builder, LevelType, LvlPrest, Name, W, H, EdgeN, EdgeE, EdgeS, EdgeW, Role, Weight, Tags, Ds1, kCols };
+	enum { Tileset, Builder, LevelType, LvlPrest, Name, W, H, EdgeN, EdgeE, EdgeS, EdgeW, Role, Weight, Tags, Ds1, Check, kCols };
 	static const char *colNames[kCols] = {"tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgen", "edgee",
-		"edges", "edgew", "role", "weight", "tags", "ds1"};
+		"edges", "edgew", "role", "weight", "tags", "ds1", "check"};
 	static const char *colShown[kCols] = {"tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgeN", "edgeE",
-		"edgeS", "edgeW", "role", "weight", "tags", "ds1"};
+		"edgeS", "edgeW", "role", "weight", "tags", "ds1", "check"};
 	int col[kCols];
 	for (int &c : col) c = -1;
 
@@ -191,9 +193,10 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 	while (pos <= text.size()) {
 		size_t end = text.find('\n', pos);
 		if (end == std::string_view::npos) end = text.size();
-		const std::string line(text.substr(pos, end - pos));
+		std::string line(text.substr(pos, end - pos));
 		pos = end + 1;
 		++lineNo;
+		if (lineNo == 1 && line.size() >= 3 && line.compare(0, 3, "﻿") == 0) line.erase(0, 3); // UTF-8 byte order mark
 		if (trim(line).empty() || line[0] == '#') continue;
 		const std::vector<std::string> row = split(line, '\t');
 
@@ -240,6 +243,15 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 			warn(lineNo, "weight of " + who + " is not a number; row skipped");
 			continue;
 		}
+		if (p.weight > kMaxWeight) {
+			warn(lineNo, "weight of " + who + " is above " + std::to_string(kMaxWeight) + "; using " + std::to_string(kMaxWeight));
+			p.weight = kMaxWeight;
+		}
+		p.check = lower(cellAt(row, col[Check]));
+		if (!p.check.empty() && p.check != "ok" && p.check != "n/a" && p.check != "variants") {
+			warn(lineNo, "check of " + who + " is '" + p.check + "', not ok or n/a; row skipped (its DS1 does not match the catalogue)");
+			continue;
+		}
 		if (!parseRole(cellAt(row, col[Role]), p.role)) {
 			warn(lineNo, "role '" + cellAt(row, col[Role]) + "' of " + who + " is not one of path, clearing, entry, boss, event, filler, border; row skipped");
 			continue;
@@ -268,6 +280,7 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		if (col[Ds1] >= 0)
 			for (const std::string &f : split(cellAt(row, col[Ds1]), ';'))
 				if (!trim(f).empty()) p.ds1.push_back(trim(f));
+		if (p.check == "variants") p.ds1.clear(); // the variants differ in shape: no DS1 variant is drawn for this piece
 		res.catalogue.pieces.push_back(std::move(p));
 	}
 	if (!haveHeader) res.warnings.push_back(file + " is empty; it has no header row");
@@ -362,12 +375,13 @@ PickResult pickPieces(const layout::Layout &layout, const Catalogue &catalogue, 
 				return catalogue.pieces[static_cast<size_t>(a)].lvlPrest < catalogue.pieces[static_cast<size_t>(b)].lvlPrest;
 			});
 			layout::Pcg32 rng(seed ^ layout::splitmix64(static_cast<uint64_t>(y) * static_cast<uint64_t>(layout.width) + static_cast<uint64_t>(x) + 1u));
-			uint32_t total = 0;
-			for (int i : candidates) total += static_cast<uint32_t>(catalogue.pieces[static_cast<size_t>(i)].weight);
-			uint32_t roll = rng.below(total);
+			uint64_t total = 0; // weights are capped at kMaxWeight when loaded; a hand-built catalogue is clamped here
+			for (int i : candidates) total += static_cast<uint64_t>(std::min(catalogue.pieces[static_cast<size_t>(i)].weight, kMaxWeight));
+			uint64_t roll = total <= 0xFFFFFFFFull ? rng.below(static_cast<uint32_t>(total))
+				: ((static_cast<uint64_t>(rng.next()) << 32) | rng.next()) % total;
 			int chosen = candidates.back();
 			for (int i : candidates) {
-				const uint32_t w = static_cast<uint32_t>(catalogue.pieces[static_cast<size_t>(i)].weight);
+				const uint64_t w = static_cast<uint64_t>(std::min(catalogue.pieces[static_cast<size_t>(i)].weight, kMaxWeight));
 				if (roll < w) {
 					chosen = i;
 					break;
