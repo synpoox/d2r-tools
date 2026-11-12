@@ -218,11 +218,7 @@ TEST_CASE("bad rows are rejected with a plain message and never crash decide")
 	w.waves = 9999;
 	bad.push_back(w);
 	Row wt = row("n", Kind::Shrine, "x", NameKind::Object);
-	wt.weight = 0;
-	bad.push_back(wt);
 	wt.weight = -1;
-	bad.push_back(wt);
-	wt.weight = 1 << 30;
 	bad.push_back(wt);
 
 	const auto errors = validateRows(bad);
@@ -322,4 +318,107 @@ TEST_CASE("golden picks are stable")
 	for (int s = 0; s < 40; ++s) fires += decide(rows, 20, static_cast<uint64_t>(s), &kRoom) ? '1' : '0';
 	std::printf("fires20: %s\n", fires.c_str());
 	CHECK(fires == "0000010010010100000000000110100000100001");
+}
+
+TEST_CASE("Weight rule: 0 is off, negative is an error, big weights are clamped with a warning")
+{
+	Row off = row("off", Kind::Horde, "x");
+	off.weight = 0;
+	CHECK(validateRow(off, 2).empty());
+	CHECK(warnRow(off, 2).empty());
+	Row neg = row("neg", Kind::Horde, "x");
+	neg.weight = -1;
+	CHECK(!validateRow(neg, 2).empty());
+	Row big = row("big", Kind::Horde, "x");
+	big.weight = 1 << 30;
+	CHECK(validateRow(big, 2).empty());
+	CHECK(!warnRow(big, 2).empty());
+	Row ok = row("ok", Kind::Horde, "x");
+	ok.weight = 5000; // no longer squashed by the old cap of 10000
+	CHECK(warnRow(ok, 2).empty());
+
+	// 0 never fires; a table of only 0s gives no event.
+	std::vector<Row> rows = {off, ok};
+	for (int s = 0; s < 300; ++s) {
+		auto e = decide(rows, 100, static_cast<uint64_t>(s), &kRoom);
+		REQUIRE(e);
+		CHECK(e->name == "ok");
+	}
+	CHECK(!decide({off}, 100, 1, &kRoom));
+
+	// 5000:2000 is about 71% / 29%, which the old 10000 cap kept and a cap of 1000 would not.
+	Row a = row("a", Kind::Horde, "x");
+	a.weight = 5000;
+	Row b = row("b", Kind::Horde, "x");
+	b.weight = 2000;
+	int na = 0;
+	for (int s = 0; s < 4000; ++s) na += decide({a, b}, 100, static_cast<uint64_t>(s), &kRoom)->name == "a";
+	CHECK(na > 2650);
+	CHECK(na < 3050);
+
+	// Many rows at the cap: the total passes 2^32 and every draw still lands on a row.
+	std::vector<Row> many(5000, big);
+	for (int s = 0; s < 200; ++s) CHECK(decide(many, 100, static_cast<uint64_t>(s), &kRoom));
+}
+
+TEST_CASE("Waves is only checked on Ambush rows")
+{
+	Row h = row("h", Kind::Horde, "x");
+	h.waves = 0;
+	CHECK(validateRow(h, 2).empty());
+	h.waves = 9999;
+	CHECK(validateRow(h, 2).empty());
+	Row a = row("a", Kind::Ambush, "x");
+	a.waves = 0;
+	CHECK(!validateRow(a, 2).empty());
+	a.waves = 51;
+	CHECK(!validateRow(a, 2).empty());
+	a.waves = 50;
+	CHECK(validateRow(a, 2).empty());
+	Row c = row("c", Kind::Boss, "x");
+	c.count = 200;
+	CHECK(validateRow(c, 2).empty());
+	c.count = 201;
+	CHECK(!validateRow(c, 2).empty());
+}
+
+TEST_CASE("error lines come from Row::line, else the row index + 2")
+{
+	Row bad = row("", Kind::Boss, "x");
+	std::vector<Row> rows = {bad, bad};
+	rows[1].line = 17;
+	const auto errors = validateRows(rows);
+	REQUIRE(errors.size() == 2);
+	CHECK(errors[0].find("line 2:") != std::string::npos);
+	CHECK(errors[1].find("line 17:") != std::string::npos);
+}
+
+TEST_CASE("a mistyped Kind gets a did-you-mean")
+{
+	Row r = row("n", Kind::Invalid, "x");
+	r.kindText = "Bos";
+	const std::string m = validateRow(r, 4);
+	CHECK(m.find("'Bos'") != std::string::npos);
+	CHECK(m.find("Did you mean Boss?") != std::string::npos);
+	r.kindText = "Treas";
+	CHECK(validateRow(r, 4).find("Did you mean Treasure?") != std::string::npos);
+	r.kindText = "zzzzzz";
+	CHECK(validateRow(r, 4).find("Did you mean") == std::string::npos);
+	r.kindText = "";
+	CHECK(validateRow(r, 4).find("needs a Kind") != std::string::npos);
+	CHECK(suggestKind("ambsh") == Kind::Ambush);
+	CHECK(!suggestKind(""));
+}
+
+TEST_CASE("a Treasure with a blank Drop warns but is still used")
+{
+	Row t = row("t", Kind::Treasure, "goblin", NameKind::Monster);
+	CHECK(validateRow(t, 2).empty());
+	CHECK(warnRow(t, 2).find("no Drop") != std::string::npos);
+	t.drop = "Act 5 (H) Super C";
+	CHECK(warnRow(t, 2).empty());
+	Row h = row("h", Kind::Horde, "x");
+	CHECK(warnRow(h, 2).empty());
+	CHECK(warnRows({row("t", Kind::Treasure, "g"), h}).size() == 1);
+	CHECK(decide({row("t", Kind::Treasure, "g")}, 100, 1, &kRoom));
 }
