@@ -4,8 +4,7 @@ A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's ow
 leads to a level built from your `maps.txt`. MIT licensed.
 
 **Status: phase 1 (not released).** The table loader, the gates, the items and the red portal
-are written and unit tested. Nothing has been run in a game yet. The engine parts the portal needs have byte signatures
-checked against a memory dump of build 93847 only; until they are checked in game, treat the portal as untested. If any
+are written, unit tested and checked live in one game (D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta; see Tested). If any
 part is not found exactly once the plugin loads, reads and checks your tables, and the portal stays off
 (`cartographer check` says which part is missing). Generated layouts come in later phases.
 
@@ -25,7 +24,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 ## Requirements
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
-- D2RLoader (not yet tested with any version)
+- D2RLoader (tested with 1.3.1-beta)
 - A mod (without one, no tables are read, so there are no maps and only the default settings apply), because the map level is added to the mod's tables (step 3 below).
 
 ## Installation
@@ -74,12 +73,23 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part
 - The installer on a copy of the vanilla 93847 tables, run twice.
 - The portal parts' byte signatures, each unique and resolving to its recorded address in a dump of build 93847
   (`python -I plugins\cartographer\tools\check_portal_signatures.py <dump>`; static, no game).
-- Not yet: installed into a game, or opened in game. Game checks: all twelve parts found at load, `UnitStat` in particular (it is
-  D2RLoader's thunk and must be in place when Cartographer loads; if it is not, `cartographer check` looks again for the called
-  parts with the load-time `signatures.txt` and turns the portal on if all are now found; the two item hooks are written at
-  load only, so a missing hooked part needs a restart).
-- Not yet in game either: an item no map names is used like an ordinary item (the hooks pass it through).
-- Not yet in game either: a spell-16 use with no matching check, whose code names a map, is dropped (it opens nothing and is not passed to the game).
-- Game check for `cartographer open <Name>`: the log line "first player unit seen by the tick" shows the same id as
-  "local player ready"; the portal opens; step through it and back; leave the game with the portal still open; repeat with
+- In game (D2R 3.3.0 build 93847, image stamp 0x6ab3782c, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty
+  unless noted; screenshots and logs checked by hand, not automated):
+  - all thirteen parts are found by signature at load and the three hooks install; the unit id the tick sees equals
+    `LocalPlayerReady.playerId` (1 and 1);
+  - the map's item opens its own map's red portal in Harrogath; stepping through loads the map level and the portal back works;
+  - a second open in the same game is refused with "a map has already been opened in this game";
+  - the Hell gate refuses with "can only be opened in Hell" (a map whose `Difficulty` is Hell, used on Normal);
+  - `cartographer open <Name>` opens the portal with no item in town, and refuses outside town ("only be opened in town");
+  - a typo in `maps.txt` gives a plain-English line in `cartographer-report.txt` and in `cartographer check`
+    (tileset 'Jungel' is not known, did you mean 'Jungle', that map is skipped);
+  - town portal scrolls (blue portal, scroll used) and identify scrolls (ring identified, scroll used) work with Cartographer loaded.
+- Not exercised in game: a Hell-difficulty open that succeeds, the character level gate, the "no free spot" gate, an ordinary
+  spell-16 item that no map names compared with vanilla, and the spell-16 use with no matching check (below).
+- Seen in game, not a Cartographer fault: a town portal scroll used on the map level itself did nothing (not compared with
+  a game without Cartographer, which has no red portal to reach that level).
+- Seen in game: `core-maps` (pd2-resurrected) hooks the same item function, so it fails to install its own hook when
+  loaded next to Cartographer; run one or the other.
+- The spell-16 use with no matching check, whose code names a map, is dropped (it opens nothing and is not passed to the game).
+- Not yet in game for `cartographer open <Name>`: leaving the game with the portal still open; repeating with
   Better Auras loaded and an aura that reserves mana; as a TCP/IP client the command refuses.

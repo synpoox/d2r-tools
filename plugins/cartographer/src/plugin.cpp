@@ -28,7 +28,7 @@ constexpr const char* PluginName = "cartographer";
 constexpr const char* PluginVersion = "0.1.0";  // PluginInfo::version too; CHANGELOG.md
 
 const D2RL::PluginContext* g_context = nullptr;
-std::wstring g_tableDir;   // <mod>\<Mod>.mpq\data\global\excel\d2rloader\cartographer
+std::wstring g_tableDir;   // <Mod>.mpq\data\global\excel\d2rloader\cartographer
 std::wstring g_excelDir;   // ...\excel: the game's own tables, for the name checks
 std::wstring g_reportPath;
 std::vector<carto::SignatureOverride> g_overrides;
@@ -302,8 +302,13 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 	plog::Info("%s loaded (mod %s, %s)", PluginVersion, context->activeMod != nullptr ? context->activeMod : "none", image);
 	try {
 		if (context->modDirectory != nullptr && context->activeMod != nullptr) {
-			g_excelDir = std::wstring(context->modDirectory) + L"\\" + Widen(context->activeMod) + L".mpq\\data\\global\\excel";
+			// D2RLoader 1.3.1 passes the <Mod>.mpq folder itself; the mod folder above it is accepted too.
+			g_excelDir = std::wstring(context->modDirectory) + L"\\data\\global\\excel";
+			if (GetFileAttributesW(g_excelDir.c_str()) == INVALID_FILE_ATTRIBUTES) {
+				g_excelDir = std::wstring(context->modDirectory) + L"\\" + Widen(context->activeMod) + L".mpq\\data\\global\\excel";
+			}
 			g_tableDir = g_excelDir + L"\\d2rloader\\cartographer";
+			plog::Info("mod folder %s, tables read from %s", Narrow(context->modDirectory).c_str(), Narrow(g_tableDir).c_str());
 		}
 		std::wstring logDir = context->pluginLogPath != nullptr ? context->pluginLogPath : L"";
 		const size_t slash = logDir.find_last_of(L"\\/");
