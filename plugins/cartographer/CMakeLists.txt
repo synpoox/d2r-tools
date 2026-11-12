@@ -15,8 +15,7 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 add_subdirectory(${CARTOGRAPHER_SDK_DIR} PluginSDK EXCLUDE_FROM_ALL)
 
 # One build rule for every Cartographer library (the sibling PRs for stats, events, outdoor and maze rebase onto this):
-#  - Every library is STATIC and linked into cartographer.dll, so dist\cartographer\ ships only the plugin and its
-#    companion folder. Never add a SHARED library: build.ps1 and release.ps1 collect every Release DLL as a plugin.
+#  - Every library is STATIC and linked into cartographer.dll, so dist\cartographer\ ships only the plugin. Never add a SHARED library: build.ps1 and release.ps1 collect every Release DLL as a plugin.
 #  - Every library gets the plugin's MSVC runtime (static, /MT) and /EHsc; a mix fails to link (LNK2038). Create a
 #    library with cartographer_library(<name> <sources...>), not add_library, and link it into the plugin target.
 function(cartographer_library name)

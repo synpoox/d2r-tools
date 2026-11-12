@@ -136,6 +136,9 @@ auto LoadAll() -> Loaded {
 	if (!names.haveMonsters || !names.haveSuperUniques || !names.haveItems) {
 		loaded.report.Note("maps.txt", 0, "some of the game's tables could not be read, so Monsters, Boss and Item names are not checked.");
 	}
+	if (names.haveItems && !names.haveItemSpells) {
+		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
+	}
 	std::string text;
 	std::vector<carto::MapDef> fromFile;
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {

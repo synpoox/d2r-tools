@@ -329,11 +329,12 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	bool mapItem = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		mapItem = g_tables != nullptr && FindMapByItem(g_tables->maps, code) != nullptr;
 		tables = g_pendingTables;
 		if (g_pendingGame == game && g_pendingPlayer == player && g_pendingItem == item) {
 			map = g_pending;
 		}
+		// A passed check decides, so a reload between check and use cannot turn a map item into a plain one.
+		mapItem = map != nullptr || (g_tables != nullptr && FindMapByItem(g_tables->maps, code) != nullptr);
 		g_pending = nullptr;
 		g_pendingTables.reset();
 		g_pendingGame = g_pendingPlayer = g_pendingItem = nullptr;

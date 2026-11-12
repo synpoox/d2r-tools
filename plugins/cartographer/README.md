@@ -26,7 +26,7 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
 
 - Diablo II: Resurrected 3.3 (Battle.net or Steam). Other versions are attempted, not tested.
 - D2RLoader (not yet tested with any version)
-- A mod (without one, no tables are read and only the built-in map and defaults apply), because the map level is added to the mod's tables (step 3 below).
+- A mod (without one, no tables are read, so there are no maps and only the default settings apply), because the map level is added to the mod's tables (step 3 below).
 
 ## Installation
 
@@ -62,8 +62,8 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | Properties, EventChance, Density, Champions, Uniques | Numbers, kept for later phases | cartographer.txt |
 
 `cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0) and
-`Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but only
-the built-in preset map opens.
+`Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
+map in `maps.txt` opens through the one map level (`Preset` slot); nothing opens without a mod and a `maps.txt`.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md`. A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.

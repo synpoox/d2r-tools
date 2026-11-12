@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the built-in preset map)
+      levels.txt    one new level, "Cartographer Preset", a copy of Act 5 Colossal Summit (the level every map opens through)
       lvlprest.txt  its level preset row (a level made from a preset needs one with its own level id)
     It also writes d2rloader\cartographer\slots.txt, which tells the plugin the level id it got.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with

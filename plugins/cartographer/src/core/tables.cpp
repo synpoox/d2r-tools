@@ -43,6 +43,11 @@ auto Contains(const std::vector<std::string>& names, std::string_view word) -> b
 	return std::find(names.begin(), names.end(), word) != names.end();
 }
 
+// Item codes are matched ignoring case, like FindMapByItem.
+auto ContainsNoCase(const std::vector<std::string>& names, std::string_view word) -> bool {
+	return std::any_of(names.begin(), names.end(), [&](const std::string& n) { return EqualsNoCase(n, word); });
+}
+
 // A whole number in [lo, hi].
 auto ParseInt(const std::string& cell, int lo, int hi, int* out) -> bool {
 	if (cell.empty()) {
@@ -197,23 +202,25 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report) -> 
 			fail("the Item cell is empty. A map is opened by its own item: put an item code here, like 't20'.");
 		} else if (map.item.size() > 4) {
 			fail("Item '" + map.item + "' is too long: an item code has up to 4 letters, like 'shm1'.");
-		} else if (names.haveItems && !Contains(names.itemCodes, map.item)) {
+		} else if (names.haveItems && !ContainsNoCase(names.itemCodes, map.item)) {
 			fail(NotInTable("item code", map.item, "the item tables (misc.txt, weapons.txt, armor.txt)", names.itemCodes));
 		} else {
+			bool spellOk = true;
 			if (names.haveItemSpells) {
 				int spell = -1;
 				for (const auto& entry : names.itemSpells) {
-					if (entry.first == map.item) {
+					if (EqualsNoCase(entry.first, map.item)) {
 						spell = entry.second;
 					}
 				}
 				if (spell != MapItemSpell) {
+					spellOk = false;
 					fail("Item '" + map.item + "' cannot open a map: it needs item spell " + std::to_string(MapItemSpell) +
 					     " (pSpell in misc.txt), and " + (spell < 0 ? std::string("it is not a misc.txt item.") : "it has " + std::to_string(spell) + "."));
 				}
 			}
 			for (const MapDef& other : maps) {
-				if (EqualsNoCase(other.item, map.item)) {
+				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
 					fail("item '" + map.item + "' already opens the map '" + other.name + "' (row " + std::to_string(other.line) +
 					     "). Each map needs an item of its own.");
 					break;

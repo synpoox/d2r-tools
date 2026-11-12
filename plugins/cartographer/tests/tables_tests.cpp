@@ -219,6 +219,30 @@ TEST_CASE("a map's item needs item spell 16 when misc.txt could be read") {
 	CHECK(text.find("it is not a misc.txt item.") != std::string::npos);
 }
 
+TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", 0}};
+	names.itemCodes.push_back("t20");
+	names.itemCodes.push_back("t21");
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "Up\tPreset\tLoop\t\t\tT20\nBlank\tPreset\tLoop\t\t\tT21\n", names, report);
+	REQUIRE(maps.size() == 1);
+	CHECK(maps[0].name == "Up");
+	CHECK(report.Errors() == 1);  // only T21's spell
+}
+
+TEST_CASE("a row refused for its spell is not also reported as a duplicate") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t21", 0}};
+	names.itemCodes.push_back("t21");
+	Report report;
+	LoadMaps(std::string(Header) + "A\tPreset\tLoop\t\t\tt21\nB\tPreset\tLoop\t\t\tt21\n", names, report);
+	CHECK(report.Errors() == 2);  // one each, and no "already opens"
+	CHECK(Joined(report).find("already opens") == std::string::npos);
+}
+
 TEST_CASE("an item opens exactly the map that names it, and any other item opens none") {
 	Report report;
 	const auto maps = Load("Hat\tPreset\tLoop\t\t\tshm1\nShore\tPreset\tLoop\t\t\tt20\n", report);

@@ -27,7 +27,7 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
 inline constexpr int MapItemSpell = 16;
-// The slot (in slots.txt) that holds the built-in preset map. Later phases add slots for built layouts.
+// The slot (in slots.txt) of the map level every map opens through. Later phases add slots for built layouts.
 inline constexpr const char* PresetSlot = "Preset";
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
@@ -42,7 +42,7 @@ struct GameNames {
 };
 
 struct MapDef {
-	int line = 0;  // row in maps.txt; 0 for the built-in map
+	int line = 0;  // row in maps.txt
 	std::string name, tileset, shape, size = "Medium", item, boss;
 	std::vector<std::string> monsters;
 	int level = DefaultMonsterLevel;
