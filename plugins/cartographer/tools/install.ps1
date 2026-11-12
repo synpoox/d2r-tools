@@ -156,6 +156,8 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelGroup' $NoGroup
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
+    Set-CellIf $levels $cells 'SubType' '-1'
+    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
     # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
     $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
@@ -208,8 +210,6 @@ if ($existing -ge 0) {
     Set-Cell $levels $cells 'OffsetX' '6000'
     Set-Cell $levels $cells 'OffsetY' '0'
     Set-CellIf $levels $cells 'Position' '0'
-    Set-CellIf $levels $cells 'SubType' '-1'    # the template's Siege sub-level set does not belong on a Jungle level
-    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) {
         Set-Cell $levels $cells "Vis$n" '0'
         Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
@@ -245,11 +245,13 @@ if ($outdoorExisting -ge 0) {
     Set-CellIf $levels $cells 'LevelGroup' $NoGroup
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
+    Set-CellIf $levels $cells 'SubType' '-1'
+    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
     if (($cells -join "`t") -ne $before) {
         $levels.Lines[$outdoorExisting] = $cells -join "`t"
         Save-Table $levels
-        Write-Host "levels.txt: repaired level $outdoorId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0)."
+        Write-Host "levels.txt: repaired level $outdoorId (no quest, no level group, no entry or warp text, no sub-level set, Vis0..Vis7 = 0)."
     }
 } else {
     $drlgCol = Column $levels 'DrlgType'
@@ -286,6 +288,8 @@ if ($outdoorExisting -ge 0) {
     Set-Cell $levels $cells 'OffsetX' $OutdoorOffsetX
     Set-Cell $levels $cells 'OffsetY' $OutdoorOffsetY
     Set-CellIf $levels $cells 'Position' '0'
+    Set-CellIf $levels $cells 'SubType' '-1'    # level 111's Siege sub-level set does not belong on a Jungle level
+    Set-CellIf $levels $cells 'SubTheme' '-1'
     for ($n = 0; $n -lt 8; $n++) {
         Set-Cell $levels $cells "Vis$n" '0'
         Set-Cell $levels $cells "Warp$n" '-1'
