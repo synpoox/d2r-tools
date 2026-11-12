@@ -5,7 +5,7 @@
 - Reads `maps.txt` and `cartographer.txt`, and writes `cartographer-report.txt` with a plain-English line for every row it skipped.
 - Each map is opened by its own item (the `Item` in `maps.txt`); there is no general map item, random map or built-in map.
 - A map's item opens a red portal to that map from Harrogath in Hell, once per game.
-- `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a named map without an item (it refuses with a message in a game you joined over TCP/IP, or if the game part is missing).
+- `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map without its item.
 - `tools\install.ps1` adds the map level to your mod's tables (no items), checks every table first and keeps a `.bak` copy (safe to run twice).
 - Without a mod, no tables are read and there are no maps; only the default settings apply.
 - A `signatures.txt` entry that cannot be checked (wildcards where the game is patched, or not at the start of a function) is refused and logged.

@@ -2,7 +2,7 @@
 
 > **Draft.** Cartographer is being built in phases. Most of what is described here does not work yet. The words and columns are the plan. Each feature is marked with the phase it lands in.
 
-Cartographer adds random maps to your mod. A player uses a map's own item in Harrogath. A red portal opens. Behind it is a new random level. Every game builds a new one.
+Cartographer adds new maps to your mod. A player uses a map's own item in Harrogath. A red portal opens. Behind it is a new level, built at random. Every game builds a new one.
 
 Each game opens **one map**. After that, more maps are refused until the next game. A refused map item is kept, and the player is told why.
 

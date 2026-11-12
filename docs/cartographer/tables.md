@@ -5,7 +5,7 @@
 All tables are tab-separated `.txt` files with a header row. They live in the mod's `data/global/excel/d2rloader/cartographer/` folder.
 
 - Words that are Cartographer's own (tileset, shape, size, target, kind) ignore case.
-- Names from the game's own tables (monster `Id`, item codes, stat names) must match exactly. The check suggests the right spelling.
+- Names from the game's own tables (monster `Id`, stat names) must match exactly; item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
 
 ## maps.txt (required)

@@ -55,7 +55,9 @@ enum class OpenStart {
 };
 
 // 'cartographer open <Name>': asks the game to open the map for the local player without an item. Safe from any thread.
-auto RequestOpen(const std::string& name) -> OpenStart;
+// `mapName` (optional) gets the map's own name, as written in maps.txt, when the request was posted. A stale earlier request
+// that this one replaces is reported to the player.
+auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> OpenStart;
 
 auto PortalLive() -> bool;
 auto PartStatuses() -> std::vector<PartStatus>;

@@ -9,7 +9,7 @@ The signatures are read from src/core/part_signatures.h (the ones the plugin com
 For each part (docs/reverse-engineering/cartographer.md, section 3) it checks that the signature matches exactly once
 in the executable sections (VirtualSize of each, as the plugin's scanner does), that the match resolves to the recorded
 RVA, that the whole signature under its mask holds at that RVA (the guard), and that the recorded max patch length ends
-where the signature says: the byte there starts the first relative branch, call or RIP-relative instruction. For the two
+where the signature says: the byte there starts the first relative branch, call or RIP-relative instruction. For the
 hooked parts it also checks that the hook size (bytes copied for the inline hook) fits in the max patch length. The
 max patch length of a part that is only called is informational (never patched) and printed as n/a. Finally it checks
 that OpenRedPortal contains calls (E8) to the matched GameCounter, which ties GameCounter's one unmasked displacement to
@@ -41,6 +41,7 @@ PARTS = [
     ("UnitStat", 0x2F5020, 0, "FF 25", 0),
     ("UnitCoords", 0x34A040, 19, "75", 0),
     ("FindFreeSpot", 0x517F90, 23, "48 8B 05", 0),
+    ("PlayerTick", 0x42E350, 27, "0F 84", 14),
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000

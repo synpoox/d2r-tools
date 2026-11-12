@@ -87,17 +87,16 @@ Part g_parts[PartCount] = {
 	{"FindFreeSpot", sig::FindFreeSpot, 0, false, nullptr, {}, {}},
 	// Not needed by the map item: only the console command waits on it. Build 93847: the player mana step
 	// (game, player), run once per frame for every live player (docs/reverse-engineering/cartographer.md section 3).
-	{"PlayerTick",
-	 "48 89 5C 24 10 48 89 6C 24 18 56 57 41 57 48 83 EC 20 48 8B FA 4C 8B F9 48 85 D2 0F 84 ?? ?? ?? ?? 45 33 C0 48 8B CF 41 8D 50 08 E8 ?? ?? ?? ?? "
-	 "48 8B CF 8B F0 E8 ?? ?? ?? ?? 33 DB 48 8B CF 8B E8 8D 53 55 E8 ?? ?? ?? ?? 85 C0 0F 85 ?? ?? ?? ??",
-	 14, false, nullptr, {}, {}},
+	{"PlayerTick", sig::PlayerTick, 14, false, nullptr, {}, {}},
 };
 
 std::mutex g_lock;
 std::shared_ptr<const Tables> g_tables;
 const MapDef* g_pending = nullptr;  // chosen at the check, used at the use; kept alive by g_pendingTables
 std::shared_ptr<const Tables> g_pendingTables;
-const void* g_pendingGame = nullptr;    // the game, player and item the check passed for: the use must be the same
+enum class Verdict { None, Map, Plain };  // what the check decided for g_pendingItem: opens a map, or goes to the game
+Verdict g_verdict = Verdict::None;
+const void* g_pendingGame = nullptr;    // the game, player and item the check decided for: the use must be the same
 const void* g_pendingPlayer = nullptr;
 const void* g_pendingItem = nullptr;
 std::atomic<bool> g_live{false};
@@ -112,7 +111,16 @@ std::atomic<bool> g_requested{false};      // g_request has something to serve: 
 std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
 std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this game: this process has a server
+bool g_installed = false;                       // InstallPortal ran to the end
 std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
+
+// Forgets the check-to-use state. g_lock must be held.
+void ClearPending() noexcept {
+	g_pending = nullptr;
+	g_pendingTables.reset();
+	g_verdict = Verdict::None;
+	g_pendingGame = g_pendingPlayer = g_pendingItem = nullptr;
+}
 
 auto NowMs() noexcept -> uint64_t {
 	return GetTickCount64();
@@ -277,10 +285,9 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		tables = g_tables;
 	}
 	{
-		// Any earlier pass is stale from here on: only a check that passes below sets it again.
+		// Any earlier verdict is stale from here on: only a check that decides below sets it again.
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_pending = nullptr;
-		g_pendingTables.reset();
+		ClearPending();
 	}
 	const MapDef* map = tables != nullptr ? FindMapByItem(tables->maps, code) : nullptr;
 	const int level = tables != nullptr ? SlotLevel(tables->slots, PresetSlot) : -1;
@@ -290,6 +297,14 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		return 0;
 	};
 	if (map == nullptr) {
+		{
+			// Recorded, so the use goes to the game as well even if a map for this code is added in between.
+			std::lock_guard<std::mutex> lock(g_lock);
+			g_verdict = Verdict::Plain;
+			g_pendingGame = game;
+			g_pendingPlayer = player;
+			g_pendingItem = item;
+		}
 		return g_checkOriginal(game, player, item, target);  // no map names this item: it is not a map item, so the game's own check
 	}
 	if (level <= 0) {
@@ -304,6 +319,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_pendingTables = tables;
 		g_pending = map;
+		g_verdict = Verdict::Map;
 		g_pendingGame = game;
 		g_pendingPlayer = player;
 		g_pendingItem = item;
@@ -330,14 +346,17 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		tables = g_pendingTables;
+		Verdict verdict = Verdict::None;
 		if (g_pendingGame == game && g_pendingPlayer == player && g_pendingItem == item) {
+			verdict = g_verdict;
 			map = g_pending;
 		}
-		// A passed check decides, so a reload between check and use cannot turn a map item into a plain one.
-		mapItem = map != nullptr || (g_tables != nullptr && FindMapByItem(g_tables->maps, code) != nullptr);
-		g_pending = nullptr;
-		g_pendingTables.reset();
-		g_pendingGame = g_pendingPlayer = g_pendingItem = nullptr;
+		// The check's verdict decides, both ways, so a reload between check and use cannot turn a map item into a plain
+		// one or a plain one into a map item. With no verdict for this use, the tables as they are now decide.
+		mapItem = verdict == Verdict::Map     ? map != nullptr
+		          : verdict == Verdict::Plain ? false
+		                                      : g_tables != nullptr && FindMapByItem(g_tables->maps, code) != nullptr;
+		ClearPending();
 	}
 	if (!mapItem) {
 		g_useOriginal(game, player, item, target);  // no map names this item: it is not a map item, so the game's own use
@@ -412,13 +431,17 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 }
 
 auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
+	if (g_tickOriginal == nullptr) {
+		return 0;  // nothing to pass to; not reachable while the install only counts a non-null original as success
+	}
 	const uint64_t result = g_tickOriginal(game, unit);
 	if (!g_tickSeen.load(std::memory_order_relaxed)) {
 		g_tickSeen = true;
 	}
-	if (!g_firstLogged.load(std::memory_order_relaxed) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0) {
-		g_firstLogged = true;  // once per game, to settle whether LocalPlayerReady.playerId is the unit id
-		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), g_localPlayer.load());
+	const uint32_t known = g_localPlayer.load();
+	if (known != NoPlayer && !g_firstLogged.load(std::memory_order_relaxed) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0) {
+		g_firstLogged = true;  // once per game, and only once the player id is known: settles whether LocalPlayerReady.playerId is the unit id
+		plog::Info("first player unit seen by the tick: id %u (LocalPlayerReady playerId %u)", At<uint32_t>(unit, UnitIdOffset), known);
 	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
 		ServeRequest(game, unit);
@@ -433,6 +456,8 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 	if (event->kind == D2RL::Lifecycle::GameplayEventKind::LocalPlayerReady) {
 		plog::Info("local player ready (unit id %u)", event->playerId);
 		g_localPlayer = event->playerId;
+		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
+		g_firstLogged = false;
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
@@ -440,11 +465,12 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
+		ClearPending();
 	}
 }
 
 // Listens for the local player and, when the tick part is on, hooks it. Best effort: failure leaves 'cartographer open'
-// arming the map for the next item instead.
+// refusing (the map items still work).
 void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	Part& part = g_parts[PlayerTick];
 	const D2RL::LifecycleService* lifecycle = nullptr;
@@ -565,27 +591,37 @@ auto RequiredPartsOn() noexcept -> bool {
 
 }  // namespace
 
-auto RequestOpen(const std::string& name) -> OpenStart {
-	std::lock_guard<std::mutex> lock(g_lock);
-	const MapDef* map = g_tables != nullptr ? FindMap(g_tables->maps, name) : nullptr;
-	if (map == nullptr) {
-		return OpenStart::NoSuchMap;
+auto RequestOpen(const std::string& name, std::string* mapName) -> OpenStart {
+	bool replaced = false;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		const MapDef* map = g_tables != nullptr ? FindMap(g_tables->maps, name) : nullptr;
+		if (map == nullptr) {
+			return OpenStart::NoSuchMap;
+		}
+		if (!g_consoleLive.load() || !g_live.load()) {
+			return OpenStart::Unavailable;
+		}
+		if (g_localPlayer.load() == NoPlayer) {
+			return OpenStart::NotInGame;
+		}
+		if (!g_tickSeen.load()) {
+			return OpenStart::NoServer;  // a remote client has no server: the tick would never run, and nothing would answer
+		}
+		if (g_request.Stale(NowMs(), RequestLifeMs)) {  // an old request the hook never reached
+			plog::Warn("an earlier open request was never served and is dropped");
+			g_request.Clear();
+			replaced = true;
+		}
+		g_request.Post(map->name, NowMs());
+		g_requested = true;
+		if (mapName != nullptr) {
+			*mapName = map->name;
+		}
 	}
-	if (!g_consoleLive.load() || !g_live.load()) {
-		return OpenStart::Unavailable;
+	if (replaced) {
+		Tell("Cartographer: your earlier open request was never served and was dropped.");
 	}
-	if (g_localPlayer.load() == NoPlayer) {
-		return OpenStart::NotInGame;
-	}
-	if (!g_tickSeen.load()) {
-		return OpenStart::NoServer;  // a remote client has no server: the tick would never run, and nothing would answer
-	}
-	if (g_request.Stale(NowMs(), RequestLifeMs)) {  // an old request the hook never reached
-		plog::Warn("an earlier open request was never served and is dropped");
-		g_request.Clear();
-	}
-	g_request.Post(map->name, NowMs());
-	g_requested = true;
 	return OpenStart::Posted;
 }
 
@@ -623,7 +659,7 @@ auto PortalLive() -> bool {
 }
 
 auto NeedsRestart() -> bool {
-	return !g_hooksIn;
+	return g_installed && !g_hooksIn;  // not when loading threw before the parts were looked at
 }
 
 auto PartStatuses() -> std::vector<PartStatus> {
@@ -650,13 +686,26 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 			return false;
 		}
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
-		const bool ok = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original) && *original != nullptr;
+		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, target, original);
+		const bool ok = hooked && *original != nullptr;
 		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : "off: D2RLoader refused the hook";
+		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
+		if (hooked && !ok) {
+			// The hook cannot be taken out again; until the portal is live it can only drop the item's own action.
+			plog::Error("part %s: D2RLoader installed the hook but gave no original; restart the game after removing what conflicts", part.name);
+		}
 		return ok;
 	};
-	g_hooksIn = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal)) &&
-	            install(ItemSpellCheck, reinterpret_cast<void*>(&SpellCheckHook), reinterpret_cast<void**>(&g_checkOriginal));
+	g_hooksIn = install(ItemSpellUse, reinterpret_cast<void*>(&SpellUseHook), reinterpret_cast<void**>(&g_useOriginal));
+	if (g_hooksIn) {
+		g_hooksIn = install(ItemSpellCheck, reinterpret_cast<void*>(&SpellCheckHook), reinterpret_cast<void**>(&g_checkOriginal));
+	} else {
+		Part& check = g_parts[ItemSpellCheck];
+		if (check.status.on) {
+			check.status.on = false;  // found, but never tried
+			check.status.detail = "off: not hooked, because the ItemSpellUse hook did not go in";
+		}
+	}
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	if (!g_live) {
@@ -668,6 +717,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	for (const Part& part : g_parts) {
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
 	}
+	g_installed = true;
 	return g_live;
 }
 

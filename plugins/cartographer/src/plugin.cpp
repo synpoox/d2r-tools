@@ -32,6 +32,7 @@ std::wstring g_tableDir;   // <mod>\<Mod>.mpq\data\global\excel\d2rloader\cartog
 std::wstring g_excelDir;   // ...\excel: the game's own tables, for the name checks
 std::wstring g_reportPath;
 std::vector<carto::SignatureOverride> g_overrides;
+bool g_loadFailed = false;  // loading threw: the portal was not set up
 
 auto Widen(const char* s) -> std::wstring {
 	std::wstring out;
@@ -136,7 +137,7 @@ auto LoadAll() -> Loaded {
 	if (!names.haveMonsters || !names.haveSuperUniques || !names.haveItems) {
 		loaded.report.Note("maps.txt", 0, "some of the game's tables could not be read, so Monsters, Boss and Item names are not checked.");
 	}
-	if (names.haveItems && !names.haveItemSpells) {
+	if (!names.haveItemSpells) {
 		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
 	}
 	std::string text;
@@ -224,7 +225,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			const Loaded loaded = Reload();
 			(void)carto::RescanPortal();
 			Say(command, std::string("Cartographer ") + PluginVersion + ": " + std::to_string(loaded.tables->maps.size()) + " map(s), " +
-			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : carto::NeedsRestart() ? "off; a part it hooks was missing at load, so a restart is needed once it is fixed." : "off."));
+			                 std::to_string(loaded.report.Errors()) + " problem(s). The portal is " + (carto::PortalLive() ? "on." : g_loadFailed ? "off; loading failed, see the plugin log." : carto::NeedsRestart() ? "off; a part it hooks was missing at load, so a restart is needed once it is fixed." : "off."));
 			int shown = 0;
 			for (const carto::Problem& p : loaded.report.problems) {
 				if (++shown > 10) {
@@ -244,7 +245,8 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, "Usage: cartographer open <Name>");
 				return D2RL::ConsoleCommandResult::InvalidArguments;
 			}
-			switch (carto::RequestOpen(rest)) {
+			std::string mapName;
+			switch (carto::RequestOpen(rest, &mapName)) {
 			case carto::OpenStart::NoSuchMap:
 				Say(command, "Cartographer: there is no map called '" + rest + "'. Run 'cartographer check'.");
 				return D2RL::ConsoleCommandResult::Failed;
@@ -258,7 +260,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, "Cartographer: a map can only be opened in a game you host, once the game is running.");
 				return D2RL::ConsoleCommandResult::Failed;
 			case carto::OpenStart::Posted:
-				Say(command, "Cartographer: opening " + rest + "...");
+				Say(command, "Cartographer: opening " + mapName + "...");
 				break;
 			}
 			return D2RL::ConsoleCommandResult::Handled;
@@ -316,6 +318,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		std::vector<carto::PartStatus> parts;
 		(void)carto::InstallPortal(context, g_overrides, &parts);
 	} catch (...) {
+		g_loadFailed = true;
 		plog::Error("loading failed; the plugin stays loaded with the portal off");
 	}
 	// Stay loaded even when parts are off, so "cartographer check" can say why.
