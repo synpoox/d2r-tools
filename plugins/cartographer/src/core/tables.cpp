@@ -937,7 +937,7 @@ auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> 
 		return {};
 	}
 	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +
-	       ") cannot be opened now. Enter that portal or leave the game first.";
+	       ") cannot be opened in this game. Leave the game and start a new one to open it.";
 }
 
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {
