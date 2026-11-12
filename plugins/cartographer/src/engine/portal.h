@@ -26,6 +26,7 @@ struct Tables {
 	std::vector<cartographer::events::Row> events;
 	cartographer::statplan::StatIds statIds;  // itemstatcost.txt: stat name -> id, for the map stats
 	cartographer::eventplan::SpawnTable spawnNames;  // monstats.txt Id and superuniques.txt Superunique/Class by row, for the event spawns
+	std::vector<std::string> objectClasses;  // objects.txt Class by row (tried before Name)
 	std::vector<std::string> objectNames;  // objects.txt Name by row, for a Shrine event's Spawn (phase 6b)
 };
 

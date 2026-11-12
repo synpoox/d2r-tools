@@ -651,21 +651,61 @@ auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot> {
 
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 	const Tsv table = ParseTsv(levelsText);
-	const int cId = table.Column("Id"), cType = table.Column("LevelType");
-	if (cId < 0 || cType < 0) {
+	const int cId = table.Column("Id"), cType = table.Column("LevelType"), cDrlg = table.Column("DrlgType");
+	if (cId < 0 || (cType < 0 && cDrlg < 0)) {
 		return;
 	}
 	for (const TsvRow& row : table.rows) {
-		int id = 0, type = 0;
-		if (!ParseInt(table.Cell(row, cId), 0, 65535, &id) || !ParseInt(table.Cell(row, cType), 0, 255, &type)) {
+		int id = 0, type = 0, drlg = 0;
+		if (!ParseInt(table.Cell(row, cId), 0, 65535, &id)) {
 			continue;
 		}
+		const bool haveType = cType >= 0 && ParseInt(table.Cell(row, cType), 0, 255, &type);
+		const bool haveDrlg = cDrlg >= 0 && ParseInt(table.Cell(row, cDrlg), 0, 255, &drlg);
 		for (Slot& slot : slots) {
 			if (slot.level == id) {
-				slot.levelType = type;
+				if (haveType) {
+					slot.levelType = type;
+				}
+				if (haveDrlg) {
+					slot.drlgType = drlg;
+				}
 			}
 		}
 	}
+}
+
+auto OutdoorLevelType(std::string_view tileset) -> int {
+	if (EqualsNoCase(tileset, "Jungle")) {
+		return 21;
+	}
+	if (EqualsNoCase(tileset, "Snow")) {
+		return 31;
+	}
+	return -1;
+}
+
+auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> std::string {
+	const int want = OutdoorLevelType(map.tileset);
+	if (want < 0) {
+		return {};
+	}
+	for (const Slot& slot : slots) {
+		if (!EqualsNoCase(slot.name, OutdoorSlot)) {
+			continue;
+		}
+		if (slot.drlgType >= 0 && slot.drlgType != OutdoorDrlgType) {
+			return "the Outdoor slot level " + std::to_string(slot.level) + " has DrlgType " + std::to_string(slot.drlgType) +
+			       " in levels.txt, but an outdoor map needs " + std::to_string(OutdoorDrlgType) + ", so the map '" + map.name + "' is refused.";
+		}
+		if (slot.levelType >= 0 && slot.levelType != want) {
+			return "the Outdoor slot level " + std::to_string(slot.level) + " has LevelType " + std::to_string(slot.levelType) +
+			       " in levels.txt, but a " + map.tileset + " map needs " + std::to_string(want) + ", so the map '" + map.name +
+			       "' is refused. One Outdoor slot serves one tileset.";
+		}
+		return {};
+	}
+	return {};
 }
 
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {

@@ -37,6 +37,10 @@ inline constexpr int MapItemSpell = 16;
 inline constexpr const char* PresetSlot = "Preset";
 // The slot of the maze level a Cave or Crypt map opens through (levels.txt DrlgType 1, plan section 3.6).
 inline constexpr const char* MazeSlot = "Maze";
+// The slot of the outdoor level a Jungle (later Snow) map opens through (levels.txt DrlgType 3, outdoor builder plan section 1.1). Recognised
+// and checked here; no map opens through it yet, because the outdoor builder is not wired in (those tilesets are still refused).
+inline constexpr const char* OutdoorSlot = "Outdoor";
+inline constexpr int OutdoorDrlgType = 3;
 
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
 // those cells are then not checked (fail open) and the report says so.
@@ -74,6 +78,7 @@ struct Slot {
 	std::string name;
 	int level = 0;      // levels.txt Id
 	int levelType = -1; // levels.txt LevelType of that level; -1 when levels.txt could not be read or has no such row
+	int drlgType = -1;  // levels.txt DrlgType of that level (1 maze, 2 preset, 3 outdoor); -1 when unknown
 };
 
 // Tilesets, shapes, sizes and difficulties as the author writes them.
@@ -100,8 +105,17 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// Fills in each slot's levelType from the mod's levels.txt (columns Id and LevelType). A slot with no row keeps -1.
+// Fills in each slot's levelType and drlgType from the mod's levels.txt (columns Id, LevelType and DrlgType; each is read when its column
+// exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
+
+// The levels.txt LevelType an outdoor tileset's slot level must have (Jungle 21, Snow 31), or -1 for a tileset that is not outdoor.
+auto OutdoorLevelType(std::string_view tileset) -> int;
+
+// Empty, or why the Outdoor slot cannot build `map`: the level has another LevelType than the tileset needs, or is not an outdoor (DrlgType 3)
+// level. Empty too for a map that is not outdoor, when there is no Outdoor slot (the "not installed" message says so) and when levels.txt
+// was not read (-1): this check never refuses on what it does not know.
+auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> std::string;
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;
