@@ -151,12 +151,20 @@ const char *scaleKindName(ScaleKind kind);
 
 // Which room an event spawns in. A maze map knows the room from its plan (`planned`: the DRLG rect of the plan's event
 // cell). A preset map has no plan: the first room populated in the level is the entry room, and the event room is the first
-// room populated after it whose centre is at least `minDistance` away (Chebyshev, in the rect's own units: DRLG tiles).
-// It fires once.
+// room populated after it whose centre is at least `minDistance` away (Chebyshev, in the rect's own units: DRLG tiles); the
+// caller gives `presetEventDistance` there. It fires once.
 constexpr int kMinEventDistance = 24;
 // The distance for a level of `levelW` x `levelH` tiles: a third of the larger side, from 1 up to kMinEventDistance, so a small
 // map still has a room that qualifies. A size that is not known (no side above 0) gives kMinEventDistance.
 int minEventDistance(int levelW, int levelH);
+// The room of `rooms` (the level's whole room list, DRLG rects in tiles) whose centre is farthest from `entry`'s centre: the largest
+// Chebyshev distance, then the largest squared straight distance, then the earlier in the list. A room with the entry's own rect, and
+// a room with no size, are skipped. Empty when no other room exists. Same inputs, same room.
+std::optional<Rect> farthestRoom(const Rect &entry, const std::vector<Rect> &rooms);
+// The distance a preset map's event room must reach: `minEventDistance(levelW, levelH)`, capped at the Chebyshev distance of the farthest
+// room of `rooms` from `entry`, so at least one room always qualifies and the event lands where players walk, not only in the farthest
+// corner. With no other room in the list (or an unreadable one: pass an empty list) it is `minEventDistance` alone.
+int presetEventDistance(int levelW, int levelH, const Rect &entry, const std::vector<Rect> &rooms);
 class EventRoomTracker {
 public:
 	explicit EventRoomTracker(std::optional<Rect> planned = std::nullopt, int minDistance = kMinEventDistance);

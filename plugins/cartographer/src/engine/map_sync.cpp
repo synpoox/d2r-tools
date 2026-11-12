@@ -314,14 +314,14 @@ void __cdecl ConnectStep(const D2RL::PluginContext* context, void* userData) noe
 			return;
 		}
 		if (step == ms::Step::Try) {
-			if (ServerTickSeen()) {
-				std::lock_guard<std::mutex> lock(g_lock);
-				ms::finish(g_schedule);
-				g_clientActive = false;
-				return;
-			}
 			{
+				// The server-tick check and the flag share one lock, so a tick seen after the check cannot be missed by the flag.
 				std::lock_guard<std::mutex> lock(g_lock);
+				if (ServerTickSeen()) {
+					ms::finish(g_schedule);
+					g_clientActive = false;
+					return;
+				}
 				g_clientActive = true;
 			}
 			net::ChannelInfo info{};
@@ -491,11 +491,16 @@ void MapSyncGameLeft() {
 void UnloadMapSync() noexcept {
 	try {
 		g_on = false;
-		g_state = "off: unloaded";
-		if (g_net != nullptr && g_ctx != nullptr && g_channel != net::InvalidChannelHandle && D2RL::HasNetworkServiceField(g_net, D2RL::NetworkServiceUnregisterChannelFieldEnd)) {
-			(void)g_net->unregisterChannel(g_ctx, g_channel);
+		net::ChannelHandle channel;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			g_state = "off: unloaded";
+			channel = g_channel;
+			g_channel = net::InvalidChannelHandle;
 		}
-		g_channel = net::InvalidChannelHandle;
+		if (g_net != nullptr && g_ctx != nullptr && channel != net::InvalidChannelHandle && D2RL::HasNetworkServiceField(g_net, D2RL::NetworkServiceUnregisterChannelFieldEnd)) {
+			(void)g_net->unregisterChannel(g_ctx, channel);
+		}
 	} catch (...) {
 	}
 }

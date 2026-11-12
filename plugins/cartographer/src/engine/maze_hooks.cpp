@@ -50,7 +50,7 @@ constexpr int RoomX = 0x60, RoomY = 0x64, RoomW = 0x68, RoomH = 0x6c;
 constexpr int PieceId = 0x00, PieceFlags = 0x10;
 constexpr uint32_t PieceFixed = 2;
 constexpr int32_t MazeType = 1;
-constexpr int MaxRooms = 4096;        // a sanity bound for the probe's walk of the room list
+constexpr int MaxRooms = 4096;        // a sanity bound for the walks of the room list (the probe's and the event room's)
 constexpr int MaxLevels = 400;        // the same for the level list
 
 using LevelBuildFn = uint64_t (*)(uint8_t dataFlag, void* level) noexcept;
@@ -742,6 +742,31 @@ void MazeGameLeft() {
 	g_entrance = {};
 	g_eventRoom = {};
 	g_arrivalLogged = false;
+}
+
+auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool {
+	out->clear();
+	if (level == nullptr) {
+		return false;
+	}
+	const void* room = Read<const void*>(level, LvlFirstRoom);
+	if (room == nullptr) {
+		return false;
+	}
+	try {
+		int count = 0;
+		for (; room != nullptr; room = Read<const void*>(room, RoomNext), ++count) {
+			if (count >= MaxRooms || !Readable(room, 0x98)) {
+				out->clear();
+				return false;
+			}
+			out->push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH)});
+		}
+	} catch (...) {
+		out->clear();
+		return false;
+	}
+	return !out->empty();
 }
 
 auto MazeEventRoom() -> MazeEventRect {

@@ -9,6 +9,8 @@
 #include "portal.h"
 #include "scan.h"
 
+#include "eventplan/eventplan.h"
+
 #include <memory>
 #include <vector>
 
@@ -61,5 +63,10 @@ struct MazeEventRect {
 	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0;
 };
 auto MazeEventRoom() -> MazeEventRect;
+
+// The DRLG rects (tiles) of every room in `level`'s room list (level +0x10 first room, room +0x48 next), read through the guarded
+// walker. False, and `out` left empty, when the list cannot be read (no level, no first room, an unreadable room, or more than the
+// sanity bound). Game thread.
+auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool;
 
 }  // namespace carto

@@ -472,6 +472,7 @@ struct RoomRects {
 	ep::Rect drlg;    // tiles
 	ep::Rect server;  // the spawn code's units (subtiles, by static reading)
 	int levelW = 0, levelH = 0;  // the level's size in tiles; 0 when it cannot be read
+	void* level = nullptr;       // the DRLG level record, for the room list walk
 };
 
 auto ReadRects(void* serverRoom) noexcept -> RoomRects {
@@ -483,6 +484,7 @@ auto ReadRects(void* serverRoom) noexcept -> RoomRects {
 	out.drlg = {At<int32_t>(drlg, DrlgRectOffset), At<int32_t>(drlg, DrlgRectOffset + 4), At<int32_t>(drlg, DrlgRectOffset + 8), At<int32_t>(drlg, DrlgRectOffset + 12)};
 	out.server = {At<int32_t>(serverRoom, ServerRectOffset), At<int32_t>(serverRoom, ServerRectOffset + 4), At<int32_t>(serverRoom, ServerRectOffset + 8), At<int32_t>(serverRoom, ServerRectOffset + 12)};
 	void* level = At<void*>(drlg, DrlgLevelOffset);
+	out.level = level;
 	if (level != nullptr) {
 		out.levelW = At<int32_t>(level, LevelSizeOffset);
 		out.levelH = At<int32_t>(level, LevelSizeOffset + 4);
@@ -618,12 +620,20 @@ void OnPopulated(Game* game, void* room) noexcept {
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
-					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (the first room a third of the level's larger side, at most %d tiles, from the first populated one)", ep::kMinEventDistance);
+					plog::Warn("the maze plan's event room is not known; the event room is chosen like a preset map's (a third of the level's larger side and at most %d tiles from the first populated one, capped at the farthest room of the level)", ep::kMinEventDistance);
 				}
 			}
-			const int distance = ep::minEventDistance(rects.levelW, rects.levelH);
+			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			if (!plan) {
-				plog::Info("eventprobe: level %d is %d x %d tiles; the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+				// A preset map: this is the first populated room, the entry room. The distance is capped at the farthest room of the
+				// level's list, so at least one room qualifies; the event fires on the first populated room at or past it.
+				std::vector<ep::Rect> all;
+				if (LevelRoomRects(rects.level, &all)) {
+					distance = ep::presetEventDistance(rects.levelW, rects.levelH, rects.drlg, all);
+					plog::Info("eventprobe: level %d is %d x %d tiles and has %zu room(s); the event room is the first room at least %d tiles from the entry room %s", state->level, rects.levelW, rects.levelH, all.size(), distance, Describe(rects.drlg).c_str());
+				} else {
+					plog::Warn("eventprobe: the room list of level %d could not be read; level is %d x %d tiles, the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
+				}
 			}
 			state->tracker.emplace(plan, distance);
 		}
