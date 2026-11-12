@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Ambush, Treasure and Shrine events are not applied yet.
 - Boss and Horde events spawn what you name in `Spawn`, taken from the game's own tables (written and unit tested; not yet verified in game).
 - When you enter a map, its name is shown on screen with the event's name and message, and Boss and Horde events spawn in the event room (written and unit tested; not yet verified in game).
 - When a map opens, its random properties from `mapstats.txt` are applied to the map's monsters (written and unit tested; not yet verified in game).

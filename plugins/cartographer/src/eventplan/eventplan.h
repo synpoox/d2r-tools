@@ -67,7 +67,9 @@ struct TableFacts {
 // and not null, and the 64-bit count equals the SDK's 32-bit one. Else why not.
 std::string checkTable(const TableFacts &facts, uint32_t wantRowSize);
 
-// What looking every monstats `Id` up through the game's name map gave: each (distinct, non-empty) `Id` should map to its own row.
+// What looking every monstats `Id` up through the game's name map gave: each non-empty `Id` should map to a row that carries it.
+// A repeated `Id` (any case) is a mod mistake; which copy the game's map keeps is not known, so either copy's row is accepted
+// (`idRowAccepted`) rather than turning the route off for the whole game on one odd row.
 struct RoundTrip {
 	bool mapNull = false;
 	int checked = 0;
@@ -78,9 +80,20 @@ struct RoundTrip {
 // Empty when the map can be trusted for name lookups. Else why not.
 std::string checkRoundTrip(const RoundTrip &trip);
 
+// True when the game's lookup `got` is one of `rowsWithId`, the rows that carry the looked-up `Id` (one row, or several for a repeat).
+bool idRowAccepted(const std::vector<int> &rowsWithId, int got);
+
 // The lookup result for superuniques: exactly -1 is the game's miss; any other negative number or a row past the table is
 // not a row either (`rowCount` is the table's). Returns the row, or -1.
 int superRowFromLookup(int32_t result, uint64_t rowCount);
+
+// The monstats Id a superuniques row (the txt's) names as its Class, or empty when the row is out of range.
+std::string_view superClassOf(const SpawnTable &table, int superRow);
+
+// Does the Class the game's tables gave for the superunique `name` (`gameClassRow`, a monstats row) agree with the mod's txt?
+// `NoReference`: the txt does not have the name, or its Class is not in its monstats, so there is nothing to compare.
+enum class ClassCheck { NoReference, Agrees, Differs };
+ClassCheck checkSuperClass(const SpawnTable &table, std::string_view name, int gameClassRow);
 
 // What the self-check decided for one (table revision, data flag).
 struct RouteVerdict {
@@ -90,11 +103,11 @@ struct RouteVerdict {
 	std::string why;        // what is off, and why (empty when everything is on)
 };
 struct RouteKey {
-	uint64_t revision = 0;  // DataTablesLoaded
+	uint64_t revision = 0;  // the SDK TableView revision (changes on every table load)
 	uint32_t dataFlag = 0;
 	bool operator==(const RouteKey &o) const { return revision == o.revision && dataFlag == o.dataFlag; }
 };
-// Verdicts by (revision, data flag). A newer revision drops the older ones: a table load invalidates everything.
+// Verdicts by (view revision, data flag). A newer revision drops the older ones: a table load invalidates everything.
 class RouteCache {
 public:
 	const RouteVerdict *find(const RouteKey &key) const;
