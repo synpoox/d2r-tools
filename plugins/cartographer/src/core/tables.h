@@ -63,6 +63,7 @@ struct Settings {
 	int properties = DefaultProperties;
 	int eventChance = DefaultEventChance;
 	int itemStats = 0;
+	int playerStats = 0;  // PlayerStats: 1 puts the map's player stats on the player (a test slot only until the save check passes)
 	std::string town = "Harrogath";
 };
 

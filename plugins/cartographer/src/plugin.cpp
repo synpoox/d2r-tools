@@ -185,6 +185,7 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SettingsFile), &text)) {
 		loaded.tables->settings = carto::LoadSettings(text, loaded.report);
 	}
+	carto::StatApplySetPlayerStats(loaded.tables->settings.playerStats != 0);
 	text.clear();
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::SlotsFile), &text)) {
 		loaded.tables->slots = carto::LoadSlots(text, loaded.report);

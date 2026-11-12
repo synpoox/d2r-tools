@@ -101,11 +101,31 @@ StatIds parseItemStatCost(std::string_view text)
 	return out;
 }
 
-Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids)
+std::string refusedReason(Target target, std::string_view stat, int id)
+{
+	static const char *const kNames[] = {"statpts", "newskills", "hitpoints", "mana", "stamina", "level", "experience", "gold", "goldbank"};
+	static const int kIds[] = {4, 5, 6, 8, 10, 12, 13, 14, 15};
+	bool listed = false;
+	for (const char *n : kNames) listed = listed || stat == n;
+	for (const int i : kIds) listed = listed || id == i;
+	if (!listed) return "";
+	const bool isLevel = stat == "level" || id == 12;
+	if (target == Target::Monsters) {
+		if (!isLevel) return ""; // a monster is never saved
+		return "'" + std::string(stat) + "' is refused on monsters: the game writes the monster's level itself while it sets the monster up.";
+	}
+	return "'" + std::string(stat) + "' is refused on players: the game reads it as a total and writes it back as the saved base value, so the map's value would stay in the character.";
+}
+
+Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats)
 {
 	Plan plan;
 	for (const Property &p : properties) {
 		const auto skip = [&](const std::string &why) { plan.skipped.push_back({p.target, p.stat, why}); };
+		if (p.target == Target::Players && !playerStats) {
+			skip("PlayerStats is 0 in cartographer.txt, so nothing is put on the player (monsters still get their stats)");
+			continue;
+		}
 		if (!ids.loaded) {
 			skip("the game's itemstatcost.txt could not be read, so the stat id is not known");
 			continue;
@@ -118,6 +138,11 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids)
 		}
 		if (id > kMaxStatId) {
 			skip("its stat id " + std::to_string(id) + " is above " + std::to_string(kMaxStatId));
+			continue;
+		}
+		const std::string refused = refusedReason(p.target, p.stat, id);
+		if (!refused.empty()) {
+			skip(refused);
 			continue;
 		}
 		if (p.value == 0) {
@@ -136,7 +161,14 @@ std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const St
 	if (!ids.loaded) return out;
 	for (size_t i = 0; i < pool.size(); ++i) {
 		const PoolRow &r = pool[i];
-		if (r.weight <= 0 || ids.find(r.stat) >= 0) continue; // an off or erroring row is never drawn
+		if (r.weight <= 0) continue; // an off or erroring row is never drawn
+		const int id = ids.find(r.stat);
+		if (id >= 0) {
+			const std::string refused = refusedReason(r.target, r.stat, id);
+			if (!refused.empty())
+				out.push_back({false, i, "row " + std::to_string(i + 1) + " (" + r.stat + ", " + targetWord(r.target) + "): " + refused + " If it is drawn it is skipped."});
+			continue;
+		}
 		const std::string near = ids.suggest(r.stat);
 		out.push_back({false, i,
 			"row " + std::to_string(i + 1) + " (" + r.stat + "): Stat is not in itemstatcost.txt." +

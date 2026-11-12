@@ -57,12 +57,22 @@ struct Plan {
 	bool empty() const { return monsters.empty() && players.empty(); }
 };
 
-// Resolves the drawn properties. A name that is not in `ids`, a value of 0 and an id outside 0..kMaxStatId are
-// skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property is skipped.
-Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids);
+// Why `stat` (itemstatcost name and id) must not be put on `target`, in plain English, or "" when it may be. The game
+// reads these as a total (base plus every list) and writes the result back as the base value, so a list value would be
+// baked into the saved character: statpts, newskills, gold and goldbank (spending), hitpoints, mana and stamina
+// (current values, rewritten every tick), level and experience. The maxima (maxhp, maxmana, maxstamina) and the
+// attributes are item stats and are fine. `level` is also refused on monsters: the game writes it itself during
+// monster setup. Matched by name or by the engine's fixed id (4, 5, 6, 8, 10, 12 to 15), so a renamed row is still
+// caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
+std::string refusedReason(Target target, std::string_view stat, int id);
 
-// Warnings for pool rows whose Stat is not in itemstatcost (row is the 0-based index into the pool). Empty when the
-// table was not read (fail open: unchecked, not wrong).
+// Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
+// refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property
+// is skipped. With `playerStats` false every player property is skipped (the PlayerStats setting is off).
+Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats = true);
+
+// Warnings for pool rows whose Stat is not in itemstatcost, or that buildPlan would refuse (row is the 0-based index
+// into the pool). Empty when the table was not read (fail open: unchecked, not wrong).
 std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids);
 
 // One line for the log: "monsters: item_maxhp_percent(76)=+30; players: fireresist(39)=-20".

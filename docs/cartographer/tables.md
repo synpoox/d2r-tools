@@ -97,6 +97,8 @@ Rules and limits:
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
 - `Properties` in `maps.txt` and in `cartographer.txt` is 0 to 20. A negative value is refused (the map row is skipped; the setting keeps its default).
 - With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. If the item has no stats, a normal draw is made instead.
+- `Players` rows are applied only when `PlayerStats` is `1` in `cartographer.txt` (default `0`: nothing is put on the player; `Monsters` rows are applied either way). The player's stats sit on the character while it is in the map. If you Save and Exit inside the map, or the game autosaves there, the character may be saved while they are still on it. Whether the save keeps them has not been checked in a game, so turn `PlayerStats` on only for a test character until it has.
+- Some stats cannot be used. The game reads them as a total and writes the result back as the saved value, so the map's value would stay in the character: `statpts`, `newskills`, `gold`, `goldbank`, `hitpoints`, `mana`, `stamina`, `level` and `experience`. Such a `Players` row is skipped when drawn, and `cartographer check` and the report name it. `level` is also skipped on `Monsters`, because the game sets the monster's level itself. The maxima (`maxhp`, `maxmana`, `maxstamina`) and the attributes are fine.
 
 ## mapevents.txt (optional)
 
@@ -133,13 +135,14 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings. Checked and reported today, not applied yet. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings. `Properties` and `PlayerStats` are used when a map opens (not yet verified in game); the others are checked and reported only. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
 | `Properties` | Random properties per map, 0 to 20 | 6 | 4 |
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
+| `PlayerStats` | `1` puts the `Players` rows of a map on the player. **Use `1` only on a test slot** until the in-game save check has passed (see below); `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 
 ## tilesets.txt (optional, advanced)

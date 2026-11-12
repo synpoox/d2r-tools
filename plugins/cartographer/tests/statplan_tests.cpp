@@ -202,3 +202,67 @@ TEST_CASE("mixSeed differs by clock, player and opening count")
 	CHECK(seen.size() == 8);
 	CHECK(mixSeed(5, 6, 7) == mixSeed(5, 6, 7));
 }
+
+TEST_CASE("buildPlan refuses player stats the game bakes into the saved base value")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"statpts", 4}, {"newskills", 5}, {"hitpoints", 6}, {"maxhp", 7}, {"mana", 8}, {"stamina", 10}, {"level", 12},
+	              {"experience", 13}, {"gold", 14}, {"goldbank", 15}, {"fireresist", 39}, {"strength", 0}, {"renamed", 14}};
+	std::vector<Property> props;
+	for (const char *n : {"statpts", "newskills", "hitpoints", "mana", "stamina", "level", "experience", "gold", "goldbank", "renamed"})
+		props.push_back({Target::Players, n, 5});
+	props.push_back({Target::Players, "maxhp", 5});    // an item stat: allowed
+	props.push_back({Target::Players, "strength", 5}); // an item stat: allowed
+	props.push_back({Target::Players, "fireresist", 5});
+	const Plan plan = buildPlan(props, ids);
+	CHECK(plan.players.size() == 3);
+	REQUIRE(plan.skipped.size() == 10);
+	for (const Skipped &s : plan.skipped) {
+		CHECK(s.why.find("refused on players") != std::string::npos);
+		CHECK(s.why.find("'" + s.stat + "'") != std::string::npos);
+	}
+}
+
+TEST_CASE("the refused stats are fine on monsters, except level")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"gold", 14}, {"level", 12}, {"hitpoints", 6}};
+	const Plan plan = buildPlan({{Target::Monsters, "gold", 5}, {Target::Monsters, "hitpoints", 5}, {Target::Monsters, "level", 5}}, ids);
+	CHECK(plan.monsters.size() == 2);
+	REQUIRE(plan.skipped.size() == 1);
+	CHECK(plan.skipped[0].stat == "level");
+	CHECK(plan.skipped[0].why.find("refused on monsters") != std::string::npos);
+	CHECK(refusedReason(Target::Players, "fireresist", 39).empty());
+	CHECK_FALSE(refusedReason(Target::Players, "x", 12).empty()); // by id alone
+}
+
+TEST_CASE("checkPoolStats names each refused row")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"gold", 14}, {"fireresist", 39}};
+	const std::vector<PoolRow> pool = {
+		{Target::Players, "fireresist", 1, 2, 1},
+		{Target::Players, "gold", 1, 2, 1},
+		{Target::Monsters, "gold", 1, 2, 1}, // fine on monsters
+		{Target::Players, "gold", 1, 2, 0},  // off: not reported
+	};
+	const auto issues = checkPoolStats(pool, ids);
+	REQUIRE(issues.size() == 1);
+	CHECK(issues[0].row == 1);
+	CHECK(issues[0].message.find("gold") != std::string::npos);
+	CHECK(issues[0].message.find("refused on players") != std::string::npos);
+}
+
+TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
+{
+	const std::vector<Property> props = {{Target::Monsters, "damagepercent", 15}, {Target::Players, "fireresist", -20}};
+	const Plan off = buildPlan(props, testIds(), false);
+	CHECK(off.monsters.size() == 1);
+	CHECK(off.players.empty());
+	REQUIRE(off.skipped.size() == 1);
+	CHECK(off.skipped[0].why.find("PlayerStats is 0") != std::string::npos);
+	CHECK(buildPlan(props, testIds()).players.size() == 1);
+}

@@ -88,6 +88,8 @@ sp::PlayerLists g_lists;                 // lists put on players; guarded by g_l
 std::atomic<bool> g_busy{false};         // a plan is active or a list is out: the hooks look at nothing else when false
 std::atomic<bool> g_monstersOn{false};   // the monster hook is in
 std::atomic<bool> g_playersOn{false};    // the player half can apply (parts found and the portal's tick hook is in)
+std::atomic<bool> g_playerSetting{false};  // PlayerStats=1 in cartographer.txt; off by default: nothing is attached to the player
+uint64_t g_generation = 0;               // counts games left; guarded by g_lock. A list made in an earlier game is never tracked
 std::atomic<int> g_monsterCount{0};      // monsters given a list in this map
 std::atomic<int> g_monsterFailed{0};
 std::atomic<int> g_playerCount{0};
@@ -214,7 +216,7 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 auto MonsterSetupHook(void* params, Unit* monster) noexcept -> uint64_t {
 	if (g_original == nullptr) {
 		// Reachable only if the loader patched the call and still returned no original (the install logs it and marks the
-		// part off). Nothing to call; the setup is skipped until the game is restarted.
+		// part off). Nothing to call, so every monster's own setup is skipped until the game is restarted.
 		return 0;
 	}
 	const uint64_t result = g_original(params, monster);
@@ -255,7 +257,7 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	plog::Info("statprobe: player %u left the map: list removed (chain %d -> %d lists)", id, before, after);
 }
 
-void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan) noexcept {
+void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t generation) noexcept {
 	const std::string before = Totals(unit, plan.players);
 	bool found = false;
 	const int chainBefore = Chain(unit, nullptr, &found);
@@ -264,11 +266,17 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan) noexcept {
 		plog::Warn("map stats: the game gave no stat list for the player; the player has none of the map's stats");
 		return;
 	}
-	bool ok = false;
+	bool ok = false, stale = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		ok = g_lists.add(id, reinterpret_cast<uintptr_t>(list));
+		stale = generation != g_generation;
+		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list));
 		UpdateBusy();
+	}
+	if (stale) {
+		// The game was left while this list was being made. The unit belongs to that game: record nothing and touch nothing more.
+		plog::Warn("map stats: the game was left while the player's list was being made; the list is not tracked");
+		return;
 	}
 	if (!ok) {
 		// Table full: take the list straight off again, so no list is out that the plugin cannot remove.
@@ -288,7 +296,8 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan) noexcept {
 
 auto SummaryNow() -> std::string {
 	const bool mon = g_monstersOn.load(), pl = g_playersOn.load();
-	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + (pl ? "on" : "off") + " (not yet verified in game)";
+	const char* player = !g_playerSetting.load() ? "off (PlayerStats=0 in cartographer.txt, the default)" : pl ? "on (test slot only)" : "off (a part was not found)";
+	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + player + " (not yet verified in game)";
 }
 
 // Finds one part by its signature (or the one from signatures.txt) and checks its guard.
@@ -374,9 +383,9 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&MonsterSetupHook), reinterpret_cast<void**>(&g_original));
 		const bool ok = hooked && g_original != nullptr;
 		part.status.on = ok;
-		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: D2RLoader gave no way back to the game's own function";
+		part.status.detail = ok ? "found by signature, hooked" : !hooked ? "off: D2RLoader refused the hook" : "off: hooked, but D2RLoader gave no way back to the game's own function, so every monster's own setup is skipped until the game is restarted";
 		if (hooked && !ok) {
-			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's monster setup is skipped for every monster until the game is restarted; restart it after removing what conflicts", part.name);
+			plog::Error("part %s: D2RLoader installed the hook but gave no original; the game's own setup is skipped for EVERY monster (not only the map's) until the game is restarted; restart it after removing what conflicts", part.name);
 		}
 		g_monstersOn = ok;
 	}
@@ -418,7 +427,9 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	cartographer::stats::MapRow row;
 	row.properties = map.properties;
 	const auto drawn = cartographer::stats::drawMapStats(seed, row, settings, tables->pool);
-	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds));
+	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
+	g_playerSetting = tables->settings.playerStats != 0;
+	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
 	plog::Info("map stats for '%s' (seed %llu, slot level %d): %zu drawn, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,
 	           drawn.size(), sp::describe(*plan).c_str());
 	for (const sp::Skipped& s : plan->skipped) {
@@ -427,9 +438,6 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	if (!g_monstersOn.load() && !plan->monsters.empty()) {
 		plog::Warn("map stats: %zu monster stat(s) drawn, but monster stats are off", plan->monsters.size());
 	}
-	if (!g_playersOn.load() && !plan->players.empty()) {
-		plog::Warn("map stats: %zu player stat(s) drawn, but player stats are off", plan->players.size());
-	}
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plan = std::move(plan);
 	g_slotLevel = slot;
@@ -437,6 +445,10 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	g_monsterFailed = 0;
 	g_playerCount = 0;
 	UpdateBusy();
+}
+
+void StatApplySetPlayerStats(bool on) noexcept {
+	g_playerSetting = on;
 }
 
 void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
@@ -458,8 +470,10 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 		std::shared_ptr<const sp::Plan> plan;
 		int slot = -1;
 		bool hasList = false;
+		uint64_t generation = 0;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
+			generation = g_generation;
 			plan = g_plan;
 			slot = g_slotLevel;
 			hasList = g_lists.find(id) != 0;
@@ -467,7 +481,9 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 		const bool inMap = plan != nullptr && slot > 0 && UnitLevelId(unit) == slot;
 		switch (sp::decidePlayer(plan != nullptr && !plan->players.empty(), inMap, hasList)) {
 		case sp::PlayerAction::Apply:
-			ApplyToPlayer(unit, id, *plan);
+			if (g_playerSetting.load()) {
+				ApplyToPlayer(unit, id, *plan, generation);
+			}
 			break;
 		case sp::PlayerAction::Remove:
 			RemoveFromPlayer(unit, id);
@@ -487,6 +503,7 @@ void StatApplyGameLeft() noexcept {
 		monsters = g_monsterCount.load();
 		players = g_playerCount.load();
 		const bool had = g_plan != nullptr;
+		++g_generation;
 		g_plan.reset();
 		g_slotLevel = -1;
 		g_lists.clear();  // the game frees the units and their lists; nothing is touched here

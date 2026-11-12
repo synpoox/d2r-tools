@@ -19,8 +19,13 @@ part is not found exactly once the plugin loads, reads and checks your tables, a
   meant to stay in your inventory with a message saying why. Neither has been tried in a game yet.
 - **Map properties** (written, **not yet verified in game**): when a map opens, `Properties` random properties are drawn
   from `mapstats.txt` (or the built-in list) and applied through the game's own stat lists: `Monsters` rows to every
-  monster that spawns in the map level, `Players` rows to the player while the player is in the map level. They are removed
-  when the player leaves the map level or the game. Each part is found by byte signature at load; a part that is not found
+  monster that spawns in the map level. `Players` rows go on the player only if you set `PlayerStats` to `1` in
+  `cartographer.txt`; it is `0` by default and then nothing is attached to the player. **Turn `PlayerStats` on only on a
+  test character** until the in-game save check (section 7, check 5) has passed: the player's stats are removed when the
+  player leaves the map level, but a Save and Exit inside the map, or an autosave there, may save the character while they
+  are still on it. Leaving the game removes nothing itself; the plugin forgets them and the game frees them with the
+  character. Stats the game writes back into the saved character (`gold`, `hitpoints`, `level`, ...) are refused on players
+  (and `level` on monsters); `cartographer check` names such rows. Each part is found by byte signature at load; a part that is not found
   once leaves that half off and `cartographer check` says which. The player half needs the `PlayerTick` part. Area columns
   (`Level`, `Density`, ...), `ItemStats`, the panel and events are not applied yet. The plugin log gets `statprobe:` lines
   that record what the game did, for the checks listed in `docs/reverse-engineering/cartographer.md` section 7.
@@ -77,8 +82,8 @@ default. Cartographer's own words (tilesets, shapes, sizes, difficulties) ignore
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance, Density, Champions, Uniques | Numbers; `Properties` is used when a map opens (not yet verified in game), the rest are kept for later phases | cartographer.txt |
 
-`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0) and
-`Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
+`cartographer.txt` has the columns `Setting` and `Value`: `Properties` (6), `EventChance` (20), `ItemStats` (0), `PlayerStats` (0; test
+slot only, see above) and `Town` (`Harrogath`, the only town supported). Phase 1 reads and checks the map columns beyond the table above, but every
 map in `maps.txt` opens through the one map level (`Preset` slot); nothing opens without a mod and a `maps.txt`.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`

@@ -183,6 +183,16 @@ TEST_CASE("settings: blank means default, a bad value keeps it and says why") {
 	CHECK(Joined(report).find("Did you mean") != std::string::npos);
 }
 
+TEST_CASE("settings: PlayerStats is off by default and takes 0 or 1")
+{
+	Report report;
+	CHECK(LoadSettings("Setting\tValue\nProperties\t6\n", report).playerStats == 0);
+	CHECK(LoadSettings("Setting\tValue\nplayerstats\t1\n", report).playerStats == 1);
+	CHECK(report.Errors() == 0);
+	CHECK(LoadSettings("Setting\tValue\nPlayerStats\t2\n", report).playerStats == 0);
+	CHECK(report.Errors() == 1);
+}
+
 TEST_CASE("slots load and are found ignoring case") {
 	Report report;
 	const auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nbroken\tx\n", report);
