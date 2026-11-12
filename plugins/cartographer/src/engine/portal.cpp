@@ -7,6 +7,7 @@
 #include "core/request.h"
 #include "core/sig.h"
 #include "core/text.h"
+#include "engine/stat_apply.h"
 #include "log.h"
 #include "steer.h"
 
@@ -174,6 +175,15 @@ void Tell(const std::string& text) noexcept {
 	}
 }
 
+// The map is open: draws its properties and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
+void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player) noexcept {
+	try {
+		StatApplyMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)));
+	} catch (...) {
+		plog::Error("drawing the map's stats failed; '%s' opens without them", map.name.c_str());
+	}
+}
+
 // A Cave or Crypt map opens through the Maze slot and is built by the maze steering hooks; every other map through the
 // Preset slot.
 auto IsMazeMap(const MapDef& map) noexcept -> bool {
@@ -323,6 +333,9 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
 	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level);
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
+	if (opened != 0) {
+		StartMapStats(*map, tables, game, player);
+	}
 }
 
 // --- The console path ------------------------------------------------------------------------------------------------
@@ -382,6 +395,9 @@ void ServeRequest(Game* game, Unit* unit) noexcept {
 	plog::Info("opening '%s' (%s) through level %d from the console", map->name.c_str(), map->tileset.c_str(), level);
 	const int32_t opened = OpenMapPortal(game, unit, *map, *tables, level);
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
+	if (opened != 0) {
+		StartMapStats(*map, tables, game, unit);
+	}
 }
 
 // MazeProbe: once per game, where the local player stands when it is in the Maze slot level (compared with the entrance room).
@@ -421,6 +437,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
 		ServeRequest(game, unit);
 	}
+	StatApplyPlayerTick(game, unit);
 	return result;
 }
 
@@ -440,6 +457,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
 		g_firstLogged = false;
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
+		StatApplyGameLeft();
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;

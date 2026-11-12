@@ -112,13 +112,13 @@ written from this page alone for the rows without a signature (AGENTS.md); the 1
 ## 3. Phase 1 parts: the map item and the red portal (`plugins/cartographer`, issue #20)
 
 **Date:** 2026-11-11 (validated 2026-11-12). **Status:** validated in game on build 93847, image stamp `0x6ab3782c`
-(D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save, Normal difficulty): all thirteen parts
-found by signature at load, the three hooks installed, the item opened its own map's portal, the map loaded and returned,
-a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
-`LocalPlayerReady.playerId`. Not validated in game: a Hell-difficulty open, the level and free-spot gates, an ordinary
-spell-16 item that no map names compared with vanilla (the pass-through of the two item hooks), the spell-16 use with no
-matching check, leaving the game with the portal open, and the TCP/IP client refusal. Open, cause unknown: a town portal
-scroll used on the map level itself did nothing; no comparison without Cartographer was made.
+(D2R 3.3.0, D2RLoader 1.3.1-beta, test slot with the D2RToolsTest mod and a test save, Normal difficulty): all thirteen
+parts found by signature at load, the three hooks installed, the item opened its own map's portal, the map loaded and
+returned, a second open was refused, the Hell gate refused, the console `open` worked, and the tick's unit id matched
+`LocalPlayerReady.playerId`. A second pass on 2026-11-12 (Hell game, level-1 then level-25 Barbarian) settled more; the
+per-check levels are in "Game checks of 2026-11-12" at the end of this section. Still not validated in game: the free-spot
+refusal (tried, not reproduced) and the TCP/IP client refusal (what would settle each is in that table); the spell-16 use
+with no matching check is not reachable through its one direct caller and stays unit tested only.
 
 Cartographer finds every part below by byte signature at load. A part needs exactly one match in the game's executable
 sections; otherwise it stays off, the reason goes to the plugin log and `cartographer check`. The two item hooks are
@@ -177,7 +177,8 @@ first, then serves a posted console request when the unit is a player (`+0` == 0
 with a log line naming both ids; the hook also logs the first player unit id it sees next to `LocalPlayerReady.playerId`.
 `cartographer open` refuses (no arming) when the part is off, and in a game with no server tick (a TCP/IP client).
 The portal opens from inside the unit timer event (`0x42e600`), not the item-use handler: needs the in-game re-entrancy
-checks in the plugin README. Not validated in game.
+checks in the plugin README. In game the console `open` worked in a
+Normal-difficulty game (section 3, Game checks); the TCP/IP client refusal was not exercised.
 
 Evidence level of every row: static, dump (not game). Eleven of the twelve RVAs are `.pdata` function entries in this build; `RoomLevelId` (`0x2efc10`) is a frameless leaf with no `.pdata` entry (the nearest `.pdata` entry before it starts at `0x2efb70`, a different function). The plugin checks `.pdata` only for hooked parts overridden in `signatures.txt`, so `RoomLevelId` needs only a unique match. None looks wrong. Findings per part:
 
@@ -218,9 +219,61 @@ Re-check on a new build: write a memory-layout image with d2rAI-toolkit's `tools
 D2RLoader), then `python -I plugins/cartographer/tools/check_portal_signatures.py <image> --stamp <stamp>`. The packed
 `D2R.exe` on disk cannot be checked (encrypted code).
 
-What remains: the in-game check listed in the plugin README and the #20 pull request (install, the signatures all
-resolving at load with `cartographer check`, the hooks going in, one opening and the refusals). Nothing in section 3 is
-validated in game, and the hook entries and `UnitStat`'s thunk are only checked in the dump of a running process.
+### Game checks of 2026-11-12
+
+Hell game on slot 11 with the D2RToolsTest mod, test save `cartos` (progression raised so Hell is offered), vanilla
+`levels.txt`, `lvlprest.txt` and `misc.txt` plus the installer's "Cartographer Preset" level 138 and three `misc.txt`
+rows with `pSpell` 16 (`t20`, `t21`, `t22`); maps `Shorelines` (Hell, level 1) and `Gated` (Hell, level 20).
+Levels: live = seen in the running game; static = read from the dump only; tried = run in game without reaching the result; not done = not tried.
+
+| Check | Level | Result |
+|---|---|---|
+| Open a map in Hell | live | `t21` in Harrogath opened `Gated` through level 138; a red portal appeared, the scroll was consumed, the portal led to level 138 and back. |
+| Level gate refuses | live | Level 1 using `Gated` (needs 20): log "Gated needs character level 20 (you are 1)", item kept. On screen the player sees only "cartos says: I can't use this yet."; the Cartographer wording is in the log and console. |
+| Level gate allows | live | After `cheat level 25` the same item opened the portal. This exercises `UnitStat` (`0x2f5020`) on its success path only. |
+| Free-spot gate | tried, refusal not reproduced | `cheat mspawn zombie1,100` around the player did not stop the spot search; the portal opened (kept as evidence). A refusal was never seen, so `FindFreeSpot` (`0x517f90`) has only its success path exercised. Static reading is in "Free-spot search" below: the mask tests a collision bit, not a monster crowd, and the search runs out to about 99 subtiles, so a refusal needs every tested window in that area blocked. What would settle it: a debug build that forces `found == nullptr` once, or a spot where collision bit `0x400` is set on every window out to that radius (none known). Until then the refusal is unit tested only (`CheckGates` -> `NoSpot`). |
+| Spell-16 item no map names | live | `t22` (spell 16, in no `maps.txt` row): no log line, no message, not consumed, the same as with Cartographer unloaded. |
+| Spell-16 use with no matching check | not done | Static: the only direct caller (`0x4f591e`) runs the use only after `ItemSpellCheck` returned nonzero (see "Callers of ItemSpellUse" below), so the case is not reachable through it. It is defensive code, unit tested only, with no in-game test planned; only an indirect caller (none searched) could reach it. |
+| Leave game with a portal open, next game | live | Save and Exit from level 138 with the portal open: clean exit, no crash. In the next game `Shorelines` opened (the per-game `'MAPS'` counter was fresh) and the tick logged its first player unit again. Whether that open used the item or `cartographer open` was not recorded, so the console path after a game change is not shown. |
+| TCP/IP client refused | not done | Needs a second game instance joined as a TCP/IP client, then `cartographer open <Name>`; not run. The refusal is in the code (no tick seen) and the unit tests. |
+| Town portal scroll on the map level | live | `tsc` used in level 138 did nothing: not consumed, no portal, no log line. With Cartographer unloaded the same scroll did the same, so this is vanilla behaviour with a preset-level slot, not Cartographer. |
+| Better Auras alongside | live | Both loaded in one game (Better Auras' log: "other plugins: cartographer.dll"); `Shorelines` opened; no new crash report. Cartographer hooks `0x42e350`, Better Auras `0x42e600`, so the two do not meet. |
+
+Gate evidence, as it stands: the order `NotInTown`, `Difficulty`, `CharLevel`, `AlreadyOpen`, `NoSpot` is the code's; in game
+the Normal-difficulty refusal, the Hell allow, the level refusal and the level allow were seen in this pass, and the
+AlreadyOpen refusal (a second open) and the NotInTown refusal (console `open` outside town) were seen live in #70. `UnitStat`
+and `FindFreeSpot` were run only on their success path (a level read, a spot found); neither has been shown to refuse live.
+Only `NoSpot` has never been seen refusing.
+
+Free-spot search (static, read-only, `python -I plugins/cartographer/tools/dump_dis.py C:\ghidra-work\D2RLoader_6ab3782c_dump.exe
+--stamp 0x6ab3782c dis <rva>`; dump, not game): `FindFreeSpot` (`0x517f90`) takes the `0x400` as its fifth argument and
+passes it, with a 7 by 7 window (`3 * 2 + 1`), to `0x364b20` (its seventh argument, `5`, is never read), then `0x365f80`, then `0x3666c0`. That last function ANDs
+each 16-bit entry of the room's collision grid (`[room_coll + 0x20]`, one `u16` per subtile) with the mask and ORs the
+results; a nonzero result means the window is blocked. So `0x400` is bit `0x400` of the per-subtile collision word, not a
+unit count: zombies would matter only if their presence sets that bit, which the 100-zombie run suggests it does not.
+The search spirals outward from the player in rings (candidates step by 2 subtiles; windows whose corner is outside the room are skipped) up to the eighth argument (100), moving into neighbouring rooms, and sets
+`found` to null only when every tested window up to that radius is blocked or no room exists. What bit `0x400` means (its engine
+name) is not established by this dump. The exact in-game check that would reproduce a refusal: stand where bit `0x400` is
+set on every 7 by 7 window out to about 99 subtiles (about 20 tiles) of the player. Harrogath has no such spot that we know
+of, so a forced `found == nullptr` in a debug build is the practical route. Not run.
+
+Callers of ItemSpellUse (static, dump; `0x581680` and `0x5817f0` found by scanning every `E8` and `E9` in `.text`): each has
+exactly one direct caller, both inside one large function (the item-use handler; `0x4f45eb` is its shared tail):
+`ItemSpellCheck` at `0x4f52c6`, `ItemSpellUse` at `0x4f591e`. The use block `0x4f590f` is reached only from `0x4f580d` and
+`0x4f5816` (both `jne`), in block `0x4f57f4`. That block is reached only from `0x4f55f9` and `0x4f562c`, both in block
+`0x4f55f0`, which is reached only from `0x4f5470`, in block `0x4f5438`, which is reached only from `0x4f52cd`: the
+`test al, al; jne` right after `call 0x5817f0` at `0x4f52c6`. So the use runs only after `ItemSpellCheck` returned nonzero.
+The two jumps at `0x4f580d` (`[record + 4]` of the row from `0x300ae0(dataFlag, ...)` compared with `r13d`) and `0x4f5816`
+(`r14b` nonzero) choose between the use and the other branch (`0x4f581c`); they do not skip the check. Through this caller
+the "use with no matching check" case is therefore not reachable (static); it is defensive code in Cartographer's hook, and
+it stays unit tested only. Indirect callers (vtable or function pointer) were not searched.
+
+Portal label: the red portal's tooltip read "Missing String" when the player stood in Harrogath and "Harrogath" inside level
+138. Likely cause: the installer sets level 138's `LevelName` to "Cartographer Preset" and adds no string for that key, so every
+installer user would see it; not verified in game. Tracked in #87.
+
+What remains: the free-spot refusal and the TCP/IP client refusal (each row above says what would settle it); the spell-16
+use with no matching check stays unit tested only. The hook entries and `UnitStat`'s thunk are checked in the dump and by the game running through them.
 
 ## 4. Outdoor S0 and S1 spike results (issue #22)
 
@@ -548,6 +601,42 @@ The `FF 25` rows are D2RLoader thunks whose slots hold `D2RCore.dll` pointers in
 4. Every spawn, superunique, TC and object call exercised once, including the six TC stack args, and which room-activation path runs for the slot level (the per-row checks in Q3).
 5. The chat packet display rule and the best text route (Q4).
 
+## 7. Map stats parts (issue #80)
+
+**Status:** written and unit tested; player half off by default (`PlayerStats`); signatures checked statically on the build 93847 dump (`check_portal_signatures.py`); **not run in a game**. Applies the section 6 recipe: monster stats from a hook on the monster setup `0x494a60`, player stats from the existing PlayerTick hook (section 3). Code: `plugins/cartographer/src/engine/stat_apply.cpp`; pure plan and tracking logic in `src/statplan/`.
+
+| Field | Record |
+|---|---|
+| Date | 2026-11-12 |
+| Consumer | Cartographer map stats (`src/engine/stat_apply.cpp`) |
+| Module | `D2R.exe` (SetListStat and AttachStatList are D2RLoader thunks into `D2RCore.dll`: call, never hook) |
+| Build identity | D2R 3.3 build 93847, image stamp `0x6ab3782c`, the dump `D2RLoader_6ab3782c_dump.exe` |
+| Location | `NewStatList` `0x2f7300`, `SetListStat` `0x2f7c00` (thunk), `AttachStatList` `0x2f2cb0` (thunk), `DetachStatList` `0x2f7920`, `FreeStatList` `0x2f4180`, `MonsterSetup` `0x494a60` (hooked). `UnitRoom` `0x34b440`, `RoomLevelId` `0x2efc10`, `UnitStat` `0x2f5020` are the portal's parts, found again under the names `StatUnitRoom`, `StatRoomLevelId`, `StatUnitStat`. Unit fields read directly: type `+0x00` (0 player, 1 monster), id `+0x08`, data flag `+0x1bd` (a byte: the three short helpers `0x34b9d0`, `0x34a330`, `0x34a0e0` are exactly these loads behind a null check, read in this change), stat list chain head `+0x90` (second head `+0x98`), next `+0x68` (section 6). The hook's first argument is the spawn block: `+0` game, `+8` room, `+0x18` monstats id (read at `0x494a72` to `0x494a84` and the caller `0x4943ec`..`0x4943f2`) |
+| Guard | Signatures in `src/core/part_signatures.h` (`NewStatList`, `SetListStat`, `AttachStatList`, `DetachStatList`, `FreeStatList`, `MonsterSetup`). Each matched exactly once. `MonsterSetup` is 21 bytes with no `??`; the hook cuts the first 14 (whole instructions: `mov [rsp+18],rbx; mov [rsp+20],rbp; push rsi; push rdi; push r15`), which D2RLoader re-checks at the entry. The first relative operand is the `call 0x976e0` at `+0x2b`. Where a part does not match once, the part is logged and left off |
+| Contract | Monster: after the game's own setup returns, if a plan is active and the room's level is the slot level, `NewStatList(0, 0, 1, unitId)`, `SetListStat(dataFlag, list, stat, value, 0)` for each monster entry, `AttachStatList(monster, list, 1)`. The list is never tracked or freed (it goes with the unit; inference). Player: from the tick, when the player's room level is the slot level, the same with type 0, and the list address is kept per unit id; on leaving the level (or the map closing) it is removed only if it is still on the unit's chain: `DetachStatList(unit, list)`, `FreeStatList(dataFlag, list)`. No state is set and no state bit is changed (the engine's own lists use a state, but a state id that does not exist in the game's states table would write outside the bit set; the plugin keeps the list address instead). Game thread only; the tables are read under a lock. On `GameLeft` the plugin forgets its state and touches no game memory |
+| Evidence | `dump_dis.py ... dis 0x494a60 16` (prologue, args), `dis 0x4943d0 14` (the call and that its result is unused), `dis 0x34a0e0 / 0x34a330 / 0x34b9d0` (field loads), `dis 0x2f7920`, `dis 0x2f4180` (detach computes its own data flag; free does nothing for a list with a negative flags word), `pat "<signature>"` for uniqueness; `check_portal_signatures.py` for all of them |
+| Validation | Unit tests (`statplan_tests`: the draw to plan, stat id lookup, player apply and remove decisions, the tracking table), signature check on the dump. **Not run in a game** |
+| Failure mode | Each half is off when any part it needs is missing or its guard fails; the other half still works. Nothing is replaced by a guess. A map opens either way |
+| Coexistence | The monster hook is a new hook on `0x494a60`, which nothing else here hooks; it calls the original first. The player half rides the portal's PlayerTick hook (also Better Auras' neighbour `0x42e600`). The D2RCore spawn hook (flag `0x40`) runs after `0x494a60` and is untouched |
+
+### Needs game (the section 6 stats checks, settled by the `statprobe:` log lines)
+
+1. **Percent stat on a monster, and the order against `0x49dd70`.** For the first six monsters of a map the log has `statprobe: monster #n ... stat 12 (level) was L at the hook, maxhp A -> B, totals [..] -> [..]`. A level of 0 at the hook means `0x49dd70` runs later; a nonzero level means earlier. Totals that change by the listed value show the list counts; maxhp A -> B shows whether `item_maxhp_percent` reaches a monster's life (if not, pd2's direct `SetUnitStat` on maxhp is the fallback). Then check the monster's life in play, and whether a later level write resets it.
+2. **List on the chain.** The same lines end `list on chain: yes/NO (n lists)`. `NO` means the chain offsets (`+0x90`, `+0x98`, `+0x68`) are wrong for an attached list; removal then never runs (it only frees a list it finds), and this is the one to fix first.
+3. **Client replication.** The probe is server side. In play: the monster's life bar and damage as the client sees them, the player's resistances on the character sheet, and the game's own stat text (the client builder `0x2dc4b0`).
+4. **Stats without a state.** If totals do not change at all, the list needs a state; add one (a state id read from `states.txt`) and re-test.
+5. **Player list and saves.** `statprobe: player ... entered the map` and `left the map` show the stat totals and chain length before and after. Save and exit inside the map, reload, and read `statprobe: first player unit ... holds N stat lists` against a game that never opened a map; a higher count means a list survived the save.
+6. **Removal and leaving.** Leave the map level (town portal): the log shows `left the map: list removed (chain n -> n-1)`, and the stats are gone from the character sheet. Leave the game: `left the game: N monster(s) and M player(s)`, and a new game shows no leftover stats.
+7. **Every monster.** Count of `monster #n` against the monsters seen in the level; whether minions and bosses get the list (they all pass the same setup call).
+8. **Monster list free or leak.** Monster lists are never tracked or freed; that the game frees a unit's lists with the unit is inference (section 6). Heap count (or process private bytes) before and after several map runs with many monsters; steady growth per monster means the lists leak and each needs a detach and free on the monster's death or removal.
+9. **Level stat on monsters.** `level` is refused on `Monsters` rows (the game's own level write at `0x49dd70` runs in or after the same setup and would interact with it); nothing here tests that write, so a `level` row is not offered until it has been checked.
+
+### Player stats are off by default (review of issue #80, fix cycle 1)
+
+- **`PlayerStats` in `cartographer.txt` is 0 by default.** While it is 0 nothing is attached to the player: the plan carries no player entries and the tick does not apply. Reason: the list is on the unit's chain until the next tick outside the map level, so a Save and Exit inside the map, or an autosave there, may write the character while it is attached. Whether the save writer reads base stats only is inference (equipped items' lists sit on the same chain and are not saved) and needs check 5 above. Use `1` on a test slot only until check 5 has passed. Removal when the map closes or the player leaves the level is unchanged.
+- **Refused stats.** `buildPlan` refuses these on `Players` rows, because the game reads them as a total (`UnitStat`: base plus lists) and writes the result back as the base value: `statpts` (4), `newskills` (5), `hitpoints` (6), `mana` (8), `stamina` (10), `level` (12), `experience` (13), `gold` (14), `goldbank` (15). Matched by name or id. The other stats of the vanilla itemstatcost with no item bit (`lastexp` 29 and `nextexp` 30) are level-table look-ups and are not written back; `maxhp`, `maxmana`, `maxstamina` and the attributes are item stats and allowed. No further stat with this behaviour was found by reading vanilla `itemstatcost.txt`; this is a static reading of the table's save columns, not of the game's writers. `level` is also refused on `Monsters`, and so are `hitpoints`, `mana` and `stamina` (6, 8, 10): the mechanism above also runs for a monster on every hit and on regeneration, so a `+X` list would be given back each time base is rewritten (inferred; the damage writer was not traced in the dump). Param stats are refused on both targets: the 17 rows of the vanilla 3.3.0 `itemstatcost.txt` with a Save Param Bits value (static reading of that column; ids 83 `item_addclassskills`, 97 `item_nonclassskill`, 98 `state`, 107 `item_singleskill`, 126 `item_elemskill`, 151 `item_aura`, 155 `item_reanimate`, 179 `attack_vs_montype`, 180 `damage_vs_montype`, 188 `item_addskill_tab`, 195-199 and 201 `item_skillonattack`/`onkill`/`ondeath`/`onhit`/`onlevelup`/`ongethit`, 204 `item_charged_skill`), matched by name or id, because the list entry is set with layer 0, which would name skill or state 0. Stat ids are the itemstatcost row numbers, not the `*ID` column (vanilla row 212 says 213). `check` and the report name each refused row.
+- **Generation counter.** A counter bumped under the lock on `GameLeft` is read with the plan on each tick and checked under the lock before a made list is recorded; if the game was left meanwhile the list is not recorded or touched (it belongs to the old game's unit). So a list pointer from an earlier game is never used, whichever thread delivers `GameLeft`.
+
 ## 8. Outdoor builder engine checks (issue #83)
 
 Static answers for the twelve open questions of plan section 7 ("Still to check, in Ghidra or in game") of
@@ -598,7 +687,6 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 | `0x3277e0` | Reads `[drlg + 0x110]`; its result picks which of the two `WarpToPreset` preset ids is used | Q9 | call-only | `40 53 48 83 EC 20 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 8B 83 10 01 00 00 83 E0 01` |
 | `0x32c360` | LvlPrest row lookup `(dataFlag, id)` | Q9 | hookable | `48 89 5C 24 08 48 89 74 24 20 57 48 83 EC 30 48 63 F2 E8 ?? ?? ?? ?? 48 8B F8 48 8B DE 85 F6 78 ?? 48 3B 98 C0 14 00 00` |
 
-
 ### Q1. Entry bytes and patch state of `0x3fe2e0`, `0x3ee320`, `0x3ecfc0`, `0x3fa7f0`
 
 - **Static:** the dump holds, at each RVA, exactly the bytes of the section 4 S0 signature (the full signatures from that table were each run
@@ -624,7 +712,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 
 ### Q3. Flag bit `0x100` in grid `+0x58`, and what sets it
 
-- **Cell flags seen (static), grid `+0x58`:** `0x200` covered (set with `bts 9` in `0x3ecfc0` next to the 16-bit file index masks `0xf0000`), `0x400` marks an
+- **Cell flags seen (static), grid `+0x58`:** `0x200` covered (set with `bts 9` in `0x3ecfc0` next to the 4-bit file index masks `0xf0000`), `0x400` marks an
   Act 5 border cell (tested with `bt rax, 0xa` in `0x3feee0`, which stamps the entrance and exit pieces 907..910 there), and `0x100` is the
   "void" mark below. The mask `0x3f0ff80` (bits 7..15 and 20..25) is the test `0x3f95e0` applies to its own per-room grid; it is not shown to be a decided-cell test on the outdoor flag grid.
 - **What `0x100` is (static):** a cell that is deliberately empty. `0x3ede00(level, x, y)` SETs the piece id (grid `+0x08`) to 0 and the flag
@@ -638,7 +726,7 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 - **Consequence for the slot:** a cell that is stamped by `0x3ecfc0` carries a piece id and the file bits, never `0x100`; the section 4 dump shows
   every cell of the 20x4 line covered, so no `0x100` is expected there. A plan that leaves cells unstamped should stamp them or
   SET `0x100` itself; what the rest of the engine does with an unstamped cell is not shown here (see the evidence level).
-- **Evidence level:** static for who writes it (`0x3ede00` and `0x3efaf0` only; `0x3f95e0` is described above, not a setter here); **inference** for what the rest of the engine does with it (no reader of the bit was found in the
+- **Evidence level:** static for who writes it (`0x3ede00` and `0x3efaf0` are the only writers found, by a scan of the 37 direct call sites of `0x3faa50`; a value passed in a register was not traced, so another writer through a computed value is not excluded; `0x3f95e0` is described above, not a setter here); **inference** for what the rest of the engine does with it (no reader of the bit was found in the
   stamper or the room maker `0x3ee780`; the bit is read only as part of the `0x3f0ff80` test). **Needs game:** log the `+0x58` grid after the build of the slot level and
   after a `0x3ede00` call from the hook; observe the `0x100` cell is not turned into a room by `0x3ee780` (room count unchanged by the mark).
 
@@ -718,8 +806,8 @@ Addresses found while answering (all `D2R.exe`, build 93847; "hookable" and "cal
 ### Q9. The special level id `DAT_142a9a5cc` in `0x3ee320`
 
 - **Static:** it is the target of the debug console command `WarpToPreset`. The command table entry at `0x400dc0` (next to `SetObjectMode`) names it; its handler
-  `0x402820` parses the arguments into the globals at `0x2a9a5c0` and `0x2a9a5c4` (preset ids), `0x2a9a5cc` (level id) and sets the byte `0x2a9a5c9` (enable). It stores its first argument in both `0x2a9a5c0` and `0x2a9a5c4`, and its second in `0x2372488` (`0x40286d`), outside that range. In `0x3ee320` (at `0x3ee4e7`, after the Act 1 builder
-  call) and in the maze path (`0x3e75f6`), when the level being built has `+0x1f8` equal to `[0x2a9a5cc]` (`0x3ee4e7`; the byte `0x2a9a5c9` is not tested there) and the chosen preset id is non-zero (`test ebx, ebx` at `0x3ee516`), the code asks `0x3277e0` for a flag, picks one of the two preset ids,
+  `0x402820` parses the arguments into the globals at `0x2a9a5c0` and `0x2a9a5c4` (preset ids), `0x2a9a5cc` (level id) and sets the byte `0x2a9a5c9` (enable). It stores its first argument in both `0x2a9a5c0` and `0x2a9a5c4` (the handler writes the same value to both preset globals), and its second in `0x2372488` (`0x40286d`), outside that range. In `0x3ee320` (at `0x3ee4e7`, after the Act 1 builder
+  call) and in the maze path (`0x3e75f6`), when the level being built has `+0x1f8` equal to `[0x2a9a5cc]` (`0x3ee4e7`; `0x3ee320` does not test the enable byte `0x2a9a5c9` there, but the maze path tests it at `0x3e7602`) and the chosen preset id is non-zero (`test ebx, ebx` at `0x3ee516`), the code asks `0x3277e0` for a flag, picks one of the two preset ids,
   looks the LvlPrest row up (`0x32c360`) and forces that preset into the grid, then writes the used id back. In the dump all of `0x2a9a5c0..0x2a9a5d0` are zero, and 0 is no valid level id, so the branch is dead
   in normal play.
 - **Consequence:** nothing for a normal slot level. It matters only if a player has typed `WarpToPreset` for the slot's level id (the debug hook would stamp a preset into it); the slot id differs

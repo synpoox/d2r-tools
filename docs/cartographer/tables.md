@@ -11,9 +11,9 @@ What the plugin reads, and what takes effect in game today:
 | File | Read today? | Applied in game today? |
 |---|---|---|
 | `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | Only `Name`, `Item`, `Difficulty` and `MinCharLevel` act; `Tileset` is written to the log. The other columns are checked, then ignored: every map opens the same installed preset level. |
-| `cartographer.txt` | Yes, checked the same way. | No. The settings are checked and reported but nothing uses them yet. |
+| `cartographer.txt` | Yes, checked the same way. | `Properties` and `PlayerStats` are used (see below). The other settings are checked and reported but nothing uses them yet. |
 | `slots.txt` | Yes. Written by `tools\install.ps1`; do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | No. They are read and checked, but nothing draws properties, rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
+| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player only when `PlayerStats` is 1 (written and unit tested; **not yet verified in game**). `shapes.txt` and `mapevents.txt`: no, they are read and checked, but nothing rolls events or builds layouts from them yet (later phases). A map's `Shape` can name a `shapes.txt` row. |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
@@ -50,7 +50,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; checked only, not applied yet) | the tileset's own monsters | `quillrat1,zombie1` |
 | `Difficulty` | no | `Normal`, `Nightmare` or `Hell` | Hell | Nightmare |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
-| `Properties` | no | Random properties for this map, 0 to 20 (checked only; not applied yet) | the `cartographer.txt` value (6) | 4 |
+| `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; not yet verified in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 (checked only; not applied yet) | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; not applied yet) | 0 | 50 |
@@ -90,11 +90,15 @@ Rules and limits:
 - `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
 - `Min` and `Max` need a column and a number on every row; a blank cell is an error and the row is skipped.
 - `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
+- `Stat` must be a `Stat` name in the game's `itemstatcost.txt` (exact spelling). `check` reports a name it does not find, with a suggestion. A row with a wrong name is still in the pool; if it is drawn it is skipped and the plugin log says so. A value that rolls 0 is skipped, as it changes nothing.
+- When a map opens, `Monsters` rows are applied to every monster that spawns in the map level, and `Players` rows to the player while the player is in the map level. Neither has been seen working in a game yet; the plugin log (`statprobe:` lines) records what happened.
 - If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
 - Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
 - If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
 - `Properties` in `maps.txt` and in `cartographer.txt` is 0 to 20. A negative value is refused (the map row is skipped; the setting keeps its default).
 - With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. If the item has no stats, a normal draw is made instead.
+- `Players` rows are applied only when `PlayerStats` is `1` in `cartographer.txt` (default `0`: nothing is put on the player; `Monsters` rows are applied either way). The player's stats sit on the character while it is in the map. If you Save and Exit inside the map, or the game autosaves there, the character may be saved while they are still on it. Whether the save keeps them has not been checked in a game, so turn `PlayerStats` on only for a test character until it has.
+- Some stats cannot be used. The game reads them as a total and writes the result back as the saved value, so the map's value would stay in the character: `statpts`, `newskills`, `gold`, `goldbank`, `hitpoints`, `mana`, `stamina`, `level` and `experience`. Such a `Players` row is skipped when drawn, and `cartographer check` and the report name it. `level` is also skipped on `Monsters`, because the game sets the monster's level itself, and so are `hitpoints`, `mana` and `stamina`, because the game rewrites them on every hit and regeneration (use `maxhp`, `maxmana`, `maxstamina`). Stats that need a skill, state or monster type number (`item_addclassskills`, `item_nonclassskill`, `state`, `item_singleskill`, `item_elemskill`, `item_aura`, `item_reanimate`, `attack_vs_montype`, `damage_vs_montype`, `item_addskill_tab`, `item_skillonattack`, `item_skillonkill`, `item_skillondeath`, `item_skillonhit`, `item_skillonlevelup`, `item_skillongethit` and `item_charged_skill`; the stats with a Save Param Bits value in the vanilla 3.3.0 `itemstatcost.txt`) are skipped on both, because a map row cannot name the skill, state or monster type yet. The maxima (`maxhp`, `maxmana`, `maxstamina`) and the attributes are fine.
 
 ## mapevents.txt (optional)
 
@@ -131,13 +135,14 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings. Checked and reported today, not applied yet. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings. `Properties` and `PlayerStats` are used when a map opens (not yet verified in game); the others are checked and reported only. Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
 | `Properties` | Random properties per map, 0 to 20 | 6 | 4 |
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
+| `PlayerStats` | `1` puts the `Players` rows of a map on the player. **Use `1` only on a test slot** until the in-game save check has passed (see below); `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 
 ## tilesets.txt (optional, advanced)

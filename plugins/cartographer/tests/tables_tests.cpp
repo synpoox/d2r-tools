@@ -197,6 +197,16 @@ TEST_CASE("settings: blank means default, a bad value keeps it and says why") {
 	CHECK(Joined(report).find("Did you mean") != std::string::npos);
 }
 
+TEST_CASE("settings: PlayerStats is off by default and takes 0 or 1")
+{
+	Report report;
+	CHECK(LoadSettings("Setting\tValue\nProperties\t6\n", report).playerStats == 0);
+	CHECK(LoadSettings("Setting\tValue\nplayerstats\t1\n", report).playerStats == 1);
+	CHECK(report.Errors() == 0);
+	CHECK(LoadSettings("Setting\tValue\nPlayerStats\t2\n", report).playerStats == 0);
+	CHECK(report.Errors() == 1);
+}
+
 TEST_CASE("slots load and are found ignoring case") {
 	Report report;
 	const auto slots = LoadSlots("Slot\tLevel\nPreset\t138\nbroken\tx\n", report);
@@ -352,6 +362,22 @@ TEST_CASE("signatures: every recorded part signature parses and has at least 24 
 		INFO(text);
 		CHECK(ParsePattern(text, &p));
 		CHECK(p.size >= 24);  // a lower bound only: uniqueness in the game is shown by tools/check_portal_signatures.py
+	}
+}
+
+TEST_CASE("signatures: every map stats part signature parses; the hooked one pins the 14 bytes it cuts") {
+	const char* const all[] = {sig::NewStatList, sig::SetListStat, sig::AttachStatList, sig::DetachStatList, sig::FreeStatList, sig::MonsterSetup};
+	for (const char* text : all) {
+		Pattern p{};
+		INFO(text);
+		CHECK(ParsePattern(text, &p));
+		CHECK(p.size >= 15);
+	}
+	Pattern hook{};
+	REQUIRE(ParsePattern(sig::MonsterSetup, &hook));
+	CHECK(hook.size == 21);
+	for (size_t i = 0; i < 14; ++i) {
+		CHECK_FALSE(hook.wild[i]);  // the guard is the exact entry bytes
 	}
 }
 
