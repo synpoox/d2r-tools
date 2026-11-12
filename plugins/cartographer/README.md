@@ -135,7 +135,7 @@ does not add the Maze level; add it by hand:
 - The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
   start a new one").
 
-Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. The player did not arrive in the planned entrance cell in the 5 games with an arrival line; the build now marks the planned entrance cell as the level entry; that room gets none of the level's random objects (chests, shrines and the like), which is accepted (written and unit tested, not verified in game; #127). Not run in game: Nightmare and Hell, and a second map in the same game on the Crypt slot.
+Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. The player did not arrive in the planned entrance cell in the 5 games with an arrival line; the build now marks the planned entrance cell as the level entry; that room gets none of the level's random objects (chests, shrines and the like), which is accepted (#127; in a Cave Corridor, a Cave Loop and a Crypt Branching game on build 93847 with D2RLoader 1.3.1-beta the player arrived in the planned entrance cell and no chest or shrine was seen in that room; Nightmare, Hell and clients not run). Not run in game: Nightmare and Hell, and a second map in the same game on the Crypt slot.
 
 ## Tested
 
