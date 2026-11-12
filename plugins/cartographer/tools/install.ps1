@@ -13,7 +13,7 @@
                     DrlgType 3 (outdoor), LevelType 21 (Jungle), SizeX and SizeY 384 (12 blocks of 32 tiles, the largest outdoor map),
                     OffsetX 6000 and OffsetY 3000 (clear of every Act 5 level and of the Maze level), no warps; copied from the
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
-                    LevelGroup Null, no LevelEntry or LevelWarp, Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
+                    LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
     It also adds or updates the Maze and Outdoor rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
