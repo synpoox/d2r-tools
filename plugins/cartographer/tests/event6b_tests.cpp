@@ -12,7 +12,7 @@ using namespace cartographer::event6b;
 
 namespace {
 
-// Line order: 0 Test Data, 1 Casket, 2 Shrine, 3 Well, 4 Shrine (a repeat), 5 (blank), 6 Barrel
+// Line order: 0 Test Data, 1 Casket, 2 Shrine, 3 Well, 4 Shrine (a repeat), 5 (an empty Name field), 6 Barrel
 std::vector<std::string> objects() { return {"Test Data", "Casket", "Shrine", "Well", "Shrine", "", "Barrel"}; }
 
 }  // namespace
@@ -22,7 +22,7 @@ TEST_CASE("resolveObject: a name is its line order") {
 	CHECK(r.result == ObjectResult::Found);
 	CHECK(r.row == 1);
 	CHECK_FALSE(r.numeric);
-	// A blank line keeps its row, so the line after it is row 6.
+	// An empty Name field keeps its row, so the line after it is row 6.
 	CHECK(resolveObject(objects(), "Barrel", 7).row == 6);
 	CHECK(resolveObject(objects(), "Test Data", 7).row == 0);
 }

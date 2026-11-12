@@ -308,8 +308,8 @@ bool namedBySkill(const uint8_t *skills, uint32_t skillCount, int state)
 }
 
 // A state row nothing uses: every column of the compiled row (cartographer.md section 7) is empty. Lookup columns are empty
-// when negative (overlays, stat, skill, missile) or 0 or negative (sounds, itemtype, gfxclass, cltevent: the dump does not
-// say which one the loader writes); setfunc and remfunc are empty when 0 or -1; clteventfunc, cltactivefunc, srvactivefunc, group, bytes (colour, light, gfxtype, itemtrans, canstack) and the
+// when negative (overlays, stat, skill, missile) or 0 or negative (sounds, itemtype, cltevent: the dump does not
+// say which one the loader writes); gfxclass is a plain word, empty when 0; setfunc and remfunc are empty when 0 or -1; clteventfunc, cltactivefunc, srvactivefunc, group, bytes (colour, light, gfxtype, itemtrans, canstack) and the
 // vfxweaponstate dword are empty when 0; the whole flag field is zero.
 bool candidate(const uint8_t *row)
 {
@@ -328,9 +328,10 @@ bool candidate(const uint8_t *row)
 		if (i16At(row, off) != 0) return false; // clteventfunc, cltactivefunc, srvactivefunc
 	}
 	if (i16At(row, 0x1e) != 0) return false; // group
-	for (const size_t off : {size_t(0x26), size_t(0x28), size_t(0x2a), size_t(0x2e), size_t(0x30)}) {
-		if (i16At(row, off) > 0) return false; // onsound, offsound, itemtype, gfxclass, cltevent
+	for (const size_t off : {size_t(0x26), size_t(0x28), size_t(0x2a), size_t(0x30)}) {
+		if (i16At(row, off) > 0) return false; // onsound, offsound, itemtype, cltevent
 	}
+	if (i16At(row, 0x2e) != 0) return false; // gfxclass: a plain word (type 3), empty is 0
 	for (const size_t off : {size_t(0x20), size_t(0x21), size_t(0x22), size_t(0x23), size_t(0x24), size_t(0x2c), size_t(0x2d), size_t(0x3c)}) {
 		if (row[off] != 0) return false; // colorpri, colorshift, light r/g/b, itemtrans, gfxtype, canstack
 	}

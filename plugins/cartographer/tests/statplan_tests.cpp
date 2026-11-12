@@ -432,6 +432,9 @@ TEST_CASE("pickPlayerState skips a row with any of the function, colour, light, 
 	setI16(states, 1, 0x26, -1);
 	setI16(states, 1, 0x30, 0);
 	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 1);
+	// gfxclass is a plain word, not a lookup: only 0 is empty, a negative value is not.
+	setI16(states, 1, 0x2e, -1);
+	CHECK(pickPlayerState(states.data(), 8, skills.data(), 1).state == 2);
 }
 
 TEST_CASE("pickPlayerState skips the states the game sets by a fixed id, including 11 and 92")

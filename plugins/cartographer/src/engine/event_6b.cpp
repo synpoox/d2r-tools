@@ -64,12 +64,13 @@ Part g_parts[PartCount] = {
 	{"SpawnObject", sig::SpawnObject, 0, false, nullptr, {}, {}},
 	{"FreeSpot", nullptr, 0, false, nullptr, {}, {}},  // no signature: the call target inside SpawnObject
 	{"CreateObject", sig::CreateObject, 0, false, nullptr, {}, {}},
-	{"Event6bDataTables", sig::DataTablesBase, 0, false, nullptr, {}, {}},
-	{"Event6bNameToRow", sig::NameToRow, 0, false, nullptr, {}, {}},
+	{"DataTablesBase", nullptr, 0, false, nullptr, {}, {}},  // shared with event_apply.cpp (copied in at load)
+	{"NameToRow", nullptr, 0, false, nullptr, {}, {}},       // shared with event_apply.cpp (copied in at load)
 };
 
 const D2RL::PluginContext* g_context = nullptr;
 DeathDropFn g_original = nullptr;
+bool g_populatorOn = false;            // the room populator hook (event_apply.cpp) is in; set once at load
 std::atomic<bool> g_dropHook{false};   // the death hook is installed and every part it calls was found
 std::atomic<bool> g_dropArmed{false};  // a Boss event with a resolved Drop is armed (read on every monster death: lock only when set)
 
@@ -103,7 +104,7 @@ State g_state;
 // The data tables base for a data flag, or null (with `why`).
 auto TablesBase(uint32_t dataFlag, std::string* why) noexcept -> const uint8_t* {
 	if (!On(DataTables)) {
-		*why = "the Event6bDataTables part is off";
+		*why = "the DataTablesBase part is off";
 	} else if (dataFlag >= DataFlagLimit) {
 		*why = "the data flag " + std::to_string(dataFlag) + " is not below 4";
 	} else {
@@ -221,19 +222,24 @@ void ResolveFreeSpot(const CodeRange* ranges, int count) noexcept {
 	part.status.detail = "found as the call target inside SpawnObject";
 }
 
-auto SummaryNow() -> std::string {
-	const bool shrine = On(FreeSpot) && On(CreateObject) && On(DataTables);
+auto SummaryNow(bool populatorOn) -> std::string {
+	// A Shrine is placed from the room populator hook, so it needs that too.
+	const bool shrine = populatorOn && On(FreeSpot) && On(CreateObject) && On(DataTables);
 	return std::string("Shrine events ") + (shrine ? "on" : "off") + ", Boss Drop " + (g_dropHook.load() ? "on" : "off") + " (written, not verified in game)";
 }
 
 }  // namespace
 
-void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides) {
+void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const Part& dataTables, const Part& nameToRow, bool populatorOn) {
 	g_context = context;
+	g_populatorOn = populatorOn;
+	// DataTablesBase and NameToRow were already found by event_apply.cpp: share them instead of scanning again.
+	g_parts[DataTables] = dataTables;
+	g_parts[NameToRow] = nameToRow;
 	CodeRange ranges[8];
 	const int count = CodeRanges(context->exeBase, ranges, 8);
 	for (int i = 0; i < PartCount; ++i) {
-		if (i != FreeSpot) {
+		if (i != FreeSpot && i != DataTables && i != NameToRow) {
 			ResolvePart(context, overrides, ranges, count, g_parts[i]);
 		}
 	}
@@ -254,7 +260,7 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 		g_parts[DeathDrop].status.on = false;
 		g_parts[DeathDrop].status.detail = "off: not hooked, because a part it needs was not found";
 	}
-	plog::Info("phase 6b: %s", SummaryNow().c_str());
+	plog::Info("phase 6b: %s", SummaryNow(populatorOn).c_str());
 	for (const Part& part : g_parts) {
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
 	}
@@ -269,12 +275,12 @@ auto Event6bPartStatuses() -> std::vector<PartStatus> {
 }
 
 auto Event6bSummary() -> std::string {
-	return "phase 6b: " + SummaryNow();
+	return "phase 6b: " + SummaryNow(g_populatorOn);
 }
 
 auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
 	if (!On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
-		*why = "a Shrine part is off (FreeSpot, CreateObject or Event6bDataTables; see the parts above)";
+		*why = "a Shrine part is off (FreeSpot, CreateObject or DataTablesBase; see the parts above)";
 		return false;
 	}
 	if (player == nullptr) {
@@ -303,14 +309,18 @@ auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>
 	return true;
 }
 
+void Event6bMapOpened() noexcept {
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_state.dropArmed = false;
+	g_state.bossTracked = false;
+	g_state.dropped = false;
+	g_state.shrineReady = false;
+	g_state.shrinePlaced = false;
+	g_dropArmed = false;
+}
+
 void Event6bArmBossDrop(const ev::Event& event, int level, void* player) {
-	{
-		std::lock_guard<std::mutex> lock(g_lock);
-		g_state.dropArmed = false;
-		g_state.bossTracked = false;
-		g_state.dropped = false;
-		g_dropArmed = false;
-	}
+	Event6bMapOpened();
 	if (event.kind != ev::Kind::Boss || event.drop.empty()) {
 		return;
 	}
@@ -400,6 +410,11 @@ void Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect, i
 			return;
 		}
 		plog::Info("eventprobe: shrine: free spot (%d,%d) in room %p (%s the event room)", xy[0], xy[1], landed, landed == room ? "in" : "NOT in");
+		if (landed != room) {
+			// The neighbouring room may not be populated yet; refuse rather than create an object there.
+			plog::Warn("shrine not placed: the free spot (%d,%d) is outside the event room (room %p, not %p)", xy[0], xy[1], landed, room);
+			return;
+		}
 		void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);
 		if (unit == nullptr) {
 			plog::Warn("shrine not placed: the game refused to create objects row %d at (%d,%d)", row, xy[0], xy[1]);

@@ -258,7 +258,7 @@ auto RoundTripMonsters(const uint8_t* dt, const ep::TableFacts& mon) noexcept ->
 	std::unordered_map<std::string, std::vector<int>> byId;
 	std::vector<std::pair<int, std::string>> order;  // each distinct Id once, at its first row
 	for (uint32_t i = 0; i < mon.viewCount; ++i) {
-		const char* field = reinterpret_cast<const char*>(rows + static_cast<size_t>(i) * mon.viewRowSize);
+		const char* field = reinterpret_cast<const char*>(rows + static_cast<size_t>(i) * mon.viewRowSize + ep::kMonStatsIdOffset);
 		const std::optional<std::string_view> id = ep::idText(field, ep::kMonStatsIdSize);
 		if (id && id->empty()) {
 			continue;
@@ -436,7 +436,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 		plog::Warn("spawn '%s': the superuniques lookup gave row %d whose Class %u is not a monstats row; the mod's .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls));
 		return false;
 	}
-	const char* idChars = reinterpret_cast<const char*>(static_cast<const uint8_t*>(mon.viewRows) + static_cast<size_t>(cls) * mon.viewRowSize);
+	const char* idChars = reinterpret_cast<const char*>(static_cast<const uint8_t*>(mon.viewRows) + static_cast<size_t>(cls) * mon.viewRowSize + ep::kMonStatsIdOffset);
 	const std::string_view gameId(idChars, strnlen(idChars, ep::kMonStatsIdSize));
 	if (ep::checkSuperClass(txt, spawn, gameId) == ep::ClassCheck::Differs) {
 		plog::Warn("spawn '%s': the superuniques lookup gave row %d with class monstats row %u, (Id '%.*s'), which the mod's superuniques.txt does not agree with; the .txt files are used", spawn.c_str(), row, static_cast<unsigned>(cls), static_cast<int>(gameId.size()), gameId.data());
@@ -652,7 +652,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 		g_parts[PopulateRoom].status.on = false;
 		g_parts[PopulateRoom].status.detail = "off: not hooked, because a part it needs was not found";
 	}
-	InstallEvent6b(context, overrides);  // phase 6b: the Shrine object and the Boss Drop (its own parts and hook)
+	InstallEvent6b(context, overrides, g_parts[DataTablesBase], g_parts[NameToRow], g_spawnOn.load());  // phase 6b: the Shrine object and the Boss Drop (its own parts and hook)
 	// The entry message follows the portal's tick part and needs the room parts.
 	bool tickOn = false;
 	for (const PartStatus& s : PartStatuses()) {
@@ -696,6 +696,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 }
 
 void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player) {
+	Event6bMapOpened();  // phase 6b: the previous map's boss Drop and Shrine end here
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
@@ -712,8 +713,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	} else {
 		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
-		bool decided = false;
-		if (player != nullptr && g_dataTables != nullptr) {
+		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
+		const bool monsterSpawn = event->kind != ev::Kind::Shrine;
+		bool decided = !monsterSpawn;
+		if (monsterSpawn && player != nullptr && g_dataTables != nullptr) {
 			const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
 			const ep::RouteVerdict route = RouteFor(dataFlag);
 			if (route.monsters) {
@@ -738,7 +741,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			state->spawn = ep::resolveSpawn(tables->spawnNames, event->spawn);
 		}
 		// Checked now with a stand-in room, so a event that cannot be spawned is neither announced nor waited for.
-		const ep::SpawnPlan check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
+		ep::SpawnPlan check;
+		if (monsterSpawn) {
+			check = ep::planEvent(*event, state->spawn, ep::Rect{0, 0, 24, 24}, state->seed);
+		}
 		std::string shrineWhy;
 		if (event->kind == ev::Kind::Shrine) {
 			// Phase 6b: a Shrine's Spawn is an objects row, not a monster; it is announced only when it resolves to exactly one row.
