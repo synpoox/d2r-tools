@@ -132,57 +132,52 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 		                    " tall, but " + who + " levels hold at most " + std::to_string(maxCap.across()) + " across and " +
 		                    std::to_string(maxCap.tall()) + " tall. Use a smaller size or a simpler shape.");
 
-	// The two special calls of 0x3eb850: the entrance and the exit (the boss room, or the path's last room).
+	// The one special call of 0x3eb850: the entrance. A maze has no exit (plan section 3.6): the far end is ordinary.
 	const Point entranceCell = l.mainPath.front();
-	const Point exitCell = l.bossIdx >= 0 ? l.mainPath[static_cast<size_t>(l.bossIdx)] : l.mainPath.back();
-	struct Target { SpecialKind kind; SpecialFamily fam; Point cell; const DeadEndFamily *family; bool place; std::string note; };
-	Target targets[2] = {{SpecialKind::Entrance, SpecialFamily::Prev, entranceCell, &ts.prev, false, std::string()},
-	                     {SpecialKind::Exit, ts.exitFamily, exitCell, &ts.family(ts.exitFamily), false, std::string()}};
-	for (Target &t : targets) {
-		const uint8_t m = l.at(t.cell.x, t.cell.y).mask;
-		const char *what = t.kind == SpecialKind::Entrance ? "entrance" : "exit";
-		if (!ts.placeSpecialRooms)
-			t.note = std::string("Special ") + what + " rooms are switched off, so the " + what + " is an ordinary room.";
-		else if (!t.family->present)
-			t.note = std::string(who) + " has no special " + what + " room, so the " + what + " is an ordinary room.";
+	bool placeEntrance = false;
+	std::string entranceNote;
+	{
+		const uint8_t m = l.at(entranceCell.x, entranceCell.y).mask;
+		if (!ts.prev.present)
+			entranceNote = who + " has no special entrance room, so the entrance is an ordinary room.";
 		else if (popcount4(m) != 1)
-			t.note = std::string("The ") + what + " room has " + std::to_string(popcount4(m)) +
-			         " exits, but the special " + what + " rooms have one, so it is an ordinary room.";
+			entranceNote = "The entrance room has " + std::to_string(popcount4(m)) +
+			               " exits, but the special entrance rooms have one, so it is an ordinary room.";
 		else
-			t.place = true;
+			placeEntrance = true;
 	}
-	auto deferred = [&](Point p) {
-		return (targets[0].place && p == targets[0].cell) || (targets[1].place && p == targets[1].cell);
-	};
+	auto deferred = [&](Point p) { return placeEntrance && p == entranceCell; };
 
-	// The first room: a used cell, not a deferred special, whose neighbourhood fits around the centre of the level.
-	// Closest to the middle of the layout's bounding box wins; ties go to the first in row-major order. The level is
-	// the smallest one with (2 x k + 1) rooms across whose centre leaves the layout inside (k starts at half the span,
-	// as the first room sits near the middle) and grows to the largest allowed size before the plan gives up.
+	// The first room: a used cell, not the deferred entrance, whose neighbourhood fits around the centre of the level.
+	// Closest to the middle of the layout's bounding box wins; ties go to the first in row-major order. Each axis of the
+	// level has (2 x k + 1) rooms (k starts at half the span, as the first room sits near the middle); the plan tries
+	// the smallest total growth first, one axis at a time, and gives up only when even the largest level fails.
 	Point root{-1, -1};
 	int levelX = 0, levelY = 0;
-	for (int step = 0; root.x < 0; ++step) {
-		levelX = levelTilesFor(ts, spanX / 2 + step);
-		levelY = levelTilesFor(ts, spanY / 2 + step);
-		const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
-		int bestScore = 0;
-		for (int y = minY; y <= maxY; ++y)
-			for (int x = minX; x <= maxX; ++x) {
-				if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
-				if (x - minX > cap.left || maxX - x > cap.right || y - minY > cap.up || maxY - y > cap.down) continue;
-				const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
-				if (root.x < 0 || score < bestScore) {
-					root = Point{x, y};
-					bestScore = score;
+	const int maxSteps = ts.maxLevelTiles / ts.roomTiles + 1;
+	for (int total = 0; total <= 2 * maxSteps && root.x < 0; ++total)
+		for (int sx = 0; sx <= total && root.x < 0; ++sx) {
+			levelX = levelTilesFor(ts, spanX / 2 + sx);
+			levelY = levelTilesFor(ts, spanY / 2 + (total - sx));
+			const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
+			int bestScore = 0;
+			for (int y = minY; y <= maxY; ++y)
+				for (int x = minX; x <= maxX; ++x) {
+					if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
+					if (x - minX > cap.left || maxX - x > cap.right || y - minY > cap.up || maxY - y > cap.down) continue;
+					const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
+					if (root.x < 0 || score < bestScore) {
+						root = Point{x, y};
+						bestScore = score;
+					}
 				}
-			}
-		if (root.x < 0 && levelX >= ts.maxLevelTiles && levelY >= ts.maxLevelTiles)
-			return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
-	}
+		}
+	if (root.x < 0)
+		return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
 
 	// Walk the layout from the first room, breadth-first, in engine direction order. Special rooms are one-exit rooms
-	// at the ends of the path; they are made last (exit, then entrance) so that D2R's "newest free room with this
-	// piece" scan in 0x3eb850 finds exactly them.
+	// at the end of the path; the entrance is made last so that D2R's "newest free room with this piece" scan in
+	// 0x3eb850 finds exactly it.
 	Plan plan;
 	std::vector<int> parent;
 	auto addRoom = [&](Point c, int parentIdx) {
@@ -209,14 +204,12 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 			plan.adds.push_back(AddStep{static_cast<int>(head), idx, d});
 		}
 	}
-	for (int k = 1; k >= 0; --k) { // exit first, entrance last
-		if (!targets[k].place) continue;
-		const Point c = targets[k].cell;
-		const uint8_t m = l.at(c.x, c.y).mask;
-		const int d = engineDir(static_cast<uint8_t>(m));
+	if (placeEntrance) { // made last
+		const Point c = entranceCell;
+		const int d = engineDir(l.at(c.x, c.y).mask);
 		const Point p{c.x + kDx[d], c.y + kDy[d]};
 		const int pi = l.inside(p.x, p.y) ? roomOf[static_cast<size_t>(p.y) * l.width + p.x] : -1;
-		if (pi < 0) return fallbackPlan("The layout's " + std::string(k == 0 ? "entrance" : "exit") + " room is not joined to the rest.");
+		if (pi < 0) return fallbackPlan("The layout's entrance room is not joined to the rest.");
 		const int idx = addRoom(c, pi);
 		plan.adds.push_back(AddStep{pi, idx, (d + 2) & 3}); // d points from the end room to its neighbour; the add goes the other way
 	}
@@ -239,29 +232,25 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 		Room &r = plan.rooms[i];
 		r.piece = ts.pieceBase + r.mask;
 		const bool reserved = r.role == layout::Role::Entrance || r.role == layout::Role::Event || r.role == layout::Role::Boss ||
-		                      r.cell == entranceCell || r.cell == exitCell;
+		                      r.cell == entranceCell;
 		r.fix = reserved ? Room::Fix::AfterWalk : Room::Fix::None;
 		const int ri = static_cast<int>(i);
 		if (r.role == layout::Role::Event) plan.eventRoom = ri;
 		if (r.role == layout::Role::Boss) plan.bossRoom = ri;
 	}
-	for (int k = 0; k < 2; ++k) {
-		const Target &t = targets[k];
-		SpecialCall sc;
-		sc.kind = t.kind;
-		sc.family = t.fam;
-		sc.room = roomOf[static_cast<size_t>(t.cell.y) * l.width + t.cell.x];
-		sc.place = t.place;
-		sc.note = t.note;
+	{
+		SpecialCall &sc = plan.entrance;
+		sc.room = roomOf[static_cast<size_t>(entranceCell.y) * l.width + entranceCell.x];
+		sc.place = placeEntrance;
+		sc.note = entranceNote;
 		Room &r = plan.rooms[static_cast<size_t>(sc.room)];
 		sc.fromPiece = r.piece;
-		if (t.place) {
-			sc.toPiece = t.family->piece[static_cast<size_t>(familyIndex(r.mask))];
+		if (placeEntrance) {
+			sc.toPiece = ts.prev.piece[static_cast<size_t>(familyIndex(r.mask))];
 			r.piece = sc.toPiece;
-			r.special = k;
+			r.special = 0;
 			r.fix = Room::Fix::ByPlacer; // 0x3eb850 fixes it itself once its call places it
 		}
-		plan.specials.push_back(sc);
 	}
 
 	plan.lvlMaze = LvlMazeRow{static_cast<int>(plan.rooms.size()), ts.roomTiles, ts.roomTiles, 0};
@@ -275,21 +264,12 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	return plan;
 }
 
-SpecialSteer steerSpecial(const Tileset &ts, const Plan &plan, int toPiece, int priorCallsOfFamily)
+SpecialSteer steerSpecial(const Tileset &ts, const Plan &plan, int toPiece, int priorPrevCalls)
 {
-	SpecialSteer s;
-	if (!plan.steer || priorCallsOfFamily != 0) return s;
-	const SpecialFamily fams[3] = {SpecialFamily::Prev, SpecialFamily::Next, SpecialFamily::Down};
-	for (SpecialFamily f : fams) {
-		if (!familyHas(ts.family(f), toPiece)) continue;
-		for (const SpecialCall &sc : plan.specials)
-			if (sc.family == f && sc.place) {
-				s.action = SpecialSteer::Action::Redirect;
-				s.fromPiece = sc.fromPiece;
-				return s;
-			}
-		return s; // a known family the plan does not place
-	}
+	SpecialSteer s; // Suppress
+	if (!plan.steer || priorPrevCalls != 0 || !plan.entrance.place || !familyHas(ts.prev, toPiece)) return s;
+	s.action = SpecialSteer::Action::Redirect;
+	s.fromPiece = plan.entrance.fromPiece;
 	return s;
 }
 
@@ -348,7 +328,7 @@ uint64_t planHash(const Plan &p)
 	}
 	for (const AddStep &a : p.adds) { mixi(a.parent); mixi(a.room); mixi(a.dir); }
 	for (const LinkStep &a : p.links) { mixi(a.a); mixi(a.b); mixi(a.dir); }
-	for (const SpecialCall &s : p.specials) { mixi(static_cast<int>(s.kind)); mixi(static_cast<int>(s.family)); mixi(s.room); mixi(s.place ? 1 : 0); mixi(s.fromPiece); mixi(s.toPiece); }
+	{ const SpecialCall &s = p.entrance; mixi(s.room); mixi(s.place ? 1 : 0); mixi(s.fromPiece); mixi(s.toPiece); }
 	mixi(p.ring.noOp ? 1 : 0); mixi(p.ring.graphInRing ? 1 : 0);
 	mixi(p.lvlMaze.rooms); mixi(p.lvlMaze.sizeX); mixi(p.lvlMaze.sizeY); mixi(p.lvlMaze.merge);
 	mixi(p.eventRoom); mixi(p.bossRoom);

@@ -4,13 +4,16 @@
 // have to feed D2R's own maze code, so the hooks themselves stay thin:
 //   * the room walk 0x3e96d0 is replaced by the plan's `adds` (0x3e77a0 per tree edge) and `links` (0x360bb0 per loop
 //     edge), then 0x3eb960 on every room; every room's piece is `pieceBase + exit mask`;
-//   * the entrance and exit placer 0x3eb850 is steered by `specials`, each call matched by the special-room family
-//     (Prev / Next / Down) of the group entry the call picked, never by call index;
+//   * the entrance placer 0x3eb850 is steered by `entrance`. A Cartographer maze has one special room, the entrance
+//     (the "Prev" family), where the player arrives through the portal. It has NO exit (owner decision, plan
+//     section 3.6): the far end is an ordinary mask room, and every call that is not the entrance's (Next, Down, a
+//     repeat) is answered `Suppress` by steerSpecial, so the slot's calls can come in any order and never move the
+//     entrance or place another special room;
 //   * the ring grower 0x3e9820 is a no-op for tilesets that call it (`ring`);
 //   * the slot level's private LvlMaze row is `lvlMaze`;
 //   * when the layout cannot fit the tileset, `steer` is false and `reason` says why in plain English: the hooks then
 //     leave the level to D2R's own maze builder.
-// The level size is an output: the plan says how big a level its layout needs (`levelTilesX/Y`), and the slot row /
+// The level size is an output: the plan says how big a level its layout needs (`levelTilesX/Y`, each axis grown only as far as it needs), and the slot row /
 // the build hook must apply it. Nothing about Cave forces 200 tiles; 200 is only what vanilla levels.txt gives.
 // Refits: a layout can change for a seed (planForSeed retries other layout seeds), so anything that rebuilds the layout
 // from the map seed (automap preview, multiplayer {map, seed}) MUST use SeedPlan::layout and never layout::generate(seed).
@@ -40,9 +43,6 @@ uint8_t maskBitOfEngineDir(int dir); // engine direction -> exit bit, or 0
 // accept 360: the hook PR must.
 constexpr int kMaxLevelTiles = 360;
 
-// The three special-room groups of 0x3eb850 (LvlPrest "Prev", "Next", "Down" rows).
-enum class SpecialFamily : uint8_t { Prev, Next, Down };
-
 // A tileset's one-exit special room pieces, by the side the room opens to: index 0 W, 1 E, 2 S, 3 N (the order of
 // the LvlPrest rows "Prev W, Prev E, Prev S, Prev N", which is also the order of the layout's mask bits).
 struct DeadEndFamily {
@@ -63,13 +63,7 @@ struct Tileset {
 	bool callsRingGrower = false;   // the tileset's case in 0x3e69e0 calls 0x3e9820 first
 	bool walkFollowsRing = true;    // false: no walk follows the ring grower, so the graph must be built inside it
 	DeadEndFamily prev;             // the "Prev" group: the entrance. Absent: the entrance is an ordinary room
-	DeadEndFamily next;             // the "Next" group
-	DeadEndFamily down;             // the "Down" group
-	SpecialFamily exitFamily = SpecialFamily::Down; // which of next / down the exit room uses. Absent: ordinary room
-	// Open question (plan section 3.6 says the vanilla Prev / Next / Down rooms are never placed; issue #38 and the test
-	// fixtures place them). The switch: false keeps both ends as ordinary mask pieces and suppresses every special call.
-	bool placeSpecialRooms = true;
-	const DeadEndFamily &family(SpecialFamily f) const { return f == SpecialFamily::Prev ? prev : f == SpecialFamily::Next ? next : down; }
+	// No Next / Down family: a maze has no exit, so those groups are never placed (plan section 3.6).
 };
 
 // Where D2R puts the first room: centred in the level. How many rooms fit on each side of it in a level of that size.
@@ -91,30 +85,26 @@ struct Room {
 	layout::Point cell;       // layout coordinates
 	int dx = 0, dy = 0;       // rooms east / south of the first room
 	uint8_t mask = 0;         // exit mask: what 0x3eb960 will read from the room's links
-	int piece = 0;            // pieceBase + mask, or the special piece for a placed entrance / exit
+	int piece = 0;            // pieceBase + mask, or the special piece for the placed entrance
 	layout::Role role = layout::Role::Empty;
 	// When the hook sets the room's fixed flag. 0x3eb850 skips fixed rooms when it looks for the newest free room with
-	// piece `from`, so a placed entrance / exit room must NOT be fixed before its own call: 0x3eb850 fixes it itself.
+	// piece `from`, so the placed entrance room must NOT be fixed before its own call: 0x3eb850 fixes it itself.
 	enum class Fix : uint8_t {
 		None,      // a plain room
-		AfterWalk, // reserved (event room, or an end whose call is suppressed): fix after the walk, before the special calls
-		ByPlacer,  // a placed entrance / exit: leave it free; 0x3eb850 sets the flag when its call places it
+		AfterWalk, // reserved (event room, boss room, or an entrance that is not placed): fix after the walk, before the special call
+		ByPlacer,  // the placed entrance: leave it free; 0x3eb850 sets the flag when its call places it
 	} fix = Fix::None;
-	int special = -1;         // index into Plan::specials, or -1
+	int special = -1;         // 0 for the placed entrance (Plan::entrance), else -1
 };
 
 struct AddStep { int parent = 0; int room = 0; int dir = 0; }; // 0x3e77a0(rooms[parent], dir, merge 0) makes rooms[room]
 struct LinkStep { int a = 0; int b = 0; int dir = 0; };        // 0x360bb0: link rooms[a] to rooms[b] (b lies `dir` of a)
 
-enum class SpecialKind : uint8_t { Entrance, Exit };
-
-// One room the plan wants 0x3eb850 to turn into a special room (entrance, then exit). It is matched to the engine's
-// calls by `family`, not by call order.
+// The one room the plan wants 0x3eb850 to turn into a special room: the entrance. Its call is recognised by the piece
+// it picked (a Prev group entry), not by call order.
 struct SpecialCall {
-	SpecialKind kind = SpecialKind::Entrance;
-	SpecialFamily family = SpecialFamily::Prev;
-	int room = 0;        // index into Plan::rooms of the cell this call must turn into the special room
-	bool place = false;  // false: suppress the call (no family, or the cell is not a dead end); the room stays ordinary
+	int room = 0;        // index into Plan::rooms of the cell this call must turn into the entrance
+	bool place = false;  // false: suppress the call (no Prev family, or the cell is not a dead end); the room stays ordinary
 	int fromPiece = 0;   // pieceBase + mask: the table rotation whose entry[0] is this one is the one to use
 	int toPiece = 0;     // the special piece (entry[1]) the room becomes
 	std::string note;    // plain English, why it is not placed
@@ -133,7 +123,7 @@ struct Plan {
 	std::vector<Room> rooms;
 	std::vector<AddStep> adds;   // tree edges, in order
 	std::vector<LinkStep> links; // non-tree edges, after all adds
-	std::vector<SpecialCall> specials;
+	SpecialCall entrance;
 	RingPlan ring;
 	LvlMazeRow lvlMaze;
 	int widthRooms = 0, heightRooms = 0; // bounding box of the layout
@@ -150,11 +140,13 @@ struct SpecialSteer {
 	enum class Action : uint8_t { Redirect, Suppress } action = Action::Suppress;
 	int fromPiece = 0; // Redirect: use the table entry whose entry[0] is this
 };
-// toPiece is the chosen group entry's entry[1]; its family (Prev / Next / Down) picks the plan's special room, so the
-// number and order of the slot's calls does not matter. priorCallsOfFamily counts the earlier calls of that family on
-// this level. A call the plan does not expect (unknown piece, absent or suppressed family, a repeat) is suppressed, so
-// it cannot grow a stray room.
-SpecialSteer steerSpecial(const Tileset &ts, const Plan &plan, int toPiece, int priorCallsOfFamily = 0);
+// toPiece is the chosen group entry's entry[1]. Only a Prev group entry, on its first call (priorPrevCalls == 0), while
+// the plan places the entrance, is redirected. Everything else (Next, Down, any other piece, a repeated Prev, a plan
+// that does not place the entrance) is suppressed, so no call can move the entrance or grow another special room, in
+// whatever order or number the slot's code makes them. Hook requirement: after the slot's case returns, check that
+// the Prev call came when `entrance.place` is true. If it never did, the room is still the ordinary piece (the plan's
+// pieces and hash say otherwise), so log it and treat the level as a fallback.
+SpecialSteer steerSpecial(const Tileset &ts, const Plan &plan, int toPiece, int priorPrevCalls = 0);
 
 // The tileset's rules clamped to the rooms the largest allowed level holds, and then a plan from a layout generated on them. When a
 // layout does not fit, up to kRefits further layout seeds are tried (splitmix64(seed ^ (kRefitSalt + k))).
