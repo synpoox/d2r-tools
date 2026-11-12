@@ -375,7 +375,7 @@ disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a 
 | Guard | The section 1a rows keep their signatures. The functions in the table below are unsigned, read-only evidence, except `0x3271c0`, which is already signed in sections 1 and 4 (its row is listed for the masked prefix only). Section 1a repeats the same function's first 24 bytes as the maze hooks' own signature (`sig::LevelBuild`): it is the same prefix as section 4's, not a different one, kept so the maze parts check themselves without the portal parts. The others were followed from signed functions or from the level build `0x3271c0`. The masked prefix shown for each matched exactly once across `.text`, `.maho`, `.koishi` and `.btext` of the dump (relative displacements and RIP-relative operands masked), so it can become a signature later; none has been checked in a running game. A hook that needs one of them records its signature and max patch length first |
 | Contract | See the answers below |
 | Evidence | Disassembly (Capstone) of the functions named, over the dump (the Ghidra decompile was only a reading aid and is not needed). Reproduce a listing with `python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis <rva> [count]`, and a prefix match with `... pat "<hex with ??>"` (read-only; refuses a different stamp; needs `capstone`). Example: `dis 0x32751e 3` shows `mov rdx, rbx / movzx ecx, r12b / call 0x3271c0` |
-| Validation | Static, then the guided maze hooks were run in game on build 93847 on 2026-11-12 ("Game checks of 2026-11-12" below; probe lines `[maze probe]`, 46 consecutive clean games). Not checked on Steam build 94995 |
+| Validation | Static, then the guided maze hooks were run in game on build 93847 on 2026-11-12 ("Game checks of 2026-11-12" below; probe lines `[maze probe]`, 46 consecutive clean games in the first run, then 9 clean built games in a second run on another table state, 55 in all; see "Games toward the 50-games check"). Not checked on Steam build 94995 |
 | Failure mode | Fail open: a hook built on this leaves the maze off if a signature or guard does not match, as in section 1a |
 | Coexistence | No new patch is proposed on this page |
 
@@ -493,7 +493,7 @@ See also section 8 (Q6 and Q10) for the portal arrival and the outdoor size. Ite
 
 ### Game checks of 2026-11-12 (second run, issue #99)
 
-Run in a test slot (D2R build 93847, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty, `MazeProbe 1`), after the arrival probe was rewritten (see "Arrival room" above). The mod's tables were vanilla plus the installer's `levels.txt`, `lvlprest.txt`, `lvlmaze.txt` and `misc.txt`, and one hand-added level 139 (DrlgType 1, LevelType 3 for Cave or 4 for Crypt, 360 x 360, OffsetX 6000, `Warp0..7` -1), `slots.txt` `Maze 139`. Per game: a new game, `cartographer open <Name>`, enter the portal, read the `[maze probe]` lines. **live** = seen in the running game.
+Run in a test slot (D2R build 93847, D2RLoader 1.3.1-beta, test mod and test save, Normal difficulty, `MazeProbe 1`), after the arrival probe was rewritten (see "Arrival room" above). The mod's tables were the vanilla `levels.txt`, `lvlprest.txt`, `lvlmaze.txt`, `itemstatcost.txt` and `misc.txt`, changed by the run's own staging scripts (`itemstatcost.txt` was later moved out of the mod; see the WARN note below). Nothing in the run's files shows that `plugins\cartographer\tools\install.ps1` was run for this run; that script writes only the Preset rows (`levels.txt`, `lvlprest.txt` and the `Preset` row of `slots.txt`), so the Preset level was not part of this evidence. The staging scripts added: the level 139 row in `levels.txt` (cloned from a vanilla Cave or Crypt level; DrlgType 1, LevelType 3 for Cave or 4 for Crypt, 360 x 360 in all three columns, Depend 0, Position 0, OffsetX 6000, OffsetY 0, `Warp0..7` -1), the `lvlmaze.txt` row `Cartographer Maze 139 4 4 4 <size> <size> 500` (cell size 24 for Cave, 8 for Crypt), the map items `cm0` to `cm8` in `misc.txt` (cloned from `isc`, `pSpell` 16), and `slots.txt` `Maze 139`. Per game: a new game, `cartographer open <Name>`, enter the portal, read the `[maze probe]` lines. **live** = seen in the running game.
 
 | # | Check | Level | Result |
 |---|---|---|---|
@@ -507,17 +507,20 @@ Arrival against the entrance cell (`[maze probe] arrival` lines: the player's DR
 | Game | Arrival (plan cell) | Entrance cell | Verdict |
 |---|---|---|---|
 | Cave Corridor | (6048,72) | (6048,0) | not in the entrance |
+| Cave Corridor (second game) | no arrival line within the capture window (about 43 s) | (6120,48) | no verdict |
 | Cave Winding | (6120,72) | (6192,144) | not in the entrance |
 | Cave Winding | (6048,48) | (6000,192) | not in the entrance |
 | Crypt Branching | (6024,40) | (6048,0) | not in the entrance |
 | Crypt Corridor | (6016,24) | (6032,24) | not in the entrance |
 | Cave Loop (2), Crypt Loop (1) | (6096,96), (6096,72), (6040,40) | unknown | no verdict: 0 entrance cells ("entrance an ordinary room"), the probe prints "the entrance cell is unknown" |
 
-In all 5 samples with a known entrance the player arrived in another room. Suspected cause (not proven): the level-entry finder `0x3da650` (section 5 Q3: first room with flag `0x30000`, then the warp rooms, then the centre, then a seeded random room) does not pick the plugin's cell. The Loop maps have no entrance cell by design, so there is nothing to compare. Tracked in a separate issue; no code was changed in this run. One further Cave Corridor game logged no arrival line.
+In all 5 games with an arrival line and a known entrance the player arrived in another room. Suspected cause (not proven): the level-entry finder `0x3da650` (section 5 Q3: first room with flag `0x30000`, then the warp rooms, then the centre, then a seeded random room) does not pick the plugin's cell. The Loop maps have no entrance cell by design, so there is nothing to compare. Tracked in a separate issue; no code was changed in this run. The second Cave Corridor game placed an entrance cell at (6120,48) but logged no arrival line within the capture window, so it is not a sample.
 
-Crash met while setting the slot up: a crash at image `+0x66259d` on arrival in level 139 came from a hand-made `levels.txt` row with `Warp0..7` = 0. With -1, as `tools\install.ps1` writes, it does not happen. Not a plugin fault.
+Crashes met while setting the slot up: 5 crash reports, all at image `+0x66259d` (13:32 to 13:43 UTC), while the hand-made level 139 row had `Warp0..7` = 0. After that row's `Warp0..7` was changed from 0 to -1 the crashes stopped: the 10 games that followed had no crash file. The cause was not traced (the earlier row was not kept, so other differences cannot be ruled out).
 
-Games toward the 50-games check: this run, 9 clean built games (6 Cave, 3 Crypt) and 1 clean refusal game, none with a crash file; with the 46 Cave games of the first run that is 55 clean built games. They were run in separate sessions on separate table states, not in one session.
+Games toward the 50-games check: this run, 9 clean built games (6 Cave, 3 Crypt) and 1 clean refusal game, none with a crash file; with the 46 Cave games of the first run that is 55 clean built games. In this run "clean" means built as planned, grid equal to the plan and no crash file. Every game also logged WARN lines saying the map stats were skipped for monsters, because `itemstatcost.txt` was not present in the test mod; so map stats on monsters were not exercised here (the first run counted "no crash, no error line").
+
+#99 item 3 (50 games in a row, or a recorded reason): settled as accepted. 55 clean built games over two sessions with different table states, not consecutive, are accepted as meeting the 50-games check. Caveat: they are not one unbroken series, and the second session's 9 built games ran without `itemstatcost.txt`.
 
 Not run: Nightmare and Hell, a TCP/IP client, a second map in the same game on the Crypt slot, a slot with an engine-side Fixed flag.
 
