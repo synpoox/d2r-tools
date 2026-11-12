@@ -46,9 +46,11 @@ Copy the Scroll of Identify row (`isc`: it keeps the scroll picture and has no s
 - `belt`: `0` (the Scroll of Identify row has 1; a map must not go in the belt).
 - `name`: any text, for example `Shorelines Map`.
 - `pSpell`: `16`.
+- `useable`: `1` (right-click needs it; the `isc` row already has it, a row built from another item must set it).
 - `namestr`: the key of the item's name in your `item-names.json` strings (add the record there).
 - `rarity`, `spawnable`, `PermStoreItem` and `multibuy`: `0`, and clear every vendor `Min` and `Max` column (`CharsiMin`,
   `GheedMagicMax` and so on), so no NPC sells it and it never drops by chance. Set them differently if the item should be sold.
+- Kept from `isc`: `cost` 80 (what an NPC pays when a player sells it) and `UICatOverride` `scrlt` (puts the item in the client's scroll/tome category). Change them if you want another price or category.
 
 The new code also needs an entry in the mod's `data\hd\items\items.json` (`{ "t20": { "asset": "scroll/identify_scroll" } }`, the picture the base item uses),
 or the item has no icon.

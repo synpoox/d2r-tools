@@ -4,6 +4,7 @@
 #include <utility>
 #include <string>
 
+#include "ascii.h"
 #include "rng.h"
 
 namespace cartographer::events {
@@ -12,17 +13,10 @@ namespace {
 
 constexpr uint64_t kEventSalt = 0x4D41504556454E54ull; // "MAPEVENT": keeps this stream apart from the layout's
 
-// ASCII-only, so the result never depends on the C locale.
-char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; }
-bool space(char c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
+using layout::equalsNoCase;
+using layout::lowerAscii;
 
-bool iequals(std::string_view a, std::string_view b)
-{
-	if (a.size() != b.size()) return false;
-	for (size_t i = 0; i < a.size(); ++i)
-		if (lower(a[i]) != lower(b[i])) return false;
-	return true;
-}
+bool space(char c) { return c == ' ' || (c >= '\t' && c <= '\r'); }
 
 bool blank(const std::string &s)
 {
@@ -46,7 +40,7 @@ size_t distance(std::string_view a, std::string_view b)
 	for (size_t i = 1; i <= a.size(); ++i) {
 		cur[0] = i;
 		for (size_t j = 1; j <= b.size(); ++j) {
-			const size_t sub = prev[j - 1] + (lower(a[i - 1]) == lower(b[j - 1]) ? 0 : 1);
+			const size_t sub = prev[j - 1] + (lowerAscii(a[i - 1]) == lowerAscii(b[j - 1]) ? 0 : 1);
 			cur[j] = std::min(std::min(prev[j], cur[j - 1]) + 1, sub);
 		}
 		std::swap(prev, cur);
@@ -82,7 +76,7 @@ std::optional<Kind> parseKindName(std::string_view name)
 	name = trim(name);
 	static const Kind all[] = {Kind::Boss, Kind::Ambush, Kind::Horde, Kind::Treasure, Kind::Shrine};
 	for (Kind k : all)
-		if (iequals(name, kindName(k))) return k;
+		if (equalsNoCase(name, kindName(k))) return k;
 	return std::nullopt;
 }
 
@@ -97,7 +91,7 @@ std::optional<Kind> suggestKind(std::string_view name)
 		const std::string_view full = kindName(k);
 		size_t d = distance(name, full);
 		// A shortened word ("Treas") is close too.
-		if (name.size() >= 3 && name.size() < full.size() && iequals(name, full.substr(0, name.size()))) d = 1;
+		if (name.size() >= 3 && name.size() < full.size() && equalsNoCase(name, full.substr(0, name.size()))) d = 1;
 		if (d < bestD) {
 			bestD = d;
 			best = k;

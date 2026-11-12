@@ -14,8 +14,8 @@ an ambush, a shrine or a treasure). MIT licensed.
   `cartographer-report.txt`; the rest load.
 - **Cave and Crypt mazes**: every map is generated (Cave or Crypt) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
-- **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are off by
-  default (`PlayerStats`, test characters only, experimental).
+- **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are on by
+  default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Outdoor map rooms** (`OutdoorBuild`, off, not checked in game): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry (Shrine and chest
@@ -50,8 +50,12 @@ in [`examples/first-map/`](examples/first-map/).
    `.bin` table files the game reads those instead: rebuild or remove them first.
    The installer refuses a spot another level in `levels.txt` already uses (it says which, and `-MazeOffsetX` and the like pick another).
 4. Give each map an item of its own: a new row in your mod's `misc.txt` with item spell 16 (`pSpell`) and `type` `cmap` (the item
-   type the installer added), for example a copy of the Scroll of Identify, `isc`, with `belt` 0 (not type `scro` or `book`: the game
+   type the installer added), for example a copy of the Scroll of Identify, `isc`, with `belt` 0 and `useable` 1 (`isc` has `useable` 1; `cost` 80 and `UICatOverride` `scrlt` also come from `isc`) (not type `scro` or `book`: the game
    names those by their spell, so your item would read "Scroll of Town Portal"). Put `maps.txt` and, if you like, `cartographer.txt` in
+   If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
+   to pick another spot (`-MazeOffsetX` and the like).
+4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
+   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
@@ -70,7 +74,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
-   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
 
@@ -88,9 +92,9 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
    header `Slot` and `Level`, then rows `Maze`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
-5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty, and `StorePage` empty. The `Map` type is for the map items: a type of its own
+5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, and `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
-   miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll or go in a tome; not a potion
+   miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
    type, so no belt). A row with code `cmap` that is not this one must be changed first.
 
 ## Configuration
@@ -118,7 +122,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
-| PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
+| PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
 | MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
 | OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
@@ -278,9 +282,9 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
-  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
+  Boss, Horde and Ambush events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character), and opening a map in Hell (a map's Boss spawned in the far room; a superunique Boss was refused once and spawned in a second game).
 - **Experimental or not verified in game**: Shrine and Treasure chest placement (not placed in the test), the event
-  banner text (not seen on screen), `PlayerStats`, `MapNames` in multiplayer, multiplayer sync, Nightmare
+  banner text (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync, Nightmare
   difficulty for mazes, and a second Crypt map in one game.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).

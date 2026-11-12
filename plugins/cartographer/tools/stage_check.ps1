@@ -35,6 +35,11 @@
     item-names.json the slot already had are taken out again (the manifest records their exact text). install.ps1 changes inside tables that already
     existed in the slot (not placed by this script) stay.
 
+    Other plugins in the slot's global plugins folder are parked: every .dll there except the staged DLL and test-harness.dll
+    moves to plugins-off\staged-<owner>\ (the manifest records each move; -Restore moves it back when its place is empty).
+    A PD2 core-rules / core-maps / core-ui left in a test slot made every character save fail ("Character save failed ...
+    encoding-error=yes" every 30 s, after "BC_ASSERT nStat" at load) with no Cartographer in the slot; -KeepPlugins skips this.
+
     -WhatIf prints every action and changes nothing: no lock, no copy, no installer run.
     The game is never launched; the launch command and the log path are printed.
 
@@ -77,6 +82,8 @@
     Project name for the slot table (default: MODKIT_PROJECT, else none).
 .PARAMETER Toolkit
     d2rAI-toolkit checkout (default: the d2rAI-toolkit folder next to this repo's folder).
+.PARAMETER KeepPlugins
+    Leave the other plugins in the slot's plugins folder where they are (the default parks them, see above).
 .PARAMETER Restore
     Restore the slot (remove the files and rows recorded in the manifest, only when unchanged) and unlock it.
 .PARAMETER WhatIf
@@ -102,6 +109,7 @@ param(
     [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
     [string]$Project = $env:MODKIT_PROJECT,
     [string]$Toolkit,
+    [switch]$KeepPlugins,
     [switch]$Restore,
     [switch]$WhatIf
 )
@@ -117,7 +125,7 @@ $AllowedSlots = @(5, 6, 7, 11)
 # Tables install.ps1 needs in the test mod's excel folder (the first two are required, the rest only matter for bosses).
 # itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
 $SeedTables = @('levels.txt', 'lvlmaze.txt', 'itemtypes.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt')
-# core-ui (D2RLoader's own plugin) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
+# core-ui (the PD2 core-ui.dll plugin, not D2RLoader itself) reads automap rows for level types 36 and up from d2rloader\core-ui\automap.txt and the
 # game asserts at startup without the file, and also when the file has a header but no row (issue #219). Cartographer adds no
 # such level type, so the seed is the header plus one row for level type 36 (nothing draws it).
 $defaultModRx = '(?m)^\uFEFF?([ \t]*default_mod[ \t]*=[ \t]*")([^"\r\n]*)(")'  # the default_mod line of the slot's d2rloader.toml
@@ -248,6 +256,7 @@ if ($Restore) {
         Plan "python release_install.py status --slot $Slot, then restore when the slot holds a release install"
         foreach ($f in @($man.files)) { Plan "remove $($f.path) when its SHA-256 is still $($f.sha256)" }
         foreach ($r in @($man.rows)) { Plan "remove the row '$($r.row)' from $($r.file)" }
+        foreach ($m in @($man.parked)) { Plan "move $($m.to) back to $($m.from) when that place is empty" }
         if ($man.defaultMod) { Plan "set default_mod in $($man.defaultMod.file) back to `"$($man.defaultMod.original)`"" }
         foreach ($e in @($man.entries)) { Plan "remove the JSON entry $((($e.text -split '\r?\n' | ForEach-Object { $_.Trim() }) -join ' ')) from $($e.file)" }
         Plan "delete $manifestPath"
@@ -268,6 +277,11 @@ if ($Restore) {
             Set-ItemProperty -LiteralPath $f.path -Name IsReadOnly -Value $false
             Remove-Item -LiteralPath $f.path -Force; Say "  removed: $($f.path)"
         } else { Write-Warning "Kept $($f.path): changed since staging (SHA-256 differs from the manifest)." }
+    }
+    foreach ($m in @($man.parked)) {
+        if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  parked plugin already gone: $($m.to)"; continue }
+        if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) parked: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
+        Move-Item -LiteralPath $m.to -Destination $m.from; Say "  plugin put back: $($m.from)"
     }
     foreach ($file in @($man.rows | ForEach-Object { $_.file } | Select-Object -Unique)) {
         if (-not (Test-Path -PathType Leaf $file)) { continue }
@@ -377,6 +391,8 @@ $rowsWritten = New-Object System.Collections.Generic.List[object]
 $jsonAdded = New-Object System.Collections.Generic.List[object]
 # The slot's d2rloader.toml default_mod before this script set it to the test mod (file and original value).
 $defaultMod = $null
+# Plugins moved out of the slot's plugins folder (from, to).
+$parked = New-Object System.Collections.Generic.List[object]
 # Read-only, so -WhatIf loads it too and plans the same replace a real run would make.
 if (Test-Path -PathType Leaf $manifestPath) {
     try {
@@ -385,6 +401,7 @@ if (Test-Path -PathType Leaf $manifestPath) {
             foreach ($f in @($old.files)) { $placed[$f.path] = $f.sha256 }
             foreach ($r in @($old.rows)) { $rowsWritten.Add(@{ file = $r.file; row = $r.row }) }
             foreach ($e in @($old.entries)) { $jsonAdded.Add(@{ file = $e.file; nl = $e.nl; text = $e.text }) }
+            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to }) } }
             if ($old.defaultMod) { $defaultMod = @{ file = $old.defaultMod.file; original = $old.defaultMod.original } }
         }
     } catch { Write-Warning "Ignoring an unreadable manifest at ${manifestPath}: $($_.Exception.Message)" }
@@ -394,7 +411,7 @@ function Save-Manifest {
     $files = @(foreach ($k in @($placed.Keys)) {
         if (Test-Path -PathType Leaf $k) { @{ path = $k; sha256 = (Get-Sha $k) } }
     })
-    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()); entries = @($jsonAdded.ToArray()) }
+    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()); entries = @($jsonAdded.ToArray()); parked = @($parked.ToArray()) }
     if ($defaultMod) { $doc['defaultMod'] = $defaultMod }
     $null = New-Item -ItemType Directory -Force (Split-Path $manifestPath -Parent)
     [System.IO.File]::WriteAllText($manifestPath, ($doc | ConvertTo-Json -Depth 5))
@@ -476,6 +493,25 @@ try {
     } elseif ($haveAutomap -and $noRows) { Write-Warning "d2rloader\core-ui\automap.txt in the slot has no data row and was not placed by this script: the game may crash at startup. Pass -CoreUiAutomap <file> or remove it." }
     elseif ($haveAutomap -and $CoreUiAutomap) { Write-Warning "d2rloader\core-ui\automap.txt in the slot already has rows and was not placed by this script: -CoreUiAutomap was ignored. Remove that file to use it." }
 
+    # Park every other plugin: a leftover PD2 core-* plugin breaks the character save in a test slot (see the help).
+    if (-not $KeepPlugins -and (Test-Path -PathType Container $p.plugins)) {
+        $ours = @((Split-Path $Dll -Leaf), 'test-harness.dll')
+        # Never park a file this script placed (an earlier staging under another -Dll name); -Restore removes those.
+        $stray = @(Get-ChildItem -LiteralPath $p.plugins -File -Filter '*.dll' | Where-Object { $full = $_.FullName; $ours -notcontains $_.Name -and -not @($placed.Keys | Where-Object { $_ -ieq $full }) })
+        $parkDir = Join-Path (Split-Path $p.plugins -Parent) "plugins-off\staged-$Owner"
+        foreach ($f in $stray) {
+            # Never delete anything: take the first free name (<name>, <name>.1, ...) so an earlier parked copy survives.
+            $to = Join-Path $parkDir $f.Name
+            for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $parkDir "$($f.Name).$n" }
+            Plan "Park plugin $($f.Name): $($f.FullName) -> $to (-Restore moves it back)"
+            if ($WhatIf) { continue }
+            $null = New-Item -ItemType Directory -Force $parkDir
+            Move-Item -LiteralPath $f.FullName -Destination $to
+            $parked.Add(@{ from = $f.FullName; to = $to })
+        }
+        if ($stray.Count -gt 0) { Save-Manifest }
+    }
+
     # 4. The DLL, the tables, the saves: only what changed.
     Say 'DLL:'
     Copy-IfChanged $Dll (Join-Path $p.plugins (Split-Path $Dll -Leaf)) $null
@@ -524,7 +560,16 @@ try {
         $added = New-Object System.Collections.Generic.List[string]
         foreach ($it in $items) {
             $have = @($mlines | Select-Object -Skip 1 | Where-Object { $_.Split("`t")[$mc] -ceq $it.code })
-            if ($have.Count -gt 0) { Say "  misc.txt already has a row with code $($it.code); left as it is"; continue }
+            $oldAt = -1
+            if ($have.Count -gt 0) {
+                # A slot staged before the Map item type has the row with type scro (or book): the game names it "Scroll of Town Portal". Replace that row; any other row is left alone.
+                $tc = [array]::IndexOf($mh, 'type')
+                $oldCells = $have[0].Split("`t")
+                if ($tc -ge 0 -and $it.values.ContainsKey('type') -and $it.values['type'] -cne $oldCells[$tc] -and $oldCells[$tc] -cin 'scro', 'book') {
+                    $oldAt = [array]::IndexOf($mlines, $have[0])
+                    Say "  misc.txt row $($it.code) has type $($oldCells[$tc]) from an earlier staging; replaced by the row with type $($it.values['type'])"
+                } else { Say "  misc.txt already has a row with code $($it.code); left as it is"; continue }
+            }
             $baseRow = @($mlines | Select-Object -Skip 1 | Where-Object { $_.Split("`t")[$mc] -ceq $it.base })
             if ($baseRow.Count -eq 0) { throw "misc.txt has no base item '$($it.base)' to copy for $($it.code) (see $MapItemRows)." }
             $cells = [string[]]::new($mh.Count)
@@ -537,7 +582,8 @@ try {
             }
             foreach ($col in $vendorCols) { $cells[[array]::IndexOf($mh, $col)] = '' }
             $row = $cells -join "`t"
-            $mlines.Add($row); $added.Add($it.code)
+            if ($oldAt -ge 0) { $mlines[$oldAt] = $row } else { $mlines.Add($row) }
+            $added.Add($it.code)
             if (-not $WhatIf) { $rowsWritten.Add(@{ file = $misc; row = $row }) }
         }
         if ($added.Count -gt 0) {

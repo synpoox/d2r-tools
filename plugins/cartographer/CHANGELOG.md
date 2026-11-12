@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
-
+- Outdoor maps (Jungle and Snow) are always on; the `OutdoorBuild` setting is gone, and an old line for it is ignored.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
@@ -12,9 +12,11 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Random map properties from `mapstats.txt` apply to monsters; `PlayerStats=1` also gives them to you (experimental).
+- Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
 - `ItemStats=1` uses a map item's own stats as the map's properties (not checked in game yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (Shrine and chest placement experimental).
+- Opening a Treasure chest now rolls its `Drop`.
+- A map's Treasure chest is never locked.
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
 - Each map's `Boss` is now its own boss from the new `bosses.txt`, never a vanilla boss (at most 16); run `tools\install.ps1` again.
@@ -31,10 +33,10 @@
 - The map Boss and events are placed in the right room of a maze map.
 - Outdoor map events and Boss minions get their full count, not just four.
 - Hosts and players need the same version of Cartographer to share a map; older versions no longer connect for map sync.
-- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (needs `OutdoorBuild=1`, not checked in game).
-- Outdoor maps (off, not checked in game): you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
-- Jungle maps open from their item through a new `Outdoor` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
+- Multiplayer: TCP/IP clients also get the host's outdoor (Jungle) map layout (not checked in game).
+- Outdoor maps: you arrive in the planned entrance clearing, and the map Boss and event use their planned clearings.
+- Jungle maps open from their item through a new `Outdoor` level (run `tools\install.ps1` again).
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
-- Snow maps open from their item through a new `OutdoorSnow` level (needs `OutdoorBuild=1`; run `tools\install.ps1` again; not checked in game yet).
-- Snow maps (off, not checked in game): you arrive in a planned entrance area, and the map Boss and event use their planned areas.
+- Snow maps open from their item through a new `OutdoorSnow` level (run `tools\install.ps1` again).
+- Snow maps: you arrive in a planned entrance area, and the map Boss and event use their planned areas.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.

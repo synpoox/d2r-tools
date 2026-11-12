@@ -24,3 +24,5 @@ New sections go in new files (the next free number, `18-<topic>.md`), and a new 
 - [15. Map monster columns in the slot level's row and region record (issue #156)](cartographer/15-map-monster-columns.md)
 - [16. Outdoor S2 spike results (issue #89)](cartographer/16-outdoor-s2.md)
 - [17. AutoCheck: a game check the plugin runs by itself (issue #173)](cartographer/17-autocheck.md)
+- [18. Chest open never reached the hook (issue #220)](cartographer/18-chest-operate.md)
+- [19. Treasure chests are never locked (issue #220)](cartographer/19-chest-lock.md)

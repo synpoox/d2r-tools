@@ -93,8 +93,7 @@ populator `0x50acf0` (section 9), the once-per-game superunique bitmap at `game 
   and `[ctx + 0x10]` is the operating player (`0x34b9d0` must return 0, a player, `0x58f6b5`; that check is an assert, an `int3` at `0x58f6cf` when the type is not a player and `0x592580` is true, not a refusal). Only the object check (`[unit + 0xc]` not 2, `0x58f6a7`) takes the refusal path at `0x58fcd4`, which calls `0x491960(player, 0x14, player)` (the third argument is also the player) and
   returns 0 (`r15d`), the existing way the game declines an operate; that call is probably what the client sees (**inference**, callee unread).
 - **Inference (route).** Hook `0x58f680` (the 13-byte prefix above is unique). For the red portal and a client the plugin has not marked as synced: send the plan over
-  `NetworkService` (Q1), return 0, and when the client acks, mark it synced and let the next click through (or call the original). Hooking the dispatcher `0x592c40`
-  also works but sees every object operate.
+  `NetworkService` (Q1), return 0, and when the client acks, mark it synced and let the next click through (or call the original). Hooking the dispatcher `0x592c40` sees only the skill path, never a click (clicks go via `0x593630`; [section 18](18-chest-operate.md)), so it is not a click gate.
 - **Route: player to peer.** The gate sees a player unit, but `sendToClient` needs a `PeerHandle`, and `getPeerPlayer` resolves peer to player only from a scheduled host
   game-thread callback (**SDK**). So on each Connected event the host queues `getPeerPlayer` and keeps a player id to peer map; a player with no entry is treated as not synced
   (the gate refuses, or the host's own player skips it).

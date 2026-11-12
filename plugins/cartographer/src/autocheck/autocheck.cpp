@@ -1,5 +1,7 @@
 #include "autocheck.h"
 
+#include "ascii.h"
+
 #include <algorithm>
 #include <cctype>
 
@@ -7,10 +9,7 @@ namespace cartographer::autocheck {
 
 namespace {
 
-auto lower(std::string text) -> std::string {
-	std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-	return text;
-}
+using layout::lowerAscii;
 
 auto trimmed(const std::string &text) -> std::string {
 	size_t a = 0, b = text.size();
@@ -147,7 +146,7 @@ auto resolveConfig(int autoCheck, const std::string &autoCheckMap, const std::ve
 		return config;
 	}
 	for (const std::string &name : mapNames) {
-		if (lower(name) == lower(wanted)) {
+		if (lowerAscii(name) == lowerAscii(wanted)) {
 			config.map = name;
 			return config;
 		}

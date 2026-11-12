@@ -92,7 +92,7 @@ sp::PlayerLists g_lists;                 // lists put on players; guarded by g_l
 std::atomic<bool> g_busy{false};         // a plan is active or a list is out: the hooks look at nothing else when false
 std::atomic<bool> g_monstersOn{false};   // the monster hook is in
 std::atomic<bool> g_playersOn{false};    // the player half can apply (parts found and the portal's tick hook is in)
-std::atomic<bool> g_playerSetting{false};  // PlayerStats=1 in cartographer.txt; off by default: nothing is attached to the player
+std::atomic<bool> g_playerSetting{false};  // PlayerStats=1 in cartographer.txt (the default); at 0 nothing is attached to the player
 uint64_t g_generation = 0;               // counts games left; guarded by g_lock. A list made in an earlier game is never tracked
 std::atomic<int> g_monsterCount{0};      // monsters given a list in this map
 std::atomic<int> g_monsterFailed{0};
@@ -474,7 +474,7 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 
 auto SummaryNow() -> std::string {
 	const bool mon = g_monstersOn.load(), pl = g_playersOn.load();
-	const char* player = !g_playerSetting.load() ? "off (PlayerStats=0 in cartographer.txt, the default)" : pl ? "on (test slot only)" : "off (a part was not found)";
+	const char* player = !g_playerSetting.load() ? "off (PlayerStats=0 in cartographer.txt)" : pl ? "on" : "off (a part was not found)";
 	return std::string("monster stats ") + (mon ? "on" : "off") + ", player stats " + player + " (monsters checked in game on cheat-spawned monsters; the player half only with Save and Exit)";
 }
 
