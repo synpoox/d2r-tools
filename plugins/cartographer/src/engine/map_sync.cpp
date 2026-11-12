@@ -4,6 +4,8 @@
 #include "log.h"
 #include "map_names.h"
 #include "maze_hooks.h"
+#include "outdoor_hooks.h"
+#include "outdoor_plan.h"
 #include "portal.h"
 
 #include <windows.h>
@@ -57,7 +59,7 @@ auto Name(const MapDef& map) -> std::string {
 auto Describe(const ms::MapIdentity& id, const std::string& name) -> std::string {
 	char text[200];
 	std::snprintf(text, sizeof(text), "row %u '%s', slot level %u, opening %u, %s seed %llu", static_cast<unsigned>(id.mapIndex), name.c_str(), static_cast<unsigned>(id.slotLevel),
-	              static_cast<unsigned>(id.opening), id.maze ? "maze" : "preset", static_cast<unsigned long long>(id.seed));
+	              static_cast<unsigned>(id.opening), id.maze ? "maze" : id.outdoor ? "outdoor" : "preset", static_cast<unsigned long long>(id.seed));
 	return text;
 }
 
@@ -205,7 +207,8 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		}
 		const MapDef& map = tables->maps[id.mapIndex];
 		const bool maze = MapIsMaze(map);
-		const int slotLevel = SlotLevel(tables->slots, MazeSlot);
+		const bool outdoor = !maze && cartographer::outdoor::outdoorTilesetKnown(map.tileset);
+		const int slotLevel = SlotLevel(tables->slots, outdoor ? OutdoorSlot : MazeSlot);
 		ms::ApplyFacts facts;
 		facts.slotLevelMatches = slotLevel > 0 && slotLevel == static_cast<int>(id.slotLevel);
 		facts.clientMazeMap = maze;
@@ -213,6 +216,9 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		facts.mazeSteeringLive = MazeSteeringLive();
 		facts.tilesetFits = !maze || MazeTilesetProblem(map, *tables).empty();
 		facts.slotBuilt = MazeSlotRanAny();
+		facts.clientOutdoorMap = outdoor;
+		facts.outdoorBuildLive = OutdoorBuildLive() && OutdoorSlotLevelId() > 0;
+		facts.outdoorSlotBuilt = OutdoorSlotRanAny();
 		const ms::ApplyPlan plan = ms::decideApply(id, facts);
 		std::string note;
 		if (plan.names) {
@@ -241,6 +247,14 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 				note += "layout skipped: the slot level was built here first";
 				plog::Warn("map sync: the host's map '%s': the layout seed was not applied (a slot level build had already started here)", map.name.c_str());
 			}
+		} else if (plan.outdoor) {
+			// The client plans from its own maps.txt row and the host's seed; the plan is a pure function of those (section 8a), so it equals the host's.
+			OutdoorMapOpened(map, *tables, 0, id.seed);
+			note += "outdoor layout seed applied";
+			plog::Info("map sync: the host's map '%s': the next build of the Outdoor slot level here uses the host's layout seed", map.name.c_str());
+		} else if (id.outdoor) {
+			note += std::string("outdoor layout skipped: ") + ms::describe(plan.outdoorWhy);
+			plog::Warn("map sync: the host's map '%s': the outdoor layout is not applied here: %s", map.name.c_str(), ms::describe(plan.outdoorWhy));
 		} else {
 			note += std::string("layout skipped: ") + ms::describe(plan.mazeWhy);
 			if (plan.mazeWhy == ms::Skip::NotMaze) {
@@ -513,7 +527,7 @@ void MapSyncSetTables(const std::shared_ptr<const Tables>& tables) {
 	}
 }
 
-void MapSyncMapOpened(const MapDef& map, const Tables& tables, int slotLevel, int openings, bool maze, uint64_t seed) {
+void MapSyncMapOpened(const MapDef& map, const Tables& tables, int slotLevel, int openings, bool maze, uint64_t seed, bool outdoor) {
 	if (!g_on.load()) {
 		return;
 	}
@@ -528,8 +542,9 @@ void MapSyncMapOpened(const MapDef& map, const Tables& tables, int slotLevel, in
 		id.nameHash = ms::nameHash(map.name);
 		id.slotLevel = static_cast<uint16_t>(slotLevel);
 		id.opening = static_cast<uint16_t>(openings < 1 ? 1 : openings > 0xffff ? 0xffff : openings);
-		id.maze = maze;
-		id.seed = maze ? seed : 0;
+		id.maze = maze && !outdoor;
+		id.outdoor = outdoor;
+		id.seed = (maze || outdoor) ? seed : 0;
 		std::vector<uint64_t> peers;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);

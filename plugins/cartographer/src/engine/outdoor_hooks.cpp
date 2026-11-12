@@ -7,6 +7,7 @@
 #include "steer.h"
 
 #include "outdoor_plan.h"
+#include "outdoor_seed.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -78,6 +79,7 @@ bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the
 std::atomic<bool> g_live{false};     // every part is on and the hooks are in
 std::atomic<bool> g_enabled{false};  // OutdoorBuild = 1
 std::atomic<bool> g_probe{false};
+std::atomic<bool> g_slotRan{false};  // the Outdoor slot level's build has started in this game
 std::atomic<int> g_slotLevel{-1};
 
 struct Job {
@@ -334,8 +336,9 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	Write<int32_t>(level, LvlOriginY, rect.y);
 	Write<int32_t>(level, LvlSizeX, rect.w);
 	Write<int32_t>(level, LvlSizeY, rect.h);
-	// The same seed the original draws: the level RNG decides each piece's DS1 file when the plan leaves it to the engine.
-	const co::LevelSeed seed = co::levelSeedFor(Read<uint32_t>(Read<const void*>(level, LvlDrlg), DrlgSeedBase), id);
+	// The level RNG decides each piece's DS1 file when the plan leaves it to the engine. It is seeded from the plan (a function of the map's seed and
+	// tables only), not from the act seed, so a client that has only the host's map seed draws the same files (issue #146, section 8a).
+	const co::SlotRngSeed seed = co::slotRngSeedFor(plan.hash, id);
 	Write<int32_t>(level, LvlSeed, seed.first);
 	Write<int32_t>(level, LvlSeed2, seed.second);
 
@@ -441,7 +444,17 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 	if (!g_live.load(std::memory_order_relaxed) || !g_enabled.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
 		return false;  // every other level runs the game's own build, untouched
 	}
+	g_slotRan.store(true);  // a remote map is not applied once the slot level has started to build (OutdoorSlotRanAny)
 	return BuildSlotLevel(dataFlag, level, original, result);
+}
+
+auto OutdoorSlotRanAny() -> bool {
+	return g_slotRan.load();
+}
+
+auto OutdoorOpenSeed() -> uint64_t {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->seed : 0;
 }
 
 auto OutdoorBuildLive() -> bool {
@@ -508,6 +521,7 @@ void OutdoorMapCancelled() {
 }
 
 void OutdoorGameLeft() {
+	g_slotRan = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_job.reset();
