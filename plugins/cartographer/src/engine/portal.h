@@ -39,6 +39,9 @@ struct SignatureOverride {
 // The tables the hooks use. Safe to call from any thread, at any time.
 void SetTables(std::shared_ptr<const Tables> tables);
 
+// Called once, on the first LocalPlayerReady event (only registered when the PlayerTick part was found). Set before InstallPortal.
+void SetFirstGameStartNotify(void (*notify)() noexcept);
+
 // Finds the parts and installs the hooks. Returns whether the portal is live; `parts` says why not.
 auto InstallPortal(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
