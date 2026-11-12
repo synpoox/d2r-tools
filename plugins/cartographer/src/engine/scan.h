@@ -39,7 +39,14 @@ struct Part {
 	const uint8_t* address;
 	PartStatus status;
 	uint8_t guard[32];  // the signature's own first hookSize bytes: what D2RLoader re-checks at the entry
+	uint32_t guardExact = 0;  // leading bytes of guard the signature pinned with no wildcard (hookSize once resolved, else 0)
 };
+
+// What to do with the result of InstallInlineHook for `part`: true only when the hook is installed and the loader returned the
+// original. An installed hook with no original is taken out again by writing the guard's exact original bytes back (only when
+// they are all known; see hookguard::canRestoreHook), so the game's own function runs; the part is then off. Sets the part's
+// status and logs. Call it at install time, before the game thread can be inside the function.
+auto HookOutcome(Part& part, bool installed, bool haveOriginal) noexcept -> bool;
 
 // Finds one part by its signature (or the one from signatures.txt) and checks its guards; sets its address and status.
 void ResolvePart(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count, Part& part);
