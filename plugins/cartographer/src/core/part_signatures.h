@@ -46,4 +46,12 @@ inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 
 inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";
 
+// Map events (cartographer.md section 8). PopulateRoom (game, serverRoom) is hooked: it runs once per not-yet-populated
+// room, from both activation paths, so the original is called first and the event spawns after the room is populated.
+// The 12-byte prefix alone matches 3 sites, so the signature runs on to 41 bytes; the hook cuts the first 12.
+inline constexpr const char* PopulateRoom = "4C 8B DC 53 56 48 81 EC B8 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 80 00 00 00 83 3D ?? ?? ?? ?? 00 48 8B F2 48 8B D9";
+// The two spawn functions are only called. The shorter prefixes match a neighbour (0x492aa0, 0x499ba1), so these run longer.
+inline constexpr const char* SpawnMonster = "4C 8B DC 48 83 EC 68 8B 84 24 90 00 00 00 45 33 D2 4D 89 53 F0 45 89 53 D8 89 44 24 38 8B 84 24 98 00 00 00 89 44 24 3C 8B 84 24 A0 00 00 00 49 89 53 C0 89 44 24 4C";
+inline constexpr const char* SpawnSuperUnique = "40 55 53 56 57 41 56 41 57 48 8D AC 24 48 FF FF FF 48 81 EC B8 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4";
+
 }  // namespace carto::sig

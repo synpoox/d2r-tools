@@ -49,6 +49,10 @@ PARTS = [
     ("DetachStatList", 0x2F7920, 9, "E8", 0),
     ("FreeStatList", 0x2F4180, 3, "74", 0),
     ("MonsterSetup", 0x494A60, 43, None, 14),
+    # Map events (cartographer.md section 8)
+    ("PopulateRoom", 0x50ACF0, 12, "48 8B 05", 12),
+    ("SpawnMonster", 0x492CF0, 56, None, 0),
+    ("SpawnSuperUnique", 0x499BA0, 34, None, 0),
 ]
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000

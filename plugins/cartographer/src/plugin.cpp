@@ -10,6 +10,7 @@
 #include "core/text.h"
 #include "core/tsv.h"
 #include "crash_guard.h"
+#include "engine/event_apply.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
 #include "engine/stat_apply.h"
@@ -91,6 +92,41 @@ auto ReadColumn(const std::wstring& file, const char* column, std::vector<std::s
 		}
 	}
 	return true;
+}
+
+// One column of a game table by row: an empty cell keeps its row, because the engine is asked for the row number.
+auto ReadColumnRows(const std::wstring& file, const char* column, std::vector<std::string>* out) -> bool {
+	std::string text;
+	if (!ReadFile(file, &text)) {
+		return false;
+	}
+	const carto::Tsv table = carto::ParseTsv(text);
+	const int c = table.Column(column);
+	if (c < 0) {
+		return false;
+	}
+	for (const carto::TsvRow& row : table.rows) {
+		out->push_back(table.Cell(row, c));
+	}
+	return true;
+}
+
+// monstats.txt Id and superuniques.txt Superunique and Class, by row, for the event spawns. Empty when a table is missing.
+auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
+	cartographer::eventplan::SpawnTable out;
+	if (g_excelDir.empty()) {
+		return out;
+	}
+	std::vector<std::string> supers, classes;
+	if (!ReadColumnRows(g_excelDir + L"\\monstats.txt", "Id", &out.monsters)) {
+		out.monsters.clear();
+	}
+	if (ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Superunique", &supers) && ReadColumnRows(g_excelDir + L"\\superuniques.txt", "Class", &classes)) {
+		for (size_t i = 0; i < supers.size(); ++i) {
+			out.supers.push_back({supers[i], i < classes.size() ? classes[i] : std::string()});
+		}
+	}
+	return out;
 }
 
 // misc.txt code and pSpell for every item that has a code (a blank pSpell is 0). False when the table or a column is missing.
@@ -176,6 +212,7 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapEventsFile), &text)) {
 		loaded.tables->events = carto::LoadMapEvents(text, loaded.report);
 	}
+	loaded.tables->spawnNames = ReadSpawnNames();
 	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadFile(g_tableDir + L"\\" + Widen(carto::MapsFile), &text)) {
@@ -311,6 +348,10 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::StatApplyPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			Say(command, "Cartographer " + carto::EventsSummary() + ". These parts are settled at load; fix and restart to change them.");
+			for (const carto::PartStatus& part : carto::EventPartStatuses()) {
+				Say(command, "part " + part.name + ": " + part.detail);
+			}
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
 		}
@@ -400,6 +441,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallPortal(context, g_overrides, &parts);
 		std::vector<carto::PartStatus> statParts;
 		(void)carto::InstallStatApply(context, g_overrides, &statParts);
+		std::vector<carto::PartStatus> eventParts;
+		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
 	} catch (...) {
 		g_loadFailed = true;
 		plog::Error("loading failed; the plugin stays loaded with the portal off");

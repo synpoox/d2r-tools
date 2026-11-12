@@ -51,4 +51,12 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string;
 // The Maze slot level id, or -1.
 auto MazeSlotLevelId() -> int;
 
+// The plan's event room in the built slot level, as the game's own room rect (tiles; the DRLG room's x, y, width, height).
+// Known once the slot build has run for the opened map; cleared when a map is opened and when the game is left.
+struct MazeEventRect {
+	bool known = false;
+	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0;
+};
+auto MazeEventRoom() -> MazeEventRect;
+
 }  // namespace carto
