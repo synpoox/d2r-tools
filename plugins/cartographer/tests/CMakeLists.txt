@@ -40,16 +40,3 @@ else()
 	target_compile_options(tables_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
 add_test(NAME tables_tests COMMAND tables_tests)
-
-# Host tests for the outdoor piece-picker. The Jungle catalogue rows it tests against are in fixtures/.
-add_executable(outdoor_tests outdoor_tests.cpp)
-target_link_libraries(outdoor_tests PRIVATE cartographer_outdoor)
-target_include_directories(outdoor_tests PRIVATE ../third_party/doctest)
-target_compile_definitions(outdoor_tests PRIVATE CARTOGRAPHER_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
-if(MSVC)
-	target_compile_options(outdoor_tests PRIVATE /W4 /permissive- /EHsc /utf-8)
-	set_property(TARGET outdoor_tests PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # match the static libraries
-else()
-	target_compile_options(outdoor_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
-endif()
-add_test(NAME outdoor_tests COMMAND outdoor_tests)

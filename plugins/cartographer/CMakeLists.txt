@@ -72,11 +72,6 @@ if(MSVC)
 	set_property(TARGET cartographer PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")  # static CRT: no VC++ runtime dependency
 endif()
 
-# The outdoor piece-picker (phase 4a): pure C++, reads the layout's types and the tileset catalogue.
-cartographer_library(cartographer_outdoor src/outdoor/outdoor.cpp src/outdoor/outdoor.h)
-target_include_directories(cartographer_outdoor PUBLIC src/outdoor)
-target_link_libraries(cartographer_outdoor PUBLIC cartographer_layout)
-
 if(CARTOGRAPHER_TESTS)
 	enable_testing()
 	add_subdirectory(tests)

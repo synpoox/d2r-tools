@@ -31,9 +31,16 @@ const std::string GOLDEN_HASHES =
 	"1215a7942077a2ae 19fecd3b91d093a6 2c520c8edae359ff a5e29bd842850fc3 901fab347c753ae8 763e37c95d92c752 08e5bbf643a10c8c "
 	"74b3fce4810fad1e ";
 
+// The fixtures sit beside this file, so the test needs no build-time path or working directory.
+std::string fixturePath(const char *name)
+{
+	std::string here = __FILE__;
+	return here.substr(0, here.find_last_of("/\\") + 1) + "fixtures/" + name;
+}
+
 LoadResult loadJungle()
 {
-	return loadCatalogueFile(std::string(CARTOGRAPHER_FIXTURE_DIR) + "/jungle_catalogue.tsv");
+	return loadCatalogueFile(fixturePath("jungle_catalogue.tsv"));
 }
 
 // A 1-row layout from masks and roles, linked as given.
