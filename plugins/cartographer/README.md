@@ -43,7 +43,8 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze level and the `Maze` slot to the mod's
-   tables (backing up each file once as `.bak`) and adds no items. The level is a Cave by default; add
+   tables, plus a `superuniques.txt` row for each boss in `bosses.txt` (backing up each file once as `.bak`), and adds
+   no items. The level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
 4. Give each map an item of its own in your mod's `misc.txt`: any item with item spell 16 (`pSpell`), for example a copy
@@ -65,7 +66,8 @@ in [`examples/first-map/`](examples/first-map/).
 | Size | `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
-| Boss, Monsters | A monster id or superunique name; up to 10 monster ids | none |
+| Boss | The `Name` of a boss in `bosses.txt`; a vanilla boss is refused | none |
+| Monsters | Up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
 | Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
@@ -101,6 +103,31 @@ The pool of random properties. Each map draws `Properties` of them. Without the 
 | Weight | How often the row is drawn compared with the others; `0` switches it off | 1 |
 
 Example row: `Monsters	item_maxhp_percent	10	20	3`
+
+#### bosses.txt
+
+The bosses a map can have. A map's `Boss` in `maps.txt` must name a row here by its `Name`. A boss is always one of
+these own entries, never a vanilla boss: a `Boss` that names a vanilla superunique (such as Bishibosh) or a vanilla
+monster, or a name that is not in this file, is refused at load (the report and the log say so) and that map opens
+without a Boss. Without this file no map has a Boss. `tools\install.ps1` writes one `superuniques.txt` row per entry,
+keyed `cartoboss:<Name>`, so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
+(the `Base` must be an ordinary monster in `monstats.txt`, never a vanilla boss such as `andariel`; each `Mods` id must
+be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
+rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
+keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row, or
+the game returns no unit for it, the boss is spawned as a plain monster of its `Base` instead (without mods or
+minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
+(two maps with that boss, or the same map opened twice): the game allows each boss once per game.
+
+| Column | Meaning | Default |
+|---|---|---|
+| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It may not show correctly in game yet (the game turns the name into a string once, when it loads the table; a follow-up is open) | required |
+| Base | A monster id from the game's `monstats.txt` that the boss is made from | required |
+| Mods | Up to 3 monster mod ids from `monumod.txt`, separated by commas (for example `5,6`: strong, fast) | none |
+| Minions | How many of the base monster come with the boss, 0 to 10 | 0 |
+
+Example row: `Shoreline Warden	zombie1	5,6	2` under the header `Name	Base	Mods	Minions`. The name, the mods
+and the minions come from the `superuniques.txt` row and have not been checked in game yet.
 
 #### mapevents.txt
 

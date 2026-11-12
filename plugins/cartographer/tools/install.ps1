@@ -11,6 +11,8 @@
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
     It also adds or updates the Maze row of d2rloader\cartographer\slots.txt, which tells the plugin the level id it got;
     any other row is kept.
+      superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
+                    keyed 'cartoboss:<Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt). That is the mod author's to set up.
@@ -235,6 +237,155 @@ if ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
     $mazes.Lines.Add($cells -join "`t")
     Save-Table $mazes
     Write-Host "lvlmaze.txt: added the maze row for level $levelId."
+}
+
+# --- superuniques.txt: one row per bosses.txt entry -------------------------------------------------------------------
+# A map's Boss names a bosses.txt entry (d2rloader\cartographer\bosses.txt: Name, Base, Mods, Minions). Each entry gets its own
+# superuniques.txt row, keyed 'cartoboss:<Name>' so it can never be a vanilla row. Vanilla rows are copied from, never edited.
+# The 'cartoboss:' rows are rebuilt from bosses.txt each run (so a renamed or removed entry loses its old row), and running this
+# again changes nothing once they are right. An entry that does not check out is reported and not written.
+# At most $MaxBosses entries: the game keeps a once-per-game "already spawned" bit per superuniques row in a bit list of unknown
+# length (docs/reverse-engineering/cartographer.md), so the number of added rows stays small.
+$BossKeyPrefix = 'cartoboss:'
+$MaxBosses = 16
+$bossPath = Join-Path $ExcelDir 'd2rloader\cartographer\bosses.txt'
+# A missing bosses.txt counts as an empty one: the old 'cartoboss:' rows are still removed.
+$bossLines = @()
+if (Test-Path $bossPath) {
+    $bossText = $bytes.GetString([System.IO.File]::ReadAllBytes($bossPath))
+    $bossLines = @($bossText -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
+}
+if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
+    $bossHeader = @(if ($bossLines.Count -gt 0) { ($bossLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" })
+    $nameAt = [array]::IndexOf($bossHeader, 'Name'); $baseAt = [array]::IndexOf($bossHeader, 'Base')
+    $modsAt = [array]::IndexOf($bossHeader, 'Mods'); $minionsAt = [array]::IndexOf($bossHeader, 'Minions')
+    $superPath = Join-Path $ExcelDir 'superuniques.txt'
+    $monstatsPath = Join-Path $ExcelDir 'monstats.txt'
+    $supers = $null
+    $needed = 'Superunique', 'hcIdx', 'Name', 'Class', 'Mod1', 'Mod2', 'Mod3', 'MinGrp', 'MaxGrp'
+    $noEntries = $bossLines.Count -lt 2
+    if (-not $noEntries -and ($nameAt -lt 0 -or $baseAt -lt 0)) {
+        Write-Host "bosses.txt: needs 'Name' and 'Base' columns; superuniques.txt was not touched."
+    } elseif (-not $noEntries -and -not (Test-Path $monstatsPath)) {
+        Write-Host 'bosses.txt: this mod has no monstats.txt to check the Base monsters against; superuniques.txt was not touched.'
+    } else {
+        $supers = Read-Table $superPath
+        $missing = @($needed | Where-Object { $supers.Header -notcontains $_ })
+        if ($missing.Count -gt 0) {
+            Write-Host "bosses.txt: superuniques.txt has no '$($missing -join "', '")' column, so no boss rows were written (the bosses will be spawned as plain monsters of their Base)."
+            $supers = $null
+        }
+    }
+    if ($supers) {
+        # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name-versus-monster check ignores case, like ContainsNoCase.
+        $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+        $bossIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
+        $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
+        $mBossCol = if ($monstats) { [array]::IndexOf($monstats.Header, 'boss') } else { -1 }
+        for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {
+            $c = $monstats.Lines[$i] -split "`t"
+            if ($c.Count -gt $mIdCol -and $c[$mIdCol] -ne '') {
+                [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add($c[$mIdCol])
+                if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { [void]$bossIds.Add($c[$mIdCol]) }
+            }
+        }
+        $modIds = $null
+        $modsPath = Join-Path $ExcelDir 'monumod.txt'
+        if (Test-Path $modsPath) {
+            $monumod = Read-Table $modsPath
+            if ($monumod.Header -contains 'id') {
+                $modIds = @{}
+                $modCol = Column $monumod 'id'
+                for ($i = 1; $i -lt $monumod.Lines.Count; $i++) {
+                    $c = $monumod.Lines[$i] -split "`t"
+                    $v = 0
+                    if ($c.Count -gt $modCol -and [int]::TryParse($c[$modCol], [ref]$v)) { $modIds[$v] = $true }
+                }
+            }
+        }
+        $superCol = Column $supers 'Superunique'
+        $hcCol = Column $supers 'hcIdx'
+        $vanillaSupers = @{}
+        $kept = [System.Collections.Generic.List[string]]::new()
+        $oldRows = [System.Collections.Generic.List[string]]::new()
+        $kept.Add($supers.Lines[0])
+        $maxHc = 0
+        for ($i = 1; $i -lt $supers.Lines.Count; $i++) {
+            $c = $supers.Lines[$i] -split "`t"
+            $key = if ($c.Count -gt $superCol) { $c[$superCol] } else { '' }
+            if ($key.StartsWith($BossKeyPrefix)) { $oldRows.Add($supers.Lines[$i]); continue }
+            $kept.Add($supers.Lines[$i])
+            if ($key -ne '') { $vanillaSupers[$key.ToLowerInvariant()] = $true }
+            $parsed = 0
+            if ($c.Count -gt $hcCol -and [int]::TryParse($c[$hcCol], [ref]$parsed) -and $parsed -gt $maxHc) { $maxHc = $parsed }
+        }
+        $template = Find-Row $supers 'Superunique' 'Bishibosh'
+        if ($template -lt 0) { $template = 1 }
+        $templateLine = $supers.Lines[$template]
+        $rows = [System.Collections.Generic.List[string]]::new()
+        $seen = @{}
+        for ($b = 1; $b -lt $bossLines.Count; $b++) {
+            $bc = $bossLines[$b] -split "`t"
+            $bossName = if ($bc.Count -gt $nameAt) { $bc[$nameAt].Trim() } else { '' }
+            $bossBase = if ($bc.Count -gt $baseAt) { $bc[$baseAt].Trim() } else { '' }
+            $skip = {
+                param([string]$why)
+                Write-Host "superuniques.txt: skipped bosses.txt row $b ('$bossName'): $why"
+            }
+            if ($bossName -eq '') { & $skip 'the Name cell is empty.'; continue }
+            if ($seen.ContainsKey($bossName.ToLowerInvariant())) { & $skip 'a boss with that name is already listed.'; continue }
+            if ($vanillaSupers.ContainsKey($bossName.ToLowerInvariant()) -or $monsterIdsNoCase.Contains($bossName)) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
+            if ($bossBase -eq '') { & $skip 'the Base cell is empty.'; continue }
+            if (-not $monsterIds.Contains($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
+            if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
+            $mods = @()
+            $bad = ''
+            if ($modsAt -ge 0 -and $bc.Count -gt $modsAt -and $bc[$modsAt].Trim() -ne '') {
+                foreach ($m in ($bc[$modsAt] -split ',')) {
+                    $v = 0
+                    if (-not [int]::TryParse($m.Trim(), [ref]$v) -or $v -lt 1 -or $v -gt 255) { $bad = "Mods entry '$($m.Trim())' is not a whole number from 1 to 255."; break }
+                    if ($null -ne $modIds -and -not $modIds.ContainsKey($v)) { $bad = "Mods entry '$v' is not an id in monumod.txt."; break }
+                    $mods += $v
+                }
+                if ($bad -eq '' -and $mods.Count -gt 3) { $bad = "Mods has $($mods.Count) entries; the limit is 3." }
+            }
+            if ($bad -ne '') { & $skip $bad; continue }
+            $minions = 0
+            if ($minionsAt -ge 0 -and $bc.Count -gt $minionsAt -and $bc[$minionsAt].Trim() -ne '') {
+                $v = 0
+                if ([int]::TryParse($bc[$minionsAt].Trim(), [ref]$v) -and $v -ge 0 -and $v -le 10) { $minions = $v }
+                else { & $skip "Minions '$($bc[$minionsAt].Trim())' is not a whole number from 0 to 10."; continue }
+            }
+            if ($rows.Count -ge $MaxBosses) { & $skip "bosses.txt may have at most $MaxBosses entries."; continue }
+            $seen[$bossName.ToLowerInvariant()] = $true
+            $key = $BossKeyPrefix + $bossName
+            # A copy of a vanilla row (read only); every cell that matters is set below.
+            $cells = Cells $supers $templateLine
+            Set-Cell $supers $cells 'hcIdx' "$($maxHc + $rows.Count + 1)"
+            Set-Cell $supers $cells 'Superunique' $key
+            Set-Cell $supers $cells 'Name' $bossName
+            Set-Cell $supers $cells 'Class' $bossBase
+            for ($n = 0; $n -lt 3; $n++) { Set-Cell $supers $cells "Mod$($n + 1)" $(if ($n -lt $mods.Count) { "$($mods[$n])" } else { '0' }) }
+            Set-Cell $supers $cells 'MinGrp' "$minions"
+            Set-Cell $supers $cells 'MaxGrp' "$minions"
+            foreach ($pair in @(@('TC', 'Act 5 Super C'), @('TC(N)', 'Act 5 (N) Super C'), @('TC(H)', 'Act 5 (H) Super C'), @('TC Desecrated', ''), @('TC(N) Desecrated', ''), @('TC(H) Desecrated', 'Act 5 (H) Super C Desecrated'))) {
+                if ($supers.Header -contains $pair[0]) { Set-Cell $supers $cells $pair[0] $pair[1] }
+            }
+            $rows.Add($cells -join "`t")
+        }
+        if (($oldRows -join "`n") -ne ($rows -join "`n")) {
+            foreach ($line in $rows) { $kept.Add($line) }
+            $supers.Lines = $kept
+            Save-Table $supers
+            Write-Host "superuniques.txt: wrote $($rows.Count) boss row(s) (replacing $($oldRows.Count) from an earlier run)."
+        } else {
+            Write-Host 'superuniques.txt: boss rows already up to date.'
+        }
+    }
+} elseif ($bossLines.Count -ge 2) {
+    Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
 }
 
 # --- write ------------------------------------------------------------------------------------------------------------
