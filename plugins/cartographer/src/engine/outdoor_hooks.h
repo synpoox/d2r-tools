@@ -6,7 +6,7 @@
 //
 // OFF by default (OutdoorBuild = 0 in cartographer.txt) until the game checks of issue #89 and #142 confirm the void marker and the
 // entry room. Fail open: a missing part, a plan that cannot be made or a level that is not as expected leaves that build to the game,
-// with the reason in the log. Nothing opens an outdoor map yet (issue #144); OutdoorMapOpened is the call it will make.
+// with the reason in the log. A Jungle map opens through portal.cpp (issue #144), which calls OutdoorMapOpened.
 // Notes and evidence: docs/reverse-engineering/cartographer.md section 8a.
 #pragma once
 
@@ -38,8 +38,16 @@ auto OutdoorBuildLive() -> bool;
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables);
 
 // An outdoor map is about to be opened through the Outdoor slot: the next build of that level uses it. `seedSalt` is mixed with a job id into the
-// layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's). Nothing calls this yet (issue #144).
+// layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's).
 void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed = 0);
+
+// Empty when the map just handed to OutdoorMapOpened can be planned on the Outdoor slot (the same cached plan the build uses); otherwise the
+// player-facing reason. Call right after OutdoorMapOpened, before the portal opens.
+auto OutdoorPlanProblem() -> std::string;
+
+// True when the Outdoor slot level was built with a map open (or is being built) in this game: it holds that layout for the game, so another
+// outdoor map cannot be opened until the game is left.
+auto OutdoorSlotBuilt() -> bool;
 
 // The portal did not open after all: forget the map.
 void OutdoorMapCancelled();

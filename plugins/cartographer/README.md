@@ -80,9 +80,11 @@ in [`examples/first-map/`](examples/first-map/).
 |---|---|---|
 | Properties | How many random properties a map gets | 6 |
 | EventChance | Percent chance a map has an event | 20 |
-| PlayerStats | `1` applies the map's player properties; test characters only | 0 |
+| PlayerStats | `1` applies the map's player properties (at most 16 stats, the most the character sheet shows); test characters only | 0 |
 | MapNames | `1` shows a map's own name on the portal, automap and banner (experimental) | 0 |
 | MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
+| OutdoorBuild | `1` lets Jungle maps open and builds them (see [Outdoor slot](#outdoor-slot-jungle)); needs a restart, not verified in game | 0 |
+| OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (not checked in game) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
 | AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS`, `FAIL` or `N/A` lines to the plugin log; for test slots only | 0 |
@@ -124,9 +126,12 @@ the game returns no unit for it, the boss is spawned as a plain monster of its `
 minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
+The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
+and the plugin defines that text when it loads. Run the installer again and restart; not yet checked in game.
+
 | Column | Meaning | Default |
 |---|---|---|
-| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It may not show correctly in game yet (the game turns the name into a string once, when it loads the table; a follow-up is open) | required |
+| Name | The boss's name; unique, and not the name of a vanilla boss or monster. It is the name shown in game (see above) | required |
 | Base | A monster id from the game's `monstats.txt` that the boss is made from | required |
 | Mods | Up to 3 monster mod ids from `monumod.txt`, separated by commas (for example `5,6`: strong, fast) | none |
 | Minions | How many of the base monster come with the boss, 0 to 10 | 0 |
@@ -207,6 +212,23 @@ The installer adds, to the mod's tables, a level "Cartographer Maze" copied from
 set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with its `lvlmaze.txt` row and the `Maze` row of
 `slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
+
+## Outdoor slot (Jungle)
+
+A map with Tileset `Jungle` is an outdoor map. It opens through the `Outdoor` slot (a second row in `slots.txt`, level
+"Cartographer Outdoor") instead of the Maze slot, from its item and the same red portal from Harrogath, in Hell, once per
+game. The installer adds that level next to the Maze level: Act 5, outdoor (DrlgType 3), Jungle (LevelType 21), 384 x 384 tiles at
+(6000, 3000), copied from a plain Act 5 outdoor level with no quest, no level group, no warps and `Vis0`..`Vis7` = 0
+(`-1` crashes the game). It needs no `lvlprest.txt` or `lvlmaze.txt` row. Running it again changes nothing, and the
+game's own rows are never edited. Restart the game afterwards.
+
+An outdoor map opens only while `OutdoorBuild` is `1` in `cartographer.txt` (default 0, so the game runs as without the
+outdoor code). With it at 0, a Jungle map's item says so and nothing opens. If the Outdoor slot is missing, not the level the
+installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part cannot be found, the map is refused with a
+plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
+`examples/first-map` has one Jungle row (item `t22`).
+
+Not verified in game. Outdoor maps are not yet sent to other players in multiplayer, so use them in single player.
 
 ## Status
 
