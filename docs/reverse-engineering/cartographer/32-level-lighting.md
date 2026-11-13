@@ -27,6 +27,6 @@ A runtime path looks feasible and independent of mod files: hook the apply funct
 ### Not done
 
 - Names to offsets for `VisualDataComponent` and the `FrameSettings` layout (needs a logging hook and a live dump compared with the vis JSON values above, slot 7).
-- Legacy (G key): `LoadActPalette` `0x9041a0` loads `data/global/palette/act<N+1>/pal.pl2` (format `%s\palettect%d\%s` at `0x1d840e0`, xref `0x9041c7`; file name `pal.pl2` at `0x1d840f8`, xref `0x9041e0`; `LoadActPalette` is only called at the end of the load screen, so a palette edit would have to be made after that load and undone on leaving the map); not read further. A per-map hue there means editing the loaded palette after the load.
+- Legacy (G key): `LoadActPalette` `0x9041a0` loads `data/global/palette/act<N+1>/pal.pl2` (format `%s\palette\act%d\%s` at `0x1d840e0`, xref `0x9041c7`; file name `pal.pl2` at `0x1d840f8`, xref `0x9041e0`; `LoadActPalette` is only called at the end of the load screen, so a palette edit would have to be made after that load and undone on leaving the map); not read further. A per-map hue there means editing the loaded palette after the load.
 - How the plugin learns that the player is in a slot level and which `maps.txt` row it is (the existing level hooks carry this), the `maps.txt` columns, tables.md, CHANGELOG, tests.
 - In-game check on two maps sharing a tileset.
