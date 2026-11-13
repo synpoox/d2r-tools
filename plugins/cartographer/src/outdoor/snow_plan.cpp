@@ -50,8 +50,8 @@ std::vector<const Piece *> candidates(Kind kind, char letter) {
 TileRect cellRect(const SnowOptions &o, int x, int y) {
 	TileRect r;
 	r.known = true;
-	r.x = o.originX + x * kCellTiles;
-	r.y = o.originY + y * kCellTiles;
+	r.x = o.originX + (x + kEdgeCells) * kCellTiles;
+	r.y = o.originY + (y + kEdgeCells) * kCellTiles;
 	r.w = kCellTiles;
 	r.h = kCellTiles;
 	return r;
@@ -112,7 +112,7 @@ std::string sizeProblem(const SnowRequest &r, Orientation o) {
 	const int along = isHorizontal(o) ? r.cellsW : r.cellsH;
 	if (along < kMinRunCells)
 		return std::string("a ") + orientationName(o) + " Snow map needs at least " + std::to_string(kMinRunCells) + " cells along its lines (a cap, a run and a cap).";
-	const int tilesW = r.cellsW * kCellTiles, tilesH = r.cellsH * kCellTiles;
+	const int tilesW = (r.cellsW + 2 * kEdgeCells) * kCellTiles, tilesH = (r.cellsH + 2 * kEdgeCells) * kCellTiles;  // the edge ring is part of the level
 	if ((r.options.maxTilesX > 0 && tilesW > r.options.maxTilesX) || (r.options.maxTilesY > 0 && tilesH > r.options.maxTilesY)) {
 		auto limit = [](int v) { return v > 0 ? std::to_string(v) : std::string("unlimited"); };
 		return "the map needs " + std::to_string(tilesW) + " x " + std::to_string(tilesH) + " tiles, more than the slot level's " + limit(r.options.maxTilesX) +
@@ -147,6 +147,24 @@ const char *kindName(Kind kind) {
 
 const char *orientationName(Orientation orientation) {
 	return orientation == Orientation::Horizontal ? "horizontal" : "vertical";
+}
+
+// Ring pieces, from the game's own Act 5 Barricade border rows (lvlprest.txt 957..982, DS1 Brdr_snow*; cartographer-snow.md section 8). Each straight piece
+// has its ground on the side of the rectangle; the camera sees a cliff face on the north and west sides and a ravine on the south and east sides, and
+// 981 and 982 join a cliff to a ravine.
+const EdgePieces kEdgePieces = {958, 959, 972, 969, 962, 982, 976, 981};
+
+int edgePieceAt(int x, int y, int w, int h) {
+	const bool west = x < 0, east = x >= w, north = y < 0, south = y >= h;
+	if (north && west) return kEdgePieces.nw;
+	if (north && east) return kEdgePieces.ne;
+	if (south && east) return kEdgePieces.se;
+	if (south && west) return kEdgePieces.sw;
+	if (west) return kEdgePieces.west;
+	if (east) return kEdgePieces.east;
+	if (north) return kEdgePieces.north;
+	if (south) return kEdgePieces.south;
+	return 0;
 }
 
 const std::vector<Piece> &pieces() { return kPieces; }
@@ -226,25 +244,27 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 	StampPlan &plan = out.stamps;
 	plan.originX = request.options.originX;
 	plan.originY = request.options.originY;
-	plan.tilesW = request.cellsW * kCellTiles;
-	plan.tilesH = request.cellsH * kCellTiles;
+	// The level is the fence rectangle plus the edge ring; macro cells keep the rectangle's own coordinates, so the ring is at -kEdgeCells..-1 and past the far side.
+	plan.tilesW = (request.cellsW + 2 * kEdgeCells) * kCellTiles;
+	plan.tilesH = (request.cellsH + 2 * kEdgeCells) * kCellTiles;
 	const int per = kCellTiles / kGridTiles;
-	plan.cellsW = request.cellsW * per;
-	plan.cellsH = request.cellsH * per;
-	plan.macroMinX = 0;
-	plan.macroMinY = 0;
-	plan.macroW = request.cellsW;
-	plan.macroH = request.cellsH;
+	plan.cellsW = (request.cellsW + 2 * kEdgeCells) * per;
+	plan.cellsH = (request.cellsH + 2 * kEdgeCells) * per;
+	plan.macroMinX = -kEdgeCells;
+	plan.macroMinY = -kEdgeCells;
+	plan.macroW = request.cellsW + 2 * kEdgeCells;
+	plan.macroH = request.cellsH + 2 * kEdgeCells;
 	int ex = 0, ey = 0;
 	entranceCell(o, request.cellsW, request.cellsH, &ex, &ey);
-	for (int y = 0; y < request.cellsH; ++y) {
-		for (int x = 0; x < request.cellsW; ++x) {
-			const size_t at = static_cast<size_t>(y) * request.cellsW + x;
+	for (int y = -kEdgeCells; y < request.cellsH + kEdgeCells; ++y) {
+		for (int x = -kEdgeCells; x < request.cellsW + kEdgeCells; ++x) {
+			const bool inside = x >= 0 && y >= 0 && x < request.cellsW && y < request.cellsH;
+			const size_t at = inside ? static_cast<size_t>(y) * request.cellsW + x : 0;
 			Stamp s;
-			s.cx = x * per;
-			s.cy = y * per;
-			s.lvlPrest = out.grid[at];
-			s.file = files[at];
+			s.cx = (x + kEdgeCells) * per;
+			s.cy = (y + kEdgeCells) * per;
+			s.lvlPrest = inside ? out.grid[at] : edgePieceAt(x, y, request.cellsW, request.cellsH);
+			s.file = inside ? files[at] : (request.options.pinFiles ? 0 : -1);
 			s.macroX = x;
 			s.macroY = y;
 			s.mask = 0;
@@ -267,6 +287,13 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 	return out;
 }
 
+// The checker's own side-to-piece table (not kEdgePieces), so a swapped side in the planner's table fails the check. Rows are north, middle, south; columns west, middle, east.
+static int checkEdgePiece(int x, int y, int w, int h) {
+	static const int table[3][3] = {{962, 959, 982}, {958, 0, 972}, {981, 969, 976}};
+	const int col = x < 0 ? 0 : (x >= w ? 2 : 1), row = y < 0 ? 0 : (y >= h ? 2 : 1);
+	return table[row][col];
+}
+
 std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPlan &plan) {
 	std::vector<std::string> bad;
 	const Orientation o = plan.orientation;
@@ -283,13 +310,14 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 	}
 	const StampPlan &sp = plan.stamps;
 	const int per = kCellTiles / kGridTiles;
-	if (sp.tilesW != W * kCellTiles || sp.tilesH != H * kCellTiles || sp.cellsW != W * per || sp.cellsH != H * per || sp.macroW != W || sp.macroH != H ||
+	const int TW = W + 2 * kEdgeCells, TH = H + 2 * kEdgeCells;  // the level, edge ring included
+	if (sp.tilesW != TW * kCellTiles || sp.tilesH != TH * kCellTiles || sp.cellsW != TW * per || sp.cellsH != TH * per || sp.macroW != TW || sp.macroH != TH ||
 		sp.originX != request.options.originX || sp.originY != request.options.originY)
 		bad.push_back("the stamp plan's level box does not match the request");
-	if (sp.macroMinX != 0 || sp.macroMinY != 0) bad.push_back("the stamp plan's macro grid does not start at 0, 0");
+	if (sp.macroMinX != -kEdgeCells || sp.macroMinY != -kEdgeCells) bad.push_back("the stamp plan's macro grid does not start at the edge ring");
 	if (plan.hash != stampPlanHash(sp)) bad.push_back("the plan's hash is not the hash of its stamps");
-	if (sp.stamps.size() != plan.grid.size()) {
-		bad.push_back("the plan has " + std::to_string(sp.stamps.size()) + " stamps for " + std::to_string(plan.grid.size()) + " cells");
+	if (sp.stamps.size() != static_cast<size_t>(TW) * TH) {
+		bad.push_back("the plan has " + std::to_string(sp.stamps.size()) + " stamps for " + std::to_string(static_cast<size_t>(TW) * TH) + " cells");
 		return bad;
 	}
 	if (!sp.voidCells.empty()) bad.push_back("a Snow map is a full rectangle but the plan lists void cells");
@@ -298,12 +326,25 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 	const int along = horizontal ? W : H;
 	int ex = 0, ey = 0;
 	entranceCell(o, W, H, &ex, &ey);
+	// The edge ring: every stamp outside the rectangle is the edge piece, in its place in row-major order.
+	for (int y = -kEdgeCells; y < H + kEdgeCells; ++y) {
+		for (int x = -kEdgeCells; x < W + kEdgeCells; ++x) {
+			if (x >= 0 && y >= 0 && x < W && y < H) continue;
+			const Stamp &s = sp.stamps[static_cast<size_t>(y + kEdgeCells) * TW + (x + kEdgeCells)];
+			const std::string where = "edge cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
+			if (s.macroX != x || s.macroY != y || s.cx != (x + kEdgeCells) * per || s.cy != (y + kEdgeCells) * per) bad.push_back(where + " is not stamped at its place in row-major order, aligned to the 16-tile grid");
+			const int want = checkEdgePiece(x, y, W, H);
+			if (s.lvlPrest != want) bad.push_back(where + " does not hold the edge piece " + std::to_string(want) + " for its side");
+			if (s.file != (request.options.pinFiles ? 0 : -1)) bad.push_back(where + " has the wrong file index");
+			if (s.role != layout::Role::Path || s.mask != 0) bad.push_back(where + " has the wrong role or mask");
+		}
+	}
 	for (int y = 0; y < H; ++y) {
 		for (int x = 0; x < W; ++x) {
 			const size_t at = static_cast<size_t>(y) * W + x;
 			const std::string where = cellName(x, y);
-			const Stamp &s = sp.stamps[at];
-			if (s.macroX != x || s.macroY != y || s.cx != x * per || s.cy != y * per) bad.push_back(where + " is not stamped at its place in row-major order, aligned to the 16-tile grid");
+			const Stamp &s = sp.stamps[static_cast<size_t>(y + kEdgeCells) * TW + (x + kEdgeCells)];
+			if (s.macroX != x || s.macroY != y || s.cx != (x + kEdgeCells) * per || s.cy != (y + kEdgeCells) * per) bad.push_back(where + " is not stamped at its place in row-major order, aligned to the 16-tile grid");
 			if (s.lvlPrest != plan.grid[at]) bad.push_back(where + " stamps a different piece than the grid holds");
 			const Piece *p = findPiece(plan.grid[at]);
 			if (!p) {

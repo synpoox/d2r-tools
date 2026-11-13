@@ -1,6 +1,7 @@
 #include "statplan.h"
 
 #include <algorithm>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -166,6 +167,8 @@ std::string refusedReason(Target target, std::string_view stat, int id)
 Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats)
 {
 	Plan plan;
+	std::vector<long long> monsterSums;
+	std::vector<long long> playerSums;
 	for (const Property &p : properties) {
 		const auto skip = [&](const std::string &why) { plan.skipped.push_back({p.target, p.stat, why}); };
 		if (p.target == Target::Players && !playerStats) {
@@ -195,17 +198,46 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 			skip("it rolled 0, which changes nothing");
 			continue;
 		}
-		if (p.target == Target::Players && plan.players.size() >= kMaxPlayerStats) {
-			skip("the game sends at most " + std::to_string(kMaxPlayerStats) + " stats of a list to the character sheet");
+		std::vector<Entry> &list = p.target == Target::Monsters ? plan.monsters : plan.players;
+		std::vector<long long> &sums = p.target == Target::Monsters ? monsterSums : playerSums;
+		// Two properties of one stat on one target become one entry holding the sum: each entry goes to SetListStat, which may set the
+		// value instead of adding to it (not checked in game), and the map panel shows the sum.
+		size_t at = 0;
+		while (at < list.size() && list[at].stat != id) ++at;
+		if (at < list.size()) {
+			sums[at] += p.value;
 			continue;
 		}
-		Entry e{p.stat, id, p.value};
-		if (p.target == Target::Monsters && (p.stat == "velocitypercent" || id == kVelocityStatId) && e.value < kMinMonsterSpeed) {
-			plan.notes.push_back("'" + p.stat + "' " + std::to_string(e.value) + " on monsters is cut to " + std::to_string(kMinMonsterSpeed) + " (the map's own value; what -100 or lower does to monsters has not been checked).");
-			e.value = kMinMonsterSpeed;
-		}
-		(p.target == Target::Monsters ? plan.monsters : plan.players).push_back(e);
+		list.push_back({p.stat, id, 0});
+		sums.push_back(p.value);
 	}
+	// The sums become the entries' values: an entry that adds up to 0 is dropped (and logged), a monster speed is cut once, on the sum, and
+	// the player list is capped after the merge, so a stat that adds up to 0 does not use up a slot.
+	const auto finish = [&plan](Target target, std::vector<Entry> &list, const std::vector<long long> &sums) {
+		std::vector<Entry> kept;
+		for (size_t i = 0; i < list.size(); ++i) {
+			long long total = sums[i];
+			total = total > INT_MAX ? INT_MAX : (total < INT_MIN ? INT_MIN : total);
+			Entry e = list[i];
+			e.value = static_cast<int>(total);
+			if (e.value == 0) {
+				plan.skipped.push_back({target, e.name, "its properties add up to 0, which changes nothing"});
+				continue;
+			}
+			if (target == Target::Players && kept.size() >= kMaxPlayerStats) {
+				plan.skipped.push_back({target, e.name, "the game sends at most " + std::to_string(kMaxPlayerStats) + " stats of a list to the character sheet"});
+				continue;
+			}
+			if (target == Target::Monsters && (e.name == "velocitypercent" || e.stat == kVelocityStatId) && e.value < kMinMonsterSpeed) {
+				plan.notes.push_back("'" + e.name + "' " + std::to_string(e.value) + " on monsters is cut to " + std::to_string(kMinMonsterSpeed) + " (the map's own value; what -100 or lower does to monsters has not been checked).");
+				e.value = kMinMonsterSpeed;
+			}
+			kept.push_back(e);
+		}
+		list = std::move(kept);
+	};
+	finish(Target::Monsters, plan.monsters, monsterSums);
+	finish(Target::Players, plan.players, playerSums);
 	return plan;
 }
 

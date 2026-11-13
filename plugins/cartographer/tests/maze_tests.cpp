@@ -1550,3 +1550,41 @@ TEST_CASE("cell room: every room of the cell is ranked, the chosen one first, ti
 	CHECK(at(3).y == c.originY + half);
 	CHECK(planCellRoom(sp.plan, unit, -1, rects).ranked.empty());
 }
+
+TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #421)")
+{
+	// The first room must be a used cell, so a layout as wide as the level allows (13 rooms with a ring) had only one cell that could be the
+	// first room, usually unused. Before: the first layout of a seed was clipped. After: planForSeed tries other layouts of the same shape.
+	const Tileset lava = lavaTileset();
+	const int seeds = 2000;
+	int before[2] = {0, 0}, after[2] = {0, 0}, total[2] = {0, 0};
+	for (int z = 0; z < 2; ++z)
+		for (layout::Shape shape : {layout::Shape::Corridor, layout::Shape::Winding}) {
+			const layout::Rules rules = layout::presetRules(shape, z == 0 ? layout::Size::Large : layout::Size::ExtraLarge);
+			for (int i = 0; i < seeds; ++i) {
+				const uint64_t seed = layout::splitmix64(static_cast<uint64_t>(i) + 0x9000);
+				const Plan first = planMaze(lava, layout::generate(fitRules(lava, rules), seed)); // the old behaviour: no other layout tried
+				const SeedPlan now = planForSeed(lava, rules, seed);
+				if (!first.steer || !now.plan.steer) continue;
+				++total[z];
+				before[z] += first.ringClipped;
+				after[z] += now.plan.ringClipped;
+				if (!now.plan.ringClipped) {
+					// Whole ring: every room's 8 neighbours lie inside the level box.
+					const Capacity box = capacityAt(lava.roomTiles, now.plan.levelTilesX, now.plan.levelTilesY);
+					for (const Room &r : now.plan.rooms) {
+						CHECK(r.dx - 1 >= -box.left);
+						CHECK(r.dx + 1 <= box.right);
+						CHECK(r.dy - 1 >= -box.up);
+						CHECK(r.dy + 1 <= box.down);
+					}
+				}
+				CHECK(now.plan.levelTilesX <= lava.maxLevelTiles);
+				CHECK(now.plan.levelTilesY <= lava.maxLevelTiles);
+			}
+		}
+	MESSAGE("Large clipped before ", before[0], " after ", after[0], " of ", total[0], "; ExtraLarge clipped before ", before[1], " after ", after[1], " of ", total[1]);
+	CHECK(before[1] * 10 > total[1]);  // the problem is real: over a tenth of ExtraLarge Corridor and Winding layouts were clipped
+	CHECK(after[1] * 200 <= total[1]); // now at most half a percent
+	CHECK(after[0] <= before[0]);
+}

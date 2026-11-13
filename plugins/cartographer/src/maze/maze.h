@@ -135,6 +135,7 @@ struct Plan {
 	// earlier filler): the walk makes them after every plan room has its piece, so a plan room's piece never counts the filler beside it.
 	std::vector<AddStep> fills;
 	std::vector<layout::Point> fillOffsets; // each filler's room offset (dx, dy) from the first room
+	bool ringClipped = false; // the layout fits only with no margin, so the filler ring is cut at the level's edge (planForSeed tries other layouts first)
 	int eventRoom = -1, bossRoom = -1;   // indexes into rooms of the reserved event and boss rooms, or -1
 };
 
