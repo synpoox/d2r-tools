@@ -139,7 +139,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS`, `FAIL` or `N/A` lines to the plugin log; for test slots only | 0 |
 | AutoCheckMap | The `Name` of the map `AutoCheck` opens, without its item; for test slots only | none |
 
-The map level can also sit on the map item as the stat `cartographer_map_level` (added to `itemstatcost.txt` by `tools\install.ps1`, with a `Map Level: N` line on hover). A map item without it uses the `maps.txt` Level (checked in game). A cube recipe cannot set it on a map item in this game (the cube turns the map into a Hand Axe; details in `docs/cartographer/tables.md`).
+The map level can also sit on the map item as the stat `cartographer_map_level` (added to `itemstatcost.txt` by `tools\install.ps1`, with a `Map Level: N` line on hover). A map item without it uses the `maps.txt` Level (checked in game). A cube recipe can raise it: a `mod` of `map-level` on an output that keeps the map (`usetype,nor,mod`) adds to the map's level, and a second transmute adds again (checked in game; details in `docs/cartographer/tables.md`).
 
 Walk into the portal yourself and leave the game by hand; the plugin does the rest and writes the results to its log. Leave `AutoCheck` at 0 for normal play.
 

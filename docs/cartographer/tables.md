@@ -106,14 +106,14 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 
 | Column | Value |
 |---|---|
-| `description` | `Map + Town Portal scroll: map level 95` |
+| `description` | `Map + Town Portal scroll: +10 map level` |
 | `enabled`, `version` | `1`, `100` |
 | `numinputs` | `2` |
 | `input 1`, `input 2` | the map's `misc.txt` code (for example `t20`), `tsc` |
-| `output` | `useitem,mod` |
-| `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `95`, `95` |
+| `output` | `usetype,nor,mod` |
+| `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `10`, `10` |
 
-**Does not work on a map item (checked in game, slot 6, Hell).** The cube reads the row, takes the inputs and sets the stat, but `useitem` rebuilds a misc item as a Hand Axe: the map came out as a Hand Axe whose hover showed `Map Level: 95`. The same happened with a type input (`cmap`) and with a vanilla misc item (`isc`), so it is the cube, not the map rows. Outputs that keep a map (`usetype,mod`, `usetype,mag,mod`, and a plain item code such as `t22`) give a normal map and drop the `mod`, so no `Map Level` line appears. The stat itself works: it is saved with the item, shown on hover and kept across a save and reload. Giving the `cmap` item type `Magic` 1, `Rare` 1, `Normal` 1 and `MaxSockets1` 1 in `itemtypes.txt` changed nothing: `useitem,mod` still produced a Hand Axe (`Map Level: 10`), and `usetype,mag,mod` and `usetype,rar,mod` still gave a plain white map with no stat. So the item type flags are not the cause; a plugin hook on the cube result would be needed. Until then, set the level in `maps.txt` (the fallback).
+**On a map item.** The plugin sets the stat when a recipe's output keeps the map: use `usetype,nor,mod` (or `t22,mod`, a fixed map) rather than `useitem,mod`, which rebuilds a misc item as a Hand Axe. The level is added to the map's own stat, so transmuting the same map again adds again (10, then 20). The result is cut to 1 to 511. Checked in game (slot 6, Hell): the map opened at the new level. The hover of a map item shows no `Map Level` line. Without the plugin hook (older versions, or a part that did not match) the cube drops the `mod` on a map, and the `maps.txt` Level is used.
 
 **Keep the stat row where it is.** Once saved items carry `cartographer_map_level`, its row in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
 

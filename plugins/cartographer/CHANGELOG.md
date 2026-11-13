@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
