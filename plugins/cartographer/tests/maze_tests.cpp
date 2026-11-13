@@ -1094,6 +1094,18 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 	CHECK_FALSE(automapInRange(6000, 4200, levelTiles));
 	CHECK_FALSE(automapInRange(6000, 4800, levelTiles));
 	CHECK(automapInRange(3500, 0, levelTiles));
+	// The planned spots of the rows still to come (Lava, Ice) and Snow (192 wide, installer default 1500,0) are in range and apart from every row
+	// and from each other: the rule is x 3500, 3000, 2500, 2000 for the maze rows, y 0.
+	struct Spot { int x, y, size; };
+	constexpr Spot planned[] = {{2500, 0, levelTiles}, {2000, 0, levelTiles}, {1500, 0, 192}};
+	for (const Spot &a : planned) {
+		CHECK(automapInRange(a.x, a.y, a.size));
+		CHECK(a.y + a.size <= 1000);
+		for (const MazeTileset &row : MazeTilesets)
+			CHECK((a.x + a.size <= row.offsetX || row.offsetX + levelTiles <= a.x));
+		for (const Spot &b : planned)
+			if (&a != &b) CHECK((a.x + a.size <= b.x || b.x + b.size <= a.x));
+	}
 	// No two levels overlap (rectangles of levelTiles x levelTiles).
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
