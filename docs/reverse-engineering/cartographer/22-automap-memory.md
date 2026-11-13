@@ -47,7 +47,7 @@ Nothing here is wired as a plugin part.
 - A swap only happens when the layer differs from the one being left: Cave (Layer 2) against Harrogath (Layer 79)
   swaps; the Jungle slot (Layer 79, shared with the Act 5 town) never does, so it was never affected.
 - The fix keeps the whole level inside the 16-bit range: the installer puts the Maze level (360 x 360) at OffsetX
-  3500, OffsetY 0 (tx - ty stays within -360..3860, tx + ty under 4220), and moves an older install's
+  3500, OffsetY 0 (tx - ty stays within 3141..3859, tx + ty under 4220), and moves an older install's
   row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
   drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
-  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way.
+  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way. The installer checks this for every slot level whose layer is not the town's 79 (the Maze level and Snow; Jungle and Siege share 79 and are never swapped), moves an older install's row (Snow was at 6000,3600, out of range) and refuses an out-of-range `-<Param>OffsetX/Y`.
