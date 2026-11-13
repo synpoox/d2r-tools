@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Not tested in game yet.
+- New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - Cave and Crypt maps now each have their own level, so one install opens either. Rerun `tools\install.ps1` once to add the new Crypt level; `-Tileset` is no longer needed.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
