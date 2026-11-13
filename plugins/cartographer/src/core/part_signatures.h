@@ -142,4 +142,7 @@ inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 
 inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
 inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
+// The visual data system's apply function (system, registry, VisualDataComponent*, FrameSettings*): the 19 bytes are whole instructions up to the RIP-relative cookie load; unique in the image (issue #380, note 32).
+inline constexpr const char* VisualApply = "4C 8B DC 55 41 56 41 57 49 8D 6B A1 48 81 EC 00 01 00 00";
+
 }  // namespace carto::sig

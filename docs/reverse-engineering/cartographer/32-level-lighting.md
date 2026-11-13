@@ -1,6 +1,6 @@
 ## 32. How D2R HD lights and colours a level (issue #380)
 
-Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Every address is an RVA in the memory-layout dump (capstone over the dump, `.pdata` for bounds; game files read with the toolkit's CascLib reader). Static only: no game was started, nothing is hooked, no plugin code changed. Everything is from disassembly or game files unless marked inference.
+Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Every address is an RVA in the memory-layout dump (capstone over the dump, `.pdata` for bounds; game files read with the toolkit's CascLib reader). The first sections are static (disassembly and game files); "Live results" at the end is from a hooked game (slot test save) and supersedes the verdict where they differ.
 
 ### Data path (game files)
 
@@ -30,3 +30,16 @@ A runtime path looks feasible and independent of mod files: hook the apply funct
 - Legacy (G key): `LoadActPalette` `0x9041a0` loads `data/global/palette/act<N+1>/pal.pl2` (format `%s\palette\act%d\%s` at `0x1d840e0`, xref `0x9041c7`; file name `pal.pl2` at `0x1d840f8`, xref `0x9041e0`; `LoadActPalette` is only called at the end of the load screen, so a palette edit would have to be made after that load and undone on leaving the map); not read further. A per-map hue there means editing the loaded palette after the load.
 - How the plugin learns that the player is in a slot level and which `maps.txt` row it is (the existing level hooks carry this), the `maps.txt` columns, tables.md, CHANGELOG, tests.
 - In-game check on two maps sharing a tileset.
+
+### Live results (build 93847, in game)
+
+- The hook on `0xf5dad0` (signature above, guard matched) sees the instance call (return RVA `0xf5d83c`) every frame with the level's component; the other call (`0xf5d9b2`) is skipped. The component is rebuilt by TransitionInstance each frame, so scaling a field before the original needs no restore: leaving the map (the plugin stops scaling) gives the stock look on the next frame (town after a map looked stock).
+- Component (cave `act1_caves_day`, stride `0x1e8`), what a change does:
+  - `+0x00` = 4.0, the exposure value. It acts inversely: a higher value is a darker picture (12 darker, 1 brighter). The plugin multiplies it by `100 / Brightness`.
+  - `+0x40` = 2125, a colour temperature (1000: warmer and darker; 6500 and 20000: cooler and brighter). The plugin multiplies it by `100 / Warmth`. `+0x40..0x50` and `+0x1d0..0x1dc` are copied by the apply function to globals (not into FrameSettings), so brightness and temperature are not part of the `FrameSettings` bytes it writes.
+  - `+0x44` 5.5, `+0x48` 1.333, `+0x4c` 1, `+0x50` 0.666 (not changed). `+0x18..0x28` light direction and intensity (copied to FrameSettings `+0x58..0x68`). `+0xa4..0xac` and `+0xb0..0xb8` (RGB 0.976, 0.922, 0.976) are the fog and bloom group (FrameSettings `+0x74..`); no visible effect in caves (fog density 0). `+0x7c` = 1; 0 makes the picture brighter.
+- Writing floats into `FrameSettings` after the original had no visible effect.
+- Two maps on the Cave tileset (one slot level), mean RGB over the central crop of a 1920x1080 screenshot: unchanged cave 28.6 / 18.7 / 15.6 (luma 20.6), Brightness 50 and Warmth 60: 12.9 / 7.0 / 6.4 (luma 8.2), Brightness 250 and Warmth 300: 47.5 / 32.9 / 26.4 (luma 35.6, visibly warmer and brighter). The hook set each look only while the player's level was the slot level ("map look: applied" and "off" in the log).
+- Not found: a hue, saturation or per-channel RGB handle in the component or the frame settings the apply function writes, so Hue, Saturation and Tint columns are not offered. Light colours (the `lights` entities of the vis JSON) are gathered elsewhere (`0xf55d60`, `0xf51f00`) and were not explored; a per-map light tint would start there.
+- Legacy (G key) mode was not examined (`LoadActPalette` `0x9041a0`, above); Brightness and Warmth do nothing there.
+- Only one Maze level can be built per game, so a second map on the same tileset needs a new game (a restart of the game with the same character was used).

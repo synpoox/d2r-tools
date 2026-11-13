@@ -5,6 +5,7 @@
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
 #include "engine/level_row.h"
+#include "engine/map_lighting.h"
 #include "engine/map_panel.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"

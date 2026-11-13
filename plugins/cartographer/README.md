@@ -20,6 +20,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
 - **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties), the map's total Density (its maps.txt `Density` plus the modifiers') and the total Magic Find of its modifiers show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
+- **Map look (HD)**: `Brightness` and `Warmth` columns in `maps.txt` give a map its own brightness and colour warmth while you are in it, even when other maps share its tileset; outside the map the game's look is back. Hue, saturation and tint are not available (the game has no per-level handle for them). The legacy (G key) look is not changed.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
