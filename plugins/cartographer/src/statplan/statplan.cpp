@@ -183,7 +183,7 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 		}
 		Entry e{p.stat, id, p.value};
 		if (p.target == Target::Monsters && (p.stat == "velocitypercent" || id == kVelocityStatId) && e.value < kMinMonsterSpeed) {
-			plan.notes.push_back("'" + p.stat + "' " + std::to_string(e.value) + " on monsters is cut to " + std::to_string(kMinMonsterSpeed) + ": -100 or lower would stop them or send them backwards.");
+			plan.notes.push_back("'" + p.stat + "' " + std::to_string(e.value) + " on monsters is cut to " + std::to_string(kMinMonsterSpeed) + " (the map's own value; what -100 or lower does to monsters has not been checked).");
 			e.value = kMinMonsterSpeed;
 		}
 		(p.target == Target::Monsters ? plan.monsters : plan.players).push_back(e);

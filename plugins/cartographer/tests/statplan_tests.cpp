@@ -839,7 +839,7 @@ TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a
 	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
 }
 
-TEST_CASE("a monster velocitypercent is cut to -99 so a map never stops or reverses monsters, with a note")
+TEST_CASE("a monster velocitypercent is cut to -99 with a note")
 {
 	StatIds ids;
 	ids.loaded = true;
@@ -862,11 +862,15 @@ TEST_CASE("a monster velocitypercent is cut to -99 so a map never stops or rever
 	REQUIRE(player.players.size() == 1);
 	CHECK(player.players[0].value == -150);
 	CHECK(player.notes.empty());
-	// The cut goes through the map item's own stat too.
-	StatIds item = parseItemStatCost("Stat\ncartographer_mon_speed\n");
+	// A map item's own speed stat becomes velocitypercent on monsters, and buildPlan cuts it.
+	StatIds item = parseItemStatCost("Stat\ncartographer_mon_speed\nvelocitypercent\n");
 	const auto mapped = itemStatsToProperties({{0, 0, -300}}, item);
 	REQUIRE(mapped.properties.size() == 1);
 	CHECK(mapped.properties[0] == cartographer::statplan::Property{Target::Monsters, "velocitypercent", -300});
+	const auto fromItem = buildPlan(mapped.properties, item);
+	REQUIRE(fromItem.monsters.size() == 1);
+	CHECK(fromItem.monsters[0].value == -99);
+	CHECK(fromItem.notes.size() == 1);
 }
 
 TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a known gap in the guard, RE note 14 section 16)")

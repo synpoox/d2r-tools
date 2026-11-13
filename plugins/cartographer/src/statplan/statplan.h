@@ -78,10 +78,11 @@ struct Plan {
 // caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
 std::string refusedReason(Target target, std::string_view stat, int id);
 
-// The lowest value a map gives monsters for velocitypercent. The stat is a percent added to 100% speed (its use as a modifier of the 100% base is not checked against the game binary), so -100 is no
-// movement and anything lower walks backwards, and the monster stat allows -512. buildPlan cuts a monster velocitypercent to this (-99 keeps
-// every value the docs allow, "above -100", as written) and notes it in Plan::notes.
+// The lowest value a map gives monsters for velocitypercent. The stat is read as a percent added to 100% speed, so -100 would be no movement and
+// lower would walk backwards, and the monster stat allows -512; this is unverified (not checked against the game binary or in game). buildPlan cuts
+// a monster velocitypercent to this and notes it in Plan::notes. Only the map's own value is cut: other slows on the monster still stack.
 constexpr int kMinMonsterSpeed = -99;
+
 // Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
 // refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property
 // is skipped. With `playerStats` false every player property is skipped (the PlayerStats setting is off).

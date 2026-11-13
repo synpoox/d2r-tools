@@ -262,9 +262,9 @@ auto LoadAll() -> Loaded {
 			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
 		}
 	}
-	// A mon-speed of -100 or lower stops monsters (the plugin cuts it), so the item tables are checked for it.
+	// A mon-speed of -100 or lower is cut by the plugin, so the item tables are checked for it.
 	if (!g_excelDir.empty()) {
-		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt"}) {
+		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt", "setitems.txt", "cubemain.txt"}) {
 			text.clear();
 			if (ReadFile(g_excelDir + L"\\" + Widen(file), &text)) {
 				carto::CheckMonSpeedRows(text, file, loaded.report);

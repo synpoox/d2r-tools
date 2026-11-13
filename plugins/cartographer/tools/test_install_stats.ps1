@@ -39,6 +39,8 @@ try {
 
     $log1 = Run-Installer
     Check ($LASTEXITCODE -eq 0) 'first run succeeds'
+    $firstTypeRows = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' })
+    Check ($firstTypeRows.Count -eq 1) 'a fresh run writes one cmap item type row'
     if ($LASTEXITCODE -ne 0) { Write-Host $log1 }
     $names = @('cartographer_map_level', 'cartographer_mon_life', 'cartographer_mon_damage', 'cartographer_mon_fire_res', 'cartographer_mon_cold_res', 'cartographer_mon_light_res', 'cartographer_mon_poison_res', 'cartographer_mon_speed', 'cartographer_map_density')
     $rows = Read-Rows 'itemstatcost.txt'
@@ -98,8 +100,10 @@ try {
     # The Map item type (cmap): a fresh run writes it with Rare on and Magic and Normal off, a row from an older install (Magic 1, Rare 0) is repaired in place, and a run after that changes nothing.
     function Get-MapType { $h = (Get-Content (Join-Path $dir 'itemtypes.txt') -TotalCount 1) -split "`t"; $r = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' }); @{ Header = $h; Row = $r } }
     $mt = Get-MapType
-    $iCode = [array]::IndexOf($mt.Header, 'Code'); $iRare = [array]::IndexOf($mt.Header, 'Rare'); $iMagic = [array]::IndexOf($mt.Header, 'Magic'); $iNormal = [array]::IndexOf($mt.Header, 'Normal')
-    Check ($mt.Row.Count -eq 1) 'a fresh run writes one cmap item type row'
+    $iRare = [array]::IndexOf($mt.Header, 'Rare'); $iMagic = [array]::IndexOf($mt.Header, 'Magic'); $iNormal = [array]::IndexOf($mt.Header, 'Normal')
+    Check ($iRare -ge 0 -and $iMagic -ge 0 -and $iNormal -ge 0) 'itemtypes.txt has the Rare, Magic and Normal columns'
+    if ($iRare -lt 0 -or $iMagic -lt 0 -or $iNormal -lt 0) { throw 'itemtypes.txt lacks a Rare, Magic or Normal column' }
+    Check ($mt.Row.Count -eq 1) 'the cmap item type row is still one row'
     $cmap = $mt.Row[0]
     Check ($cmap[$iRare] -eq '1' -and $cmap[$iMagic] -eq '0' -and $cmap[$iNormal] -eq '0') "the new cmap row has Rare 1, Magic 0, Normal 0 (got $($cmap[$iRare]) $($cmap[$iMagic]) $($cmap[$iNormal]))"
     $typePath = Join-Path $dir 'itemtypes.txt'
