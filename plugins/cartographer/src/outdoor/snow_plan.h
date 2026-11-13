@@ -2,8 +2,8 @@
 //
 // The Snow tileset is not a mask family like the Jungle: its 16 pieces (LvlPrest 987..1002, 16 x 16 tiles, LevelType 31) are fence-line
 // tiles that join by the position of the fence where it crosses an edge, so the jungle picker (one piece per exit mask) cannot use them.
-// A Snow map is a rectangle of 16-tile cells. Every line of the rectangle (a row for Horizontal, a column for Vertical) is a west cap,
-// a chain of fence runs whose fence positions match their neighbours, and an east cap. The evidence for every rule is in
+// A Snow map is a rectangle of 16-tile cells. Every line of the rectangle (a row for Horizontal, a column for Vertical) is a chain of fence
+// runs whose fence positions match their neighbours. The cap pieces are in the table but the plan does not use them (a cap's empty half left void). The evidence for every rule is in
 // docs/reverse-engineering/cartographer-snow.md.
 //
 // The plan is the same StampPlan the Jungle plan produces, so the outdoor build hook can replay it unchanged once it is wired. This file is
@@ -29,9 +29,9 @@ constexpr int kFirstLvlPrest = 987;
 constexpr int kLastLvlPrest = 1002;
 constexpr int kDirtOffset = 72;    // the dirt twin of a snow piece is lvlPrest - 72 (915..930); same fence grammar, noisier edges
 constexpr int kMaxCells = 12;      // longest side of the fence rectangle, in 16-tile cells; with the edge ring that is 224 tiles, so the slot's maxTilesX/Y is what limits a real map
-constexpr int kMinRunCells = 3;    // a line needs a cap, a run piece and a cap
+constexpr int kMinRunCells = 3;    // the entrance, the boss and the event need a line of three cells
 // The edge ring: every side of the fence rectangle gets kEdgeCells more cells, so the screen has something to draw past the outer fence
-// lines (issue #395). The empty half of a cap still leaves void between its wall and the ring. Each side and corner has its own border piece, the way the
+// lines (issue #395). The ring joins the run pieces at the ends of the lines directly. Each side and corner has its own border piece, the way the
 // game's own outline border picks one per direction. docs/reverse-engineering/cartographer-snow.md, section 8.
 constexpr int kEdgeCells = 1;
 struct EdgePieces {

@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace carto {
@@ -82,6 +83,8 @@ auto OutdoorArrivalResult() -> int;
 // OutdoorProbe or AutoCheck: where the local player first stands in the Outdoor slot level, compared with the entrance cell (as MazeProbeArrival). Game thread.
 auto OutdoorArrivalPending() -> bool;
 void OutdoorProbeArrival(void* room, int32_t levelId);
+// Where a position (world subtiles) is in the last slot build: box tile and plan cell. For `cartographer where`.
+auto OutdoorWhereText(int32_t levelId, int32_t subX, int32_t subY) -> std::string;
 
 // Called by the level-build hook for every level. Returns true, with the game's result in *result, when it built the Outdoor slot level (the
 // caller returns *result); false when it left the build alone (not the slot, the setting is off, a part or the plan is missing, or the level is
