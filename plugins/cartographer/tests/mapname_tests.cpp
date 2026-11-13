@@ -373,7 +373,7 @@ TEST_CASE("map level stat text: one record in the plugin's namespace, the instal
 	const std::string json = MapStatStringsJson();
 	CHECK(json.find(std::string("\"Key\":\"") + MapLevelStatLocalKey + "\"") != std::string::npos);
 	for (const char* language : Languages) {
-		CHECK(json.find(std::string("\"") + language + "\":\"Map Level: %d\"") != std::string::npos);
+		CHECK(json.find(std::string("\"") + language + "\":\"Area Level: %d\"") != std::string::npos);
 	}
 	std::string here = __FILE__;
 	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);

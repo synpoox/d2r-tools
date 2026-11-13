@@ -35,7 +35,7 @@
                     after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
                     before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
-      itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Map Level: N"): a map item's level.
+      itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Area Level: N"): a map item's level.
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
       itemstatcost.txt also seven monster-side stats, cartographer_mon_life, _damage, _fire_res, _cold_res, _light_res, _poison_res and _speed (signed, shown on the item as "+20% Monster Life" and so on).
                     A map item that carries one gives its monsters the matching vanilla stat; a vanilla stat on a map item is the player's. See docs/cartographer/tables.md.
@@ -570,7 +570,7 @@ if ($mapTypeRow -ge 0) {
 # (a plain unsigned-looking item stat), with the price columns and the stat-link columns emptied, 9 bits saved and sent (0 to 511), appended once.
 # The mod may not carry itemstatcost.txt: then the stat is left out and every map opens at its maps.txt Level.
 $MapLevelStat = 'cartographer_map_level'
-$MapLevelString = 'cartographer:map_level_stat'  # registered by the plugin (src/engine/map_stat_text.cpp); text "Map Level: %d"
+$MapLevelString = 'cartographer:map_level_stat'  # registered by the plugin (src/engine/map_stat_text.cpp); text "Area Level: %d"
 $statCostPath = Join-Path $ExcelDir 'itemstatcost.txt'
 if (-not (Test-Path $statCostPath)) {
     Write-Host "itemstatcost.txt: this mod does not carry it, so the map level stat '$MapLevelStat' was not added; maps open at their maps.txt Level."
@@ -698,7 +698,7 @@ if (-not (Test-Path $propsPath)) {
         Set-Cell $props $cells 'code' $MapLevelProperty
         Set-CellIf $props $cells '*Id' "$newId"
         Set-Cell $props $cells 'stat1' $MapLevelStat
-        Set-CellIf $props $cells '*Tooltip' 'Map Level #'
+        Set-CellIf $props $cells '*Tooltip' 'Area Level #'
         Set-CellIf $props $cells '*Notes' 'Cartographer: sets the map level of a map item'
         $props.Lines.Add($cells -join "`t")
         Save-Table $props

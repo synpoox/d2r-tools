@@ -66,32 +66,34 @@ std::atomic<uint32_t> g_maps[MaxQuality];  // natural map rolls by quality as th
 std::atomic<uint32_t> g_seen{0};      // map rolls logged with their item level (the first 20 are written to the log)
 std::atomic<uint32_t> g_rolled{0};    // magic rolls of the item maker turned normal
 std::atomic<uint32_t> g_stamped{0};    // new map items given the map level stat (issue #422)
+std::atomic<uint32_t> g_stampFailed{0};  // new map items the stat could not be set on (logged up to 5)
 std::atomic<uint32_t> g_fallbacks{0};  // magic fallbacks (a failed set, rare or unique maker) sent to the normal one
 
 auto On(PartId id) noexcept -> bool {
 	return g_parts[id].address != nullptr && g_parts[id].status.on;
 }
 
-// True when `item` is a map item: its misc.txt row carries the map spell. False on anything that cannot be read.
-auto IsMapItem(Unit* item) noexcept -> bool {
+// The item's misc.txt row record; null on anything that cannot be read.
+auto RecordOf(Unit* item) noexcept -> const uint8_t* {
 	if (item == nullptr) {
-		return false;
+		return nullptr;
 	}
 	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(g_parts[UnitClassOf].address))(item, __FILE__, __LINE__);
 	if (row < 0) {
-		return false;
+		return nullptr;
 	}
-	const uint8_t* record = reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(g_parts[ItemRecord].address))(At<uint8_t>(item, UnitDataFlagOffset), row);
+	return reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(g_parts[ItemRecord].address))(At<uint8_t>(item, UnitDataFlagOffset), row);
+}
+
+// True when `item` is a map item: its misc.txt row carries the map spell. False on anything that cannot be read.
+auto IsMapItem(Unit* item) noexcept -> bool {
+	const uint8_t* record = RecordOf(item);
 	return record != nullptr && At<int32_t>(record, RecordSpellOffset) == MapSpell;
 }
 
 // The map item's code from its misc.txt row (trailing blanks cut); empty when it cannot be read.
 auto MapCodeOf(Unit* item) noexcept -> std::string {
-	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(g_parts[UnitClassOf].address))(item, __FILE__, __LINE__);
-	if (row < 0) {
-		return {};
-	}
-	const uint8_t* record = reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(g_parts[ItemRecord].address))(At<uint8_t>(item, UnitDataFlagOffset), row);
+	const uint8_t* record = RecordOf(item);
 	if (record == nullptr) {
 		return {};
 	}
@@ -122,10 +124,10 @@ auto WriteStatSafe(Unit* item, int stat, int value) noexcept -> bool {
 	}
 }
 
-// Issue #422: a new map item carries its maps.txt Level as the map level stat (itemstatcost.txt), so its tooltip shows `Map Level: N` first
-// (the stat's descpriority is the highest). An item that already carries the stat is left alone; affixes the game applies after the roll add
-// to it, as the cube does. Fail open: any part or table missing leaves the item as the game made it.
-void StampMapLevel(Unit* item) noexcept {
+// Issue #422: a new map item carries its maps.txt Level as the map level stat (itemstatcost.txt), so its tooltip shows `Area Level: N` first
+// (the stat's descpriority is the highest). An item that already carries the stat is left alone; a map-level property the game applies after the roll
+// (an affix, a unique) replaces it (item_stats.cpp, NoteStampedMap); the cube adds to it. Fail open: any part or table missing leaves the item as the game made it.
+void StampMapLevel(Unit* item, bool fromMaker) noexcept {
 	if (!ItemStatsWritable()) {
 		return;
 	}
@@ -144,9 +146,13 @@ void StampMapLevel(Unit* item) noexcept {
 		return;
 	}
 	const bool done = WriteStatSafe(item, statId, level);
+	if (done && fromMaker) {
+		NoteStampedMap(item);
+	}
 	const uint32_t n = done ? g_stamped.fetch_add(1) + 1 : g_stamped.load();
-	if (!done || n <= 10) {
-		plog::Info("map level line: %s Map Level %d on a new map item (%u so far)", done ? "set" : "could not set", level, n);
+	const uint32_t failed = done ? g_stampFailed.load() : g_stampFailed.fetch_add(1) + 1;
+	if (done ? n <= 10 : failed <= 5) {
+		plog::Info("map level line: %s Area Level %d on a new map item (%u so far)", done ? "set" : "could not set", level, n);
 	}
 }
 
@@ -159,7 +165,7 @@ auto QualityRollHook(Unit* item, void* request) noexcept -> uint64_t {
 	if (!IsMapItem(item)) {
 		return rolled;
 	}
-	StampMapLevel(item);  // every new map item, whatever its quality
+	StampMapLevel(item, true);  // every new map item, whatever its quality
 	if (request != nullptr && At<int32_t>(request, RequestForcedOffset) != 0) {
 		return rolled;  // a quality forced by the caller (cheat spawn typ m) wins over the roll in the game; leave it
 	}
@@ -200,6 +206,38 @@ auto Hook(const D2RL::PluginContext* context, PartId id, void* hook, void** orig
 }
 
 }  // namespace
+
+namespace {
+auto MapsLevelRaw(Unit* item) noexcept -> int {
+	int statId = -1;
+	int level = 0;
+	return IsMapItem(item) && MapLevelStatFor(MapCodeOf(item), &statId, &level) ? level : 0;
+}
+}  // namespace
+
+// The maps.txt Level of a map item, 0 when `item` is not a map or no loaded map names it.
+auto MapsLevelOfItem(void* item) noexcept -> int {
+	if (!On(UnitClassOf) || !On(ItemRecord)) {
+		return 0;
+	}
+	__try {
+		return MapsLevelRaw(static_cast<Unit*>(item));
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return 0;
+	}
+}
+
+void StampMapOutput(void* item) noexcept {
+	if (!On(UnitClassOf) || !On(ItemRecord)) {
+		return;
+	}
+	__try {
+		if (IsMapItem(static_cast<Unit*>(item))) {
+			StampMapLevel(static_cast<Unit*>(item), false);
+		}
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+	}
+}
 
 auto InstallMapQuality(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	CodeRange ranges[8];
