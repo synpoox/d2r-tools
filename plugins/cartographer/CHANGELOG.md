@@ -12,7 +12,7 @@
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
 - Plain-English checking of `maps.txt` and `cartographer.txt`, with a skipped-row report in `cartographer-report.txt`.
 - `cartographer check` lists problems in your tables; `cartographer open <Name>` opens a map in town without its item.
-- `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
+- `tools\install.ps1` adds the map levels to your mod, keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
