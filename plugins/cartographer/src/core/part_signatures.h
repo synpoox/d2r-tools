@@ -142,4 +142,9 @@ inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 
 inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
 inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
+// The HUDWarnings panel's per-frame update (issue #371; cartographer/30-hud-warnings-hook.md): sets its InfoText from the string at this+0x198 and its
+// TerrorZoneInfoText (widget at this+0x180) from the string at this+0x1e8, then shows or hides it. Hooked: the hook cuts the first 18 bytes (seven whole
+// instructions, no relative operand), calls the original, and while a map is open writes the map text into the terror zone widget.
+inline constexpr const char* HudWarningsUpdate = "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 56 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 1F 48 8B F1 B9 0A 00 00 00 E8 ?? ?? ?? ?? 84 C0 0F 84";
+
 }  // namespace carto::sig
