@@ -33,6 +33,7 @@ constexpr int PointSize = 30;
 constexpr int LineUnits = cartographer::mappanel::kLineUnits;  // one line of the panel text, in layout units (measured live at PointSize 30)
 constexpr int MaxPadLines = cartographer::mappanel::kMaxPadLines;
 constexpr int PanelHeight = cartographer::mappanel::panelHeight(LineUnits, MaxPadLines);  // room for the padding and the longest panel text (1540: ends at 1810 of 2160)
+constexpr size_t ScreenShiftWrite = 0xf;  // the setter's `mov [rip+x], ecx`: its operand is the global
 constexpr uint32_t PadTasks = 15;   // the game's terror zone text is measured this often
 // The entry banner (issue #357): the Overlay service's drawText returned Success but drew nothing (see below), so the banner is a second panel
 // of two centred TextBoxWidgets (event name, event message; the map name is the game's own "Entering" text), 16% down from the top, open for the banner's time.
@@ -185,6 +186,29 @@ auto TerrorTextBottom() noexcept -> int {
 	return wrapper.height > 0 ? hud.y + wrapper.y + wrapper.height : 0;
 }
 
+// A side panel of the game (the inventory with the equipment slots, the skill tree) covers the right side where the panel text is (issue #431), so
+// the panel is closed while one is open. The game keeps "which sides are shifted for an open panel" in one global (0 none, 1 right panel, 2 left
+// panel, 3 both; setter 0xb9c20, docs/reverse-engineering/better-automap.md), found here from the setter's signature. Without it the panel stays
+// up. UI thread.
+const int32_t* g_screenShift = nullptr;
+auto SidePanelOpen() noexcept -> bool {
+	if (g_screenShift == nullptr) {
+		return false;
+	}
+	__try {
+		const int32_t shift = *g_screenShift;
+		static int32_t last = -1;
+		if (shift != last) {
+			last = shift;
+			plog::Info("map panel: the game's side panel state is %d (%s)", shift, (shift & 1) != 0 ? "a right panel is open: the map panel is hidden" : "the map panel can show");
+		}
+		return (shift & 1) != 0;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		g_screenShift = nullptr;
+		return false;
+	}
+}
+
 void ClosePanel() noexcept {
 	if (g_open) {
 		(void)g_panels->closePanel(g_context, g_panel);
@@ -195,7 +219,7 @@ void ClosePanel() noexcept {
 
 void Apply(const std::string& text, const std::string& blue) noexcept {
 	NoticeClosed();
-	if (text.empty() && blue.empty()) {
+	if ((text.empty() && blue.empty()) || SidePanelOpen()) {
 		ClosePanel();
 		return;
 	}
@@ -434,6 +458,20 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 			parts->push_back(part.status);
 		}
 		allOn = allOn && part.status.on;
+	}
+	// Optional: only for hiding the panel while a side panel is open.
+	Part shiftPart{"ScreenShift", sig::ScreenShiftSetter, 0, false, nullptr, {}, {}};
+	ResolvePart(context, overrides, ranges, count, shiftPart);
+	plog::Info("part %s: %s", shiftPart.name, shiftPart.status.detail.c_str());
+	if (parts != nullptr) {
+		parts->push_back(shiftPart.status);
+	}
+	if (shiftPart.status.on && shiftPart.address != nullptr) {
+		int32_t rel = 0;
+		std::memcpy(&rel, shiftPart.address + ScreenShiftWrite + 2, sizeof(rel));
+		g_screenShift = reinterpret_cast<const int32_t*>(shiftPart.address + ScreenShiftWrite + 6 + rel);
+	} else {
+		plog::Info("map panel: the screen shift part was not found; the panel stays up while a side panel is open");
 	}
 	if (!allOn) {
 		plog::Warn("map panel: off (a game part was not found)");

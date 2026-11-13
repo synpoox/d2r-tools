@@ -173,3 +173,11 @@ Result: Route A works for the player's own sheet in single player. Still not che
 ### Issue #104 closing note (2026-11-12, desk work)
 
 The issue's symptom (sheet unchanged) is fixed by Route A (PR #113, #131) and was seen working in game (second check above, PR #137): the stat list needs a state, because the game's sender ships a list only with its state. The one further change is the 16-entry cap (static, from the `0x2f64e0 ..., 0x10` call; the loader's replacement of that body was not read): `buildPlan` keeps at most 16 player stats and lists the rest as skipped, so the server totals and the sheet agree. Unit tested (`statplan_tests`), not seen in game. Still open and needing a game: a joining client, other clients in multiplayer, an autosave inside the map (the save writer confirmed to run with the list attached), death and curses with state 39, a second character. In-game check for the cap: a map with 17 Players rows, enter; the log plan shows 16 and one skipped line, and the sheet shows the first 16.
+
+## ScreenShift (map panel hides behind side panels, issue #431)
+
+- Part `ScreenShift`, optional. Signature `ScreenShiftSetter` in `plugins/cartographer/src/core/part_signatures.h`: the setter at 0xb9c20 in build 93847 (see `docs/reverse-engineering/better-automap.md`). Its `mov [rip+x], ecx` at +0xf names the global.
+- Value: 0 no side panel, 1 right panel, 2 left panel, 3 both. The map panel closes when bit 0 is set.
+- Evidence: live in slot 5 (test save, Hell, god mode): the global read 1 with the inventory open and 0 after closing it, logged as `map panel: the game's side panel state`. Other right-side panels (skill tree) were not checked.
+- Guard: if the signature is not found the panel simply stays up (logged).
+- Item stat read (#429): `ReadMapItemStats` copies up to 512 entries (the ListCopy `CopyMax`); the old cap of 16 was ours. The 16 limit that remains is the state sender's, for player stats only (static evidence).
