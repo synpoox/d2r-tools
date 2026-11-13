@@ -54,6 +54,14 @@ struct MapPlan {
 	std::string cacheKey;   // what PlanCache keyed it by
 };
 
+// The most cells an Open map may have along each side (the 9 x 9 grid of Medium, 81 blocks). It applies to any outdoor Open layout this
+// planner builds, whatever the shape's Width and Height.
+constexpr int kJungleOpenMaxCells = 9;
+
+// Caps the rules of an Open shape to kJungleOpenMaxCells and checks them again, so a MinPath above the capped grid is refused. Empty when
+// the rules are fine (or are not Open); else a plain-English reason. Used by the planner and by the maps.txt loader.
+std::string capJungleOpenRules(layout::Rules &rules);
+
 // Plans a map: resolves the shape and size, generates the layout for the seed, picks the pieces, plans the stamps and
 // checks the stamp plan with checkStampPlan. Any failure leaves ok false with the reason (the first error, with the count
 // of the others). Never throws for bad input; allocation failures propagate.

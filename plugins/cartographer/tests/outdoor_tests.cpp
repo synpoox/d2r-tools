@@ -818,9 +818,30 @@ TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a p
 			if (std::string(size) == "Large") {
 				CHECK(plan.layout.width == 9);
 				CHECK(plan.layout.height == 9);
-				CHECK(plan.stamps.stamps.size() <= 81);
+				CHECK(plan.stamps.stamps.size() == 81);
 			}
 		}
+}
+
+TEST_CASE("a shapes.txt Open row with a large Width and Height is capped at 81 stamps, and a MinPath the capped grid cannot reach is refused")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	const layout::ParseResult parsed = layout::parseShapesTxt("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nHuge Plains\tOpen\t\t\t20\t20\nLong Plains\tOpen\t20\t60\t20\t20\n");
+	REQUIRE(parsed.errors.empty());
+	MapRequest r = jungleRequest(7);
+	r.shape = "Huge Plains";
+	r.size = "Large";
+	r.shapes = &parsed.table;
+	const MapPlan plan = planOutdoorMap(r, cat);
+	REQUIRE_MESSAGE(plan.ok, plan.reason);
+	CHECK(plan.layout.width == 9);
+	CHECK(plan.layout.height == 9);
+	CHECK(plan.stamps.stamps.size() == 81);
+	r.shape = "Long Plains";
+	const MapPlan refused = planOutdoorMap(r, cat);
+	CHECK_FALSE(refused.ok);
+	CHECK(refused.stamps.stamps.empty());
+	CHECK(refused.reason.find("MinPath") != std::string::npos);
 }
 
 TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")
