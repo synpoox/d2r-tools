@@ -1,5 +1,7 @@
 ## 5. Maze slot engine checks (issue #62)
 
+Map sizes here use the names from before #381: "Large" below is ExtraLarge now (Cave 12 x 12), "Medium" is Large, "Small" is Medium.
+
 Answers the four static questions of plan section 3.6 [V] for the guided maze slot. Everything here is read from the build 93847 dump (Capstone
 disassembly; Ghidra was only a reading aid); nothing was run in a game. Where a conclusion needs the game, the check is given as "needs game: set X, observe Y".
 

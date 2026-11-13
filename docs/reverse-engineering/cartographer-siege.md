@@ -14,7 +14,7 @@ Companion to [cartographer-snow.md](cartographer-snow.md) and [cartographer.md](
 
 ## Layout
 
-The slot level is `levels.txt` row `Cartographer Siege`: LevelType 30 (Act 5 - Siege), 240 x 48 tiles at offset (6000, 3900), copied from level 110. It is the one slot level that is not square, so the installer has a `SizeY` for it. The 16 x 48 strips are stamped on the engine's 8-tile grid as 2 x 6 rooms each, 168 rooms for the 14-strip Medium map.
+The slot level is `levels.txt` row `Cartographer Siege`: LevelType 30 (Act 5 - Siege), 240 x 48 tiles at offset (6000, 3900), copied from level 110. It is the one slot level that is not square, so the installer has a `SizeY` for it. The 16 x 48 strips are stamped on the engine's 8-tile grid as 2 x 6 rooms each, 168 rooms for the 14-strip Large map.
 
 One line, west to east: 879 (barricade gate, closed west side), 878, free strips, the funnel block 875, 874, 873, 872, 871, 870, 869, 868 (fixed order), free strips, 865 (town, closed east side). The free strips are 866, 867, 876 and 877; the map `Size` sets how many are used (Small 12 strips, Medium 13, Large 14, ExtraLarge 15) and the seed sets their order, from the orders whose seams all match.
 
