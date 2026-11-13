@@ -42,7 +42,10 @@ inline constexpr int RecMaxGroups = 13;
 inline constexpr int RecDensityOffset = 0x2b8;             // int32: MonDen of the game's difficulty
 inline constexpr int RecUMinOffset = 0x2bc;                // byte: MonUMin of the game's difficulty
 inline constexpr int RecUMaxOffset = 0x2bd;                // byte: MonUMax of the game's difficulty
-inline constexpr size_t RecSpan = 0x2c0;                   // the bytes from the record start the plugin reads
+inline constexpr int RecRoomsSeenOffset = 0x04;            // int32: rooms the game has activated (rises by one per room)
+inline constexpr int RecRoomsOffset = 0x0c;                // int32: rooms in the whole level (0 until the first room is populated)
+inline constexpr int RecUniqueCountOffset = 0x2c8;         // byte: unique packs made so far
+inline constexpr size_t RecSpan = 0x2d0;                   // the bytes from the record start the plugin reads
 
 inline constexpr int MaxWeightSum = 255;                   // the group weight sum is one byte in the record
 inline constexpr int MaxMonsters = 10;                     // maps.txt Monsters: at most 10 entries
@@ -90,6 +93,14 @@ struct Request {
 	std::vector<int> monsterWeights;
 	int density = 0, uniques = 0;
 };
+
+// How many unique packs the map may make over the whole level (Uniques scaling applied to the record's MonUMax), 0 when it has none,
+// `Uniques` is 0 (that map is not paced) or the part is not allowed. The pace (PaceBudget) spreads this number over the rooms.
+auto UniqueTotal(const Request& request, const RecordSnapshot& record, bool uniquesAllowed) -> int;
+
+// The unique packs allowed after `seen` of `rooms` rooms: `total` times the share of rooms done, rounded up, at least 1 and at most
+// `total`. `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0 or less gives 0.
+auto PaceBudget(int total, int seen, int rooms) -> int;
 
 // The 1 to 255 monster level.
 auto ClampLevel(int level) -> int;

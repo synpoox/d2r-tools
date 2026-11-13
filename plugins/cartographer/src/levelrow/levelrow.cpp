@@ -189,6 +189,27 @@ auto MonstersRefusal(const Request& r) -> std::string {
 	return "";
 }
 
+auto UniqueTotal(const Request& r, const RecordSnapshot& s, bool uniquesAllowed) -> int {
+	if (!uniquesAllowed || s.uMax <= 0 || r.uniques <= 0) {
+		return 0;
+	}
+	return static_cast<int>(ScalePercent(s.uMax, r.uniques, MaxPackCount));
+}
+
+auto PaceBudget(int total, int seen, int rooms) -> int {
+	if (total <= 0) {
+		return 0;
+	}
+	if (rooms <= 0 || seen <= 0) {
+		return 1;
+	}
+	if (seen >= rooms) {
+		return total;
+	}
+	const int64_t scaled = (static_cast<int64_t>(total) * seen + rooms - 1) / rooms;
+	return static_cast<int>(std::min<int64_t>(std::max<int64_t>(scaled, 1), total));
+}
+
 auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed) -> std::vector<Field> {
 	std::vector<Field> out;
 	const size_t n = r.monsterRows.size();

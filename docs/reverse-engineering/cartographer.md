@@ -33,4 +33,5 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [24. The Ice caves case of the maze builder (issue #245)](cartographer/24-ice-caves-builder.md)
 - [25. The cube sets a map's level (issue #330)](cartographer/25-cube-map-level.md)
 - [26. Map items are never magic (issue #352)](cartographer/26-map-quality.md)
+- [29. Unique packs through the whole map (issue #317)](cartographer/29-uniques-whole-map.md)
 - [31. The `0x1255802` crash is `abort()` at process exit (issue #328)](cartographer/31-crash-1255802-abort.md)
