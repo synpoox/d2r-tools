@@ -3,6 +3,7 @@
 ## Unreleased
 
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
+- A map's Boss now tries the other rooms of its boss cell when the first room has no spot for it.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.
