@@ -29,6 +29,9 @@
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
                     before anything is written. Existing rows are never changed.
+      itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Map Level: N"): a map item's level.
+                    The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
+      properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat. Left out when the mod has no properties.txt.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt) and type cmap. That is the mod author's to set up.
     The tables are read and checked before anything is written. Each is backed up once as <name>.bak.
@@ -452,6 +455,70 @@ if ($mapTypeRow -ge 0) {
     $itemTypes.Lines.Add($cells -join "`t")
     Save-Table $itemTypes
     Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, not throwable, not beltable, no auto-stack, StorePage misc as herb."
+}
+
+# --- itemstatcost.txt: the map level stat -----------------------------------------------------------------------------
+# A map item's level is a stat on the item (src/statplan mapLevelFromItem): a cube recipe or an affix sets it, and the game's tooltip shows it
+# through descfunc 19 (the string is a format with the value) and the plugin's own string key. A copy of the vanilla item_maxhp_percent row
+# (a plain unsigned-looking item stat), with the price columns and the stat-link columns emptied, 9 bits saved and sent (0 to 511), appended once.
+# The mod may not carry itemstatcost.txt: then the stat is left out and every map opens at its maps.txt Level.
+$MapLevelStat = 'cartographer_map_level'
+$MapLevelString = 'cartographer:map_level_stat'  # registered by the plugin (src/engine/map_stat_text.cpp); text "Map Level: %d"
+$statCostPath = Join-Path $ExcelDir 'itemstatcost.txt'
+if (-not (Test-Path $statCostPath)) {
+    Write-Host "itemstatcost.txt: this mod does not carry it, so the map level stat '$MapLevelStat' was not added; maps open at their maps.txt Level."
+} else {
+    $statCost = Read-Table $statCostPath
+    if ((Find-Row $statCost 'Stat' $MapLevelStat) -ge 0) {
+        Write-Host "itemstatcost.txt: '$MapLevelStat' is already there."
+    } else {
+        $template = Find-Row $statCost 'Stat' 'item_maxhp_percent'
+        if ($template -lt 0) { throw "itemstatcost.txt has no 'item_maxhp_percent' row to copy for the '$MapLevelStat' stat." }
+        $cells = Cells $statCost $statCost.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $statCost.Lines.Count; $i++) { if ($statCost.Lines[$i].Trim() -ne '') { $newId++ } }
+        Set-Cell $statCost $cells 'Stat' $MapLevelStat
+        Set-CellIf $statCost $cells '*ID' "$newId"
+        foreach ($col in 'Signed', 'Send Other', 'Add', 'Multiply', 'ValShift', 'Save Add', '1.09-Save Add', 'op', 'op param', 'op base', 'op stat1', 'op stat2', 'op stat3', 'direct', 'maxstat') { Set-CellIf $statCost $cells $col '' }
+        foreach ($col in 'Send Bits', 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col '9' }
+        Set-CellIf $statCost $cells 'descpriority' '255'
+        Set-CellIf $statCost $cells 'descfunc' '19'
+        Set-CellIf $statCost $cells 'descval' ''
+        Set-CellIf $statCost $cells 'descstrpos' $MapLevelString
+        Set-CellIf $statCost $cells 'descstrneg' $MapLevelString
+        foreach ($col in 'dgrp', 'dgrpfunc', 'dgrpval', 'dgrpstrpos', 'dgrpstrneg', 'dgrpstr2', 'descstr2') { Set-CellIf $statCost $cells $col '' }
+        $statCost.Lines.Add($cells -join "`t")
+        Save-Table $statCost
+        Write-Host "itemstatcost.txt: added the stat '$MapLevelStat' (id $newId, copied from item_maxhp_percent): 9 bits, shown on the item as '$MapLevelString'."
+    }
+}
+
+# --- properties.txt: the map level property ---------------------------------------------------------------------------
+# A cube recipe (cubemain.txt "mod 1") and an affix name a property, not a stat, so the stat gets a property of its own: 'map-level' sets
+# cartographer_map_level to the value in the recipe (docs/cartographer/tables.md has an example). A copy of the vanilla 'str' row.
+$MapLevelProperty = 'map-level'
+$propsPath = Join-Path $ExcelDir 'properties.txt'
+if (-not (Test-Path $propsPath)) {
+    Write-Host "properties.txt: this mod does not carry it, so the property '$MapLevelProperty' was not added (a cube recipe cannot set the map level)."
+} else {
+    $props = Read-Table $propsPath
+    if ((Find-Row $props 'code' $MapLevelProperty) -ge 0) {
+        Write-Host "properties.txt: '$MapLevelProperty' is already there."
+    } else {
+        $template = Find-Row $props 'code' 'str'
+        if ($template -lt 0) { throw "properties.txt has no 'str' row to copy for the '$MapLevelProperty' property." }
+        $cells = Cells $props $props.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $props.Lines.Count; $i++) { if ($props.Lines[$i].Trim() -ne '') { $newId++ } }
+        Set-Cell $props $cells 'code' $MapLevelProperty
+        Set-CellIf $props $cells '*Id' "$newId"
+        Set-Cell $props $cells 'stat1' $MapLevelStat
+        Set-CellIf $props $cells '*Tooltip' 'Map Level #'
+        Set-CellIf $props $cells '*Notes' 'Cartographer: sets the map level of a map item'
+        $props.Lines.Add($cells -join "`t")
+        Save-Table $props
+        Write-Host "properties.txt: added the property '$MapLevelProperty' (stat $MapLevelStat, copied from str)."
+    }
 }
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------

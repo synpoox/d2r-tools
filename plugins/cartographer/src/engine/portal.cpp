@@ -415,30 +415,37 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
-	// ItemStats=1: the item's own stats, read now, before the game uses the item up.
+	// The item's own stats, read now, before the game uses the item up: the map level always, the map's properties with ItemStats=1.
 	std::vector<cartographer::statplan::ItemStat> itemStats;
-	if (tables->settings.itemStats != 0) {
-		try {
-			std::string note;
-			itemStats = ReadMapItemStats(item, &note);
-			if (!note.empty()) {
-				plog::Warn("ItemStats: %s", note.c_str());
-			}
-		} catch (...) {
-			plog::Error("reading the map item's stats failed; '%s' draws its properties as usual", map->name.c_str());
-			itemStats.clear();
+	try {
+		std::string note;
+		itemStats = ReadMapItemStats(item, &note);
+		if (!note.empty()) {
+			plog::Warn("item stats: %s", note.c_str());
 		}
+	} catch (...) {
+		plog::Error("reading the map item's stats failed; '%s' opens at its maps.txt Level", map->name.c_str());
+		itemStats.clear();
 	}
+	// The map's level is the item's map-level stat, else the maps.txt Level. Everything the open writes or draws uses this copy.
+	MapDef opening = *map;
+	const cartographer::statplan::MapLevelPick pick = cartographer::statplan::mapLevelFromItem(itemStats, tables->statIds, map->level);
+	opening.level = pick.level;
+	if (!pick.note.empty()) {
+		plog::Warn("map level: %s", pick.note.c_str());
+	}
+	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
+	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
 	std::string refusal;
-	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level, &refusal);
+	const int32_t opened = OpenMapPortal(game, player, opening, *tables, level, &refusal);
 	if (!refusal.empty()) {
 		Tell(refusal);
 		return;
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(*map, tables, game, player, itemStats);
-		StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
+		StartMapStats(opening, tables, game, player, itemStats);
+		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
 }

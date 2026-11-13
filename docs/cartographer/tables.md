@@ -88,6 +88,32 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
 | everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
 
+## Map level on the item (itemstatcost.txt, properties.txt, cubemain.txt)
+
+A map item can carry its own map level as a stat, so a cube recipe can change it and the item shows it on hover. `tools\install.ps1` adds two rows (never changing an existing one); a modder without the installer adds them by hand.
+
+| File | Row | Notes |
+|---|---|---|
+| `itemstatcost.txt` | `cartographer_map_level` | A copy of `item_maxhp_percent` with 9 save bits (0 to 511), unsigned, no op, `descfunc` 19, `descstrpos` and `descstrneg` `cartographer:map_level_stat` (the plugin registers the text `Map Level: %d`). The stat id is the row number, so the row goes last. |
+| `properties.txt` | `map-level` | A copy of `str` with `stat1` `cartographer_map_level`, so `cubemain.txt` can write `map-level` in a `mod` column. |
+
+- **Fallback:** a map item without the stat, with a value under 1 or with a layer uses the `maps.txt` Level. A value over 255 is cut to 255. The log line `map level N (...)` says which one applied.
+- **Where it is read:** the item-use hook, from the same stat list as `ItemStats` (the stat is taken out before the rest are used as map properties). `cartographer open` has no item and uses the `maps.txt` Level.
+- **Rarity and modifiers** come later (#311); this stat is only the level.
+
+Example recipe, one `cubemain.txt` row (columns not named are empty):
+
+| Column | Value |
+|---|---|
+| `description` | `Map + Town Portal scroll: map level 95` |
+| `enabled`, `version` | `1`, `100` |
+| `numinputs` | `2` |
+| `input 1`, `input 2` | the map's `misc.txt` code (for example `t20`), `tsc` |
+| `output` | `usetype,mod` |
+| `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `95`, `95` |
+
+Not confirmed in game: with this row the cube did not consume the scroll or change the map (the hover showed no `Map Level` line and the plugin log read the `maps.txt` Level), also with `usetype,mag,mod`. Why was not found (the recipe itself, a Normal-quality item not keeping a cube mod, or the stat landing in a list the plugin does not read). Treat the recipe as untested.
+
 ## mapstats.txt (optional)
 
 One shared pool of random properties. Each map draws `Properties` of them. A property is never drawn twice in one map. If the file is missing, a small built-in pool is used.

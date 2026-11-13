@@ -177,6 +177,44 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 	return plan;
 }
 
+MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback)
+{
+	MapLevelPick out;
+	out.level = fallback;
+	const int id = ids.find(kMapLevelStat);
+	if (id < 0) {
+		return out;
+	}
+	for (const ItemStat &s : stats) {
+		if (s.stat != id || s.layer != 0) {
+			continue;
+		}
+		if (s.value < kMinMapLevel) {
+			out.note = std::string(kMapLevelStat) + " is " + std::to_string(s.value) + "; the map opens at its maps.txt Level " + std::to_string(fallback);
+			return out;
+		}
+		out.fromItem = true;
+		out.level = s.value > kMaxMapLevel ? kMaxMapLevel : s.value;
+		if (s.value > kMaxMapLevel) {
+			out.note = std::string(kMapLevelStat) + " is " + std::to_string(s.value) + "; the map level is cut to " + std::to_string(kMaxMapLevel);
+		}
+		return out;
+	}
+	return out;
+}
+
+std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapLevelStat);
+	std::vector<ItemStat> out;
+	for (const ItemStat &s : stats) {
+		if (id < 0 || s.stat != id) {
+			out.push_back(s);
+		}
+	}
+	return out;
+}
+
 ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids)
 {
 	ItemProperties out;
