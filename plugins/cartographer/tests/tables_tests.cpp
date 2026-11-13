@@ -738,7 +738,7 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
-TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does not") {
+TEST_CASE("a map item with a blank spellicon or one of 0 to 9 gets a note, one with -1 does not") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
 	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
@@ -747,7 +747,7 @@ TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does n
 	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
 	CHECK(maps.size() == 2);
 	const std::string text = Joined(report);
-	CHECK(text.find("Item 't21' has a spellicon of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't21' has a blank spellicon or one of 0 to 9") != std::string::npos);
 	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
 }
 
@@ -1465,6 +1465,17 @@ TEST_CASE("each maze slot reads the LevelType of its own level") {
 	REQUIRE(slots.size() == 2);
 	CHECK(slots[0].levelType == 3);
 	CHECK(slots[1].levelType == 4);
+}
+
+TEST_CASE("ParseItemSpells lists a blank spellicon and 0 to 9, not -1") {
+	std::vector<std::pair<std::string, int>> spells;
+	std::vector<std::string> compact, cursor;
+	const std::string misc = "code\tpSpell\tcompactsave\tspellicon\r\nt20\t16\t0\t-1\r\nt21\t16\t0\t\r\nt22\t16\t0\t0\r\nt23\t16\t0\t9\r\nt24\t16\t0\t12\r\n";
+	REQUIRE(ParseItemSpells(misc, &spells, &compact, &cursor));
+	REQUIRE(cursor.size() == 3);
+	CHECK(cursor[0] == "t21");
+	CHECK(cursor[1] == "t22");
+	CHECK(cursor[2] == "t23");
 }
 
 TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text, the way the plugin does") {

@@ -61,7 +61,7 @@ struct GameNames {
 };
 
 // misc.txt text: the code and pSpell of every item that has a code (a blank pSpell is 0) go to `spells`, the codes with compactsave 1 to `compact`.
-// False when the code or pSpell column is missing (a missing compactsave column is fine: nothing is compact). With `cursor`, the codes with a spellicon of 0 to 9 go there.
+// False when the code or pSpell column is missing (a missing compactsave column is fine: nothing is compact). With `cursor`, the codes with a blank spellicon or one of 0 to 9 go there.
 auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact, std::vector<std::string>* cursor = nullptr) -> bool;
 
 // Text of an item table with mods (magicprefix, magicsuffix, uniqueitems, setitems or cubemain; `file` names it in the report): a note for each
