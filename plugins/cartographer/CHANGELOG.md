@@ -4,6 +4,7 @@
 
 - The map name no longer shows as a second title on entry; only the game's own text does.
 - The map panel now sits below the terror zone text instead of over it.
+- With a terror zone on, the map name and monster level now take the place of its lines.
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
