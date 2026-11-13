@@ -646,3 +646,21 @@ TEST_CASE("the pace gives the unique packs out with the rooms done, from the fir
 	}
 	CHECK(PaceBudget(255, 400, 401) == 255);
 }
+
+TEST_CASE("the pace leaves the closed filler rooms out of the room count, so the budget reaches the total") {
+	// A Large Lava map: 576 rooms in the level, 384 of them closed filler that never activate, 192 plan rooms.
+	CHECK(PaceBudget(16, 192, 576, 384) == 16);
+	CHECK(PaceBudget(16, 96, 576, 384) == 8);
+	CHECK(PaceBudget(16, 192, 576, 0) == 6);  // without the fix the last room of the plan only reached 6 of 16
+	CHECK(PaceBudget(16, 300, 576, 384) == 16);
+	CHECK(PaceBudget(16, 1, 0, 384) == 1);  // the room count is still unknown
+	CHECK(PaceBudget(16, 10, 100, 100) == 2);  // fillers that would leave nothing are ignored
+	CHECK(PaceBudget(16, 10, 100, 500) == 2);
+	CHECK(PaceBudget(16, 10, 100, -5) == 2);
+	int last = 0;
+	for (int seen = 1; seen <= 192; ++seen) {
+		const int b = PaceBudget(16, seen, 576, 384);
+		CHECK(b >= last);
+		last = b;
+	}
+}

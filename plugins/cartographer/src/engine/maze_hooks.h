@@ -49,6 +49,10 @@ auto MazeLevelDataFlag() -> int;
 // The layout seed of the map opened last (the seed MazeMapOpened chose), or 0 when none is open. For the map sync (host to client).
 auto MazeOpenSeed() -> uint64_t;
 
+// Filler rooms the last maze build made (the Lava ring), 0 when none or no build yet. They are in the region record's room count but never
+// activate, so the unique pace takes them off it.
+auto MazeFillerRooms() -> int;
+
 // The portal did not open after all: forget the map.
 void MazeMapCancelled();
 
