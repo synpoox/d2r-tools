@@ -21,6 +21,21 @@ auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<Sign
 // Game thread only.
 auto ReadMapItemStats(void* item, std::string* note) noexcept -> std::vector<cartographer::statplan::ItemStat>;
 
+// The cube map level (issue #330): the properties.txt row of 'map-level' and the itemstatcost.txt row of the map level stat (-1: off). Call after
+// the tables are read. The hook is installed at load by InstallItemStats and does nothing until both are set.
+void CubeMapLevelConfigure(int propertyId, int statId);
+
+// Writing (the cube map level, issue #330). True when the list maker and the stat setter were found too.
+auto ItemStatsWritable() -> bool;
+
+// The value of `stat` (layer 0) on the item's base magic list; 0 when the item has no list or no such stat. `ok` (optional) is false when the
+// item stats cannot be read. Game thread only.
+auto ItemMagicStat(void* item, int stat, bool* ok = nullptr) noexcept -> int;
+
+// Sets `stat` (layer 0) on the item's base magic list to `value`, making the list first when the item has none. Returns false when a part is
+// off or no list could be made. Game thread only.
+auto SetItemMagicStat(void* item, int stat, int value) noexcept -> bool;
+
 auto ItemStatsPartStatuses() -> std::vector<PartStatus>;
 
 }  // namespace carto

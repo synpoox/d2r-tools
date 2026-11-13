@@ -3,7 +3,8 @@
 ## Unreleased
 
 - A map the game rolls as magic now drops as normal.
-- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
+- New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
+- A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.
 - The event's `Name` and `Message` now show on screen as a banner; before, they never appeared.

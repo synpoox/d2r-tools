@@ -55,6 +55,18 @@ Tileset caveTileset(int maxLevelTiles = kMaxLevelTiles)
 	return t;
 }
 
+// River of Flame: pieces 836 + mask; the builder case places no entrance, so no Prev family.
+Tileset lavaTileset(int maxLevelTiles = kMaxLevelTiles)
+{
+	Tileset t;
+	t.name = "Lava";
+	t.levelType = 28;
+	t.roomTiles = 24;
+	t.pieceBase = 836;
+	t.maxLevelTiles = maxLevelTiles;
+	return t;
+}
+
 Tileset cryptTileset(int maxLevelTiles = kMaxLevelTiles)
 {
 	Tileset t;
@@ -358,7 +370,7 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 {
 	// Cave and Crypt at the allowed maximum, and Cave in a 200-tile slot (the fallback path).
 	struct Config { Tileset ts; const char *label; bool slot200; };
-	const Config configs[3] = {{caveTileset(), "Cave", false}, {cryptTileset(), "Crypt", false}, {caveTileset(200), "Cave in a 200-tile slot", true}};
+	const Config configs[4] = {{caveTileset(), "Cave", false}, {cryptTileset(), "Crypt", false}, {caveTileset(200), "Cave in a 200-tile slot", true}, {lavaTileset(), "Lava", false}};
 	for (const Config &cfg : configs)
 		for (int s = 0; s < layout::kShapeCount; ++s)
 			for (int z = 0; z < layout::kSizeCount; ++z) {
@@ -385,7 +397,8 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 				// Crypt rooms are tiny: nothing may fall back, whatever the reason.
 				if (cfg.ts.name == "Crypt") CHECK(t.fallbacks == 0);
 				// A one-exit entrance gets its special piece in every shape except the rings and Open (its entrance has two or more exits).
-				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl && shape != layout::Shape::Open) CHECK(t.placedEntrance == t.steered);
+				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl && shape != layout::Shape::Open && cfg.ts.prev.present) CHECK(t.placedEntrance == t.steered);
+				if (!cfg.ts.prev.present) CHECK(t.placedEntrance == 0);  // Lava: the entrance is an ordinary room
 			}
 }
 
@@ -713,7 +726,7 @@ Plan steeringCavePlan(const Tileset &ts)
 
 } // namespace
 
-TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
+TEST_CASE("built-in tilesets are Cave, Crypt and Lava, found ignoring case")
 {
 	Tileset t;
 	REQUIRE(builtinTileset("cave", t));
@@ -722,7 +735,12 @@ TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
 	CHECK(t.prev.piece[3] == 86);
 	REQUIRE(builtinTileset("CRYPT", t));
 	CHECK(t.roomTiles == 8);
-	CHECK(!builtinTileset("Lava", t));
+	REQUIRE(builtinTileset("lava", t));
+	CHECK(t.levelType == 28);
+	CHECK(t.roomTiles == 24);
+	CHECK(t.pieceBase == 836);
+	CHECK(!t.prev.present);
+	CHECK(!builtinTileset("Barracks", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -814,7 +832,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
-	CHECK(planForMap("Lava", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Barracks", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -959,7 +977,10 @@ TEST_CASE("slot build state: ranAny sees a build with no map open, which blocked
 
 TEST_CASE("a maze slot level serves one tileset: the other is refused in plain English")
 {
-	Tileset cave, crypt;
+	Tileset cave, crypt, lava;
+	REQUIRE(builtinTileset("Lava", lava));
+	CHECK(slotTypeProblem(lava, 28, "L").empty());
+	CHECK(slotTypeProblem(lava, 3, "L").find("the MazeLava slot level") != std::string::npos);
 	REQUIRE(builtinTileset("Cave", cave));
 	REQUIRE(builtinTileset("Crypt", crypt));
 	CHECK(slotTypeProblem(cave, 3, "A").empty());
@@ -978,10 +999,10 @@ TEST_CASE("a maze slot level serves one tileset: the other is refused in plain E
 
 // --- The tileset table (maze_tilesets.h) -------------------------------------------------------------------------------------
 
-TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hooks and the installer rely on")
+TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values the hooks and the installer rely on")
 {
 	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
-	REQUIRE(MazeTilesetCount == 2);
+	REQUIRE(MazeTilesetCount == 3);
 	CHECK(std::string(MazeTilesets[0].name) == "Cave");
 	CHECK(MazeTilesets[0].levelType == 3);
 	CHECK(std::string(MazeTilesets[0].slot) == "Maze");
@@ -1000,14 +1021,25 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 	CHECK(MazeTilesets[1].prevPiece[0] == 139);
 	CHECK(MazeTilesets[1].prevPiece[3] == 142);
 	CHECK_FALSE(MazeTilesets[1].callsRingGrower);
+	// Lava: River of Flame's LevelType 28, 24-tile rooms, pieces 836 + mask, and no entrance family (its builder case places none).
+	CHECK(std::string(MazeTilesets[2].name) == "Lava");
+	CHECK(MazeTilesets[2].levelType == 28);
+	CHECK(std::string(MazeTilesets[2].slot) == "MazeLava");
+	CHECK(std::string(MazeTilesets[2].levelName) == "Cartographer Lava");
+	CHECK(MazeTilesets[2].roomTiles == 24);
+	CHECK(MazeTilesets[2].pieceBase == 836);
+	for (int i = 0; i < 4; ++i) CHECK(MazeTilesets[2].prevPiece[i] == 0);
+	CHECK_FALSE(MazeTilesets[2].callsRingGrower);
 	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
-	CHECK(findMazeTileset("Lava") == nullptr);
+	CHECK(findMazeTileset("Lava") == &MazeTilesets[2]);
+	CHECK(findMazeTileset("Barracks") == nullptr);
 	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
 	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
-	CHECK(mazeTilesetIndex("Lava") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave or Crypt");
+	CHECK(mazeTilesetIndex("lava") == 2);
+	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
+	CHECK(mazeTilesetNames() == "Cave, Crypt or Lava");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1024,12 +1056,12 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 		CHECK(t.roomTiles == row.roomTiles);
 		CHECK(t.pieceBase == row.pieceBase);
 		CHECK(t.callsRingGrower == row.callsRingGrower);
-		CHECK(t.prev.present);
+		CHECK(t.prev.present == (row.prevPiece[0] != 0));
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Lava", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
+	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Lava'. Use Cave or Crypt.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt or Lava.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1092,10 +1124,10 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 	// The old spots were out of range: Cave at 6000,0.
 	CHECK_FALSE(automapInRange(6000, 0, levelTiles));
 	CHECK(automapInRange(3500, 0, levelTiles));
-	// The planned spots of the rows still to come (Lava, Ice) and Snow (192 wide, installer default 1500,0) are in range and apart from every row
+	// The planned spot of the row still to come (Ice) and Snow (192 wide, installer default 1500,0) are in range and apart from every row
 	// and from each other: the rule is x 3500, 3000, 2500, 2000 for the maze rows, y 0.
 	struct Spot { int x, y, size; };
-	constexpr Spot planned[] = {{2500, 0, levelTiles}, {2000, 0, levelTiles}, {1500, 0, 192}};
+	constexpr Spot planned[] = {{2000, 0, levelTiles}, {1500, 0, 192}};
 	for (const Spot &a : planned) {
 		CHECK(automapInRange(a.x, a.y, a.size));
 		CHECK(a.y + a.size <= 1000);

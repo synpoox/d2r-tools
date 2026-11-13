@@ -622,6 +622,44 @@ TEST_CASE("every monster-side map stat names a vanilla stat buildPlan accepts on
 	}
 }
 
+TEST_CASE("parsePropertyId: the row number of the property code")
+{
+	const std::string t = "code\tfunc1\nstr\t1\n\nmap-level\t1\n";
+	CHECK(parsePropertyId(t, "str") == 0);
+	CHECK(parsePropertyId(t, "map-level") == 1); // a blank line is not a row, as for itemstatcost.txt
+	CHECK(parsePropertyId(t, "nope") == -1);
+	// The vanilla "Expansion" separator row is not counted by the game: the rows after it are one lower.
+	const std::string e = "code\tfunc1\nstr\t1\nExpansion\t\nmap-level\t1\n";
+	CHECK(parsePropertyId(e, "map-level") == 1);
+	CHECK(parsePropertyId("x\ty\n", "str") == -1);
+}
+
+TEST_CASE("cubeMapLevelTarget: the recipe adds to the map's level")
+{
+	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5) == 5);       // untouched, a map with no stat
+	CHECK(cubeMapLevelTarget(70, 70, 5, 5, 5) == 75);    // untouched, a second transmute
+	CHECK(cubeMapLevelTarget(70, 5, 5, 5, 5) == 75);     // the game set it instead of adding
+	CHECK(cubeMapLevelTarget(70, 75, 5, 5, 5) == 75);    // the game added: stands
+	CHECK(cubeMapLevelTarget(0, 5, 5, 5, 5) == 5);       // set on a map with none
+	CHECK(cubeMapLevelTarget(10, 7, 5, 9, 7) == 17);     // set to a value in range
+	CHECK(cubeMapLevelTarget(500, 500, 20, 20, 20) == 511); // cut to the stat's 9 bits
+	CHECK(cubeMapLevelTarget(3, 3, 0, 0, 0) == 3);       // a recipe that adds nothing leaves it
+	CHECK(cubeMapLevelTarget(3, 3, 8, 4, 6) == 11);      // max below min: min is used
+	// Fail open: a level that could not be read is never treated as 0.
+	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5, false) == 0);
+	CHECK(cubeMapLevelTarget(20, 20, 10, 10, 10, false) == 20);
+	CHECK(cubeMapLevelTarget(20, 10, 10, 10, 10, false) == 10);
+	// A fresh map reads as a trusted 0 (no stat, nothing in the cube raised it): the first transmute gets the roll.
+	CHECK(cubeLevelKnown(true, 0, true));
+	CHECK(cubeMapLevelTarget(0, 0, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(0, 10, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(10, 10, 10, 10, 10, cubeLevelKnown(true, 10, true)) == 20);
+	// Not read: the input walk failed (-1) while the cube step is hooked, or an item read failed.
+	CHECK_FALSE(cubeLevelKnown(true, -1, true));
+	CHECK_FALSE(cubeLevelKnown(false, 5, true));
+	CHECK(cubeLevelKnown(true, -1, false));
+}
+
 TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")
 {
 	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");

@@ -96,7 +96,7 @@ TEST_CASE("a typo gets a plain-English message with a suggestion and the row num
 
 TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
 	Report report;
-	const auto maps = Load("Lava One\tLava\tWinding\t\t\tt20\n", report);
+	const auto maps = Load("Barracks One\tBarracks\tWinding\t\t\tt20\n", report);
 	CHECK(maps.empty());
 	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
 }
@@ -146,7 +146,7 @@ TEST_CASE("a shapes.txt row based on Open is Open for Snow too") {
 	CHECK(Joined(report).find("Open shape") != std::string::npos);
 }
 
-TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazeProbe") {
+TEST_CASE("Cave, Crypt and Lava are accepted tilesets; the settings file knows MazeProbe") {
 	Report report;
 	const auto maps = Load("Cave One\tcave\tWinding\t\t\tt20\nCrypt One\tCrypt\tLoop\t\t\tt21\n", report);
 	CHECK(maps.size() == 2);
@@ -1163,7 +1163,7 @@ TEST_CASE("the notice names core-maps and says to use one") {
 	CHECK(text.find("Remove one") != std::string::npos);
 }
 
-TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave and Crypt through the Maze slot") {
+TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave, Crypt and Lava through their own maze slots") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nDeep\tCave\tLoop\t\t\tt21\n", report);
 	REQUIRE(maps.size() == 2);
@@ -1185,11 +1185,13 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 
 TEST_CASE("a maze open is refused while a map of another maze tileset is open and unbuilt") {
 	Report report;
-	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\nWild\tJungle\tWinding\t\t\tt20\n", report);
-	REQUIRE(maps.size() == 3);
+	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\nWild\tJungle\tWinding\t\t\tt20\nBurn\tLava\tLoop\t\t\tt24\n", report);
+	REQUIRE(maps.size() == 4);
 	const MapDef& cave = maps[0];
 	const MapDef& crypt = maps[1];
 	const MapDef& jungle = maps[2];
+	CHECK(MazeOpenConflict(maps[3], "Crypt").find("Crypt map is already open") != std::string::npos);
+	CHECK(MazeOpenConflict(cave, "Cave").empty());
 	CHECK(MazeOpenConflict(cave, "").empty());          // nothing pending
 	CHECK(MazeOpenConflict(cave, "Cave").empty());      // the same tileset replaces its own job
 	CHECK(MazeOpenConflict(cave, "cave").empty());
@@ -1317,7 +1319,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[15] == "Snow");
 	CHECK(all[16] == "Siege");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Jungle", "Snow", "Siege"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Jungle", "Snow", "Siege"};
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
@@ -1378,7 +1380,7 @@ TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load fo
 	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
 }
 
-TEST_CASE("Cave opens through the Maze slot and Crypt through the MazeCrypt slot, each on the level the installer wrote") {
+TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava slots, each on the level the installer wrote") {
 	Report report;
 	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\n", report);
 	REQUIRE(maps.size() == 2);

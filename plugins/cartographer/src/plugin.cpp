@@ -388,6 +388,13 @@ auto Reload() -> Loaded {
 	WriteReport(loaded);
 	carto::SetTables(loaded.tables);
 	carto::BossNamesSetTables(loaded.tables);
+	{
+		// The cube map level: the 'map-level' property (properties.txt) sets the map level stat. Both must be in the mod's tables.
+		std::string props;
+		const int propertyId = !g_excelDir.empty() && ReadFile(g_excelDir + L"\\properties.txt", &props) ? cartographer::statplan::parsePropertyId(props, cartographer::statplan::kMapLevelProperty) : -1;
+		const int statId = loaded.tables->statIds.find(cartographer::statplan::kMapLevelStat);
+		carto::CubeMapLevelConfigure(propertyId, statId);
+	}
 	for (const carto::Problem& p : loaded.report.problems) {
 		plog::Warn("%s", carto::Report::Line(p).c_str());
 	}
