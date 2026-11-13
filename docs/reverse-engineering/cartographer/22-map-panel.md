@@ -49,3 +49,9 @@ top right (`PanelTop` 270) just under the game's info text, where the zone text 
   game version, mod) with the automap open, and was gone after leaving. Not checked: a map with properties after the fix, a terror
   zone, a TCP/IP client (it does not know the properties), a second map in a game, other
   resolutions, other languages, a Steam build.
+
+## The entry banner (issue #357)
+
+The Overlay service route above is also why the event banner never showed: `drawText` returned Success and drew nothing. The banner is now a second panel in the same
+file (`cartographer/entry-banner`, three centred text boxes, open 6.1 s), set through the same FindPanel, FindChild and SetText parts on the UI thread, driven by the same
+frame callback. It has its own on and fault state. Seen on screen at entry and after the event spawned: [banner check](../../cartographer/checks/2026-11-12-banner-check.md).
