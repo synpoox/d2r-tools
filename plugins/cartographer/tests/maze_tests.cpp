@@ -438,7 +438,7 @@ TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one 
 {
 	// verify() checks each plan's ring cell by cell. Here: Cave makes none, and the ring is whole for nearly every Large Lava layout (a layout that fills the level is clipped, see the margin-0 fallback).
 	const Tileset cave = caveTileset(), lava = lavaTileset();
-	int cut = 0, total = 0;
+	int cut = 0, total = 0, bareCells = 0;
 	for (int s = 0; s < layout::kShapeCount; ++s)
 		for (int i = 0; i < 200; ++i) {
 			const layout::Rules rules = layout::presetRules(static_cast<layout::Shape>(s), layout::Size::Large);
@@ -450,14 +450,26 @@ TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one 
 			++total;
 			CHECK(!l.plan.fills.empty());
 			const Capacity box = capacityAt(lava.roomTiles, l.plan.levelTilesX, l.plan.levelTilesY);
+			// Ring cells (the 8 cells around every room) that fall outside the level: bare edge. Counted once per cell.
+			std::set<std::pair<int, int>> bare;
 			for (const Room &r : l.plan.rooms)
-				if (r.dx - 1 < -box.left || r.dx + 1 > box.right || r.dy - 1 < -box.up || r.dy + 1 > box.down) { ++cut; break; }
+				for (int oy = -1; oy <= 1; ++oy)
+					for (int ox = -1; ox <= 1; ++ox) {
+						const int fx = r.dx + ox, fy = r.dy + oy;
+						if (fx < -box.left || fx > box.right || fy < -box.up || fy > box.down) bare.insert({fx, fy});
+					}
+			bareCells += static_cast<int>(bare.size());
+			cut += bare.empty() ? 0 : 1;
+			const bool atMax = l.plan.levelTilesX == lava.maxLevelTiles && l.plan.levelTilesY == lava.maxLevelTiles;
+			CHECK((bare.empty() || atMax));
 			CHECK(l.plan.levelTilesX <= lava.maxLevelTiles);
 			CHECK(l.plan.levelTilesY <= lava.maxLevelTiles);
 		}
 	CHECK(total > 0);
-	MESSAGE("cut ", cut, " of ", total);
+	MESSAGE("clipped ", cut, " of ", total, ", bare cells ", bareCells);
+	// Only layouts too big for a ring in the 360 x 360 level are clipped (110 of 1200 here, 740 bare cells; 1528 with a smaller margin-0 level).
 	CHECK(cut * 10 <= total);
+	CHECK(bareCells <= 800);
 }
 
 TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
