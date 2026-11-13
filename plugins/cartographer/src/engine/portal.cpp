@@ -12,6 +12,7 @@
 #include "engine/stat_apply.h"
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
+#include "engine/game_memory.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
@@ -39,6 +40,8 @@ constexpr int GameCountersOffset = 0x1aac8;  // per-game counters (key -> int)
 constexpr int RecordCodeOffset = 0x80;       // uint32: the item code, four letters
 constexpr int RecordSpellOffset = 0x94;      // int32: misc.txt pSpell
 constexpr int32_t MapSpell = 16;             // free in vanilla D2R
+constexpr int RecordSpellIconOffset = 0x144; // int8: misc.txt spellicon; the client starts its item cursor for 0 to 9 (docs/reverse-engineering/cartographer/27-item-cursor-in-game.md)
+constexpr int32_t RecordScanCap = 16384;     // upper bound for the item record walk
 constexpr uint32_t OpenKey = 0x4d415053;     // 'MAPS': the game counter that allows one opening per game
 constexpr int32_t StatLevel = 12;
 constexpr int32_t HarrogathId = 109;
@@ -87,6 +90,7 @@ Part g_parts[PartCount] = {
 
 std::mutex g_lock;
 std::shared_ptr<const Tables> g_tables;
+std::atomic<uint32_t> g_iconsCleared{0};  // bit per data bank whose map rows have spellicon -1 this process (never restored)
 const MapDef* g_pending = nullptr;  // chosen at the check, used at the use; kept alive by g_pendingTables
 std::shared_ptr<const Tables> g_pendingTables;
 enum class Verdict { None, Map, Plain };  // what the check decided for g_pendingItem: opens a map, or goes to the game
@@ -313,6 +317,61 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 		OutdoorMapCancelled();
 	}
 	return opened;
+}
+
+// The client starts the identify-style item cursor on a right-click for any item whose misc.txt spellicon is 0 to 9 (note 27).
+// A map row cloned from isc keeps 0, so a second map used while one is open shows the cursor. Setting spellicon to -1 is the
+// verified fix (the owner confirmed it from misc.txt); this does the same in memory for rows a modder has not fixed. The item
+// record lookup takes a data flag that picks one of up to four record tables (the game's own flag, game+0x106), so the walk
+// covers the table the running game uses. Only rows whose item code a Maps table row names are touched: any other pSpell 16 row
+// is not ours and keeps the game's check. The write is process-wide and is never restored. Static analysis only: not run in game.
+void ClearMapItemCursor(Game* game) noexcept {
+	if (game == nullptr || !g_parts[ItemRecord].status.on || g_parts[ItemRecord].address == nullptr) {
+		return;
+	}
+	const uint8_t flag = At<uint8_t>(game, GameDataFlagOffset);
+	if (flag >= 4) {
+		return;  // the lookup asserts on a flag of 4 or more
+	}
+	const uint32_t bit = 1u << flag;
+	if ((g_iconsCleared.load(std::memory_order_relaxed) & bit) != 0) {
+		return;
+	}
+	std::shared_ptr<const Tables> tables;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+	}
+	if (tables == nullptr) {
+		return;
+	}
+	int changed = 0;
+	int failed = 0;
+	int32_t rows = 0;
+	for (; rows < RecordScanCap; ++rows) {
+		const uint8_t* record = Call<ItemRecordFn>(ItemRecord)(flag, rows);
+		if (record == nullptr) {
+			break;
+		}
+		if (At<int32_t>(record, RecordSpellOffset) != MapSpell || At<uint8_t>(record, RecordSpellIconOffset) >= 10) {
+			continue;
+		}
+		char code[5] = {};
+		std::memcpy(code, record + RecordCodeOffset, 4);
+		if (FindMapByItem(tables->maps, Trim(code)) == nullptr) {
+			continue;
+		}
+		const uint8_t minusOne = 0xff;
+		if (WriteGame(const_cast<uint8_t*>(record) + RecordSpellIconOffset, &minusOne, 1)) {
+			++changed;
+		} else {
+			++failed;
+		}
+	}
+	if (rows > 0) {
+		g_iconsCleared.fetch_or(bit);
+		plog::Info("map items: spellicon set to -1 on %d map item row(s) of %d in data bank %u (%d write(s) failed)", changed, rows, static_cast<unsigned>(flag), failed);
+	}
 }
 
 // --- The hooks ---------------------------------------------------------------------------------------------------------
@@ -618,6 +677,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		return 0;
 	}
 	const uint64_t result = g_tickOriginal(game, unit);
+	if (g_live.load(std::memory_order_relaxed)) {
+		ClearMapItemCursor(game);
+	}
 	if (!g_tickSeen.load(std::memory_order_relaxed)) {
 		g_tickSeen = true;
 	}

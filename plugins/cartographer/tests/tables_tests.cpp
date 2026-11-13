@@ -717,6 +717,19 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
+TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does not") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
+	names.cursorItems = {"t21"};
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has a spellicon of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
+}
+
 TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
