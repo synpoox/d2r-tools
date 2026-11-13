@@ -58,6 +58,14 @@ uint64_t mix(uint64_t x)
 
 } // namespace
 
+std::string StatIds::nameOf(int id) const
+{
+	for (const auto &e : byName) {
+		if (e.second == id) return e.first;
+	}
+	return "";
+}
+
 int StatIds::find(std::string_view name) const
 {
 	for (const auto &p : byName)
@@ -192,8 +200,9 @@ int parsePropertyId(std::string_view text, std::string_view code)
 	return -1;
 }
 
-int cubeMapLevelTarget(int before, int after, int min, int max, int roll)
+int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown)
 {
+	if (!levelKnown) return after; // the level could not be read: the game's result stands
 	if (max < min) max = min;
 	const int delta = roll < min ? min : (roll > max ? max : roll);
 	if (delta < 1) return after;
@@ -246,7 +255,21 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 	return out;
 }
 
-ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids)
+const std::vector<MonsterStat> &monsterStats()
+{
+	static const std::vector<MonsterStat> table = {
+		{"cartographer_mon_life", "item_maxhp_percent"},
+		{"cartographer_mon_damage", "damagepercent"},
+		{"cartographer_mon_fire_res", "fireresist"},
+		{"cartographer_mon_cold_res", "coldresist"},
+		{"cartographer_mon_light_res", "lightresist"},
+		{"cartographer_mon_poison_res", "poisonresist"},
+		{"cartographer_mon_speed", "velocitypercent"},
+	};
+	return table;
+}
+
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids)
 {
 	ItemProperties out;
 	for (const ItemStat &s : stats) {
@@ -263,40 +286,23 @@ ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const s
 			out.dropped.push_back(label + ": its value is 0");
 			continue;
 		}
-		const PoolRow *row = nullptr;
-		for (const PoolRow &r : pool) {
-			if (ids.find(r.stat) == s.stat) {
-				row = &r;
+		const std::string name = ids.nameOf(s.stat);
+		if (name.empty()) {
+			out.dropped.push_back(label + ": no itemstatcost row has this id");
+			continue;
+		}
+		const MonsterStat *mon = nullptr;
+		for (const MonsterStat &m : monsterStats()) {
+			if (name == m.itemStat) {
+				mon = &m;
 				break;
 			}
 		}
-		if (row == nullptr) {
-			out.dropped.push_back(label + ": no mapstats.txt row has this stat");
-			continue;
+		if (mon != nullptr) {
+			out.properties.push_back({Target::Monsters, mon->applied, s.value});
+		} else {
+			out.properties.push_back({Target::Players, name, s.value});
 		}
-		out.properties.push_back({row->target, row->stat, s.value});
-	}
-	return out;
-}
-
-std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids)
-{
-	std::vector<PoolIssue> out;
-	if (!ids.loaded) return out;
-	for (size_t i = 0; i < pool.size(); ++i) {
-		const PoolRow &r = pool[i];
-		if (r.weight <= 0) continue; // an off or erroring row is never drawn
-		const int id = ids.find(r.stat);
-		if (id >= 0) {
-			const std::string refused = refusedReason(r.target, r.stat, id);
-			if (!refused.empty())
-				out.push_back({false, i, "row " + std::to_string(i + 1) + " (" + r.stat + ", " + targetWord(r.target) + "): " + refused + " If it is drawn it is skipped."});
-			continue;
-		}
-		const std::string near = ids.suggest(r.stat);
-		out.push_back({false, i,
-			"row " + std::to_string(i + 1) + " (" + r.stat + "): Stat is not in itemstatcost.txt." +
-				(near.empty() ? "" : " Did you mean '" + near + "'?") + " If it is drawn it is skipped."});
 	}
 	return out;
 }
@@ -614,6 +620,26 @@ std::vector<std::string> explainNoPick(const uint8_t *states, uint32_t count, co
 		lines.push_back(rejectionText(static_cast<int>(ranks[i].state), states + static_cast<size_t>(ranks[i].state) * kStateRowSize));
 	}
 	return lines;
+}
+
+std::vector<ItemStat> decodeItemStatList(const int32_t *buffer, int count, int maxStats, std::string *problem) {
+	std::vector<ItemStat> out;
+	if (buffer == nullptr || count <= 0) {
+		return out;
+	}
+	const int n = count < maxStats ? count : maxStats;
+	for (int i = 0; i < n; ++i) {
+		const int32_t *e = buffer + i * 4;
+		if (e[3] != 0 || e[0] < 0 || e[0] > 0xffff || e[1] < 0 || e[1] > kMaxStatId) {
+			if (problem != nullptr) {
+				*problem = "ItemListCopy layout not recognised (entry " + std::to_string(i) + " is " + std::to_string(e[0]) + ", " +
+				           std::to_string(e[1]) + ", " + std::to_string(e[2]) + ", " + std::to_string(e[3]) + "); the item's stats are not used";
+			}
+			return {};
+		}
+		out.push_back({e[1], e[0], e[2]});
+	}
+	return out;
 }
 
 } // namespace cartographer::statplan

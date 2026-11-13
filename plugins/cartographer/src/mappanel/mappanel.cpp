@@ -12,7 +12,7 @@ struct Known {
 	bool percent;
 };
 
-// Stat names the built-in pool and the examples use. Anything else is shown with a tidied stat name and its plain number.
+// Stat names the monster stats and the examples use. Anything else is shown with a tidied stat name and its plain number.
 const Known kKnown[] = {
 	{"item_maxhp_percent", "Life", true},
 	{"damagepercent", "Damage", true},
@@ -64,6 +64,13 @@ std::string panelText(const std::string &mapName, int monsterLevel, const std::v
 	if (monsterLevel > 0) out += "\nMonster level " + std::to_string(monsterLevel);
 	for (const Stat &s : stats) out += "\n" + statLine(s);
 	return out;
+}
+
+bool hiddenAfter(bool visible, bool succeeded, bool wasHidden) {
+	if (!succeeded) {
+		return wasHidden;
+	}
+	return !visible;
 }
 
 } // namespace cartographer::mappanel

@@ -2,6 +2,7 @@
 
 #include "core/part_signatures.h"
 #include "core/text.h"
+#include "automap_reset.h"
 #include "log.h"
 #include "maze_hooks.h"
 #include "steer.h"
@@ -466,6 +467,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	const co::SlotRngSeed seed = co::slotRngSeedFor(plan.hash, id);
 	Write<int32_t>(level, LvlSeed, seed.first);
 	Write<int32_t>(level, LvlSeed2, seed.second);
+	AutomapResetArm(plan.hash, id);  // a new Snow map starts with an empty automap (Jungle and Siege share the town's layer, so nothing is skipped for them)
 
 	BuildCtx ctx;
 	ctx.level = level;

@@ -16,6 +16,7 @@
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
+#include "engine/automap_reset.h"
 #include "log.h"
 #include "hookguard.h"
 #include "steer.h"
@@ -184,7 +185,7 @@ void Tell(const std::string& text) noexcept {
 	}
 }
 
-// The map is open: draws its properties and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
+// The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
@@ -416,7 +417,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
-	// The item's own stats, read now, before the game uses the item up: the map level always, the map's properties with ItemStats=1.
+	// The item's own stats, read now, before the game uses the item up: the map level and the map's properties (its rare or unique modifiers).
 	std::vector<cartographer::statplan::ItemStat> itemStats;
 	try {
 		std::string note;
@@ -627,6 +628,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);
@@ -653,6 +655,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
+		AutomapResetDisarm();
 		StatApplyGameLeft();
 		MapPanelGameLeft();
 		EventsGameLeft();
@@ -864,6 +867,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
 	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	InstallAutoCheck(context, overrides, ranges, count);
+	InstallAutomapReset(context, overrides, ranges, count);
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}

@@ -20,9 +20,8 @@ struct Tables {
 	std::vector<MapDef> maps;
 	Settings settings;
 	std::vector<Slot> slots;
-	// Optional tables. The pool is applied in game (not yet verified there); shapes and events are loaded and checked only.
+	// Optional tables. Shapes and events are loaded and checked only.
 	cartographer::layout::ShapeTable shapes;
-	std::vector<cartographer::stats::PoolRow> pool;  // empty: the built-in pool
 	std::vector<cartographer::events::Row> events;
 	std::vector<BossDef> bosses;  // bosses.txt: the only things a map's Boss may name
 	cartographer::statplan::StatIds statIds;  // itemstatcost.txt: stat name -> id, for the map stats

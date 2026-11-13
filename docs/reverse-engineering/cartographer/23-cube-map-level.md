@@ -26,6 +26,12 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 
 - `ItemPropApply`: `48 89 6C 24 20 56 41 56 41 57 48 83 EC 60 0F B6 F1 49 8B E9 49 8B C9 4D 8B F0 44 8B FA E8 ?? ?? ?? ?? 66 83 F8 01 72`; hook size 14, first relative operand (the call) at `+29`.
 - `ItemListMake`: `48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 8B F8 41 8B D9 48 8B F2 44 8B C3 41 8B D7 48 8B F9 48 85 C9 74 ?? E8 ?? ?? ?? ??`; only called.
+- `CubeExec`: `40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 08 EA FF FF B8 F8 16 00 00 E8 ?? ?? ?? ??` (31 bytes, unique); hook size 21 (the push sequence and `lea rbp,[rsp-0x15f8]`, no relative operand inside the 21 bytes; the first, a call, is at `+26`). The byte guard is the 21 hooked bytes, pinned in the signature, so a build whose prologue differs leaves the part off and the hook is not installed.
+- The three walkers the cube step uses to find the cube's items are only called:
+  - `UnitInventory` `0x34a360`: `48 89 5C 24 18 56 48 83 EC 20 48 8B F1 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 9E A0 00 00 00` (unit to its inventory).
+  - `InventoryFirst` `0x388c10`: `40 53 48 83 EC 20 48 8B D9 48 85 C9 74 ?? 81 39 04 03 02 01 74 ??` (inventory to its first item).
+  - `InventoryNext` `0x38aba0`: the 130-byte signature in `part_signatures.h` (item to the next item).
+- All of them are checked by `tools/check_portal_signatures.py` against the memory-layout image and, when one is missing, the hook is not installed and the game's own apply runs unchanged (ItemPropApply still hooked: the stat is then only the game's).
 - `SetListStat` is the signature of section 7.
 
 ### Cube executor details (seen in game)
@@ -34,12 +40,12 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 - The game frees the input items during the output step, so the input map's level is read when `CubeExec` is entered (the second hook, 21 bytes).
 - The cube reuses the input map's unit for a map-keeping output, so the game's own apply **adds** to the stat that is already there (10 then 20). The hook confirms that and only sets the stat when the result differs from "old level plus the recipe's value".
 - The `properties.txt` row `map-level` is game property id **284** (the row number the game counts from the table, not 285).
-- An item's stat list (`ItemListFind(item, 0, 0x40)`) holds its entries at `[list + 0x30]` with the count at `[list + 0x38]`. Each entry is 16 bytes `{int layer, int stat, int value, int pad}`. `ItemListCopy` returns only `{int, int}` pairs and no value, so the plugin reads the raw entries (this corrects the pair format guessed in section 14: the pair has no value).
+- The item's stat list is read through `ItemListFind` and `ItemListCopy` with the layout guard of section 16 (`decodeItemStatList`): 16-byte entries `{layer, stat, value, 0}` (D2RLoader's replacement writes the value; section 16 corrects the earlier 8-byte pair reading).
 
 ### Behaviour
 
-- **Fail open:** a part off, or `properties.txt` / `itemstatcost.txt` without the rows, leaves the hook installed but idle (the property id is `-1`), and the game's own apply runs unchanged. The hook is installed only when `ItemListFind`, `ItemListMake`, `SetListStat` and `ItemPropApply` are all found.
-- **What it does:** for a call whose `Property` id is the `map-level` row, it reads the map level stat from the item's base magic list, lets the game apply, reads it again and, when the result is not "the old level plus the recipe's value", sets it (`statplan::cubeMapLevelTarget`, unit tested). The stat is cut to 1 to 511 (9 bits).
+- **Fail open:** a read of the map's level that is not trustworthy (a part missing, the list layout not recognised, more stats than the plugin reads and the level not among them, the input map's level not found) leaves the game's own result as it is; the hook never adds to an assumed 0 (`cubeMapLevelTarget` takes `levelKnown`, unit tested). A part off, or `properties.txt` / `itemstatcost.txt` without the rows, leaves the hook installed but idle (the property id is `-1`), and the game's own apply runs unchanged. The hook is installed only when `ItemListFind`, `ItemListCopy`, `ItemListMake`, `SetListStat` and `ItemPropApply` are all found.
+- **What it does:** for a call whose `Property` id is the `map-level` row, it reads the map level stat from the item's base magic list, lets the game apply, reads it again and, when the result is not "the old level plus the recipe's value", sets it (`statplan::cubeMapLevelTarget`, unit tested). The stat is cut to 1 to 511 (9 bits). With a wide range (`min < max`) a game result that already lies in the range counts as the game's own roll and stands, so such a recipe can add less than a fixed one (never twice). The recipe's input level is added to any output with a `map-level` mod, a new map or the Hand Axe from `useitem,mod`.
 
 ### Evidence
 

@@ -1,6 +1,6 @@
-// The map item's own stats (ItemStats=1): reads the stat list of the item that is being used, before the game consumes it.
+// The map item's own stats : reads the stat list of the item that is being used, before the game consumes it.
 // Two engine parts, both only called and found by byte signature at load: the finder for a unit's list by flags and the
-// list copy the game's own client sender uses. A part that is missing leaves the mode off (a normal draw). Notes:
+// list copy the game's own client sender uses. A part that is missing leaves the map without stats. Notes:
 // docs/reverse-engineering/cartographer/14-item-stats.md.
 #pragma once
 

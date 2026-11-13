@@ -550,31 +550,21 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		MapPanelMapOpened(cartographer::mappanel::panelText(map.name, map.level, {}), slot);  // name and level, no properties
 		return;
 	}
-	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);
-	cartographer::stats::Settings settings;
-	settings.properties = tables->settings.properties;
-	settings.itemStats = tables->settings.itemStats != 0;
-	std::vector<cartographer::stats::Property> fromItem;
-	if (settings.itemStats) {
-		const auto mapped = sp::itemStatsToProperties(itemStats, tables->pool.empty() ? cartographer::stats::builtInPool() : tables->pool, tables->statIds);
-		for (const std::string& line : mapped.dropped) {
-			plog::Warn("ItemStats: %s", line.c_str());
-		}
-		fromItem = mapped.properties;
-		plog::Info("ItemStats: %zu item stat(s) read, %zu used%s", itemStats.size(), fromItem.size(), fromItem.empty() ? "; drawing as usual" : "");
+	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);  // names the open in the log
+	const auto mapped = sp::itemStatsToProperties(itemStats, tables->statIds);
+	for (const std::string& line : mapped.dropped) {
+		plog::Warn("map item stats: %s", line.c_str());
 	}
-	cartographer::stats::MapRow row;
-	row.properties = map.properties;
-	const auto drawn = cartographer::stats::drawMapStats(seed, row, settings, tables->pool, fromItem);
+	const std::vector<cartographer::statplan::Property>& drawn = mapped.properties;
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
-	plog::Info("map stats for '%s' (seed %llu, slot level %d): %zu drawn, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,
-	           drawn.size(), sp::describe(*plan).c_str());
+	plog::Info("map stats for '%s' (open %llu, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,
+	           itemStats.size(), sp::describe(*plan).c_str());
 	for (const sp::Skipped& s : plan->skipped) {
-		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::stats::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());
+		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::statplan::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());
 	}
 	if (!g_monstersOn.load() && !plan->monsters.empty()) {
-		plog::Warn("map stats: %zu monster stat(s) drawn, but monster stats are off", plan->monsters.size());
+		plog::Warn("map stats: %zu monster stat(s) on the map item, but monster stats are off", plan->monsters.size());
 	}
 	// The map panel (issue #308): the map's name, level and the properties that are applied (monster ones only with monster stats on).
 	std::vector<cartographer::mappanel::Stat> shown;

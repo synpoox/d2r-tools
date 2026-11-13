@@ -93,9 +93,9 @@ inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B D
 inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
-// The map item's own stats (ItemStats=1, cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
+// The map item's own stats (cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
 // finder (with state 0 it matches a list on the unit's chain by flags). ItemListCopy (list, out, max) is D2RLoader's thunk (jmp [rip+x],
-// then the dead original body) into D2RLoader's replacement of up to `max` {stat << 16 | layer, value} pairs; call the thunk, never hook it.
+// then the dead original body) into D2RLoader's replacement of up to `max` entries of four int32, {layer, stat, value, 0}; call the thunk, never hook it.
 inline constexpr const char* ItemListFind = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??";
 inline constexpr const char* ItemListCopy = "FF 25 ?? ?? ?? ?? 90 90 90 90 57 48 83 EC 20 49 63 F8 48 8B DA 48 8B F1";
 // Phase 6b: the Shrine object and the Boss Drop (cartographer/13-ambush-treasure-shrine.md). DeathDrop (game, victim, arg3, info) is hooked
@@ -130,6 +130,11 @@ inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 inline constexpr const char* UnitMove = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11";
 inline constexpr const char* RoomAtTile = "48 8B 52 70 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC 48 8B 49 18 E9";
 inline constexpr const char* RoomBringUp = "48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 85 C0 75 ?? 48 8B D3 48 8B CF E8";
+
+// The automap memory read (issue #306 review; cartographer/22-automap-memory.md): 0xd5710 reads the current layer's saved cells back from the character's map
+// file when the layer becomes current. Hooked (the hook cuts the first 17 bytes: three whole instructions, no relative operand); a new slot map skips the one read.
+// The `cmp qword ptr [rip+x], 0` at +0x22 is the current layer object pointer.
+inline constexpr const char* AutomapRestore = "40 55 48 8D AC 24 F0 FD FF FF 48 81 EC 10 03 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 D0 01 00 00 48 83 3D ?? ?? ?? ?? 00 0F 84";
 
 // The map panel (issue #308; cartographer/22-map-panel.md). The UI text calls the other plugins use (docs/reverse-engineering/better-xp-bar.md,
 // dps-counter.md, player-bars.md): FindPanel(name), FindChild(parent, name) (direct children only) and TextBoxWidget::SetText(box, {ptr, len}). Only called.

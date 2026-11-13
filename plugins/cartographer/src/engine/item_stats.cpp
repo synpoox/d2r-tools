@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <cstdio>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -23,14 +24,11 @@ constexpr int32_t MagicListFlags = 0x40;  // the item's base magic list (created
 constexpr int MaxStats = 16;              // the game's own sender sends 16 at most
 // The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use and cut to MaxStats here.
 constexpr int CopyMax = 0x200;
-constexpr int ListEntriesOffset = 0x30;
-constexpr int ListCountOffset = 0x38;
-constexpr uint64_t ListEntrySize = 16;
 
 struct Unit;
 
 using FindListFn = void* (*)(Unit*, int32_t state, int32_t flags) noexcept;
-// Copies up to `max` {stat << 16 | layer, value} pairs (two int32 each) from the list into `out`; returns how many.
+// Copies up to `max` entries of four int32 each, {layer, stat, value, 0}, from the list into `out`; returns how many.
 using ListCopyFn = int32_t (*)(void* list, int32_t* out, int32_t max) noexcept;
 
 // (owner, item, state, flags) -> the item's list with those flags, made and attached when missing.
@@ -42,7 +40,7 @@ constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data fl
 using PropApplyFn = uint64_t (*)(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_t p5, uint64_t p6, uint64_t p7, uint64_t p8, uint64_t p9,
                                  uint64_t p10, uint64_t p11, uint64_t p12) noexcept;
 
-// The cube's output step (recipe -> output items): its second argument is the cube item whose inventory holds the recipe's inputs.
+// The cube's output step (recipe -> output items): its second argument is the player, whose inventory holds the cube items (the recipe's inputs).
 using CubeExecFn = uint64_t (*)(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9,
                                 uint64_t a10) noexcept;
 using UnitInventoryFn = void* (*)(void* unit) noexcept;
@@ -75,7 +73,7 @@ std::atomic<int> g_logged{0};
 constexpr int CubePageOffset = 0x55;
 constexpr uint8_t CubePage = 3;
 CubeExecFn g_cubeOriginal = nullptr;
-std::atomic<int> g_cubeInput{0};  // the highest map level among the cube's inputs, read when the output step starts (the game frees the inputs during it)
+std::atomic<int> g_cubeInput{-1};  // the highest map level among the cube's inputs, read when the output step starts (the game frees the inputs during it)
 
 auto CubeInputsFound() noexcept -> bool {
 	return On(CubeExec) && g_cubeOriginal != nullptr && On(UnitInventory) && On(InventoryFirst) && On(InventoryNext);
@@ -90,7 +88,7 @@ auto CubeInputLevel(uint64_t owner, int statId) noexcept -> int;
 auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10) noexcept -> uint64_t {
 	g_cubeInput.store(CubeInputLevel(a2, g_statId.load(std::memory_order_relaxed)));
 	const uint64_t result = g_cubeOriginal(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
-	g_cubeInput.store(0);
+	g_cubeInput.store(-1);
 	return result;
 }
 
@@ -98,19 +96,22 @@ auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a
 // recipe's input map carries. The game frees the inputs during the output step, so this runs when the step starts.
 auto CubeInputLevel(uint64_t cube, int statId) noexcept -> int {
 	if (cube == 0 || statId < 0 || !CubeInputsFound() || !Readable(cube)) {
-		return 0;
+		return -1;
 	}
-	int best = 0;
+	int best = -1;  // -1: no input map's level was read
+	bool trusted = true;
 	try {
 		void* inv = reinterpret_cast<UnitInventoryFn>(const_cast<uint8_t*>(g_parts[UnitInventory].address))(reinterpret_cast<void*>(cube));
 		if (!Readable(reinterpret_cast<uint64_t>(inv))) {
-			return 0;
+			return -1;
 		}
 		void* it = reinterpret_cast<InventoryFirstFn>(const_cast<uint8_t*>(g_parts[InventoryFirst].address))(inv);
 		for (int n = 0; n < 40 && Readable(reinterpret_cast<uint64_t>(it)); ++n) {
 			const uint64_t data = Readable(reinterpret_cast<uint64_t>(it)) ? At<uint64_t>(it, 0x10) : 0;
 			if (At<int32_t>(it, 0) == 4 && Readable(data) && At<uint8_t>(reinterpret_cast<const void*>(data), CubePageOffset) == CubePage) {  // an item in the cube
-				const int v = ItemMagicStat(it, statId);
+				bool ok = false;
+				const int v = ItemMagicStat(it, statId, &ok);
+				trusted = trusted && ok;
 				if (v > best) {
 					best = v;
 				}
@@ -118,8 +119,9 @@ auto CubeInputLevel(uint64_t cube, int statId) noexcept -> int {
 			it = reinterpret_cast<InventoryNextFn>(const_cast<uint8_t*>(g_parts[InventoryNext].address))(it);
 		}
 	} catch (...) {
+		return -1;
 	}
-	return best;
+	return trusted ? best : -1;
 }
 
 // The cube's output step applies each `mod` of a recipe through the property applier. When it is the map-level property, the map's stat is
@@ -161,8 +163,9 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 		roll = (after >= pmin && after <= pmax) ? after : pmin + static_cast<int>(GetTickCount() % static_cast<unsigned>(pmax - pmin + 1));
 	}
 	const int inputLevel = g_cubeInput.load();
+	// Fail open: the level to add to must have been read (the stat found on the item or on an input map); never add to an assumed 0.
 	const int base = before > inputLevel ? before : inputLevel;
-	const int target = ok ? sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll) : after;
+	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, ok && base > 0);
 	bool fixed = false;
 	if (target != after) {
 		try {
@@ -215,7 +218,7 @@ auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<Sign
 	if (parts != nullptr) {
 		*parts = ItemStatsPartStatuses();
 	}
-	return On(FindList);
+	return On(FindList) && On(ListCopy);
 }
 
 void CubeMapLevelConfigure(int propertyId, int statId) {
@@ -225,18 +228,23 @@ void CubeMapLevelConfigure(int propertyId, int statId) {
 }
 
 auto ItemStatsWritable() -> bool {
-	return On(FindList) && On(MakeList) && On(SetListStat);
+	return On(FindList) && On(ListCopy) && On(MakeList) && On(SetListStat);
 }
 
 auto ItemMagicStat(void* item, int stat, bool* ok) noexcept -> int {
 	std::string note;
-	if (ok != nullptr) {
-		*ok = On(FindList);
-	}
-	for (const sp::ItemStat& s : ReadMapItemStats(item, &note)) {
+	const std::vector<sp::ItemStat> stats = ReadMapItemStats(item, &note);
+	for (const sp::ItemStat& s : stats) {
 		if (s.stat == stat && s.layer == 0) {
+			if (ok != nullptr) {
+				*ok = On(FindList) && On(ListCopy);
+			}
 			return s.value;
 		}
+	}
+	// Not found: 0 only counts as the item's level when the list was read whole (no note: parts present, layout recognised, at most MaxStats stats).
+	if (ok != nullptr) {
+		*ok = On(FindList) && On(ListCopy) && note.empty();
 	}
 	return 0;
 }
@@ -264,7 +272,7 @@ auto ItemStatsPartStatuses() -> std::vector<PartStatus> {
 
 auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<sp::ItemStat> {
 	std::vector<sp::ItemStat> out;
-	if (!On(FindList)) {
+	if (!On(FindList) || !On(ListCopy)) {
 		if (note != nullptr) {
 			*note = "the item stat parts were not found";
 		}
@@ -278,23 +286,22 @@ auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<
 	if (list == nullptr) {
 		return out;  // the item has no magic list: no stats
 	}
-	// The list's entries are 16 bytes {layer, stat, value, pad}, `count` of them at +0x30 / +0x38 (seen in game; ItemListCopy's pairs drop the value).
-	const uint64_t count = At<uint64_t>(list, ListCountOffset);
-	const uint64_t arr = At<uint64_t>(list, ListEntriesOffset);
-	if (count > static_cast<uint64_t>(CopyMax) || (count > 0 && !Readable(arr))) {
+	int32_t pairs[CopyMax * 4] = {};
+	const int32_t n = reinterpret_cast<ListCopyFn>(const_cast<uint8_t*>(g_parts[ListCopy].address))(list, pairs, CopyMax);
+	if (n < 0 || n > CopyMax) {
 		if (note != nullptr) {
-			*note = "the list holds " + std::to_string(count) + " stats, which is not possible; the item's stats are not used";
+			*note = "the game copied " + std::to_string(n) + " stats, which is not possible; the item's stats are not used";
 		}
 		return out;
 	}
-	const int32_t n = static_cast<int32_t>(count);
-	for (int32_t i = 0; i < n && i < MaxStats; ++i) {
-		const uint64_t entry = arr + static_cast<uint64_t>(i) * ListEntrySize;
-		if (!Readable(entry) || !Readable(entry + ListEntrySize - 1)) {
-			break;
+	std::string problem;
+	out = sp::decodeItemStatList(pairs, n, MaxStats, &problem);
+	if (!problem.empty()) {
+		plog::Warn("%s", problem.c_str());
+		if (note != nullptr) {
+			*note = problem;
 		}
-		const void* e = reinterpret_cast<const void*>(entry);
-		out.push_back({At<int32_t>(e, 4), At<int32_t>(e, 0), At<int32_t>(e, 8)});
+		return out;
 	}
 	if (n > MaxStats && note != nullptr) {
 		*note = "the item has " + std::to_string(n) + " stats; only the first " + std::to_string(MaxStats) + " are read";
