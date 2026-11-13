@@ -56,6 +56,21 @@ auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
 // this text for MapLevelStatLocalKey. The text is a format that takes the stat's value (descfunc 19).
 inline constexpr const char* MapLevelStatLocalKey = "map_level_stat";
 inline constexpr const char* MapLevelStatText = "Map Level: %d";
+// The monster-side map stats (statplan monsterStats()): itemstatcost.txt row `cartographer_<key>`, description key RowKey(plugin id, key), and the text, a format that
+// takes the stat's signed value.
+struct MonsterStatText {
+	const char* key;
+	const char* text;
+};
+inline constexpr MonsterStatText MonsterStatTexts[] = {
+    {"mon_life", "%+d%% Monster Life"},
+    {"mon_damage", "%+d%% Monster Damage"},
+    {"mon_fire_res", "%+d%% Monster Fire Resistance"},
+    {"mon_cold_res", "%+d%% Monster Cold Resistance"},
+    {"mon_light_res", "%+d%% Monster Lightning Resistance"},
+    {"mon_poison_res", "%+d%% Monster Poison Resistance"},
+    {"mon_speed", "%+d%% Monster Speed"},
+};
 auto MapStatStringsJson() -> std::string;
 
 // Writes `key` into a 40-byte field (the rest zero). False, and the field untouched, when the key does not fit.

@@ -5,6 +5,8 @@
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
+- `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
+- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
@@ -17,12 +19,12 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
+- Rare and unique map items: their modifiers show on hover and apply in the map (magic maps can still drop for now). Run `tools\install.ps1` again.
+- New monster modifiers for map items: life, damage, speed and fire, cold, lightning and poison resistance.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).
-- `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
-- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
-- Opening a Treasure chest now rolls its `Drop`.
+- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot when the Boss dies (a rune seen dropping in game, one kill).
+- Opening a Treasure chest rolls its `Drop` (a rune seen dropping in game, one chest).
 - A map's Treasure chest is never locked.
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.
@@ -36,8 +38,8 @@
 - A map's own name shows on its portal, automap and entry banner by default (experimental; `MapNames=0` turns it off; multiplayer not checked yet).
 - `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
-- `cartographer check` warns when `core-maps` is also loaded, and names unusable `mapstats.txt` rows.
-- Optional `shapes.txt`, `mapstats.txt` and `mapevents.txt`, with problems reported.
+- `cartographer check` warns when `core-maps` is also loaded.
+- Optional `shapes.txt` and `mapevents.txt`, with problems reported.
 - New guide "Your first map in 5 minutes", a column reference and an example set in `examples/first-map`.
 - The map Boss and events are placed in the right room of a maze map.
 - Outdoor map events and Boss minions get their full count, not just four.

@@ -814,7 +814,59 @@ TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a p
 			CHECK(plan.layout.rulesMet);
 			CHECK(!plan.stamps.stamps.empty());
 			CHECK(planOutdoorMap(r, cat).hash == plan.hash);
+			// Open stamps every block, so Large is capped at the Medium grid (9 x 9 blocks).
+			if (std::string(size) == "Large") {
+				CHECK(plan.layout.width == 9);
+				CHECK(plan.layout.height == 9);
+				CHECK(plan.stamps.stamps.size() == 81);
+			}
 		}
+}
+
+TEST_CASE("a shapes.txt Open row with a large Width and Height is capped at 81 stamps, and a MinPath the capped grid cannot reach is refused")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	const layout::ParseResult parsed = layout::parseShapesTxt("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nHuge Plains\tOpen\t\t\t20\t20\nLong Plains\tOpen\t20\t60\t20\t20\n");
+	REQUIRE(parsed.errors.empty());
+	MapRequest r = jungleRequest(7);
+	r.shape = "Huge Plains";
+	r.size = "Large";
+	r.shapes = &parsed.table;
+	const MapPlan plan = planOutdoorMap(r, cat);
+	REQUIRE_MESSAGE(plan.ok, plan.reason);
+	CHECK(plan.layout.width == 9);
+	CHECK(plan.layout.height == 9);
+	CHECK(plan.stamps.stamps.size() == 81);
+	r.shape = "Long Plains";
+	const MapPlan refused = planOutdoorMap(r, cat);
+	CHECK_FALSE(refused.ok);
+	CHECK(refused.stamps.stamps.empty());
+	CHECK(refused.reason.find("MinPath") != std::string::npos);
+}
+
+TEST_CASE("capJungleOpenRules names the 81-cell limit for a MinPath above it, and no seed or Width/Height advice")
+{
+	layout::Rules rules;
+	std::string ignored;
+	const layout::ShapeTable none;
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, rules, ignored));
+	rules.width = 20;
+	rules.height = 20;
+	rules.pathMin = 90;
+	rules.pathMax = 120;
+	const std::string problem = capJungleOpenRules(rules);
+	CHECK(problem == "an Open map on Jungle is at most 9 x 9 cells, so MinPath can't be more than 81.");
+	CHECK(problem.find("MaxPath") == std::string::npos);
+
+	layout::Rules reach;
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, reach, ignored));
+	reach.width = 20;
+	reach.height = 20;
+	reach.pathMin = 20;
+	reach.pathMax = 60;
+	const std::string unreachable = capJungleOpenRules(reach);
+	CHECK(unreachable == "an Open map on Jungle is capped at 9 x 9 cells, and MinPath 20 is too long for it.");
+	CHECK(unreachable.find("seed") == std::string::npos);
 }
 
 TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze level and Outdoor level to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze level and its Outdoor, Snow and Siege levels to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -18,7 +18,7 @@
     levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 1500, OffsetY 0, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    levels.txt    a fourth new level, "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
+    levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
     It also adds or updates the Maze, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
@@ -28,13 +28,18 @@
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
-                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
-                    and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
+                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
+                    and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
+                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. Maps are meant to be normal, rare or unique; magic maps can still drop for now (Magic 1 would mean always magic, so no column stops them) and a plugin hook to block them is planned. The one row the installer changes
+                    after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
-                    before anything is written. Existing rows are never changed.
+                    before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
       itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Map Level: N"): a map item's level.
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
-      properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat. Left out when the mod has no properties.txt.
+      itemstatcost.txt also seven monster-side stats, cartographer_mon_life, _damage, _fire_res, _cold_res, _light_res, _poison_res and _speed (signed, shown on the item as "+20% Monster Life" and so on).
+                    A map item that carries one gives its monsters the matching vanilla stat; a vanilla stat on a map item is the player's. See docs/cartographer/tables.md.
+      properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat, and one property for each monster-side stat
+                    (mon-life, mon-damage, mon-fire-res, mon-cold-res, mon-light-res, mon-poison-res, mon-speed), so an affix or unique row can use them. Left out when the mod has no properties.txt.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt) and type cmap. That is the mod author's to set up.
     The tables are read and checked before anything is written. Each is backed up once as <name>.bak.
@@ -462,7 +467,7 @@ foreach ($t in $OutdoorTilesets) {
 # --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------
 # A copy of the Herb row (the vanilla non-quest miscellaneous type), appended once. Equiv1 misc is what Herb, Scroll and Key use: the game treats
 # the item as plain miscellaneous. It is not 'scro' or 'book' (so it is not a scroll: not a Town Portal scroll, and the game
-# does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed.
+# does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed (except the Map type's quality cells, repaired below).
 $MapTypeCode = 'cmap'
 $MapTypeName = 'Map'
 $itemTypes = Read-Table (Join-Path $ExcelDir 'itemtypes.txt')
@@ -486,10 +491,26 @@ if ($mapTypeRow -ge 0) {
     Set-Cell $itemTypes $cells 'Equiv1' 'misc'
     Set-Cell $itemTypes $cells 'Equiv2' ''
     foreach ($col in 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable') { Set-CellIf $itemTypes $cells $col '0' }
-    foreach ($col in 'Magic', 'Rare', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
+    foreach ($col in 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
+    # Rare on, Magic and Normal off (Normal on forces every item Normal). Magic maps can still drop: Magic 1 means always magic, so no column blocks them; a plugin hook is planned.
+    Set-CellIf $itemTypes $cells 'Rare' '1'
+    Set-CellIf $itemTypes $cells 'Magic' '0'
     $itemTypes.Lines.Add($cells -join "`t")
     Save-Table $itemTypes
-    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, not throwable, not beltable, no auto-stack, StorePage misc as herb."
+    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, Rare on, not throwable, not beltable, no auto-stack, StorePage misc as herb."
+}
+# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can roll rare.
+if ($mapTypeRow -ge 0) {
+    $cells = Cells $itemTypes $itemTypes.Lines[$mapTypeRow]
+    $before = $cells -join "`t"
+    Set-CellIf $itemTypes $cells 'Rare' '1'
+    Set-CellIf $itemTypes $cells 'Magic' '0'
+    Set-CellIf $itemTypes $cells 'Normal' '0'
+    if (($cells -join "`t") -ne $before) {
+        $itemTypes.Lines[$mapTypeRow] = $cells -join "`t"
+        Save-Table $itemTypes
+        Write-Host "itemtypes.txt: updated the '$MapTypeName' ($MapTypeCode) row: Rare on, Magic and Normal off."
+    }
 }
 
 # --- itemstatcost.txt: the map level stat -----------------------------------------------------------------------------
@@ -530,6 +551,51 @@ if (-not (Test-Path $statCostPath)) {
     }
 }
 
+# --- itemstatcost.txt: the monster-side map stats ----------------------------------------------------------------------
+# A monster stat needs a stat of its own: a vanilla one (item_maxhp_percent, fireresist, ...) on a map item is the player's. When the map opens the
+# plugin gives the matching vanilla stat to the map's monsters (src/statplan monsterStats()). Each is a copy of the map level row made signed:
+# sent in 11 bits and saved in 10 bits with an add of 512 (values -512 to 511), shown on the item through descfunc 19 and the plugin's string key
+# (src/mapname MonsterStatTexts). Appended once each; a mod without itemstatcost.txt gets none.
+$MonsterStats = @(
+    @{ Stat = 'cartographer_mon_life';       Key = 'cartographer:mon_life';       Property = 'mon-life';       Note = 'monster life' },
+    @{ Stat = 'cartographer_mon_damage';     Key = 'cartographer:mon_damage';     Property = 'mon-damage';     Note = 'monster damage' },
+    @{ Stat = 'cartographer_mon_fire_res';   Key = 'cartographer:mon_fire_res';   Property = 'mon-fire-res';   Note = 'monster fire resistance' },
+    @{ Stat = 'cartographer_mon_cold_res';   Key = 'cartographer:mon_cold_res';   Property = 'mon-cold-res';   Note = 'monster cold resistance' },
+    @{ Stat = 'cartographer_mon_light_res';  Key = 'cartographer:mon_light_res';  Property = 'mon-light-res';  Note = 'monster lightning resistance' },
+    @{ Stat = 'cartographer_mon_poison_res'; Key = 'cartographer:mon_poison_res'; Property = 'mon-poison-res'; Note = 'monster poison resistance' },
+    @{ Stat = 'cartographer_mon_speed';      Key = 'cartographer:mon_speed';      Property = 'mon-speed';      Note = 'monster speed' }
+)
+if (Test-Path $statCostPath) {
+    $statCost = Read-Table $statCostPath
+    $template = Find-Row $statCost 'Stat' 'item_maxhp_percent'
+    if ($template -lt 0) { throw "itemstatcost.txt has no 'item_maxhp_percent' row to copy for the monster stats." }
+    $added = 0
+    foreach ($m in $MonsterStats) {
+        if ((Find-Row $statCost 'Stat' $m.Stat) -ge 0) { continue }
+        $cells = Cells $statCost $statCost.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $statCost.Lines.Count; $i++) { if ($statCost.Lines[$i].Trim() -ne '') { $newId++ } }
+        if ($newId -ge 511) { throw "itemstatcost.txt already has $newId stat rows; the new '$($m.Stat)' stat would get id $newId, but an item save cannot hold a stat id of 511 or more." }
+        Set-Cell $statCost $cells 'Stat' $m.Stat
+        Set-CellIf $statCost $cells '*ID' "$newId"
+        foreach ($col in 'Send Other', 'Add', 'Multiply', 'ValShift', 'op', 'op param', 'op base', 'op stat1', 'op stat2', 'op stat3', 'direct', 'maxstat', 'damagerelated') { Set-CellIf $statCost $cells $col '' }
+        Set-CellIf $statCost $cells 'Signed' '1'
+        Set-CellIf $statCost $cells 'Send Bits' '11'
+        foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col '10' }
+        foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col '512' }
+        Set-CellIf $statCost $cells 'descpriority' '250'
+        Set-CellIf $statCost $cells 'descfunc' '19'
+        Set-CellIf $statCost $cells 'descval' ''
+        Set-CellIf $statCost $cells 'descstrpos' $m.Key
+        Set-CellIf $statCost $cells 'descstrneg' $m.Key
+        foreach ($col in 'dgrp', 'dgrpfunc', 'dgrpval', 'dgrpstrpos', 'dgrpstrneg', 'dgrpstr2', 'descstr2') { Set-CellIf $statCost $cells $col '' }
+        $statCost.Lines.Add($cells -join "`t")
+        $added++
+        Write-Host "itemstatcost.txt: added the stat '$($m.Stat)' (id $newId, $($m.Note))."
+    }
+    if ($added -gt 0) { Save-Table $statCost } else { Write-Host 'itemstatcost.txt: the monster stats are already there.' }
+}
+
 # --- properties.txt: the map level property ---------------------------------------------------------------------------
 # A cube recipe (cubemain.txt "mod 1") and an affix name a property, not a stat, so the stat gets a property of its own: 'map-level' sets
 # cartographer_map_level to the value in the recipe (docs/cartographer/tables.md has an example). A copy of the vanilla 'str' row.
@@ -556,6 +622,31 @@ if (-not (Test-Path $propsPath)) {
         Save-Table $props
         Write-Host "properties.txt: added the property '$MapLevelProperty' (stat $MapLevelStat, copied from str)."
     }
+}
+
+# --- properties.txt: the monster stat properties ----------------------------------------------------------------------
+# One property per monster-side stat (a copy of 'str'), so an affix row (magicprefix.txt and the others) or a uniqueitems.txt row can name it:
+# the Min and Max of that mod are the stat's value.
+if (Test-Path $propsPath) {
+    $props = Read-Table $propsPath
+    $template = Find-Row $props 'code' 'str'
+    if ($template -lt 0) { throw "properties.txt has no 'str' row to copy for the monster stat properties." }
+    $added = 0
+    foreach ($m in $MonsterStats) {
+        if ((Find-Row $props 'code' $m.Property) -ge 0) { continue }
+        $cells = Cells $props $props.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $props.Lines.Count; $i++) { if ($props.Lines[$i].Trim() -ne '') { $newId++ } }
+        Set-Cell $props $cells 'code' $m.Property
+        Set-CellIf $props $cells '*Id' "$newId"
+        Set-Cell $props $cells 'stat1' $m.Stat
+        Set-CellIf $props $cells '*Tooltip' ($m.Note + ' #')
+        Set-CellIf $props $cells '*Notes' 'Cartographer: a monster-side map stat'
+        $props.Lines.Add($cells -join "`t")
+        $added++
+        Write-Host "properties.txt: added the property '$($m.Property)' (stat $($m.Stat))."
+    }
+    if ($added -gt 0) { Save-Table $props } else { Write-Host 'properties.txt: the monster stat properties are already there.' }
 }
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
