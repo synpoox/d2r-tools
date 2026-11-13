@@ -227,6 +227,8 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap*;
 
 // What the player sees when using the item of a skipped row (row number and where to read why; the reason goes to the log, see SkippedMapLog).
+// The same message as two short lines for the on-screen banner.
+auto SkippedMapLines(const SkippedMap& skipped) -> std::vector<std::string>;
 auto SkippedMapText(const SkippedMap& skipped) -> std::string;
 auto SkippedMapLog(const SkippedMap& skipped) -> std::string;
 

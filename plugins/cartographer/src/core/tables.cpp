@@ -1085,8 +1085,13 @@ auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view 
 	return nullptr;
 }
 
+auto SkippedMapLines(const SkippedMap& skipped) -> std::vector<std::string> {
+	return {"Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up.", "maps.txt row " + std::to_string(skipped.line) + " was skipped (see cartographer-report.txt)."};
+}
+
 auto SkippedMapText(const SkippedMap& skipped) -> std::string {
-	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: maps.txt row " + std::to_string(skipped.line) + " was skipped (see cartographer-report.txt).";
+	const std::vector<std::string> lines = SkippedMapLines(skipped);
+	return lines[0].substr(0, lines[0].size() - 1) + ": " + lines[1];
 }
 
 auto SkippedMapLog(const SkippedMap& skipped) -> std::string {

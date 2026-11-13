@@ -1539,6 +1539,10 @@ TEST_CASE("a skipped row is kept by its item, with the first reason") {
 	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
 	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
 	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: maps.txt row 3 was skipped (see cartographer-report.txt).");
+	const std::vector<std::string> lines = SkippedMapLines(skipped[0]);
+	REQUIRE(lines.size() == 2);
+	CHECK(lines[0] == "Map Bad is not set up.");
+	CHECK(lines[1] == "maps.txt row 3 was skipped (see cartographer-report.txt).");
 	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
 }
 
@@ -1563,6 +1567,7 @@ TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the c
 	CHECK(FindMapByItem(maps, "t24") != nullptr);
 	CHECK(FindMapByItem(maps, "t24")->name == "First");
 	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	REQUIRE(skipped.size() == 1);
 	for (const SkippedMap& s : skipped) {
 		CHECK(s.name == "Second");
 		CHECK(s.reason.find("t24") != std::string::npos);

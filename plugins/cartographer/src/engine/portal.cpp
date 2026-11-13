@@ -405,6 +405,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 	if (map == nullptr && tables != nullptr) {
 		if (const SkippedMap* skipped = FindSkippedByItem(tables->skippedMaps, code)) {
 			plog::Warn("%s", SkippedMapLog(*skipped).c_str());
+			(void)ShowEntryBanner(SkippedMapLines(*skipped));  // on screen; the console line below stays either way
 			return refuse(SkippedMapText(*skipped));  // refused, so the item is not used up
 		}
 	}
