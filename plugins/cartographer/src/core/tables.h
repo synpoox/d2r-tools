@@ -57,7 +57,7 @@ struct GameNames {
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
 	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
-	std::vector<std::string> cursorItems;                 // misc.txt codes with spellicon 0 to 9: the client starts an item cursor on use
+	std::vector<std::string> cursorItems;                 // misc.txt codes with spellicon blank or 0 to 9: the client starts an item cursor on use
 };
 
 // misc.txt text: the code and pSpell of every item that has a code (a blank pSpell is 0) go to `spells`, the codes with compactsave 1 to `compact`.

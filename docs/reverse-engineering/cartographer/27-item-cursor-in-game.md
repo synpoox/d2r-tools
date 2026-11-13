@@ -45,7 +45,7 @@ targeting mode. The hotkey use (`0x1c7a30`) also calls `0x1c26b0`. The item inte
 
 ### Fix
 
-The real fix is data: `spellicon` -1 on the map rows in `misc.txt` (documented in `docs/cartographer/tables.md`; `cartographer check` notes a map item row with 0 to 9).
+The real fix is data: `spellicon` -1 on the map rows in `misc.txt` (documented in `docs/cartographer/tables.md`; `cartographer check` notes a map item row with a blank cell or 0 to 9).
 As a safety net for rows a modder has not fixed, `ClearMapItemCursor` (`portal.cpp`) does the same in memory. It runs from the player tick (the server side of the game, so single
 player and the host; a joined client never runs it), once per data bank. It reads the data flag from `game+0x106` and walks that bank's records (`ItemRecord` part, rows from 0
 until the first null; the flag must be below 4), and writes `0xff` to `+0x144` only for a row with `pSpell` 16, a spellicon byte below 10, and an item code that a row of the
@@ -66,7 +66,7 @@ Tried in game (D2R 3.3 build 93847, D2RLoader 1.3.1-beta, slot 11, test mod; the
 | `t21` | `0` | `0x00` |
 | `t22` | `-1` | `0xff` |
 
-A blank cell is therefore the same as 0 and shows the item cursor like it. `cartographer check` still notes only a literal 0 to 9; flagging blank cells too is a follow-up (the in-memory safety net already covers them: 0 is below 10).
+A blank cell is therefore the same as 0 and shows the item cursor like it. `cartographer check` notes a blank cell as well as 0 to 9.
 
 ### Verification levels
 

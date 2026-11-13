@@ -1470,12 +1470,14 @@ TEST_CASE("each maze slot reads the LevelType of its own level") {
 TEST_CASE("ParseItemSpells lists a blank spellicon and 0 to 9, not -1") {
 	std::vector<std::pair<std::string, int>> spells;
 	std::vector<std::string> compact, cursor;
-	const std::string misc = "code\tpSpell\tcompactsave\tspellicon\r\nt20\t16\t0\t-1\r\nt21\t16\t0\t\r\nt22\t16\t0\t0\r\nt23\t16\t0\t9\r\nt24\t16\t0\t12\r\n";
+	const std::string misc = "code\tpSpell\tcompactsave\tspellicon\r\nt20\t16\t0\t-1\r\nt21\t16\t0\t\r\nt22\t16\t0\t0\r\nt23\t16\t0\t9\r\nt24\t16\t0\t12\r\nt25\t16\t0\t \r\nt26\t16\r\n";
 	REQUIRE(ParseItemSpells(misc, &spells, &compact, &cursor));
-	REQUIRE(cursor.size() == 3);
+	REQUIRE(cursor.size() == 5);
 	CHECK(cursor[0] == "t21");
 	CHECK(cursor[1] == "t22");
 	CHECK(cursor[2] == "t23");
+	CHECK(cursor[3] == "t25");  // whitespace only is blank
+	CHECK(cursor[4] == "t26");  // a row that ends before the spellicon column is blank
 }
 
 TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text, the way the plugin does") {
