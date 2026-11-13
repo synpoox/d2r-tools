@@ -142,4 +142,8 @@ inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 
 inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
 inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
+// The side panel shift setter (0xb9c20 in build 93847; better-automap.md): its `mov [rip+x], ecx` at +0xf writes the global that says which sides
+// an open panel shifts (1 right, 2 left, 3 both). Only read.
+inline constexpr const char* ScreenShiftSetter = "48 83 EC 38 44 8B 0D ?? ?? ?? ?? 41 8B C1 99 89 0D ?? ?? ?? ?? 83 E2 03 44 8D 14 02 41 C1 FA 02";
+
 }  // namespace carto::sig
