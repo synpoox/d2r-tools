@@ -18,6 +18,10 @@ auto clampKelvin(float kelvin) -> float {
 	return kelvin < MinKelvin ? MinKelvin : (kelvin > MaxKelvin ? MaxKelvin : kelvin);
 }
 
+auto changesTemperature(const Look& look) -> bool {
+	return look.warmth != DefaultPercent;
+}
+
 auto describe(const Look& look) -> std::string {
 	return "brightness " + std::to_string(look.brightness) + "%, warmth " + std::to_string(look.warmth) + "%";
 }

@@ -128,3 +128,15 @@ TEST_CASE("the longest panel text fits the panel under the most padding")
 	CHECK((pad + lineCount(p.gold)) * units <= height);
 	CHECK(top + height <= 2160); // the layout's height in units: the panel stays on screen
 }
+
+TEST_CASE("the two panel texts merge into one, line by line")
+{
+	CHECK(mergeLines("Shorelines\nMonster level 90\n", "\n\n+10% Life") == "Shorelines\nMonster level 90\n+10% Life");
+	CHECK(mergeLines("Name\n\n", "\nLife\nFire") == "Name\nLife\nFire");
+	CHECK(mergeLines("a\nb", "x\ny") == "a\nb");        // both have text: the gold one
+	CHECK(mergeLines("a", "\nb\nc") == "a\nb\nc");      // uneven line counts
+	CHECK(mergeLines("a\nb\nc", "x") == "a\nb\nc");
+	CHECK(mergeLines("", "").empty());
+	CHECK(mergeLines("", "only") == "only");
+	CHECK(mergeLines("only", "") == "only");
+}

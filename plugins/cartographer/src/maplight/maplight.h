@@ -33,6 +33,10 @@ auto temperatureScale(const Look& look) -> float;
 inline constexpr float MinKelvin = 1000.0f, MaxKelvin = 20000.0f;
 auto clampKelvin(float kelvin) -> float;
 
+// False when Warmth is blank or 100: the colour temperature is then not written at all, so a Brightness-only map never clamps
+// the tileset's own temperature.
+auto changesTemperature(const Look& look) -> bool;
+
 // A short description for the log.
 auto describe(const Look& look) -> std::string;
 

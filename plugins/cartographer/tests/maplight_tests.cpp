@@ -45,6 +45,17 @@ TEST_CASE("the colour temperature is clamped to the range seen working in game")
 	CHECK(Near(clampKelvin(50000.0f), 20000.0f));
 }
 
+TEST_CASE("a Brightness-only look does not write the colour temperature") {
+	Look look;
+	look.brightness = 150;
+	CHECK(look.any());
+	CHECK_FALSE(changesTemperature(look));
+	look.warmth = 120;
+	CHECK(changesTemperature(look));
+	look.warmth = 100;
+	CHECK_FALSE(changesTemperature(look));
+}
+
 TEST_CASE("describe names every column") {
 	Look look;
 	look.brightness = 80;

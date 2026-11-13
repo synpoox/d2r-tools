@@ -38,6 +38,7 @@ std::mutex g_lock;  // g_looks and the two scales (no engine call while held)
 std::map<int, ml::Look> g_looks;  // slot level -> the look of the map opened there last (maps that share a tileset share the level)
 float g_exposure = 1.0f;
 float g_temperature = 1.0f;
+bool g_changesTemperature = false;  // false for a Brightness-only look: the tileset's own temperature is left alone (not even clamped)
 std::atomic<bool> g_active{false};  // the local player stands in the map's slot level and the map has a look
 
 std::atomic<uint32_t> g_instanceCalls{0}, g_changed{0};
@@ -49,10 +50,12 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 			g_instanceCalls.fetch_add(1, std::memory_order_relaxed);
 			if (g_active.load(std::memory_order_relaxed) && Readable(component, ComponentSize)) {
 				float exposure = 1.0f, temperature = 1.0f;
+				bool changesTemperature = false;
 				{
 					std::lock_guard<std::mutex> lock(g_lock);
 					exposure = g_exposure;
 					temperature = g_temperature;
+					changesTemperature = g_changesTemperature;
 				}
 				const auto scale = [&](size_t offset, float factor, bool kelvin) {
 					float value = 0;
@@ -64,7 +67,9 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 					std::memcpy(component + offset, &value, 4);
 				};
 				scale(ExposureOffset, exposure, false);
-				scale(TemperatureOffset, temperature, true);
+				if (changesTemperature) {
+					scale(TemperatureOffset, temperature, true);
+				}
 				g_changed.fetch_add(1, std::memory_order_relaxed);
 			}
 		}
@@ -100,15 +105,20 @@ auto MapLightingPartStatuses() -> std::vector<PartStatus> {
 }
 
 void MapLightingMapOpened(const MapDef& map, int slotLevel) {
-	std::lock_guard<std::mutex> lock(g_lock);
-	// One look per slot level: a map opened later on another tileset does not replace the look of the first one.
-	if (map.look.any() && slotLevel > 0) {
-		g_looks[slotLevel] = map.look;
-		plog::Info("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(map.look).c_str(), g_live.load() ? "" : " (not applied: the hook is off)");
-	} else {
-		g_looks.erase(slotLevel);
+	const bool has = map.look.any() && slotLevel > 0;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		// One look per slot level: a map opened later on another tileset does not replace the look of the first one.
+		if (has) {
+			g_looks[slotLevel] = map.look;
+		} else {
+			g_looks.erase(slotLevel);
+		}
+		g_active = false;
 	}
-	g_active = false;
+	if (has) {
+		plog::Info("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(map.look).c_str(), g_live.load() ? "" : " (not applied: the hook is off)");
+	}
 }
 
 void MapLightingPlayerTick(int playerLevel) noexcept {
@@ -123,6 +133,7 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 		if (active) {
 			g_exposure = ml::exposureScale(look->second);
 			g_temperature = ml::temperatureScale(look->second);
+			g_changesTemperature = ml::changesTemperature(look->second);
 		}
 	}
 	if (g_active.exchange(active) != active) {
