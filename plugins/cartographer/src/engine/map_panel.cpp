@@ -53,9 +53,7 @@ using FindPanelFn = void* (*)(const char* name) noexcept;
 using FindChildFn = void* (*)(void* parent, const char* name) noexcept;
 using SetTextFn = void (*)(void* textBox, const StringView* text) noexcept;
 
-// The game's HUDWarnings update (issue #371): this+0x180 is its TerrorZoneInfoText widget; the vtable entry at +0x50 is SetVisible(bool).
-constexpr int HudTerrorWidgetOffset = 0x180;
-constexpr int WidgetSetVisibleSlot = 0x50;
+// The game's HUDWarnings update (issue #371), hooked below.
 using HudUpdateFn = uint64_t (*)(void* self, void* a2, void* a3, void* a4) noexcept;
 
 enum PartId { FindPanel, FindChild, SetText, HudUpdate, PartCount };
@@ -70,6 +68,7 @@ Part g_parts[PartCount] = {
 HudUpdateFn g_hudOriginal = nullptr;
 std::atomic<bool> g_hudLive{false};     // the HUDWarnings update is hooked: the map text goes into the game's terror zone field, the own panel stays closed
 std::atomic<uint32_t> g_hudWrites{0};
+std::atomic<bool> g_hudZone{false};     // a zone is on and the map text replaced its lines: the plugin's own panel stays closed
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::OverlayService* g_overlay = nullptr;
@@ -141,8 +140,23 @@ auto SetRaw(const std::string& text, const char* panelName = PanelName, const ch
 	}
 }
 
-// The hook's write, after the game's own update of the HUDWarnings panel: the map text goes into its terror zone text and the text is shown.
-// Kept apart from the lock: __try and objects with destructors do not mix.
+// The game's update of the HUDWarnings panel keeps the terror zone text in a string at this+0x1e8 (pointer) and this+0x1f0 (length) and sets the widget at
+// this+0x180 from it every frame. While a map is open and a zone is on (that length is not 0) the hook writes the map text into the widget after the game's
+// own update, so it replaces the zone lines. With no zone the widget is hidden and the layout has already run without it: a text shown then is drawn
+// above the game info, so the plugin's own panel (below the game's zone text position) is used instead. Kept apart from the lock: __try and objects with
+// destructors do not mix.
+constexpr int HudTerrorWidgetOffset = 0x180;
+constexpr int HudTextLenOffset = 0x1f0;
+constexpr int WidgetSetVisibleSlot = 0x50;
+
+auto ZoneTextLength(void* self) noexcept -> uint64_t {
+	__try {
+		return At<uint64_t>(self, HudTextLenOffset);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return 0;
+	}
+}
+
 auto WriteHudText(void* self, const char* text, size_t size) noexcept -> bool {
 	__try {
 		void* const widget = At<void*>(self, HudTerrorWidgetOffset);
@@ -160,21 +174,28 @@ auto WriteHudText(void* self, const char* text, size_t size) noexcept -> bool {
 }
 
 auto HudUpdateHook(void* self, void* a2, void* a3, void* a4) noexcept -> uint64_t {
-	const uint64_t result = g_hudOriginal(self, a2, a3, a4);
-	{ static std::atomic<uint32_t> n{0}; const uint32_t c = n.fetch_add(1); if (c % 120 == 0) plog::Info("DEBUGHUD call %u inMap=%d live=%d self=%p", c, g_inMap.load() ? 1 : 0, g_hudLive.load() ? 1 : 0, self); }  // TEMP
 	if (!g_hudLive.load(std::memory_order_relaxed) || !g_inMap.load(std::memory_order_relaxed) || self == nullptr) {
-		return result;
+		g_hudZone = false;
+		return g_hudOriginal(self, a2, a3, a4);
 	}
+	const bool zone = ZoneTextLength(self) != 0;  // the game's text of the last update
+	const uint64_t result = g_hudOriginal(self, a2, a3, a4);
+	const bool zoneNow = ZoneTextLength(self) != 0;
 	bool ok = true;
-	try {
-		std::lock_guard<std::mutex> lock(g_lock);
-		if (!g_text.empty()) {
-			ok = WriteHudText(self, g_text.c_str(), g_text.size());
-			if (ok && g_hudWrites.fetch_add(1) < 3) {
-				plog::Info("map panel: map text written into the game's terror zone text (%zu character(s))", g_text.size());
+	bool wrote = false;
+	if (zone && zoneNow) {
+		try {
+			std::lock_guard<std::mutex> lock(g_lock);
+			if (!g_text.empty()) {
+				ok = WriteHudText(self, g_text.c_str(), g_text.size());
+				wrote = ok;
 			}
+		} catch (...) {
 		}
-	} catch (...) {
+	}
+	g_hudZone = wrote;
+	if (wrote && g_hudWrites.fetch_add(1) < 3) {
+		plog::Info("map panel: map text written into the game's terror zone text");
 	}
 	if (!ok) {
 		g_hudLive = false;  // the game's text shows again; the plugin's own panel takes over
@@ -397,7 +418,7 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 		if (g_on.load()) {
 			std::string want;
 			std::string wantBlue;
-			if (g_inMap.load() && !g_hudLive.load()) {  // with the game's own field in use the plugin's panel stays closed
+			if (g_inMap.load() && !g_hudZone.load()) {  // with the game's own field in use the plugin's panel stays closed
 				std::lock_guard<std::mutex> lock(g_lock);
 				want = g_text;
 				wantBlue = g_textBlue;
@@ -415,7 +436,7 @@ void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Fr
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!(g_on.load() && ((g_inMap.load() && !g_hudLive.load()) || g_open)) && !(g_bannerOn.load() && BannerPending())) {
+	if (!(g_on.load() && ((g_inMap.load() && !g_hudZone.load()) || g_open)) && !(g_bannerOn.load() && BannerPending())) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
@@ -681,7 +702,7 @@ auto MapPanelSummary() -> std::string {
 		return "Map panel: off (a memory fault; see the plugin log)";
 	}
 	if (g_hudLive.load()) {
-		return "Map text: on, in the game's terror zone text (the host shows it, a TCP/IP client does not know the properties)";
+		return "Map text: on, in the game's terror zone text while a zone is on, otherwise in the own panel";
 	}
 	if (!g_on.load()) {
 		return "Map panel: off (a game part or D2RLoader service was not found)";
