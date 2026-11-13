@@ -12,7 +12,7 @@ struct Known {
 	bool percent;
 };
 
-// Stat names the built-in pool and the examples use. Anything else is shown with a tidied stat name and its plain number.
+// Stat names the monster stats and the examples use. Anything else is shown with a tidied stat name and its plain number.
 const Known kKnown[] = {
 	{"item_maxhp_percent", "Life", true},
 	{"damagepercent", "Damage", true},

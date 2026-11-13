@@ -190,6 +190,10 @@ auto BossStringsJson(const std::vector<std::string>& names) -> std::string {
 auto MapStatStringsJson() -> std::string {
 	std::string out = "[";
 	AppendRecord(out, MapLevelStatLocalKey, MapLevelStatText);
+	for (const MonsterStatText& m : MonsterStatTexts) {
+		out += ',';
+		AppendRecord(out, m.key, m.text);
+	}
 	out += "]";
 	return out;
 }

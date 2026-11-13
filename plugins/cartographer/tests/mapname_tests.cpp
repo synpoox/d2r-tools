@@ -383,3 +383,16 @@ TEST_CASE("map level stat text: one record in the plugin's namespace, the instal
 	CHECK(all.str().find("'" + RowKey("cartographer", MapLevelStatLocalKey) + "'") != std::string::npos);
 	CHECK(all.str().find("$MapLevelStat = 'cartographer_map_level'") != std::string::npos);
 }
+
+TEST_CASE("monster map stat texts: one record each, and the installer and the plugin agree on the stats") {
+	const std::string json = MapStatStringsJson();
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	for (const MonsterStatText& m : MonsterStatTexts) {
+		CHECK(json.find(std::string("\"Key\":\"") + m.key + "\"") != std::string::npos);
+		CHECK(all.str().find(std::string("'cartographer_") + m.key + "'") != std::string::npos);
+	}
+}

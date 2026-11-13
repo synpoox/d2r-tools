@@ -1,5 +1,0 @@
-Target	Stat	Min	Max	Weight
-Monsters	item_maxhp_percent	10	20	3
-Monsters	fireresist	10	40	2
-Players	fireresist	-25	-10	1
-Players	hpregen	-30	-10	1

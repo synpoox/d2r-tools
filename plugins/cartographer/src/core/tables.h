@@ -8,7 +8,6 @@
 
 #include "events.h"
 #include "layout.h"
-#include "mapstats.h"
 #include "report.h"
 
 #include <cstdint>
@@ -22,14 +21,13 @@ inline constexpr const char* MapsFile = "maps.txt";
 inline constexpr const char* SettingsFile = "cartographer.txt";
 inline constexpr const char* SlotsFile = "slots.txt";
 inline constexpr const char* ShapesFile = "shapes.txt";
-inline constexpr const char* MapStatsFile = "mapstats.txt";
+inline constexpr const char* MapStatsFile = "mapstats.txt";  // retired: only noted when it exists
 inline constexpr const char* MapEventsFile = "mapevents.txt";
 inline constexpr const char* BossesFile = "bosses.txt";
 // The superuniques.txt key (Superunique column) of a boss entry. The prefix is on every key, so it can never equal a vanilla row; tools/install.ps1 writes the same.
 inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
-inline constexpr int DefaultProperties = 6;
 inline constexpr int DefaultEventChance = 20;
 inline constexpr int MaxMonsters = 10;
 inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
@@ -58,6 +56,7 @@ struct GameNames {
 	std::vector<int> monsterMods;           // monumod.txt id
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
+	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
 };
 
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
@@ -82,15 +81,12 @@ struct MapDef {
 	std::vector<std::string> monsters;
 	int level = DefaultMonsterLevel;
 	int minCharLevel = 1;
-	int properties = -1;   // -1: use the cartographer.txt value
 	int eventChance = -1;  // -1: use the cartographer.txt value
 	int density = 0, champions = 0, uniques = 0;
 };
 
 struct Settings {
-	int properties = DefaultProperties;
 	int eventChance = DefaultEventChance;
-	int itemStats = 0;
 	int playerStats = 1;  // PlayerStats: 1 puts the map's player stats on the player while in the map (removed on leaving and on Save and Exit)
 	int mapNames = 1;   // MapNames: 0 turns off a map's own Name on the portal tooltip, the automap title and the entry banner (on by default; seen in game in single player, multiplayer unverified)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
@@ -138,10 +134,6 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 
 // shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;
-
-// mapstats.txt (optional): the pool of random properties. A bad row is left out; an empty result means the built-in pool.
-// Stat names are not checked against the game's tables yet (they are used when properties are applied).
-auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartographer::stats::PoolRow>;
 
 // mapevents.txt (optional): the events a map can roll. A bad row is left out. Spawn names are not resolved yet.
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row>;
