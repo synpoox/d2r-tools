@@ -1,4 +1,4 @@
-﻿# Cartographer
+# Cartographer
 
 A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's own item. In Harrogath, in Hell, the item
 opens a red portal to a level built from your `maps.txt`. Maps can carry random properties and events (a boss, a horde,
@@ -175,7 +175,7 @@ the game returns no unit for it, the boss is spawned as a plain monster of its `
 minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
 (two maps with that boss, or the same map opened twice): the game allows each boss once per game.
 
-Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `GÃ©rard Ã–stberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
+Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
 
 The boss's name in game is the entry's `Name`: the installer writes the row's `Name` cell as a text key (`cartographer:boss_<Name>`, with every character other than a letter or digit written as `_` and its two-digit hex code, so `Shoreline Warden` is `boss_Shoreline_20Warden`)
 and the plugin defines that text when it loads. Run the installer again and restart. The names shown on hover were checked in game (single player, Hell, a Latin-1 `bosses.txt`; PR #261).
@@ -298,4 +298,3 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
   `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).
-

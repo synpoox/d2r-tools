@@ -373,7 +373,8 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			}
 		}
 
-		// The pace (the whole map gets its unique packs, issue #317): armed whenever the record's Uniques part is allowed.
+		// The pace (the whole map gets its unique packs, issue #317): armed whenever the record's Uniques part is allowed;
+		// disarmed again below when the record write fails.
 		if (record != nullptr && difficulty >= 0) {
 			const int total = lr::UniqueTotal(request, recSnap, recOn.uniques);
 			if (total > 0) {
@@ -422,6 +423,9 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 		};
 		const bool rowOk = write(g_row, row, rowPrep, rowCount);
 		const bool recOk = record == nullptr ? true : write(g_rec, record, recPrep, recCount);
+		if (!recOk) {
+			DisarmPaceLocked();  // the record does not hold the planned values, so there is nothing sound to pace or restore
+		}
 		if (!rowOk || !recOk) {
 			Note("'" + map.name + "' was partly not applied: writing the " + std::string(!rowOk ? "row" : "record") + " failed");
 		} else {
