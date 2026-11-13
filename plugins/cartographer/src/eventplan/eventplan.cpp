@@ -213,8 +213,23 @@ bool EventRoomTracker::onPopulated(const Rect &room) {
 	return false;
 }
 
-BossRoomPicker::BossRoomPicker(std::vector<Rect> ranked) : ranked_(std::move(ranked)), populated_(ranked_.size(), false) {
-	done_ = ranked_.empty();
+BossRoomPicker::BossRoomPicker(std::vector<Rect> cell, std::vector<Rect> others, std::optional<Rect> entry) {
+	cellCount_ = cell.size();
+	ranked_ = std::move(cell);
+	for (const Rect &r : others) {
+		ranked_.push_back(r);
+	}
+	if (entry) {
+		const int at = indexOf(*entry);
+		if (at < 0) {
+			ranked_.push_back(*entry);
+			entry_ = ranked_.size() - 1;
+		} else if (static_cast<size_t>(at) >= cellCount_) {
+			entry_ = static_cast<size_t>(at);
+		}  // an entrance room inside the cell is tried there; it is not the forced room
+	}
+	populated_.assign(ranked_.size(), false);
+	refused_.assign(ranked_.size(), false);
 }
 
 int BossRoomPicker::indexOf(const Rect &room) const {
@@ -226,6 +241,17 @@ int BossRoomPicker::indexOf(const Rect &room) const {
 	return -1;
 }
 
+int BossRoomPicker::adopt(const Rect &room) {
+	const int at = indexOf(room);
+	if (at >= 0) {
+		return at;
+	}
+	ranked_.push_back(room);
+	populated_.push_back(true);
+	refused_.push_back(false);
+	return static_cast<int>(ranked_.size() - 1);
+}
+
 bool BossRoomPicker::onPopulated(const Rect &room) {
 	if (done_) {
 		return false;
@@ -234,21 +260,114 @@ bool BossRoomPicker::onPopulated(const Rect &room) {
 	if (i < 0) {
 		return false;
 	}
-	populated_[static_cast<size_t>(i)] = true;
-	return static_cast<size_t>(i) == current_;
+	const size_t at = static_cast<size_t>(i);
+	populated_[at] = true;
+	if (!forcing_ && current_ < cellCount_) {
+		return at == current_;  // still in the cell: only the room being waited for
+	}
+	if (refused_[at] || at < cellCount_) {
+		return false;
+	}
+	current_ = at;
+	forcing_ = false;
+	return true;
+}
+
+int BossRoomPicker::nextUntried() {
+	for (size_t i = cellCount_; i < ranked_.size(); ++i) {
+		if (populated_[i] && !refused_[i]) {
+			current_ = i;
+			forcing_ = false;
+			return static_cast<int>(i);
+		}
+	}
+	// Every populated room refused: the entrance room again, with the collision test skipped; once only.
+	if (entry_ && populated_[*entry_] && refused_[*entry_] && !forced_) {
+		forced_ = true;
+		current_ = *entry_;
+		forcing_ = true;
+		return static_cast<int>(*entry_);
+	}
+	return -1;
 }
 
 int BossRoomPicker::refused() {
-	if (done_) {
+	if (done_ || current_ >= ranked_.size()) {
 		return -1;
 	}
-	++current_;
-	if (current_ >= ranked_.size()) {
-		done_ = true;  // none left: given up
-		gaveUp_ = true;
-		return -1;
+	if (forcing_) {
+		forcing_ = false;  // the forced try is spent; rooms that populate later are tried as they do
+		return nextUntried();
 	}
-	return populated_[current_] ? static_cast<int>(current_) : -1;
+	refused_[current_] = true;
+	if (current_ < cellCount_) {
+		++current_;
+		if (current_ < cellCount_) {
+			return populated_[current_] ? static_cast<int>(current_) : -1;
+		}
+	}
+	return nextUntried();
+}
+
+std::vector<Rect> roomsFarthestFirst(const Rect &entry, const std::vector<Rect> &rooms, const std::vector<Rect> &exclude) {
+	struct Cand {
+		int64_t cheb;
+		int64_t sq;
+		size_t order;
+		Rect room;
+	};
+	const auto same = [](const Rect &a, const Rect &b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };
+	std::vector<Cand> cands;
+	for (size_t i = 0; i < rooms.size(); ++i) {
+		const Rect &r = rooms[i];
+		if (r.w <= 0 || r.h <= 0 || same(r, entry)) {
+			continue;
+		}
+		bool skip = false;
+		for (const Rect &e : exclude) {
+			skip = skip || same(r, e);
+		}
+		if (skip) {
+			continue;
+		}
+		const int64_t dx = (2 * static_cast<int64_t>(r.x) + r.w) - (2 * static_cast<int64_t>(entry.x) + entry.w);
+		const int64_t dy = (2 * static_cast<int64_t>(r.y) + r.h) - (2 * static_cast<int64_t>(entry.y) + entry.h);
+		cands.push_back({std::max(dx < 0 ? -dx : dx, dy < 0 ? -dy : dy), dx * dx + dy * dy, i, r});
+	}
+	std::stable_sort(cands.begin(), cands.end(), [](const Cand &a, const Cand &b) { return a.cheb != b.cheb ? a.cheb > b.cheb : (a.sq != b.sq ? a.sq > b.sq : a.order < b.order); });
+	std::vector<Rect> out;
+	for (const Cand &c : cands) {
+		out.push_back(c.room);
+	}
+	return out;
+}
+
+BossDrive driveBoss(BossRoomPicker &picker, size_t first, const std::function<BossTry(size_t, BossRoomPicker::Tier)> &tryRoom) {
+	BossDrive out;
+	size_t index = first;
+	for (;;) {
+		const BossRoomPicker::Tier tier = picker.tier();
+		out.tries.push_back({index, tier});
+		const BossTry result = tryRoom(index, tier);
+		if (result == BossTry::Made) {
+			picker.finish();
+			out.placed = true;
+			return out;
+		}
+		if (result == BossTry::Stop) {
+			out.stopped = true;
+			return out;
+		}
+		const int next = picker.refused();
+		if (next < 0) {
+			out.waiting = !picker.done();
+			if (picker.currentRoom() != nullptr) {
+				out.waitRoom = *picker.currentRoom();
+			}
+			return out;
+		}
+		index = static_cast<size_t>(next);
+	}
 }
 
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {

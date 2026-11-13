@@ -4,6 +4,7 @@
 // The engine part (src/engine/event_apply.cpp) reads the game and calls these.
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -194,45 +195,76 @@ private:
 	bool fired_ = false;
 };
 
-// Which room the map's own Boss goes in, when the plan's boss cell has several rooms (a maze cell is 2 x 2 engine rooms, or 3 x 3).
-// `ranked` is the cell's rooms, the preferred one first. The Boss is tried in the first as it is populated; when the game refuses
-// every spot there (a quadrant with no floor), the next one is tried, and so on, in order, even when it was populated earlier.
-// When none is left the Boss is given up (fail open). Pure: the caller keeps the rooms' game pointers by `indexOf`.
+// Which room the map's own Boss goes in, and what happens when the game refuses it there. Pure: the engine keeps the rooms' game
+// pointers by `indexOf` and does the spawning; this decides the order, so the Boss always ends up somewhere (no give-up).
+//   1. `cell`: the plan's boss room, then the other rooms of its cell (a maze cell has several engine rooms), in order. Each is waited
+//      for until it is populated, so the Boss is not put anywhere else while the cell may still take it.
+//   2. `others`: every other room of the level, farthest from the entrance first, the entrance room last (`entry`). Once the cell is
+//      spent they are tried as they are populated: the populated ones at once, the farthest first; one that populates later the moment it does.
+//   3. The last resort: when every populated room has refused, the entrance room is tried again with `forcing()` (the game's own spot
+//      test for collision skipped), and any room that populates after that is tried normally. There is no give-up.
+// A room the list does not know (the room list could not be read) is `adopt`ed as a populated candidate at the end.
 class BossRoomPicker {
 public:
-	explicit BossRoomPicker(std::vector<Rect> ranked);
+	enum class Tier { Cell, Other, Forced };
+	BossRoomPicker(std::vector<Rect> cell, std::vector<Rect> others = {}, std::optional<Rect> entry = std::nullopt);
 	// The candidate's index for a rect, -1 when the rect is not one of them.
 	int indexOf(const Rect &room) const;
-	// A room of the level was populated. True when the Boss should be tried in it now (it is the current candidate and the Boss is
-	// neither placed nor given up); a later candidate is remembered as populated for `refused`.
+	// A room the list does not know, populated: added as the last candidate. Returns its index (the existing one when already known).
+	int adopt(const Rect &room);
+	// A room of the level was populated. True when the Boss should be tried in it now (`current()` is then its index). In the cell it is
+	// the current candidate only; after the cell any room not yet refused counts. A later cell room is remembered for `refused`.
 	bool onPopulated(const Rect &room);
 	// The Boss was placed: no more tries.
 	void finish() { done_ = true; }
-	// The Boss can never be placed (the plan has a problem no room fixes): no more tries, and `gaveUp()`.
-	void giveUp() {
-		done_ = true;
-		gaveUp_ = true;
-	}
-	// The current candidate has no placeable spot, or cannot be read (counts as refused). Returns the index of the next candidate to try now
-	// (it was populated already), or -1: then either wait for the next candidate to populate (`!done()`, `current()` is the room waited for),
-	// or, when `gaveUp()`, the last room refused and the Boss is given up (fail open).
+	// The try in `current()` failed (or its room cannot be read: that counts as a refusal). Returns the index to try next, now, or -1: then
+	// wait (`currentRoom()` is the cell room waited for, null after the cell: the next room to populate is tried at once).
 	int refused();
-	// The current candidate is the last one: a refusal there gives up.
-	bool lastRoom() const { return !done_ && current_ + 1 >= ranked_.size(); }
-	// The candidate being tried or waited for, when there is one.
-	const Rect *currentRoom() const { return current_ < ranked_.size() ? &ranked_[current_] : nullptr; }
+	// The tier of the room being tried or waited for.
+	Tier tier() const { return forcing_ ? Tier::Forced : (current_ < cellCount_ ? Tier::Cell : Tier::Other); }
+	bool forcing() const { return forcing_; }
+	// The cell room being waited for, when there is one.
+	const Rect *currentRoom() const { return !done_ && !forcing_ && current_ < cellCount_ ? &ranked_[current_] : nullptr; }
 	bool done() const { return done_; }
-	bool gaveUp() const { return gaveUp_; }
 	size_t size() const { return ranked_.size(); }
 	size_t current() const { return current_; }
+	size_t cellSize() const { return cellCount_; }
+	const Rect &room(size_t i) const { return ranked_[i]; }
 
 private:
+	int nextUntried();
 	std::vector<Rect> ranked_;
 	std::vector<bool> populated_;
+	std::vector<bool> refused_;
+	size_t cellCount_ = 0;
 	size_t current_ = 0;
+	std::optional<size_t> entry_;  // the index of the entrance room, the forced try's room
+	bool forcing_ = false;
+	bool forced_ = false;  // the forced try was made
 	bool done_ = false;
-	bool gaveUp_ = false;
 };
+
+// The rooms other than `entry` and `exclude`, farthest first from `entry` (Chebyshev distance of the centres, then the larger squared
+// distance, then list order). The order of `BossRoomPicker`'s `others`.
+std::vector<Rect> roomsFarthestFirst(const Rect &entry, const std::vector<Rect> &rooms, const std::vector<Rect> &exclude);
+
+// What one try of the Boss in one room came to.
+enum class BossTry { Made, Refused, Stop };
+// What the engine loop did, the picker's decisions run against a `tryRoom` that does the spawn. `tries` lists every room tried, in order, with
+// its tier; `placed`: the Boss is made; `stopped`: the loop was told to stop (the game was left); `waiting`: no room is ready now (`waitRoom` is the
+// cell room waited for, when there is one; else the next room to populate takes it). Pure, so the engine's loop is tested as it runs.
+struct BossDrive {
+	struct Step {
+		size_t index = 0;
+		BossRoomPicker::Tier tier = BossRoomPicker::Tier::Cell;
+	};
+	std::vector<Step> tries;
+	bool placed = false;
+	bool stopped = false;
+	bool waiting = false;
+	std::optional<Rect> waitRoom;
+};
+BossDrive driveBoss(BossRoomPicker &picker, size_t first, const std::function<BossTry(size_t index, BossRoomPicker::Tier tier)> &tryRoom);
 
 // --- What is spawned -----------------------------------------------------------------------------------------------
 
