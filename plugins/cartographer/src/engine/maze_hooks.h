@@ -62,6 +62,10 @@ void MazeProbeArrival(void* room, int32_t levelId);
 // The probe runs when MazeProbe or AutoCheck is 1. Read by AutoCheck.
 auto MazeArrivalResult() -> int;
 
+// The tileset of the maze map that is open and not yet built, or empty. The maze slots share one job, so portal.cpp refuses a map of another
+// tileset while this is set (MazeOpenConflict).
+auto MazePendingTileset() -> std::string;
+
 // True while a slot build is running, or once one ran for an opened map in this game; no map is opened through the slot then
 // (the level can be torn down and rebuilt, so a later open could mix plans) until the game is left.
 auto MazeSlotBuilt() -> bool;

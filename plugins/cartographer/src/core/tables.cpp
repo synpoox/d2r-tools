@@ -996,6 +996,14 @@ auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> 
 	       ") cannot be opened in this game. Leave the game and start a new one to open it.";
 }
 
+auto MazeOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
+	if (MapIsOutdoor(map) || pendingTileset.empty() || EqualsNoCase(pendingTileset, map.tileset)) {
+		return {};
+	}
+	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +
+	       ") cannot be opened in this game. Leave the game and start a new one to open it.";
+}
+
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int {
 	for (const Slot& s : slots) {
 		if (EqualsNoCase(s.name, slot)) {

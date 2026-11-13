@@ -263,8 +263,7 @@ same game is refused. Without the tileset's level, its maps do not open.
 
 The installer adds, to the mod's tables, those levels copied from a plain game Cave and Crypt level and
 set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with their `lvlmaze.txt` rows and the `Maze` and
-`MazeCrypt` rows of `slots.txt`. `-Tileset` is no longer used. A Maze level made by an older install with `-Tileset Crypt` keeps LevelType 4:
-set it to 3 by hand for Cave maps (Crypt maps use the new level).
+`MazeCrypt` rows of `slots.txt`. `-Tileset` is no longer needed. A Maze level made by an older install with `-Tileset Crypt` is set back to LevelType 3 when you rerun the installer (Crypt maps use the new level).
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Outdoor slot (Jungle)

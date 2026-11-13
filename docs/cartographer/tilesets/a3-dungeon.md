@@ -18,7 +18,7 @@ Research only. Vanilla tables of build 3.3.0 were read, nothing copied. Engine f
 
 Almost. The plan side is one new `builtinTileset` entry (name Dungeon, levelType 24, roomTiles 14, pieceBase 664, prev 695-698), plus the table touch points of `adding-a-tileset.md` (ready list, README, `tables.md`). It needs more in three places:
 
-- **A slot per tileset.** The Maze slot is one level of one LevelType (`slotTypeProblem`, installer `-Tileset`) and `maze_hooks.cpp` hooks one slot id. Dungeon needs its own level (LevelType 24) or a reinstall. A multi-slot table like `OutdoorTilesets` is the shared fix (work shared by all seven research issues).
+- **A slot per tileset.** Each maze tileset has a slot level of its own (a row of `MazeTilesets` in `src/maze/maze_tilesets.h`, installed by `$MazeTilesets` in `install.ps1`; #303). Dungeon needs a row with LevelType 24.
 - **The builder case.** Only the Cave and Crypt cases of the maze builder `0x3e69e0` are recorded. Whether the Dungeon case calls the ring grower `0x3e9820` (the plugin has `ring.noOp`) and whether a walk follows it (`walkFollowsRing`) is not recorded. The plan lists Dungeon among the tilesets that steer once the ring grower is a no-op, from the pd2-resurrected prototype, not from a game check in this repo.
 - **Room size 14.** Cave (24) and Crypt (8) are multiples of 8, and the probe saw 8 x 8 engine rooms. 14 is not, so how the game splits a 14 x 14 piece into engine rooms, and whether the entrance-cell arrival check (it divides by `roomTiles`) holds, is unknown.
 
