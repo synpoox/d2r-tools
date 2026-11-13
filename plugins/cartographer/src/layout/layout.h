@@ -65,7 +65,7 @@ struct Rules {
 	int loopsMax = 0;
 	bool bossRoom = true;  // reserve the boss room at the end of the path
 	int eventPct = 50;     // the event room is this percent of the way along the main path
-	// Open (a plains map): every cell of the grid is a room and neighbours are linked, but for a few walls. The main path
+	// Open (an open room grid): every cell of the grid is a room and neighbours are linked, but for a few walls. The main path
 	// is the shortest walk from the entrance to the farthest cell. Side rooms, loops and rings do not apply.
 	bool open = false;
 	int wallPct = 12;      // percent of the grid's links that become walls (an Open map only)

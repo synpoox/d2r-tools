@@ -289,12 +289,12 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 
 		// An Open map needs rooms joined on all four sides. Snow is lines of fence pieces and takes no Shape, so it cannot build one.
 		if (ok && !map.shape.empty() && !map.tileset.empty()) {
-			const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(map.tileset);
-			if (row != nullptr && row->planner == cartographer::outdoor::Planner::Snow) {
+			const cartographer::outdoor::OutdoorTileset* outdoorRow = cartographer::outdoor::findOutdoorTileset(map.tileset);
+			if (outdoorRow != nullptr && outdoorRow->planner == cartographer::outdoor::Planner::Snow) {
 				cartographer::layout::Rules rules;
 				std::string ignored;
 				const cartographer::layout::ShapeTable none;
-				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::Size::Medium, rules, ignored) && rules.open) {
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored) && rules.open) {
 					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
 				}
 			}

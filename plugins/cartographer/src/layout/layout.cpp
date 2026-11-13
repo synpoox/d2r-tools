@@ -857,7 +857,7 @@ const Preset kPresets[kShapeCount][kSizeCount] = {
 	 {12, 16, 0, 3, 99, 2, 4, 1, 2, 0, 1, true},
 	 {20, 28, 0, 3, 99, 4, 7, 1, 3, 0, 2, true},
 	 {32, 40, 0, 3, 99, 6, 10, 2, 4, 0, 2, true}},
-	// Open: a plains map, every cell a room. Only the main path's length is used (entrance to the farthest room).
+	// Open: an open room grid, every cell a room. Only the main path's length is used (entrance to the farthest room).
 	{{4, 16, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
 	 {4, 36, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
 	 {4, 81, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
@@ -1021,12 +1021,10 @@ Layout generateFallback(const Rules &r, uint64_t seed)
 			return l;
 		}
 	}
-	if (r.open) {
-		// buildOpen cannot get stuck on usable rules; the empty layout below reports rulesMet false for any other
-	} else if (r.loop) {
-		fallbackRing(g, r, d);
-	} else {
-		fallbackWalk(g, r, d);
+	// An Open map that buildOpen could not build (rules validateRules refuses) stays an empty layout and reports rulesMet false.
+	if (!r.open) {
+		if (r.loop) fallbackRing(g, r, d);
+		else fallbackWalk(g, r, d);
 	}
 	reserveRooms(r, d);
 	fallbackBranches(g, r, d);
