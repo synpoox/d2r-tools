@@ -1,4 +1,4 @@
-## 23. The Ice caves case of the maze builder (issue #245)
+## 24. The Ice caves case of the maze builder (issue #245)
 
 Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Addresses are RVAs in the memory-layout dump. **Evidence level: static** (Capstone over the dump); not run in a game by this section.
 

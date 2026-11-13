@@ -1079,7 +1079,7 @@ TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev 
 	CHECK(row->prevPiece[1] == 1019);
 	CHECK(row->prevPiece[2] == 1020);
 	CHECK(row->prevPiece[3] == 1021);
-	CHECK(row->callsRingGrower);  // docs/reverse-engineering/cartographer/23-ice-caves-builder.md
+	CHECK(row->callsRingGrower);  // docs/reverse-engineering/cartographer/24-ice-caves-builder.md
 	CHECK(findMazeTilesetBySlot("mazeice") == row);
 	Tileset t;
 	REQUIRE(builtinTileset("Ice", t));

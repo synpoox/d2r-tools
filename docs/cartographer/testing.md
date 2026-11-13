@@ -111,9 +111,9 @@ Map names are on by default: a map's own `Name` shows on its portal, the automap
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md` (the index of the per-section files). A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.
 
-## Maze slot (Cave and Crypt, manual setup)
+## Maze slot (Cave, Crypt and Ice caves, manual setup)
 
-A `Cave` or `Crypt` map opens through a second level, the `Maze` slot (Cave) or the `MazeCrypt` slot (Crypt), and the plugin builds that level from the map's layout
+A `Cave`, `Crypt` or `Ice` map opens through a second level, the `Maze` slot (Cave), the `MazeCrypt` slot (Crypt) or the `MazeIce` slot (Ice caves), and the plugin builds that level from the map's layout
 instead of the game's random maze. **One maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
 or 4 (Crypt), and each tileset has its own slot level (`src/maze/maze_tilesets.h`). A slot whose level has another LevelType (an old install's Maze level made a Crypt with `-Tileset Crypt`, until the installer is rerun) is refused with a plain message when you
 try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
@@ -135,11 +135,11 @@ refused later, at build time (for example the slot is too small for the map's si
   game level so it has a string, and a matching `lvlmaze.txt` row. The row also keeps the copied level's Act 1 monster list and
   `MonLvl*` values; check in game that the map's own `Monsters` and `Level` settings override them. At load, a `Maze` slot is kept only if
   its `levels.txt` row is named `Cartographer Maze`. Cartographer
-  reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave and Crypt maps are refused.
-- Restart the game. If a part or the slot is missing, only Cave and Crypt maps are refused; the rest keep working. If the
+  reads this `LevelType` from the mod's `levels.txt` at load; if it cannot, Cave, Crypt and Ice maps are refused.
+- Restart the game. If a part or the slot is missing, only Cave, Crypt and Ice maps are refused; the rest keep working. If the
   plan cannot be built or the engine refuses a step, the game's own walk finishes that maze (with the slot's own size and
   `lvlmaze.txt` row restored first) and the reason is logged.
-- The Maze level is built once per game. Opening a second Cave or Crypt map in the same game is refused ("leave the game and
+- The Maze level is built once per game. Opening a second Cave, Crypt or Ice map in the same game is refused ("leave the game and
   start a new one").
 
 Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): the plan, the steered build, the tileset refusal, the fallback and new games. The player did not arrive in the planned entrance cell in the 5 games with an arrival line; the build now marks the planned entrance cell as the level entry; that room gets none of the level's random objects (chests, shrines and the like), which is accepted (written and unit tested, not verified in game; #127). Not run in game: a second map in the same game on the Crypt slot. Hell (arrival, Boss, event) and the Normal and Nightmare refusal were run later ([crypt-difficulty-check](checks/2026-11-12-crypt-difficulty-check.md)).

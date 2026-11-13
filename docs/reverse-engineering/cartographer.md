@@ -29,4 +29,4 @@ New sections go in new files (the next free number, `18-<topic>.md`), and a new 
 - [20. `warpDefs` assert at map entry (issue #254)](cartographer/20-warpdefs-assert.md)
 - [21. `ptWarp` and `bPiece` asserts in a Crypt map (issue #263)](cartographer/21-crypt-asserts.md)
 - [22. Map panel on the right of the screen (issue #308)](cartographer/22-map-panel.md)
-- [23. The Ice caves case of the maze builder (issue #245)](cartographer/23-ice-caves-builder.md)
+- [24. The Ice caves case of the maze builder (issue #245)](cartographer/24-ice-caves-builder.md)

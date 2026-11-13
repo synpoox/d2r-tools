@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave) and "Cartographer Crypt" (Crypt; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt) and "Cartographer Ice Caves" (Ice; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt) or 33 (Ice),
                     360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
@@ -18,7 +18,7 @@
     levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, MazeCrypt, Outdoor and OutdoorSnow rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeIce, Outdoor and OutdoorSnow rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -76,7 +76,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave and Crypt are both added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt and Ice are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -352,7 +352,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
     $mazeId
 }
 
-# --- levels.txt: one level per maze tileset (Cave, Crypt) -------------------------------------------------------------
+# --- levels.txt: one level per maze tileset (Cave, Crypt, Ice) -------------------------------------------------------------
 $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly

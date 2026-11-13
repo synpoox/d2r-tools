@@ -83,7 +83,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    |---|---|---|---|---|---|
    | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 6000, 0 |
    | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 6000, 4200 |
-   | `Cartographer Ice Caves` | a plain game Ice caves maze row (DrlgType 1), such as level 129 | 1 | 33 (Ice) | 360 | 6400, 0 |
+   | `Cartographer Ice Caves` | a plain game Ice caves maze row (DrlgType 1), such as level 113 | 1 | 33 (Ice) | 360 | 6400, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
 

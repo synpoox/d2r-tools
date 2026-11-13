@@ -8,12 +8,12 @@ Boss `Shoreline Warden`, an Ambush event, `EventChance=100`, the example `mapsta
 
 | Check | Result |
 |---|---|
-| Normal/Nightmare refusal | PASS: the item in a Nightmare game logged "can only be opened in Hell" and said "I can't use this yet". |
+| Nightmare refusal | PASS: the item in a Nightmare game logged "can only be opened in Hell" and said "I can't use this yet". |
 | Opens from its item in Hell | PASS: "Glacial Veins is open", red portal, log `opening 'Glacial Veins' (Ice) through level 143`. |
 | Built as planned | PASS: `maze slot level 143: built as planned (19 rooms, entrance placed)`, level 144 x 80 tiles, 0 refits. The map is the Ice cave tileset (Act 5 ice walls seen on arrival). |
 | Arrival in the entrance cell | PASS: `room 75 of 76 (at 6400,64) marked as the level entry, in plan cell (0,4)`; the player stood by the cave wall of the entry room. |
-| Boss room | PASS by log: `the map Boss 'Shoreline Warden' goes in the plan's boss room (6496,0) 8 x 8` (plan cell 6,0). The Boss was not seen on screen. |
-| Event room | PASS by log: the Ambush spawned 6 `zombie1` in the plan's event room, rooms #1-#5 (6400-6408, 56-72), plan cell (6,3) rect (6496,48). The positions logged are the Ambush's own rooms, not the event cell: not compared further. |
+| Boss room | PARTLY: first game (slot 11) log only. Second game (slot 5, Hell, level 143, 24 rooms, arrival in plan cell (8,8)): after `cheat goto` to the boss room (plan cell (0,7), rect (6400,112)) the log read `map Boss 'Shoreline Warden': spawned in the boss room (32000,560) 40 x 40 (as a superunique)` and a pack of zombies (the Boss's minions) stood in the room, one hovered as "Zombie, Undead, Minion". The Boss itself was not identified on screen: NOT VERIFIED. |
+| Event room | PASS: slot 5, Ambush armed in the event room (plan cell (4,1), rect (6464,16)): `armed in the event room (32320,80) 40 x 40: 5 per wave`, then on standing in it `wave 1 of 2: the game made 5 of 5 units in the event room`; the zombies were seen on screen. |
 | Map stats and panel | PASS: panel showed Monster level 85 and the two monster and two player properties. |
 | Stability | PASS: 0 `[ERROR]`, 0 `[FAULT]`. |
 
@@ -30,7 +30,11 @@ eventprobe: the map Boss 'Shoreline Warden' goes in the plan's boss room (6496,0
 ## Findings
 
 - A 16-tile cell is two engine rooms of 8 by 8 on each side (the log rects are 8 x 8 and the entry room sits at the cell's
-  corner), as a 24-tile Cave cell splits into three: the assumption in RE section 23 holds for arrival, the Boss room and the event room.
-- Not verified: the Boss and the event monsters seen in their rooms on screen (a warp to the boss room did not clearly
-  move the character), Nightmare-free multiplayer, a second Ice map in one game, the other shapes in game.
+  corner), as a 24-tile Cave cell splits into three: the assumption in RE section 24 holds for arrival, the Boss room and the event room.
+- Not verified: the named Boss seen on screen (only its spawn log line and its minions), multiplayer, a second Ice map in
+  one game, the other shapes in game.
+- `cheat goto <level>,<x>,<y>` takes absolute subtile coordinates (tile x 5 + 2), not tile coordinates.
+- Automap range: the engine saves automap cells as signed 16-bit words (x = (tx-ty)*8, y = (tx+ty)*4). Ice at the installed
+  offset 6400,0 gives x about 51200, out of range, so its reveal is lost after a town trip. Not changed here; Ice gets an
+  in-range offset once the installer range check of #329 lands.
 - The staging slot's Hell had to be chosen in the Select Difficulty box; the character the earlier checks left in Normal does not open maps.
