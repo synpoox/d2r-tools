@@ -89,6 +89,34 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
 | everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
 
+## Map level on the item (itemstatcost.txt, properties.txt, cubemain.txt)
+
+A map item can carry its own map level as a stat, so a cube recipe can change it and the item shows it on hover. `tools\install.ps1` adds two rows (never changing an existing one); a modder without the installer adds them by hand.
+
+| File | Row | Notes |
+|---|---|---|
+| `itemstatcost.txt` | `cartographer_map_level` | A copy of `item_maxhp_percent` with 9 save bits (0 to 511), unsigned, no op, `descfunc` 19, `descstrpos` and `descstrneg` `cartographer:map_level_stat` (the plugin registers the text `Map Level: %d`). The stat id is the row number, so the row goes last. |
+| `properties.txt` | `map-level` | A copy of `str` with `stat1` `cartographer_map_level`, so `cubemain.txt` can write `map-level` in a `mod` column. |
+
+- **Fallback:** a map item without the stat, with a value under 1 or with a layer uses the `maps.txt` Level. A value over 255 is cut to 255. The log line `map level N (...)` says which one applied.
+- **Where it is read:** the item-use hook, from the same stat list as `ItemStats` (the stat is taken out before the rest are used as map properties). `cartographer open` has no item and uses the `maps.txt` Level.
+- **Rarity and modifiers** come later (#311); this stat is only the level.
+
+Example recipe, one `cubemain.txt` row (columns not named are empty):
+
+| Column | Value |
+|---|---|
+| `description` | `Map + Town Portal scroll: map level 95` |
+| `enabled`, `version` | `1`, `100` |
+| `numinputs` | `2` |
+| `input 1`, `input 2` | the map's `misc.txt` code (for example `t20`), `tsc` |
+| `output` | `useitem,mod` |
+| `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `95`, `95` |
+
+**Does not work on a map item (checked in game, slot 6, Hell).** The cube reads the row, takes the inputs and sets the stat, but `useitem` rebuilds a misc item as a Hand Axe: the map came out as a Hand Axe whose hover showed `Map Level: 95`. The same happened with a type input (`cmap`) and with a vanilla misc item (`isc`), so it is the cube, not the map rows. Outputs that keep a map (`usetype,mod`, `usetype,mag,mod`, and a plain item code such as `t22`) give a normal map and drop the `mod`, so no `Map Level` line appears. The stat itself works: it is saved with the item, shown on hover and kept across a save and reload. Giving the `cmap` item type `Magic` 1, `Rare` 1, `Normal` 1 and `MaxSockets1` 1 in `itemtypes.txt` changed nothing: `useitem,mod` still produced a Hand Axe (`Map Level: 10`), and `usetype,mag,mod` and `usetype,rar,mod` still gave a plain white map with no stat. So the item type flags are not the cause; a plugin hook on the cube result would be needed. Until then, set the level in `maps.txt` (the fallback).
+
+**Keep the stat row where it is.** Once saved items carry `cartographer_map_level`, its row in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
+
 ## mapstats.txt (optional)
 
 One shared pool of random properties. Each map draws `Properties` of them. A property is never drawn twice in one map. If the file is missing, a small built-in pool is used.

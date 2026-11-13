@@ -52,6 +52,12 @@ auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::st
 // The plugin's boss string file: one record per name (a repeated name once), the display text in every language (see DisplayName).
 auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
 
+// The description of the map level stat (itemstatcost.txt, descstrpos): install.ps1 writes RowKey(plugin id, MapLevelStatLocalKey) and the plugin registers
+// this text for MapLevelStatLocalKey. The text is a format that takes the stat's value (descfunc 19).
+inline constexpr const char* MapLevelStatLocalKey = "map_level_stat";
+inline constexpr const char* MapLevelStatText = "Map Level: %d";
+auto MapStatStringsJson() -> std::string;
+
 // Writes `key` into a 40-byte field (the rest zero). False, and the field untouched, when the key does not fit.
 auto WriteKey(uint8_t* field, const std::string& key) -> bool;
 
