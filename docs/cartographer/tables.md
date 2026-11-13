@@ -139,7 +139,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 | `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 
-Any other stat on the map item (a resistance, `str`, `item_magicbonus`) is the player's while in the map. When the map opens the plugin reads the item's stats (up to 16), takes the map level out, and applies the rest: the monster ones to every monster that spawns in the map, the player ones to the player (removed on leaving; `PlayerStats` `0` turns that off). The plugin log line `map stats for ...` lists what was read and applied.
+Any other stat on the map item (a resistance, `str`, `item_magicbonus`) is the player's while in the map. When the map opens the plugin reads every stat on the item, takes the map level out, and applies the rest: the monster ones to every monster that spawns in the map, the player ones to the player (removed on leaving; `PlayerStats` `0` turns that off). The plugin log line `map stats for ...` lists what was read and applied.
 
 Example rows (columns not named are as in the vanilla file; `spawnable` 1, `rare` 1, `itype1` `cmap`):
 
