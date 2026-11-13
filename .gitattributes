@@ -1,5 +1,3 @@
 * text=auto
 *.ps1 text eol=crlf
 *.dll binary
-plugins/*/CHANGELOG.md merge=union
-plugins/*/README.md merge=union
