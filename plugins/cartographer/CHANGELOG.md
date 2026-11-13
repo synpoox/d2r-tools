@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Cave and Crypt maps now each have their own level, so one install opens either. If you installed Crypt before, rerun `tools\install.ps1` once; `-Tileset` is no longer needed.
+- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Crypt levels move to their new spots.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.

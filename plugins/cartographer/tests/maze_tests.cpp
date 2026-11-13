@@ -1058,10 +1058,49 @@ TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the s
 		CHECK(field(body, "Slot") == MazeTilesets[row].slot);
 		CHECK(field(body, "LevelName") == MazeTilesets[row].levelName);
 		CHECK(field(body, "LevelType") == std::to_string(MazeTilesets[row].levelType));
+		CHECK(field(body, "Size") == std::to_string(levelTiles));
+		// The installer's -<Param>OffsetX / -<Param>OffsetY defaults are the row's offsets.
+		const std::string param = field(body, "Param");
+		for (const char *axis : {"X", "Y"}) {
+			const std::string key = "[int]$" + param + "Offset" + axis + " = ";
+			const size_t k = text.find(key);
+			REQUIRE(k != std::string::npos);
+			CHECK(std::stoi(text.substr(k + key.size())) == (axis[0] == 'X' ? MazeTilesets[row].offsetX : MazeTilesets[row].offsetY));
+		}
 		++row;
 		at += 2;
 	}
 	CHECK(row == MazeTilesetCount);
+}
+
+TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-bit automap range and overlap nothing")
+{
+	// Range: the corners of each level, and a rule check of the function itself against the cell arithmetic.
+	for (const MazeTileset &row : MazeTilesets) {
+		CHECK_MESSAGE(automapInRange(row.offsetX, row.offsetY, levelTiles), row.name);
+		for (const int tx : {row.offsetX, row.offsetX + levelTiles})
+			for (const int ty : {row.offsetY, row.offsetY + levelTiles}) {
+				CHECK((tx - ty) * 8 >= -32768);
+				CHECK((tx - ty) * 8 <= 32767);
+				CHECK((tx + ty) * 4 <= 32767);
+				CHECK(tx >= 0);
+				CHECK(ty >= 0);
+			}
+		// Above the first Act 5 level of the game (Harrogath and the others start at y 1000), so no vanilla level is hit.
+		CHECK(row.offsetY + levelTiles <= 1000);
+	}
+	// The old spots were out of range: Cave at 6000,0 and Crypt at 6000,4200 (and Lava at 6000,4800).
+	CHECK_FALSE(automapInRange(6000, 0, levelTiles));
+	CHECK_FALSE(automapInRange(6000, 4200, levelTiles));
+	CHECK_FALSE(automapInRange(6000, 4800, levelTiles));
+	CHECK(automapInRange(3500, 0, levelTiles));
+	// No two levels overlap (rectangles of levelTiles x levelTiles).
+	for (size_t i = 0; i < MazeTilesetCount; ++i)
+		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
+			const bool apart = MazeTilesets[i].offsetX + levelTiles <= MazeTilesets[j].offsetX || MazeTilesets[j].offsetX + levelTiles <= MazeTilesets[i].offsetX ||
+			                   MazeTilesets[i].offsetY + levelTiles <= MazeTilesets[j].offsetY || MazeTilesets[j].offsetY + levelTiles <= MazeTilesets[i].offsetY;
+			CHECK_MESSAGE(apart, MazeTilesets[i].name << " overlaps " << MazeTilesets[j].name);
+		}
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------

@@ -23,12 +23,26 @@ struct MazeTileset {
 	int pieceBase;          // a room's piece is pieceBase + exit mask
 	int prevPiece[4];       // the entrance family ("Prev" group) by side W, E, S, N; all 0: no entrance family, the entrance is an ordinary room
 	bool callsRingGrower;   // the tileset's case in the maze builder 0x3e69e0 calls the ring grower 0x3e9820 first
+	int offsetX;            // the levels.txt OffsetX tools\install.ps1 gives the slot level (its -<Param>OffsetX default)
+	int offsetY;            // the levels.txt OffsetY (its -<Param>OffsetY default)
 };
+
+// Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
+inline constexpr int levelTiles = 360;
+
+// The game saves a level's automap cells as signed 16-bit numbers when the player leaves it (x = (tx - ty) * 8, y = (tx + ty) * 4) and a level whose
+// cells do not fit loses its revealed map after a trip to town (docs/reverse-engineering/cartographer/22-automap-memory.md). True when all four
+// corners of the size x size level at (offsetX, offsetY) fit: tx - ty from -4096 to 4095 and tx + ty up to 8191. tools/install.ps1 has the same test
+// (Test-AutomapRange) and refuses an offset that fails it.
+constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
+	return offsetX - offsetY + size <= 4095 && offsetY - offsetX + size <= 4096 && offsetX + offsetY + 2 * size <= 8191;
+}
 
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
 inline constexpr MazeTileset MazeTilesets[] = {
-	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false},
-	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false},
+	// Offsets: y 0 and x 3500 minus 400 for each row, so every level fits the automap range and sits above the first Act 5 level (y 1000).
+	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false, 3500, 0},
+	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false, 3100, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

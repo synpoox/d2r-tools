@@ -81,13 +81,14 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
-   | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 6000, 0 |
-   | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 6000, 4200 |
+   | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 3500, 0 |
+   | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 3100, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
 
    The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
-   shows).
+   shows). Keep a maze level's offsets small: the game saves its map cells as 16-bit numbers when you leave it, so a maze level with
+   OffsetX minus OffsetY above 3735 (or below -3736), or OffsetX plus OffsetY above 7471, loses its revealed map after a trip to town.
 2. **lvlmaze.txt**: copy the first row once for each maze level; set `Name` to `Cartographer Maze` (or `Cartographer Crypt`), `Level` to that
    row's `Id`, every `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
 3. **superuniques.txt**: for each `bosses.txt` entry copy the `Bishibosh` row and set `Superunique` to `cartoboss:` plus
