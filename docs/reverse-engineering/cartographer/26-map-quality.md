@@ -52,10 +52,16 @@ Build 93847, D2RLoader 1.3.1-beta, 2026-11-13, [check record](../../cartographer
 
 | Caller | Flag, request | Used by | Reaches the roll |
 |---|---|---|---|
-| `0x43cf18` (item spawn `0x43cd50`) | 1, set | monster and chest drops, `cheat spawn` | yes |
-| `0x527009` (cube executor) | 0, null | cube outputs | no |
-| `0x48de7b` | `edi`, not examined | probably vendor or gamble | not checked |
+| call site `0x43cf18` (item spawn `0x43cd50`; return address `0x43cf1d`) | 1, set | monster and chest drops, `cheat spawn` | yes |
+| call site `0x527009` (cube executor) | 0, null | cube outputs | no |
+| call site `0x48de7b` | `edi`, not examined | probably vendor or gamble | not checked |
 
-The earlier "148 of 304" was a reporting gap, not a missed path: the summary printed normal, rare, unique, magic and set, but left out low (1) and superior (3), which the roll gives about as often as normal. Every maker call in the test ended in a counted roll: 373 of 373 spawned maps (20, 133 and 240 in three runs) and 10 of 10 monster drops; zero magic maps. The summary now names all eight qualities and their total.
+The earlier "148 of 304" is most likely a reporting gap, not a missed path: the summary printed normal, rare, unique, magic and set, but left out low (1) and superior (3). In game on 2026-11-13 the scratch diagnostic hooks logged every maker call and every main roll (return `0x442e80`) of `cheat spawn`. The three log snapshots (20, 133 and 240 maker calls) are cumulative, not separate runs: the counts only grow, so the session made 240 maps (the ground area stops spawning at about 130 items per area, and the game was restarted between area fills). Of the 240, every maker call had a main roll (240 of 240):
 
-Item level: the maker's request holds the level at `request+0x18`. For `cheat spawn` it is 100 (the game thread's unit level reads 100 before and after the maker); drops from `testtreasure` in town had level 1. The "Item Level: 1" on a ground label is the UI thread's client copy, which reads 1 even for level 100 units.
+| Rolled | low 1 | normal 2 | superior 3 | magic 4 | set 5 | rare 6 | unique 7 |
+|---|---|---|---|---|---|---|---|
+| Maps | 114 | 97 | 23 | 4 | 0 | 1 | 1 |
+
+Final quality after the maker was normal (2) for all 240: the plugin makes magic normal, the failed rare and unique go through the normal fallback, and the game itself gives a map normal for a low (114) or superior (23) roll (observed, not traced in the code). So low and superior rolls (137 of 240) never show in the final quality, and a summary that lists only the qualities of the finished items counts about half of the rolls as missing. Cause: inferred from these counts and the summary code; the old run (304 spawned, 148 counted) was not repeated with the old build. Monster drops (`testtreasure mon=19,num=10`): 10 maker calls, 10 main rolls, all normal. Drop roll breakdown was not kept.
+
+Item level: the maker's request holds the level at `request+0x18`. For `cheat spawn` it is 100 (240 of 240 maker calls: `request+0x18` 100, unit level 100 before and after the maker); drops from `testtreasure` in town had level 1. The "Item Level: 1" on a ground label is the UI thread's client copy, which reads 1 even for level 100 units.
