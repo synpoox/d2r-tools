@@ -34,6 +34,45 @@ Nothing here is wired as a plugin part.
 
 - No reproduction of the loss in a healthy run, and no fix. A far-from-arrival screenshot comparison was not obtained
   (the overlay only drew cells near the player; `cheat goto` stopped moving the character after a return).
+
+## Cause and fix of the lost reveal (issue #306; build 93847, live)
+
+- The layer save (`0xd6230` -> `0xd5fe0`) writes each cell's x and y as 16-bit words and the restore (`0xd5710`, read
+  from the disassembly) sign-extends them back and sets the cell type to 1. A cell's x is `(tx - ty) * 8` and its y
+  `(tx + ty) * 4` (tile coordinates). The Maze level sat at OffsetX 6000, OffsetY 0, so x was about 48000, past 32767:
+  restored cells came back 65536 too small and drew far off screen. The cell count was unchanged (655 before and after
+  the trip in the probe), which is why the earlier runs saw "restored" and nothing on the map.
+- A swap only happens when the layer differs from the one being left: Cave (Layer 2) against Harrogath (Layer 79)
+  swaps; the Jungle slot (Layer 79, shared with the Act 5 town) never does, so it was never affected.
+- The fix keeps the whole level inside the 16-bit range: the installer puts the Maze level (360 x 360) at OffsetX
+  3500, OffsetY 0 (tx - ty stays within 3141..3859, tx + ty under 4220), and moves an older install's
+  row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
+  drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
+  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way. The installer checks it for the tilesets flagged `Range` (the Maze level and Snow, whose layers are not the town's 79; Jungle and Siege share 79 and are never swapped). The flag is per tileset, not read from the written row's Layer, moves an older install's row (Snow was at 6000,3600, out of range) and refuses an out-of-range `-<Param>OffsetX/Y`.
+
+## Stale reveal on a new map (issue #306 review; build 93847)
+
+- The map memory is kept per character, per layer and per game seed (`0xd5710` reads a layer's cells back from the
+  `.map` file when that layer becomes current; `0xd5fe0` writes them on leaving). A Cave slot map shares Layer 2 and a
+  Crypt slot map Layer 10 with a game level, and a single-player seed carries over, so map A's revealed walls were
+  drawn on map B's different maze in the next game. Seen live (slot 7, Cave then Crypt maps), before the fix.
+- Fix: part `AutomapRestore` (signature in `part_signatures.h`, 17 bytes hooked: three whole instructions, `push rbp`,
+  `lea rbp,[rsp-210h]`, `sub rsp,310h`). The function reads its state from globals but its first call (`0xd5450`, the map
+  file path) uses `rcx` as the caller left it, so it must be treated as taking the four argument registers: a hook with
+  no arguments that logged before calling the original made `0xd5450` fault (seen live, waypoint trips). The hook passes
+  `rcx`, `rdx`, `r8`, `r9` and the result straight on. The build of a slot map (the Maze build, and the outdoor build for
+  Snow; Jungle and Siege share the town's layer 79, so nothing is skipped for them) arms one skip. The map is built when
+  its portal opens, not when the player enters, so the skip lands only on the read made while the player's tick says
+  the player stands in the slot level (a trip to another area between opening and entering reads its cells as usual) and
+  another layer than the one left is current (current layer object read through the `cmp qword ptr [rip+x],0` at +0x22;
+  key = first dword). Building the same map again in the same game (the return from a town trip rebuilds it from the same
+  plan) arms nothing. Live (slot 5): a waypoint trip and town trips before entering kept their reads (layers 27 and 79,
+  log lines "read of layer N kept"); entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
+  (Snow) in level 140, in two games in a row; a town trip after the skip and the return showed the map's own reveal
+  again, no second skip.
+- Cost: the skipped read also drops the stock level's reveal on that layer for that seed (Cave Level 1 shares Layer 2,
+  the Crypt template Layer 10, Barricade Snow Layer 84): the leave writes only the new map's cells. A follow-up could let
+  the read run and then drop only the cells inside the slot's rectangle.
 - Game crashes at `0x1255802`: see the next section. Cause not established; no evidence that Cartographer or the probe causes them.
 
 ## Crash at `0x1255802` (issue #328)
@@ -61,3 +100,26 @@ Build 93847, slot 5. Read-only look at `d2rloader/crashes`, the logs and `D2R.ex
 
 To settle it (needs a game): reproduce in a slot with only Cartographer, then with Cartographer off, same save and
 steps; keep `d2rloader.log` and the full crash report; read the string at `0x1c783d0` and the caller in a live dump.
+
+### Cartographer-only run (2026-11-12, slot 5): no crash
+
+Build 93847, D2RLoader 1.3.1-beta, Cartographer built from origin/main `0eff6f4`, test mod and test character (level 99
+Barbarian, Hell chosen at the difficulty prompt; not read back from a log), single player, `debug_mode` and `cheat god 1` before the first map.
+Only Cartographer and the test harness were loaded: the slot's PD2 `core-maps`, `core-rules` and `core-ui` were parked
+(the slot's other plugins were already parked from earlier checks) and put back afterwards, with the mod folder, config and
+saves restored from a copy taken before. Staged with `tools\stage_check.ps1 -MapItems` using the example tables.
+
+- Game 1: Shorelines (Cave, opened with `cartographer open Shorelines`), 7 round trips about 8 minutes into one game. Each: red portal in
+  Harrogath, `cheat goto` calls in the map level, a Scroll or Tome of Town Portal back to Harrogath, the red portal again.
+- Game 2 (after Save and Exit): Overgrown Reach (Jungle, opened by right-clicking the `t22` item), 4 round trips, same steps.
+- 11 map entries in all, 19 `arrival` lines in `cartographer.log`. The game stayed up; no new report in `d2rloader\crashes`, no
+  `0x1255802`, no fail-fast, no "Character save failed". Both games ended with Save and Exit.
+- Two non-fatal loader assertions (dialogs off, game continued): `BC_ASSERT: i != dataTable->warpDefs.end()`
+  (`D2Common\src\DataTbls\LvlTbls.cpp:817`, "Error in DRLG related to stairs that connect levels", caller `exe+0x78EF6`) at
+  the first Shorelines entry, and `BC_VERIFY: ptDrlgLevel->ptRoomFirst` (`Drlg.cpp:882`, caller `exe+0x7600A`) right after a
+  `cheat goto` to a coordinate outside the map. Neither is the `0x1255802` function; the first came with the map's first build and did not repeat.
+
+Reading: the path that crashed in the earlier slot 5 runs did not fire with Cartographer alone in 11 round trips, so it is not
+shown to be Cartographer's. One run does not prove it is not: the earlier crashes came 5 to 8 minutes into a game
+and this run's longer game ran about 8 minutes. Not done: a run with the other plugins loaded and Cartographer off
+(the still-open comparison above), and reading the string at `0x1c783d0`. Logs were kept outside the repository.

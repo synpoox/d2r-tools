@@ -85,6 +85,8 @@ PARTS = [
     # The two parts the console command 'goto' calls to reach x,y (RoomAtTile is a thunk: its jmp is the first relative operand).
     ("RoomAtTile", 0x2F0810, 4, "E9", 0),
     ("RoomBringUp", 0x4042A0, 16, "E8", 0),
+    # The automap memory read (cartographer/22-automap-memory.md): hooked (17 bytes); the first relative operand (mov rax, [rip+x]) is at +17.
+    ("AutomapRestore", 0xD5710, 17, "48 8B 05", 17),
 ]
 
 # The free-spot search (0x402f50) has no signature: it is the target of the call at SpawnObject + 0xff. The 17 bytes before that call

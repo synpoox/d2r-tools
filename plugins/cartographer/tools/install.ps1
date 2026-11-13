@@ -5,7 +5,7 @@
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
-                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
+                    360 x 360, Depend 0, Position 0, OffsetX 3500, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
@@ -15,8 +15,8 @@
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
                     LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
-    levels.txt    a third new level (the second outdoor one), "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
-                  the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
+    levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
+                  the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 1500, OffsetY 0, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
     levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
@@ -56,8 +56,8 @@
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
 .PARAMETER MazeOffsetX
-    Where the Maze level sits on the Act 5 map: OffsetX (default 6000) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
-    -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (6000, 3600) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
+    Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
+    -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -74,12 +74,12 @@ param(
     [string]$ModDirectory,
     [string]$ExcelDir,
     [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
-    [int]$MazeOffsetX = 6000,
+    [int]$MazeOffsetX = 3500,
     [int]$MazeOffsetY = 0,
     [int]$OutdoorOffsetX = 6000,
     [int]$OutdoorOffsetY = 3000,
-    [int]$SnowOffsetX = 6000,
-    [int]$SnowOffsetY = 3600,
+    [int]$SnowOffsetX = 1500,
+    [int]$SnowOffsetY = 0,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900
 )
@@ -93,19 +93,27 @@ $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
-# tileset; SizeY, when a row has it, is its height if that differs from Size, as for Siege's 240 x 48); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 6000,3600); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
+# tileset; SizeY, when a row has it, is its height if that differs from Size, as for Siege's 240 x 48); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 1500,0); Range is a per-tileset flag, $true for a level whose layer is not the town's 79 (Maze: Cave 2, Crypt 10; Snow: 84), whose map the game saves as 16-bit cells (see Test-AutomapRange); it is not read from the written row's Layer; Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
 $OutdoorTilesets = @(
-    # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
+    # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 3500..3860, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
     @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
-    # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
-    @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 },
-    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. y 3900..3948 sits between the Snow level (y 3600..3792) and whatever slot level follows at a larger y. Template 110 is Act 5 - Siege 1.
+    # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; x 1500..1692, y 0..192 is clear of the Maze level (x 3500..3860) and inside the automap range (an older install had it at 6000,3600, out of range). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
+    @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117; Range = $true },
+    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. Its layer is the town's 79 (like Jungle), so its map is never swapped out and its offset needs no automap range. Template 110 is Act 5 - Siege 1.
     @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 }
 )
 # Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).
-foreach ($p in @(@(@{ Param = 'Maze'; Size = [int]$MazeSize; SizeY = [int]$MazeSize }) + @($OutdoorTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size; SizeY = $(if ($_.SizeY) { [int]$_.SizeY } else { [int]$_.Size }) } }))) {
+# A level whose layer is not the town's 79 (the Maze level, Snow) is swapped out on a town trip and its revealed map is saved as 16-bit cells
+# (x = (tx - ty) * 8, y = (tx + ty) * 4) when the player leaves it: all four corners must be in range or the map is lost (Test-AutomapRange).
+function Test-AutomapRange([int]$offX, [int]$offY, [int]$sx, [int]$sy = 0) {
+    if ($sy -le 0) { $sy = $sx }
+    return ($offX + $sx - $offY) -le 4095 -and ($offY + $sy - $offX) -le 4096 -and ($offX + $offY + $sx + $sy) -le 8191
+}
+$AutomapHint = 'keep OffsetX minus OffsetY within -3736..3735 and OffsetX plus OffsetY at most 7471 for a 360-tile level (smaller levels have a little more room)'
+foreach ($p in @(@(@{ Param = 'Maze'; Size = [int]$MazeSize; SizeY = [int]$MazeSize; Range = $true }) + @($OutdoorTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size; SizeY = $(if ($_.SizeY) { [int]$_.SizeY } else { [int]$_.Size }); Range = [bool]$_.Range } }))) {
     $x = Get-Variable -Name "$($p.Param)OffsetX" -ValueOnly; $y = Get-Variable -Name "$($p.Param)OffsetY" -ValueOnly
     if ($x -lt 0 -or $y -lt 0 -or $x + $p.Size -gt 13107 -or $y + $p.SizeY -gt 13107) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY must be 0 or more and leave room for the $($p.Size) x $($p.SizeY)-tile level (offset plus size at most 13107) (got $x, $y)." }
+    if ($p.Range -and -not (Test-AutomapRange $x $y $p.Size $p.SizeY)) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY ($x, $y) put part of the $($p.Size) x $($p.SizeY)-tile level out of the range the game keeps a revealed map in (it would lose its map after a trip to town): $AutomapHint." }
 }
 
 if (-not $ExcelDir) {
@@ -247,10 +255,23 @@ function Warn-LevelOverlap($t, [string]$name, $cells) {
     }
 }
 # The refusal text for a level that would overlap another.
+# An older install put a level where its revealed map is lost after a trip to town (Maze at x 6000, y 0; Snow at 6000, 3600): move the row to its
+# default spot, unless that spot overlaps another level (then warn and leave it).
+function Move-IntoAutomapRange($t, $cells, [string]$name, [int]$offX, [int]$offY) {
+    $ox = 0; $oy = 0; $sx = 0; $sy = 0
+    if (-not ([int]::TryParse($cells[(Column $t 'OffsetX')], [ref]$ox) -and [int]::TryParse($cells[(Column $t 'OffsetY')], [ref]$oy) -and
+              [int]::TryParse($cells[(Column $t 'SizeX')], [ref]$sx) -and [int]::TryParse($cells[(Column $t 'SizeY')], [ref]$sy))) { return }
+    if (Test-AutomapRange $ox $oy $sx $sy) { return }
+    $hit = Find-LevelOverlap $t $name $offX $offY $sx $sy
+    if ($hit) { Write-Host "levels.txt: warning: '$name' is at x $ox, y $oy, too far out for the game to keep a revealed map after a trip to town, and its new spot ($offX, $offY) overlaps $hit. It was not moved."; return }
+    Set-Cell $t $cells 'OffsetX' "$offX"
+    Set-Cell $t $cells 'OffsetY' "$offY"
+    Write-Host "levels.txt: moved '$name' from ($ox, $oy) to ($offX, $offY), so a revealed map survives a trip to town."
+}
 function Write-OverlapRefusal([string]$name, [string]$param, [int]$offX, [int]$offY, [int]$size, [string]$hit, [int]$sizeY = 0) {
     if ($sizeY -le 0) { $sizeY = $size }
     Write-Host "levels.txt: Left out '$name': its spot (x $offX..$($offX + $size), y $offY..$($offY + $sizeY)) overlaps $hit."
-    Write-Host "levels.txt: to place it, run the installer again with another spot (-${param}OffsetX and -${param}OffsetY, for example -${param}OffsetY 9000), or move the other level by hand. Nothing was written for '$name'."
+    Write-Host "levels.txt: to place it, run the installer again with another spot (-${param}OffsetX and -${param}OffsetY; a maze or Snow level must also stay in the automap range: $AutomapHint), or move the other level by hand. Nothing was written for '$name'."
 }
 
 foreach ($name in 'levels.txt', 'lvlmaze.txt', 'itemtypes.txt') {
@@ -278,6 +299,7 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+    Move-IntoAutomapRange $levels $cells $LevelName $MazeOffsetX $MazeOffsetY
     # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
     $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
     if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {
@@ -359,7 +381,7 @@ if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
 }
 
 # One new outdoor level (Act 5, DrlgType 3) copied from a plain Act 5 outdoor row; an existing row of that name is only repaired. Returns the level id.
-function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param, [string]$sizeY = '') {
+function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param, [string]$sizeY = '', [bool]$range = $false) {
     if ($sizeY -eq '') { $sizeY = $size }
     $existingRow = Find-Row $levels 'Name' $name
     if ($existingRow -ge 0) {
@@ -375,6 +397,7 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$
         Set-CellIf $levels $cells 'SubType' '-1'
         Set-CellIf $levels $cells 'SubTheme' '-1'
         for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+        if ($range) { Move-IntoAutomapRange $levels $cells $name $offX $offY }
         if (($cells -join "`t") -ne $before) {
             $levels.Lines[$existingRow] = $cells -join "`t"
             Save-Table $levels
@@ -446,7 +469,7 @@ $outdoorIds = @{}
 foreach ($t in $OutdoorTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
     $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
-    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param $(if ($t.SizeY) { $t.SizeY } else { $t.Size })
+    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param $(if ($t.SizeY) { $t.SizeY } else { $t.Size }) ([bool]$t.Range)
 }
 
 # --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------
