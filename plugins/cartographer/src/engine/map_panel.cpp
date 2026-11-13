@@ -2,6 +2,7 @@
 
 #include "core/part_signatures.h"
 #include "log.h"
+#include "mappanel.h"
 #include "scan.h"
 
 #include <windows.h>
@@ -68,7 +69,9 @@ bool g_open = false;      // the plugin opened the panel and has not closed it
 std::string g_shown;      // what the plugin last put in the text; empty: nothing yet
 uint32_t g_tasks = 0;
 std::atomic<bool> g_hidden{false};  // the plugin hid the game's terror zone text and has not restored it
+uint32_t g_restoreWait = 0;  // tasks since a restore failed; the restore is tried again every RefreshTasks tasks (0: not failing)
 int32_t g_hideResult = -1;
+D2RL::Widgets::WidgetHandle g_terrorText = D2RL::Widgets::InvalidHandle;  // the game's terror zone text, once found
 bool g_openFailedLogged = false;
 bool g_notFoundLogged = false;
 std::atomic<bool> g_queued{false};
@@ -112,31 +115,48 @@ void NoticeClosed() noexcept {
 }
 
 // The panel takes the place of the game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText),
-// so the text is hidden while the panel shows. The game sets the widget's visibility itself, so this runs every task in a map, and
-// the widget is shown again when the panel closes. UI thread.
-void SetTerrorTextVisible(bool visible) noexcept {
-	if (g_widgets == nullptr) {
-		return;
-	}
+// so the text is hidden while the panel shows. The game may set the widget's visibility itself, so this runs every task in a map
+// (the widget is looked up once and the handle kept; a failed call looks it up again next time), and the widget is shown again when
+// the panel closes. g_hidden stays set until a restore call succeeds, so a failed restore is retried, but only every RefreshTasks tasks
+// (the widget is gone in the menu, so the lookup would fail every frame). UI thread.
+auto FindTerrorText(D2RL::Widgets::WidgetHandle* text) noexcept -> D2RL::Widgets::Result {
 	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
 	D2RL::Widgets::WidgetHandle wrapper = D2RL::Widgets::InvalidHandle;
-	D2RL::Widgets::WidgetHandle text = D2RL::Widgets::InvalidHandle;
 	auto result = g_widgets->findPanel(g_context, "HUDWarnings", &hud);
 	if (result == D2RL::Widgets::Result::Success) {
 		result = g_widgets->findWidget(g_context, hud, "TerrorZoneInfoTextWrapper", &wrapper);
 	}
 	if (result == D2RL::Widgets::Result::Success) {
-		result = g_widgets->findWidget(g_context, wrapper, "TerrorZoneInfoText", &text);
+		result = g_widgets->findWidget(g_context, wrapper, "TerrorZoneInfoText", text);
+	}
+	return result;
+}
+
+void SetTerrorTextVisible(bool visible) noexcept {
+	if (g_widgets == nullptr) {
+		return;
+	}
+	if (visible && g_restoreWait != 0 && ++g_restoreWait % RefreshTasks != 0) {
+		return;  // a restore just failed: wait before looking the widget up again
+	}
+	auto result = D2RL::Widgets::Result::Success;
+	if (g_terrorText == D2RL::Widgets::InvalidHandle) {
+		result = FindTerrorText(&g_terrorText);
 	}
 	if (result == D2RL::Widgets::Result::Success) {
-		result = g_widgets->setWidgetVisible(g_context, text, visible);
+		result = g_widgets->setWidgetVisible(g_context, g_terrorText, visible);
+		if (result != D2RL::Widgets::Result::Success) {
+			g_terrorText = D2RL::Widgets::InvalidHandle;  // maybe stale (a new game): find it again next time
+		}
 	}
 	const auto last = static_cast<int32_t>(result);
 	if (last != g_hideResult) {
 		g_hideResult = last;
 		plog::Info("map panel: terror zone text %s: result %d", visible ? "shown" : "hidden", last);
 	}
-	g_hidden = !visible && result == D2RL::Widgets::Result::Success;
+	const bool ok = result == D2RL::Widgets::Result::Success;
+	g_hidden = cartographer::mappanel::hiddenAfter(visible, ok, g_hidden.load());  // a failed call keeps the previous state
+	g_restoreWait = (visible && !ok) ? 1 : 0;
 }
 
 void ClosePanel() noexcept {
@@ -162,6 +182,9 @@ void Apply(const std::string& want) noexcept {
 			if (!g_openFailedLogged) {
 				g_openFailedLogged = true;
 				plog::Warn("map panel: the panel did not open (result %u); trying again", static_cast<uint32_t>(result));
+			}
+			if (g_hidden.load()) {
+				SetTerrorTextVisible(true);  // the panel is not there to take its place
 			}
 			return;
 		}

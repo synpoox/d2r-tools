@@ -34,20 +34,30 @@ Nothing here is wired as a plugin part.
 
 - No reproduction of the loss in a healthy run, and no fix. A far-from-arrival screenshot comparison was not obtained
   (the overlay only drew cells near the player; `cheat goto` stopped moving the character after a return).
-- Two game crashes at `0x1255802` (a deliberate fatal-assert stub) happened during the runs; unrelated to the
-  automap as far as seen.
+- Game crashes at `0x1255802`: see the next section. Cause not established; no evidence that Cartographer or the probe causes them.
 
-## Cause and fix of the lost reveal (issue #306; build 93847, live)
+## Crash at `0x1255802` (issue #328)
 
-- The layer save (`0xd6230` -> `0xd5fe0`) writes each cell's x and y as 16-bit words and the restore (`0xd5710`, read
-  from the disassembly) sign-extends them back and sets the cell type to 1. A cell's x is `(tx - ty) * 8` and its y
-  `(tx + ty) * 4` (tile coordinates). The Maze level sat at OffsetX 6000, OffsetY 0, so x was about 48000, past 32767:
-  restored cells came back 65536 too small and drew far off screen. The cell count was unchanged (655 before and after
-  the trip in the probe), which is why the earlier runs saw "restored" and nothing on the map.
-- A swap only happens when the layer differs from the one being left: Cave (Layer 2) against Harrogath (Layer 79)
-  swaps; the Jungle slot (Layer 79, shared with the Act 5 town) never does, so it was never affected.
-- The fix keeps the whole level inside the 16-bit range: the installer puts the Maze level (360 x 360) at OffsetX
-  3500, OffsetY 0 (tx - ty stays within -360..3860, tx + ty under 4220), and moves an older install's
-  row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
-  drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
-  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way.
+Build 93847, slot 5. Read-only look at `d2rloader/crashes`, the logs and `D2R.exe`; no game was started.
+
+- Three last-resort reports hold it (start times UTC 2026-11-07 17:15, 2026-11-13 01:06 and 01:15). Each is a first-chance
+  access violation, a write to address 0 (`[00]=1`, `[01]=0`), `RIP` at `0x1255802` inside the function
+  `0x1255790..0x125581a` (138 bytes, from the plaintext `.pdata`). A null write from a tiny function is a deliberate
+  fail-fast, as the issue guessed.
+- All three have the same call chain: return addresses in `0x12f4a49..0x12f60ca` (5761 bytes), `0x12e4e80..0x12e57e0`,
+  `0x12fa4b5..0x12fa895`, `0x12da1f0..0x12da5d5` and `0x139a87c..0x139abc7`, and the same registers (`RCX=RBX=0x16`,
+  `RDX=0x141c783d0`, `RDI=0x1435b4d70`). Only heap pointers differ. So it is one deterministic path, not memory damage.
+- Not the probe: the first report (11-07) is five days before the #306 runs. It was a different run (events, tomb and
+  portal screenshots in `runs/agent-ms8b-events`), with no layer-object probe.
+- Not shown to be Cartographer: it was seen only in slot 5, which also ran many other plugins (logs for
+  `charm-inv`, `ruffneckk-*`, `pyre-lootfilter`, `w6-give` and others are kept), and the unit under the assert is unknown.
+  The 11-13 crashes came 7.7 and 5.1 minutes into a game, in the middle of the #306 round trips.
+- The assert text and the caller's purpose are **not recorded**. The loader's full report (with "Most Recent Session
+  Assert") was not written for these three (last-resort report only), the per-run `d2rloader.log` and
+  `cartographer.log` were overwritten by later runs, and the code on disk is encrypted, so the function and its
+  string at `0x1c783d0` cannot be read statically. None of these addresses is in the plugins or the other notes.
+- Other last-resort reports in the folder fault at other addresses (mostly reads); only `0x12d3907` and `0x140d9e8e7` are
+  also writes to address 0, one report each.
+
+To settle it (needs a game): reproduce in a slot with only Cartographer, then with Cartographer off, same save and
+steps; keep `d2rloader.log` and the full crash report; read the string at `0x1c783d0` and the caller in a live dump.

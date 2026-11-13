@@ -12,6 +12,7 @@
 #include "event6b.h"
 #include "crash_guard.h"
 #include "engine/boss_names.h"
+#include "engine/map_stat_text.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
 #include "engine/level_row.h"
@@ -456,6 +457,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
 			Say(command, "Cartographer " + carto::BossNamesSummary() + ".");
+			Say(command, "Cartographer " + carto::MapStatTextSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
@@ -543,6 +545,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		carto::InstallBossNames(context);  // first: the boss strings must be there before the game compiles superuniques.txt
+		carto::InstallMapStatText(context);  // likewise the map level stat's text before itemstatcost.txt is compiled
 		std::vector<carto::PartStatus> parts;
 		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);
@@ -568,6 +571,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
 	carto::UnloadMapPanel();
 	carto::BossNamesUnload();
+	carto::MapStatTextUnload();
 	carto::MapNamesUnload();  // the slot level's own text back in the game's table
 	carto::LevelRowUnload();  // ... and its own monster fields
 	carto::UnloadMapSync();

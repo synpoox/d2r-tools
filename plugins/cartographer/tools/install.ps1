@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt) and Outdoor levels (Jungle, Snow) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt) and Outdoor levels (Jungle, Snow, Siege) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -15,10 +15,10 @@
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
                     LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
-    levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
+    levels.txt    a third new level (the second outdoor one), "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    levels.txt    a fourth new level, "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
+    levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
     It also adds or updates the Maze, MazeCrypt, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
@@ -32,6 +32,9 @@
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
                     before anything is written. Existing rows are never changed.
+      itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Map Level: N"): a map item's level.
+                    The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
+      properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat. Left out when the mod has no properties.txt.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
     item spell 16 (pSpell in misc.txt) and type cmap. That is the mod author's to set up.
     The tables are read and checked before anything is written. Each is backed up once as <name>.bak.
@@ -105,7 +108,7 @@ $OutdoorTilesets = @(
     @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 },
-    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. y 3900..3948 sits between the Snow level (y 3600..3792) and the next maze slot (y 4200). Template 110 is Act 5 - Siege 1.
+    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. y 3900..3948 sits between the Snow level (y 3600..3792) and whatever slot level follows at a larger y. Template 110 is Act 5 - Siege 1.
     @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 }
 )
 # A maze level's revealed map is saved as 16-bit cells (x = (tx - ty) * 8, y = (tx + ty) * 4) when the player leaves it. True when every corner of
@@ -516,6 +519,72 @@ if ($mapTypeRow -ge 0) {
     $itemTypes.Lines.Add($cells -join "`t")
     Save-Table $itemTypes
     Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, not throwable, not beltable, no auto-stack, StorePage misc as herb."
+}
+
+# --- itemstatcost.txt: the map level stat -----------------------------------------------------------------------------
+# A map item's level is a stat on the item (src/statplan mapLevelFromItem): a cube recipe or an affix may set it (the cube cannot on a map yet, affixes are untested), and the game's tooltip shows it
+# through descfunc 19 (the string is a format with the value) and the plugin's own string key. A copy of the vanilla item_maxhp_percent row
+# (a plain unsigned-looking item stat), with the price columns and the stat-link columns emptied, 9 bits saved and sent (0 to 511), appended once.
+# The mod may not carry itemstatcost.txt: then the stat is left out and every map opens at its maps.txt Level.
+$MapLevelStat = 'cartographer_map_level'
+$MapLevelString = 'cartographer:map_level_stat'  # registered by the plugin (src/engine/map_stat_text.cpp); text "Map Level: %d"
+$statCostPath = Join-Path $ExcelDir 'itemstatcost.txt'
+if (-not (Test-Path $statCostPath)) {
+    Write-Host "itemstatcost.txt: this mod does not carry it, so the map level stat '$MapLevelStat' was not added; maps open at their maps.txt Level."
+} else {
+    $statCost = Read-Table $statCostPath
+    if ((Find-Row $statCost 'Stat' $MapLevelStat) -ge 0) {
+        Write-Host "itemstatcost.txt: '$MapLevelStat' is already there."
+    } else {
+        $template = Find-Row $statCost 'Stat' 'item_maxhp_percent'
+        if ($template -lt 0) { throw "itemstatcost.txt has no 'item_maxhp_percent' row to copy for the '$MapLevelStat' stat." }
+        $cells = Cells $statCost $statCost.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $statCost.Lines.Count; $i++) { if ($statCost.Lines[$i].Trim() -ne '') { $newId++ } }
+        # 511 ends the stat list in an item save, so a stat id of 511 or more cannot be stored.
+        if ($newId -ge 511) { throw "itemstatcost.txt already has $newId stat rows; the new '$MapLevelStat' stat would get id $newId, but an item save cannot hold a stat id of 511 or more." }
+        Set-Cell $statCost $cells 'Stat' $MapLevelStat
+        Set-CellIf $statCost $cells '*ID' "$newId"
+        foreach ($col in 'Signed', 'Send Other', 'Add', 'Multiply', 'ValShift', 'Save Add', '1.09-Save Add', 'op', 'op param', 'op base', 'op stat1', 'op stat2', 'op stat3', 'direct', 'maxstat') { Set-CellIf $statCost $cells $col '' }
+        foreach ($col in 'Send Bits', 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col '9' }
+        Set-CellIf $statCost $cells 'descpriority' '255'
+        Set-CellIf $statCost $cells 'descfunc' '19'
+        Set-CellIf $statCost $cells 'descval' ''
+        Set-CellIf $statCost $cells 'descstrpos' $MapLevelString
+        Set-CellIf $statCost $cells 'descstrneg' $MapLevelString
+        foreach ($col in 'dgrp', 'dgrpfunc', 'dgrpval', 'dgrpstrpos', 'dgrpstrneg', 'dgrpstr2', 'descstr2') { Set-CellIf $statCost $cells $col '' }
+        $statCost.Lines.Add($cells -join "`t")
+        Save-Table $statCost
+        Write-Host "itemstatcost.txt: added the stat '$MapLevelStat' (id $newId, copied from item_maxhp_percent): 9 bits, shown on the item as '$MapLevelString'."
+    }
+}
+
+# --- properties.txt: the map level property ---------------------------------------------------------------------------
+# A cube recipe (cubemain.txt "mod 1") and an affix name a property, not a stat, so the stat gets a property of its own: 'map-level' sets
+# cartographer_map_level to the value in the recipe (docs/cartographer/tables.md has an example). A copy of the vanilla 'str' row.
+$MapLevelProperty = 'map-level'
+$propsPath = Join-Path $ExcelDir 'properties.txt'
+if (-not (Test-Path $propsPath)) {
+    Write-Host "properties.txt: this mod does not carry it, so the property '$MapLevelProperty' was not added (a cube recipe cannot set the map level)."
+} else {
+    $props = Read-Table $propsPath
+    if ((Find-Row $props 'code' $MapLevelProperty) -ge 0) {
+        Write-Host "properties.txt: '$MapLevelProperty' is already there."
+    } else {
+        $template = Find-Row $props 'code' 'str'
+        if ($template -lt 0) { throw "properties.txt has no 'str' row to copy for the '$MapLevelProperty' property." }
+        $cells = Cells $props $props.Lines[$template]
+        $newId = 0
+        for ($i = 1; $i -lt $props.Lines.Count; $i++) { if ($props.Lines[$i].Trim() -ne '') { $newId++ } }
+        Set-Cell $props $cells 'code' $MapLevelProperty
+        Set-CellIf $props $cells '*Id' "$newId"
+        Set-Cell $props $cells 'stat1' $MapLevelStat
+        Set-CellIf $props $cells '*Tooltip' 'Map Level #'
+        Set-CellIf $props $cells '*Notes' 'Cartographer: sets the map level of a map item'
+        $props.Lines.Add($cells -join "`t")
+        Save-Table $props
+        Write-Host "properties.txt: added the property '$MapLevelProperty' (stat $MapLevelStat, copied from str)."
+    }
 }
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------

@@ -36,7 +36,7 @@ constexpr int kWestCap = 879;
 constexpr int kStripThirteen = 878;
 constexpr int kEastCap = 865;
 
-// A wide strip has a wide seam on both sides: the boss and the event stand on these, not in the funnel or on a cap.
+// A wide strip has a wide seam on both sides: the boss and the event stand on these. That includes 868, 875 and 878 (their seams are wide too: the ends of the funnel block and the west cap's neighbour), not the funnel's narrow middle or the caps.
 bool isWide(const Piece &p) {
 	const auto wide = [](char c) { return c >= 'A' && c <= 'E'; };
 	return p.role != Role::WestCap && p.role != Role::EastCap && wide(p.west) && wide(p.east);

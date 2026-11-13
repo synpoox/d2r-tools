@@ -1,5 +1,6 @@
 #include "outdoor_plan.h"
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -8,6 +9,27 @@
 #include "snow_plan.h"
 
 namespace cartographer::outdoor {
+
+std::string capJungleOpenRules(layout::Rules &rules) {
+	if (!rules.open) return std::string();
+	rules.width = std::min(rules.width, kJungleOpenMaxCells);
+	rules.height = std::min(rules.height, kJungleOpenMaxCells);
+	const std::string grid = std::to_string(rules.width) + " x " + std::to_string(rules.height);
+	const int cells = rules.width * rules.height;
+	if (rules.pathMin > cells) {
+		return "an Open map on Jungle is at most " + grid + " cells, so MinPath can't be more than " + std::to_string(cells) + ".";
+	}
+	rules.pathMax = std::min(rules.pathMax, cells);
+	std::string problem = layout::validateRules(rules);
+	// An Open path is the shortest walk across the grid, so a MinPath that fit the uncapped grid may be out of reach on the capped one.
+	for (uint64_t seed = 1; problem.empty() && seed <= 16; ++seed) {
+		if (!layout::generate(rules, seed).rulesMet) problem = "MinPath " + std::to_string(rules.pathMin) + " is too long for it.";
+	}
+	if (!problem.empty()) {
+		return "an Open map on Jungle is capped at " + grid + " cells, and " + problem;
+	}
+	return std::string();
+}
 
 namespace {
 
@@ -113,6 +135,12 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	std::string error;
 	if (!layout::resolveRules(request.shapes != nullptr ? *request.shapes : none, request.shape.empty() ? std::string_view("Winding") : std::string_view(request.shape), *size, rules, error)) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + error);
+	}
+	// An Open map stamps every block (no void), so a Large one is 144 blocks, 2304 rooms: 6 to 8 times the other Jungle maps. Cap it at
+	// the 9 x 9 grid of Medium (81 blocks, 1296 rooms). The cap applies to any outdoor Open layout this planner builds, and the capped
+	// rules are checked again (maps.txt checks them at load with capJungleOpenRules).
+	if (const std::string capped = capJungleOpenRules(rules); !capped.empty()) {
+		return fail("The shape '" + request.shape + "' cannot be used: " + capped);
 	}
 	out.layout = layout::generate(rules, request.seed);
 	out.picks = pickPieces(out.layout, catalogue, tileset->name, request.seed);
