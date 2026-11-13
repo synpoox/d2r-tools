@@ -622,12 +622,21 @@ if (Test-Path $statCostPath) {
         $saveAdd = if ($m.SaveAdd) { $m.SaveAdd } else { '512' }
         $have = Find-Row $statCost 'Stat' $m.Stat
         if ($have -ge 0) {
-            # A row from an earlier run with other widths (the density stat was first written 11/10/512): set the widths, keep the id and the rest.
+            # Only the density row, and only with exactly the widths a development build first wrote (11 / 10 / 512, the monster width): set the new widths,
+            # keep the id and the rest. No other row, and no other widths, are touched (a hand-set width stays; changing widths breaks saved items).
             $cells = Cells $statCost $statCost.Lines[$have]
             $before = $cells -join "`t"
-            Set-CellIf $statCost $cells 'Send Bits' $sendBits
-            foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col $saveBits }
-            foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col $saveAdd }
+            $old = @{ 'Send Bits' = '11'; 'Save Bits' = '10'; '1.09-Save Bits' = '10'; 'Save Add' = '512'; '1.09-Save Add' = '512' }
+            $isOld = $m.Stat -eq 'cartographer_map_density'
+            foreach ($col in $old.Keys) {
+                $at = [array]::IndexOf($statCost.Header, $col)
+                if ($at -ge 0 -and $cells[$at] -ne $old[$col]) { $isOld = $false }
+            }
+            if ($isOld) {
+                Set-CellIf $statCost $cells 'Send Bits' $sendBits
+                foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col $saveBits }
+                foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col $saveAdd }
+            }
             if (($cells -join "`t") -ne $before) {
                 $statCost.Lines[$have] = $cells -join "`t"
                 $added++

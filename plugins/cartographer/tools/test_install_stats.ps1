@@ -30,8 +30,8 @@ try {
     Write-Tsv 'lvlmaze.txt' @('Name', 'Level', 'Rooms', 'SizeX', 'SizeY', 'Merge') @(, @('Cave 1', '8', '3', '10', '10', '0'))
     $ih = @('ItemType', 'Code', 'Equiv1', 'Equiv2', 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2', 'Rare', 'Magic')
     Write-Tsv 'itemtypes.txt' $ih @(, @('Herb', 'herb', 'misc', '', '0', '0', '0', '0', '0', '0', '1', '1', '', '', '', '', '0', '0'))
-    $sh = @('Stat', '*ID', 'Signed', 'Send Bits', 'Save Bits', 'Save Add', 'descfunc', 'descstrpos', 'descstrneg')
-    $stats = @(0..367 | ForEach-Object { if ($_ -eq 76) { , @('item_maxhp_percent', '76', '', '9', '9', '', '', '', '') } else { , @("vanilla_stat_$_", "$_", '', '9', '9', '', '', '', '') } })
+    $sh = @('Stat', '*ID', 'Signed', 'Send Bits', 'Save Bits', 'Save Add', 'descfunc', 'descstrpos', 'descstrneg', '1.09-Save Bits', '1.09-Save Add')
+    $stats = @(0..367 | ForEach-Object { if ($_ -eq 76) { , @('item_maxhp_percent', '76', '', '9', '9', '', '', '', '', '9', '') } else { , @("vanilla_stat_$_", "$_", '', '9', '9', '', '', '', '', '9', '') } })
     Write-Tsv 'itemstatcost.txt' $sh $stats
     $ph = @('code', '*Id', 'stat1', '*Tooltip', '*Notes')
     $props = @(0..292 | ForEach-Object { if ($_ -eq 5) { , @('str', '5', 'strength', 'Str', '') } else { , @("vanilla_prop_$_", "$_", 'strength', '', '') } })
@@ -64,15 +64,15 @@ try {
     Check (($before -join ',') -eq ($after -join ',')) 'a second run changes no table'
 
     $density = $rows | Where-Object { $_[0] -eq 'cartographer_map_density' }
-    Check ($density[3] -eq '20' -and $density[4] -eq '20' -and $density[5] -eq '524288') "the density stat is 20 send bits, 20 save bits, save add 524288 (got $($density[3]) $($density[4]) $($density[5]))"
+    Check ($density[3] -eq '20' -and $density[4] -eq '20' -and $density[5] -eq '524288' -and $density[9] -eq '20' -and $density[10] -eq '524288') "the density stat is 20 send bits, 20 save bits, save add 524288 (got $($density[3]) $($density[4]) $($density[5]))"
     $monLife = $rows | Where-Object { $_[0] -eq 'cartographer_mon_life' }
-    Check ($monLife[3] -eq '11' -and $monLife[4] -eq '10' -and $monLife[5] -eq '512') 'a monster stat keeps 11 / 10 / 512'
+    Check ($monLife[3] -eq '11' -and $monLife[4] -eq '10' -and $monLife[5] -eq '512' -and $monLife[9] -eq '10' -and $monLife[10] -eq '512') 'a monster stat keeps 11 / 10 / 512'
 
     # A density row an earlier run wrote with the monster widths is widened in place (same id), and then a run changes nothing.
     $statPath = Join-Path $dir 'itemstatcost.txt'
     $text = [System.IO.File]::ReadAllText($statPath)
     $old = ($density -join "`t")
-    $narrow = $density.Clone(); $narrow[3] = '11'; $narrow[4] = '10'; $narrow[5] = '512'
+    $narrow = $density.Clone(); $narrow[3] = '11'; $narrow[4] = '10'; $narrow[5] = '512'; $narrow[9] = '10'; $narrow[10] = '512'
     Check ($text.Contains($old)) 'the density row is found in the table'
     [System.IO.File]::WriteAllText($statPath, $text.Replace($old, ($narrow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
     $log3 = Run-Installer
@@ -80,10 +80,20 @@ try {
     $rows3 = Read-Rows 'itemstatcost.txt'
     $fixed = $rows3 | Where-Object { $_[0] -eq 'cartographer_map_density' }
     Check ($rows3.Count -eq $rows.Count) 'the repair adds no row'
-    Check ($fixed[1] -eq $density[1] -and $fixed[3] -eq '20' -and $fixed[4] -eq '20' -and $fixed[5] -eq '524288') "the old-width density row is widened and keeps its id (got id $($fixed[1]), $($fixed[3]) $($fixed[4]) $($fixed[5]))"
+    Check ($fixed[1] -eq $density[1] -and $fixed[3] -eq '20' -and $fixed[4] -eq '20' -and $fixed[5] -eq '524288' -and $fixed[9] -eq '20' -and $fixed[10] -eq '524288') "the old-width density row is widened and keeps its id (got id $($fixed[1]), $($fixed[3]) $($fixed[4]) $($fixed[5]))"
     $before = (Get-FileHash $statPath).Hash
     $log4 = Run-Installer
     Check ((Get-FileHash $statPath).Hash -eq $before) 'a run after the repair changes nothing'
+
+    # Only that one old row is repaired: a monster stat and a density row with other widths, set by hand, stay as they are.
+    $text = [System.IO.File]::ReadAllText($statPath)
+    $monOld = ($monLife -join "`t"); $monHand = $monLife.Clone(); $monHand[3] = '12'; $monHand[4] = '11'; $monHand[5] = '1024'
+    $denOld = ($fixed -join "`t"); $denHand = $fixed.Clone(); $denHand[3] = '15'; $denHand[4] = '15'; $denHand[5] = '16384'
+    Check ($text.Contains($monOld) -and $text.Contains($denOld)) 'the monster and density rows are found in the table'
+    [System.IO.File]::WriteAllText($statPath, $text.Replace($monOld, ($monHand -join "`t")).Replace($denOld, ($denHand -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $before = (Get-FileHash $statPath).Hash
+    $log5 = Run-Installer
+    Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $statPath).Hash -eq $before) 'a monster row and a density row with other widths are left alone'
 } finally {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }
