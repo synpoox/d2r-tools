@@ -1576,6 +1576,7 @@ TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the c
 	CHECK(FindMapByItem(maps, "t24") != nullptr);
 	CHECK(FindMapByItem(maps, "t24")->name == "First");
 	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	REQUIRE(skipped.size() == 1);
 	for (const SkippedMap& s : skipped) {
 		CHECK(s.name == "Second");
 		CHECK(s.reason.find("t24") != std::string::npos);

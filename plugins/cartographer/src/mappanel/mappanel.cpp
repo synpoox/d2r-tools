@@ -118,8 +118,31 @@ std::string statLine(const Stat &stat)
 	return out;
 }
 
-PanelText panelText(int monsterLevel, const std::vector<Stat> &stats)
+std::string densityLine(int density)
 {
+	return density == 0 ? std::string() : formatGameText("%+d%% Monster Density", density);
+}
+
+std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
+{
+	std::vector<Stat> out;
+	for (const Stat &s : stats) {
+		bool merged = false;
+		for (Stat &o : out) {
+			if (o.monsters == s.monsters && o.name == s.name) {
+				o.value += s.value;
+				merged = true;
+				break;
+			}
+		}
+		if (!merged) out.push_back(s);
+	}
+	return out;
+}
+
+PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density)
+{
+	const std::vector<Stat> stats = mergedStats(rolled);
 	PanelText out;
 	bool any = false;
 	const auto line = [&out, &any](const std::string &header, const std::string &property) {
@@ -140,8 +163,21 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &stats)
 			header = true;
 			line("", statLine(s));
 		}
+		if (monsters && density != 0) {
+			if (!header) line("Monsters have", "");
+			line("", densityLine(density));
+		}
 	}
 	return out;
+}
+
+int lineCount(const std::string &text)
+{
+	if (text.empty()) return 0;
+	int lines = 1;
+	for (char c : text)
+		if (c == '\n') ++lines;
+	return lines;
 }
 
 int padLines(int textBottom, int panelTop, int lineUnits, int maxLines)

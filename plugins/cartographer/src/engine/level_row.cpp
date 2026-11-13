@@ -201,7 +201,6 @@ struct Pace {
 	uint8_t* record = nullptr;
 	int total = 0;
 	uint8_t restoreMin = 0, restoreMax = 0;  // what the record holds outside a populate call: the planned MonUMin / MonUMax
-	int fillers = 0;  // filler rooms (Lava's closed ring) populated since the pace was armed: the room counter (+4) counts them, the room total (+0xc) does not
 };
 Pace g_pace;
 std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
@@ -482,7 +481,7 @@ auto UniquePaceArmed() noexcept -> bool {
 	return g_paceArmed.load(std::memory_order_relaxed);
 }
 
-auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> bool {
+auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
 	if (!g_paceArmed.load(std::memory_order_relaxed) || g_paceOpen) {
 		return false;
 	}
@@ -490,9 +489,6 @@ auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> b
 		Pace pace;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (g_pace.armed && filler) {
-				++g_pace.fillers;
-			}
 			pace = g_pace;
 		}
 		if (!pace.armed || pace.game != game || pace.level != roomLevel || pace.record == nullptr || !Readable(pace.record, lr::RecSpan)) {
@@ -501,14 +497,11 @@ auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> b
 		int32_t seen = 0, rooms = 0;
 		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
-		// A filler room is closed: a unique pack there is never met, so it gets none (its budget is the count already made), and it does not
-		// count as map done. See RoomBudget.
-		const int made = pace.record[lr::RecUniqueCountOffset];
-		const int budget = lr::RoomBudget(pace.total, seen, rooms, pace.fillers, filler, made);
-		if (g_probe.load()) {
-			plog::Info("record probe: pace begin: filler %d +4=%d +0xc=%d fillers seen %d unique count %d budget %d", filler ? 1 : 0, seen, rooms, pace.fillers, made, budget);
-		}
+		const int budget = lr::PaceBudget(pace.total, seen, rooms);
 		g_paceLastBudget = budget;
+		if (g_probe.load()) {
+			plog::Info("record probe: pace begin: +4=%d +0xc=%d unique count %d budget %d", seen, rooms, pace.record[lr::RecUniqueCountOffset], budget);
+		}
 		g_paceSavedMin = pace.restoreMin;
 		g_paceSavedMax = pace.restoreMax;
 		const uint32_t zero = 0, max = static_cast<uint32_t>(budget);

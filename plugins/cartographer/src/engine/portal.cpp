@@ -106,6 +106,7 @@ CheckFn g_checkOriginal = nullptr;
 UseFn g_useOriginal = nullptr;
 PlayerTickFn g_tickOriginal = nullptr;
 OpenRequest g_request;                     // the console's request; guarded by g_lock
+std::atomic<bool> g_whereRequested{false};  // `cartographer where`: the next tick of the local player logs its position
 std::atomic<bool> g_requested{false};      // g_request has something to serve: the per-frame hook reads only this
 std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
@@ -376,6 +377,38 @@ void ClearMapItemCursor(Game* game) noexcept {
 
 // --- The hooks ---------------------------------------------------------------------------------------------------------
 
+auto OffPartsList() -> std::string {
+	std::string out;
+	for (const Part& part : g_parts) {
+		if (part.required && !part.status.on) {
+			out += (out.empty() ? "" : ", ") + std::string(part.name);
+		}
+	}
+	return out.empty() ? "none" : out;
+}
+
+
+std::atomic<bool> g_noMapLogged{false};  // a map-spell item matched no map: logged once per process
+std::atomic<bool> g_offUseLogged{false};  // a map use fell through to the game while the portal was off: logged once per process
+
+// Logs once when a map item is used while the portal is off (the game then runs its plain use, a Town Portal).
+void LogOffMapUse(Game* game, Unit* item) noexcept {
+	if (g_offUseLogged.load(std::memory_order_relaxed) || game == nullptr || item == nullptr) {
+		return;
+	}
+	// Each address is read once: 'cartographer check' re-resolves the parts on the console thread.
+	const uint8_t* classAddress = g_parts[UnitClassOf].address;
+	const uint8_t* recordAddress = g_parts[ItemRecord].address;
+	if (classAddress == nullptr || recordAddress == nullptr) {
+		return;
+	}
+	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(classAddress))(item, __FILE__, __LINE__);
+	const uint8_t* record = reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(recordAddress))(At<uint8_t>(game, GameDataFlagOffset), row);
+	if (record != nullptr && At<int32_t>(record, RecordSpellOffset) == MapSpell && !g_offUseLogged.exchange(true)) {
+		plog::Warn("a map item was used while the portal is off, so the game ran its plain use; parts still off: %s", OffPartsList().c_str());
+	}
+}
+
 auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept -> uint64_t {
 	if (!g_live.load()) {
 		return g_checkOriginal != nullptr ? g_checkOriginal(game, player, item, target) : 0;  // the portal is off: the game's own check
@@ -409,6 +442,11 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		}
 	}
 	if (map == nullptr) {
+		if (!g_noMapLogged.exchange(true)) {
+			// A map-spell item is a map item by construction: no row for its code is a table or setup problem. Log only.
+			plog::Warn("an item with the map spell (code '%s') matches no map, so the game ran its plain use; tables loaded: %s, maps in them: %d", code.c_str(),
+			           tables != nullptr ? "yes" : "no", tables != nullptr ? static_cast<int>(tables->maps.size()) : 0);
+		}
 		{
 			// Recorded, so the use goes to the game as well even if a map for this code is added in between.
 			std::lock_guard<std::mutex> lock(g_lock);
@@ -441,6 +479,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 
 void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	if (!g_live.load()) {
+		LogOffMapUse(game, item);
 		if (g_useOriginal != nullptr) {
 			g_useOriginal(game, player, item, target);  // the portal is off: the game's own use
 		}
@@ -675,6 +714,21 @@ void MazeArrivalCheck(Unit* unit) noexcept {
 	}
 }
 
+// `cartographer where`, on the game thread: the local player's subtile position, level id and, in the outdoor slot level, the box tile and plan cell. Console and log only.
+void ServeWhere(Unit* unit) noexcept {
+	if (!g_whereRequested.exchange(false)) {
+		return;
+	}
+	const uint8_t* path = At<const uint8_t*>(unit, 0x38);  // the unit's path: a player has a dynamic path, subtile x, y are uint16 at +0x2 and +0x6 (better-auras UnitXY; +0x10/+0x14 is the static path of objects)
+	if (path == nullptr) {
+		Tell("Cartographer where: the player has no position yet.");
+		return;
+	}
+	const int32_t x = At<uint16_t>(path, 0x2), y = At<uint16_t>(path, 0x6);
+	const int level = PlayerLevelOf(unit);
+	Tell("Cartographer where: level " + std::to_string(level) + ", subtile (" + std::to_string(x) + "," + std::to_string(y) + "), " + OutdoorWhereText(level, x, y));
+}
+
 auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	if (g_tickOriginal == nullptr) {
 		// Reachable: the loader can patch the tick and still return no original (the install then logs an error and marks
@@ -703,6 +757,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		ServeWhere(unit);
 		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
@@ -739,6 +794,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		MapSyncGameLeft();
 		AutoCheckGameLeft();
 		g_localPlayer = NoPlayer;
+		g_whereRequested = false;
 		g_tickSeen = false;
 		g_firstLogged = false;
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -810,6 +866,14 @@ auto RequiredPartsOn() noexcept -> bool {
 
 }  // namespace
 
+auto RequestWhere() -> bool {
+	if (!g_consoleLive.load() || g_localPlayer.load() == NoPlayer || !g_tickSeen.load()) {
+		return false;
+	}
+	g_whereRequested = true;
+	return true;
+}
+
 auto RequestOpen(const std::string& name, std::string* mapName) -> OpenStart {
 	bool replaced = false;
 	{
@@ -856,6 +920,25 @@ void SetTables(std::shared_ptr<const Tables> tables) {
 	MapSyncSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_tables = std::move(tables);
+}
+
+auto MapLevelStatFor(const std::string& code, int* statId, int* level) -> bool {
+	std::shared_ptr<const Tables> tables;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+	}
+	if (tables == nullptr) {
+		return false;
+	}
+	const MapDef* map = FindMapByItem(tables->maps, code);
+	const int stat = tables->statIds.find(cartographer::statplan::kMapLevelStat);
+	if (map == nullptr || stat < 0) {
+		return false;
+	}
+	*statId = stat;
+	*level = map->level;
+	return true;
 }
 
 auto RescanPortal() -> bool {

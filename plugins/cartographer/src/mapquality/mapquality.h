@@ -3,6 +3,9 @@
 // docs/reverse-engineering/cartographer/26-map-quality.md.
 #pragma once
 
+#include <cstdint>
+#include <string>
+
 namespace cartographer::mapquality {
 
 // The game's item quality numbers (the value the quality roll returns and an item's quality field holds).
@@ -22,5 +25,9 @@ int mapQuality(int rolled, bool isMap);
 // Whether the game's magic fallback (taken when a set, rare or unique maker fails; it forces quality 4) must be replaced by the
 // normal one for this item: true for a map, false for everything else.
 bool useNormalFallback(bool isMap);
+
+// The map rolls the item maker has seen, by the quality they ended with (index = the quality number, 0 and 9 unused), as one
+// line that adds up: every quality is named and the total is the sum, so the line shows whether any roll went unseen.
+std::string rollCounts(const std::uint32_t (&byQuality)[10], std::uint32_t magicMadeNormal);
 
 }  // namespace cartographer::mapquality

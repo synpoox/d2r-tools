@@ -95,3 +95,36 @@ TEST_CASE("the panel text starts under the game's terror zone text")
 	CHECK(padLines(2000, 270, 44, 8) == 8);  // capped
 	CHECK(padLines(416, 270, 0, 8) == 0);    // no line height known
 }
+
+TEST_CASE("the total Density ends the Monsters group, the total magic find is one Players line")
+{
+	const PanelText p = panelText(80, {{true, "item_fastermovevelocity", 16}, {false, "item_magicbonus", 10}, {false, "item_magicbonus", 21}}, 35);
+	CHECK(p.gold == "Monster level 80\nMonsters have\n\n\nPlayers have\n");
+	CHECK(p.blue == "\n\n+16% Faster Run/Walk\n+35% Monster Density\n\n+31% Better Chance of Getting Magic Items");
+}
+
+TEST_CASE("Density alone makes the Monsters group, 0 leaves it out, a negative total shows")
+{
+	CHECK(panelText(0, {}, 10).gold == "Monsters have\n");
+	CHECK(panelText(0, {}, 10).blue == "\n+10% Monster Density");
+	CHECK(panelText(0, {}, 0).empty());
+	CHECK(panelText(0, {}, -20).blue == "\n-20% Monster Density");
+}
+
+TEST_CASE("the longest panel text fits the panel under the most padding")
+{
+	std::vector<Stat> stats;
+	for (int i = 0; i < kMaxMonsterLines; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
+	for (int i = 0; i < kMaxPlayerLines; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
+	const PanelText p = panelText(85, stats, 40);
+	CHECK(lineCount(p.gold) == kMaxLines);
+	CHECK(lineCount(p.blue) == kMaxLines);
+	CHECK(lineCount("") == 0);
+	CHECK(lineCount("a\nb\n") == 3);
+	const int units = kLineUnits;
+	const int pad = kMaxPadLines;
+	const int top = kPanelTop;
+	const int height = panelHeight(units, pad);
+	CHECK((pad + lineCount(p.gold)) * units <= height);
+	CHECK(top + height <= 2160); // the layout's height in units: the panel stays on screen
+}

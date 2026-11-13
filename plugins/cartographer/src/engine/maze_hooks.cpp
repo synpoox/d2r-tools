@@ -129,7 +129,6 @@ struct Entrance {
 	int32_t minX = 0, minY = 0, unit = 0;  // the rooms' box corner and the plan cell size, tiles: a room's cell = (pos - min) / unit
 };
 Entrance g_entrance;  // guarded by g_lock
-cm::FillerMask g_fillers;  // the opened map's filler cells (empty: none, or unknown); guarded by g_lock
 MazeEventRect g_eventRoom;  // guarded by g_lock
 MazeEventRect g_bossRoom;   // guarded by g_lock
 
@@ -416,7 +415,6 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_entrance = {true, mark.originX, mark.originY, Read<int32_t>(level, LvlId), mark.minX, mark.minY, unit};
-		g_fillers = cm::fillerMask(plan);
 	}
 	plog::Info("maze arrival: room %d of %d (at %d,%d) marked as the level entry, in plan cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, mark.cellX, mark.cellY, static_cast<int>(mark.clear.size()));
@@ -876,7 +874,6 @@ auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	g_job = job;
 	g_cache = {};
 	g_entrance = {};
-	g_fillers = {};
 	g_eventRoom = {};
 	g_bossRoom = {};
 	g_arrivalLogged = false;
@@ -932,7 +929,6 @@ void MazeGameLeft() {
 	g_ownRows.clear();
 	g_slotState.clear();
 	g_entrance = {};
-	g_fillers = {};
 	g_eventRoom = {};
 	g_bossRoom = {};
 	g_arrivalLogged = false;
@@ -962,14 +958,6 @@ auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect
 		return false;
 	}
 	return !out->empty();
-}
-
-auto MazeRoomIsFiller(int32_t levelId, int32_t x, int32_t y) -> bool {
-	std::lock_guard<std::mutex> lock(g_lock);
-	if (g_fillers.empty() || g_entrance.unit <= 0 || g_entrance.levelId != levelId || x < g_entrance.minX || y < g_entrance.minY) {
-		return false;
-	}
-	return g_fillers.isFiller((x - g_entrance.minX) / g_entrance.unit, (y - g_entrance.minY) / g_entrance.unit);
 }
 
 auto MazeEventRoom() -> MazeEventRect {

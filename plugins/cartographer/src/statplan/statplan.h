@@ -106,7 +106,7 @@ struct ItemStat {
 // 0..0xffff and a stat 0..kMaxStatId. If one entry does not fit, nothing is returned and `problem` says why (fail open: no stats).
 std::vector<ItemStat> decodeItemStatList(const int32_t *buffer, int count, int maxStats, std::string *problem = nullptr);
 
-// The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; nothing can put it on a map yet: the cube cannot, affixes are untested).
+// The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; the plugin gives every new map item its maps.txt Level, issue #422).
 inline constexpr const char *kMapLevelStat = "cartographer_map_level";
 // The monster levels maps.txt allows (its Level column).
 constexpr int kMinMapLevel = 1;
@@ -121,6 +121,11 @@ struct MapLevelPick {
 // The level a map opens at: the item's map-level stat (layer 0) when `ids` names the stat and the item has it with a value of 1 or more
 // (cut to kMaxMapLevel, with a note), else `fallback`. A missing stat is not an error: an item made before the stat existed has none.
 MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback);
+
+// The map level stat a new map item is given (issue #422): the item's maps.txt Level cut to kMinMapLevel..kMaxMapLevel, so the tooltip shows it first.
+// 0 means leave the item alone: the stat could not be read (`currentKnown` false), the item already carries one (`current` 1 or more) or the
+// maps.txt Level is below 1.
+int mapLevelToStamp(int mapsLevel, int current, bool currentKnown);
 
 // `stats` without the map-level stat, so it is not reported as a stat with no meaning on a map.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);

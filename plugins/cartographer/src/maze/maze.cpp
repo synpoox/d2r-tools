@@ -192,7 +192,11 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 			// Both axes at the maximum is the largest level; every later step would repeat it.
 			if (root.x < 0 && levelX == ts.maxLevelTiles && levelY == ts.maxLevelTiles) searchedLargest = true;
 		}
-	if (root.x < 0 && ring > 0) findRoot(ts.maxLevelTiles, ts.maxLevelTiles, 0);
+	bool clipped = false;
+	if (root.x < 0 && ring > 0) {
+		findRoot(ts.maxLevelTiles, ts.maxLevelTiles, 0);
+		clipped = root.x >= 0;
+	}
 	if (root.x < 0)
 		return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
 
@@ -309,6 +313,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	plan.levelTilesY = levelY;
 	plan.widthRooms = spanX;
 	plan.heightRooms = spanY;
+	plan.ringClipped = clipped;
 	plan.steer = true;
 	return plan;
 }
@@ -343,11 +348,20 @@ SeedPlan planForSeed(const Tileset &ts, const layout::Rules &rules, uint64_t see
 		out.generatorUnmet = true;
 		return out;
 	}
+	SeedPlan clippedFirst; // the first layout that fits only with its filler ring cut short; kept if no later layout has a whole ring
 	for (int k = 0; k <= kRefits; ++k) {
 		const uint64_t s = k == 0 ? seed : layout::splitmix64(seed ^ (kRefitSalt + static_cast<uint64_t>(k)));
 		out.layout = layout::generate(fitted, s);
 		out.plan = planMaze(ts, out.layout);
 		out.refits = k;
+		if (out.plan.steer && out.plan.ringClipped) {
+			// The first room must be a used cell, and a layout as wide as the level allows has only one cell that centres it (often unused):
+			// another layout of the same shape usually has a whole ring.
+			if (!clippedFirst.plan.steer) clippedFirst = out;
+			if (k < kRefits) continue;
+			out = clippedFirst;
+			break;
+		}
 		if (out.plan.steer) break;
 		if (!out.layout.rulesMet) {
 			// Even the generator's own fallback broke the shape's rules in this many rooms: more seeds will not help.
@@ -358,6 +372,7 @@ SeedPlan planForSeed(const Tileset &ts, const layout::Rules &rules, uint64_t see
 			break;
 		}
 	}
+	if (!out.plan.steer && clippedFirst.plan.steer) out = clippedFirst; // a later layout failed outright: the clipped one still beats the game's own maze
 	return out;
 }
 
@@ -384,30 +399,6 @@ uint64_t planHash(const Plan &p)
 	mixi(p.eventRoom); mixi(p.bossRoom);
 	mixi(p.levelTilesX); mixi(p.levelTilesY);
 	return h;
-}
-
-FillerMask fillerMask(const Plan &plan)
-{
-	FillerMask out;
-	if (plan.rooms.empty() || plan.fillOffsets.empty()) return out;
-	int minX = plan.rooms[0].dx, minY = plan.rooms[0].dy, maxX = minX, maxY = minY;
-	for (const Room &r : plan.rooms) {
-		minX = std::min(minX, r.dx);
-		minY = std::min(minY, r.dy);
-		maxX = std::max(maxX, r.dx);
-		maxY = std::max(maxY, r.dy);
-	}
-	for (const layout::Point &f : plan.fillOffsets) {
-		minX = std::min(minX, f.x);
-		minY = std::min(minY, f.y);
-		maxX = std::max(maxX, f.x);
-		maxY = std::max(maxY, f.y);
-	}
-	out.w = maxX - minX + 1;
-	out.h = maxY - minY + 1;
-	out.planCell.assign(static_cast<size_t>(out.w) * static_cast<size_t>(out.h), 0);
-	for (const Room &r : plan.rooms) out.planCell[static_cast<size_t>(r.dy - minY) * static_cast<size_t>(out.w) + static_cast<size_t>(r.dx - minX)] = 1;
-	return out;
 }
 
 } // namespace cartographer::maze

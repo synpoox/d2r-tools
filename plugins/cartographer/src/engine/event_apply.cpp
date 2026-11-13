@@ -786,9 +786,7 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 	bool paced = false;
 	if (game != nullptr && room != nullptr && UniquePaceArmed() && On(EvRoomLevelId)) {
 		try {
-			const int roomLevel = Call<RoomLevelFn>(EvRoomLevelId)(room);
-			const RoomRects rects = ReadRects(room);
-			paced = UniquePaceBegin(game, roomLevel, rects.ok && MazeRoomIsFiller(roomLevel, rects.drlg.x, rects.drlg.y));
+			paced = UniquePaceBegin(game, Call<RoomLevelFn>(EvRoomLevelId)(room));
 		} catch (...) {
 		}
 	}
