@@ -5,7 +5,7 @@
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
-                    360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
+                    360 x 360, Depend 0, Position 0, OffsetX 3500, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   its maze row (a maze level needs one with its own level id)
@@ -44,7 +44,7 @@
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
 .PARAMETER MazeOffsetX
-    Where the Maze level sits on the Act 5 map: OffsetX (default 6000) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
+    Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
     -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
@@ -62,7 +62,7 @@ param(
     [string]$ModDirectory,
     [string]$ExcelDir,
     [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
-    [int]$MazeOffsetX = 6000,
+    [int]$MazeOffsetX = 3500,
     [int]$MazeOffsetY = 0,
     [int]$OutdoorOffsetX = 6000,
     [int]$OutdoorOffsetY = 3000,
@@ -81,7 +81,7 @@ $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts tow
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
 # tileset); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 6000,3600); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
 $OutdoorTilesets = @(
-    # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
+    # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 3500..3860, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
     @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 }
@@ -252,6 +252,20 @@ if ($existing -ge 0) {
     Set-CellIf $levels $cells 'LevelEntry' ''
     Set-CellIf $levels $cells 'LevelWarp' ''
     for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+    # The game saves automap cells as 16-bit numbers when the player leaves a level: x = (tx - ty) * 8 and y = (tx + ty) * 4 must stay within
+    # -32768..32767 over the whole level, or its revealed map is lost after a trip to town. An older install put the level at x 6000, y 0.
+    $ox = 0; $oy = 0; $size = 0
+    if ([int]::TryParse($cells[(Column $levels 'OffsetX')], [ref]$ox) -and [int]::TryParse($cells[(Column $levels 'OffsetY')], [ref]$oy) -and
+        [int]::TryParse($cells[(Column $levels 'SizeX')], [ref]$size) -and
+        (($ox - $oy + $size) -gt 4095 -or ($oy - $ox + $size) -gt 4096 -or ($ox + $oy + 2 * $size) -gt 8191)) {
+        $hit = Find-LevelOverlap $levels $LevelName $MazeOffsetX $MazeOffsetY $size
+        if ($hit) { Write-Host "levels.txt: warning: '$LevelName' is at x $ox, y $oy, too far out for the game to keep a revealed map after a trip to town, and its new spot ($MazeOffsetX, $MazeOffsetY) overlaps $hit. It was not moved." }
+        else {
+            Set-Cell $levels $cells 'OffsetX' "$MazeOffsetX"
+            Set-Cell $levels $cells 'OffsetY' "$MazeOffsetY"
+            Write-Host "levels.txt: moved '$LevelName' from ($ox, $oy) to ($MazeOffsetX, $MazeOffsetY), so a revealed map survives a trip to town."
+        }
+    }
     # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
     $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
     if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {

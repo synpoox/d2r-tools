@@ -36,3 +36,18 @@ Nothing here is wired as a plugin part.
   (the overlay only drew cells near the player; `cheat goto` stopped moving the character after a return).
 - Two game crashes at `0x1255802` (a deliberate fatal-assert stub) happened during the runs; unrelated to the
   automap as far as seen.
+
+## Cause and fix of the lost reveal (issue #306; build 93847, live)
+
+- The layer save (`0xd6230` -> `0xd5fe0`) writes each cell's x and y as 16-bit words and the restore (`0xd5710`, read
+  from the disassembly) sign-extends them back and sets the cell type to 1. A cell's x is `(tx - ty) * 8` and its y
+  `(tx + ty) * 4` (tile coordinates). The Maze level sat at OffsetX 6000, OffsetY 0, so x was about 48000, past 32767:
+  restored cells came back 65536 too small and drew far off screen. The cell count was unchanged (655 before and after
+  the trip in the probe), which is why the earlier runs saw "restored" and nothing on the map.
+- A swap only happens when the layer differs from the one being left: Cave (Layer 2) against Harrogath (Layer 79)
+  swaps; the Jungle slot (Layer 79, shared with the Act 5 town) never does, so it was never affected.
+- The fix keeps the whole level inside the 16-bit range: the installer puts the Maze level (360 x 360) at OffsetX
+  3500, OffsetY 0 (tx - ty stays within -360..3860, tx + ty under 4220), and moves an older install's
+  row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
+  drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
+  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way.
