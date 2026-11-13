@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-- A jungle map keeps its revealed automap when you go to town and come back (run `tools\install.ps1` again).
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.

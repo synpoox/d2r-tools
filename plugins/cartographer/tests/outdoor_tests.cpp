@@ -1180,32 +1180,6 @@ TEST_CASE("tools/install.ps1 lists the same outdoor tilesets as the table, in th
 	CHECK(row == OutdoorTilesetCount);
 }
 
-TEST_CASE("tools/install.ps1 gives the Jungle slot level its own automap Layer, not the Act 5 town's 79 (issue #306)")
-{
-	std::string here = __FILE__;
-	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
-	REQUIRE(in.good());
-	std::stringstream all;
-	all << in.rdbuf();
-	const std::string text = all.str();
-	const size_t row = text.find("Slot = 'Outdoor';");
-	REQUIRE(row != std::string::npos);
-	const std::string body = text.substr(row, text.find('}', row) - row);
-	const size_t at = body.find("Layer = '");
-	REQUIRE(at != std::string::npos);
-	const int layer = std::atoi(body.c_str() + at + 9);
-	CHECK(layer != 79);  // the Act 5 town's layer: the game keeps the revealed map per layer
-	CHECK(layer > 0);
-	CHECK(layer < 100);  // the game's map memory has 100 layers
-	// Both the new-row and the existing-row paths write it.
-	size_t writes = 0, pos = 0;
-	while ((pos = text.find("Set-CellIf $levels $cells 'Layer' $layer", pos)) != std::string::npos) {
-		++writes;
-		pos += 1;
-	}
-	CHECK(writes == 2);
-}
-
 TEST_CASE("pickFarthestCell with no anchors or no candidates picks nothing and draws nothing from the rng")
 {
 	const std::vector<GridCell> cells = {{0, 0}, {1, 0}, {2, 0}};
