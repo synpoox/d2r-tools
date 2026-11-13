@@ -26,6 +26,10 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
 
 ## Open issues with no work yet
 
+- **Owner report after the rare-map install (first priority):** #390 rare map item white with no properties on hover
+  (affixes do roll and apply), #391 panel wording/colour (`Monsters have`, `Players have`, blue, readable stat names, no
+  map-name line), #392 panel shows total Density and MF. All under #309. Same screenshot shows the terror zone text
+  still overlapping the panel (#371, #389).
 - #383 quality hook sees about half of spawned maps; #384 Item Level 1 (lead: ItemLevel getter `0x36ccf0`); both under #353.
 - #385 unique pace undercounts with Lava filler rooms (under #317).
 - #380 tint (research in #388), #371 remainder (in #389).
@@ -38,7 +42,7 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
   orchestrator scratchpad `affix\build.py`): `magicprefix.txt` 8 cmap rows (groups 9100-9107: Brutish, Savage, Swift,
   Infernal, Glacial, Stormbound, Blighted, Teeming), `magicsuffix.txt` 6 rows (9200-9205: of Resilience, Might, Vitality,
   Haste, Fortune, the Horde), `raresuffix.txt` cmap rows, `item-nameaffixes.json` ids 60100-60106 (English only) in
-  `strings` and `strings-legacy`. Not yet checked in game: owner tries `cheat spawn t23,typ r,lvl 90,inv 0`.
+  `strings` and `strings-legacy`. Owner checked in game: affixes roll and apply; tooltip/name bugs filed as #390-#392.
 - Earlier: 60 map icons (HD, lowend, DC6) imported to the mod; t20-t23 use map_08/23/37/45; owner set spellicon -1.
 
 ## Hazards
