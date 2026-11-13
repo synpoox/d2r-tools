@@ -55,7 +55,7 @@ auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
 // The description of the map level stat (itemstatcost.txt, descstrpos): install.ps1 writes RowKey(plugin id, MapLevelStatLocalKey) and the plugin registers
 // this text for MapLevelStatLocalKey. The text is a format that takes the stat's value (descfunc 19).
 inline constexpr const char* MapLevelStatLocalKey = "map_level_stat";
-inline constexpr const char* MapLevelStatText = "Map Level: %d";
+inline constexpr const char* MapLevelStatText = "Area Level: %d";
 // The monster-side map stats (statplan monsterStats()): itemstatcost.txt row `cartographer_<key>`, description key RowKey(plugin id, key), and the text, a format that
 // takes the stat's signed value.
 struct MonsterStatText {

@@ -1,0 +1,1 @@
+- Compatibility: a cube `map-level` recipe now adds to the map's own Area Level (the `maps.txt` Level) instead of starting from 0.
