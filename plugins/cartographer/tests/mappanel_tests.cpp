@@ -33,3 +33,11 @@ TEST_CASE("a map without properties or a level still has a name")
 	CHECK(panelText("Shorelines", 0, {}) == "Shorelines");
 	CHECK(panelText("", 0, {}) == "Map");
 }
+
+TEST_CASE("the terror zone text stays marked hidden when a restore fails")
+{
+	CHECK(hiddenAfter(false, true));
+	CHECK_FALSE(hiddenAfter(false, false));
+	CHECK_FALSE(hiddenAfter(true, true));
+	CHECK(hiddenAfter(true, false));
+}

@@ -16,7 +16,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are on by
   default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
-- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, in place of the terror zone text, and go away outside it. A TCP/IP client does not show it.
+- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
