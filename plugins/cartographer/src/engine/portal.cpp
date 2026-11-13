@@ -681,12 +681,12 @@ void ServeWhere(Unit* unit) noexcept {
 	if (!g_whereRequested.exchange(false)) {
 		return;
 	}
-	const uint8_t* path = At<const uint8_t*>(unit, 0x38);  // the unit's path: players keep subtile x, y at +0x10 and +0x14 (better-auras UnitXY)
+	const uint8_t* path = At<const uint8_t*>(unit, 0x38);  // the unit's path: a player has a dynamic path, subtile x, y are uint16 at +0x2 and +0x6 (better-auras UnitXY; +0x10/+0x14 is the static path of objects)
 	if (path == nullptr) {
 		Tell("Cartographer where: the player has no position yet.");
 		return;
 	}
-	const int32_t x = At<int32_t>(path, 0x10), y = At<int32_t>(path, 0x14);
+	const int32_t x = At<uint16_t>(path, 0x2), y = At<uint16_t>(path, 0x6);
 	const int level = PlayerLevelOf(unit);
 	Tell("Cartographer where: level " + std::to_string(level) + ", subtile (" + std::to_string(x) + "," + std::to_string(y) + "), " + OutdoorWhereText(level, x, y));
 }
