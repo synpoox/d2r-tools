@@ -36,11 +36,11 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
 Each map is a row in the mod's `misc.txt` of type `cmap` (the item type `install.ps1` adds to `itemtypes.txt`, so the
 tooltip shows the map's name), `pSpell` 16, `belt` 0, `useable` 1, `spellicon` -1, and a free 3-character `code`.
-Copy the `isc` row and set
-the columns that [`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists for the three example
-maps (`name` is the row's `name` column, `namestr` the string key); blank the vendor `Min`/`Max` columns so no NPC sells it.
-Set `compactsave` to 0: `isc` has 1, and an item saved compact carries no quality, so every map would stay Normal (white name, no
-property lines).
+Copy the `isc` row and set the columns that
+[`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists for the three example maps
+(`name` is the row's `name` column, `namestr` the string key); blank the vendor `Min`/`Max` columns so no NPC sells
+it. Set `compactsave` to 0: `isc` has 1, and an item saved compact carries no quality, so every map would stay Normal
+(white name, no property lines).
 Then add two files to the mod, each starting from the game's own copy (the mod's file replaces the game's whole file):
 
 - `<Mod>.mpq\data\hd\items\items.json`, one entry per code, using the picture of the `isc` scroll (without it the item has no
