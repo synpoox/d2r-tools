@@ -36,7 +36,8 @@ const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Lo
 const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "EventChance",
-                                             "Density", "Champions",   "Uniques"};
+                                             "Density", "Champions",   "Uniques",
+                                             "Brightness", "Warmth"};
 
 auto Canonical(const std::vector<std::string>& names, std::string_view word) -> const std::string* {
 	for (const std::string& n : names) {
@@ -217,6 +218,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 	const int cBoss = table.Column("Boss"), cMonsters = table.Column("Monsters");
 	const int cMinChar = table.Column("MinCharLevel"), cEvent = table.Column("EventChance");
 	const int cDensity = table.Column("Density"), cChampions = table.Column("Champions"), cUniques = table.Column("Uniques");
+	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
 
 	std::vector<std::string> customShapes;
 	if (shapes != nullptr) {
@@ -356,6 +358,16 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		percent(cDensity, "Density", &map.density);
 		percent(cChampions, "Champions", &map.champions);
 		percent(cUniques, "Uniques", &map.uniques);
+		// The look columns are cosmetic: a bad cell keeps the tileset's own look for that column and the map still loads.
+		const auto look = [&](int column, const char* label, int lo, int hi, int* out) {
+			const std::string cell = table.Cell(row, column);
+			if (!cell.empty() && !ParseInt(cell, lo, hi, out)) {
+				report.Error(MapsFile, row.line, std::string(label) + " '" + cell + "' is not a whole number " + Range(lo, hi) + ". The tileset's own look is kept for this column.");
+			}
+		};
+		namespace ml = cartographer::maplight;
+		look(cBrightness, "Brightness", ml::MinBrightness, ml::MaxBrightness, &map.look.brightness);
+		look(cWarmth, "Warmth", ml::MinWarmth, ml::MaxWarmth, &map.look.warmth);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {
