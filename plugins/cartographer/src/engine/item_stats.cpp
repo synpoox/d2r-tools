@@ -80,10 +80,36 @@ auto CubeInputsFound() noexcept -> bool {
 }
 
 auto Readable(uint64_t p) noexcept -> bool {
-	return p > 0x10000 && p < 0x00007fffffffffffull && !IsBadReadPtr(reinterpret_cast<const void*>(p), 16);
+	if (p <= 0x10000 || p >= 0x00007fffffffffffull) {
+		return false;
+	}
+	MEMORY_BASIC_INFORMATION mbi{};
+	if (VirtualQuery(reinterpret_cast<const void*>(p), &mbi, sizeof(mbi)) == 0 || mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) != 0) {
+		return false;
+	}
+	return p + 16 <= reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
 }
 
-auto CubeInputLevel(uint64_t owner, int statId) noexcept -> int;
+// try/catch under /EHsc does not catch an access violation, so the game-facing reads run inside __try/__except, each in a function of its own
+// (a function with __try holds no C++ objects). A fault reads as "not read".
+auto SafeMagicStat(void* item, int statId, int* value, bool* ok) noexcept -> bool {
+	__try {
+		*value = ItemMagicStat(item, statId, ok);
+		return true;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+auto SafeSetMagicStat(void* item, int statId, int value) noexcept -> bool {
+	__try {
+		return SetItemMagicStat(item, statId, value);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+auto CubeInputLevel(uint64_t player, int statId) noexcept -> int;
 
 auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10) noexcept -> uint64_t {
 	g_cubeInput.store(CubeInputLevel(a2, g_statId.load(std::memory_order_relaxed)));
@@ -92,16 +118,13 @@ auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a
 	return result;
 }
 
-// The highest map level stat among the items in the cube, read from the player (`owner`) whose inventory the cube step walks: the level the
+// The highest map level stat among the items in the cube, read from the player whose inventory the cube step walks: the level the
 // recipe's input map carries. The game frees the inputs during the output step, so this runs when the step starts.
-auto CubeInputLevel(uint64_t cube, int statId) noexcept -> int {
-	if (cube == 0 || statId < 0 || !CubeInputsFound() || !Readable(cube)) {
-		return -1;
-	}
+auto CubeInputLevelRaw(uint64_t player, int statId) noexcept -> int {
 	int best = -1;  // -1: no input map's level was read
 	bool trusted = true;
-	try {
-		void* inv = reinterpret_cast<UnitInventoryFn>(const_cast<uint8_t*>(g_parts[UnitInventory].address))(reinterpret_cast<void*>(cube));
+	{
+		void* inv = reinterpret_cast<UnitInventoryFn>(const_cast<uint8_t*>(g_parts[UnitInventory].address))(reinterpret_cast<void*>(player));
 		if (!Readable(reinterpret_cast<uint64_t>(inv))) {
 			return -1;
 		}
@@ -118,10 +141,19 @@ auto CubeInputLevel(uint64_t cube, int statId) noexcept -> int {
 			}
 			it = reinterpret_cast<InventoryNextFn>(const_cast<uint8_t*>(g_parts[InventoryNext].address))(it);
 		}
-	} catch (...) {
-		return -1;
 	}
 	return trusted ? best : -1;
+}
+
+auto CubeInputLevel(uint64_t player, int statId) noexcept -> int {
+	if (player == 0 || statId < 0 || !CubeInputsFound() || !Readable(player)) {
+		return -1;
+	}
+	__try {
+		return CubeInputLevelRaw(player, statId);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return -1;
+	}
 }
 
 // The cube's output step applies each `mod` of a recipe through the property applier. When it is the map-level property, the map's stat is
@@ -147,22 +179,18 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	int after = 0;
 	bool okBefore = false;
 	bool okAfter = false;
-	try {
-		before = ItemMagicStat(reinterpret_cast<void*>(item), statId, &okBefore);
-	} catch (...) {
+	if (!SafeMagicStat(reinterpret_cast<void*>(item), statId, &before, &okBefore)) {
+		okBefore = false;
 	}
 	const uint64_t result = g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
-	try {
-		after = ItemMagicStat(reinterpret_cast<void*>(item), statId, &okAfter);
-	} catch (...) {
+	if (!SafeMagicStat(reinterpret_cast<void*>(item), statId, &after, &okAfter)) {
+		okAfter = false;
 	}
 	// The recipe's range is the Property's min and max dwords; a range rolls once per transmute.
 	const int pmin = At<int32_t>(reinterpret_cast<const void*>(prop), 8);
 	const int pmax = At<int32_t>(reinterpret_cast<const void*>(prop), 12);
-	int roll = pmin;
-	if (pmax > pmin && pmax - pmin < 1000) {
-		roll = (after >= pmin && after <= pmax) ? after : pmin + static_cast<int>(GetTickCount() % static_cast<unsigned>(pmax - pmin + 1));
-	}
+	// A game result inside the range is the game's own roll and stands; otherwise roll here with the plugin's mixer (statplan::cubeRoll), not a clock modulo.
+	const int roll = (after >= pmin && after <= pmax) ? after : sp::cubeRoll(pmin, pmax, sp::mixSeed(GetTickCount64(), static_cast<uint32_t>(item >> 4), static_cast<uint32_t>(g_logged.load())));
 	const int inputLevel = g_cubeInput.load();
 	// Fail open: both reads of the item and the cube inputs walk must have worked. A level read as 0 (a fresh map) counts; an unread one does not.
 	const int base = before > inputLevel ? before : inputLevel;
@@ -171,12 +199,13 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, known);
 	bool fixed = false;
 	if (target != after) {
-		try {
-			fixed = SetItemMagicStat(reinterpret_cast<void*>(item), statId, target);
-		} catch (...) {
-		}
+		fixed = SafeSetMagicStat(reinterpret_cast<void*>(item), statId, target);
 	}
-	const int readback = fixed ? ItemMagicStat(reinterpret_cast<void*>(item), statId) : after;
+	int readback = after;
+	bool okReadback = false;
+	if (fixed && !SafeMagicStat(reinterpret_cast<void*>(item), statId, &readback, &okReadback)) {
+		readback = -1;
+	}
 	if (g_logged.fetch_add(1) < 200) {
 		plog::Info("cube map level: item %p class %d, range %d..%d: stat before %d after %d, cube input %d, target %d, now %d (%s; read %s)", reinterpret_cast<void*>(item),
 		           Readable(item) ? At<int32_t>(reinterpret_cast<const void*>(item), 4) : -1, pmin, pmax, before, after, inputLevel, target, readback,

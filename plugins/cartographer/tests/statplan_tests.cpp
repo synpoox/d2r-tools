@@ -634,6 +634,21 @@ TEST_CASE("parsePropertyId: the row number of the property code")
 	CHECK(parsePropertyId("x\ty\n", "str") == -1);
 }
 
+TEST_CASE("cubeRoll: stays in the range")
+{
+	CHECK(cubeRoll(5, 5, 99) == 5);
+	CHECK(cubeRoll(8, 4, 99) == 8);
+	CHECK(cubeRoll(0, 5000, 99) == 0);
+	bool seen[6] = {};
+	for (uint64_t e = 0; e < 200; ++e) {
+		const int r = cubeRoll(5, 10, e);
+		REQUIRE(r >= 5);
+		REQUIRE(r <= 10);
+		seen[r - 5] = true;
+	}
+	for (bool b : seen) CHECK(b);
+}
+
 TEST_CASE("cubeMapLevelTarget: the recipe adds to the map's level")
 {
 	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5) == 5);       // untouched, a map with no stat
