@@ -1074,7 +1074,7 @@ auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view 
 }
 
 auto SkippedMapText(const SkippedMap& skipped) -> std::string {
-	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: see the Cartographer log.";
+	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: maps.txt row " + std::to_string(skipped.line) + " was skipped (see cartographer-report.txt).";
 }
 
 auto SkippedMapLog(const SkippedMap& skipped) -> std::string {

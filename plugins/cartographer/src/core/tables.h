@@ -226,7 +226,7 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 // The skipped row whose Item is `itemCode` (ignoring case), or nullptr. Only for a code no loaded map uses (FindMapByItem is tried first).
 auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap*;
 
-// What the player sees when using the item of a skipped row (the reason goes to the log, see SkippedMapLog).
+// What the player sees when using the item of a skipped row (row number and where to read why; the reason goes to the log, see SkippedMapLog).
 auto SkippedMapText(const SkippedMap& skipped) -> std::string;
 auto SkippedMapLog(const SkippedMap& skipped) -> std::string;
 
