@@ -25,9 +25,10 @@ example `Plague Missing string Shorelines Map`: +12% Monster Speed, +10% Monster
 -15% Monster Cold Resistance, +18% Monster Fire Resistance, +10% Monster Damage, +4 Strength, All Resistances +6.
 
 Unforced `cheat spawn t20,num 60` repeated (clearing the grid and ground between rounds): `cartographer check` went from 12
-normal and 1 rare to 467 normal (31 of them magic rolls made normal), 8 rare, 2 unique, 0 magic, 9 set. Set and unique
-rolls failed their makers (no such rows in the mod) and went normal; the 8 rare rolls did not, and the one found and
-identified (`cheat idall`) was a rare map with affixes. The hook sees only about half of the spawned maps (about 31 of 60
+normal and 1 rare to 467 normal (31 of them magic rolls made normal), 8 rare, 2 unique, 0 magic, 9 set (running totals, so 7
+new rares). The 9 set/rare/unique makers that failed (fallbacks sent to normal) equal the 9 set rolls, so none of the rare
+rolls failed; the unique count was not separately checked. Only one natural rare was identified (`cheat idall`) and looked
+at: a rare map with affixes. The hook sees only about half of the spawned maps (about 31 of 60
 per spawn), as in the quality check.
 
 Rare maps spawn unidentified (red inventory cell, `Unidentified` tooltip) until `cheat idall`.
@@ -58,15 +59,16 @@ Two rare maps (`Plague ... Shorelines Map`, `Rune ... Tunneling Depths Map`) wit
 - Ctrl+click dropped the Shorelines map; the ground label read the same name; clicking it picked it up and it went back
   into the inventory with an identical tooltip (same name, same six lines).
 - Save and Exit, then Play, Hell: both maps were back in the inventory with identical names and identical affixes.
-- Opening the reloaded Shorelines map logged `slot level 138`, the same as the same item before the save, and the same
-  stats (`item_maxhp_percent=+23, damagepercent=+25, fireresist=+10, velocitypercent=+12; players: strength=+4,
-  item_magicbonus=+15`), so quality, affixes and level survived.
+- Opening the reloaded Shorelines map logged the same stats (`item_maxhp_percent=+23, damagepercent=+25, fireresist=+10, velocitypercent=+12; players: strength=+4,
+  item_magicbonus=+15`), so quality and affixes survived. The item level could not be seen (see Findings), so it is not claimed.
+  The stat read (10 stats with correct values) also covers the decode guard in effect.
 - `d2rloader.log` has no `Character save failed` line.
 
 ## Findings
 
-No bug found; no issue filed. Notes: the item level label reads `Item Level: 1` whatever `lvl` is, so the level was judged
-by the map's slot level in the log, not the label; and a modder who adds `rareprefix`/`raresuffix` rows without string
+No bug confirmed; two open questions (not filed from here): the hook saw only about half of the spawned maps (31 of 60),
+so the unseen half was not examined; and the item level label reads `Item Level: 1` whatever `lvl` is, so the item level
+could not be seen and its survival across save and reload is not checked. Also, a modder who adds `rareprefix`/`raresuffix` rows without string
 keys sees `Missing string` in the name.
 
-Not checked: multiplayer, automap lines, a unique map, maps from the cube or vendors, and other game builds.
+Not checked: multiplayer, traded maps (need multiplayer), item level survival, automap lines, a unique map, maps from the cube or vendors, and other game builds.
