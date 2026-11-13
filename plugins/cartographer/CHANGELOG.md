@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The Lava map now fills its edges with lava and cliff, so no black void shows from the ground near the outer wall.
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.

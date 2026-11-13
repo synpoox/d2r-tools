@@ -20,3 +20,9 @@ Consequences for the table row `{"Lava", 28, "MazeLava", "Cartographer Lava", 24
 
 Open (game check): the DS1 edge scan of `a4-lava.md` says piece 839 (EW) is about 36 percent open on its north side and 845 (NW) about 7 percent on its south side. In a maze the neighbour is absent
 on those sides, so they should open onto lava or void, not onto a room; to confirm in game. Also: that the lava edge blocks movement with no extra block, and that the entrance room (no Prev piece) places the player in the planned room.
+
+## Edge fill (issue #372)
+
+The Lava case only walks, so no room exists beyond the plan's outer rooms, and a Lava piece's lava fringe is a few tiles deep: from ground near the outer wall the rest of the screen was black. The plan now adds a ring of closed filler rooms (`ringCells` of the tileset row, 1 for Lava, 0 for Cave and Crypt) on every free cell within one cell (8 ways) of a plan room and inside the level box. Each is made with add-room `0x3e77a0` from an adjacent room and picked with `0x3eb960` (836 plus the mask of its back link). No new address and no new table: the same add-room and picker calls as the plan rooms.
+
+Seen in game (slot 7, Large Lava, build 1.3.1-beta): the log reads "maze filler ring: N of N rooms made" and "built as planned"; the bottom, top and left outer rooms and a corner show lava and cliff to the screen edge, no black field. A layout that fills the level box is planned with margin 0 and the ring is clipped to the level, so its outermost edge can stay bare (about a tenth of Large layouts in the planner tests). The arrival box check counts the filler cells (`planCellRoom`).

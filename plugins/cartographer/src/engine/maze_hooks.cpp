@@ -562,6 +562,23 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	for (size_t i = 0; i < n; ++i) {
 		(void)pick(ctx.rooms[i], 1);
 	}
+	// The filler ring (Lava): closed cells around the layout so no void shows past its edges. Made after the plan rooms have their pieces, so
+	// a plan room's piece never counts the link to the filler beside it. A refused filler is only a gap in the ring: logged, the build goes on.
+	if (!plan.fills.empty()) {
+		std::vector<void*> all(ctx.rooms);
+		int refused = 0;
+		for (const cm::AddStep& step : plan.fills) {
+			void* parent = step.parent >= 0 && static_cast<size_t>(step.parent) < all.size() ? all[static_cast<size_t>(step.parent)] : nullptr;
+			void* made = parent != nullptr ? add(parent, step.dir, 0) : nullptr;
+			if (made == nullptr) {
+				++refused;
+			} else {
+				(void)pick(made, 1);
+			}
+			all.push_back(made);  // a null keeps the indices; its children are refused too
+		}
+		plog::Info("maze filler ring: %d of %d rooms made", static_cast<int>(plan.fills.size()) - refused, static_cast<int>(plan.fills.size()));
+	}
 	for (size_t i = 0; i < n; ++i) {
 		if (!cm::fixAfterWalk(plan, static_cast<int>(i))) {
 			continue;

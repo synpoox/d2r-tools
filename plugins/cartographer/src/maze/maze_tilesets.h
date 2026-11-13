@@ -25,6 +25,7 @@ struct MazeTileset {
 	bool callsRingGrower;   // the tileset's case in the maze builder 0x3e69e0 calls the ring grower 0x3e9820 first
 	int offsetX;            // the levels.txt OffsetX tools\install.ps1 gives the slot level (its -<Param>OffsetX default)
 	int offsetY;            // the levels.txt OffsetY (its -<Param>OffsetY default)
+	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 };
 
 // Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
@@ -41,11 +42,12 @@ constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
 inline constexpr MazeTileset MazeTilesets[] = {
 	// Offsets: y 0 and x 3500, 3000, 2500, 2000 (Cave, Crypt, Lava, Ice; 500 apart), so every level fits the automap range and sits above the first Act 5 level (y 1000).
-	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false, 3500, 0},
-	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false, 3000, 0},
+	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false, 3500, 0, 0},
+	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false, 3000, 0, 0},
 	// Lava (River of Flame, LevelType 28): 24-tile rooms, "Lava W" is Def 837 (base 836, 837..851). Its case in 0x3e69e0 neither calls the ring grower
-	// nor places an entrance or exit (no 0x3eb850 call), so there is no Prev family: the entrance is an ordinary room. docs/reverse-engineering/cartographer/23-maze-lava.md.
-	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0},
+	// nor places an entrance or exit (no 0x3eb850 call), so there is no Prev family: the entrance is an ordinary room. The pieces close their own sides with a few tiles of lava and the engine
+	// draws nothing past the rooms, so one ring of filler rooms goes around the layout (ringCells, issue #372). docs/reverse-engineering/cartographer/23-maze-lava.md.
+	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0, 1},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
