@@ -649,6 +649,15 @@ TEST_CASE("cubeMapLevelTarget: the recipe adds to the map's level")
 	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5, false) == 0);
 	CHECK(cubeMapLevelTarget(20, 20, 10, 10, 10, false) == 20);
 	CHECK(cubeMapLevelTarget(20, 10, 10, 10, 10, false) == 10);
+	// A fresh map reads as a trusted 0 (no stat, nothing in the cube raised it): the first transmute gets the roll.
+	CHECK(cubeLevelKnown(true, 0, true));
+	CHECK(cubeMapLevelTarget(0, 0, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(0, 10, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(10, 10, 10, 10, 10, cubeLevelKnown(true, 10, true)) == 20);
+	// Not read: the input walk failed (-1) while the cube step is hooked, or an item read failed.
+	CHECK_FALSE(cubeLevelKnown(true, -1, true));
+	CHECK_FALSE(cubeLevelKnown(false, 5, true));
+	CHECK(cubeLevelKnown(true, -1, false));
 }
 
 TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")

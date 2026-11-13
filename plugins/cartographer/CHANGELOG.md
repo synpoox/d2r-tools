@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
+- `tools\install.ps1` no longer drops the `map-level` property row when it also edits `properties.txt` for monster stats. Re-run it on an existing mod.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).

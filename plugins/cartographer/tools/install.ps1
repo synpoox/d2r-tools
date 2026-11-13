@@ -133,6 +133,8 @@ $bom = [string][char]0xEF + [char]0xBB + [char]0xBF
 # A tab-separated table with a header: lines kept as they are, edited by column name.
 function Read-Table([string]$path) {
     if (-not (Test-Path $path)) { throw "Missing $path. This mod does not carry that table, so it cannot be edited here." }
+    # A table already read and queued for writing is returned as it is: a second read of the file would miss the queued rows and the later write would drop them.
+    foreach ($queued in $pending) { if ($queued.Path -eq $path) { return $queued } }
     $text = $bytes.GetString([System.IO.File]::ReadAllBytes($path))
     $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = [System.Collections.Generic.List[string]]($text -split [regex]::Escape($eol))

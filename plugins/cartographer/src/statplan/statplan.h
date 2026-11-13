@@ -125,6 +125,9 @@ int parsePropertyId(std::string_view text, std::string_view code);
 constexpr int kMaxStatValue = 511;
 // `levelKnown` is false when the map's level (or the input map's) could not be read; the game's own result then stands.
 int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown = true);
+// Whether the level to add to was read: the item reads worked (`itemReadsOk`) and, when the cube step is hooked, its inputs walk gave a level
+// (`inputLevel` >= 0; -1 means not read). A level read as 0, a fresh map without the stat, is known.
+bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked);
 
 struct ItemProperties {
 	std::vector<Property> properties; // in the item's order

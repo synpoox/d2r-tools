@@ -1,4 +1,4 @@
-## 23. The cube sets a map's level (issue #330)
+## 25. The cube sets a map's level (issue #330)
 
 A cube recipe with `mod 1` = `map-level` (the `properties.txt` row `tools\install.ps1` adds) set the `cartographer_map_level` stat in the cube's own test but
 never put it on a map output (`docs/cartographer/tables.md`, issue #310). The plugin hooks the one function every item property goes through and corrects the
@@ -44,13 +44,15 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 
 ### Behaviour
 
-- **Fail open:** a read of the map's level that is not trustworthy (a part missing, the list layout not recognised, more stats than the plugin reads and the level not among them, the input map's level not found) leaves the game's own result as it is; the hook never adds to an assumed 0 (`cubeMapLevelTarget` takes `levelKnown`, unit tested). A part off, or `properties.txt` / `itemstatcost.txt` without the rows, leaves the hook installed but idle (the property id is `-1`), and the game's own apply runs unchanged. The hook is installed only when `ItemListFind`, `ItemListCopy`, `ItemListMake`, `SetListStat` and `ItemPropApply` are all found.
+- **Fail open:** a read of the map's level that is not trustworthy (a part missing, the list layout not recognised, more stats than the plugin reads and the level not among them, the input map's level not found) leaves the game's own result as it is; a 0 that was read (a fresh map without the stat) counts, an unread level does not (`cubeMapLevelTarget` takes `levelKnown`, unit tested). A part off, or `properties.txt` / `itemstatcost.txt` without the rows, leaves the hook installed but idle (the property id is `-1`), and the game's own apply runs unchanged. The hook is installed only when `ItemListFind`, `ItemListCopy`, `ItemListMake`, `SetListStat` and `ItemPropApply` are all found.
 - **What it does:** for a call whose `Property` id is the `map-level` row, it reads the map level stat from the item's base magic list, lets the game apply, reads it again and, when the result is not "the old level plus the recipe's value", sets it (`statplan::cubeMapLevelTarget`, unit tested). The stat is cut to 1 to 511 (9 bits). With a wide range (`min < max`) a game result that already lies in the range counts as the game's own roll and stands, so such a recipe can add less than a fixed one (never twice). The recipe's input level is added to any output with a `map-level` mod, a new map or the Hand Axe from `useitem,mod`.
 
 ### Evidence
 
-Slot 6, Hell, test save, a build with extra logging, `usetype,nor,mod` and `t22,mod` recipes (map with a Town Portal scroll). Both hooks logged `hooked` at load. First transmute: the stat went to 10. Second transmute: stat before 10, after 20, cube input 10, target 20, read back 20. Using the map logged `map level 20 (from the item's stat)` and opened a portal (CaveB). The test slot's `maps.txt` was edited for the run (three Cave maps) and restored. Record: `docs/cartographer/checks/2026-11-12-cube-map-level.md`.
+Run 1: slot 6, Hell, test save, a build with extra logging, `usetype,nor,mod` and `t22,mod` recipes (map with a Town Portal scroll). Both hooks logged `hooked` at load. First transmute: the stat went to 10. Second transmute: stat before 10, after 20, cube input 10, target 20, read back 20. Using the map logged `map level 20 (from the item's stat)` and opened a portal (CaveB). The test slot's `maps.txt` was edited for the run (three Cave maps) and restored. Record: `docs/cartographer/checks/2026-11-12-cube-map-level.md`.
+
+Run 2 (the final DLL of this head, slot 5, Hell, god mode, test save; recipe `t21` + `tsc`, `usetype,nor,mod`, `map-level` 10): a fresh map, first transmute: `stat before 0 after 10, cube input 0, target 10, now 10`; second: `stat before 10 after 20, cube input 10, target 20, now 20`; the map used in Harrogath logged `map level 20 (from the item's stat)`, the map monsters took Level 20 and CaveB opened.
 
 ### Not checked
 
-A `Map Level` line on the hover of a map item (map-class items show no property lines; it shows on non-map outputs, section 15). A transmute with the final cleaned DLL (the runs used the same logic with extra logging; the final DLL loaded and hooked).
+A `Map Level` line on the hover of a map item (map-class items show no property lines; it shows on non-map outputs, section 15). Recipe forms other than `usetype,nor,mod` with the final DLL, and a multiplayer or client-side view.

@@ -29,7 +29,7 @@ inline constexpr const char* PlayerTick = "48 89 5C 24 10 48 89 6C 24 18 56 57 4
 // D2RLoader thunks (jmp [rip+x], then the dead original body): call the thunk, never hook it.
 inline constexpr const char* NewStatList = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 89 4C 24 08 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC B0 00 00 00";
 inline constexpr const char* SetListStat = "FF 25 ?? ?? ?? ?? 90 90 90 90 66 89 44 24 28";
-// The cube map level (issue #330, cartographer/23-cube-map-level.md): the property applier (hooked) and the item list maker (called).
+// The cube map level (issue #330, cartographer/25-cube-map-level.md): the property applier (hooked) and the item list maker (called).
 inline constexpr const char* ItemPropApply = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 60 0F B6 F1 49 8B E9 49 8B C9 4D 8B F0 44 8B FA E8 ?? ?? ?? ?? 66 83 F8 01 72";
 inline constexpr const char* ItemListMake = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 8B F8 41 8B D9 48 8B F2 44 8B C3 41 8B D7 48 8B F9 48 85 C9 74 ?? E8 ?? ?? ?? ??";
 // The cube's output step (hooked, 21 bytes) and the three small inventory walkers it uses to find the cube's items (only called).

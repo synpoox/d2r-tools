@@ -145,14 +145,15 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	}
 	int before = 0;
 	int after = 0;
-	bool ok = false;
+	bool okBefore = false;
+	bool okAfter = false;
 	try {
-		before = ItemMagicStat(reinterpret_cast<void*>(item), statId, &ok);
+		before = ItemMagicStat(reinterpret_cast<void*>(item), statId, &okBefore);
 	} catch (...) {
 	}
 	const uint64_t result = g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
 	try {
-		after = ItemMagicStat(reinterpret_cast<void*>(item), statId, &ok);
+		after = ItemMagicStat(reinterpret_cast<void*>(item), statId, &okAfter);
 	} catch (...) {
 	}
 	// The recipe's range is the Property's min and max dwords; a range rolls once per transmute.
@@ -163,9 +164,11 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 		roll = (after >= pmin && after <= pmax) ? after : pmin + static_cast<int>(GetTickCount() % static_cast<unsigned>(pmax - pmin + 1));
 	}
 	const int inputLevel = g_cubeInput.load();
-	// Fail open: the level to add to must have been read (the stat found on the item or on an input map); never add to an assumed 0.
+	// Fail open: both reads of the item and the cube inputs walk must have worked. A level read as 0 (a fresh map) counts; an unread one does not.
 	const int base = before > inputLevel ? before : inputLevel;
-	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, ok && base > 0);
+	const bool ok = okBefore && okAfter;
+	const bool known = sp::cubeLevelKnown(ok, inputLevel, On(CubeExec));
+	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, known);
 	bool fixed = false;
 	if (target != after) {
 		try {

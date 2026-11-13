@@ -217,6 +217,11 @@ int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool l
 	return target;
 }
 
+bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked)
+{
+	return itemReadsOk && (inputLevel >= 0 || !cubeStepHooked);
+}
+
 MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback)
 {
 	MapLevelPick out;
