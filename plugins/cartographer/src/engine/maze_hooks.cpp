@@ -94,7 +94,7 @@ std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
 std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
-std::atomic<int> g_closedFillerPiece{-1};  // the closed piece the filler ring's rooms were given in this game's slot build, -1: no ring built
+std::atomic<int> g_closedFillerPiece{-1};  // the closed piece the filler ring's rooms were given by the last steered walk, -1: none (cleared when a steered walk starts and on GameLeft)
 cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
 
 // The map that was opened, and the plan for it. Guarded by g_lock.
@@ -532,6 +532,7 @@ void Fallback(BuildCtx& ctx, const std::string& why) noexcept {
 // Replaces the walk: the plan's rooms in creation order, then its loop links, then the piece of every room.
 // False (with ctx.why set by the caller from `why`) when the engine refuses a step; the caller then lets the game's walk finish.
 auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may throw (strings, vectors); WalkHook catches
+	g_closedFillerPiece.store(-1);  // a fallback to the game's walk, or a build with no ring, must not keep an earlier build's piece
 	const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
 	void* first = Read<void*>(level, LvlFirstRoom);
 	if (first == nullptr || Read<int32_t>(level, LvlRoomCount) != 1 || Read<void*>(first, RoomNext) != nullptr) {

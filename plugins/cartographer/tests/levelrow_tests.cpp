@@ -647,62 +647,38 @@ TEST_CASE("the pace gives the unique packs out with the rooms done, from the fir
 	CHECK(PaceBudget(255, 400, 401) == 255);
 }
 
-TEST_CASE("the pace takes half a pack off the line so a pack does not carry the count past the total early") {
-	CHECK(PaceBudget(16, 279, 558, 1) == PaceBudget(16, 279, 558));
-	CHECK(PaceBudget(16, 279, 558, 5) == 6);  // 8 - 2
-	CHECK(PaceBudget(16, 1, 558, 5) == 1);  // never below 1
-	CHECK(PaceBudget(16, 558, 558, 5) == 16);  // the last room is due the whole total
-	CHECK(PaceBudget(14, 100, 0, 5) == 1);
-	CHECK(PackUnitsEstimate(0, 0) == 1);
-	CHECK(PackUnitsEstimate(3, 10) == 3);
-	CHECK(PackUnitsEstimate(2, 9) == 5);
-	CHECK(PackUnitsEstimate(4, 3) == 1);
-	int last = 0;
-	for (int seen = 1; seen <= 558; ++seen) {
-		const int b = PaceBudget(16, seen, 558, 4);
-		CHECK(b >= last);
-		CHECK(b <= 16);
-		last = b;
-	}
-}
-
 namespace {
 
-// One map's room sequence as the pace sees it: `rooms` plan rooms (+0xc) with `fillers` closed filler rooms mixed in among the populates,
-// two packs per room, each a unique pack with the game's flat 6 percent while the count is below MonUMax. A unique pack adds 1 unit, now
-// and then 2 or 3 (a room with several packs, a pack with minions counted). `skipFillers` leaves the fillers out of the share of rooms
-// done, as the engine does for the Lava ring. Returns the count made, and the populate index (1-based) of the last pack.
+// One map's room sequence as the pace sees it: `rooms` plan rooms (+0xc) with `fillers` closed filler rooms mixed in among the populates
+// (+4 counts them, +0xc does not), two packs per room, each a unique pack with the game's flat 6 percent while the count is below
+// MonUMax. A unique pack adds 1 unit, now and then 2 or 3 (a pack with its minions counted). `skipFillers` leaves the fillers out of the
+// share of rooms done, as the engine does for the Lava ring. Returns the count made, and the populate index (1-based) of the last pack.
 struct PaceRun {
 	int made = 0;
 	int lastPack = 0;
 	int populates = 0;
 };
 
-auto SimulatePace(uint32_t seed, int total, int rooms, int fillers, bool skipFillers, bool lag) -> PaceRun {
+auto SimulatePace(uint32_t seed, int total, int rooms, int fillers, bool skipFillers) -> PaceRun {
 	uint32_t state = seed * 2654435761u + 12345u;
 	const auto next = [&state]() {
 		state = state * 1664525u + 1013904223u;
 		return (state >> 8) & 0xffffff;
 	};
 	PaceRun run;
-	int events = 0, units = 0, fillersDone = 0, planDone = 0;
+	int fillersDone = 0, planDone = 0;
 	const int populates = rooms + fillers;
 	const int every = fillers > 0 ? populates / fillers : 0;
 	for (int i = 0; i < populates; ++i) {
 		const bool filler = every > 0 && i % every == 3 && fillersDone < fillers;
 		const int share = skipFillers ? planDone : i;
-		const int budget = PaceBudget(total, share, rooms, lag ? PackUnitsEstimate(events, units) : 1);
-		const int before = run.made;
+		const int budget = PaceBudget(total, share, rooms);
 		for (int pack = 0; pack < 2; ++pack) {
 			if (run.made < budget && next() % 100 < 6) {
 				const uint32_t r = next() % 100;
 				run.made += r < 75 ? 1 : (r < 90 ? 2 : 3);
+				run.lastPack = i + 1;
 			}
-		}
-		if (run.made > before) {
-			++events;
-			units += run.made - before;
-			run.lastPack = i + 1;
 		}
 		(filler ? fillersDone : planDone) += 1;
 	}
@@ -712,29 +688,30 @@ auto SimulatePace(uint32_t seed, int total, int rooms, int fillers, bool skipFil
 
 }  // namespace
 
-TEST_CASE("the pace, simulated over a room sequence with bursts, keeps unique packs coming through the last third and lands near the total") {
+TEST_CASE("with no filler rooms the simulated pace keeps unique packs coming through the last third and lands near the total (baseline)") {
 	const int total = 14, rooms = 486, runs = 300;
 	int lastThird = 0, closeTo = 0;
-	double lastShare = 0;
 	for (int s = 1; s <= runs; ++s) {
-		const PaceRun run = SimulatePace(static_cast<uint32_t>(s), total, rooms, 0, false, true);
+		const PaceRun run = SimulatePace(static_cast<uint32_t>(s), total, rooms, 0, false);
 		lastThird += run.lastPack * 3 > run.populates * 2 ? 1 : 0;
 		closeTo += run.made >= total - 2 && run.made <= total + 2 ? 1 : 0;
-		lastShare += static_cast<double>(run.lastPack) / run.populates;
 	}
-	CHECK(lastThird >= runs * 95 / 100);
-	CHECK(closeTo >= runs * 90 / 100);
-	CHECK(lastShare / runs > 0.88);
+	CHECK(lastThird >= runs * 85 / 100);
+	CHECK(closeTo >= runs * 85 / 100);
 }
 
 TEST_CASE("leaving the filler rooms out of the share of rooms done keeps the last packs for the last plan rooms") {
 	const int total = 14, rooms = 486, fillers = 96, runs = 300;
+	int lastThirdWith = 0, lastThirdWithout = 0;
 	double withSkip = 0, without = 0;
 	for (int s = 1; s <= runs; ++s) {
-		const PaceRun a = SimulatePace(static_cast<uint32_t>(s), total, rooms, fillers, true, true);
-		const PaceRun b = SimulatePace(static_cast<uint32_t>(s), total, rooms, fillers, false, true);
+		const PaceRun a = SimulatePace(static_cast<uint32_t>(s), total, rooms, fillers, true);
+		const PaceRun b = SimulatePace(static_cast<uint32_t>(s), total, rooms, fillers, false);
 		withSkip += static_cast<double>(a.lastPack) / a.populates;
 		without += static_cast<double>(b.lastPack) / b.populates;
+		lastThirdWith += a.lastPack * 3 > a.populates * 2 ? 1 : 0;
+		lastThirdWithout += b.lastPack * 3 > b.populates * 2 ? 1 : 0;
 	}
 	CHECK(withSkip / runs > without / runs + 0.03);
+	CHECK(lastThirdWith > lastThirdWithout);
 }

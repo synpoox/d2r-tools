@@ -206,9 +206,8 @@ Pace g_pace;
 std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
 // The last room's pace, for the probe line (game thread only).
 int g_paceLastBudget = 0;
-// What the packs of this map added to the unique count so far (game thread only): populates that raised it, and by how much. The mean
-// is the pack size PaceBudget lags the line by.
-int g_paceEvents = 0, g_paceUnits = 0, g_paceCountBefore = 0, g_paceLastPack = 1, g_paceFillers = 0;
+// The filler rooms (closed ring pieces) populated so far in this map (game thread only); they are left out of the share of rooms done.
+int g_paceFillers = 0;
 // Set between UniquePaceBegin and UniquePaceEnd (game thread only): what the two bytes held.
 bool g_paceOpen = false;
 uint8_t g_paceSavedMin = 0, g_paceSavedMax = 0;
@@ -382,8 +381,6 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			const int total = lr::UniqueTotal(request, recSnap, recOn.uniques);
 			if (total > 0) {
 				g_pace = Pace{true, level, game, record, total, static_cast<uint8_t>(recSnap.uMin), static_cast<uint8_t>(total)};
-				g_paceEvents = g_paceUnits = g_paceCountBefore = 0;
-				g_paceLastPack = 1;
 				g_paceFillers = 0;
 				g_paceArmed.store(true);
 				plog::Info("map monsters: level %d: unique packs are paced over the whole map, %d in all (MonUMin 0, MonUMax follows the share of rooms done)", level, total);
@@ -504,16 +501,16 @@ auto UniquePaceBegin(const void* game, int roomLevel, bool filler, int pieceId) 
 		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
 		// +4 counts every room the game populates, the filler ring's too, and +0xc only the plan's: take the fillers out of the share.
-		// The game raises +4 while it populates a room, so at Begin it holds the rooms before this one, and so does the filler count.
+		// Whether +4 already holds the room being populated was not measured; the filler count is taken before this room's own is added,
+		// so the share can be one room off either way, which changes nothing noticeable over several hundred rooms.
 		const int planSeen = std::max(0, static_cast<int>(seen) - g_paceFillers);
 		if (filler) {
 			++g_paceFillers;
 		}
-		const int budget = lr::PaceBudget(pace.total, planSeen, rooms, g_paceLastPack);
-		g_paceCountBefore = pace.record[lr::RecUniqueCountOffset];
+		const int budget = lr::PaceBudget(pace.total, planSeen, rooms);
 		g_paceLastBudget = budget;
 		if (g_probe.load()) {
-			plog::Info("record probe: pace begin: +4=%d +0xc=%d unique count %d pack units %d filler %d (piece %d) fillers seen %d budget %d", seen, rooms, pace.record[lr::RecUniqueCountOffset], g_paceLastPack, filler ? 1 : 0, pieceId, g_paceFillers, budget);
+			plog::Info("record probe: pace begin: +4=%d +0xc=%d unique count %d filler %d (piece %d) fillers seen %d budget %d", seen, rooms, pace.record[lr::RecUniqueCountOffset], filler ? 1 : 0, pieceId, g_paceFillers, budget);
 		}
 		g_paceSavedMin = pace.restoreMin;
 		g_paceSavedMax = pace.restoreMax;
@@ -540,14 +537,6 @@ void UniquePaceEnd() noexcept {
 	}
 	g_paceOpen = false;
 	try {
-		if (Readable(g_paceRecord + lr::RecUniqueCountOffset, 1)) {
-			const int added = static_cast<int>(g_paceRecord[lr::RecUniqueCountOffset]) - g_paceCountBefore;
-			if (added > 0) {
-				++g_paceEvents;
-				g_paceUnits += added;
-				g_paceLastPack = lr::PackUnitsEstimate(g_paceEvents, g_paceUnits);
-			}
-		}
 		const uint32_t min = g_paceSavedMin, max = g_paceSavedMax;
 		const bool a = WriteGame(g_paceRecord + lr::RecUMinOffset, &min, 1);
 		const bool b = WriteGame(g_paceRecord + lr::RecUMaxOffset, &max, 1);

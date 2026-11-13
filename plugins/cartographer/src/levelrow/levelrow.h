@@ -98,16 +98,9 @@ struct Request {
 // `Uniques` is 0 (that map is not paced) or the part is not allowed. The pace (PaceBudget) spreads this number over the rooms.
 auto UniqueTotal(const Request& request, const RecordSnapshot& record, bool uniquesAllowed) -> int;
 
-// The unique packs allowed after `seen` of `rooms` rooms: `total` times the share of rooms done, less half of a pack's extra units
-// (`packUnits` is how many units one unique pack adds to the game's count, 1 when not known), rounded up, at least 1 and at most
-// `total`. The game adds a whole pack once it lets one through, so without the lag the count passes the line by up to a pack and runs
-// out of budget before the last rooms. `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0
-// or less gives 0.
-auto PaceBudget(int total, int seen, int rooms, int packUnits = 1) -> int;
-
-// The units one unique pack adds, from `units` added over `events` packs (a room's populate that raised the count): the mean rounded,
-// at least 1; 1 when nothing was seen yet.
-auto PackUnitsEstimate(int events, int units) -> int;
+// The unique packs allowed after `seen` of `rooms` rooms: `total` times the share of rooms done, rounded up, at least 1 and at most
+// `total`. `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0 or less gives 0.
+auto PaceBudget(int total, int seen, int rooms) -> int;
 
 // The 1 to 255 monster level.
 auto ClampLevel(int level) -> int;

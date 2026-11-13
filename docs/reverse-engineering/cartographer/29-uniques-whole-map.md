@@ -47,7 +47,7 @@ Question (#385): the Lava edge fill (section 23) adds closed filler rooms to the
 | `+8` at the end | 397 |
 | unique count at the end | 15 (total 14) |
 
-So the premise is wrong twice. `+0xc` does not hold the fillers (495 is the plan alone), and `+4` counts every room the game populates, 95 more than the plan has rooms: the rooms beside a visited plan room activate with it, the fillers among them. `+4` passed `+0xc` at the 494th populated room (84 percent of the 590), so the unpatched budget `total * +4 / +0xc` reaches the total before the last rooms and nothing falls short. The first version of this fix (`PaceBudget` dividing by `rooms - fillers`, 495 - 96 = 399 here) subtracted fillers that were never in the count and reached the total at the 375th probed room (about 64 percent), front-loading the packs; the run above was made on that build. It was reverted and the pace stays unchanged; the section "Spread check (issue #317)" below adds the later measurements. Not measured: the same map on the unpatched build (the budget column of the log gives it by formula: 14 * `+4` / 495), a second layout or size, a character walking the map. `+4` also overruns `+0xc` here, so on a map of this kind the share is capped at the total near the last sixth of the rooms.
+So the premise is wrong twice. `+0xc` does not hold the fillers (495 is the plan alone), and `+4` counts every room the game populates, 95 more than the plan has rooms: the rooms beside a visited plan room activate with it, the fillers among them. `+4` passed `+0xc` at the 494th populated room (84 percent of the 590), so the unpatched budget `total * +4 / +0xc` reaches the total before the last rooms and nothing falls short. The first version of this fix (`PaceBudget` dividing by `rooms - fillers`, 495 - 96 = 399 here) subtracted fillers that were never in the count and reached the total at the 375th probed room (about 64 percent), front-loading the packs; the run above was made on that build. It was reverted; the later measurements are in "Spread check (issue #317)" below, and the pace that ships is in "Pace leaves filler rooms out" at the end. Not measured: the same map on the unpatched build (the budget column of the log gives it by formula: 14 * `+4` / 495), a second layout or size, a character walking the map. `+4` also overruns `+0xc` here, so on a map of this kind the share is capped at the total near the last sixth of the rooms.
 
 ### Spread check (issue #317): Cave, Snow and Lava measured, no code change
 
@@ -57,21 +57,25 @@ So the premise is wrong twice. `+0xc` does not hold the fillers (495 is the plan
 
 **Lava, full sweep (a build that left filler rooms out of the pace and led the plan rooms; the change was dropped, so this is not the shipped pace).** Total 14, `+0xc` = 504, 827 rooms populated (503 plan, 324 filler by the corrected grid), 15 uniques made, 0 in filler rooms. Six pack events (a pack and its minions count together, one room made 4) at populate numbers 54, 80, 247, 425, 463 and 533 of 827; the last pack is at 64 percent of the rooms, and none came in the last 36 percent because the count (15) was above the total from then on. By thirds of the plan rooms: 9 / 2 / 4 uniques. The budget at each event was the count made plus one, so MonUMax is the gate; no preset or superunique spill-over showed in those lines. **Burst finding:** the game decides a pack after the budget is set and a unique pack adds all its units, so one populate can jump the count past the total; from then on no room gets budget under any pace formula, which leaves the end of the map without uniques. That tail is not the entrance bunching of #317 and a pace change cannot fill it.
 
-Filler rooms are in `+4` but not in `+0xc` (above). With the pace unchanged they advance it, so the total is due at about `+4 = +0xc`, 61 to 71 percent of the rooms of a Lava map; leaving them out and leading the plan rooms was tried and not kept: no run showed a gain over the unchanged pace (the unchanged pace put 0 of 13 in fillers), and which way the early budget moves depends on where the fillers fall in the room order.
+Filler rooms are in `+4` but not in `+0xc` (above). That sweep was run with a build that left the fillers out by grid position and also divided by the plan alone; it gave 9 / 2 / 4 and a last pack at 64 percent. A later build left them out by piece id and measured differently (last section); this sweep's conclusion that leaving them out gains nothing is superseded there.
 
-Not measured: the unchanged pace on a full sweep of the same seed, a second seed, Crypt, Jungle, a walking character.
+Not measured in this section: a second seed, Crypt, Jungle, a walking character.
 
-### Pace excludes filler rooms from the rooms done (issue #317)
+### Pace leaves filler rooms out (issue #317)
 
-2026-11-13, slot 7, Hell, test save, god mode, `MazeProbe=1`, `cheat goto` sweeps (not walked), maps Level 90, Density 100, Uniques 100. Maze seeds are random per game, so the before and after runs are different maps of the same size.
+2026-11-13, slot 7, Hell, test save, god mode, `MazeProbe=1`, `cheat goto` sweeps (not walked), maps Level 90, Density 100, Uniques 100. Maze seeds are random per game, so every run below is a different map of the same size, and one run per build cannot tell the builds apart; read the numbers as samples.
 
-`+4` counts every populated room, the Lava filler ring included, and `+0xc` counts plan rooms only. The pace now counts only the plan rooms among the rooms done: a populate whose DRLG room piece id (`+0x40`, id at `+0`) equals the closed filler piece made at slot build (836 in the slot) is a filler and is left out (`MazeRoomIsFiller`). Plan rooms carry the base piece plus an exit mask (846 and the like), never the closed piece. The probe line is now `pace begin: +4 +0xc unique count pack units filler (piece) fillers seen budget`. A pack that added several units (a pack with its minions) also shifts the budget a little later (`PaceBudget` `packUnits`, from the mean units per pack event so far); the simulation in `levelrow_tests.cpp` shows this alone helps little because most pack events add one unit, and that the filler rule carries the effect.
+`+4` counts every populated room, the Lava filler ring included, and `+0xc` counts plan rooms only. The pace now counts only plan rooms among the rooms done: a populate whose DRLG room piece id (`+0x40`, id at `+0`) equals the closed piece the steered walk gave the ring (836 in the slot; `g_closedFillerPiece`, cleared when a steered walk starts and on leaving the game) is a filler and is not counted (`MazeRoomIsFiller`). Plan rooms carry the base piece plus an exit mask (846 and the like), never the closed piece. This differs from the grid-position attempt above, which also divided by the plan alone. Probe line: `pace begin: +4 +0xc unique count filler (piece) fillers seen budget`. Whether `+4` already holds the room being populated was not measured; the share may be one room off, which does not matter over several hundred rooms. A pack-size lag that was tried alongside is not in this change (no evidence of its own).
 
-| Run | Total | Uniques by thirds of plan rooms | Last pack |
+| Run (uniques by thirds of plan rooms) | Total made (budget) | Thirds | Last pack |
 |---|---|---|---|
-| Lava, origin/main (fillers advance the pace) | 14 | 8 / 6 / 0 | plan room 61 percent |
-| Lava, this change | 14 | 5 / 5 / 5 (15 made: a burst of 3 at count 12) | plan room 87 percent |
+| Lava, origin/main (before the merge of #434 to #443) | 14 (14) | 8 / 6 / 0 | plan room 61 percent |
+| Lava, first build of this change (with the lag) | 15 (14), burst of 3 at count 12 | 5 / 5 / 5 | 87 percent |
+| Lava, this change, seed A | 16 (14), a pack of 4 at the first event and one of 4 near the end | 5 / 5 / 6 | 86 percent |
+| Lava, this change, seed B | 14 (14) | 6 / 3 / 5 | 94 percent |
 | Cave control, origin/main | 10 | 4 / 3 / 3 | 91 percent |
 | Cave control, this change | 10 | 4 / 3 / 3 | 91 percent |
 
-Not checked: the same seed before and after, Snow, a walking character, `cartographer where`, a second Lava seed.
+Both final-build Lava sweeps got uniques in the last third. The total ran over by up to 2 in one of them, from whole packs. A second origin/main Lava sweep was started and not finished (the session ended), so the before side is one run.
+
+Not checked: the same seed before and after, Snow, a walking character, `cartographer where`, a second origin/main Lava sweep.
