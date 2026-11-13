@@ -9,7 +9,7 @@
 //
 // The plan is the same StampPlan the Jungle and Snow plans produce, so the outdoor build hook replays it unchanged.
 //
-// Seen in game (docs/cartographer/checks/2026-11-12-siege-check.md): the stamper accepts these ids, the strips are built as 2 x 6 rooms of 8 tiles,
+// Seen in game (#288): the stamper accepts these ids, the strips are built as 2 x 6 rooms of 8 tiles,
 // the Boss and event land in their rooms. Not settled: how the seams look on screen (the funnel pair 874/873 differs by one row at the wall) and the
 // north and south edge (KillEdge).
 #pragma once

@@ -6,7 +6,7 @@ Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Addr
 ### The message
 
 `BC_ASSERT: i != dataTable->warpDefs.end()` at `D2Common\src\DataTbls\LvlTbls.cpp:817`, "Error in DRLG related to stairs that connect levels", logged once at
-map entry in two of three games of the names/drop check (`docs/cartographer/checks/2026-11-12-names-drop-check.md`), with "Continuing because assertion
+map entry in two of three games of the names/drop check (the names/drop check, #254), with "Continuing because assertion
 dialogs are disabled".
 
 ### The lookup that fails
