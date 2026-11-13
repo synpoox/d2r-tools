@@ -99,6 +99,8 @@ const void* g_pendingGame = nullptr;    // the game, player and item the check d
 const void* g_pendingPlayer = nullptr;
 const void* g_pendingItem = nullptr;
 std::atomic<bool> g_live{false};
+std::atomic<uint64_t> g_nextRescanMs{0};  // while the portal is off the tick looks again for the called parts at this time
+std::atomic<bool> g_rescanBusy{false};
 const D2RL::PluginContext* g_context = nullptr;
 std::vector<SignatureOverride> g_overrides;  // kept for RescanPortal
 bool g_hooksIn = false;                      // both item hooks were installed at load; they pass through until g_live
@@ -376,6 +378,61 @@ void ClearMapItemCursor(Game* game) noexcept {
 
 // --- The hooks ---------------------------------------------------------------------------------------------------------
 
+auto OffPartsList() -> std::string {
+	std::string out;
+	for (const Part& part : g_parts) {
+		if (part.required && !part.status.on) {
+			out += (out.empty() ? "" : ", ") + std::string(part.name);
+		}
+	}
+	return out.empty() ? "none" : out;
+}
+
+constexpr uint64_t PortalRescanMs = 2000;  // how often the tick looks again for a called part that was missing
+
+auto RequiredPartsOn() noexcept -> bool;
+
+// While the portal is off, looks again (cheaply: only the parts that are off, every PortalRescanMs) for the called
+// parts, so the portal comes on by itself once they resolve (D2RLoader's UnitStat thunk is not always in place at load).
+void RescanFromTick() noexcept {
+	if (g_context == nullptr || g_rescanBusy.exchange(true)) {
+		return;
+	}
+	try {
+		CodeRange ranges[8];
+		const int count = CodeRanges(g_context->exeBase, ranges, 8);
+		for (Part& part : g_parts) {
+			if (part.hookSize == 0 && !part.status.on) {
+				ResolvePart(g_context, g_overrides, ranges, count, part);
+				if (part.status.on) {
+					plog::Info("part %s: %s (found after load)", part.name, part.status.detail.c_str());
+				}
+			}
+		}
+		if (RequiredPartsOn()) {
+			g_live = true;
+			plog::Info("the portal is on: every part it needs is found");
+		}
+	} catch (...) {
+	}
+	g_rescanBusy = false;
+}
+
+std::atomic<bool> g_offUseLogged{false};  // a map use fell through to the game while the portal was off: logged once per process
+
+// Logs once when a map item is used while the portal is off (the game then runs its plain use, a Town Portal).
+void LogOffMapUse(Game* game, Unit* item) noexcept {
+	if (g_offUseLogged.load(std::memory_order_relaxed) || game == nullptr || item == nullptr || g_parts[ItemRecord].address == nullptr ||
+	    g_parts[UnitClassOf].address == nullptr) {
+		return;
+	}
+	const uint8_t* record = nullptr;
+	(void)CodeOf(game, item, &record);
+	if (record != nullptr && At<int32_t>(record, RecordSpellOffset) == MapSpell && !g_offUseLogged.exchange(true)) {
+		plog::Warn("a map item was used while the portal is off, so the game ran its plain use; parts still off: %s", OffPartsList().c_str());
+	}
+}
+
 auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept -> uint64_t {
 	if (!g_live.load()) {
 		return g_checkOriginal != nullptr ? g_checkOriginal(game, player, item, target) : 0;  // the portal is off: the game's own check
@@ -441,6 +498,7 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 
 void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	if (!g_live.load()) {
+		LogOffMapUse(game, item);
 		if (g_useOriginal != nullptr) {
 			g_useOriginal(game, player, item, target);  // the portal is off: the game's own use
 		}
@@ -685,6 +743,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	const uint64_t result = g_tickOriginal(game, unit);
 	if (g_live.load(std::memory_order_relaxed)) {
 		ClearMapItemCursor(game);
+	} else if (g_hooksIn && NowMs() >= g_nextRescanMs.load(std::memory_order_relaxed)) {
+		g_nextRescanMs = NowMs() + PortalRescanMs;
+		RescanFromTick();
 	}
 	if (!g_tickSeen.load(std::memory_order_relaxed)) {
 		g_tickSeen = true;
