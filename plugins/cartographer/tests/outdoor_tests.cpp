@@ -814,6 +814,12 @@ TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a p
 			CHECK(plan.layout.rulesMet);
 			CHECK(!plan.stamps.stamps.empty());
 			CHECK(planOutdoorMap(r, cat).hash == plan.hash);
+			// Open stamps every block, so Large is capped at the Medium grid (9 x 9 blocks).
+			if (std::string(size) == "Large") {
+				CHECK(plan.layout.width == 9);
+				CHECK(plan.layout.height == 9);
+				CHECK(plan.stamps.stamps.size() <= 81);
+			}
 		}
 }
 

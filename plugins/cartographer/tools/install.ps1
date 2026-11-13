@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze level and Outdoor level to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze level and its Outdoor, Snow and Siege levels to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -15,10 +15,10 @@
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
                     LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
-    levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
+    levels.txt    a third new level (the second outdoor one), "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    levels.txt    a fourth new level, "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
+    levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
     It also adds or updates the Maze, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
@@ -93,7 +93,7 @@ $OutdoorTilesets = @(
     @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 },
-    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. y 3900..3948 sits between the Snow level (y 3600..3792) and the next maze slot (y 4200). Template 110 is Act 5 - Siege 1.
+    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. y 3900..3948 sits between the Snow level (y 3600..3792) and whatever slot level follows at a larger y. Template 110 is Act 5 - Siege 1.
     @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 }
 )
 # Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).

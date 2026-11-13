@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
+- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).

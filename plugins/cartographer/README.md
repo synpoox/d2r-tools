@@ -16,7 +16,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
 - **Map properties**: random properties from `mapstats.txt` apply to the map's monsters. Player properties are on by
   default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
-- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, in place of the terror zone text, and go away outside it. A TCP/IP client does not show it.
+- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
@@ -113,7 +113,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
@@ -283,7 +283,7 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
 is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
-A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
+A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
