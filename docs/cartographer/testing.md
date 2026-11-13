@@ -205,6 +205,8 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 - Map sync part 1: unit tests of the message, its validation, the client's check, the client list and the connect schedule (`mapsync_tests`). No game run: the connection, the delivery, the late join and the thread each callback runs on are the checks in `docs/reverse-engineering/cartographer/12-map-sync.md` ("Needs game").
 - Not yet in game for `cartographer open <Name>`: repeating with an aura that reserves mana; leaving the game with the portal open and using the console in the next game; as a TCP/IP client the command refuses.
 
+`cartographer where` (developer console command, single player or host): logs the local player's subtile position, level id and, in an outdoor slot level, the box tile and plan cell, to the console and `cartographer.log` (no on-screen text); use it to see which part of a map you stand on while walking.
+
 ## Staging a game check (`stage_check.ps1`)
 
 `plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>] [-MapItems]`

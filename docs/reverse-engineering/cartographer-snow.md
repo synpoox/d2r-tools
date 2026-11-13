@@ -110,12 +110,12 @@ File counts: a pinned file index must be below both `Files` and the number of li
 `planSnowMap(SnowRequest)` returns a `SnowPlan` with the same `StampPlan` as the Jungle plan, so the outdoor hook could replay it unchanged:
 
 - A rectangle of `cellsW x cellsH` cells of 16 tiles (2 x 2 engine grid cells each), at most 12 x 12, at least 3 along the line, inside the slot row's declared size (`maxTilesX/Y`). The origin is the slot row's. No void cells (the rectangle is full).
-- One orientation per map, taken from the seed unless the request fixes it. Each line is an independent random stream of the seed: a start cap, runs whose sockets chain, an end cap.
+- One orientation per map, taken from the seed unless the request fixes it. Each line is an independent random stream of the seed: run pieces whose sockets chain, no caps (section 8).
 - With `pinFiles` off every stamp's file is `-1` (the engine draws it); on, a file below the piece's `files`.
-- The entrance rectangle is the first run cell of the middle line (never a cap: a cap's far side is empty). The boss rectangle is the run cell farthest from the entrance and the event rectangle the run cell whose distance to the nearer of the entrance and the boss is greatest (squared distance in cells; seed breaks ties, `outdoor::pickFarthestCell`); both are 16-tile run cells, never caps, all three distinct. A 16-tile cell holds four 8 x 8 rooms, all the same distance from its centre, so `chooseCellRoom` takes the smaller y and then the smaller x: the top-left room of the cell is the one the arrival, the Boss and the event use. That the rooms of two cells are reachable from each other across the fence lines is not established; the fence posts are short runs, so a gap is likely, but no walk flags were checked. A map with fewer than three run cells has neither (the event falls back to the distance rule, the map Boss is left off). Unit-tested: distinct, inside the layout, deterministic per seed, checker catches moved rectangles. The outdoor hook (ArrangeRooms), event_apply and AutoCheck read them through OutdoorBossRoom/OutdoorEventRoom exactly as for the Jungle.
-- `checkSnowPlan` re-checks a finished plan without using the planner: size, one stamp per cell on the 16-tile grid in row-major order, kinds by position, socket chain, file range, entrance.
+- The entrance rectangle is the first run cell of the middle line. The boss rectangle is the run cell farthest from the entrance and the event rectangle the run cell whose distance to the nearer of the entrance and the boss is greatest (squared distance in cells; seed breaks ties, `outdoor::pickFarthestCell`); both are 16-tile run cells one or more in from the line ends, all three distinct. A 16-tile cell holds four 8 x 8 rooms, all the same distance from its centre, so `chooseCellRoom` takes the smaller y and then the smaller x: the top-left room of the cell is the one the arrival, the Boss and the event use. That the rooms of two cells are reachable from each other across the fence lines is not established; the fence posts are short runs, so a gap is likely, but no walk flags were checked. A map with fewer than three run cells has neither (the event falls back to the distance rule, the map Boss is left off). Unit-tested: distinct, inside the layout, deterministic per seed, checker catches moved rectangles. The outdoor hook (ArrangeRooms), event_apply and AutoCheck read them through OutdoorBossRoom/OutdoorEventRoom exactly as for the Jungle.
+- `checkSnowPlan` re-checks a finished plan without using the planner: size, one stamp per cell on the 16-tile grid in row-major order, a run piece of the line's kind in every cell, the edge ring, socket chain, file range, entrance.
 
-What it does not do: any border (the outside of the rectangle is whatever the engine has there), monsters, waypoint, cave exits or a boss. The level is a field of fence lines, not yet a playable map.
+What it does not do: monsters, waypoint, cave exits or a boss. The level is a field of fence lines, not yet a playable map.
 
 ## 7. Open, and what wiring is left
 
@@ -135,6 +135,34 @@ Wiring (issue #147, second PR): the tables, the installer, the plan cache and th
 - Done in the plan and hook: `planOutdoorMap` dispatches `Snow` to `planSnowMap` (Small, Medium, Large or ExtraLarge cells, the shape is ignored, only `stamps` are filled; the plan cache keys it like Jungle). The outdoor hook keeps one slot record per outdoor slot (level, geometry, refusal), builds either slot level, picks the record by the open map's tileset and refuses (the game then builds its own level) when the level being built is the other slot's. `OutdoorSlotLevelId()` returns the open map's slot level, so the event code and the arrival probe follow it.
 - Left: the AutoCheck game check for the Snow level, an example Snow row in `examples/first-map` (it needs its own item code), and every in-game check in the list above. Needs a game: that each 16-tile cell yields a wholly-inside 8 x 8 room for chooseCellRoom, the arrival landing in the entrance cell, and the Boss and event standing in their rooms on a Snow map.
 
-## Adding a tileset
+## 8. Edge ring (issue #395)
 
-Moved to [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md): every touch point, what the table drives and what a tileset gets for free.
+Build 93847 (D2R 3.3), D2RLoader 1.3.1-beta, slot 6, Hell, test save, single player. The plan stamps one extra cell (`kEdgeCells` 1, 16 tiles) around the fence rectangle, chosen per side from the vanilla Act 5 Barricade border rows (route B in `cartographer-outline.md` section 3): W 958, N 959, E 972, S 969, NW 962, NE 982, SE 976, SW 981 (`kEdgePieces`, `edgePieceAt`; `checkSnowPlan` has its own table, `checkEdgePiece`, so a swapped side fails the check). Sizes are Small 4x3, Medium 6x4, Large 8x5, ExtraLarge 10x7 cells, so the level box is 16 tiles larger on every side (Small 96 x 80, Medium 128 x 96, Large 160 x 112, ExtraLarge 192 x 144; the slot is 192 x 192, so the ring depth cannot grow past 1). One walkable piece (964) all round was rejected: a player could stand on the ring and still see black past it.
+
+Two DS1 families:
+
+| Family | W | N | E | S | Corners |
+|---|---|---|---|---|---|
+| Cliff | 958 | 957 / 959 | 960 | none | 962 (NW), 981 (SW: cliff W, ravine S), 982 (NE: cliff N, ravine E) |
+| Ravine | 970 | 971 | 972 | 969 | 974 (NW), 975 (NE), 976 (SE), 973 (SW) |
+
+Rule: the isometric camera shows a cliff face only on the N and W sides (the face stands up and away from the camera). On S and E the face is hidden behind the floor, and 960 draws its blocked block black. So N and W use the cliff pieces and S and E use the ravine pieces. Each piece has 4 to 7 floor tiles on its inner side (the walkable strip); the outer part is a face, a drop or blocked.
+
+Orientation and caps. A Snow map is a set of lines of pieces, chosen by seed: horizontal lines are rows, vertical lines are columns. The cap pieces (995..998 W/E, 999..1002 N/S) have an empty outer half: the floor ends about halfway across the cell, a blocked wall row follows and nothing is drawn past it. Next to the ring that left about 8 tiles of black void on the two cap sides (seen in the first edge-ring build). Fix: the plan uses no caps. Every line is run pieces only (`RunH` or `RunV`, fully tiled) and the ring cell sits directly against the end run. This adds no stamps that overlap (the engine's behaviour for overlapping or offset stamps is untested) and no void cells; the cap rows stay in the piece table, unused. Because a line has no end piece, the line needs only `kMinRunCells` (3) cells and the entrance, boss and event keep off the end cells.
+
+Seen in game with this build (Hell, test save, single player, `cheat goto`, god mode, `cartographer where` for the position, screenshots):
+- Medium, horizontal (seed 16191774478151808831): log "built as planned (48 stamps, 0 void cells ...)". The west and east end cells and their ring cells showed floor, the cliff (west) and the ravine edge (east), and no black void. Walked on foot from the end run cell (plan cell 0) into the west ring cell (-1), and from the end cell (5) into the east ring cell (6) (box tile x 11 and x 118 of 128).
+- Medium, vertical (seed 14111761437268299793): walked from run cell (2,0) into the north ring cell (2,-1) and from run cell (1,3) into the south ring cell (1,4); the pictures showed the cliff on the north and a ravine drop on the south, no void.
+- ExtraLarge, vertical (seed 6801670374834866650): "built as planned (108 stamps, 0 void cells)"; walked from run cell (4,0) into the north ring cell (4,-1).
+- Not seen: the four corners of these new maps up close, Small and Large, every ring side of an ExtraLarge map, monster counts in the ring.
+- `cheat goto` to a point does not always land there (two warps landed back at the arrival cell), so positions were read with `cartographer where`, which logs the player's subtile x, y, level id, box tile and plan cell. Clicks on the action bar or on a unit do not move the character, and a cluster of rocks and bushes can stop a walk (move to another column).
+
+Reachability. The cap-side ring strips are reachable on foot: the walks above went from a run cell across the cell edge into the ring cell on all four sides (west and east in the horizontal map, north and south in the vertical map). With the caps gone nothing else stands between a run end and the ring. The walk-flag data (DS1 and DT1 flood fill) agrees. Monsters and uniques in ring rooms therefore stand on ground the player can reach, and nothing needs to keep them off. Not checked: every ring cell of every size.
+
+Not done: voiding the ring cells (0x3ede00).
+
+Player position (used by `cartographer where`), build 93847: the unit's path pointer is at unit `+0x38`; a player has a dynamic path, so subtile x and y are uint16 at path `+0x2` and `+0x6` (the static `+0x10`/`+0x14` is for objects, items and tiles). Source: better-auras `UnitXY` (`plugins/better-auras/src/d2r.h`); confirmed in game, where the readout matched the box tile and plan cell walked to.
+
+Adding a tileset: [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md) lists every touch point, what the table drives and what a tileset gets for free.
+
+Screenshots: `C:/D2RTestSlots/runs/snow-edges3/screenshots/` (`L_montage`, `M_montage`, `S_montage`, `X_montage`) and `C:/D2RTestSlots/runs/snowfix/screenshots/` (kept outside the repo).

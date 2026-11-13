@@ -593,7 +593,17 @@ try {
                 if ($tc -ge 0 -and $it.values.ContainsKey('type') -and $it.values['type'] -cne $oldCells[$tc] -and $oldCells[$tc] -cin 'scro', 'book') {
                     $oldAt = [array]::IndexOf($mlines, $have[0])
                     Say "  misc.txt row $($it.code) has type $($oldCells[$tc]) from an earlier staging; replaced by the row with type $($it.values['type'])"
-                } else { Say "  misc.txt already has a row with code $($it.code); left as it is"; continue }
+                } else {
+                    Say "  misc.txt already has a row with code $($it.code); left as it is"
+                    # An older row can differ from the overrides (compactsave 1 keeps no stats on the item); say which columns.
+                    foreach ($col in $exHead) {
+                        $ix = [array]::IndexOf($mh, $col)
+                        if ($col -in 'code', 'name', 'base', 'namestr' -or $ix -lt 0) { continue }
+                        $have1 = if ($ix -lt $oldCells.Count) { $oldCells[$ix] } else { '' }
+                        if ($have1 -cne $it.values[$col]) { Write-Warning "misc.txt row $($it.code): $col is '$have1', map-items.txt has '$($it.values[$col])'; the row is kept as it is." }
+                    }
+                    continue
+                }
             }
             $baseRow = @($mlines | Select-Object -Skip 1 | Where-Object { $_.Split("`t")[$mc] -ceq $it.base })
             if ($baseRow.Count -eq 0) { throw "misc.txt has no base item '$($it.base)' to copy for $($it.code) (see $MapItemRows)." }

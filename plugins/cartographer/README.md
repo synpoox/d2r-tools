@@ -19,7 +19,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `uniqueitems.txt` row. The map level and the modifiers are stats on the item, shown on hover. When the map opens,
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
-- **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties) show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
+- **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties), the map's total Density (its maps.txt `Density` plus the modifiers') and the total Magic Find of its modifiers show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
@@ -143,7 +143,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | AutoCheck | `1` runs a game check by itself in a Hell game and writes `AUTOCHECK PASS`, `FAIL` or `N/A` lines to the plugin log; for test slots only | 0 |
 | AutoCheckMap | The `Name` of the map `AutoCheck` opens, without its item; for test slots only | none |
 
-The map level can also sit on the map item as the stat `cartographer_map_level` (added to `itemstatcost.txt` by `tools\install.ps1`, with a `Map Level: N` line on hover). A map item without it uses the `maps.txt` Level (checked in game). A cube recipe can raise it: a `mod` of `map-level` on an output that keeps the map (`usetype,nor,mod`) adds to the map's level, and a second transmute adds again (checked in game with this version: a fresh map 0 to 10, a second transmute 10 to 20, and the map opened at 20; details in `docs/cartographer/tables.md`).
+The map level can also sit on the map item as the stat `cartographer_map_level` (added to `itemstatcost.txt` by `tools\install.ps1`, with an `Area Level: N` line on hover). Every new map item is given its `maps.txt` Level as this stat and shows it first, above its other properties (the stat's `descpriority`); maps that already exist have no line and use the `maps.txt` Level, and a map made by a cube recipe gets the line too. A `map-level` property on an affix or unique replaces the stamped Level. Checked in game: `cheat spawn` and cube recipes. A monster drop was stamped (log) but its hover was not seen; vendor, chest and gamble maps were not checked. A cube recipe can raise it: a `mod` of `map-level` on an output that keeps the map (`usetype,nor,mod`) adds to the map's level, starting from its `maps.txt` Level, and a second transmute adds again (checked in game: 85 to 95 to 105, same map; details in `docs/cartographer/tables.md`).
 
 Walk into the portal yourself and leave the game by hand; the plugin does the rest and writes the results to its log. Leave `AutoCheck` at 0 for normal play.
 
@@ -284,7 +284,7 @@ second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0
 is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
-Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
+Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Snow edges: a cliff and ravine border ring seen on all four sides and corners; no black void at the line ends, and the border strip was walked to on all four sides in a horizontal and a vertical Medium map (issue #395). Not checked: Jungle edges and void cells (issue #142), and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
 ## Status
 
@@ -294,7 +294,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, a Lava map opening and building (no automap lines drawn, #366), an Ice caves map opening, building and running an Ambush (the Boss was not placed in one cell, #364),
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit).
 - **Outdoor maps (Jungle, Snow and Siege)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen. Siege was checked in two games (opening, arrival, Boss and Treasure event); its north and south edges and how its pieces meet were not settled.
-- **Experimental or not verified in game**: what a Boss `Drop` roll drops beyond a rune in one kill and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event banner with long text or at other resolutions,
+- **Experimental or not verified in game**: a Boss `Drop` roll's rare and unique items (9 kills gave normal, low, superior, magic and socketed items) and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event banner with long text or at other resolutions,
   `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).
