@@ -8,22 +8,46 @@ namespace {
 
 struct Known {
 	const char *stat;
-	const char *label;
-	bool percent;
+	const char *text; // the game's wording with the number in: "%+d" is signed, "%%" a percent sign
 };
 
-// Stat names the monster stats and the examples use. Anything else is shown with a tidied stat name and its plain number.
+// The fallback when the game's own text for a stat cannot be read. Anything else is shown with a tidied stat name and its plain number.
 const Known kKnown[] = {
-	{"item_maxhp_percent", "Life", true},
-	{"damagepercent", "Damage", true},
-	{"fireresist", "Fire Resistance", true},
-	{"coldresist", "Cold Resistance", true},
-	{"lightresist", "Lightning Resistance", true},
-	{"poisonresist", "Poison Resistance", true},
-	{"magicresist", "Magic Resistance", true},
-	{"hpregen", "Life Regeneration", true},
-	{"toblock", "Chance to Block", true},
-	{"velocitypercent", "Movement Speed", true},
+	{"item_maxhp_percent", "%+d%% Life"},
+	{"damagepercent", "%+d%% Damage"},
+	{"fireresist", "%+d%% Fire Resistance"},
+	{"coldresist", "%+d%% Cold Resistance"},
+	{"lightresist", "%+d%% Lightning Resistance"},
+	{"poisonresist", "%+d%% Poison Resistance"},
+	{"magicresist", "%+d%% Magic Resistance"},
+	{"hpregen", "%+d%% Life Regeneration"},
+	{"toblock", "%+d%% Chance to Block"},
+	{"velocitypercent", "%+d%% Movement Speed"},
+	{"item_fastermovevelocity", "%+d%% Faster Run/Walk"},
+	{"item_fasterattackrate", "%+d%% Increased Attack Speed"},
+	{"item_fastercastrate", "%+d%% Faster Cast Rate"},
+	{"item_fastergethitrate", "%+d%% Faster Hit Recovery"},
+	{"item_magicbonus", "%+d%% Better Chance of Getting Magic Items"},
+	{"item_goldbonus", "%+d%% Extra Gold from Monsters"},
+	{"item_armor_percent", "%+d%% Enhanced Defense"},
+	{"item_maxdamage_percent", "%+d%% Enhanced Damage"},
+	{"item_lifeleech", "%+d%% Life Stolen per Hit"},
+	{"item_manaleech", "%+d%% Mana Stolen per Hit"},
+	{"item_absorbfire_percent", "Fire Absorb %+d%%"},
+	{"item_absorbcold_percent", "Cold Absorb %+d%%"},
+	{"item_absorblight_percent", "Lightning Absorb %+d%%"},
+	{"maxfireresist", "%+d%% to Maximum Fire Resistance"},
+	{"maxcoldresist", "%+d%% to Maximum Cold Resistance"},
+	{"maxlightresist", "%+d%% to Maximum Lightning Resistance"},
+	{"maxpoisonresist", "%+d%% to Maximum Poison Resistance"},
+	{"strength", "%+d to Strength"},
+	{"dexterity", "%+d to Dexterity"},
+	{"vitality", "%+d to Vitality"},
+	{"energy", "%+d to Energy"},
+	{"maxhp", "%+d to Life"},
+	{"maxmana", "%+d to Mana"},
+	{"armorclass", "%+d Defense"},
+	{"tohit", "%+d to Attack Rating"},
 };
 
 const Known *find(const std::string &stat)
@@ -35,9 +59,38 @@ const Known *find(const std::string &stat)
 
 } // namespace
 
+std::string formatGameText(const std::string &text, int value)
+{
+	std::string out;
+	int numbers = 0;
+	for (size_t i = 0; i < text.size(); ++i) {
+		if (text[i] != '%') {
+			out.push_back(text[i]);
+			continue;
+		}
+		const std::string rest = text.substr(i + 1, 2);
+		if (rest.compare(0, 1, "%") == 0) {
+			out.push_back('%');
+			i += 1;
+		} else if (rest == "+d" || rest == "+i") {
+			if (value >= 0) out.push_back('+');
+			out += std::to_string(value);
+			++numbers;
+			i += 2;
+		} else if (rest.compare(0, 1, "d") == 0 || rest.compare(0, 1, "i") == 0) {
+			if (value < 0 && !out.empty() && out.back() == '+') out.pop_back();  // "+%d" with a negative value
+			out += std::to_string(value);
+			++numbers;
+			i += 1;
+		} else {
+			return std::string();  // %s or another conversion: the game fills it from something this panel does not have
+		}
+	}
+	return numbers == 1 ? out : std::string();  // two numbers would show the one value twice
+}
+
 std::string statLabel(const std::string &stat)
 {
-	if (const Known *k = find(stat)) return k->label;
 	std::string out;
 	for (char c : stat) out.push_back(c == '_' ? ' ' : c);
 	if (out.rfind("item ", 0) == 0) out.erase(0, 5);
@@ -47,22 +100,47 @@ std::string statLabel(const std::string &stat)
 
 std::string statLine(const Stat &stat)
 {
-	const Known *k = find(stat.name);
-	const bool percent = k != nullptr && k->percent;
-	std::string out = stat.monsters ? "Monsters: " : "You: ";
+	const Known *known = find(stat.name);
+	const std::string *sources[] = {(stat.value < 0 && !stat.gameTextNeg.empty()) ? &stat.gameTextNeg : nullptr, &stat.gameText};
+	for (const std::string *source : sources) {
+		if (source == nullptr || source->empty()) continue;
+		std::string text = formatGameText(*source, stat.value);
+		// A percent stat whose game text lost its percent sign (the game adds it by descfunc): the fallback has it.
+		const bool losesPercent = known != nullptr && std::string(known->text).find("%%") != std::string::npos && text.find('%') == std::string::npos;
+		if (!text.empty() && !losesPercent) return text;
+	}
+	if (known != nullptr) return formatGameText(known->text, stat.value);
+	std::string out;
 	if (stat.value >= 0) out += '+';
 	out += std::to_string(stat.value);
-	if (percent) out += '%';
 	out += ' ';
 	out += statLabel(stat.name);
 	return out;
 }
 
-std::string panelText(const std::string &mapName, int monsterLevel, const std::vector<Stat> &stats)
+PanelText panelText(int monsterLevel, const std::vector<Stat> &stats)
 {
-	std::string out = mapName.empty() ? "Map" : mapName;
-	if (monsterLevel > 0) out += "\nMonster level " + std::to_string(monsterLevel);
-	for (const Stat &s : stats) out += "\n" + statLine(s);
+	PanelText out;
+	bool any = false;
+	const auto line = [&out, &any](const std::string &header, const std::string &property) {
+		if (any) {
+			out.gold += '\n';
+			out.blue += '\n';
+		}
+		any = true;
+		out.gold += header;
+		out.blue += property;
+	};
+	if (monsterLevel > 0) line("Monster level " + std::to_string(monsterLevel), "");
+	for (const bool monsters : {true, false}) {
+		bool header = false;
+		for (const Stat &s : stats) {
+			if (s.monsters != monsters) continue;
+			if (!header) line(monsters ? "Monsters have" : "Players have", "");
+			header = true;
+			line("", statLine(s));
+		}
+	}
 	return out;
 }
 
