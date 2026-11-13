@@ -69,6 +69,7 @@ bool g_open = false;      // the plugin opened the panel and has not closed it
 std::string g_shown;      // what the plugin last put in the text; empty: nothing yet
 uint32_t g_tasks = 0;
 std::atomic<bool> g_hidden{false};  // the plugin hid the game's terror zone text and has not restored it
+uint32_t g_restoreWait = 0;  // tasks since a restore failed; the restore is tried again every RefreshTasks tasks (0: not failing)
 int32_t g_hideResult = -1;
 D2RL::Widgets::WidgetHandle g_terrorText = D2RL::Widgets::InvalidHandle;  // the game's terror zone text, once found
 bool g_openFailedLogged = false;
@@ -116,7 +117,8 @@ void NoticeClosed() noexcept {
 // The panel takes the place of the game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText),
 // so the text is hidden while the panel shows. The game may set the widget's visibility itself, so this runs every task in a map
 // (the widget is looked up once and the handle kept; a failed call looks it up again next time), and the widget is shown again when
-// the panel closes. g_hidden stays set until a restore call succeeds, so a failed restore is retried. UI thread.
+// the panel closes. g_hidden stays set until a restore call succeeds, so a failed restore is retried, but only every RefreshTasks tasks
+// (the widget is gone in the menu, so the lookup would fail every frame). UI thread.
 auto FindTerrorText(D2RL::Widgets::WidgetHandle* text) noexcept -> D2RL::Widgets::Result {
 	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
 	D2RL::Widgets::WidgetHandle wrapper = D2RL::Widgets::InvalidHandle;
@@ -134,6 +136,9 @@ void SetTerrorTextVisible(bool visible) noexcept {
 	if (g_widgets == nullptr) {
 		return;
 	}
+	if (visible && g_restoreWait != 0 && ++g_restoreWait % RefreshTasks != 0) {
+		return;  // a restore just failed: wait before looking the widget up again
+	}
 	auto result = D2RL::Widgets::Result::Success;
 	if (g_terrorText == D2RL::Widgets::InvalidHandle) {
 		result = FindTerrorText(&g_terrorText);
@@ -150,7 +155,8 @@ void SetTerrorTextVisible(bool visible) noexcept {
 		plog::Info("map panel: terror zone text %s: result %d", visible ? "shown" : "hidden", last);
 	}
 	const bool ok = result == D2RL::Widgets::Result::Success;
-	g_hidden = cartographer::mappanel::hiddenAfter(visible, ok);  // a failed restore leaves it marked hidden, so the next task tries again
+	g_hidden = cartographer::mappanel::hiddenAfter(visible, ok, g_hidden.load());  // a failed call keeps the previous state
+	g_restoreWait = (visible && !ok) ? 1 : 0;
 }
 
 void ClosePanel() noexcept {
