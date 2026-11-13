@@ -121,6 +121,27 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	CHECK(text.find("This map is skipped.") != std::string::npos);
 }
 
+TEST_CASE("a blank Shape loads for Snow and Siege, which ignore it, and is still refused for the tilesets that build from it") {
+	Report report;
+	const auto maps = Load(
+		"A\tSnow\t\t\t\tt20\n"
+		"B\tSiege\t\tLarge\t\tt21\n"
+		"C\tSnow\tSprawl\t\t\tt22\n"
+		"D\tCave\t\t\t\tt23\n"
+		"E\tJungle\t\t\t\tt24\n",
+		report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].name == "A");
+	CHECK(maps[0].shape.empty());
+	CHECK(maps[1].name == "B");
+	CHECK(maps[1].shape.empty());
+	CHECK(maps[2].shape == "Sprawl");  // a Shape that is set keeps working
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("the Shape cell is empty: the Cave tileset needs one") != std::string::npos);
+	CHECK(text.find("shape '' is not known") == std::string::npos);
+}
+
 TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);

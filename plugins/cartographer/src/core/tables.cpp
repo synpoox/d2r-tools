@@ -279,7 +279,19 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
-		if (const std::string* known = Canonical(Shapes, shape)) {
+		// Snow and Siege build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
+		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege);
+		if (shape.empty() && ignoresShape) {
+			map.shape.clear();
+		} else if (shape.empty()) {
+			// A refused tileset already has its own error; a second one about the blank Shape would only add noise.
+			if (!map.tileset.empty()) {
+				std::vector<std::string> all = Shapes;
+				all.insert(all.end(), customShapes.begin(), customShapes.end());
+				fail("the Shape cell is empty: the " + map.tileset + " tileset needs one. Use " + OneOf(all) + (customShapes.empty() ? "" : " (the last ones are from shapes.txt)") + ".");
+			}
+		} else if (const std::string* known = Canonical(Shapes, shape)) {
 			map.shape = *known;
 		} else if (const std::string* custom = Canonical(customShapes, shape)) {
 			map.shape = *custom;
