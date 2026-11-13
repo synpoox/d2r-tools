@@ -758,8 +758,8 @@ TEST_CASE("mapDensityBonus: the item's map-density values are added up over its 
 	CHECK(mapDensityBonus({{D, 3, 20}}, ids) == 0);
 	CHECK(mapDensityBonus({{D, 0, 20}}, testIds()) == 0);
 	CHECK(mapDensityBonus({{D, 0, 20}}, StatIds{}) == 0);
-	// Not capped at 1000.
-	CHECK(mapDensityBonus({{D, 0, 511}, {D, 0, 511}, {D, 0, 511}}, ids) == 1533);
+	// Not capped at 1000: an item saves one value of -524288 to 524287 for the stat, so a sum of 500000 is within what a saved item holds.
+	CHECK(mapDensityBonus({{D, 0, 200000}, {D, 0, 200000}, {D, 0, 100000}}, ids) == 500000);
 }
 
 TEST_CASE("densityWithBonus adds percentage points, uncapped, never below 0")

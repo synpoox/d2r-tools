@@ -117,7 +117,7 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 inline constexpr const char *kMapDensityStat = "cartographer_map_density";
 
 // The bonus Density of a map item: the sum of every layer 0 value of the map-density stat over `stats` (one entry per affix that carries it, or
-// one entry the game already added up). 0 when `ids` does not name the stat or the item has none. Not capped; the result is only kept inside int.
+// one entry the game already added up). 0 when `ids` does not name the stat or the item has none. Not capped by the plugin: the installer's stat row saves -524288 to 524287 on an item, and the result is only kept inside int.
 int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids);
 
 // The map's Density with the bonus added: `base` plus `bonus` percentage points, never below 0.

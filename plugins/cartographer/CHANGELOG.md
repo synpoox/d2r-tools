@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
-- The installer now adds all its item stats and properties in one run, each with its own id (a fresh install no longer left the map level stat out until the second run).
+- A fresh install now adds the map level stat on the first run.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
 - Cave and Crypt maps now each have their own level, so one install opens either. Rerun `tools\install.ps1` once to add the new Crypt level; `-Tileset` is no longer needed.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.

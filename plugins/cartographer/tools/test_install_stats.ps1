@@ -62,6 +62,28 @@ try {
     Check ($LASTEXITCODE -eq 0) 'second run succeeds'
     $after = $tables | ForEach-Object { (Get-FileHash (Join-Path $dir $_)).Hash }
     Check (($before -join ',') -eq ($after -join ',')) 'a second run changes no table'
+
+    $density = $rows | Where-Object { $_[0] -eq 'cartographer_map_density' }
+    Check ($density[3] -eq '20' -and $density[4] -eq '20' -and $density[5] -eq '524288') "the density stat is 20 send bits, 20 save bits, save add 524288 (got $($density[3]) $($density[4]) $($density[5]))"
+    $monLife = $rows | Where-Object { $_[0] -eq 'cartographer_mon_life' }
+    Check ($monLife[3] -eq '11' -and $monLife[4] -eq '10' -and $monLife[5] -eq '512') 'a monster stat keeps 11 / 10 / 512'
+
+    # A density row an earlier run wrote with the monster widths is widened in place (same id), and then a run changes nothing.
+    $statPath = Join-Path $dir 'itemstatcost.txt'
+    $text = [System.IO.File]::ReadAllText($statPath)
+    $old = ($density -join "`t")
+    $narrow = $density.Clone(); $narrow[3] = '11'; $narrow[4] = '10'; $narrow[5] = '512'
+    Check ($text.Contains($old)) 'the density row is found in the table'
+    [System.IO.File]::WriteAllText($statPath, $text.Replace($old, ($narrow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $log3 = Run-Installer
+    Check ($LASTEXITCODE -eq 0) 'a run on an old-width density row succeeds'
+    $rows3 = Read-Rows 'itemstatcost.txt'
+    $fixed = $rows3 | Where-Object { $_[0] -eq 'cartographer_map_density' }
+    Check ($rows3.Count -eq $rows.Count) 'the repair adds no row'
+    Check ($fixed[1] -eq $density[1] -and $fixed[3] -eq '20' -and $fixed[4] -eq '20' -and $fixed[5] -eq '524288') "the old-width density row is widened and keeps its id (got id $($fixed[1]), $($fixed[3]) $($fixed[4]) $($fixed[5]))"
+    $before = (Get-FileHash $statPath).Hash
+    $log4 = Run-Installer
+    Check ((Get-FileHash $statPath).Hash -eq $before) 'a run after the repair changes nothing'
 } finally {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }
