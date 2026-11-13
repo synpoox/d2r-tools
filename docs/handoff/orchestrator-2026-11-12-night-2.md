@@ -32,7 +32,9 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
   copied from has 1, so the item is saved as Normal). #390 is now docs (first-map.md, map-items.txt), an optional
   `check` warning, and an in-game re-check (owner confirmed: rare name and blue lines show).
 - #393 using a map item whose maps.txt row was skipped says nothing (found on the owner's `m05`, Snow + Shape Open).
-- #394 blank Shape refused for Snow/Siege although they ignore it (owner's `m05` uses any shape but Open as a workaround). Same screenshot shows the terror zone text
+- #394 blank Shape refused for Snow/Siege although they ignore it (owner's `m05` uses any shape but Open as a workaround).
+- #395 Snow maps leave black void at the edges (like Lava #372/#377; under #142).
+- #396 research spike: one map from several tilesets woven together (owner request; under #19). Same screenshot shows the terror zone text
   still overlapping the panel (#371, #389).
 - #383 quality hook sees about half of spawned maps; #384 Item Level 1 (lead: ItemLevel getter `0x36ccf0`); both under #353.
 - #385 unique pace undercounts with Lava filler rooms (under #317).
