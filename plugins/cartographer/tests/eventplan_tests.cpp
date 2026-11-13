@@ -615,6 +615,59 @@ TEST_CASE("BossRoomPicker: the first room is tried first; a refusal moves on, in
 	CHECK_FALSE(p.onPopulated(a));
 }
 
+TEST_CASE("BossRoomPicker: the last room's refusal is the give-up; a placed Boss or an earlier refusal is not")
+{
+	const Rect a{0, 0, 8, 8}, b{8, 0, 8, 8};
+	BossRoomPicker p({a, b});
+	CHECK_FALSE(p.lastRoom());
+	CHECK(p.currentRoom() != nullptr);
+	CHECK(p.onPopulated(a));
+	CHECK_FALSE(p.onPopulated(b));
+	CHECK(p.refused() == 1);  // a refused, b was populated already
+	CHECK_FALSE(p.gaveUp());
+	CHECK(p.lastRoom());
+	CHECK(p.refused() == -1);  // b refused: none left
+	CHECK(p.done());
+	CHECK(p.gaveUp());
+	CHECK(p.currentRoom() == nullptr);
+
+	BossRoomPicker placed({a, b});
+	placed.finish();
+	CHECK(placed.done());
+	CHECK_FALSE(placed.gaveUp());
+
+	BossRoomPicker single({a});
+	CHECK(single.lastRoom());
+	CHECK(single.refused() == -1);
+	CHECK(single.gaveUp());
+
+	BossRoomPicker problem({a, b});
+	problem.giveUp();
+	CHECK(problem.gaveUp());
+	CHECK_FALSE(problem.lastRoom());
+
+	BossRoomPicker none({});
+	CHECK(none.done());
+	CHECK_FALSE(none.gaveUp());
+}
+
+TEST_CASE("BossRoomPicker: unreadable rooms are skipped as refusals; waiting names the room waited for")
+{
+	const Rect a{0, 0, 8, 8}, b{8, 0, 8, 8}, c{0, 8, 8, 8};
+	BossRoomPicker p({a, b, c});
+	CHECK(p.onPopulated(a));
+	CHECK_FALSE(p.onPopulated(b));  // not the current candidate: remembered only
+	CHECK(p.refused() == 1);        // a refused; b is up next but cannot be read
+	CHECK(p.refused() == -1);       // b skipped as refused; c is not populated yet: wait
+	CHECK_FALSE(p.done());
+	REQUIRE(p.currentRoom() != nullptr);
+	CHECK(p.currentRoom()->x == c.x);
+	CHECK(p.currentRoom()->y == c.y);
+	CHECK(p.onPopulated(c));
+	CHECK(p.refused() == -1);  // c refused: given up
+	CHECK(p.gaveUp());
+}
+
 TEST_CASE("BossRoomPicker: a placed Boss stops every later try; no rooms is done at once")
 {
 	BossRoomPicker p({Rect{0, 0, 8, 8}, Rect{8, 0, 8, 8}});

@@ -245,6 +245,7 @@ int BossRoomPicker::refused() {
 	++current_;
 	if (current_ >= ranked_.size()) {
 		done_ = true;  // none left: given up
+		gaveUp_ = true;
 		return -1;
 	}
 	return populated_[current_] ? static_cast<int>(current_) : -1;
