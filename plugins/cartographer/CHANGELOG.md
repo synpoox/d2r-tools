@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A cube recipe with `map-level` raises a map's level, and each transmute adds again.
+- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.
 - The event's `Name` and `Message` now show on screen as a banner; before, they never appeared.

@@ -113,6 +113,22 @@ MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds 
 // `stats` without the map-level stat, so it is not reported as a stat with no meaning on a map.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
 
+// The properties.txt property that sets the map level stat (install.ps1 adds the row), and its id: the row number, as the game counts rows.
+inline constexpr const char *kMapLevelProperty = "map-level";
+// The id of the property whose `code` is `code` in properties.txt text, or -1 (no such row, or no code column): the row number, not counting
+// the "Expansion" separator row.
+int parsePropertyId(std::string_view text, std::string_view code);
+
+// The cube map level (issue #330). `before` and `after` are the item's map level stat before and after the game applied the recipe's
+// `map-level` mod; [min, max] is the mod's range and `roll` the value picked in it. The recipe adds `roll` to the level the map has: when the
+// game left the stat alone, or set it instead of adding, the result is before + roll; otherwise `after` stands. Cut to 1..kMaxStatValue.
+constexpr int kMaxStatValue = 511;
+// `levelKnown` is false when the map's level (or the input map's) could not be read; the game's own result then stands.
+int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown = true);
+// Whether the level to add to was read: the item reads worked (`itemReadsOk`) and, when the cube step is hooked, its inputs walk gave a level
+// (`inputLevel` >= 0; -1 means not read). A level read as 0, a fresh map without the stat, is known.
+bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked);
+
 // The itemstatcost.txt stat that holds a map affix's bonus Density in percent (tools/install.ps1 adds the row and the `map-density` property).
 inline constexpr const char *kMapDensityStat = "cartographer_map_density";
 

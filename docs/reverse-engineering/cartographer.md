@@ -29,3 +29,4 @@ New sections go in new files (the next free number, `18-<topic>.md`), and a new 
 - [20. `warpDefs` assert at map entry (issue #254)](cartographer/20-warpdefs-assert.md)
 - [21. `ptWarp` and `bPiece` asserts in a Crypt map (issue #263)](cartographer/21-crypt-asserts.md)
 - [22. Map panel on the right of the screen (issue #308)](cartographer/22-map-panel.md)
+- [25. The cube sets a map's level (issue #330)](cartographer/25-cube-map-level.md)
