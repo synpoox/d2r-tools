@@ -146,7 +146,7 @@ TEST_CASE("a shapes.txt row based on Open is Open for Snow too") {
 	CHECK(Joined(report).find("Open shape") != std::string::npos);
 }
 
-TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazeProbe") {
+TEST_CASE("Cave, Crypt and Lava are accepted tilesets; the settings file knows MazeProbe") {
 	Report report;
 	const auto maps = Load("Cave One\tcave\tWinding\t\t\tt20\nCrypt One\tCrypt\tLoop\t\t\tt21\n", report);
 	CHECK(maps.size() == 2);
@@ -1163,7 +1163,7 @@ TEST_CASE("the notice names core-maps and says to use one") {
 	CHECK(text.find("Remove one") != std::string::npos);
 }
 
-TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave and Crypt through the Maze slot") {
+TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and OutdoorSnow slots; Cave, Crypt and Lava through their own maze slots") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nDeep\tCave\tLoop\t\t\tt21\n", report);
 	REQUIRE(maps.size() == 2);
@@ -1380,7 +1380,7 @@ TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load fo
 	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
 }
 
-TEST_CASE("Cave opens through the Maze slot and Crypt through the MazeCrypt slot, each on the level the installer wrote") {
+TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava slots, each on the level the installer wrote") {
 	Report report;
 	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\n", report);
 	REQUIRE(maps.size() == 2);
