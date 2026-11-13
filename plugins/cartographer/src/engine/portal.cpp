@@ -39,6 +39,8 @@ constexpr int GameCountersOffset = 0x1aac8;  // per-game counters (key -> int)
 constexpr int RecordCodeOffset = 0x80;       // uint32: the item code, four letters
 constexpr int RecordSpellOffset = 0x94;      // int32: misc.txt pSpell
 constexpr int32_t MapSpell = 16;             // free in vanilla D2R
+constexpr int RecordSpellIconOffset = 0x144; // int8: misc.txt spellicon; the client starts its item cursor for 0 to 9 (docs/reverse-engineering/cartographer/27-item-cursor-in-game.md)
+constexpr int32_t RecordScanCap = 16384;     // upper bound for the item record walk
 constexpr uint32_t OpenKey = 0x4d415053;     // 'MAPS': the game counter that allows one opening per game
 constexpr int32_t StatLevel = 12;
 constexpr int32_t HarrogathId = 109;
@@ -107,6 +109,7 @@ std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events 
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
 std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this game: this process has a server
 bool g_installed = false;                       // InstallPortal ran to the end
+std::atomic<bool> g_iconsCleared{false};        // the map rows' spellicon has been set to -1 this game
 std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
 std::atomic<bool> g_mapOpen{false};             // this process opened a map in the current game (cleared on leaving it)
 constexpr uint32_t GateReadEvery = 10;          // ticks between readings of the gates for the item listener
@@ -143,6 +146,37 @@ auto CodeOf(Game* game, Unit* item, const uint8_t** record) noexcept -> std::str
 	char code[5] = {};
 	std::memcpy(code, *record + RecordCodeOffset, 4);
 	return Trim(code);
+}
+
+// The client starts the item (identify) cursor on any right-click of an item whose spellicon is 0 to 9, before the server answers
+// (27-item-cursor-in-game.md). A map item copied from the Scroll of Identify has spellicon 0, so a refused second map leaves that
+// cursor on. Setting the byte to -1 in the loaded record, as the Town Portal scroll has, turns the client cursor off for map rows
+// (pSpell 16) only. The record table is one table for the whole process; the walk stops at the first row past its count.
+// Returns the number of rows changed, -1 when the lookup is not available.
+auto ClearMapItemCursor() noexcept -> int {
+	if (g_iconsCleared.load(std::memory_order_relaxed)) {
+		return 0;
+	}
+	if (!g_parts[ItemRecord].status.on || g_parts[ItemRecord].address == nullptr) {
+		return -1;
+	}
+	int changed = 0;
+	int32_t rows = 0;
+	for (; rows < RecordScanCap; ++rows) {
+		const uint8_t* record = Call<ItemRecordFn>(ItemRecord)(0, rows);
+		if (record == nullptr) {
+			break;
+		}
+		if (At<int32_t>(record, RecordSpellOffset) == MapSpell && At<uint8_t>(record, RecordSpellIconOffset) < 10) {
+			const_cast<uint8_t*>(record)[RecordSpellIconOffset] = 0xff;
+			++changed;
+		}
+	}
+	if (rows > 0) {
+		g_iconsCleared = true;
+		plog::Info("map items: spellicon set to -1 on %d item row(s) of %d (no item cursor on a refused map)", changed, rows);
+	}
+	return changed;
 }
 
 auto PlayerLevelId(Unit* player) noexcept -> int32_t {
@@ -627,6 +661,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		return 0;
 	}
 	const uint64_t result = g_tickOriginal(game, unit);
+	if (g_live.load(std::memory_order_relaxed)) {
+		(void)ClearMapItemCursor();
+	}
 	if (!g_tickSeen.load(std::memory_order_relaxed)) {
 		g_tickSeen = true;
 	}
@@ -677,6 +714,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		}
 		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
 		g_firstLogged = false;
+		g_iconsCleared = false;
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
@@ -691,6 +729,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
+		g_iconsCleared = false;
 		g_mapOpen = false;
 		{
 			std::lock_guard<std::mutex> lock(g_gateLock);
@@ -767,6 +806,9 @@ const D2RL::ItemService* g_itemService = nullptr;
 auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
 	using D2RL::ItemInteractions::Decision;
 	try {
+		if (g_live.load()) {
+			(void)ClearMapItemCursor();  // before the game's own right-click handling reads the record
+		}
 		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate ||
 		    (event->modifiers & (D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Shift) | D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Control))) != 0) {
 			return Decision::Continue;  // Shift or Ctrl held: not a plain use (Alt is let through; the belt is not covered either)

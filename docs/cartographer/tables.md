@@ -76,7 +76,7 @@ A map opens only in Hell, in Harrogath, for a character of at least `MinCharLeve
 
 ## Map item type (itemtypes.txt)
 
-Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0.
+Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0. Set `spellicon` to -1 as well: the game starts the Scroll of Identify cursor for a value of 0 to 9, and the plugin sets it to -1 in memory for map items if you copied the Scroll of Identify row.
 
 | Column | Value | Why |
 |---|---|---|
