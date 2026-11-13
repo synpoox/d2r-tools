@@ -138,7 +138,8 @@ TEST_CASE("a blank Shape loads for Snow and Siege, which ignore it, and is still
 	CHECK(maps[2].shape == "Sprawl");  // a Shape that is set keeps working
 	CHECK(report.Errors() == 2);
 	const std::string text = Joined(report);
-	CHECK(text.find("shape '' is not known") != std::string::npos);
+	CHECK(text.find("the Shape cell is empty: the Cave tileset needs one") != std::string::npos);
+	CHECK(text.find("shape '' is not known") == std::string::npos);
 }
 
 TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
