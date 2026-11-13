@@ -42,3 +42,9 @@ TEST_CASE("a value outside the game's qualities passes through")
 	CHECK(mapQuality(-1, true) == -1);
 	CHECK(mapQuality(99, true) == 99);
 }
+
+TEST_CASE("the roll counts name every quality and add up")
+{
+	const std::uint32_t counts[10] = {0, 3, 10, 4, 0, 1, 2, 5, 0, 0};
+	CHECK(rollCounts(counts, 2) == "25 map rolls: 3 low, 10 normal (2 of them rolled magic), 4 superior, 0 magic, 1 set, 2 rare, 5 unique, 0 crafted");
+}

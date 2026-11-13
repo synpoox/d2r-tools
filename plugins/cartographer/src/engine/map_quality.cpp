@@ -18,6 +18,7 @@ constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 on a unit: the first argumen
 constexpr int RecordSpellOffset = 0x94;    // int32: misc.txt pSpell, as in portal.cpp
 constexpr int32_t MapSpell = 16;           // the map item's spell: what makes an item a map for this plugin
 constexpr int RequestForcedOffset = 0x40;  // int32 on the item request: a nonzero quality forced by the caller (cheat spawn typ m)
+constexpr int RequestLevelOffset = 0x18;   // int32 on the item request: the item level the caller asked for (game thread; the client copy of an item reads 1)
 // Return address of the item maker's own quality roll (call at 0x442e7b); the rolls inside the fallbacks are not counted.
 constexpr uint64_t MainRollReturnRva = 0x442e80;
 
@@ -56,6 +57,7 @@ std::atomic<bool> g_rollLive{false};
 std::atomic<bool> g_fallbackLive{false};
 constexpr int MaxQuality = 9;
 std::atomic<uint32_t> g_maps[MaxQuality];  // natural map rolls by quality as the item maker gets them (not forced, not a fallback's)
+std::atomic<uint32_t> g_seen{0};      // map rolls logged with their item level (the first 20 are written to the log)
 std::atomic<uint32_t> g_rolled{0};    // magic rolls of the item maker turned normal
 std::atomic<uint32_t> g_fallbacks{0};  // magic fallbacks (a failed set, rare or unique maker) sent to the normal one
 
@@ -97,6 +99,10 @@ auto QualityRollHook(Unit* item, void* request) noexcept -> uint64_t {
 	}
 	if (decided >= 0 && decided < MaxQuality) {
 		g_maps[decided].fetch_add(1);  // what the item maker gets for a map, after the change
+	}
+	const uint32_t seen = g_seen.fetch_add(1) + 1;
+	if (seen <= 20 && request != nullptr) {
+		plog::Info("map quality: map roll %u: rolled %d, item level %d", seen, static_cast<int>(rolled), At<int32_t>(request, RequestLevelOffset));
 	}
 	return static_cast<uint64_t>(decided);
 }
@@ -171,9 +177,12 @@ auto MapQualitySummary() -> std::string {
 		return "magic maps are not blocked (the item quality roll and its magic fallback are not hooked)";
 	}
 	namespace mq = cartographer::mapquality;
-	std::string counts = "map rolls: " + std::to_string(g_maps[mq::Normal].load()) + " normal (" + std::to_string(g_rolled.load()) + " of them magic made normal), " +
-		std::to_string(g_maps[mq::Rare].load()) + " rare, " + std::to_string(g_maps[mq::Unique].load()) + " unique, " + std::to_string(g_maps[mq::Magic].load()) + " magic; " +
-		std::to_string(g_maps[mq::Set].load()) + " set; " + std::to_string(g_fallbacks.load()) + " maps whose set, rare or unique maker failed were made normal, not magic";
+	std::uint32_t byQuality[10] = {};
+	for (int quality = 0; quality < MaxQuality; ++quality) {
+		byQuality[quality] = g_maps[quality].load();
+	}
+	const std::string counts = cartographer::mapquality::rollCounts(byQuality, g_rolled.load()) + "; " + std::to_string(g_fallbacks.load()) +
+		" maps whose set, rare or unique maker failed were made normal, not magic";
 	if (roll && fallback) {
 		return "magic maps are blocked (maps forced magic by a cheat, and maps that already exist, stay magic): " + counts + " so far";
 	}

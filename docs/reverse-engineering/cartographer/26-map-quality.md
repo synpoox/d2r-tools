@@ -38,8 +38,30 @@ pointer in `r9`, `0x442820` by value in `r9d`, so the hook passes `*level`.
 - A quality forced by the caller (`cheat spawn ...,typ m`) stays magic: the game puts it over the roll.
 - Maps that already exist (in a save, in a stash) stay as they are.
 - The test is the misc.txt spell, the same one `portal.cpp` uses to treat an item as a map, so any item of a mod with spell 16 is affected, whether or not it is in `maps.txt`.
-- Multiplayer, the cube, vendors and other builds were not checked.
+- The cube: `0x527009` calls the item creator with flag 0 and no request, so the item maker and the roll never run; the recipe's own quality (for example `t20,mag`) is set elsewhere. A map output with `mag` is not covered. Not verified live (see the coverage section).
+- The third caller of the creator (`0x48de7b`, flag from `edi`) was not examined (probably vendors or gambling).
+- Multiplayer and other builds were not checked.
 
 ### In game
 
 Slot 6, build 93847, [2026-11-12-map-quality-check.md](../../cartographer/checks/2026-11-12-map-quality-check.md): of 148 natural map rolls the hook saw, 142 were normal (5 of them magic rolls made normal), 1 rare, 2 unique, 3 set and 0 magic; the 6 set, rare and unique rolls all failed their maker (the test mod has no `cmap` affix rows) and were sent to the normal fallback, and so were 3 forced rare spawns. Forced magic spawns stayed magic. A rare or unique map that succeeds was not seen.
+
+### Coverage: why the log "saw half"
+
+Build 93847, D2RLoader 1.3.1-beta, 2026-11-13, [check record](../../cartographer/checks/2026-11-13-quality-hook-coverage.md). The creator `0x43ef10(game, Unit** item, request, flag)` calls the item maker `0x442d60` only when `flag != 0` and `request != null`. Callers:
+
+| Caller | Flag, request | Used by | Reaches the roll |
+|---|---|---|---|
+| call site `0x43cf18` (item spawn `0x43cd50`; return address `0x43cf1d`) | 1, set | monster and chest drops, `cheat spawn` | yes |
+| call site `0x527009` (cube executor) | 0, null | cube outputs | no |
+| call site `0x48de7b` | `edi`, not examined | probably vendor or gamble | not checked |
+
+The earlier "148 of 304" is most likely a reporting gap, not a missed path: the summary printed normal, rare, unique, magic and set, but left out low (1) and superior (3). In game on 2026-11-13 the scratch diagnostic hooks logged every maker call and every main roll (return `0x442e80`) of `cheat spawn`. The three log snapshots (20, 133 and 240 maker calls) are cumulative, not separate runs: the counts only grow, so the session made 240 maps (the ground area stops spawning at about 130 items per area, and the game was restarted between area fills). Of the 240, every maker call had a main roll (240 of 240):
+
+| Rolled | low 1 | normal 2 | superior 3 | magic 4 | set 5 | rare 6 | unique 7 |
+|---|---|---|---|---|---|---|---|
+| Maps | 114 | 97 | 23 | 4 | 0 | 1 | 1 |
+
+Final quality after the maker was normal (2) for all 240: the plugin makes magic normal, the failed rare and unique go through the normal fallback, and the game itself gives a map normal for a low (114) or superior (23) roll (observed, not traced in the code). So low and superior rolls (137 of 240) never show in the final quality, and a summary that lists only the qualities of the finished items counts about half of the rolls as missing. Cause: inferred from these counts and the summary code; the old run (304 spawned, 148 counted) was not repeated with the old build. Monster drops (`testtreasure mon=19,num=10`): 10 maker calls, 10 main rolls, all normal. Drop roll breakdown was not kept.
+
+Item level: the maker's request holds the level at `request+0x18`. For `cheat spawn` it is 100 (240 of 240 maker calls: `request+0x18` 100, unit level 100 before and after the maker); drops from `testtreasure` in town had level 1. The "Item Level: 1" on a ground label is the UI thread's client copy, which reads 1 even for level 100 units.
