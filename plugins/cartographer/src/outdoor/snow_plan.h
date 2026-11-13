@@ -30,6 +30,10 @@ constexpr int kLastLvlPrest = 1002;
 constexpr int kDirtOffset = 72;    // the dirt twin of a snow piece is lvlPrest - 72 (915..930); same fence grammar, noisier edges
 constexpr int kMaxCells = 12;      // longest side of a map, in 16-tile cells (192 tiles)
 constexpr int kMinRunCells = 3;    // a line needs a cap, a run piece and a cap
+// The edge ring: every side of the fence rectangle gets kEdgeCells more cells of kEdgePiece, so the screen has ground to draw past the
+// outer fence lines and the empty side of a cap, where it was black void (issue #395). docs/reverse-engineering/cartographer-snow.md, section 8.
+constexpr int kEdgeCells = 1;
+constexpr int kEdgePiece = 964;    // "Act 5 - Barricade Cliff Border 8 Snow": a 16 x 16 piece with a tile in every cell
 
 // How a piece joins: Run pieces have a fence socket on both ends of their axis, Cap pieces on one end only (the other side has no tiles).
 enum class Kind : uint8_t {
@@ -86,8 +90,9 @@ struct SnowPlan {
 	Orientation orientation = Orientation::Horizontal;
 	int cellsW = 0;                     // in 16-tile cells
 	int cellsH = 0;
-	std::vector<int> grid;              // cellsW * cellsH piece ids, row-major
-	StampPlan stamps;                   // complete only when ok; the same plan the Jungle builder makes
+	std::vector<int> grid;              // cellsW * cellsH piece ids, row-major (the fence rectangle, without the edge ring)
+	StampPlan stamps;                   // complete only when ok; the same plan the Jungle builder makes. Holds the edge ring too: (cellsW + 2 * kEdgeCells) x (cellsH + 2 * kEdgeCells)
+	                                    // stamps, row-major, starting at macro cell (-kEdgeCells, -kEdgeCells)
 	uint64_t hash = 0;                  // stampPlanHash of the stamps
 };
 
@@ -95,9 +100,9 @@ struct SnowPlan {
 // false with the reason. Never throws for bad input.
 SnowPlan planSnowMap(const SnowRequest &request);
 
-// Independent check of a plan against its request (does not use planSnowMap). Empty means: the size is within the limits, every cell is stamped
-// once on the 16-tile grid with a Snow piece of the right kind for its position, every fence socket matches the next piece, pinned files are in
-// range, the stamps are in row-major order and the entrance rectangle sits on the entrance cell.
+// Independent check of a plan against its request (does not use planSnowMap). Empty means: the size (edge ring included) is within the limits, every
+// cell is stamped once on the 16-tile grid with a Snow piece of the right kind for its position, every ring cell holds the edge piece, every fence
+// socket matches the next piece, pinned files are in range, the stamps are in row-major order and the entrance rectangle sits on the entrance cell.
 std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPlan &plan);
 
 // Two characters per cell for logs and failed tests, cells separated by a space, row by row. A run piece is its start and end socket letters
