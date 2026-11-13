@@ -68,8 +68,6 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
    of the repository (the release zip does not carry it). It adds the Maze, Crypt, Outdoor and Snow levels and their four slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
-   of the repository (the release zip does not carry it). It adds the Maze, Outdoor, Snow and Siege levels and their four slots,
-   plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`; `-Tileset Crypt` makes the Maze level a Crypt.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
 
@@ -88,7 +86,6 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    |---|---|---|---|---|---|
    | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 3500, 0 |
    | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 3000, 0 |
-   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
@@ -98,10 +95,6 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    OffsetX minus OffsetY above 3735 (or below -3736), or OffsetX plus OffsetY above 7471, loses its revealed map after a trip to town.
 2. **lvlmaze.txt**: copy the first row once for each maze level; set `Name` to `Cartographer Maze` (or `Cartographer Crypt`), `Level` to that
    row's `Id`, every `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
-   The outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
-   shows).
-2. **lvlmaze.txt**: copy the first row; set `Name` to `Cartographer Maze`, `Level` to the Maze row's `Id`, every
-   `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
 3. **superuniques.txt**: for each `bosses.txt` entry copy the `Bishibosh` row and set `Superunique` to `cartoboss:` plus
    the `Name`, `Name` to `cartographer:boss_` plus the `Name`, `Class` to the entry's `Base`, `Mod1` to `Mod3` to its
    `Mods` (0 when unused), `MinGrp` and `MaxGrp` to its `Minions`, and `hcIdx` to one more than the highest `hcIdx` in the
