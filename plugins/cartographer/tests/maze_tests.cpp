@@ -1356,3 +1356,40 @@ TEST_CASE("cell room: refused with a reason when there is nothing to match")
 	CHECK(c.room < 0);
 	CHECK_FALSE(c.why.empty());
 }
+
+TEST_CASE("cell room: every room of the cell is ranked, the chosen one first, ties by y then x")
+{
+	const Tileset ts = caveTileset();
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 3);
+	REQUIRE(sp.plan.steer);
+	// every cell built as 2 x 2 engine rooms of 8 tiles, as an Ice cell is
+	const int unit = 16, half = 8;
+	int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+	for (const Room &r : sp.plan.rooms) {
+		minX = std::min(minX, r.dx);
+		minY = std::min(minY, r.dy);
+	}
+	std::vector<RoomRect> rects;
+	for (const Room &r : sp.plan.rooms) {
+		for (int j = 1; j >= 0; --j) {
+			for (int i = 1; i >= 0; --i) {
+				rects.push_back({1000 + (r.dx - minX) * unit + i * half, 2000 + (r.dy - minY) * unit + j * half, half, half, 0});
+			}
+		}
+	}
+	const CellRoom c = planCellRoom(sp.plan, unit, 0, rects);
+	REQUIRE(c.room >= 0);
+	REQUIRE(c.ranked.size() == 4);
+	CHECK(c.ranked.front() == c.room);
+	// all four are equally near the centre: top-left, top-right, bottom-left, bottom-right
+	const auto at = [&](int k) -> const RoomRect & { return rects[static_cast<size_t>(c.ranked[static_cast<size_t>(k)])]; };
+	CHECK(at(0).x == c.originX);
+	CHECK(at(0).y == c.originY);
+	CHECK(at(1).x == c.originX + half);
+	CHECK(at(1).y == c.originY);
+	CHECK(at(2).x == c.originX);
+	CHECK(at(2).y == c.originY + half);
+	CHECK(at(3).x == c.originX + half);
+	CHECK(at(3).y == c.originY + half);
+	CHECK(planCellRoom(sp.plan, unit, -1, rects).ranked.empty());
+}

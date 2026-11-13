@@ -233,26 +233,30 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	out.minY = static_cast<int32_t>(minY);
 	out.originX = out.minX + out.cellX * unit;
 	out.originY = out.minY + out.cellY * unit;
-	// The room whose top-left corner is in the cell and whose centre is nearest the cell's centre (doubled coordinates, so
-	// there are no halves); ties go to the smaller y, then the smaller x.
-	int64_t best = -1;
+	// The rooms whose top-left corner is in the cell, nearest the cell's centre first (doubled coordinates, so there are no
+	// halves); ties go to the smaller y, then the smaller x. The first is the cell's room; the rest are its fallbacks.
+	struct Cand {
+		int64_t d;
+		int index;
+	};
+	std::vector<Cand> cands;
 	for (size_t i = 0; i < rects.size(); ++i) {
 		const RoomRect &r = rects[i];
 		if (r.w <= 0 || r.h <= 0) continue;  // a room with no area is not a room of the cell
 		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unit) continue;
 		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - (2 * static_cast<int64_t>(out.originX) + unit);
 		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unit);
-		const int64_t d = dx * dx + dy * dy;
-		bool better = best < 0 || d < best;
-		if (!better && d == best) {
-			const RoomRect &cur = rects[static_cast<size_t>(out.room)];
-			better = r.y < cur.y || (r.y == cur.y && r.x < cur.x);
-		}
-		if (better) {
-			best = d;
-			out.room = static_cast<int>(i);
-		}
+		cands.push_back({dx * dx + dy * dy, static_cast<int>(i)});
 	}
+	std::sort(cands.begin(), cands.end(), [&rects](const Cand &a, const Cand &b) {
+		if (a.d != b.d) return a.d < b.d;
+		const RoomRect &ra = rects[static_cast<size_t>(a.index)], &rb = rects[static_cast<size_t>(b.index)];
+		if (ra.y != rb.y) return ra.y < rb.y;
+		if (ra.x != rb.x) return ra.x < rb.x;
+		return a.index < b.index;
+	});
+	for (const Cand &c : cands) out.ranked.push_back(c.index);
+	if (!out.ranked.empty()) out.room = out.ranked.front();
 	if (out.room < 0) return refuse("the cell holds no room");
 	return out;
 }

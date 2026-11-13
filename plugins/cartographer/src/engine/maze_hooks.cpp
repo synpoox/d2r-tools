@@ -445,6 +445,10 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 		}
 		const cm::RoomRect& r = rects[static_cast<size_t>(c.room)];
 		out = {true, Read<int32_t>(level, LvlId), r.x, r.y, r.w, r.h};
+		for (size_t k = 1; k < c.ranked.size(); ++k) {
+			const cm::RoomRect& o = rects[static_cast<size_t>(c.ranked[k])];
+			out.more.push_back({o.x, o.y, o.w, o.h});
+		}
 		plog::Info("eventprobe: maze %s room (plan room %d, cell %d,%d) is the DRLG room at list index %d, level %d, rect (%d,%d) %d x %d", what, planRoom, c.cellX, c.cellY, c.room,
 		           out.levelId, out.x, out.y, out.w, out.h);
 		return out;
