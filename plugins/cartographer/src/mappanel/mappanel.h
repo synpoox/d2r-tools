@@ -40,8 +40,9 @@ std::string statLine(const Stat &stat);
 
 // The whole panel text, lines joined by newlines: "Monster level N" (left out when level is 0 or below), then "Monsters have" and its
 // property lines, then "Players have" and its lines (a group with no property is left out). Header lines are in `gold`, property
-// lines in `blue`. The map's name is not in it: the game shows it above Difficulty. Both empty when there is nothing to show.
-PanelText panelText(int monsterLevel, const std::vector<Stat> &stats);
+// lines in `blue`. `density` is the map's total Density (maps.txt plus the affixes' bonus), a monster value: "+N% Monster Density" ends the
+// Monsters group (left out at 0). Magic find is a player stat from the affixes (maps.txt has no MF column), so stats of one name and group are added up into one line. The map's name is not in it: the game shows it above Difficulty. Both empty when there is nothing to show.
+PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0);
 
 // Blank lines to put in front of the panel text so it starts under the game's terror zone text: the text ends at `textBottom` (0 or less:
 // no zone text), the panel starts at `panelTop`, a line of the panel text is `lineUnits` high (all in layout units), at most `maxLines`.
