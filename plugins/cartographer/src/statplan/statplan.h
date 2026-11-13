@@ -129,6 +129,19 @@ int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool l
 // (`inputLevel` >= 0; -1 means not read). A level read as 0, a fresh map without the stat, is known.
 bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked);
 
+// The itemstatcost.txt stat that holds a map affix's bonus Density in percent (tools/install.ps1 adds the row and the `map-density` property).
+inline constexpr const char *kMapDensityStat = "cartographer_map_density";
+
+// The bonus Density of a map item: the sum of every layer 0 value of the map-density stat over `stats` (one entry per affix that carries it, or
+// one entry the game already added up). 0 when `ids` does not name the stat or the item has none. Not capped by the plugin: the installer's stat row saves -524288 to 524287 on an item, and the result is only kept inside int.
+int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids);
+
+// The map's Density with the bonus added: `base` plus `bonus` percentage points, never below 0.
+int densityWithBonus(int base, int bonus);
+
+// `stats` without the map-density stat, so it is not reported as a stat with no meaning on a map.
+std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids);
+
 struct ItemProperties {
 	std::vector<Property> properties; // in the item's order
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out

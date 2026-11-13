@@ -114,7 +114,7 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 
 **On a map item.** The plugin sets the stat when a recipe's output keeps the map: use `usetype,nor,mod` (or `t22,mod`, a fixed map) rather than `useitem,mod`, which rebuilds a misc item as a Hand Axe. The level is added to the map's own stat, so transmuting the same map again adds again (10, then 20). The result is cut to 1 to 511, but a map opens at level 255 at most. A recipe adds to the map's level; it cannot set an exact level on a map that already has one. Without a readable level on the map the game's own result stands. Checked in game (Hell, test save, the final build of the cube change, `usetype,nor,mod` only): a fresh map went 0 to 10, a second transmute 10 to 20, and the map opened at level 20. The hover of a map item shows no `Map Level` line. Without the plugin hook (older versions, or a part that did not match) the cube drops the `mod` on a map, and the `maps.txt` Level is used.
 
-**Keep the stat rows where they are.** Once saved items carry `cartographer_map_level` or any of the seven `cartographer_mon_*` stats (`life`, `damage`, `speed`, `fire_res`, `cold_res`, `light_res`, `poison_res`), their rows in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
+**Keep the stat rows where they are.** Once saved items carry `cartographer_map_level` or any of the seven `cartographer_mon_*` stats (`life`, `damage`, `speed`, `fire_res`, `cold_res`, `light_res`, `poison_res`) or `cartographer_map_density`, their rows in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load. The same goes for the stat's bit widths: items already saved with a stat are read with the widths it has now, so do not change them once items exist. The installer widens one row only, `cartographer_map_density` written with the early 11 / 10 / 512 widths (from a development build) to the 20-bit widths above; it touches no other row.
 
 ## Map item rarity and modifiers
 
@@ -126,7 +126,7 @@ A map item has the game's own quality. The installer sets the `Map` item type (`
 | Rare | `magicprefix.txt` and `magicsuffix.txt` rows, and the `rareprefix.txt` and `raresuffix.txt` names, with `itype1` `cmap`; each `modNcode` is a `properties.txt` code, `Min` and `Max` its range |
 | Unique | a `uniqueitems.txt` row with `code` = the map's `misc.txt` code, `prop1` to `prop12` as for any unique |
 
-Added by `tools\install.ps1` (an existing row is never changed, except the `cmap` quality cells): seven `itemstatcost.txt` stats and a `properties.txt` property for each. They are signed, -512 to 511, and shown as `+20% Monster Life` and so on.
+Added by `tools\install.ps1` (an existing row is never changed, except the `cmap` quality cells and the one old `cartographer_map_density` row below): eight `itemstatcost.txt` stats and a `properties.txt` property for each (seven monster stats and the bonus density). The monster stats are signed, -512 to 511, and shown as `+20% Monster Life` and so on. The density stat is wider, 20 bits, -524288 to 524287 per item (the most a saved item holds; vanilla item stats go to 22 bits), shown as `+25% Map Density`.
 
 | Property | Stat | Monsters get |
 |---|---|---|
@@ -134,6 +134,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
 | `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: -100 or lower stops monsters) |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
+| `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 
 Any other stat on the map item (a resistance, `str`, `item_magicbonus`) is the player's while in the map. When the map opens the plugin reads the item's stats (up to 16), takes the map level out, and applies the rest: the monster ones to every monster that spawns in the map, the player ones to the player (removed on leaving; `PlayerStats` `0` turns that off). The plugin log line `map stats for ...` lists what was read and applied.
 
@@ -145,7 +146,7 @@ Example rows (columns not named are as in the vanilla file; `spawnable` 1, `rare
 | `magicsuffix.txt` | `Name` `of Resilience`, `mod1code` `res-all`, `mod1min` 5, `mod1max` 9 |
 | `uniqueitems.txt` | `index` `Cartographer Test Unique`, `code` the map code, `prop1` `mon-life` 30, `prop2` `mon-fire-res` -20, `prop3` `res-all` 15, `prop4` `map-level` 95 |
 
-**Bonus density and magic find (#313).** An affix row's first mod is the property itself (the `mon-life` above). Its other mods are fixed values (`Min` = `Max`) for the map's density and for `item_magicbonus`, added up over all the item's affixes when the map opens. Only the `item_magicbonus` part exists today, as the property `mag%`; the density property comes with #313. Example `magicprefix.txt` row: `mod1code` `mon-life` 20 to 40, `mod2code` `mag%` 15 to 15, so every `Brutish` map adds 15 magic find on top of the life roll.
+**Bonus density and magic find (#313).** An affix row's first mod is the property itself (the `mon-life` above). Its other mods are fixed values (`Min` = `Max`) for the map's density and for `item_magicbonus`, added up over all the item's affixes when the map opens. The density is the property `map-density` (a percent) and the magic find is the vanilla property `mag%` (`item_magicbonus`, a player stat while in the map). The `map-density` values on the item are summed and added to the map's `Density` from `maps.txt` when the map opens (a base of 0 works: 0 plus 75 is 75), with no cap in the plugin; a negative value only cancels positive ones (the result is never below 0, and 0 leaves the tileset's own density). A saved item holds one value of -524288 to 524287 for the stat, the sum of its affixes; a value outside it wraps when the item is saved (524288 reloads as -524288, which opens the map with no bonus). The plugin log line `map density` shows the sum. Example `magicprefix.txt` row: `mod1code` `mon-life` 20 to 40, `mod2code` `mag%` 15 to 15, `mod3code` `map-density` 25 to 25, so every `Brutish` map adds 15 magic find and 25 percent more monsters on top of the life roll.
 
 Name text: the game shows an affix by its `Name` as a string key. Add the names to your strings (a missing one shows as the key, and the log notes `Missing string`).
 

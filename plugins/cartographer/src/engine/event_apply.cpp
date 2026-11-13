@@ -5,6 +5,7 @@
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
 #include "engine/level_row.h"
+#include "engine/map_panel.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"
 #include "engine/scan.h"
@@ -86,7 +87,6 @@ PopulateFn g_original = nullptr;
 std::atomic<bool> g_spawnOn{false};   // the populator hook is in and the spawn parts are found
 std::atomic<bool> g_tickOn{false};    // the entry message can be shown (the portal's tick part and the room parts)
 std::atomic<bool> g_busy{false};      // a map is armed
-std::atomic<bool> g_bannerOverlay{false};
 
 template <typename Fn>
 auto Call(PartId id) noexcept -> Fn {
@@ -123,85 +123,12 @@ uint64_t g_generation = 0;
 
 // --- Banner ---------------------------------------------------------------------------------------------------------------
 
-struct Banner {
-	std::vector<std::string> lines;
-	uint64_t startMs = 0;
-	bool active = false;
-};
-std::mutex g_bannerLock;
-Banner g_banner;
-const D2RL::OverlayService* g_overlay = nullptr;
-D2RL::Overlay::CallbackHandle g_callback = D2RL::Overlay::InvalidCallbackHandle;
-std::atomic<bool> g_drawFailedLogged{false};
-
-void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Frame* frame, void*) noexcept {
-	if (g_overlay == nullptr || frame == nullptr) {
-		return;
-	}
-	std::vector<std::string> lines;
-	int alpha = 0;
-	{
-		std::lock_guard<std::mutex> lock(g_bannerLock);
-		if (!g_banner.active) {
-			return;
-		}
-		alpha = ep::bannerAlpha(static_cast<int>(GetTickCount64() - g_banner.startMs));
-		if (alpha == 0 && GetTickCount64() - g_banner.startMs >= static_cast<uint64_t>(ep::kBannerTotalMs)) {
-			g_banner.active = false;
-			return;
-		}
-		lines = g_banner.lines;
-	}
-	if (alpha <= 0 || lines.empty()) {
-		return;
-	}
-	const float a = static_cast<float>(alpha) / 255.0f;
-	float y = frame->screenHeight * 0.16f;
-	for (size_t i = 0; i < lines.size(); ++i) {
-		const float size = frame->defaultTextSize * (i == 0 ? 1.7f : 1.25f);
-		D2RL::Overlay::MeasureTextRequest measure{};
-		measure.structSize = D2RL::Overlay::MeasureTextRequestSize;
-		measure.canvas = frame->canvas;
-		measure.textSize = size;
-		measure.text = lines[i].c_str();
-		measure.textLength = static_cast<uint32_t>(lines[i].size());
-		D2RL::Overlay::TextMetrics metrics{};
-		metrics.structSize = D2RL::Overlay::TextMetricsSize;
-		if (g_overlay->measureText(context, &measure, &metrics) != D2RL::Overlay::Result::Success) {
-			metrics.width = 0;
-			metrics.height = size;
-		}
-		const D2RL::Overlay::Color colours[3] = {{0.86f, 0.76f, 0.46f, a}, {0.92f, 0.32f, 0.26f, a}, {0.85f, 0.85f, 0.85f, a}};
-		const D2RL::Overlay::Color shadow{0.0f, 0.0f, 0.0f, a * 0.85f};
-		const float x = (frame->screenWidth - metrics.width) * 0.5f;
-		for (int pass = 0; pass < 2; ++pass) {
-			D2RL::Overlay::TextRequest request{};
-			request.structSize = D2RL::Overlay::TextRequestSize;
-			request.canvas = frame->canvas;
-			request.position = {x + (pass == 0 ? 2.0f : 0.0f), y + (pass == 0 ? 2.0f : 0.0f)};
-			request.color = pass == 0 ? shadow : colours[std::min<size_t>(i, 2)];
-			request.textSize = size;
-			request.text = lines[i].c_str();
-			request.textLength = static_cast<uint32_t>(lines[i].size());
-			if (g_overlay->drawText(context, &request) != D2RL::Overlay::Result::Success && !g_drawFailedLogged.exchange(true)) {
-				plog::Warn("the entry banner could not draw its text through the overlay; the console shows the message instead from now on");
-				g_bannerOverlay = false;
-			}
-		}
-		y += (metrics.height > 0 ? metrics.height : size) * 1.2f;
-	}
-}
-
 void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 	if (lines.empty()) {
 		return;
 	}
-	if (g_bannerOverlay.load()) {
-		std::lock_guard<std::mutex> lock(g_bannerLock);
-		g_banner.lines = lines;
-		g_banner.startMs = GetTickCount64();
-		g_banner.active = true;
-		plog::Info("eventprobe: entry message shown on the overlay (%zu line(s))", lines.size());
+	if (ShowEntryBanner(lines)) {
+		plog::Info("eventprobe: entry message handed to the banner panel (%zu line(s))", lines.size());
 		return;
 	}
 	for (const std::string& line : lines) {
@@ -209,7 +136,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 			g_context->WriteConsoleMessage(line.c_str());
 		}
 	}
-	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no overlay", lines.size());
+	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no banner panel", lines.size());
 }
 
 // --- Spawn names from the game's loaded tables (cartographer/11-spawn-names.md) -----------------------------------------------
@@ -865,7 +792,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 
 auto SummaryNow() -> std::string {
 	const std::string spawn = g_spawnOn.load() ? "map Boss, Boss and Horde events on" : "map Boss, Boss and Horde events off";
-	const std::string banner = !g_tickOn.load() ? "entry message off (a part was not found)" : g_bannerOverlay.load() ? "entry message on the overlay" : "entry message on the console";
+	const std::string banner = !g_tickOn.load() ? "entry message off (a part was not found)" : EntryBannerAvailable() ? "entry message on the banner panel" : "entry message on the console";
 	return spawn + ", " + banner + " (not yet verified in game)";
 }
 
@@ -970,21 +897,6 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 	}
 	if (!g_spawnOn) {
 		plog::Warn("Boss and Horde events are off (see the parts above)");
-	}
-	// The overlay, best effort; without it the entry message goes to the console.
-	if (context->QueryService(&g_overlay) == D2RL::ServiceQueryResult::Success && D2RL::HasOverlayServiceField(g_overlay, D2RL::OverlayServiceRequiredSize)) {
-		D2RL::Overlay::CallbackRegistration registration{};
-		registration.structSize = D2RL::Overlay::CallbackRegistrationSize;
-		registration.phase = D2RL::Overlay::Phase::AfterGameUi;
-		registration.callback = OnFrame;
-		const auto result = g_overlay->registerFrameCallback(context, &registration, &g_callback);
-		g_bannerOverlay = result == D2RL::Overlay::Result::Success;
-		if (!g_bannerOverlay) {
-			plog::Warn("the overlay refused the banner callback (result %u); the entry message goes to the console", static_cast<uint32_t>(result));
-		}
-	} else {
-		g_overlay = nullptr;
-		plog::Warn("no overlay service; the entry message goes to the console");
 	}
 	// Spawn names from the game's tables: the SDK table service. Best effort; without it the .txt files are used.
 	if (context->QueryService(&g_dataTables) != D2RL::ServiceQueryResult::Success || !D2RL::HasDataTableServiceField(g_dataTables, D2RL::DataTableServiceRequiredSize)) {
@@ -1113,8 +1025,6 @@ void EventsGameLeft() noexcept {
 		g_state.reset();
 		g_busy = false;
 	}
-	std::lock_guard<std::mutex> lock(g_bannerLock);
-	g_banner = {};
 }
 
 auto EventPartStatuses() -> std::vector<PartStatus> {

@@ -781,3 +781,45 @@ TEST_CASE("decodeItemStatList reads D2RLoader's 16-byte entries and refuses any 
 	CHECK(decodeItemStatList(good, 0, 16, &problem).empty());
 	CHECK(problem.empty());
 }
+
+TEST_CASE("mapDensityBonus: the item's map-density values are added up over its affixes")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
+	const int D = 1, MF = 2;
+	REQUIRE(ids.find(kMapDensityStat) == D);
+	// Two affixes with density (20 and 35) and one with magic find: only density counts.
+	CHECK(mapDensityBonus({{D, 0, 20}, {MF, 0, 15}, {D, 0, 35}}, ids) == 55);
+	CHECK(mapDensityBonus({{D, 0, 20}, {D, 0, -50}}, ids) == -30);
+	CHECK(mapDensityBonus({{MF, 0, 15}}, ids) == 0);
+	CHECK(mapDensityBonus({}, ids) == 0);
+	// A layer makes it another stat; a missing row or an unreadable table gives nothing.
+	CHECK(mapDensityBonus({{D, 3, 20}}, ids) == 0);
+	CHECK(mapDensityBonus({{D, 0, 20}}, testIds()) == 0);
+	CHECK(mapDensityBonus({{D, 0, 20}}, StatIds{}) == 0);
+	// Not capped at 1000: an item saves one value of -524288 to 524287 for the stat, so a sum of 500000 is within what a saved item holds.
+	CHECK(mapDensityBonus({{D, 0, 200000}, {D, 0, 200000}, {D, 0, 100000}}, ids) == 500000);
+}
+
+TEST_CASE("densityWithBonus adds percentage points, uncapped, never below 0")
+{
+	CHECK(densityWithBonus(100, 55) == 155);
+	CHECK(densityWithBonus(0, 40) == 40);
+	CHECK(densityWithBonus(1000, 500) == 1500);
+	CHECK(densityWithBonus(100, 0) == 100);
+	CHECK(densityWithBonus(50, -80) == 0);
+}
+
+TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a player stat")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
+	const std::vector<ItemStat> stats = {{1, 0, 20}, {2, 0, 15}, {0, 0, 5}};
+	const auto rest = withoutMapDensity(stats, ids);
+	REQUIRE(rest.size() == 2);
+	CHECK(rest[0].stat == 2);
+	CHECK(rest[1].stat == 0);
+	// The magic find left over is a player stat on the player under its own name.
+	const auto mapped = itemStatsToProperties(rest, ids);
+	REQUIRE(mapped.properties.size() == 2);
+	CHECK(mapped.properties[0] == Property{Target::Players, "item_magicbonus", 15});
+	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
+}

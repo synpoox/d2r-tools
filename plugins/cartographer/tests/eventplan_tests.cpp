@@ -419,20 +419,14 @@ TEST_CASE("EntryTracker fires once per arrival") {
 	CHECK(t.update(true));
 }
 
-TEST_CASE("bannerAlpha fades in, holds, fades out, then is 0") {
-	CHECK(bannerAlpha(-1) == 0);
-	CHECK(bannerAlpha(0) == 0);
-	CHECK(bannerAlpha(kBannerFadeInMs / 2) > 100);
-	CHECK(bannerAlpha(kBannerFadeInMs / 2) < 160);
-	CHECK(bannerAlpha(kBannerFadeInMs) == 255);
-	CHECK(bannerAlpha(kBannerFadeInMs + kBannerHoldMs - 1) == 255);
-	CHECK(bannerAlpha(kBannerTotalMs - 1) < 5);
-	CHECK(bannerAlpha(kBannerTotalMs) == 0);
-	int last = 0;
-	for (int ms = 0; ms < kBannerFadeInMs; ++ms) {
-		CHECK(bannerAlpha(ms) >= last);
-		last = bannerAlpha(ms);
-	}
+TEST_CASE("bannerVisible is true from the start until the banner's total time") {
+	CHECK_FALSE(bannerVisible(-1));
+	CHECK(bannerVisible(0));
+	CHECK(bannerVisible(kBannerTotalMs - 1));
+	CHECK_FALSE(bannerVisible(kBannerTotalMs));
+	CHECK_FALSE(bannerVisible(1'000'000));
+	// The game was left: the start time is set to 0, so the elapsed time is the tick count (ms since boot), far past the banner's time: the panel closes.
+	CHECK_FALSE(bannerVisible(static_cast<int64_t>(5'000'000) - 0));
 }
 
 TEST_CASE("eventSeed is stable and differs from the map seed") {

@@ -38,6 +38,7 @@
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
       itemstatcost.txt also seven monster-side stats, cartographer_mon_life, _damage, _fire_res, _cold_res, _light_res, _poison_res and _speed (signed, shown on the item as "+20% Monster Life" and so on).
                     A map item that carries one gives its monsters the matching vanilla stat; a vanilla stat on a map item is the player's. See docs/cartographer/tables.md.
+      itemstatcost.txt also "cartographer_map_density" (signed, 20 bits, -524288 to 524287; shown as "+20% Map Density"): bonus Density added to the map's Density when it opens, with the property "map-density".
       properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat, and one property for each monster-side stat
                     (mon-life, mon-damage, mon-fire-res, mon-cold-res, mon-light-res, mon-poison-res, mon-speed), so an affix or unique row can use them. Left out when the mod has no properties.txt.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
@@ -147,10 +148,13 @@ $pending = [System.Collections.Generic.List[object]]::new()
 $bom = [string][char]0xEF + [char]0xBB + [char]0xBF
 
 # A tab-separated table with a header: lines kept as they are, edited by column name.
+# A table is read once per run: nothing is written until the end, so a second read of the same file must give the same object (with the rows
+# added so far), or two edits of one table would each count the rows from the file and give two new rows the same id (#358).
+$tableCache = @{}
 function Read-Table([string]$path) {
     if (-not (Test-Path $path)) { throw "Missing $path. This mod does not carry that table, so it cannot be edited here." }
-    # A table already read and queued for writing is returned as it is: a second read of the file would miss the queued rows and the later write would drop them.
-    foreach ($queued in $pending) { if ($queued.Path -eq $path) { return $queued } }
+    $key = [System.IO.Path]::GetFullPath($path).ToLowerInvariant()
+    if ($tableCache.ContainsKey($key)) { return $tableCache[$key] }
     $text = $bytes.GetString([System.IO.File]::ReadAllBytes($path))
     $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = [System.Collections.Generic.List[string]]($text -split [regex]::Escape($eol))
@@ -158,7 +162,9 @@ function Read-Table([string]$path) {
     if ($final) { $lines.RemoveAt($lines.Count - 1) }
     if ($lines.Count -eq 0 -or $lines[0] -eq '') { throw "$path is empty." }
     $header = ($lines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t"
-    [pscustomobject]@{ Path = $path; Eol = $eol; Lines = $lines; Header = $header; FinalEol = $final }
+    $table = [pscustomobject]@{ Path = $path; Eol = $eol; Lines = $lines; Header = $header; FinalEol = $final }
+    $tableCache[$key] = $table
+    $table
 }
 
 # Queues the table; nothing is written until every table has been read and checked.
@@ -598,7 +604,12 @@ $MonsterStats = @(
     @{ Stat = 'cartographer_mon_cold_res';   Key = 'cartographer:mon_cold_res';   Property = 'mon-cold-res';   Note = 'monster cold resistance' },
     @{ Stat = 'cartographer_mon_light_res';  Key = 'cartographer:mon_light_res';  Property = 'mon-light-res';  Note = 'monster lightning resistance' },
     @{ Stat = 'cartographer_mon_poison_res'; Key = 'cartographer:mon_poison_res'; Property = 'mon-poison-res'; Note = 'monster poison resistance' },
-    @{ Stat = 'cartographer_mon_speed';      Key = 'cartographer:mon_speed';      Property = 'mon-speed';      Note = 'monster speed' }
+    @{ Stat = 'cartographer_mon_speed';      Key = 'cartographer:mon_speed';      Property = 'mon-speed';      Note = 'monster speed' },
+    # Not a monster stat: the bonus Density of a map (summed over the item's affixes and added to the map's Density when it opens, src/statplan mapDensityBonus).
+    # Same row, but wide: the owner's rule is that Density has no cap, and an item saves one value per stat (the affixes' values are added up), so the 10-bit
+    # monster width (-512 to 511) would wrap a bigger total. 20 bits with a Save Add of 524288 save -524288 to 524287; vanilla item stats go to 22 bits
+    # (the *_bytime stats) and 24 (item_lightcolor), so an item save holds this. An earlier row with the monster width is widened by a run (below).
+    @{ Stat = 'cartographer_map_density';    Key = 'cartographer:map_density';    Property = 'map-density';    Note = 'map density'; SendBits = '20'; SaveBits = '20'; SaveAdd = '524288' }
 )
 if (Test-Path $statCostPath) {
     $statCost = Read-Table $statCostPath
@@ -606,7 +617,33 @@ if (Test-Path $statCostPath) {
     if ($template -lt 0) { throw "itemstatcost.txt has no 'item_maxhp_percent' row to copy for the monster stats." }
     $added = 0
     foreach ($m in $MonsterStats) {
-        if ((Find-Row $statCost 'Stat' $m.Stat) -ge 0) { continue }
+        $sendBits = if ($m.SendBits) { $m.SendBits } else { '11' }
+        $saveBits = if ($m.SaveBits) { $m.SaveBits } else { '10' }
+        $saveAdd = if ($m.SaveAdd) { $m.SaveAdd } else { '512' }
+        $have = Find-Row $statCost 'Stat' $m.Stat
+        if ($have -ge 0) {
+            # Only the density row, and only with exactly the widths a development build first wrote (11 / 10 / 512, the monster width): set the new widths,
+            # keep the id and the rest. No other row, and no other widths, are touched (a hand-set width stays; changing widths breaks saved items).
+            $cells = Cells $statCost $statCost.Lines[$have]
+            $before = $cells -join "`t"
+            $old = @{ 'Send Bits' = '11'; 'Save Bits' = '10'; '1.09-Save Bits' = '10'; 'Save Add' = '512'; '1.09-Save Add' = '512' }
+            $isOld = $m.Stat -eq 'cartographer_map_density'
+            foreach ($col in $old.Keys) {
+                $at = [array]::IndexOf($statCost.Header, $col)
+                if ($at -ge 0 -and $cells[$at] -ne $old[$col]) { $isOld = $false }
+            }
+            if ($isOld) {
+                Set-CellIf $statCost $cells 'Send Bits' $sendBits
+                foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col $saveBits }
+                foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col $saveAdd }
+            }
+            if (($cells -join "`t") -ne $before) {
+                $statCost.Lines[$have] = $cells -join "`t"
+                $added++
+                Write-Host "itemstatcost.txt: updated the stat '$($m.Stat)' to $sendBits send bits, $saveBits save bits, save add $saveAdd."
+            }
+            continue
+        }
         $cells = Cells $statCost $statCost.Lines[$template]
         $newId = 0
         for ($i = 1; $i -lt $statCost.Lines.Count; $i++) { if ($statCost.Lines[$i].Trim() -ne '') { $newId++ } }
@@ -615,9 +652,9 @@ if (Test-Path $statCostPath) {
         Set-CellIf $statCost $cells '*ID' "$newId"
         foreach ($col in 'Send Other', 'Add', 'Multiply', 'ValShift', 'op', 'op param', 'op base', 'op stat1', 'op stat2', 'op stat3', 'direct', 'maxstat', 'damagerelated') { Set-CellIf $statCost $cells $col '' }
         Set-CellIf $statCost $cells 'Signed' '1'
-        Set-CellIf $statCost $cells 'Send Bits' '11'
-        foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col '10' }
-        foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col '512' }
+        Set-CellIf $statCost $cells 'Send Bits' $sendBits
+        foreach ($col in 'Save Bits', '1.09-Save Bits') { Set-CellIf $statCost $cells $col $saveBits }
+        foreach ($col in 'Save Add', '1.09-Save Add') { Set-CellIf $statCost $cells $col $saveAdd }
         Set-CellIf $statCost $cells 'descpriority' '250'
         Set-CellIf $statCost $cells 'descfunc' '19'
         Set-CellIf $statCost $cells 'descval' ''

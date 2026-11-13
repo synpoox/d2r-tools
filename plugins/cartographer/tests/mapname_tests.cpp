@@ -391,7 +391,7 @@ TEST_CASE("monster map stat texts: one record each, and the installer and the pl
 	REQUIRE(in.good());
 	std::stringstream all;
 	all << in.rdbuf();
-	for (const MonsterStatText& m : MonsterStatTexts) {
+	for (const MonsterStatText& m : MonsterStatTexts) {  // includes map_density, the bonus Density stat
 		CHECK(json.find(std::string("\"Key\":\"") + m.key + "\"") != std::string::npos);
 		CHECK(all.str().find(std::string("'cartographer_") + m.key + "'") != std::string::npos);
 	}

@@ -26,6 +26,7 @@ console commands (`debug_mode`, `cheat god 1`, `cheat easykill 1`) and clicks re
 not touched again. A recipe row was also added to slot 6's `cubemain.txt` by mistake (a script pointed at the wrong slot; slot 6 was
 free and not running), and removed again.
 
-Also found and fixed during run 2: `tools\install.ps1` lost the `map-level` property row (and, on a fresh mod, the map-level
-stat row) when a table was read a second time while its first edit was still queued, so the first game start logged
-`property id -1`. A table already queued is now reused.
+Also found during run 2: `tools\install.ps1` lost the `map-level` property row (and, on a fresh mod, the map-level stat row) when a table
+was read a second time while its first edit was still queued, so the first game start logged `property id -1`. That is #358, fixed
+by #362 (a per-run table cache), not by this PR. The slot 5 run checked the cube hook live with an earlier version of this PR's own
+`Read-Table` fix installed, not #362's.

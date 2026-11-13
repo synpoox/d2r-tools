@@ -51,7 +51,7 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 
 Run 1: slot 6, Hell, test save, a build with extra logging, `usetype,nor,mod` and `t22,mod` recipes (map with a Town Portal scroll). Both hooks logged `hooked` at load. First transmute: the stat went to 10. Second transmute: stat before 10, after 20, cube input 10, target 20, read back 20. Using the map logged `map level 20 (from the item's stat)` and opened a portal (CaveB). The test slot's `maps.txt` was edited for the run (three Cave maps) and restored. Record: `docs/cartographer/checks/2026-11-12-cube-map-level.md`.
 
-Run 2 (the final DLL of this head, slot 5, Hell, god mode, test save; recipe `t21` + `tsc`, `usetype,nor,mod`, `map-level` 10): a fresh map, first transmute: `stat before 0 after 10, cube input 0, target 10, now 10`; second: `stat before 10 after 20, cube input 10, target 20, now 20`; the map used in Harrogath logged `map level 20 (from the item's stat)`, the map monsters took Level 20 and CaveB opened.
+Run 2 (the final DLL of this head, slot 5, Hell, god mode, test save; recipe `t21` + `tsc`, `usetype,nor,mod`, `map-level` 10): a fresh map, first transmute: `stat before 0 after 10, cube input 0, target 10, now 10`; second: `stat before 10 after 20, cube input 10, target 20, now 20`; the map used in Harrogath logged `map level 20 (from the item's stat)`, the map monsters took Level 20 and CaveB opened. The installer then in use was an earlier version of this PR's own `Read-Table` fix for the lost `map-level` property row; that bug is #358, fixed by #362 (not by this PR).
 
 ### Not checked
 
