@@ -171,9 +171,12 @@ auto MapQualitySummary() -> std::string {
 		return "magic maps are not blocked (the item quality roll and its magic fallback are not hooked)";
 	}
 	namespace mq = cartographer::mapquality;
-	std::string counts = "map rolls: " + std::to_string(g_maps[mq::Normal].load()) + " normal (" + std::to_string(g_rolled.load()) + " of them magic made normal), " +
-		std::to_string(g_maps[mq::Rare].load()) + " rare, " + std::to_string(g_maps[mq::Unique].load()) + " unique, " + std::to_string(g_maps[mq::Magic].load()) + " magic; " +
-		std::to_string(g_maps[mq::Set].load()) + " set; " + std::to_string(g_fallbacks.load()) + " maps whose set, rare or unique maker failed were made normal, not magic";
+	std::uint32_t byQuality[10] = {};
+	for (int quality = 0; quality < MaxQuality; ++quality) {
+		byQuality[quality] = g_maps[quality].load();
+	}
+	const std::string counts = cartographer::mapquality::rollCounts(byQuality, g_rolled.load()) + "; " + std::to_string(g_fallbacks.load()) +
+		" maps whose set, rare or unique maker failed were made normal, not magic";
 	if (roll && fallback) {
 		return "magic maps are blocked (maps forced magic by a cheat, and maps that already exist, stay magic): " + counts + " so far";
 	}
