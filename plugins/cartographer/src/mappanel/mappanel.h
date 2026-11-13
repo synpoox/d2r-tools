@@ -1,5 +1,5 @@
-// Cartographer map panel text: what the side-of-screen panel says while the player is inside a map (the map's name, its
-// monster level and the rolled properties). Pure C++ on plain structs: no engine, no SDK. The engine part
+// Cartographer map panel text: what the side-of-screen panel says while the player is inside a map (the map's
+// monster level and the rolled properties, grouped like item properties). Pure C++ on plain structs: no engine, no SDK. The engine part
 // (src/engine/map_panel.cpp) puts the text into the plugin's panel.
 #pragma once
 #include <string>
@@ -12,19 +12,29 @@ struct Stat {
 	bool monsters = true; // false: it is on the player
 	std::string name;     // an itemstatcost Stat name
 	int value = 0;
+	std::string gameText; // the game's own text for the stat ("+%d%% Faster Run/Walk"), "" when it could not be read
 };
 
-// A readable name for an itemstatcost Stat name: the common map properties get their game wording ("Life", "Fire
-// Resistance"); any other stat has its underscores turned into spaces and a leading "item " dropped, first letter upper case.
+// The game's colour code for item property blue and for gold (the panel's own colour), as UTF-8: U+00FF, 'c', digit.
+inline constexpr const char *kBlue = "\xC3\xBF" "c3";
+inline constexpr const char *kGold = "\xC3\xBF" "c4";
+
+// A game string with the value put in: "%d" and "%i" are the number, "%+d" the number with its sign, "%%" a percent sign. A '+'
+// in front of "%d" is dropped for a negative value. "" when the text has no number placeholder (the caller then falls back).
+std::string formatGameText(const std::string &text, int value);
+
+// A readable name for an itemstatcost Stat name that has no entry in the fallback table: underscores turned into spaces and a
+// leading "item " dropped, first letter upper case.
 std::string statLabel(const std::string &stat);
 
-// One line for a property: "Monsters: +30% Life" or "You: -20% Fire Resistance". Percent stats (resistances, life and damage
-// percent) get a % sign; the others show the plain number.
+// The property text without the group: "+30% Life", "-20% Fire Resistance". The stat's game text when it has one with a number
+// in it, else the fallback table's wording, else "+25 Magic bonus" (the plain number and the tidied name).
 std::string statLine(const Stat &stat);
 
-// The whole panel text, lines joined by '\n': the map name, "Monster level N" (left out when level is 0 or below), then one
-// line per property (in the order given). A map without properties shows the first two lines only. An empty name shows "Map".
-std::string panelText(const std::string &mapName, int monsterLevel, const std::vector<Stat> &stats);
+// The whole panel text, lines joined by newlines: "Monster level N" (left out when level is 0 or below), then "Monsters have" and its
+// property lines, then "Players have" and its lines (a group with no property is left out). Property lines are blue. The map's
+// name is not in it: the game shows it above Difficulty. Empty when there is nothing to show.
+std::string panelText(int monsterLevel, const std::vector<Stat> &stats);
 
 // Whether the game's terror zone text counts as hidden after a call that asked for it to be `visible` and `succeeded` or not, given
 // whether it was hidden before (`wasHidden`). A failed call keeps the previous state: a failed restore leaves it hidden (so it is

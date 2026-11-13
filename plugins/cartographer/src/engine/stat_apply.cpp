@@ -103,7 +103,21 @@ std::atomic<bool> g_chainLogged{false};  // the first player's list chain was lo
 std::atomic<bool> g_stateRefused{false};  // the state for the player's list was refused this map: logged once, nothing more is tried
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::DataTableService* g_dataTables = nullptr;
+const D2RL::LocalizationService* g_localization = nullptr;  // optional: the game's own text for a stat in the map panel
 MonsterSetupFn g_original = nullptr;
+
+// The game's text for a stat's descstrpos key in the current language, "" when there is no key, no service or no such string.
+auto GameStatText(const std::string& key) noexcept -> std::string {
+	if (key.empty() || g_localization == nullptr || g_context == nullptr) {
+		return std::string();
+	}
+	char buffer[256] = {};
+	uint32_t required = 0;
+	if (g_localization->getStringByKey(g_context, key.c_str(), buffer, sizeof(buffer), &required) != D2RL::Localization::Result::Success) {
+		return std::string();
+	}
+	return buffer;
+}
 
 template <typename Fn>
 auto Call(PartId id) noexcept -> Fn {
@@ -521,6 +535,10 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	if (context->QueryService(&g_dataTables) != D2RL::ServiceQueryResult::Success || !D2RL::HasDataTableServiceField(g_dataTables, D2RL::DataTableServiceRequiredSize)) {
 		g_dataTables = nullptr;
 	}
+	if (context->QueryService(&g_localization) != D2RL::ServiceQueryResult::Success ||
+	    !D2RL::HasLocalizationServiceField(g_localization, D2RL::LocalizationServiceRequiredSize) || g_localization->getStringByKey == nullptr) {
+		g_localization = nullptr;  // the panel then uses its own wording
+	}
 	const bool partsOn = AllOn({NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, UnitRoom, RoomLevelId, SetListState, SetStateBit, StateOn, FindStateList, StatDataTablesBase});
 	g_playersOn = tickOn && partsOn && g_dataTables != nullptr;
 	if (!g_playersOn) {
@@ -547,7 +565,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	}
 	const int slot = SlotLevel(tables->slots, MapSlotName(map));
 	if (!g_monstersOn.load() && !g_playersOn.load()) {
-		MapPanelMapOpened(cartographer::mappanel::panelText(map.name, map.level, {}), slot);  // name and level, no properties
+		MapPanelMapOpened(cartographer::mappanel::panelText(map.level, {}), slot);  // the level only, no properties
 		return;
 	}
 	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);  // names the open in the log
@@ -573,13 +591,13 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	std::vector<cartographer::mappanel::Stat> shown;
 	if (g_monstersOn.load()) {
 		for (const sp::Entry& e : plan->monsters) {
-			shown.push_back({true, e.name, e.value});
+			shown.push_back({true, e.name, e.value, GameStatText(tables->statIds.descKey(e.name))});
 		}
 	}
 	for (const sp::Entry& e : plan->players) {
-		shown.push_back({false, e.name, e.value});
+		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name))});
 	}
-	MapPanelMapOpened(cartographer::mappanel::panelText(map.name, map.level, shown), slot);
+	MapPanelMapOpened(cartographer::mappanel::panelText(map.level, shown), slot);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plan = std::move(plan);
 	g_slotLevel = slot;

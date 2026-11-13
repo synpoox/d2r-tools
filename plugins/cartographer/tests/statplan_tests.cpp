@@ -53,6 +53,15 @@ TEST_CASE("itemstatcost: the *ID column is a comment, the row number wins (vanil
 	CHECK(ids.find("passive_mastery_attack_speed") == 213);
 }
 
+TEST_CASE("itemstatcost: the descstrpos key is read for rows that have one")
+{
+	const StatIds ids = parseItemStatCost("Stat\tdescstrpos\nstrength\tModStr1a\nitem_magicbonus\t\nhitpoints\tModStr2\n");
+	CHECK(ids.descKey("strength") == "ModStr1a");
+	CHECK(ids.descKey("item_magicbonus").empty());
+	CHECK(ids.descKey("hitpoints") == "ModStr2");
+	CHECK(ids.descKey("nothing").empty());
+}
+
 TEST_CASE("itemstatcost: without an *ID column the row number is the id")
 {
 	const StatIds ids = parseItemStatCost("Stat\tSend Other\nstrength\t1\nenergy\t1\n\t1\ndexterity\t1\n");

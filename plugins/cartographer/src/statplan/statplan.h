@@ -33,10 +33,13 @@ constexpr size_t kMaxPlayerStats = 16;
 // itemstatcost.txt: stat name -> id.
 struct StatIds {
 	std::vector<std::pair<std::string, int>> byName;
+	std::vector<std::pair<std::string, std::string>> descKeys; // stat name -> its descstrpos string key (rows that have one)
 	bool loaded = false; // false: the table could not be read, so names are not checked and nothing can be applied
 
 	// The id of `name` (exact), or -1.
 	int find(std::string_view name) const;
+	// The descstrpos string key of stat `name`, or "".
+	std::string descKey(std::string_view name) const;
 	// The name of stat `id`, or "" when no row has it.
 	std::string nameOf(int id) const;
 	// The listed name closest to `name` (for a "did you mean" message), or "" when nothing is close.
