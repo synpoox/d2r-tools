@@ -733,7 +733,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			Write<int32_t>(level, LvlSizeX, plan.levelTilesX);
 			Write<int32_t>(level, LvlSizeY, plan.levelTilesY);
 			Write<const int32_t*>(level, LvlMazeRow, ctx.prep.row);
-			AutomapResetArm();  // the new map starts with an empty automap: skip the read of an earlier map's revealed cells in this layer
+			AutomapResetArm(ctx.prep.plan->hash ^ (ctx.prep.job->seed * 0x9E3779B97F4A7C15ull), id);  // a new map starts with an empty automap: skip the read of an earlier map's revealed cells in this layer
 			plog::Info("maze slot level %d: steering '%s' (%s %s %s, seed %llu): %d rooms, level %d x %d tiles, plan %016llx, %d refits", id, ctx.prep.job->name.c_str(),
 			           ctx.prep.plan->tileset.name.c_str(), ctx.prep.job->shape.c_str(), ctx.prep.job->size.c_str(), static_cast<unsigned long long>(ctx.prep.job->seed),
 			           static_cast<int>(plan.rooms.size()), plan.levelTilesX, plan.levelTilesY, static_cast<unsigned long long>(ctx.prep.plan->hash), ctx.prep.plan->seedPlan.refits);

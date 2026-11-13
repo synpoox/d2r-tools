@@ -628,6 +628,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);

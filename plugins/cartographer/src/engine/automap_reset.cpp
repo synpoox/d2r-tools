@@ -9,14 +9,19 @@
 namespace carto {
 namespace {
 
-using RestoreFn = void (*)() noexcept;
+// The restore (0xd5710) reads no register argument itself, but its first call (0xd5450, the map file path) is made with rcx as the caller left it, so the hook passes the
+// four argument registers and the result straight on: a hook that took none and called plog first handed the original garbage (a fault in 0xd5450).
+using RestoreFn = uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t) noexcept;
 
 Part g_part = {"AutomapRestore", sig::AutomapRestore, 17, false, nullptr, {}, {}};
 RestoreFn g_original = nullptr;
 const uint8_t* g_currentObject = nullptr;   // the game's "current layer object" global, decoded from the part's own `cmp qword ptr [rip+x], 0`
 std::atomic<bool> g_hooked{false};
 std::atomic<bool> g_armed{false};
-std::atomic<int> g_armedKey{-1};            // the layer object that was current when the skip was armed (the one being left)
+std::atomic<uint64_t> g_lastMap{0};         // the map built last in this game (0: none); building the same map again (the return from a town trip) keeps its cells
+std::atomic<int> g_armedKey{-1};
+std::atomic<int> g_armedLevel{-1};          // the slot level (levels.txt id) whose layer the skip is for
+std::atomic<int> g_playerLevel{-1};         // the local player's level id, from the player's tick (-1 unknown)            // the layer object that was current when the skip was armed (the one being left)
 
 // The layer object's key (levels.txt Layer) is its first dword; -1 when no object is current.
 auto CurrentKey() noexcept -> int {
@@ -33,16 +38,18 @@ auto CurrentKey() noexcept -> int {
 	return key;
 }
 
-void RestoreHook() noexcept {
+auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uint64_t {
 	if (g_armed.load()) {
 		const int key = CurrentKey();
-		if (key >= 0 && key != g_armedKey.load()) {
-			g_armed = false;  // another layer is now current: this is the new map's first read. Skip it; the cells stay empty and are saved empty on leaving.
-			plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map", key);
-			return;
+		const int level = g_playerLevel.load();
+		if (key >= 0 && key != g_armedKey.load() && level == g_armedLevel.load()) {
+			g_armed = false;  // the player stands in the slot level and another layer than the one left is current: this is the new map's own layer, first read. Skip it; the cells stay empty and are saved empty on leaving.
+			plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
+			return 0;
 		}
+		plog::Info("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, g_armedLevel.load());
 	}
-	g_original();
+	return g_original(a, b, c, d);
 }
 
 }  // namespace
@@ -72,16 +79,26 @@ void InstallAutomapReset(const D2RL::PluginContext* context, const std::vector<S
 	}
 }
 
-void AutomapResetArm() noexcept {
+void AutomapResetArm(uint64_t map, int slotLevel) noexcept {
 	if (!g_hooked.load()) {
 		return;
 	}
+	if (map != 0 && g_lastMap.exchange(map) == map) {
+		return;  // the same map again: a trip to town and back rebuilds it from the same seed, and its saved cells belong to it
+	}
 	g_armedKey = CurrentKey();
+	g_armedLevel = slotLevel;
 	g_armed = true;
+}
+
+void AutomapResetPlayerTick(int level) noexcept {
+	g_playerLevel = level;
 }
 
 void AutomapResetDisarm() noexcept {
 	g_armed = false;
+	g_playerLevel = -1;
+	g_lastMap = 0;
 }
 
 auto AutomapResetPartStatus() -> PartStatus {
