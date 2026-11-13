@@ -57,8 +57,8 @@ foreach(core IN LISTS cartographer_core_dirs)
 endforeach()
 
 # core is the one place that names cores by hand (see #36 for the discovery above); a new core it reads needs a line here.
-# The table loader also reads shapes.txt, mapstats.txt and mapevents.txt through these cores.
-target_link_libraries(cartographer_core PUBLIC cartographer_layout cartographer_stats cartographer_events cartographer_outdoor)
+# The table loader also reads shapes.txt and mapevents.txt through these cores.
+target_link_libraries(cartographer_core PUBLIC cartographer_layout cartographer_events cartographer_outdoor)
 
 add_library(cartographer SHARED
 	src/plugin.cpp

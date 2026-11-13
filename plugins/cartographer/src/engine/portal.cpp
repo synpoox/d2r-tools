@@ -184,7 +184,7 @@ void Tell(const std::string& text) noexcept {
 	}
 }
 
-// The map is open: draws its properties and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
+// The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
@@ -416,7 +416,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
-	// The item's own stats, read now, before the game uses the item up: the map level always, the map's properties with ItemStats=1.
+	// The item's own stats, read now, before the game uses the item up: the map level and the map's properties (its rare or unique modifiers).
 	std::vector<cartographer::statplan::ItemStat> itemStats;
 	try {
 		std::string note;
