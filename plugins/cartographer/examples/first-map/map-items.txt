@@ -1,4 +1,4 @@
-code	name	base	type	belt	pSpell	rarity	spawnable	PermStoreItem	multibuy	namestr	compactsave
-t20	Shorelines Map	isc	cmap	0	16	0	0	0	0	t20	0
-t21	Tunneling Depths Map	isc	cmap	0	16	0	0	0	0	t21	0
-t22	Overgrown Reach Map	isc	cmap	0	16	0	0	0	0	t22	0
+code	name	base	type	belt	pSpell	rarity	spawnable	PermStoreItem	multibuy	namestr	compactsave	spellicon
+t20	Shorelines Map	isc	cmap	0	16	0	0	0	0	t20	0	-1
+t21	Tunneling Depths Map	isc	cmap	0	16	0	0	0	0	t21	0	-1
+t22	Overgrown Reach Map	isc	cmap	0	16	0	0	0	0	t22	0	-1

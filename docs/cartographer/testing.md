@@ -79,7 +79,7 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
 4. Give each map an item of its own in your mod's `misc.txt`: a new row with item spell 16 (`pSpell`) and type `cmap` (the installer adds that item type), for example a copy of the
-   Scroll of Identify with `belt` 0. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
+   Scroll of Identify with `belt` 0 and `spellicon` -1. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader. Check `cartographer-report.txt` in the plugin's log folder.
 
 ## Configuration
