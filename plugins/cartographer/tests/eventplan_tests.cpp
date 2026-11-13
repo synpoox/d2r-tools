@@ -399,10 +399,10 @@ TEST_CASE("entryLines: the map name, then the event name and message") {
 	CHECK(entryLines("", nullptr).empty());
 }
 
-TEST_CASE("bannerLines: the event only once announced, no map name in a late banner") {
+TEST_CASE("bannerLines: the event only once announced, never the map name") {
 	ev::Event e = event(ev::Kind::Boss, "andariel");
-	CHECK(bannerLines("Crypt", &e, false, false) == std::vector<std::string>{"Crypt"});
-	CHECK(bannerLines("Crypt", &e, true, false) == std::vector<std::string>{"Crypt", "The Drowned King", "Something stirs."});
+	CHECK(bannerLines("Crypt", &e, false, false).empty());
+	CHECK(bannerLines("Crypt", &e, true, false) == std::vector<std::string>{"The Drowned King", "Something stirs."});
 	CHECK(bannerLines("Crypt", &e, true, true) == std::vector<std::string>{"The Drowned King", "Something stirs."});
 	CHECK(bannerLines("Crypt", &e, false, true).empty());
 	CHECK(bannerLines("Crypt", nullptr, true, true).empty());
@@ -594,4 +594,41 @@ TEST_CASE("scaleKind says why the spot scale is what it is") {
 	CHECK(scaleKind({0, 0, 101, 80}, {0, 0, 20, 16}) == ScaleKind::NotAMultiple);
 	CHECK(scaleKind({0, 0, 100, 40}, {0, 0, 20, 16}) == ScaleKind::NotAMultiple);
 	CHECK(std::string(scaleKindName(ScaleKind::NotAMultiple)).find("fallback") != std::string::npos);
+}
+
+TEST_CASE("BossRoomPicker: the first room is tried first; a refusal moves on, in order, and the last refusal gives up")
+{
+	const Rect a{0, 0, 8, 8}, b{8, 0, 8, 8}, c{0, 8, 8, 8};
+	BossRoomPicker p({a, b, c});
+	CHECK(p.size() == 3);
+	CHECK(p.indexOf(b) == 1);
+	CHECK(p.indexOf({40, 40, 8, 8}) == -1);
+	CHECK_FALSE(p.onPopulated({40, 40, 8, 8}));  // not of the cell
+	CHECK_FALSE(p.onPopulated(b));               // a fallback populated before the first: remembered, not tried
+	CHECK(p.onPopulated(a));                     // the first: try the Boss here
+	CHECK(p.refused() == 1);                     // refused: b was populated already, so try it now
+	CHECK(p.refused() == -1);                    // refused again: c is not populated yet, wait
+	CHECK_FALSE(p.done());
+	CHECK(p.onPopulated(c));                     // c populates: try it
+	CHECK(p.refused() == -1);                    // refused, none left
+	CHECK(p.done());
+	CHECK_FALSE(p.onPopulated(a));
+}
+
+TEST_CASE("BossRoomPicker: a placed Boss stops every later try; no rooms is done at once")
+{
+	BossRoomPicker p({Rect{0, 0, 8, 8}, Rect{8, 0, 8, 8}});
+	CHECK(p.onPopulated({0, 0, 8, 8}));
+	p.finish();
+	CHECK(p.done());
+	CHECK_FALSE(p.onPopulated({8, 0, 8, 8}));
+	CHECK(p.refused() == -1);
+	BossRoomPicker none({});
+	CHECK(none.done());
+	CHECK_FALSE(none.onPopulated({0, 0, 8, 8}));
+	// the next room populates only after the refusal: it is tried then, not before
+	BossRoomPicker q({Rect{0, 0, 8, 8}, Rect{8, 0, 8, 8}});
+	CHECK(q.onPopulated({0, 0, 8, 8}));
+	CHECK(q.refused() == -1);
+	CHECK(q.onPopulated({8, 0, 8, 8}));
 }

@@ -33,7 +33,7 @@ constexpr Tileset Tilesets[] = {
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
-const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
+const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "EventChance",
                                              "Density", "Champions",   "Uniques"};
@@ -298,7 +298,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			if (const std::string* known = Canonical(Sizes, size)) {
 				map.size = *known;
 			} else {
-				fail("size '" + size + "' is not known." + DidYouMean(size, Sizes) + " Use " + OneOf(Sizes) + ", or leave it blank for Medium.");
+				fail("size '" + size + "' is not known." + DidYouMean(size, Sizes) + " Use " + OneOf(Sizes) + ", or leave it blank for Large." + cartographer::layout::sizeRenameNote(size));
 			}
 		}
 
@@ -309,7 +309,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				cartographer::layout::Rules rules;
 				std::string ignored;
 				const cartographer::layout::ShapeTable none;
-				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored) && rules.open) {
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Large), rules, ignored) && rules.open) {
 					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
 				}
 			}
@@ -322,7 +322,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				cartographer::layout::Rules rules;
 				std::string ignored;
 				const cartographer::layout::ShapeTable none;
-				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored)) {
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Large), rules, ignored)) {
 					if (const std::string problem = cartographer::outdoor::capJungleOpenRules(rules); !problem.empty()) {
 						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath in shapes.txt.");
 					}
@@ -330,11 +330,11 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
-		// ExtraSmall is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
+		// Small is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
 		// row that asks for it checks its shapes.txt shape here.
-		if (ok && map.size == "ExtraSmall" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
-			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::ExtraSmall); !problem.empty()) {
-				fail(problem + " The shape does not fit Size ExtraSmall (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
+		if (ok && map.size == "Small" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
+			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::Small); !problem.empty()) {
+				fail(problem + " The shape does not fit Size Small (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
 			}
 		}
 
