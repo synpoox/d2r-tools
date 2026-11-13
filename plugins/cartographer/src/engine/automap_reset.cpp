@@ -1,10 +1,12 @@
 #include "automap_reset.h"
 
 #include "core/part_signatures.h"
+#include "automap_skip.h"
 #include "log.h"
 
 #include <atomic>
 #include <cstring>
+#include <mutex>
 
 namespace carto {
 namespace {
@@ -17,11 +19,10 @@ Part g_part = {"AutomapRestore", sig::AutomapRestore, 17, false, nullptr, {}, {}
 RestoreFn g_original = nullptr;
 const uint8_t* g_currentObject = nullptr;   // the game's "current layer object" global, decoded from the part's own `cmp qword ptr [rip+x], 0`
 std::atomic<bool> g_hooked{false};
-std::atomic<bool> g_armed{false};
+std::mutex g_mutex;                         // the build (any thread), the player's tick and the read (game thread) share the skip state
+SkipState g_skip;                           // armed / the layer left / the slot level / the player seen in it (automap_skip.h)
 std::atomic<uint64_t> g_lastMap{0};         // the map built last in this game (0: none); building the same map again (the return from a town trip) keeps its cells
-std::atomic<int> g_armedKey{-1};
-std::atomic<int> g_armedLevel{-1};          // the slot level (levels.txt id) whose layer the skip is for
-std::atomic<int> g_playerLevel{-1};         // the local player's level id, from the player's tick (-1 unknown)            // the layer object that was current when the skip was armed (the one being left)
+int g_playerLevel = -1;                     // the local player's level id, from the player's tick (-1 unknown)
 
 // The layer object's key (levels.txt Layer) is its first dword; -1 when no object is current.
 auto CurrentKey() noexcept -> int {
@@ -39,15 +40,28 @@ auto CurrentKey() noexcept -> int {
 }
 
 auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uint64_t {
-	if (g_armed.load()) {
-		const int key = CurrentKey();
-		const int level = g_playerLevel.load();
-		if (key >= 0 && key != g_armedKey.load() && level == g_armedLevel.load()) {
-			g_armed = false;  // the player stands in the slot level and another layer than the one left is current: this is the new map's own layer, first read. Skip it; the cells stay empty and are saved empty on leaving.
-			plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
-			return 0;
+	bool armed = false;
+	bool skip = false;
+	int key = -1;
+	int level = -1;
+	int slot = -1;
+	{
+		std::lock_guard<std::mutex> lock(g_mutex);
+		armed = g_skip.armed;
+		if (armed) {
+			key = CurrentKey();
+			level = g_playerLevel;
+			slot = g_skip.armedLevel;
+			skip = SkipOnRead(g_skip, key, level) == SkipVerdict::Skip;
 		}
-		plog::Info("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, g_armedLevel.load());
+	}
+	if (skip) {
+		// the player stands in the slot level and another layer than the one left is current: this is the new map's own layer, first read. Skip it; the cells stay empty and are saved empty on leaving.
+		plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
+		return 0;
+	}
+	if (armed) {
+		plog::Info("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, slot);
 	}
 	return g_original(a, b, c, d);
 }
@@ -86,17 +100,19 @@ void AutomapResetArm(uint64_t map, int slotLevel) noexcept {
 	if (map != 0 && g_lastMap.exchange(map) == map) {
 		return;  // the same map again: a trip to town and back rebuilds it from the same seed, and its saved cells belong to it
 	}
-	g_armedKey = CurrentKey();
-	g_armedLevel = slotLevel;
-	g_armed = true;
+	std::lock_guard<std::mutex> lock(g_mutex);
+	SkipArm(g_skip, CurrentKey(), slotLevel);
 }
 
 void AutomapResetPlayerTick(int level) noexcept {
+	std::lock_guard<std::mutex> lock(g_mutex);
 	g_playerLevel = level;
+	SkipTick(g_skip, level);
 }
 
 void AutomapResetDisarm() noexcept {
-	g_armed = false;
+	std::lock_guard<std::mutex> lock(g_mutex);
+	g_skip = {};
 	g_playerLevel = -1;
 	g_lastMap = 0;
 }
