@@ -26,5 +26,14 @@ Log lines:
     map monsters:   record 0x2b8: 600 -> 1350
     map stats for 'Shorelines' ...: 2 item stat(s) read, monsters: item_maxhp_percent(76)=+10; players: item_magicbonus(80)=+25
 
-Not checked: the widened (20-bit) stat on a saved and reloaded item, and values above 511 on an item. The wider rows and the repair of an
-old-width row are covered only by the offline `tools\test_install_stats.ps1`.
+## Second run: the 20-bit stat (PR #362, lock carto-362)
+
+Same slot, build and test save (put back afterwards), the plugin built from the branch with the widened stat. `debug_mode` then `cheat god 1` before any map. The `Cartographer Density Unique` row was set to `map-density` 2000 and 35 (`mag%` 25, `mon-life` 10); items came from `cheat spawn t20,typ u,inv 0` with `savecheatitems 1`.
+
+| # | Check | Result |
+|---|---|---|
+| 5 | Run the current installer on the slot's tables | PASS: `updated the stat 'cartographer_map_density' to 20 send bits, 20 save bits, save add 524288`; the row kept id 376 and the other install lines said already there |
+| 6 | Unique with a density value above 511 (2000 + 35), fresh item | PASS: `map density: 50% from maps.txt +2035% from the item's affixes = 2085%`, record `0x2b8` 600 to 13110 (600 x 21.85) |
+| 7 | Save and Exit, game closed and restarted, same unique | PASS: it was still in the inventory and logged the same `+2035% ... = 2085%` and record 600 to 13110 |
+
+Notes: a map opens once per game process, so the second item was opened after a full game restart (a Save and Exit alone gave `I can't use this yet`). One earlier reload opened a rare-looking map (10 stats, record 600 to 900) from the item spawned in the first game; it was not looked at further, and the later unique spawned in its own game came back correctly. The in-game results are for one unique on one character; saves of items from the earlier 10-bit width were not tried (the first-run item was gone from the restored save).
