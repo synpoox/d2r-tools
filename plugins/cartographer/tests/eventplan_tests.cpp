@@ -399,10 +399,10 @@ TEST_CASE("entryLines: the map name, then the event name and message") {
 	CHECK(entryLines("", nullptr).empty());
 }
 
-TEST_CASE("bannerLines: the event only once announced, no map name in a late banner") {
+TEST_CASE("bannerLines: the event only once announced, never the map name") {
 	ev::Event e = event(ev::Kind::Boss, "andariel");
-	CHECK(bannerLines("Crypt", &e, false, false) == std::vector<std::string>{"Crypt"});
-	CHECK(bannerLines("Crypt", &e, true, false) == std::vector<std::string>{"Crypt", "The Drowned King", "Something stirs."});
+	CHECK(bannerLines("Crypt", &e, false, false).empty());
+	CHECK(bannerLines("Crypt", &e, true, false) == std::vector<std::string>{"The Drowned King", "Something stirs."});
 	CHECK(bannerLines("Crypt", &e, true, true) == std::vector<std::string>{"The Drowned King", "Something stirs."});
 	CHECK(bannerLines("Crypt", &e, false, true).empty());
 	CHECK(bannerLines("Crypt", nullptr, true, true).empty());

@@ -461,7 +461,9 @@ bool superSeen(const uint8_t *bitmap, int row) {
 }
 
 std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late) {
-	return entryLines(late ? std::string() : mapName, announced ? event : nullptr);
+	(void)mapName;
+	(void)late;
+	return entryLines(std::string(), announced ? event : nullptr);  // the game's own "Entering <name>" is the map's title
 }
 
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event) {

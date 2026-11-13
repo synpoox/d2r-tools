@@ -702,14 +702,14 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 	if (fire && SpawnEvent(game, room, *state, rects, ep::eventSeed(state->seed))) {
 		// The banner names the event only now that it has spawned. If the player is already in the map it follows at once,
-		// else the entry tick shows it with the map's name.
+		// else the entry tick shows it.
 		std::vector<std::string> lines;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (generation == g_generation && g_state == state) {
 				state->announced = true;
 				if (state->entry.inside()) {
-					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the map name was shown on entry
+					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the game's own Entering text showed the map name on entry
 				}
 			}
 		}
@@ -1085,7 +1085,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			if (entered) {
 				lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
 			} else if (late && wasInside) {
-				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the map name was shown on entry
+				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the game's own Entering text showed the map name on entry
 			} else {
 				return;
 			}

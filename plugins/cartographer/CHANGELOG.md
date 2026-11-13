@@ -1,7 +1,9 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
+- The map name no longer shows as a second title on entry; only the game's own text does.
+- The map panel now sits below the terror zone text instead of over it.
 - A map can now roll rare (yellow name, blue property lines): set `compactsave` to 0 on the map rows in `misc.txt`; `cartographer check` notes rows that still have 1.
 - The Lava map now fills most of its edges with lava and cliff, so no black void shows from the ground near the outer wall (a layout that fills the whole level can keep a bare side).
 - A second map item no longer turns the cursor into the identify cursor when a map is already open: set `spellicon` to -1 on the map rows in `misc.txt` (`cartographer check` points at rows that need it).

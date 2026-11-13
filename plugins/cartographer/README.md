@@ -24,7 +24,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).
-- **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
+- **Map names** (experimental): a map's own name shows on its portal, automap and the game's "Entering" text; `MapNames=0` turns it off.
 - **Multiplayer sync** (experimental): when the host opens a map, TCP/IP clients are told which map it is. Not on Battle.net.
 - **Console**: `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map's portal
   in town without its item.
@@ -136,7 +136,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | EventChance | Percent chance a map has an event | 20 |
 | PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
-| MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
+| MapNames | `0` turns off showing a map's own name on the portal, automap and "Entering" text (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze and, per room, the level record's room and unique counters (for debugging) | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
