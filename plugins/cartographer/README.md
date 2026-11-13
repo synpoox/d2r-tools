@@ -300,7 +300,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
   in town, the plain-English table report, Cave and Crypt mazes built from the plan,
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit).
 - **Outdoor maps (Jungle, Snow and Siege)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen. Siege was checked in two games (opening, arrival, Boss and Treasure event); its north and south edges and how its pieces meet were not settled.
-- **Experimental or not verified in game**: what a Boss `Drop` roll drops beyond a rune in one kill and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event
-  name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
+- **Experimental or not verified in game**: what a Boss `Drop` roll drops beyond a rune in one kill and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event banner with long text or at other resolutions,
+  `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.
 
 The full testing log, with what each check showed, is in [docs/cartographer/testing.md](../../docs/cartographer/testing.md).
