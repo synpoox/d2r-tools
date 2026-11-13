@@ -1339,15 +1339,18 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 16);
+	REQUIRE(all.size() == 17);
 	CHECK(all[13] == "Temple");
 	CHECK(all[14] == "Jungle");  // the outdoor rows come last, in table order
 	CHECK(all[15] == "Snow");
+	CHECK(all[16] == "Siege");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Jungle", "Snow"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Jungle", "Snow", "Siege"};
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
+	CHECK(OutdoorLevelType("Siege") == 30);
+	CHECK(OutdoorSlotLevelName("outdoorsiege") == "Cartographer Siege");
 	CHECK(OutdoorSlotLevelName("Outdoor") == "Cartographer Outdoor");
 	CHECK(OutdoorSlotLevelName("outdoorsnow") == "Cartographer Snow");
 	CHECK(IsOutdoorSlotName("Outdoor"));

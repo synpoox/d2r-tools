@@ -22,8 +22,8 @@ foreach(test_source IN LISTS cartographer_core_tests)
 endforeach()
 
 # Tests whose code lives in the outdoor core, so the glob above (tests/<core>_tests.cpp) does not name them:
-# outline_shapes_tests (src/outdoor/outline_shapes.*) and snow_tests (snow_plan.cpp).
-foreach(test_name outline_shapes_tests snow_tests)
+# outline_shapes_tests (src/outdoor/outline_shapes.*) snow_tests (snow_plan.cpp) and siege_tests (siege_plan.cpp).
+foreach(test_name outline_shapes_tests snow_tests siege_tests)
 	add_executable(${test_name} ${test_name}.cpp)
 	target_link_libraries(${test_name} PRIVATE cartographer_outdoor)
 	target_include_directories(${test_name} PRIVATE ../third_party/doctest)

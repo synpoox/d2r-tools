@@ -18,7 +18,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   default (`PlayerStats`, `0` turns them off) and are removed when you leave the map and are not kept in your save.
 - **Map panel**: in a map, its name, monster level and properties show at the right of the screen, in place of the terror zone text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze.
-- **Outdoor map rooms** (Jungle and Snow, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
+- **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).
 - **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
@@ -45,7 +45,7 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor and Snow levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor, Snow and Siege levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
    no map items. The Maze level is a Cave by default; add
    `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
@@ -63,7 +63,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
-   of the repository (the release zip does not carry it). It adds the Maze, Outdoor and Snow levels and their three slots,
+   of the repository (the release zip does not carry it). It adds the Maze, Outdoor, Snow and Siege levels and their four slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`; `-Tileset Crypt` makes the Maze level a Crypt.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
@@ -84,8 +84,9 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
+   | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
 
-   The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
+   The outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
    shows).
 2. **lvlmaze.txt**: copy the first row; set `Name` to `Cartographer Maze`, `Level` to the Maze row's `Id`, every
    `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
@@ -98,7 +99,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, and `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -280,6 +281,7 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
 is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
+A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
@@ -290,7 +292,7 @@ Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and tes
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
   in town, the plain-English table report, Cave and Crypt mazes built from the plan, map properties on monsters,
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit), and `ItemStats=1` for a player stat.
-- **Outdoor maps (Jungle and Snow)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen.
+- **Outdoor maps (Jungle, Snow and Siege)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen. Siege was checked in two games (opening, arrival, Boss and Treasure event); its north and south edges and how its pieces meet were not settled.
 - **Experimental or not verified in game**: Treasure chest loot (the chest opened but dropped nothing in one game, #220), what a Boss `Drop` roll drops
   (the roll runs when the Boss dies, 5 of 5 kills), the event
   name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.

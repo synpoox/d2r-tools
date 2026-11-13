@@ -43,6 +43,7 @@
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
 - Snow maps open from their item through a new `OutdoorSnow` level (run `tools\install.ps1` again).
 - Snow maps: you arrive in a planned entrance area, and the map Boss and event use their planned areas.
+- New map `Tileset` `Siege` (Act 5 Bloody Foothills, a long strip); run `tools\install.ps1` again for its level.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
 

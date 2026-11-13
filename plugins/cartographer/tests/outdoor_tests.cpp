@@ -1118,10 +1118,10 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 
 // --- The tileset table (outdoor_tilesets.h) ----------------------------------------------------------------------------------
 
-TEST_CASE("the outdoor tileset table holds Jungle then Snow, with the values the hooks and the installer rely on")
+TEST_CASE("the outdoor tileset table holds Jungle, Snow then Siege, with the values the hooks and the installer rely on")
 {
 	// Pinned: these are the slot rows, levels.txt names and LevelTypes of shipped installs. A change here is a compatibility change.
-	REQUIRE(OutdoorTilesetCount == 2);
+	REQUIRE(OutdoorTilesetCount == 3);
 	CHECK(std::string(OutdoorTilesets[0].name) == "Jungle");
 	CHECK(OutdoorTilesets[0].levelType == 21);
 	CHECK(std::string(OutdoorTilesets[0].slot) == "Outdoor");
@@ -1132,21 +1132,28 @@ TEST_CASE("the outdoor tileset table holds Jungle then Snow, with the values the
 	CHECK(std::string(OutdoorTilesets[1].slot) == "OutdoorSnow");
 	CHECK(std::string(OutdoorTilesets[1].levelName) == "Cartographer Snow");
 	CHECK(OutdoorTilesets[1].planner == Planner::Snow);
+	CHECK(std::string(OutdoorTilesets[2].name) == "Siege");
+	CHECK(OutdoorTilesets[2].levelType == 30);
+	CHECK(std::string(OutdoorTilesets[2].slot) == "OutdoorSiege");
+	CHECK(std::string(OutdoorTilesets[2].levelName) == "Cartographer Siege");
+	CHECK(OutdoorTilesets[2].planner == Planner::Siege);
 	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
 	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);
+	CHECK(findOutdoorTileset("siege") == &OutdoorTilesets[2]);
 	CHECK(findOutdoorTileset("Lava") == nullptr);
 	CHECK(findOutdoorTilesetBySlot("outdoorsnow") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTilesetBySlot("Maze") == nullptr);
 	CHECK(outdoorTilesetIndex("snow") == 1);
+	CHECK(outdoorTilesetIndex("Siege") == 2);
 	CHECK(outdoorTilesetIndex("Jungle") == 0);
 	CHECK(outdoorTilesetIndex("Lava") == 0);
-	CHECK(outdoorTilesetNames() == "Jungle or Snow");
+	CHECK(outdoorTilesetNames() == "Jungle, Snow or Siege");
 	MapRequest r;
 	r.tileset = "Lava";
 	const MapPlan refused = planOutdoorMap(r, builtinJungleCatalogue());
 	CHECK_FALSE(refused.ok);
-	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle or Snow.");
+	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow or Siege.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same outdoor tilesets as the table, in the same order")
