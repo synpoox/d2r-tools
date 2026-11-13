@@ -382,6 +382,9 @@ TEST_CASE("map level stat text: one record in the plugin's namespace, the instal
 	all << in.rdbuf();
 	CHECK(all.str().find("'" + RowKey("cartographer", MapLevelStatLocalKey) + "'") != std::string::npos);
 	CHECK(all.str().find("$MapLevelStat = 'cartographer_map_level'") != std::string::npos);
+	CHECK(all.str().find("$MapLevelString = '" + RowKey("cartographer", MapLevelStatLocalKey) + "'") != std::string::npos);
+	CHECK(all.str().find("'descstrpos' $MapLevelString") != std::string::npos);  // the cell that holds the key
+	CHECK(all.str().find("'descstrpos' $m.Key") != std::string::npos);
 }
 
 TEST_CASE("monster map stat texts: one record each, and the installer and the plugin agree on the stats") {
@@ -394,5 +397,7 @@ TEST_CASE("monster map stat texts: one record each, and the installer and the pl
 	for (const MonsterStatText& m : MonsterStatTexts) {  // includes map_density, the bonus Density stat
 		CHECK(json.find(std::string("\"Key\":\"") + m.key + "\"") != std::string::npos);
 		CHECK(all.str().find(std::string("'cartographer_") + m.key + "'") != std::string::npos);
+		// The installer's Key becomes the stat's descstrpos and descstrneg cells, and must be RowKey(plugin id, key) or the game finds no text.
+		CHECK(all.str().find(std::string("Key = '") + RowKey("cartographer", m.key) + "'") != std::string::npos);
 	}
 }

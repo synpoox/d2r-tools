@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+- A map's monster speed modifier is cut to -99, and `cartographer check` notes rows at -100 or lower.
+- A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
+- New map `Tileset` `Ice` (Act 5 Ice caves): rerun `tools\install.ps1` once to add its level.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.
@@ -24,7 +27,7 @@
 - `tools\install.ps1` adds the map levels to your mod, keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Rare and unique map items: their modifiers show on hover and apply in the map (magic maps can still drop for now). Run `tools\install.ps1` again.
+- Rare and unique map items: their modifiers show on hover and apply in the map. Run `tools\install.ps1` again.
 - New monster modifiers for map items: life, damage, speed and fire, cold, lightning and poison resistance.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).

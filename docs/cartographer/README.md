@@ -86,7 +86,7 @@ The blank cell under `Level` for Tunneling Depths keeps level 85.
 
 ### The tilesets
 
-- **Indoor:** `Cave`, `Crypt`, `Lava` (Act 4 Lava). More follow: `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`. Act 5 Lava follows under its own name (not yet set).
+- **Indoor:** `Cave`, `Crypt`, `Ice` (Act 5 Ice caves), `Lava` (Act 4 Lava). More follow: `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider`, `Temple`. Act 5 Lava follows under its own name (not yet set).
 - **Outdoor:** `Jungle`, `Snow`, then `Siege` (Act 5 Bloody Foothills, one strip).
 
 A tileset that is not ready is refused when the game loads, with a message that says so.
@@ -108,7 +108,7 @@ See [tables.md](tables.md) for every column of every file.
 
 ## Map item modifiers
 
-A map item is meant to be normal, rare or unique (magic maps can still drop for now; a plugin hook to block them is planned). A rare map gets modifiers from the game's own affix tables (rows with `itype1` `cmap`); a unique map has its own in `uniqueitems.txt`. Some make monsters tougher (`mon-life`, `mon-damage` and so on); the others change what happens to you. They show on hover and apply when the map opens. See [tables.md](tables.md).
+A map item is meant to be normal, rare or unique (a plugin hook makes a map the game rolls as magic normal; a map forced magic by a cheat or already existing stays magic, and the hook applies to any item with the map spell 16). A rare map gets modifiers from the game's own affix tables (rows with `itype1` `cmap`); a unique map has its own in `uniqueitems.txt`. Some make monsters tougher (`mon-life`, `mon-damage` and so on); the others change what happens to you. They show on hover and apply when the map opens. See [tables.md](tables.md).
 
 ## Events (optional, phase 6)
 

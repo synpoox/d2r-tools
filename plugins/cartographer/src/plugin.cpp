@@ -15,6 +15,7 @@
 #include "engine/map_stat_text.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
+#include "engine/map_quality.h"
 #include "engine/level_row.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
@@ -164,21 +165,7 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 	if (!ReadFile(file, &text)) {
 		return false;
 	}
-	const carto::Tsv table = carto::ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
-	if (cCode < 0 || cSpell < 0) {
-		return false;
-	}
-	for (const carto::TsvRow& row : table.rows) {
-		const std::string code = table.Cell(row, cCode);
-		if (!code.empty()) {
-			out->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
-			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
-				compact->push_back(code);
-			}
-		}
-	}
-	return true;
+	return carto::ParseItemSpells(text, out, compact);
 }
 
 // monstats.txt Ids whose boss column is 1. False when the table or either column is missing.
@@ -273,6 +260,15 @@ auto LoadAll() -> Loaded {
 		}
 		if (!missing.empty()) {
 			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
+		}
+	}
+	// A mon-speed of -100 or lower is cut by the plugin, so the item tables are checked for it.
+	if (!g_excelDir.empty()) {
+		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt", "setitems.txt", "cubemain.txt"}) {
+			text.clear();
+			if (ReadFile(g_excelDir + L"\\" + Widen(file), &text)) {
+				carto::CheckMonSpeedRows(text, file, loaded.report);
+			}
 		}
 	}
 	text.clear();
@@ -473,6 +469,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			Say(command, "Cartographer " + carto::BossNamesSummary() + ".");
 			Say(command, "Cartographer " + carto::MapStatTextSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
+			Say(command, "Cartographer " + carto::MapQualitySummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
@@ -567,6 +564,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallStatApply(context, g_overrides, &statParts);
 		std::vector<carto::PartStatus> itemParts;
 		(void)carto::InstallItemStats(context, g_overrides, &itemParts);
+		(void)carto::InstallMapQuality(context, g_overrides, nullptr);
 		std::vector<carto::PartStatus> eventParts;
 		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
 		std::vector<carto::PartStatus> nameParts;

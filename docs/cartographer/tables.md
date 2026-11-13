@@ -10,9 +10,9 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave or Crypt map opens the installed Maze level, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave, Crypt or Ice map opens the installed Maze level of its tileset, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
 | `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
-| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
+| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `MazeIce`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
@@ -43,7 +43,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave`, `Crypt` and `Lava` (River of Flame) are built (each opens through its own level, `Maze`, `MazeCrypt` and `MazeLava`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
@@ -83,7 +83,7 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 | `ItemType`, `Code` | `Map`, `cmap` | The game names an item of type `scro` or `book` after its item spell (a spell-16 item would read "Scroll of Town Portal"), so a map item needs a type of its own. A row with code `cmap` that is not this one stops the installer. |
 | `Equiv1` | `misc` | The parent of `herb`, `scro`, `key` and `elix`: plain miscellaneous. `scro`, `book` or a potion type would make it a scroll (a Town Portal scroll) or a potion (belt). |
 | `Equiv2`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition. |
-| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Rare on, Magic and Normal off. This does not stop magic maps (see Map item rarity and modifiers). |
+| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Rare on, Magic and Normal off. A plugin hook turns a magic roll into normal; forced and existing magic maps stay magic (see Map item rarity and modifiers). |
 | `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Beltable` | 0 | Not throwable, not beltable, no auto-stack. |
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
 | everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
@@ -118,7 +118,7 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 
 ## Map item rarity and modifiers
 
-A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes. Maps are meant to be normal, rare or unique, but magic maps can still drop for now: `Magic` 1 would mean always magic, so no column can stop them, and a plugin hook to block them is planned (an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
+A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes. Maps are meant to be normal, rare or unique, and a plugin hook makes a map the game rolls as magic normal, including the fallback after a failed set, rare or unique roll; a map forced magic by a cheat (`typ m`) or already existing stays magic, and the hook applies to any item with the map spell 16 (`Magic` 1 would mean always magic, so no column can do it; an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
 
 | Quality | Where the modifiers come from |
 |---|---|
@@ -132,7 +132,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 |---|---|---|
 | `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
-| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: -100 or lower stops monsters) |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: the plugin cuts a map's own value to -99, because what -100 or lower does to monsters has not been checked in game, and other slows on a monster still stack; `cartographer check` notes a `magicprefix.txt`, `magicsuffix.txt`, `uniqueitems.txt`, `setitems.txt` or `cubemain.txt` row that reaches -100 or lower) |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 | `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 

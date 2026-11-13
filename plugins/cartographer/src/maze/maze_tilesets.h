@@ -46,6 +46,8 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// Lava (River of Flame, LevelType 28): 24-tile rooms, "Lava W" is Def 837 (base 836, 837..851). Its case in 0x3e69e0 neither calls the ring grower
 	// nor places an entrance or exit (no 0x3eb850 call), so there is no Prev family: the entrance is an ordinary room. docs/reverse-engineering/cartographer/23-maze-lava.md.
 	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0},
+	// Ice: its case in the builder calls the ring grower first (docs/reverse-engineering/cartographer/24-ice-caves-builder.md).
+	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {1018, 1019, 1020, 1021}, true, 2000, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
