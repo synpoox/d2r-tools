@@ -204,5 +204,5 @@ Every column except `Name` is optional. A blank column keeps the value of the ba
 | `MinBranchLen`, `MaxBranchLen` | Cells in one side room (at least 1; `MaxBranchLen` at most half of `Width` x `Height`). `MinBranches` x `MinBranchLen`, plus 2 cells per `MinLoops`, must fit in the grid beside the main path | the base shape's | 1, 3 |
 | `Loop` | `1` for a ring that returns to the entrance, `0` for a path | the base shape's | 1 |
 | `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
-| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against every `Size`'s grid (6, 9 and 12), so a row has to fit the smallest | the `Size`'s grid | 9, 9 |
+| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against the grids of Small, Medium and Large (6, 9 and 12) when the file loads, so a row has to fit the smallest. At `ExtraSmall` (a 4 x 4 grid) it is checked when a `maps.txt` row uses the shape: a row that does not fit is refused with the reason | the `Size`'s grid | 9, 9 |
 | `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |

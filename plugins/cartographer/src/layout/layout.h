@@ -164,4 +164,8 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName = "s
 // Rules for a shape name (a preset or a custom shape from the table) at a size. False with a plain-English error.
 bool resolveRules(const ShapeTable &table, std::string_view shapeName, Size size, Rules &out, std::string &error);
 
+// The check parseShapesTxt runs for a shape at a size (resolves to valid rules and the generator meets them for 16 seeds). Empty when the
+// shape builds; else a plain-English reason. maps.txt uses it for ExtraSmall rows, which parseShapesTxt does not check.
+std::string checkShapeAtSize(const ShapeTable &table, std::string_view shapeName, Size size);
+
 } // namespace cartographer::layout

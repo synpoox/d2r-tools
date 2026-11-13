@@ -1267,6 +1267,19 @@ bool resolveRules(const ShapeTable &table, std::string_view name, Size size, Rul
 	return true;
 }
 
+std::string checkShapeAtSize(const ShapeTable &table, std::string_view shapeName, Size size)
+{
+	Rules r;
+	std::string e;
+	if (!resolveRules(table, shapeName, size, r, e)) return e;
+	for (uint64_t seed = 1; seed <= 16; ++seed)
+		if (!generate(r, seed).rulesMet)
+			return "Shape \"" + std::string(shapeName) + "\" at size " + sizeName(size) +
+				" is too tight: the generator could not meet its rules for seed " + std::to_string(seed) +
+				". Loosen the numbers or enlarge Width and Height.";
+	return std::string();
+}
+
 ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
 {
 	ParseResult res;
@@ -1359,18 +1372,8 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
 		// Every size must resolve to usable rules that the generator can build. ExtraSmall is checked only when a map uses it
 		// (resolveRules), so a shape written before it existed is not rejected for a size it never asked for.
 		for (int s = static_cast<int>(Size::Small); s < kSizeCount; ++s) {
-			Rules r;
-			std::string e;
-			if (!resolveRules(res.table, def.name, static_cast<Size>(s), r, e)) { err(lineNo, e); break; }
-			for (uint64_t seed = 1; seed <= 16; ++seed) {
-				if (!generate(r, seed).rulesMet) {
-					err(lineNo, "Shape \"" + def.name + "\" at size " + sizeName(static_cast<Size>(s)) +
-						" is too tight: the generator could not meet its rules for seed " + std::to_string(seed) +
-						". Loosen the numbers or enlarge Width and Height.");
-					break;
-				}
-			}
-			if (res.errors.size() != errorsBefore) break;
+			const std::string e = checkShapeAtSize(res.table, def.name, static_cast<Size>(s));
+			if (!e.empty()) { err(lineNo, e); break; }
 		}
 		if (res.errors.size() != errorsBefore) res.table.shapes.pop_back();
 	}

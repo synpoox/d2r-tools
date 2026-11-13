@@ -4,7 +4,6 @@
 
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
-
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.

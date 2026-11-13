@@ -1369,7 +1369,9 @@ TEST_CASE("Size accepts ExtraSmall, and Density, Champions and Uniques have no 1
 		"Name\tTileset\tShape\tSize\tItem\tDensity\tChampions\tUniques\n"
 		"A\tCave\tCorridor\tExtraSmall\tt20\t5000\t2000\t1000000\n"
 		"B\tCave\tCorridor\textrasmall\tt21\t2147483647\t\t\n"
-		"C\tCave\tCorridor\t\tt22\t-1\t\t\n",
+		"C\tCave\tCorridor\t\tt22\t-1\t\t\n"
+		"D\tCave\tCorridor\t\tt23\t2147483648\t\t\n"
+		"E\tCave\tCorridor\t\tt24\t99999999999999999999\t\t\n",
 		Names(), report);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].size == "ExtraSmall");
@@ -1378,5 +1380,25 @@ TEST_CASE("Size accepts ExtraSmall, and Density, Champions and Uniques have no 1
 	CHECK(maps[0].uniques == 1000000);
 	CHECK(maps[1].size == "ExtraSmall");
 	CHECK(maps[1].density == 2147483647);
-	CHECK(Joined(report).find("Density '-1'") != std::string::npos);
+	CHECK(Joined(report).find("Density '-1' must be a whole number, 0 or more") != std::string::npos);
+	CHECK(Joined(report).find("Density '2147483648' must be") != std::string::npos);
+	CHECK(Joined(report).find("Density '99999999999999999999' must be") != std::string::npos);
+}
+
+TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load for an ExtraSmall row only") {
+	Report shapeReport;
+	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\nSnake\tWinding\t20\t24\n", shapeReport);
+	REQUIRE(shapes.shapes.size() == 1);  // fine at Small, Medium and Large
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tSize\tItem\n"
+		"Tiny\tCave\tSnake\tExtraSmall\tt20\n"
+		"Roomy\tCave\tSnake\tSmall\tt21\n"
+		"Plain\tCave\tWinding\tExtraSmall\tt22\n",
+		Names(), report, &shapes);
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].name == "Roomy");
+	CHECK(maps[1].name == "Plain");
+	CHECK(Joined(report).find("Snake") != std::string::npos);
+	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
 }
