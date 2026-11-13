@@ -223,6 +223,43 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 	return out;
 }
 
+int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapDensityStat);
+	if (id < 0) {
+		return 0;
+	}
+	int64_t sum = 0;
+	for (const ItemStat &s : stats) {
+		if (s.stat == id && s.layer == 0) {
+			sum += s.value;
+		}
+	}
+	constexpr int64_t limit = 0x7fffffff;
+	return static_cast<int>(sum > limit ? limit : sum < -limit ? -limit : sum);
+}
+
+int densityWithBonus(int base, int bonus)
+{
+	const int64_t total = static_cast<int64_t>(base) + bonus;
+	if (total < 0) {
+		return 0;
+	}
+	return total > 0x7fffffff ? 0x7fffffff : static_cast<int>(total);
+}
+
+std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapDensityStat);
+	std::vector<ItemStat> out;
+	for (const ItemStat &s : stats) {
+		if (id < 0 || s.stat != id) {
+			out.push_back(s);
+		}
+	}
+	return out;
+}
+
 const std::vector<MonsterStat> &monsterStats()
 {
 	static const std::vector<MonsterStat> table = {
