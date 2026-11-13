@@ -2,7 +2,6 @@
 
 ## Unreleased
 
-- A player who joins a multiplayer game no longer sees the revealed cells of an earlier map when a new map opens.
 - The map name no longer shows as a second title on entry; only the game's own text does.
 - The map panel now sits below the terror zone text instead of over it.
 - A map can now roll rare (yellow name, blue property lines): set `compactsave` to 0 on the map rows in `misc.txt`; `cartographer check` notes rows that still have 1.
