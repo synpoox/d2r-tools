@@ -97,3 +97,14 @@ P2 only after P1: a real zone plan (bands), the border rule above, then the outd
 ### 9. Verdict
 
 **Feasible, and cheap for same-builder pairs.** Suggested follow-up: a "Cartographer: woven tilesets, prototype P1 (Cave in Lava)" issue; a second one for the outdoor host and the automap fallback once P1 passes.
+
+### 10. P1 as built (issue #415; not yet run in a game)
+
+Code (`plugins/cartographer/src/engine/maze_hooks.cpp`), debug only, off unless `cartographer.txt` has `WovenProbe` set to the first copy `Def`:
+
+- **Guest write.** After the picker and the filler ring, in a Lava plan every room with exits W+E (mask 3) or N+S (mask 12) gets piece id `WovenProbe + mask - 1` written to `piece+0`, the same write as the filler ring (section 4 mechanism). In a 3 x 1 strip that is the middle cell. The `[woven]` log lines name each room changed.
+- **Tile list log.** With `WovenProbe` on, the room tile loader `0x3f3970` (signature in section 2, 15-byte hook: `48 89 5C 24 18`, `55`, `56`, `57`, `48 81 EC 40 01 00 00`, unique in `.text`, checked with `dump_dis.py ... pat`) is hooked as a pass-through. After the original runs it reads `room+0x90` (level), the piece id, `[room+0x80]` and the 32 pointers at `room+0xb0` (each points at the interned file name: `0x1460250` stores the result of the string pool `0x145e530`, whose nodes start with the NUL-terminated name). One `[woven] room tile list: piece N, mask 0x..: <files>` line per distinct (piece, mask, list), counts at game end. Static.
+- **Data (test mod only, by hand; not in `install.ps1`).** `lvltypes.txt`: Lava row (Id 28) `File 12` = `Act1/Caves/Cave.dt1`. `lvlprest.txt`: 15 rows appended after the last real row (the `Expansion` separator row is not a row: the lookup `0x32c360` indexes by id, `rows[id]`, size `0x1ac`, so the copies are ids 1092..1106), each a copy of Cave 53..67 with `Dt1Mask` 2048 and the same `File1..2`, size 24 x 24, `Pops`, `PopPad`.
+- **Test map.** `maps.txt` `Woven`, Tileset Lava, Size Small, shape `Strip` (`shapes.txt`: Base Corridor, MinPath 3, MaxPath 3, Straight 100, no branches or loop), `EventChance 0`; `cartographer.txt` `MazeProbe 1`, `WovenProbe 1092`.
+
+Not checked in a game yet: whether `[room+0x80]` follows the id write (the tile list line settles it; if it shows the Lava file at bit 0 for a Cave piece, use route (c)), seam crossing, the rim, automap, palette. The result and build go here once the game check has run.
