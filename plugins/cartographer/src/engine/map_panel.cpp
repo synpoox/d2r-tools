@@ -226,8 +226,11 @@ auto ShowHudText(void* self, const char* text, size_t size) noexcept -> HudResul
 	}
 }
 
+auto SidePanelOpen() noexcept -> bool;  // below: a right side panel (inventory, skill tree) is open (issue #431)
+
 auto HudUpdateHook(void* self, void* a2, void* a3, void* a4) noexcept -> uint64_t {
-	if (!g_hudLive.load(std::memory_order_relaxed) || !g_inMap.load(std::memory_order_relaxed) || self == nullptr) {
+	// While a right side panel is open the map text would run over its equipment slots: the game's field is left alone then (the own panel is closed too).
+	if (!g_hudLive.load(std::memory_order_relaxed) || !g_inMap.load(std::memory_order_relaxed) || self == nullptr || SidePanelOpen()) {
 		g_hudShown = false;
 		return g_hudOriginal(self, a2, a3, a4);
 	}
@@ -792,7 +795,8 @@ auto MapPanelSummary() -> std::string {
 		return "Map panel: off (a memory fault; see the plugin log)";
 	}
 	if (g_hudLive.load()) {
-		return "Map text: on, in the game's terror zone text field inside a map";
+		return g_faulted.load() ? "Map text: on, in the game's terror zone text field inside a map (the plugin's own panel is off after a memory fault; see the plugin log)"
+		                        : "Map text: on, in the game's terror zone text field inside a map";
 	}
 	if (!g_on.load()) {
 		return "Map panel: off (a game part or D2RLoader service was not found)";
