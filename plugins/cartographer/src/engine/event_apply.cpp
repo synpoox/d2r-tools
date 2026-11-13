@@ -865,6 +865,13 @@ auto SummaryNow() -> std::string {
 
 }  // namespace
 
+void ShowPlayerMessage(const std::string& line) noexcept {
+	try {
+		ShowEntryMessage({line});
+	} catch (...) {
+	}
+}
+
 auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std::vector<int>* rows, std::vector<int>* weights, std::string* why) noexcept -> bool {
 	try {
 		rows->clear();

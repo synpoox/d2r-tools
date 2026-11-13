@@ -43,6 +43,9 @@ auto GameMonsterRows(uint32_t dataFlag, const std::vector<std::string>& ids, std
 // False, with `why`, when it cannot be read. Game thread.
 auto GameLevelCount(uint32_t dataFlag, int64_t* count, std::string* why) noexcept -> bool;
 
+// Shows one line to the player the way the entry message does (the overlay banner, else the console). Any thread.
+void ShowPlayerMessage(const std::string& line) noexcept;
+
 // The game was left: forget the map and the event. Touches no game memory.
 void EventsGameLeft() noexcept;
 

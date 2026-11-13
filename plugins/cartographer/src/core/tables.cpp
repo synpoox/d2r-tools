@@ -1005,4 +1005,22 @@ auto RefusalText(Gate gate, const MapDef& map, const GateState& state) -> std::s
 	return who + "is open.";
 }
 
+auto ItemCodeFromPacked(uint32_t packed) -> std::string {
+	std::string code;
+	for (int i = 0; i < 4; ++i) {
+		const char c = static_cast<char>((packed >> (8 * i)) & 0xFF);
+		if (c != ' ' && c != '\0') {
+			code += c;
+		}
+	}
+	return code;
+}
+
+auto SecondMapRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, bool mapOpen) -> std::string {
+	if (!mapOpen || FindMapByItem(maps, itemCode) == nullptr) {
+		return {};
+	}
+	return "Cartographer: a map is already open in this game.";
+}
+
 }  // namespace carto

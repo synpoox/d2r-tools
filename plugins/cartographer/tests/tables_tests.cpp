@@ -724,6 +724,18 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	CHECK(RefusalText(Gate::AlreadyOpen, map, s).find("already been opened in this game") != std::string::npos);
 }
 
+TEST_CASE("a second map item is stopped with a short message") {
+	std::vector<MapDef> maps(1);
+	maps[0].name = "Shore";
+	maps[0].item = "t20";
+	CHECK(ItemCodeFromPacked('t' | ('2' << 8) | ('0' << 16) | (' ' << 24)) == "t20");
+	CHECK(ItemCodeFromPacked('a' | ('b' << 8) | ('c' << 16) | ('d' << 24)) == "abcd");
+	CHECK(SecondMapRefusal(maps, "t20", true) == "Cartographer: a map is already open in this game.");
+	CHECK(!SecondMapRefusal(maps, "T20", true).empty());
+	CHECK(SecondMapRefusal(maps, "t20", false).empty());  // no map open yet: the item goes on to the game
+	CHECK(SecondMapRefusal(maps, "tsc", true).empty());   // not a map item
+}
+
 TEST_CASE("an old Difficulty column is ignored with a note, not an error") {
 	Report report;
 	const auto maps = LoadMaps("Name\tTileset\tShape\tItem\tDifficulty\nOld\tCave\tCorridor\tt20\tNormal\nBad\tCave\tLoop\tt21\tSoon\n", Names(), report);

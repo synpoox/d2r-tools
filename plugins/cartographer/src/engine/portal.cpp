@@ -106,6 +106,7 @@ std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (
 std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this game: this process has a server
 bool g_installed = false;                       // InstallPortal ran to the end
 std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
+std::atomic<bool> g_mapOpen{false};             // this process opened a map in the current game (cleared on leaving it)
 
 // Forgets the check-to-use state. g_lock must be held.
 void ClearPending() noexcept {
@@ -302,6 +303,9 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	}
 	if (shaped && opened == 0) {
 		LevelRowOpenFailed(level);
+	}
+	if (opened != 0) {
+		g_mapOpen = true;
 	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
@@ -651,6 +655,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
+		g_mapOpen = false;
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
@@ -707,6 +712,68 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 			(void)lifecycle->unregisterGameplayEventListener(context, readyHandle);  // GameLeft stays
 		}
 	}
+}
+
+// A second map item while a map is open: the game's own refusal (the check returning 0) makes it start the item-spell cursor
+// (the Scroll of Identify cursor on a scroll-based map item). The item interaction listener sees the right-click first, on the
+// UI thread, and stops it there: no cursor, no use, the item stays. Best effort: without the service the check refusal stays.
+const D2RL::ItemService* g_itemService = nullptr;
+
+auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
+	using D2RL::ItemInteractions::Decision;
+	try {
+		if (event == nullptr || !g_mapOpen.load() || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate) {
+			return Decision::Continue;
+		}
+		D2RL::Items::ItemInfo info{};
+		info.structSize = D2RL::Items::ItemInfoSize;
+		if (g_itemService->getItemInfo(context, event->item, &info) != D2RL::Items::Result::Success) {
+			return Decision::Continue;
+		}
+		std::shared_ptr<const Tables> tables;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			tables = g_tables;
+		}
+		if (tables == nullptr) {
+			return Decision::Continue;
+		}
+		const std::string text = SecondMapRefusal(tables->maps, ItemCodeFromPacked(info.code), true);
+		if (text.empty()) {
+			return Decision::Continue;
+		}
+		plog::Info("%s (the item was stopped before the game could start its cursor)", text.c_str());
+		ShowPlayerMessage(text);
+		return Decision::Consume;
+	} catch (...) {
+		return Decision::Continue;
+	}
+}
+
+void InstallItemGuard(const D2RL::PluginContext* context) noexcept {
+	const D2RL::ItemInteractionService* interactions = nullptr;
+	if (context->QueryService(&interactions) != D2RL::ServiceQueryResult::Success || interactions == nullptr ||
+	    !D2RL::HasItemInteractionServiceField(interactions, D2RL::ItemInteractionServiceRequiredSize) || interactions->registerListener == nullptr) {
+		plog::Warn("D2RLoader has no ItemInteraction service of the expected version: a second map item may start the item cursor");
+		return;
+	}
+	const D2RL::ItemService* items = nullptr;
+	if (context->QueryService(&items) != D2RL::ServiceQueryResult::Success || items == nullptr || !D2RL::HasItemServiceField(items, D2RL::ItemServiceRequiredSize) ||
+	    items->getItemInfo == nullptr) {
+		plog::Warn("D2RLoader has no Item service of the expected version: a second map item may start the item cursor");
+		return;
+	}
+	g_itemService = items;
+	D2RL::ItemInteractions::ItemInteractionListener listener{};
+	listener.structSize = D2RL::ItemInteractions::ItemInteractionListenerSize;
+	listener.callback = &OnItemActivate;
+	D2RL::ItemInteractions::ListenerHandle handle = D2RL::ItemInteractions::InvalidHandle;
+	if (interactions->registerListener(context, &listener, &handle) != D2RL::ItemInteractions::Result::Success) {
+		plog::Warn("D2RLoader refused the item interaction listener: a second map item may start the item cursor");
+		g_itemService = nullptr;
+		return;
+	}
+	plog::Info("item guard on: a second map item is stopped before the game can start its cursor");
 }
 
 auto RequiredPartsOn() noexcept -> bool {
@@ -849,6 +916,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	}
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
+	InstallItemGuard(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
 	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	InstallAutoCheck(context, overrides, ranges, count);

@@ -7,6 +7,7 @@
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
 - Maps can only be opened in Hell; the old `Difficulty` column is ignored.
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
+- Using a second map item while a map is open now shows a short message instead of the identify cursor; the item is kept.
 - Plain-English checking of `maps.txt` and `cartographer.txt`, with a skipped-row report in `cartographer-report.txt`.
 - `cartographer check` lists problems in your tables; `cartographer open <Name>` opens a map in town without its item.
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
