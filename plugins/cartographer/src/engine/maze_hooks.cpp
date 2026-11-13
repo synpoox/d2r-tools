@@ -445,6 +445,10 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 		}
 		const cm::RoomRect& r = rects[static_cast<size_t>(c.room)];
 		out = {true, Read<int32_t>(level, LvlId), r.x, r.y, r.w, r.h};
+		for (size_t k = 1; k < c.ranked.size(); ++k) {
+			const cm::RoomRect& o = rects[static_cast<size_t>(c.ranked[k])];
+			out.more.push_back({o.x, o.y, o.w, o.h});
+		}
 		plog::Info("eventprobe: maze %s room (plan room %d, cell %d,%d) is the DRLG room at list index %d, level %d, rect (%d,%d) %d x %d", what, planRoom, c.cellX, c.cellY, c.room,
 		           out.levelId, out.x, out.y, out.w, out.h);
 		return out;
@@ -561,6 +565,36 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	const auto pick = Call<PickFn>(MazePiecePicker);
 	for (size_t i = 0; i < n; ++i) {
 		(void)pick(ctx.rooms[i], 1);
+	}
+	// The filler ring (Lava): cells around the layout so no void shows past its edges. Made after the plan rooms have their pieces, so
+	// a plan room's piece never counts the link to the filler beside it. The picker gives a filler 836 + the mask of its link to its parent (a
+	// walkable dead end), so the piece id is set back to the tileset's closed piece (pieceBase, no exits) after the pick. A refused filler is
+	// only a gap in the ring (it also makes the built box differ from the plan's, so arrival, event and boss fall back): logged, the build goes on.
+	if (!plan.fills.empty()) {
+		std::vector<void*> all(ctx.rooms);
+		int refused = 0, closed = 0;
+		const int32_t closedPiece = ctx.prep.plan->tileset.pieceBase;
+		for (const cm::AddStep& step : plan.fills) {
+			void* parent = step.parent >= 0 && static_cast<size_t>(step.parent) < all.size() ? all[static_cast<size_t>(step.parent)] : nullptr;
+			void* made = parent != nullptr ? add(parent, step.dir, 0) : nullptr;
+			if (made == nullptr) {
+				++refused;
+			} else {
+				(void)pick(made, 1);
+				uint8_t* piece = Read<uint8_t*>(made, RoomPiece);
+				if (piece != nullptr && Readable(piece + PieceId, 4)) {
+					Write<int32_t>(piece, PieceId, closedPiece);
+					++closed;
+				}
+			}
+			all.push_back(made);  // a null keeps the indices; its children are refused too
+		}
+		const int made = static_cast<int>(plan.fills.size()) - refused;
+		if (refused != 0) {
+			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
+		} else {
+			plog::Info("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
+		}
 	}
 	for (size_t i = 0; i < n; ++i) {
 		if (!cm::fixAfterWalk(plan, static_cast<int>(i))) {

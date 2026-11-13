@@ -142,9 +142,13 @@ TEST_CASE("names")
 	CHECK(parseShapeName("SPRAWL") == Shape::Sprawl);
 	CHECK_FALSE(parseShapeName("Maze").has_value());
 	CHECK(parseSizeName("large") == Size::Large);
-	CHECK(parseSizeName("extrasmall") == Size::ExtraSmall);
-	CHECK(parseSizeName("ExtraSmall") == Size::ExtraSmall);
-	CHECK(static_cast<int>(Size::ExtraSmall) < static_cast<int>(Size::Small));
+	CHECK(parseSizeName("small") == Size::Small);
+	CHECK(parseSizeName("EXTRALARGE") == Size::ExtraLarge);
+	CHECK(parseSizeName("Medium") == Size::Medium);
+	CHECK_FALSE(parseSizeName("ExtraSmall").has_value());  // renamed Small; no alias
+	CHECK(sizeRenameNote("extrasmall").find("renamed Small") != std::string::npos);
+	CHECK(sizeRenameNote("Huge").empty());
+	CHECK(static_cast<int>(Size::Small) < static_cast<int>(Size::Medium));
 	CHECK_FALSE(parseSizeName("huge").has_value());
 	for (int s = 0; s < kShapeCount; ++s) CHECK(parseShapeName(shapeName(static_cast<Shape>(s))) == static_cast<Shape>(s));
 }
@@ -197,7 +201,7 @@ TEST_CASE("same seed gives the same layout; different seeds differ")
 		int distinct = 0;
 		uint64_t previous = 0;
 		for (uint64_t seed = 1; seed <= 200; ++seed) {
-			const Layout a = generate(shape, Size::Medium, seed), b = generate(shape, Size::Medium, seed);
+			const Layout a = generate(shape, Size::Large, seed), b = generate(shape, Size::Large, seed);
 			CHECK(layoutHash(a) == layoutHash(b));
 			CHECK(toAscii(a) == toAscii(b));
 			if (layoutHash(a) != previous) ++distinct;
@@ -212,17 +216,17 @@ TEST_CASE("shape rules show in the layouts")
 	// Corridor is straighter than Winding; Branching has side rooms; Loop and Sprawl are rings; Sprawl has loops.
 	auto avgTurns = [](Shape shape) {
 		int total = 0;
-		for (uint64_t seed = 1; seed <= 300; ++seed) total += generate(shape, Size::Medium, seed).turns();
+		for (uint64_t seed = 1; seed <= 300; ++seed) total += generate(shape, Size::Large, seed).turns();
 		return total / 300;
 	};
 	CHECK(avgTurns(Shape::Corridor) < avgTurns(Shape::Winding));
 	int branching = 0, sprawlLoops = 0;
 	for (uint64_t seed = 1; seed <= 300; ++seed) {
-		branching += static_cast<int>(generate(Shape::Branching, Size::Medium, seed).branches.size());
-		const Layout sp = generate(Shape::Sprawl, Size::Large, seed);
+		branching += static_cast<int>(generate(Shape::Branching, Size::Large, seed).branches.size());
+		const Layout sp = generate(Shape::Sprawl, Size::ExtraLarge, seed);
 		CHECK(sp.ring);
 		sprawlLoops += static_cast<int>(sp.loops.size());
-		const Layout lp = generate(Shape::Loop, Size::Medium, seed);
+		const Layout lp = generate(Shape::Loop, Size::Large, seed);
 		CHECK(lp.ring);
 		CHECK(lp.bossIdx == static_cast<int>(lp.mainPath.size()) / 2);
 		CHECK(lp.eventIdx == static_cast<int>(lp.mainPath.size()) / 4);
@@ -248,7 +252,7 @@ TEST_CASE("the fallback meets the rules of every preset on its own")
 
 TEST_CASE("checkLayout catches broken layouts")
 {
-	const Rules r = presetRules(Shape::Branching, Size::Medium);
+	const Rules r = presetRules(Shape::Branching, Size::Large);
 	const Layout good = generate(r, 42);
 	REQUIRE(checkLayout(good, r).empty());
 
@@ -303,7 +307,7 @@ TEST_CASE("checkLayout catches broken layouts")
 
 	// A side room that is not a dead end: take an extra loop and file it as a plain side room. Its last cell still
 	// links back into the layout, so the checker must complain.
-	Rules loopy = presetRules(Shape::Sprawl, Size::Large);
+	Rules loopy = presetRules(Shape::Sprawl, Size::ExtraLarge);
 	bool sawLoop = false;
 	for (uint64_t seed = 1; seed <= 200 && !sawLoop; ++seed) {
 		Layout l = generate(loopy, seed);
@@ -320,18 +324,18 @@ TEST_CASE("checkLayout catches broken layouts")
 
 TEST_CASE("validateRules rejects impossible rules")
 {
-	Rules r = presetRules(Shape::Winding, Size::Small);
+	Rules r = presetRules(Shape::Winding, Size::Medium);
 	r.pathMax = 100;
 	CHECK_FALSE(validateRules(r).empty());
-	r = presetRules(Shape::Loop, Size::Small);
+	r = presetRules(Shape::Loop, Size::Medium);
 	r.pathMin = r.pathMax = 9;
 	CHECK_FALSE(validateRules(r).empty());
-	r = presetRules(Shape::Winding, Size::Small);
+	r = presetRules(Shape::Winding, Size::Medium);
 	r.turnsMin = 5;
 	r.turnsMax = 2;
 	CHECK_FALSE(validateRules(r).empty());
 	// A too-tight rule set still returns a layout, with rulesMet false.
-	r = presetRules(Shape::Winding, Size::Small);
+	r = presetRules(Shape::Winding, Size::Medium);
 	r.pathMin = r.pathMax = 36;
 	r.turnsMin = 30;
 	r.turnsMax = 30;
@@ -392,7 +396,7 @@ TEST_CASE("shapes.txt: rows at the caps are answered")
 
 TEST_CASE("validateRules refuses side rooms that can't fit")
 {
-	Rules r = presetRules(Shape::Winding, Size::Small); // 6 x 6 = 36 cells
+	Rules r = presetRules(Shape::Winding, Size::Medium); // 6 x 6 = 36 cells
 	r.pathMin = r.pathMax = 10;
 	r.branchesMin = r.branchesMax = 6;
 	r.branchLenMin = r.branchLenMax = 5; // 30 cells asked for, 26 free
@@ -404,7 +408,7 @@ TEST_CASE("validateRules refuses side rooms that can't fit")
 TEST_CASE("a rule set that can't be built gives up on a budget and falls back")
 {
 	// Far too many side rooms to place: generate() must still answer at once, with the fallback.
-	Rules r = presetRules(Shape::Branching, Size::Large);
+	Rules r = presetRules(Shape::Branching, Size::ExtraLarge);
 	r.width = r.height = 32;
 	r.branchesMin = r.branchesMax = 300;
 	r.branchLenMin = r.branchLenMax = 3;
@@ -418,7 +422,7 @@ TEST_CASE("a rule set that can't be built gives up on a budget and falls back")
 
 TEST_CASE("a Loop row with extra loops stays buildable under the work budget")
 {
-	Rules r = presetRules(Shape::Loop, Size::Small);
+	Rules r = presetRules(Shape::Loop, Size::Medium);
 	r.width = 11;
 	r.height = 9;
 	r.pathMin = 38;
@@ -455,23 +459,23 @@ TEST_CASE("shapes.txt: a valid table")
 
 	Rules r;
 	std::string e;
-	REQUIRE(resolveRules(p.table, "snake", Size::Medium, r, e));
+	REQUIRE(resolveRules(p.table, "snake", Size::Large, r, e));
 	CHECK(r.pathMin == 12);
 	CHECK(r.pathMax == 16);
 	CHECK(r.width == 9); // the size's grid is kept
-	REQUIRE(resolveRules(p.table, "Fat Snake", Size::Medium, r, e));
+	REQUIRE(resolveRules(p.table, "Fat Snake", Size::Large, r, e));
 	CHECK(r.pathMin == 12); // inherited from Snake
 	CHECK(r.branchesMin == 2);
-	REQUIRE(resolveRules(p.table, "Arena", Size::Large, r, e));
+	REQUIRE(resolveRules(p.table, "Arena", Size::ExtraLarge, r, e));
 	CHECK(r.loop);
 	CHECK_FALSE(r.bossRoom);
-	REQUIRE(resolveRules(p.table, "Corridor", Size::Small, r, e));
-	CHECK_FALSE(resolveRules(p.table, "Nope", Size::Small, r, e));
+	REQUIRE(resolveRules(p.table, "Corridor", Size::Medium, r, e));
+	CHECK_FALSE(resolveRules(p.table, "Nope", Size::Medium, r, e));
 	CHECK(e.find("Nope") != std::string::npos);
 
 	// The custom shapes build.
 	for (const char *name : {"Snake", "Fat Snake", "Arena"}) {
-		REQUIRE(resolveRules(p.table, name, Size::Medium, r, e));
+		REQUIRE(resolveRules(p.table, name, Size::Large, r, e));
 		for (uint64_t seed = 1; seed <= 300; ++seed) {
 			const Layout l = generate(r, seed);
 			CHECK(l.rulesMet);
@@ -493,7 +497,7 @@ TEST_CASE("shapes.txt: plain-English errors")
 	CHECK(errorsOf("Name\nA\nA\n").size() == 1);                          // twice
 	CHECK(errorsOf("Name\tBase\nA\tZed\n").size() == 1);                  // unknown base
 	CHECK(errorsOf("Name\tMinPath\tMaxPath\nA\t30\t20\n").size() == 1);   // min > max
-	CHECK(errorsOf("Name\tMinPath\tMaxPath\nA\t30\t60\n").size() == 1);   // does not fit the Small grid
+	CHECK(errorsOf("Name\tMinPath\tMaxPath\nA\t30\t60\n").size() == 1);   // does not fit the Medium grid
 	CHECK(errorsOf("Name\tLoop\nA\tmaybe\n").size() == 1);
 	CHECK(errorsOf("Name\tBase\nA\tB\nB\tA\n").size() >= 1);              // base must be an earlier row
 	CHECK(errorsOf("").empty());
@@ -531,7 +535,7 @@ TEST_CASE("Open: every cell is a room, a few walls, no dead ends, entrance to th
 		CHECK(withWalls >= 290); // a wall is nearly always present: the shape is "few walls", not "none"
 	}
 	// Not a ring, not a tree: more links than rooms.
-	const Layout l = generate(Shape::Open, Size::Medium, 1);
+	const Layout l = generate(Shape::Open, Size::Large, 1);
 	int links = 0;
 	for (const Cell &c : l.cells) links += bitsIn(c.mask);
 	CHECK(links / 2 > l.cellCount());
@@ -543,12 +547,12 @@ TEST_CASE("Open in shapes.txt: Base Open keeps the grid rules, and rows that nee
 	REQUIRE(p.errors.empty());
 	Rules r;
 	std::string e;
-	REQUIRE(resolveRules(p.table, "plain", Size::Medium, r, e));
+	REQUIRE(resolveRules(p.table, "plain", Size::Large, r, e));
 	CHECK(r.open);
 	CHECK(r.width == 5);
 	CHECK(r.height == 7);
 	for (uint64_t seed = 1; seed <= 100; ++seed) CHECK(generate(r, seed).rulesMet);
-	REQUIRE(resolveRules(p.table, "NoBoss", Size::Small, r, e));
+	REQUIRE(resolveRules(p.table, "NoBoss", Size::Medium, r, e));
 	const Layout l = generate(r, 3);
 	CHECK(l.rulesMet);
 	CHECK(l.bossIdx == -1);
@@ -566,44 +570,44 @@ TEST_CASE("golden layouts")
 		uint64_t seed;
 		uint64_t hash;
 	};
-	// seed 1 and seed 0xC0FFEE of every shape at Medium, plus Small/Large samples.
+	// seed 1 and seed 0xC0FFEE of every shape at Large, plus Medium/ExtraLarge samples.
 	static const Golden kGolden[] = {
-		{Shape::Corridor, Size::Small, 0x1ull, 0x335D0D0166D02B77ull},
-		{Shape::Corridor, Size::Medium, 0x1ull, 0xD8A57E5D108A5708ull},
-		{Shape::Corridor, Size::Large, 0x1ull, 0x621E6DDF2527486Aull},
-		{Shape::Corridor, Size::Small, 0xC0FFEEull, 0xC3FF8F3D18B2D504ull},
-		{Shape::Corridor, Size::Medium, 0xC0FFEEull, 0x3EA9D9DA8D42A7BBull},
-		{Shape::Corridor, Size::Large, 0xC0FFEEull, 0xDD05A1CACF0B3E44ull},
-		{Shape::Winding, Size::Small, 0x1ull, 0xEFEAB22D0829BEA3ull},
-		{Shape::Winding, Size::Medium, 0x1ull, 0x2A2D0DD09B5A5BBBull},
-		{Shape::Winding, Size::Large, 0x1ull, 0x83AAFEB9C0C00A9Bull},
-		{Shape::Winding, Size::Small, 0xC0FFEEull, 0xA422A6CC1643D2A7ull},
-		{Shape::Winding, Size::Medium, 0xC0FFEEull, 0x7A1555E4F5286942ull},
-		{Shape::Winding, Size::Large, 0xC0FFEEull, 0x97778CB82BECCB27ull},
-		{Shape::Branching, Size::Small, 0x1ull, 0x853D7C7C7A5B22DFull},
-		{Shape::Branching, Size::Medium, 0x1ull, 0x0EEC1DA9827A6C4Eull},
-		{Shape::Branching, Size::Large, 0x1ull, 0x51DA4949BB0FF089ull},
-		{Shape::Branching, Size::Small, 0xC0FFEEull, 0x31A58DFB0814B385ull},
-		{Shape::Branching, Size::Medium, 0xC0FFEEull, 0xD98CF3DF4F59925Cull},
-		{Shape::Branching, Size::Large, 0xC0FFEEull, 0xBD1E28941AB2699Eull},
-		{Shape::Loop, Size::Small, 0x1ull, 0x90C630B533CD7DAEull},
-		{Shape::Loop, Size::Medium, 0x1ull, 0xF7D9B1461F8B2E18ull},
-		{Shape::Loop, Size::Large, 0x1ull, 0xC77A00BB8EF0CD6Dull},
-		{Shape::Loop, Size::Small, 0xC0FFEEull, 0x06F706B5AAFF4819ull},
-		{Shape::Loop, Size::Medium, 0xC0FFEEull, 0xA66773FFE6FF3FEAull},
-		{Shape::Loop, Size::Large, 0xC0FFEEull, 0x9387954586F004BFull},
-		{Shape::Sprawl, Size::Small, 0x1ull, 0xECEE52C9FCCA9765ull},
-		{Shape::Sprawl, Size::Medium, 0x1ull, 0x272EB22710073C4Aull},
-		{Shape::Sprawl, Size::Large, 0x1ull, 0xAAFE4E2EAE9224A1ull},
-		{Shape::Sprawl, Size::Small, 0xC0FFEEull, 0xA6E1843017E6C8EBull},
-		{Shape::Sprawl, Size::Medium, 0xC0FFEEull, 0x6D0B61977647383Aull},
-		{Shape::Sprawl, Size::Large, 0xC0FFEEull, 0xF64C39D28B426C3Aull},
-		{Shape::Open, Size::Small, 0x1ull, 0x87ED37D1B3715E22ull},
-		{Shape::Open, Size::Medium, 0x1ull, 0xAB93C9F6789B45BBull},
-		{Shape::Open, Size::Large, 0x1ull, 0x0FBE7C101BA8CCA9ull},
-		{Shape::Open, Size::Small, 0xC0FFEEull, 0xEBD9A2894A3834AEull},
-		{Shape::Open, Size::Medium, 0xC0FFEEull, 0x9FF3473070A6F9B7ull},
-		{Shape::Open, Size::Large, 0xC0FFEEull, 0xEE1A0BA147060377ull},
+		{Shape::Corridor, Size::Medium, 0x1ull, 0x335D0D0166D02B77ull},
+		{Shape::Corridor, Size::Large, 0x1ull, 0xD8A57E5D108A5708ull},
+		{Shape::Corridor, Size::ExtraLarge, 0x1ull, 0x621E6DDF2527486Aull},
+		{Shape::Corridor, Size::Medium, 0xC0FFEEull, 0xC3FF8F3D18B2D504ull},
+		{Shape::Corridor, Size::Large, 0xC0FFEEull, 0x3EA9D9DA8D42A7BBull},
+		{Shape::Corridor, Size::ExtraLarge, 0xC0FFEEull, 0xDD05A1CACF0B3E44ull},
+		{Shape::Winding, Size::Medium, 0x1ull, 0xEFEAB22D0829BEA3ull},
+		{Shape::Winding, Size::Large, 0x1ull, 0x2A2D0DD09B5A5BBBull},
+		{Shape::Winding, Size::ExtraLarge, 0x1ull, 0x83AAFEB9C0C00A9Bull},
+		{Shape::Winding, Size::Medium, 0xC0FFEEull, 0xA422A6CC1643D2A7ull},
+		{Shape::Winding, Size::Large, 0xC0FFEEull, 0x7A1555E4F5286942ull},
+		{Shape::Winding, Size::ExtraLarge, 0xC0FFEEull, 0x97778CB82BECCB27ull},
+		{Shape::Branching, Size::Medium, 0x1ull, 0x853D7C7C7A5B22DFull},
+		{Shape::Branching, Size::Large, 0x1ull, 0x0EEC1DA9827A6C4Eull},
+		{Shape::Branching, Size::ExtraLarge, 0x1ull, 0x51DA4949BB0FF089ull},
+		{Shape::Branching, Size::Medium, 0xC0FFEEull, 0x31A58DFB0814B385ull},
+		{Shape::Branching, Size::Large, 0xC0FFEEull, 0xD98CF3DF4F59925Cull},
+		{Shape::Branching, Size::ExtraLarge, 0xC0FFEEull, 0xBD1E28941AB2699Eull},
+		{Shape::Loop, Size::Medium, 0x1ull, 0x90C630B533CD7DAEull},
+		{Shape::Loop, Size::Large, 0x1ull, 0xF7D9B1461F8B2E18ull},
+		{Shape::Loop, Size::ExtraLarge, 0x1ull, 0xC77A00BB8EF0CD6Dull},
+		{Shape::Loop, Size::Medium, 0xC0FFEEull, 0x06F706B5AAFF4819ull},
+		{Shape::Loop, Size::Large, 0xC0FFEEull, 0xA66773FFE6FF3FEAull},
+		{Shape::Loop, Size::ExtraLarge, 0xC0FFEEull, 0x9387954586F004BFull},
+		{Shape::Sprawl, Size::Medium, 0x1ull, 0xECEE52C9FCCA9765ull},
+		{Shape::Sprawl, Size::Large, 0x1ull, 0x272EB22710073C4Aull},
+		{Shape::Sprawl, Size::ExtraLarge, 0x1ull, 0xAAFE4E2EAE9224A1ull},
+		{Shape::Sprawl, Size::Medium, 0xC0FFEEull, 0xA6E1843017E6C8EBull},
+		{Shape::Sprawl, Size::Large, 0xC0FFEEull, 0x6D0B61977647383Aull},
+		{Shape::Sprawl, Size::ExtraLarge, 0xC0FFEEull, 0xF64C39D28B426C3Aull},
+		{Shape::Open, Size::Medium, 0x1ull, 0x87ED37D1B3715E22ull},
+		{Shape::Open, Size::Large, 0x1ull, 0xAB93C9F6789B45BBull},
+		{Shape::Open, Size::ExtraLarge, 0x1ull, 0x0FBE7C101BA8CCA9ull},
+		{Shape::Open, Size::Medium, 0xC0FFEEull, 0xEBD9A2894A3834AEull},
+		{Shape::Open, Size::Large, 0xC0FFEEull, 0x9FF3473070A6F9B7ull},
+		{Shape::Open, Size::ExtraLarge, 0xC0FFEEull, 0xEE1A0BA147060377ull},
 	};
 	if (std::getenv("CARTOGRAPHER_PRINT_GOLDEN")) {
 		for (int s = 0; s < kShapeCount; ++s)
@@ -621,9 +625,9 @@ TEST_CASE("golden layouts")
 	}
 }
 
-TEST_CASE("golden ASCII dumps (Medium, seed 1)")
+TEST_CASE("golden ASCII dumps (Large, seed 1)")
 {
-	CHECK(toAscii(generate(Shape::Corridor, Size::Medium, 1)) == R"(. . #-@ . . . . .
+	CHECK(toAscii(generate(Shape::Corridor, Size::Large, 1)) == R"(. . #-@ . . . . .
     |
 . . # . . . . . .
     |
@@ -641,7 +645,7 @@ TEST_CASE("golden ASCII dumps (Medium, seed 1)")
 
 . . . . . . . . .
 )");
-	CHECK(toAscii(generate(Shape::Winding, Size::Medium, 1)) == R"(@-# . . . . . . .
+	CHECK(toAscii(generate(Shape::Winding, Size::Large, 1)) == R"(@-# . . . . . . .
   |
 . #-#-# . . . . .
       |
@@ -659,7 +663,7 @@ TEST_CASE("golden ASCII dumps (Medium, seed 1)")
 |     |
 #-#-#-# . . . . .
 )");
-	CHECK(toAscii(generate(Shape::Loop, Size::Medium, 1)) == R"(. . . o-#-#-# . .
+	CHECK(toAscii(generate(Shape::Loop, Size::Large, 1)) == R"(. . . o-#-#-# . .
         |   |
 . . . . # . #-# .
         |     |
@@ -690,7 +694,7 @@ TEST_CASE("the example pack's shapes.txt loads and its shape builds at every siz
 	for (const std::string &e : parsed.errors) MESSAGE(e);
 	REQUIRE(parsed.ok());
 	REQUIRE(parsed.table.shapes.size() == 1);
-	for (Size size : {Size::Small, Size::Medium, Size::Large}) {
+	for (Size size : {Size::Medium, Size::Large, Size::ExtraLarge}) {
 		Rules rules;
 		std::string error;
 		CHECK(resolveRules(parsed.table, "snake", size, rules, error));

@@ -142,7 +142,7 @@ TEST_CASE("the piece table matches the Snow rows of tools/catalogue.tsv")
 	CHECK(found == 16);
 }
 
-TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
+TEST_CASE("sizes: Small, Medium, Large, ExtraLarge, and the game's own Frozen Tundra size")
 {
 	int w = 0, h = 0;
 	CHECK(snowSizeCells("", &w, &h));
@@ -150,13 +150,13 @@ TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
 	CHECK(h == 5);
 	CHECK(w * kCellTiles == 128); // level 117 is 128 x 80 tiles
 	CHECK(h * kCellTiles == 80);
-	CHECK(snowSizeCells("ExtraSmall", &w, &h));
+	CHECK(snowSizeCells("Small", &w, &h));
 	CHECK(w == 4);
 	CHECK(h == 3);
-	CHECK(snowSizeCells("SMALL", &w, &h));
+	CHECK(snowSizeCells("MEDIUM", &w, &h));
 	CHECK(w == 6);
 	CHECK(h == 4);
-	CHECK(snowSizeCells("Large", &w, &h));
+	CHECK(snowSizeCells("ExtraLarge", &w, &h));
 	CHECK(w == 10);
 	CHECK(h == 7);
 	CHECK_FALSE(snowSizeCells("Huge", &w, &h));

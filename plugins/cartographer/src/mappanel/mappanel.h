@@ -26,9 +26,8 @@ std::string statLine(const Stat &stat);
 // line per property (in the order given). A map without properties shows the first two lines only. An empty name shows "Map".
 std::string panelText(const std::string &mapName, int monsterLevel, const std::vector<Stat> &stats);
 
-// Whether the game's terror zone text counts as hidden after a call that asked for it to be `visible` and `succeeded` or not, given
-// whether it was hidden before (`wasHidden`). A failed call keeps the previous state: a failed restore leaves it hidden (so it is
-// tried again), a failed hide does not clear an earlier successful hide.
-bool hiddenAfter(bool visible, bool succeeded, bool wasHidden);
+// Blank lines to put in front of the panel text so it starts under the game's terror zone text: the text ends at `textBottom` (0 or less:
+// no zone text), the panel starts at `panelTop`, a line of the panel text is `lineUnits` high (all in layout units), at most `maxLines`.
+int padLines(int textBottom, int panelTop, int lineUnits, int maxLines);
 
 } // namespace cartographer::mappanel

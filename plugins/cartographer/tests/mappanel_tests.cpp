@@ -34,14 +34,13 @@ TEST_CASE("a map without properties or a level still has a name")
 	CHECK(panelText("", 0, {}) == "Map");
 }
 
-TEST_CASE("a failed terror zone text call keeps the previous hidden state")
+TEST_CASE("the panel text starts under the game's terror zone text")
 {
-	CHECK(hiddenAfter(false, true, false));
-	CHECK(hiddenAfter(false, true, true));
-	CHECK_FALSE(hiddenAfter(false, false, false));
-	CHECK(hiddenAfter(false, false, true));  // an earlier hide in the same map still counts
-	CHECK_FALSE(hiddenAfter(true, true, true));
-	CHECK_FALSE(hiddenAfter(true, true, false));
-	CHECK(hiddenAfter(true, false, true));   // a failed restore stays marked hidden
-	CHECK_FALSE(hiddenAfter(true, false, false));
+	CHECK(padLines(0, 270, 44, 8) == 0);     // no zone text
+	CHECK(padLines(270, 270, 44, 8) == 0);   // it ends where the panel starts
+	CHECK(padLines(100, 270, 44, 8) == 0);   // it ends above the panel
+	CHECK(padLines(271, 270, 44, 8) == 1);   // a part of a line rounds up
+	CHECK(padLines(416, 270, 44, 8) == 4);   // 146 units: 3.3 lines
+	CHECK(padLines(2000, 270, 44, 8) == 8);  // capped
+	CHECK(padLines(416, 270, 0, 8) == 0);    // no line height known
 }

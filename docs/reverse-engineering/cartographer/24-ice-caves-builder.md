@@ -44,3 +44,7 @@ So the walk follows the ring grower (`walkFollowsRing` stays true) and the ring 
 ### Live check (2026-11-12, slot 11, Hell)
 
 A `Glacial Veins` Ice map built as planned (19 rooms, 0 refits), arrival logged in plan cell (0,4) at (6400,64), the boss room (6496,0) and event room (6496,48) found as 8 x 8 DRLG rooms, so a 16-tile cell is the expected 2 x 2 engine rooms. No fault. Record: `docs/cartographer/checks/2026-11-12-ice-caves-check.md`.
+
+### Boss room fallback (2026-11-12, slot 6, Hell)
+
+`IceE01.ds1` and `IceS01.ds1` have almost no floor in their top-left 8 x 8 quadrant (DS1 floor layer). With those two variants pinned, a top-edge boss cell (0,0) had all 9 spots refused in its first room (2000,0) and the Boss spawned in the next room of the cell (2008,0) as a superunique and was seen on screen. Record: `docs/cartographer/checks/2026-11-12-boss-room-fallback-check.md`.

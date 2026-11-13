@@ -56,7 +56,7 @@ Leave a cell blank, or leave a column out, and you get the default:
 
 | Setting | Default |
 |---|---|
-| Size | Medium |
+| Size | Large |
 | Monster level | 85 |
 | Chance of an event | 20% |
 | Opens from | Harrogath |
@@ -67,8 +67,8 @@ Add only the columns you care about:
 
 ```
 Name	Tileset	Shape	Item	Size	Level	Boss
-Shorelines	Jungle	Corridor	t20	Large	90	Bishibosh
-Tunneling Depths	Cave	Loop	t21	Small		quillrat5
+Shorelines	Jungle	Corridor	t20	ExtraLarge	90	Bishibosh
+Tunneling Depths	Cave	Loop	t21	Medium		quillrat5
 ```
 
 The blank cell under `Level` for Tunneling Depths keeps level 85.
@@ -95,7 +95,7 @@ A tileset that is not ready is refused when the game loads, with a message that 
 
 | Column | What it does |
 |---|---|
-| `Size` | `ExtraSmall`, `Small`, `Medium` or `Large` |
+| `Size` | `Small`, `Medium`, `Large` or `ExtraLarge` |
 | `Level` | Monster level in the map |
 | `Item` | Required. The item code that opens this map, and only this map; no two maps share one. The item needs item spell 16 in `misc.txt` |
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |
