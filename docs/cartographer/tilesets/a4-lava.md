@@ -27,3 +27,5 @@ The lava pieces have Jungle's shape: an exit-mask family. Only the cell size (24
 - Risk: medium. The edge anomalies mean exits must come from the data; the Chaos Sanctuary seals are unproven.
 - Effort: M for the lava fields (a Jungle-like picker); L for the Chaos Sanctuary, possibly not feasible without reading that code.
 - Game checks: fill mode of LevelType 28 for an unstamped cell; whether 24-tile cells give `chooseCellRoom` its 8 x 8 rooms (3 x 3 per cell); the 839 and 845 anomalies against the exit masks; that the lava edge is impassable with no extra block; the Chaos seals and filler cells.
+
+Status (#239): River of Flame is built as the maze row `Lava` (`MazeLava`, LevelType 28, pieces 836 + mask, no entrance family); see `docs/reverse-engineering/cartographer/23-maze-lava.md`. The outdoor Lava fields idea above is not built. Not tested in game.

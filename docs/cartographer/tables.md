@@ -43,7 +43,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (each opens through its own level, `Maze` and `MazeCrypt`), and `Jungle` and `Snow` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Tileset` | yes | A tileset name. `Cave`, `Crypt` and `Lava` (River of Flame) are built (each opens through its own level, `Maze`, `MazeCrypt` and `MazeLava`), and `Jungle` and `Snow` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |

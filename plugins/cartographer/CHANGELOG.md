@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Cave and Crypt maps now each have their own level, so one install opens either. If you installed Crypt before, rerun `tools\install.ps1` once; `-Tileset` is no longer needed.
+- New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Not tested in game yet.
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).

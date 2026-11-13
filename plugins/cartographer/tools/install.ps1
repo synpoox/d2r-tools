@@ -1,10 +1,10 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt) and Outdoor levels (Jungle, Snow) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava) and Outdoor levels (Jungle, Snow) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave) and "Cartographer Crypt" (Crypt; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave) and "Cartographer Crypt" (Crypt) and "Cartographer Lava" (Lava, River of Flame; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
                     360 x 360, Depend 0, Position 0, OffsetX 6000, no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
@@ -18,12 +18,12 @@
     levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 6000, OffsetY 3600, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, MazeCrypt, Outdoor and OutdoorSnow rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeLava, Outdoor and OutdoorSnow rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
-    Cave and Crypt maps each open through their own level, so one install serves both (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
+    Cave, Crypt and Lava maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
@@ -45,7 +45,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 6000) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (6000, 4200), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (6000, 4200), -LavaOffsetX and -LavaOffsetY (6000, 4800), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -69,11 +69,13 @@ param(
     [int]$SnowOffsetX = 6000,
     [int]$SnowOffsetY = 3600,
     [int]$CryptOffsetX = 6000,
-    [int]$CryptOffsetY = 4200
+    [int]$CryptOffsetY = 4200,
+    [int]$LavaOffsetX = 6000,
+    [int]$LavaOffsetY = 4800
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave and Crypt are both added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt and Lava are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -85,7 +87,9 @@ $MazeTilesets = @(
     # Cave keeps the slot "Maze" and the level name of the installs from before this table.
     @{ Tileset = 'Cave';  Slot = 'Maze';      LevelName = 'Cartographer Maze';  LevelType = '3'; Size = '360'; Param = 'Maze' },
     # Crypt: y is clear of the Maze level (y 0..360), the Outdoor level (y 3000..3384) and the Snow level (y 3600..3792).
-    @{ Tileset = 'Crypt'; Slot = 'MazeCrypt'; LevelName = 'Cartographer Crypt'; LevelType = '4'; Size = '360'; Param = 'Crypt' }
+    @{ Tileset = 'Crypt'; Slot = 'MazeCrypt'; LevelName = 'Cartographer Crypt'; LevelType = '4'; Size = '360'; Param = 'Crypt' },
+    # Lava (River of Flame): y 4800..5160 is clear of the Crypt level (y 4200..4560). Copied from level 107 (DrlgType 1, LevelType 28).
+    @{ Tileset = 'Lava'; Slot = 'MazeLava'; LevelName = 'Cartographer Lava'; LevelType = '28'; Size = '360'; Param = 'Lava' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
@@ -347,7 +351,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
     $mazeId
 }
 
-# --- levels.txt: one level per maze tileset (Cave, Crypt) -------------------------------------------------------------
+# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava) -------------------------------------------------------------
 $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
