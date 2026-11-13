@@ -54,7 +54,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs the map may have, 0 and up. Raises the level's `MonUMax` (stops at 255); `MonUMin` is left alone. Past the minimum the game makes about 6 percent of packs unique, so the count depends on `Density` and map size and a larger `Uniques` adds nothing once that is reached (about 73 on a Large Cave at `Density` 100, near 800 percent). Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
+| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on a Large Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when `Uniques` is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -76,7 +76,7 @@ A map opens only in Hell, in Harrogath, for a character of at least `MinCharLeve
 
 ## Map item type (itemtypes.txt)
 
-Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0.
+Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0. Set `spellicon` to -1 as well: the game starts the Scroll of Identify cursor for a value of 0 to 9, and `cartographer check` notes a map item row that still has one. As a safety net the plugin also sets it to -1 in memory for the map items your Maps table names (not tested in game).
 
 | Column | Value | Why |
 |---|---|---|

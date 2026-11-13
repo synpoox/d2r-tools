@@ -24,7 +24,7 @@ void AutomapResetArm(uint64_t map, int slotLevel) noexcept;
 // area (a waypoint) between opening the map and entering it reads its own cells back as usual.
 void AutomapResetPlayerTick(int level) noexcept;
 
-// A game was left, or the map did not open: forget a skip that was not used, and the map built last.
+// A game was left: forget a skip that was not used, and the map built last.
 void AutomapResetDisarm() noexcept;
 
 auto AutomapResetPartStatus() -> PartStatus;

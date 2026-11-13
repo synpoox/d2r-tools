@@ -36,6 +36,15 @@ void LevelRowProbeSet(bool on) noexcept;
 auto LevelRowProbeOn() noexcept -> bool;
 void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const char* where) noexcept;
 
+// Unique pace (issue #317): the room populator hook calls Begin before the game populates a room of `roomLevel` and End after it.
+// While a room is populated, MonUMin is 0 and MonUMax is the share of the map's unique packs due after the rooms done so far, so the
+// game's flat 6 percent per pack cannot spend them all in the first rooms; End puts the record's two bytes back. Armed by
+// LevelRowBeforeOpen (only for a map with Uniques above 0), disarmed on a failed open, leaving the game and unload. Begin returns false
+// (nothing written) when not armed or the room is not of the armed level/game. Game thread. One game, one thread.
+auto UniquePaceArmed() noexcept -> bool;
+auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool;
+void UniquePaceEnd() noexcept;
+
 // What the columns do now, for 'cartographer check'.
 auto LevelRowSummary() -> std::string;
 

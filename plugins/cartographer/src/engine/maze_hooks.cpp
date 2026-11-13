@@ -587,7 +587,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 		}
 		const int made = static_cast<int>(plan.fills.size()) - refused;
 		if (refused != 0) {
-			plog::Warn("maze filler ring: only %d of %d rooms made; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()));
+			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
 			plog::Info("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		}

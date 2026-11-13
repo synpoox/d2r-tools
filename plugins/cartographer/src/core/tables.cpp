@@ -366,6 +366,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			if (spellOk && ContainsNoCase(names.compactItems, map.item)) {
 				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
 			}
+			if (spellOk && ContainsNoCase(names.cursorItems, map.item)) {
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has a spellicon of 0 to 9 in misc.txt, so a second map used while one is open shows an item cursor. Set spellicon to -1 on its row.");
+			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
 					fail("item '" + map.item + "' already opens the map '" + other.name + "' (row " + std::to_string(other.line) +
@@ -417,9 +420,9 @@ auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {
 	return rowFound ? BossPath::Superunique : (baseFound ? BossPath::PlainMonster : BossPath::None);
 }
 
-auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact) -> bool {
+auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact, std::vector<std::string>* cursor) -> bool {
 	const Tsv table = ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave"), cIcon = table.Column("spellicon");
 	if (cCode < 0 || cSpell < 0) {
 		return false;
 	}
@@ -429,6 +432,12 @@ auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, i
 			spells->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
 			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
 				compact->push_back(code);
+			}
+			if (cursor != nullptr && cIcon >= 0) {
+				const std::string icon = table.Cell(row, cIcon);
+				if (icon.size() == 1 && icon[0] >= '0' && icon[0] <= '9') {
+					cursor->push_back(code);
+				}
 			}
 		}
 	}

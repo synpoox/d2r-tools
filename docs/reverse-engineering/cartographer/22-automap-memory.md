@@ -48,7 +48,7 @@ Nothing here is wired as a plugin part.
   3500, OffsetY 0 (tx - ty stays within 3141..3859, tx + ty under 4220), and moves an older install's
   row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
   drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
-  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way. The installer checks it for the tilesets flagged `Range` (the Maze level and Snow, whose layers are not the town's 79; Jungle and Siege share 79 and are never swapped). The flag is per tileset, not read from the written row's Layer, moves an older install's row (Snow was at 6000,3600, out of range) and refuses an out-of-range `-<Param>OffsetX/Y`.
+  `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way. The installer checks it for the tilesets flagged `Range` (the Maze level and Snow, whose layers are not the town's 79; Jungle and Siege share 79 and are never swapped). The flag is per tileset and is not read from the written row's Layer. The installer also moves an older install's row (Snow was at 6000,3600, out of range) and refuses an out-of-range `-<Param>OffsetX/Y`.
 
 ## Stale reveal on a new map (issue #306 review; build 93847)
 
@@ -57,19 +57,23 @@ Nothing here is wired as a plugin part.
   Crypt slot map Layer 10 with a game level, and a single-player seed carries over, so map A's revealed walls were
   drawn on map B's different maze in the next game. Seen live (slot 7, Cave then Crypt maps), before the fix.
 - Fix: part `AutomapRestore` (signature in `part_signatures.h`, 17 bytes hooked: three whole instructions, `push rbp`,
-  `lea rbp,[rsp-210h]`, `sub rsp,310h`). The function reads its state from globals but its first call (`0xd5450`, the map
-  file path) uses `rcx` as the caller left it, so it must be treated as taking the four argument registers: a hook with
-  no arguments that logged before calling the original made `0xd5450` fault (seen live, waypoint trips). The hook passes
-  `rcx`, `rdx`, `r8`, `r9` and the result straight on. The build of a slot map (the Maze build, and the outdoor build for
+  `lea rbp,[rsp-210h]`, `sub rsp,310h`). The function takes two arguments, `rcx` and `rdx`: its only call site (`0xd18c8`) sets
+  both just before the call, and the function hands them on to `0xd5450` (the map file path). It reads the rest of its state
+  from globals. A hook with no arguments that logged before calling the original made `0xd5450` fault (seen live, waypoint
+  trips), so the hook still takes `rcx`, `rdx`, `r8`, `r9` and passes them and the result straight on. The build of a slot map (the Maze build, and the outdoor build for
   Snow; Jungle and Siege share the town's layer 79, so nothing is skipped for them) arms one skip. The map is built when
   its portal opens, not when the player enters, so the skip lands only on the read made while the player's tick says
   the player stands in the slot level (a trip to another area between opening and entering reads its cells as usual) and
   another layer than the one left is current (current layer object read through the `cmp qword ptr [rip+x],0` at +0x22;
   key = first dword). Building the same map again in the same game (the return from a town trip rebuilds it from the same
   plan) arms nothing. Live (slot 5): a waypoint trip and town trips before entering kept their reads (layers 27 and 79,
-  log lines "read of layer N kept"); entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
+  log lines "read of layer N kept"; the waypoint trip is log only, the reveal of that area was not looked at; repeated in slot 7 with a waypoint object from `cheat ospawn 429`, see the automap follow-up check); slot 7 reported layer 10 for the Cave map because its `levels.txt` row 138 (Cartographer Maze) there has Layer 10, not 2; entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
   (Snow) in level 140, in two games in a row; a town trip after the skip and the return showed the map's own reveal
   again, no second skip.
+- Order (issue #354): the skip assumes the player's tick reports the slot level before the layer is read back. A skip that
+  was missed because the read came first would otherwise stay armed and drop the map's own reveal on the next return
+  from town. So the skip is dropped once the tick has reported the slot level and then reports any other level
+  (`src/engine/automap_skip.h`, unit tested in `automap_skip_tests`).
 - Cost: the skipped read also drops the stock level's reveal on that layer for that seed (Cave Level 1 shares Layer 2,
   the Crypt template Layer 10, Barricade Snow Layer 84): the leave writes only the new map's cells. A follow-up could let
   the read run and then drop only the cells inside the slot's rectangle.
