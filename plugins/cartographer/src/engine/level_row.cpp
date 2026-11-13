@@ -7,6 +7,7 @@
 #include "log.h"
 
 #include <cstdint>
+#include <atomic>
 #include <cstring>
 #include <mutex>
 #include <string>
@@ -190,7 +191,58 @@ auto RecordOf(const void* game, int level, int64_t levelCount, std::string* why)
 	return record;
 }
 
+std::atomic<bool> g_probe{false};
+int g_probeLevel = 0;  // game thread only
+int g_probeRooms = 0;
+int g_probeUniques = 0;
+
 }  // namespace
+
+void LevelRowProbeSet(bool on) noexcept {
+	g_probe.store(on);
+	g_probeLevel = 0;
+}
+
+auto LevelRowProbeOn() noexcept -> bool {
+	return g_probe.load();
+}
+
+void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const char* where) noexcept {
+	if (!g_probe.load()) {
+		return;
+	}
+	try {
+		std::string why;
+		int64_t levelCount = 0;
+		if (!GameLevelCount(dataFlag, &levelCount, &why)) {
+			plog::Info("record probe: level count unreadable: %s", why.c_str());
+			return;
+		}
+		const uint8_t* r = RecordOf(game, level, levelCount, &why);
+		if (r == nullptr) {
+			plog::Info("record probe: no record: %s", why.c_str());
+			return;
+		}
+		if (!Readable(r + 0x2c8, 1)) {
+			return;
+		}
+		if (g_probeLevel != level) {
+			g_probeLevel = level;
+			g_probeRooms = 0;
+			g_probeUniques = 0;
+		}
+		int32_t f4 = 0, f8 = 0, fc = 0, den = 0;
+		std::memcpy(&f4, r + 4, 4);
+		std::memcpy(&f8, r + 8, 4);
+		std::memcpy(&fc, r + 0xc, 4);
+		std::memcpy(&den, r + 0x2b8, 4);
+		const int uniques = r[0x2c8];
+		plog::Info("record probe: room #%d level %d %s: +4=%d +8=%d +0xc=%d uniqueCount(+0x2c8)=%d (+%d this room) MonUMin=%d MonUMax=%d MonDen=%d", ++g_probeRooms, level, where, f4, f8, fc,
+		           uniques, uniques - g_probeUniques, r[0x2bc], r[0x2bd], den);
+		g_probeUniques = uniques;
+	} catch (...) {
+	}
+}
 
 auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void* game, uint32_t dataFlag) noexcept -> bool {
 	try {
@@ -290,8 +342,8 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			if (recOn.density && map.density > 0 && recSnap.density == 0) {
 				plog::Info("map monsters: '%s': Density %d%% adds nothing, the slot level's MonDen is 0 in this difficulty", map.name.c_str(), map.density);
 			}
-			if (recOn.uniques && map.uniques > 0 && recSnap.uMin == 0 && recSnap.uMax == 0) {
-				plog::Info("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMin and MonUMax are 0 in this difficulty", map.name.c_str(), map.uniques);
+			if (recOn.uniques && map.uniques > 0 && recSnap.uMax == 0) {
+				plog::Info("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMax is 0 in this difficulty", map.name.c_str(), map.uniques);
 			}
 		}
 

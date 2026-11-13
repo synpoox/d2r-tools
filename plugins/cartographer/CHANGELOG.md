@@ -28,6 +28,7 @@
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
+- `Uniques` packs are spread over the whole map instead of near the entrance.
 - A map's own name shows on its portal, automap and entry banner by default (experimental; `MapNames=0` turns it off; multiplayer not checked yet).
 - `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).
