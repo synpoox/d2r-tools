@@ -66,9 +66,9 @@ Part g_parts[PartCount] = {
 	{"HudWarningsUpdate", sig::HudWarningsUpdate, 18, false, nullptr, {}, {}},
 };
 HudUpdateFn g_hudOriginal = nullptr;
-std::atomic<bool> g_hudLive{false};     // the HUDWarnings update is hooked: the map text goes into the game's terror zone field, the own panel stays closed
-std::atomic<uint32_t> g_hudWrites{0};
-std::atomic<bool> g_hudZone{false};     // a zone is on and the map text replaced its lines: the plugin's own panel stays closed
+std::atomic<bool> g_hudLive{false};     // the HUDWarnings update is hooked: the map text goes into the game's terror zone field in a map, the own panel stays closed
+std::string g_hudBuffer;                // the map text handed to the game as its zone string for one update (game thread only)
+std::atomic<bool> g_hudShown{false};    // the map text is in the game's field (written by the last update): the own panel stays closed
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::OverlayService* g_overlay = nullptr;
@@ -87,6 +87,7 @@ std::atomic<bool> g_on{false};  // the parts and services are there, the panel i
 std::mutex g_lock;
 std::string g_text;       // the panel header lines; both texts empty: nothing to show
 std::string g_textBlue;   // the panel property lines
+std::string g_textHud;    // both in one text, for the game's terror zone field (one colour)
 bool g_mapOpen = false;   // a map was opened and not left; independent of the text
 int g_slotLevel = -1;
 std::atomic<bool> g_inMap{false};
@@ -140,68 +141,133 @@ auto SetRaw(const std::string& text, const char* panelName = PanelName, const ch
 	}
 }
 
-// The game's update of the HUDWarnings panel keeps the terror zone text in a string at this+0x1e8 (pointer) and this+0x1f0 (length) and sets the widget at
-// this+0x180 from it every frame. While a map is open and a zone is on (that length is not 0) the hook writes the map text into the widget after the game's
-// own update, so it replaces the zone lines. With no zone the widget is hidden and the layout has already run without it: a text shown then is drawn
-// above the game info, so the plugin's own panel (below the game's zone text position) is used instead. Kept apart from the lock: __try and objects with
-// destructors do not mix.
+// The game's update of the HUDWarnings panel keeps the terror zone text in a string at this+0x1e8 (pointer) and this+0x1f0 (length). Each frame it sets the
+// widget at this+0x180 from that string, shows the widget only when the length is not 0, and then lays the panel's visible children out one under the other.
+// While a map is open the hook hands the game the map text as the zone string for that call when no zone is on (so the widget is shown and laid out), puts the
+// game's own string back, and then writes the map text into the widget: the map text takes the zone lines' place with a zone on or off. Outside a map
+// it passes through. Kept apart from the lock: __try and objects with destructors do not mix.
 constexpr int HudTerrorWidgetOffset = 0x180;
+constexpr int HudTextPtrOffset = 0x1e8;
 constexpr int HudTextLenOffset = 0x1f0;
 constexpr int WidgetSetVisibleSlot = 0x50;
 
-auto ZoneTextLength(void* self) noexcept -> uint64_t {
-	__try {
-		return At<uint64_t>(self, HudTextLenOffset);
-	} __except (EXCEPTION_EXECUTE_HANDLER) {
-		return 0;
-	}
-}
+// The game's zone string (pointer and length) as it stands, and a swap to another one; false on a memory fault.
+struct ZoneString {
+	void* data;
+	uint64_t length;
+};
 
-auto WriteHudText(void* self, const char* text, size_t size) noexcept -> bool {
+auto GetZoneString(void* self, ZoneString* out) noexcept -> bool {
 	__try {
-		void* const widget = At<void*>(self, HudTerrorWidgetOffset);
-		if (widget == nullptr) {
-			return true;
-		}
-		const StringView view{text, size};
-		Call<SetTextFn>(SetText)(widget, &view);
-		void** const vtable = *static_cast<void***>(widget);
-		reinterpret_cast<void (*)(void*, bool)>(vtable[WidgetSetVisibleSlot / sizeof(void*)])(widget, true);
+		out->data = At<void*>(self, HudTextPtrOffset);
+		out->length = At<uint64_t>(self, HudTextLenOffset);
 		return true;
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		return false;
 	}
 }
 
+auto SetZoneString(void* self, const ZoneString& value) noexcept -> bool {
+	__try {
+		*reinterpret_cast<void**>(static_cast<char*>(self) + HudTextPtrOffset) = value.data;
+		*reinterpret_cast<uint64_t*>(static_cast<char*>(self) + HudTextLenOffset) = value.length;
+		return true;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+// 1: written, 0: a memory fault, 2: the game has no terror zone widget (yet).
+auto WriteHudText(void* self, const char* text, size_t size) noexcept -> int {
+	__try {
+		void* const widget = At<void*>(self, HudTerrorWidgetOffset);
+		if (widget == nullptr) {
+			return 2;
+		}
+		const StringView view{text, size};
+		Call<SetTextFn>(SetText)(widget, &view);
+		void** const vtable = *static_cast<void***>(widget);
+		reinterpret_cast<void (*)(void*, bool)>(vtable[WidgetSetVisibleSlot / sizeof(void*)])(widget, true);
+		return 1;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return 0;
+	}
+}
+
 auto HudUpdateHook(void* self, void* a2, void* a3, void* a4) noexcept -> uint64_t {
 	if (!g_hudLive.load(std::memory_order_relaxed) || !g_inMap.load(std::memory_order_relaxed) || self == nullptr) {
-		g_hudZone = false;
+		g_hudShown = false;
 		return g_hudOriginal(self, a2, a3, a4);
 	}
-	const bool zone = ZoneTextLength(self) != 0;  // the game's text of the last update
-	const uint64_t result = g_hudOriginal(self, a2, a3, a4);
-	const bool zoneNow = ZoneTextLength(self) != 0;
-	bool ok = true;
-	bool wrote = false;
-	if (zone && zoneNow) {
+	bool haveText = false;
+	try {
+		std::lock_guard<std::mutex> lock(g_lock);
+		haveText = !g_textHud.empty();
+	} catch (...) {
+	}
+	if (!haveText) {
+		g_hudShown = false;
+		return g_hudOriginal(self, a2, a3, a4);
+	}
+	ZoneString zone{};
+	bool ok = GetZoneString(self, &zone);
+	const bool forced = ok && zone.length == 0;
+	int written = 1;
+	if (forced) {
+		// No zone: the game would hide the widget and lay the panel out without it. Hand it the map text as the zone string for this call, so it
+		// shows and sizes the widget; its own string goes back right after.
 		try {
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (!g_text.empty()) {
-				ok = WriteHudText(self, g_text.c_str(), g_text.size());
-				wrote = ok;
+			g_hudBuffer = g_textHud;
+		} catch (...) {
+			ok = false;
+		}
+		ok = ok && SetZoneString(self, ZoneString{g_hudBuffer.data(), g_hudBuffer.size()});
+	}
+	const uint64_t result = g_hudOriginal(self, a2, a3, a4);
+	if (forced) {
+		ok = SetZoneString(self, zone) && ok;
+	}
+	if (ok) {
+		try {
+			std::lock_guard<std::mutex> lock(g_lock);
+			if (!g_textHud.empty()) {
+				written = WriteHudText(self, g_textHud.c_str(), g_textHud.size());
+				ok = written != 0;
 			}
 		} catch (...) {
 		}
 	}
-	g_hudZone = wrote;
-	if (wrote && g_hudWrites.fetch_add(1) < 3) {
-		plog::Info("map panel: map text written into the game's terror zone text");
+	const bool shown = ok && written == 1;
+	if (shown != g_hudShown.exchange(shown)) {
+		plog::Info("map panel: %s (zone %s)", shown ? "map text written into the game's terror zone text" : "the game has no terror zone text widget here; the plugin's own panel is used",
+			forced ? "off" : "on");
 	}
 	if (!ok) {
 		g_hudLive = false;  // the game's text shows again; the plugin's own panel takes over
 		plog::Error("map panel: memory fault while writing the terror zone text; back to the plugin's own panel");
 	}
 	return result;
+}
+
+// The two panel texts have the same line count, an empty line where the other has text: one text takes the non-empty line of each.
+auto MergeLines(const std::string& gold, const std::string& blue) -> std::string {
+	std::string out;
+	size_t a = 0;
+	size_t b = 0;
+	while (a <= gold.size() || b <= blue.size()) {
+		const size_t ae = a <= gold.size() ? (std::min)(gold.find('\n', a), gold.size()) : gold.size();
+		const size_t be = b <= blue.size() ? (std::min)(blue.find('\n', b), blue.size()) : blue.size();
+		const std::string g = a <= gold.size() ? gold.substr(a, ae - a) : std::string();
+		const std::string u = b <= blue.size() ? blue.substr(b, be - b) : std::string();
+		if (!out.empty()) {
+			out += '\n';
+		}
+		out += g.empty() ? u : g;
+		a = ae + 1;
+		b = be + 1;
+	}
+	return out;
 }
 
 // Something other than this plugin may close the panel (a game left): the next task then opens it again.
@@ -418,7 +484,7 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 		if (g_on.load()) {
 			std::string want;
 			std::string wantBlue;
-			if (g_inMap.load() && !g_hudZone.load()) {  // with the game's own field in use the plugin's panel stays closed
+			if (g_inMap.load() && !g_hudShown.load()) {  // with the game's own field in use the plugin's panel stays closed
 				std::lock_guard<std::mutex> lock(g_lock);
 				want = g_text;
 				wantBlue = g_textBlue;
@@ -436,7 +502,7 @@ void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Fr
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!(g_on.load() && ((g_inMap.load() && !g_hudZone.load()) || g_open)) && !(g_bannerOn.load() && BannerPending())) {
+	if (!(g_on.load() && ((g_inMap.load() && !g_hudShown.load()) || g_open)) && !(g_bannerOn.load() && BannerPending())) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
@@ -652,6 +718,7 @@ void MapPanelNoMap() {
 	g_mapOpen = false;
 	g_text.clear();
 	g_textBlue.clear();
+	g_textHud.clear();
 	g_slotLevel = -1;
 	g_inMap = false;
 }
@@ -661,6 +728,7 @@ void MapPanelMapOpened(const std::string& gold, const std::string& blue, int slo
 	g_mapOpen = true;
 	g_text = gold;
 	g_textBlue = blue;
+	g_textHud = MergeLines(gold, blue);
 	g_slotLevel = slotLevel;
 	g_inMap = false;  // the player's tick says when it stands in the map
 }
@@ -681,6 +749,7 @@ void MapPanelGameLeft() noexcept {
 	g_mapOpen = false;
 	g_text.clear();
 	g_textBlue.clear();
+	g_textHud.clear();
 	g_slotLevel = -1;
 	g_inMap = false;
 	g_bannerStartMs = 0;  // a banner still open is out of time: the next pass closes it (bannerVisible of the whole tick count is false)
@@ -702,7 +771,7 @@ auto MapPanelSummary() -> std::string {
 		return "Map panel: off (a memory fault; see the plugin log)";
 	}
 	if (g_hudLive.load()) {
-		return "Map text: on, in the game's terror zone text while a zone is on, otherwise in the own panel";
+		return "Map text: on, in the game's terror zone text field inside a map";
 	}
 	if (!g_on.load()) {
 		return "Map panel: off (a game part or D2RLoader service was not found)";
