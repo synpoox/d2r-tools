@@ -68,7 +68,9 @@ using PickFn = uint64_t (*)(void* room, int32_t clearFixed) noexcept;
 enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAddRoom, MazeLinkRooms, MazePiecePicker,
                   // Only checked, never called or hooked: the level-entry finder, its first-room-with-flags helper and the flag test. They gate
                   // MarkArrival alone; a missing one leaves the arrival to the game and does not turn the steering off.
-                  ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest, MazePartCount };
+                  ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest,
+                  // Hooked only with WovenProbe on (issue #415): the room tile loader, to log which DT1 files a room loads. Never needed for steering.
+                  RoomTileLoader, MazePartCount };
 constexpr int MazeSteerParts = ArrivalFinder;  // the parts the steering needs
 
 Part g_parts[MazePartCount] = {
@@ -82,6 +84,7 @@ Part g_parts[MazePartCount] = {
 	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
+	{"RoomTileLoader", sig::RoomTileLoader, 15, false, nullptr, {}, {}},
 };
 
 LevelBuildFn g_levelOriginal = nullptr;
@@ -89,6 +92,10 @@ std::atomic<bool> g_levelBuildTried{false};  // InstallMazeHooks reached the lev
 WalkFn g_walkOriginal = nullptr;
 SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
+
+using RoomTilesFn = void (*)(uint8_t dataFlag, void* room) noexcept;
+RoomTilesFn g_roomTilesOriginal = nullptr;
+std::atomic<int> g_wovenBase{0};  // WovenProbe: the Def of the first Cave copy row, 0 off (set by SetMazeTables)
 
 std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
@@ -528,6 +535,33 @@ void Fallback(BuildCtx& ctx, const std::string& why) noexcept {
 	plog::Warn("maze slot level %d: falling back to the game's own maze build: %s", ctx.level != nullptr ? Read<int32_t>(ctx.level, LvlId) : -1, why.c_str());
 }
 
+// Woven tilesets prototype P1 (issue #415, RE note 33 section 7), debug only (WovenProbe): in a Lava plan, every room that is a straight run (exits W and E, or N
+// and S) takes the Cave copy of its piece instead (the copy rows are lvlprest rows the test mod adds: Cave's 15 rows with Dt1Mask 1 << 11, the Cave file appended to the
+// Lava LevelType). The write is the filler ring's: the piece id after the picker has run. A copy id is base + mask - 1 (the Cave row for mask m is 52 + m).
+void WovenGuestRooms(BuildCtx& ctx) {
+	const int base = g_wovenBase.load();
+	if (base <= 0 || ctx.prep.plan->tileset.levelType != 28) {
+		return;
+	}
+	const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
+	int made = 0;
+	for (size_t i = 0; i < plan.rooms.size(); ++i) {
+		const cm::Room& r = plan.rooms[i];
+		if (r.mask != 3 && r.mask != 12) {
+			continue;
+		}
+		uint8_t* piece = Read<uint8_t*>(ctx.rooms[i], RoomPiece);
+		if (piece == nullptr || !Readable(piece + PieceId, 4)) {
+			continue;
+		}
+		const int32_t was = Read<int32_t>(piece, PieceId);
+		Write<int32_t>(piece, PieceId, base + r.mask - 1);
+		++made;
+		plog::Info("[woven] plan room %d (cell %d,%d, exit mask %d): piece %d -> Cave copy %d", static_cast<int>(i), r.dx, r.dy, static_cast<int>(r.mask), was, base + r.mask - 1);
+	}
+	plog::Info("[woven] %d of %d plan rooms took a Cave copy piece (WovenProbe %d)", made, static_cast<int>(plan.rooms.size()), base);
+}
+
 // Replaces the walk: the plan's rooms in creation order, then its loop links, then the piece of every room.
 // False (with ctx.why set by the caller from `why`) when the engine refuses a step; the caller then lets the game's walk finish.
 auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may throw (strings, vectors); WalkHook catches
@@ -596,6 +630,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 			plog::Info("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		}
 	}
+	WovenGuestRooms(ctx);
 	for (size_t i = 0; i < n; ++i) {
 		if (!cm::fixAfterWalk(plan, static_cast<int>(i))) {
 			continue;
@@ -704,6 +739,45 @@ void RingHook(void* level, int32_t n) noexcept {
 		return;
 	}
 	g_ringOriginal(level, n);
+}
+
+// WovenProbe: after the game's room tile loader (RE note 33 section 2) has run, log the room's piece id, its DT1 mask and the file names on its tile list (room +0xb0: 32
+// slots, each a pointer to the interned name). One line per distinct (piece, mask, list); counts at the end of the game. Reads only.
+std::mutex g_tileLock;
+std::map<std::string, int> g_tileLists;
+
+void RoomTileLoaderHook(uint8_t dataFlag, void* room) noexcept {
+	if (g_roomTilesOriginal == nullptr) {
+		return;
+	}
+	g_roomTilesOriginal(dataFlag, room);
+	try {
+		const void* level = Read<const void*>(room, 0x90);
+		if (level == nullptr || !IsMazeSlotLevel(Read<int32_t>(level, LvlId))) {
+			return;
+		}
+		const void* piece = Read<const void*>(room, RoomPiece);
+		std::string list;
+		for (int i = 0; i < 32; ++i) {
+			const char* name = Read<const char*>(room, 0xb0 + i * 8);
+			if (name == nullptr || !Readable(name, 1)) {
+				continue;
+			}
+			char text[96] = {};
+			for (int k = 0; k < 95 && Readable(name + k, 1) && name[k] != '\0'; ++k) {
+				text[k] = name[k];
+			}
+			list += (list.empty() ? "" : ", ") + std::string(text);
+		}
+		char head[160];
+		std::snprintf(head, sizeof(head), "piece %d, mask 0x%x: ", piece != nullptr ? Read<int32_t>(piece, PieceId) : -1, Read<uint32_t>(room, 0x80));
+		const std::string key = head + list;
+		std::lock_guard<std::mutex> lock(g_tileLock);
+		if (++g_tileLists[key] == 1) {
+			plog::Info("[woven] room tile list: %s (first room at %d,%d %d x %d)", key.c_str(), Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH));
+		}
+	} catch (...) {
+	}
 }
 
 // The row of cm::MazeTilesets whose slot level `level` is, or -1.
@@ -850,6 +924,7 @@ void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
 	for (size_t i = 0; i < cm::MazeTilesetCount; ++i) {
 		g_slotLevels[i] = tables != nullptr ? SlotLevel(tables->slots, cm::MazeTilesets[i].slot) : -1;
 	}
+	g_wovenBase = tables != nullptr ? tables->settings.wovenProbe : 0;
 	g_probe = tables != nullptr && (tables->settings.mazeProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
 
@@ -922,6 +997,13 @@ void MazeMapCancelled() {
 
 void MazeGameLeft() {
 	g_dataFlag = -1;
+	{
+		std::lock_guard<std::mutex> tileLock(g_tileLock);
+		for (const auto& entry : g_tileLists) {
+			plog::Info("[woven] room tile list seen %d time(s): %s", entry.second, entry.first.c_str());
+		}
+		g_tileLists.clear();
+	}
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();
 	g_cache = {};
@@ -1083,6 +1165,15 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 		return;
 	}
 	g_live = true;
+	if (g_wovenBase.load() > 0) {
+		// Debug only; a refusal leaves the steering and the guest write as they are (the tile list is just not logged).
+		Part& part = g_parts[RoomTileLoader];
+		if (part.status.on) {
+			const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+			const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&RoomTileLoaderHook), reinterpret_cast<void**>(&g_roomTilesOriginal));
+			(void)HookOutcome(part, hooked, g_roomTilesOriginal != nullptr);
+		}
+	}
 }
 
 }  // namespace carto

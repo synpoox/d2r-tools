@@ -62,6 +62,10 @@ inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 8
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
 inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
 
+// The room tile loader (RE note 33, section 2): (dataFlag, room) appends the level type's DT1 names its mask selects to the room's tile list. Hooked
+// (15 bytes, whole instructions) only when WovenProbe is on, to log which files a room loads; never otherwise.
+inline constexpr const char* RoomTileLoader = "48 89 5C 24 18 55 56 57 48 81 EC 40 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 30 01 00 00 48 8B 82 90 00 00 00";
+
 // The outdoor slot parts (build 93847; cartographer/04-outdoor-spike.md and 08-outdoor-builder.md), re-checked by tools/check_maze_signatures.py. src/engine/outdoor_hooks.cpp
 // hooks OutdoorAct5Builder (16 bytes) and, when the maze hook does not, LevelBuild (14 bytes); it only calls OutdoorEntry, PieceStamp and VoidCell.
 // The hook lengths are derived in section 8a (capstone, no relative operand inside a patch) and pinned in tools/check_maze_signatures.py.
