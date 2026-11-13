@@ -20,5 +20,6 @@
 | `0x3fac10` | Act 1 per-act builder `(dataFlag, level)`. Signed; hooked and counted: still called for levels 2 and 3 when a game starts (§4). Callers not logged | outdoor plan, probe step S0; §4 |
 | `0x3e2b5ce` / `[0x3e2ac38]` | D2RLoader stub `JMP [0x3e2ac38]` into D2RCore, taken by `0x3271c0` for type 3. Found by following the first `E8` in `0x3271c0` whose target starts `FF 25`; the pointer held an address inside `D2RCore.dll` (§4) | outdoor plan 2; §4 |
 | `0x3e2b5c8` | D2RCore's act lookup `int8 (u8 dataFlag, int32 level id)`, a `FF 25` stub into `D2RCore.dll`. Found as the first `E8` in `0x3ee320` whose target starts `FF 25`, not a fixed RVA. Returned 4 for the slot id 138 (§4) | outdoor plan 1.1; §4 |
-| `0x3f3970` | Room loader: adds a room's DT1s from `level+0x1e0`. Planned hook for mixed tilesets (plan phase 9) | outdoor plan; cartographer-plugin.md |
+| `0x3f3970` | Room loader `(dataFlag, room)`: adds the level row's files for the set bits of `[room+0x80]` (row at `[level+0x1e0]`, files `0x3c` bytes apart), plus three fixed DT1s. Signature recorded and unique in 33. Planned hook for mixed tilesets (plan phase 9) | §33; outdoor plan; cartographer-plugin.md |
+| `0x32c300` / `0x32bdf0` | LvlTypes row getter `(levelType)` (row stride `0x781`) / automap tile lookup `(levelType, tileType, style, sequence)`. Unsigned here, static only | §33 |
 | `0x86bc0` | Client act load: preloads only the current act's LvlTypes DT1s. Fallback hook for cross-act tiles | outdoor plan |
