@@ -94,6 +94,29 @@ try {
     $before = (Get-FileHash $statPath).Hash
     $log5 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $statPath).Hash -eq $before) 'a monster row and a density row with other widths are left alone'
+
+    # The Map item type (cmap): a fresh run writes it with Rare on and Magic and Normal off, a row from an older install (Magic 1, Rare 0) is repaired in place, and a run after that changes nothing.
+    function Get-MapType { $h = (Get-Content (Join-Path $dir 'itemtypes.txt') -TotalCount 1) -split "`t"; $r = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' }); @{ Header = $h; Row = $r } }
+    $mt = Get-MapType
+    $iCode = [array]::IndexOf($mt.Header, 'Code'); $iRare = [array]::IndexOf($mt.Header, 'Rare'); $iMagic = [array]::IndexOf($mt.Header, 'Magic'); $iNormal = [array]::IndexOf($mt.Header, 'Normal')
+    Check ($mt.Row.Count -eq 1) 'a fresh run writes one cmap item type row'
+    $cmap = $mt.Row[0]
+    Check ($cmap[$iRare] -eq '1' -and $cmap[$iMagic] -eq '0' -and $cmap[$iNormal] -eq '0') "the new cmap row has Rare 1, Magic 0, Normal 0 (got $($cmap[$iRare]) $($cmap[$iMagic]) $($cmap[$iNormal]))"
+    $typePath = Join-Path $dir 'itemtypes.txt'
+    $typeText = [System.IO.File]::ReadAllText($typePath)
+    $oldRow = ($cmap -join "`t"); $staleRow = $cmap.Clone(); $staleRow[$iRare] = '0'; $staleRow[$iMagic] = '1'; $staleRow[$iNormal] = ''
+    Check ($typeText.Contains($oldRow)) 'the cmap row is found in the table'
+    [System.IO.File]::WriteAllText($typePath, $typeText.Replace($oldRow, ($staleRow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $log6 = Run-Installer
+    Check ($LASTEXITCODE -eq 0) 'a run on an old cmap row succeeds'
+    $mt = Get-MapType
+    Check ($mt.Row.Count -eq 1) 'the repair adds no item type row'
+    $fixedType = $mt.Row[0]
+    Check ($fixedType[$iRare] -eq '1' -and $fixedType[$iMagic] -eq '0' -and $fixedType[$iNormal] -eq '0') "the old cmap row is repaired to Rare 1, Magic 0, Normal 0 (got $($fixedType[$iRare]) $($fixedType[$iMagic]) $($fixedType[$iNormal]))"
+    Check (($fixedType -join "`t") -eq $oldRow) 'the repair changes only those cells'
+    $before = (Get-FileHash $typePath).Hash
+    $log7 = Run-Installer
+    Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
 } finally {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }

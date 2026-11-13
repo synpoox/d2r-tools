@@ -59,6 +59,14 @@ struct GameNames {
 	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
 };
 
+// misc.txt text: the code and pSpell of every item that has a code (a blank pSpell is 0) go to `spells`, the codes with compactsave 1 to `compact`.
+// False when the code or pSpell column is missing (a missing compactsave column is fine: nothing is compact).
+auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact) -> bool;
+
+// magicprefix.txt, magicsuffix.txt or uniqueitems.txt text (`file` names it in the report): a note for each mon-speed mod whose lowest value is
+// -100 or lower, because the plugin cuts a monster speed to -99 (a speed of -100 stops monsters, lower sends them backwards).
+void CheckMonSpeedRows(std::string_view text, const std::string& file, Report& report);
+
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
 struct BossDef {
 	int line = 0;  // row in bosses.txt

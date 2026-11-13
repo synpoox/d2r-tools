@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A map's `mon-speed` can no longer stop monsters or make them walk backwards: it is cut to -99, and `cartographer check` warns about a row at -100 or lower.
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.

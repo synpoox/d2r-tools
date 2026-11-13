@@ -417,6 +417,43 @@ auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {
 	return rowFound ? BossPath::Superunique : (baseFound ? BossPath::PlainMonster : BossPath::None);
 }
 
+auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact) -> bool {
+	const Tsv table = ParseTsv(text);
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
+	if (cCode < 0 || cSpell < 0) {
+		return false;
+	}
+	for (const TsvRow& row : table.rows) {
+		const std::string code = table.Cell(row, cCode);
+		if (!code.empty()) {
+			spells->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
+			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
+				compact->push_back(code);
+			}
+		}
+	}
+	return true;
+}
+
+void CheckMonSpeedRows(std::string_view text, const std::string& file, Report& report) {
+	const Tsv table = ParseTsv(text);
+	for (const TsvRow& row : table.rows) {
+		for (int n = 1; n <= 12; ++n) {
+			const std::string i = std::to_string(n);
+			// Affix files name the mod columns modNcode/modNmin/modNmax, uniqueitems.txt propN/minN/maxN.
+			int cCode = table.Column("mod" + i + "code"), cMin = table.Column("mod" + i + "min");
+			if (cCode < 0) {
+				cCode = table.Column("prop" + i);
+				cMin = table.Column("min" + i);
+			}
+			int low = 0;
+			if (cCode >= 0 && cMin >= 0 && table.Cell(row, cCode) == "mon-speed" && ParseInt(table.Cell(row, cMin), -1000000, 1000000, &low) && low <= -100) {
+				report.Note(file, row.line, "mon-speed goes down to " + std::to_string(low) + ". A monster speed of -100 or lower would stop monsters or send them backwards, so the plugin cuts it to -99. Keep it above -100.");
+			}
+		}
+	}
+}
+
 auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef* {
 	for (const BossDef& def : bosses) {
 		if (EqualsNoCase(def.name, value)) {

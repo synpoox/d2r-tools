@@ -56,6 +56,8 @@ uint64_t mix(uint64_t x)
 	return x ^ (x >> 31);
 }
 
+constexpr int kVelocityStatId = 67; // velocitypercent, the engine's fixed id (0x43)
+
 } // namespace
 
 std::string StatIds::nameOf(int id) const
@@ -180,6 +182,10 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 			continue;
 		}
 		Entry e{p.stat, id, p.value};
+		if (p.target == Target::Monsters && (p.stat == "velocitypercent" || id == kVelocityStatId) && e.value < kMinMonsterSpeed) {
+			plan.notes.push_back("'" + p.stat + "' " + std::to_string(e.value) + " on monsters is cut to " + std::to_string(kMinMonsterSpeed) + ": -100 or lower would stop them or send them backwards.");
+			e.value = kMinMonsterSpeed;
+		}
 		(p.target == Target::Monsters ? plan.monsters : plan.players).push_back(e);
 	}
 	return plan;

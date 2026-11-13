@@ -838,3 +838,47 @@ TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a
 	CHECK(mapped.properties[0] == Property{Target::Players, "item_magicbonus", 15});
 	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
 }
+
+TEST_CASE("a monster velocitypercent is cut to -99 so a map never stops or reverses monsters, with a note")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"velocitypercent", 67}, {"damagepercent", 25}};
+	const auto plan = buildPlan({{Target::Monsters, "velocitypercent", -512}, {Target::Monsters, "velocitypercent", -100}, {Target::Monsters, "velocitypercent", -99},
+	                             {Target::Monsters, "velocitypercent", -50}, {Target::Monsters, "velocitypercent", 40}, {Target::Monsters, "damagepercent", -300}},
+	                            ids);
+	REQUIRE(plan.monsters.size() == 6);
+	CHECK(plan.monsters[0].value == -99);
+	CHECK(plan.monsters[1].value == -99);
+	CHECK(plan.monsters[2].value == -99);
+	CHECK(plan.monsters[3].value == -50);
+	CHECK(plan.monsters[4].value == 40);
+	CHECK(plan.monsters[5].value == -300);  // only the speed is cut
+	REQUIRE(plan.notes.size() == 2);        // one note for each value that was cut (-512 and -100)
+	CHECK(plan.notes[0].find("-512") != std::string::npos);
+	CHECK(plan.notes[0].find("-99") != std::string::npos);
+	// A speed on the player is the player's own and is not cut.
+	const auto player = buildPlan({{Target::Players, "velocitypercent", -150}}, ids);
+	REQUIRE(player.players.size() == 1);
+	CHECK(player.players[0].value == -150);
+	CHECK(player.notes.empty());
+	// The cut goes through the map item's own stat too.
+	StatIds item = parseItemStatCost("Stat\ncartographer_mon_speed\n");
+	const auto mapped = itemStatsToProperties({{0, 0, -300}}, item);
+	REQUIRE(mapped.properties.size() == 1);
+	CHECK(mapped.properties[0] == cartographer::statplan::Property{Target::Monsters, "velocitypercent", -300});
+}
+
+TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a known gap in the guard, RE note 14 section 16)")
+{
+	// {stat << 16 | layer, value} pairs with a value of 0 read as 16-byte entries {layer, stat 0, value, 0}: the guard cannot tell them apart.
+	// The game never lists a stat with value 0, so real pairs do not look like this.
+	const int32_t pairs[] = {5, 0, 7, 0};
+	std::string problem;
+	const auto r = decodeItemStatList(pairs, 1, 16, &problem);
+	REQUIRE(r.size() == 1);
+	CHECK(problem.empty());
+	CHECK(r[0].layer == 5);
+	CHECK(r[0].stat == 0);
+	CHECK(r[0].value == 7);
+}
