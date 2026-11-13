@@ -73,6 +73,13 @@ public:
 		mask_[idx(b)] = static_cast<uint8_t>(mask_[idx(b)] | kBit[opposite(d)]);
 	}
 
+	void unlink(Point a, Point b)
+	{
+		const int d = dirBetween(a, b);
+		mask_[idx(a)] = static_cast<uint8_t>(mask_[idx(a)] & ~kBit[d]);
+		mask_[idx(b)] = static_cast<uint8_t>(mask_[idx(b)] & ~kBit[opposite(d)]);
+	}
+
 	// Removes a cell and every link to it.
 	void remove(Point c)
 	{
@@ -578,6 +585,74 @@ bool addLoops(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
 	return static_cast<int>(d.loops.size()) >= r.loopsMin;
 }
 
+// --- an open map --------------------------------------------------------------------------------------------------
+
+// Fills the whole grid with rooms linked to every neighbour, then closes a few links as walls. A link is closed only when its
+// two rooms keep at least two links each (no dead ends) and are still joined round one of the two squares beside it, so the
+// layout stays connected after every step. The main path is the shortest walk from an entrance on the border to the farthest room.
+bool buildOpen(Grid &g, Pcg32 &rng, const Rules &r, Draft &d, Work &work)
+{
+	const int w = g.width(), h = g.height();
+	work.charge(static_cast<int64_t>(w) * h * 8);
+	for (int y = 0; y < h; ++y)
+		for (int x = 0; x < w; ++x) g.place(Point{x, y});
+	std::vector<std::pair<Point, int>> edges; // (cell, kDirE or kDirS)
+	for (int y = 0; y < h; ++y)
+		for (int x = 0; x < w; ++x) {
+			if (x + 1 < w) { g.link(Point{x, y}, Point{x + 1, y}); edges.push_back({Point{x, y}, kDirE}); }
+			if (y + 1 < h) { g.link(Point{x, y}, Point{x, y + 1}); edges.push_back({Point{x, y}, kDirS}); }
+		}
+	for (size_t i = edges.size(); i > 1; --i) std::swap(edges[i - 1], edges[rng.below(static_cast<uint32_t>(i))]);
+	auto linked = [&](Point a, int dir) { return g.inside(step(a, dir)) && (g.mask(a) & kBit[dir]) != 0; };
+	int walls = static_cast<int>(edges.size()) * r.wallPct / 100;
+	for (const auto &e : edges) {
+		if (walls <= 0) break;
+		const Point a = e.first;
+		const int dir = e.second;
+		const Point b = step(a, dir);
+		if (g.degree(a) < 3 || g.degree(b) < 3) continue;
+		bool detour = false;
+		const int perp[2] = {dir == kDirE ? kDirS : kDirW, dir == kDirE ? kDirN : kDirE};
+		for (int p : perp) detour = detour || (linked(a, p) && linked(b, p) && linked(step(a, p), dir));
+		if (!detour) continue;
+		g.unlink(a, b);
+		--walls;
+	}
+
+	// Entrance on the border; boss at the farthest room (first in row-major order among equals); the path between.
+	std::vector<Point> border;
+	for (int y = 0; y < h; ++y)
+		for (int x = 0; x < w; ++x)
+			if (x == 0 || y == 0 || x == w - 1 || y == h - 1) border.push_back(Point{x, y});
+	const Point start = border[rng.below(static_cast<uint32_t>(border.size()))];
+	std::vector<int> dist(static_cast<size_t>(w) * h, -1);
+	std::vector<Point> parent(static_cast<size_t>(w) * h, kNoPoint), queue;
+	queue.push_back(start);
+	dist[static_cast<size_t>(start.y) * w + start.x] = 0;
+	for (size_t head = 0; head < queue.size(); ++head) {
+		const Point c = queue[head];
+		for (int dir = 0; dir < 4; ++dir) {
+			if (!(g.mask(c) & kBit[dir])) continue;
+			const Point n = step(c, dir);
+			int &dn = dist[static_cast<size_t>(n.y) * w + n.x];
+			if (dn >= 0) continue;
+			dn = dist[static_cast<size_t>(c.y) * w + c.x] + 1;
+			parent[static_cast<size_t>(n.y) * w + n.x] = c;
+			queue.push_back(n);
+		}
+	}
+	if (static_cast<int>(queue.size()) != w * h) return false;
+	Point far = start;
+	for (const Point &p : queue)
+		if (dist[static_cast<size_t>(p.y) * w + p.x] > dist[static_cast<size_t>(far.y) * w + far.x]) far = p;
+	std::vector<Point> path;
+	for (Point p = far; p != kNoPoint; p = parent[static_cast<size_t>(p.y) * w + p.x]) path.push_back(p);
+	std::reverse(path.begin(), path.end());
+	d.path = path;
+	d.ring = false;
+	return true;
+}
+
 // --- assembling a layout ------------------------------------------------------------------------------------------
 
 Layout assemble(const Grid &g, const Draft &d)
@@ -608,6 +683,13 @@ Layout assemble(const Grid &g, const Draft &d)
 	l.branches = d.branches;
 	l.loops = d.loops;
 	return l;
+}
+
+// The rooms off the main path of an open map are side rooms (every room of the grid is used).
+void markOpenRooms(Layout &l)
+{
+	for (Cell &c : l.cells)
+		if (c.role == Role::Empty && c.mask != 0) c.role = Role::Branch;
 }
 
 // --- the fallback -------------------------------------------------------------------------------------------------
@@ -775,6 +857,11 @@ const Preset kPresets[kShapeCount][kSizeCount] = {
 	 {12, 16, 0, 3, 99, 2, 4, 1, 2, 0, 1, true},
 	 {20, 28, 0, 3, 99, 4, 7, 1, 3, 0, 2, true},
 	 {32, 40, 0, 3, 99, 6, 10, 2, 4, 0, 2, true}},
+	// Open: an open room grid, every cell a room. Only the main path's length is used (entrance to the farthest room).
+	{{4, 16, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
+	 {4, 36, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
+	 {4, 81, 0, 0, 99, 0, 0, 1, 1, 0, 0, false},
+	 {4, 144, 0, 0, 99, 0, 0, 1, 1, 0, 0, false}},
 };
 
 const int kGridSize[kSizeCount] = {4, 6, 9, 12};
@@ -783,7 +870,7 @@ const int kGridSize[kSizeCount] = {4, 6, 9, 12};
 
 const char *shapeName(Shape shape)
 {
-	static const char *const names[kShapeCount] = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
+	static const char *const names[kShapeCount] = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
 	return names[static_cast<int>(shape)];
 }
 
@@ -824,6 +911,7 @@ Rules presetRules(Shape shape, Size size)
 	r.loopsMin = p.loopsMin;
 	r.loopsMax = p.loopsMax;
 	r.loop = p.loop;
+	r.open = shape == Shape::Open;
 	return r;
 }
 
@@ -833,7 +921,7 @@ std::string validateRules(const Rules &r)
 		return "Width and Height must each be between 2 and 32 cells.";
 	if (r.pathMin < 4) return "MinPath must be at least 4: the path needs an entrance, an event room, a boss room and one more.";
 	if (r.pathMin > r.pathMax) return "MinPath can't be more than MaxPath.";
-	if (r.pathMax > r.width * r.height) return "MaxPath is more cells than fit in the Width x Height grid.";
+	if (r.pathMax > r.width * r.height && !r.open) return "MaxPath is more cells than fit in the Width x Height grid.";
 	if (r.straightPct < 0 || r.straightPct > 100) return "Straight must be a percent between 0 and 100.";
 	if (r.turnsMin < 0) return "MinTurns can't be negative.";
 	if (r.turnsMin > r.turnsMax) return "MinTurns can't be more than MaxTurns.";
@@ -850,6 +938,12 @@ std::string validateRules(const Rules &r)
 	if (static_cast<int64_t>(r.branchesMin) * r.branchLenMin + static_cast<int64_t>(r.loopsMin) * 2 > freeCells)
 		return "MinBranches x MinBranchLen (plus 2 cells per MinLoops) is more cells than the grid has beside the main path (" + std::to_string(freeCells) + ").";
 	if (r.eventPct < 1 || r.eventPct > 99) return "The event room position must be between 1 and 99 percent.";
+	if (r.open) {
+		if (r.loop) return "An Open map is not a Loop: set Loop to 0.";
+		if (r.branchesMax > 0 || r.loopsMax > 0) return "An Open map has no side rooms or extra loops: set MaxBranches and MaxLoops to 0.";
+		if (r.width < 3 || r.height < 3) return "An Open map needs a grid at least 3 cells wide and 3 high.";
+		if (r.wallPct < 0 || r.wallPct > 40) return "The wall percent of an Open map must be between 0 and 40.";
+	}
 	if (r.loop) {
 		bool evenFits = false;
 		for (int n = r.pathMin; n <= r.pathMax; ++n)
@@ -879,6 +973,13 @@ std::optional<Layout> attemptWithin(const Rules &r, uint64_t attemptSeed, Work &
 		Grid g(r.width, r.height);
 		work.charge(static_cast<int64_t>(r.width) * r.height);
 		Draft d;
+		if (r.open) {
+			if (!buildOpen(g, rng, r, d, work)) continue;
+			reserveRooms(r, d);
+			Layout l = assemble(g, d);
+			markOpenRooms(l);
+			return l;
+		}
 		if (r.loop) {
 			if (!buildRing(g, rng, r, d, work)) continue;
 		} else {
@@ -906,10 +1007,24 @@ Layout generateFallback(const Rules &r, uint64_t seed)
 {
 	Grid g(r.width, r.height);
 	Draft d;
-	if (r.loop) {
-		fallbackRing(g, r, d);
-	} else {
-		fallbackWalk(g, r, d);
+	if (r.open) {
+		Pcg32 rng(seed);
+		Work work;
+		if (buildOpen(g, rng, r, d, work)) {
+			reserveRooms(r, d);
+			Layout l = assemble(g, d);
+			markOpenRooms(l);
+			l.seed = seed;
+			l.attempt = kRetries;
+			l.fallback = true;
+			l.rulesMet = checkLayout(l, r).empty();
+			return l;
+		}
+	}
+	// An Open map that buildOpen could not build (rules validateRules refuses) stays an empty layout and reports rulesMet false.
+	if (!r.open) {
+		if (r.loop) fallbackRing(g, r, d);
+		else fallbackWalk(g, r, d);
 	}
 	reserveRooms(r, d);
 	fallbackBranches(g, r, d);
@@ -982,7 +1097,7 @@ std::vector<std::string> checkLayout(const Layout &l, const Rules &r)
 				const bool bit = (c.mask & kBit[d]) != 0;
 				if (bit && !used(n)) fail("cell " + at(x, y) + " has an exit to nothing");
 				else if (bit && !(l.at(n.x, n.y).mask & kBit[opposite(d)])) fail("cell " + at(x, y) + " and its neighbour disagree on a facing bit");
-				else if (!bit && used(n)) fail("cells " + at(x, y) + " and " + pt(n) + " touch without a link");
+				else if (!bit && used(n) && !r.open) fail("cells " + at(x, y) + " and " + pt(n) + " touch without a link");
 			}
 		}
 	if (usedCount == 0) { fail("the layout is empty"); return bad; }
@@ -1042,7 +1157,7 @@ std::vector<std::string> checkLayout(const Layout &l, const Rules &r)
 			const Point e = l.mainPath[static_cast<size_t>(l.eventIdx)];
 			if (!l.ring && l.eventIdx >= n - 1) fail("the event room is at the end of the path");
 			if (used(e) && l.at(e.x, e.y).role != Role::Event) fail("the event room cell has the wrong role");
-			if (used(e) && popcount4(l.at(e.x, e.y).mask) != 2) fail("the event room is not partway along (it has a branch)");
+			if (!r.open && used(e) && popcount4(l.at(e.x, e.y).mask) != 2) fail("the event room is not partway along (it has a branch)");
 		}
 		if (r.bossRoom) {
 			if (l.bossIdx < 1 || l.bossIdx >= n || l.bossIdx == l.eventIdx) {
@@ -1051,7 +1166,7 @@ std::vector<std::string> checkLayout(const Layout &l, const Rules &r)
 				const Point b = l.mainPath[static_cast<size_t>(l.bossIdx)];
 				if (!l.ring && l.bossIdx != n - 1) fail("the boss room is not at the end of the path");
 				if (used(b) && l.at(b.x, b.y).role != Role::Boss) fail("the boss room cell has the wrong role");
-				if (used(b) && popcount4(l.at(b.x, b.y).mask) != (l.ring ? 2 : 1)) fail("the boss room has the wrong number of exits");
+				if (!r.open && used(b) && popcount4(l.at(b.x, b.y).mask) != (l.ring ? 2 : 1)) fail("the boss room has the wrong number of exits");
 			}
 		} else if (l.bossIdx != -1) {
 			fail("a boss room was reserved but the rules have none");
@@ -1088,6 +1203,17 @@ std::vector<std::string> checkLayout(const Layout &l, const Rules &r)
 		const int len = static_cast<int>(b.cells.size());
 		if (len < 2 || len > kLoopBranchMax) fail("an extra loop has " + std::to_string(len) + " cells");
 		if (!b.closes || len == 0 || !linked(b.cells.back(), b.closeTo) || reserved(b.closeTo)) fail("an extra loop does not rejoin the layout");
+	}
+	if (r.open) {
+		// Every cell of the grid is a room, none is a dead end, and the walls are a few of the links (the grid has
+		// w*(h-1) + h*(w-1) of them; connectivity was checked above).
+		if (usedCount != l.width * l.height) fail("an open layout has an empty cell");
+		for (int y = 0; y < l.height; ++y)
+			for (int x = 0; x < l.width; ++x)
+				if (l.at(x, y).role != Role::Empty && popcount4(l.at(x, y).mask) < 2) fail("cell " + at(x, y) + " of an open layout is a dead end");
+		const int gridLinks = l.width * (l.height - 1) + l.height * (l.width - 1);
+		if (gridLinks - bitCount / 2 > gridLinks * r.wallPct / 100) fail("an open layout has more walls than " + std::to_string(r.wallPct) + " percent of its links");
+		return bad;
 	}
 	if (accounted != usedCount) fail("some cells belong to no path, side room or loop");
 
@@ -1241,7 +1367,7 @@ bool resolveDepth(const ShapeTable &table, std::string_view name, Size size, Rul
 	}
 	const ShapeDef *def = findCustom(table, name);
 	if (!def) {
-		error = "There is no shape called \"" + std::string(name) + "\". Use Corridor, Winding, Branching, Loop, Sprawl, or a Name from shapes.txt.";
+		error = "There is no shape called \"" + std::string(name) + "\". Use Corridor, Winding, Branching, Loop, Sprawl, Open, or a Name from shapes.txt.";
 		return false;
 	}
 	if (depth > 16) {

@@ -12,6 +12,8 @@
 //   * side branches (dead-end rooms): branchesMin..branchesMax of them, each branchLenMin..branchLenMax cells long;
 //   * a Loop closes the main path back onto the entrance, and "extra loops" are side branches that rejoin the layout;
 //   * unlinked cells never touch side to side, and every cell lies inside the width x height bounds.
+// An Open layout is the exception: every cell is a room, neighbours are linked except across a few walls, and the layout is
+// connected with no dead ends (see Rules::open).
 // Determinism: the layout depends on (rules, seed) only. Retries use splitmix64(seed ^ k) for k < 32, then a fallback.
 #pragma once
 #include <cstdint>
@@ -37,9 +39,9 @@ struct Point {
 	bool operator!=(const Point &o) const { return !(*this == o); }
 };
 
-enum class Shape : uint8_t { Corridor, Winding, Branching, Loop, Sprawl };
+enum class Shape : uint8_t { Corridor, Winding, Branching, Loop, Sprawl, Open };
 enum class Size : uint8_t { ExtraSmall, Small, Medium, Large };
-constexpr int kShapeCount = 5;
+constexpr int kShapeCount = 6;
 constexpr int kSizeCount = 4;
 
 // What a cell is for. Entrance, Event and Boss are the reserved rooms.
@@ -63,6 +65,10 @@ struct Rules {
 	int loopsMax = 0;
 	bool bossRoom = true;  // reserve the boss room at the end of the path
 	int eventPct = 50;     // the event room is this percent of the way along the main path
+	// Open (an open room grid): every cell of the grid is a room and neighbours are linked, but for a few walls. The main path
+	// is the shortest walk from the entrance to the farthest cell. Side rooms, loops and rings do not apply.
+	bool open = false;
+	int wallPct = 12;      // percent of the grid's links that become walls (an Open map only)
 };
 
 // Extra loops are internal-sized: a loop branch has 2..kLoopBranchMax cells.

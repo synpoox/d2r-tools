@@ -187,6 +187,17 @@ auto BossStringsJson(const std::vector<std::string>& names) -> std::string {
 	return out;
 }
 
+auto MapStatStringsJson() -> std::string {
+	std::string out = "[";
+	AppendRecord(out, MapLevelStatLocalKey, MapLevelStatText);
+	for (const MonsterStatText& m : MonsterStatTexts) {
+		out += ',';
+		AppendRecord(out, m.key, m.text);
+	}
+	out += "]";
+	return out;
+}
+
 auto WriteKey(uint8_t* field, const std::string& key) -> bool {
 	if (field == nullptr || !KeyFits(key)) {
 		return false;

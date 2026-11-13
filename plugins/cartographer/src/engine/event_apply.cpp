@@ -4,6 +4,7 @@
 #include "engine/auto_check.h"
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
+#include "engine/level_row.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"
 #include "engine/scan.h"
@@ -30,6 +31,7 @@ namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
 // --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/09-map-events.md.
+constexpr int GameDataFlagOffset = 0x106;    // uint8 on the game, what the engine's own room lookups read
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
@@ -671,6 +673,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 		return;
 	}
 	const RoomRects rects = ReadRects(room);
+	if (LevelRowProbeOn()) {
+		const std::string where = rects.ok ? Describe(rects.drlg) : std::string("unreadable");
+		LevelRowProbeRoom(game, state->level, At<uint8_t>(game, GameDataFlagOffset), where.c_str());
+	}
 	bool fire = false;
 	bool fireBoss = false;
 	bool planned = false;
@@ -1000,6 +1006,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
+	LevelRowProbeSet(tables->settings.mazeProbe != 0);
 	auto state = std::make_shared<State>();
 	state->mapName = map.name;
 	state->level = level;

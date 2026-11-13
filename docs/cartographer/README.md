@@ -58,7 +58,6 @@ Leave a cell blank, or leave a column out, and you get the default:
 |---|---|
 | Size | Medium |
 | Monster level | 85 |
-| Random properties | 6 |
 | Chance of an event | 20% |
 | Opens from | Harrogath |
 
@@ -83,11 +82,12 @@ The blank cell under `Level` for Tunneling Depths keeps level 85.
 | `Branching` | A main path with side rooms and dead ends |
 | `Loop` | A ring that comes back to where it started, with a few short side rooms |
 | `Sprawl` | Wide and open, with loops and many branches |
+| `Open` | An open room grid: every room joins its neighbours and only a few walls get in the way, so there are many crossings and no dead ends. It is not yet a bordered field; that is a later tileset. `Snow` cannot build it |
 
 ### The tilesets
 
 - **Indoor:** `Cave`, `Crypt`, `Lava` (Act 4 Lava). More follow: `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider`, `Temple`. Act 5 Lava follows under its own name (not yet set).
-- **Outdoor:** `Jungle`, then `Snow`.
+- **Outdoor:** `Jungle`, `Snow`, then `Siege` (Act 5 Bloody Foothills, one strip).
 
 A tileset that is not ready is refused when the game loads, with a message that says so.
 
@@ -101,25 +101,14 @@ A tileset that is not ready is refused when the game loads, with a message that 
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |
 | `Monsters` | Up to 10 monster `Id`s, separated by commas, with the case matching. Blank: the tileset's own monsters |
 | `MinCharLevel` | The character level the player needs |
-| `Properties` | How many random properties this map gets |
 | `EventChance` | Percent chance of an event |
 | `Density`, `Champions`, `Uniques` | Percent more monsters and unique packs than the level's own (experimental, not verified in game); `Champions` is read and checked but not applied |
 
 See [tables.md](tables.md) for every column of every file.
 
-## Random properties (optional, phase 5)
+## Map item modifiers
 
-Every map gets a few random properties. Some make monsters tougher. Some change what happens to players. They come from one shared list.
-
-Without a `mapstats.txt`, Cartographer uses a small built-in list. To use your own, add the file:
-
-```
-Target	Stat	Min	Max	Weight
-Monsters	item_maxhp_percent	10	20	3
-Players	fireresist	10	25	1
-```
-
-The text players see comes from the game's own stat description. You do not write any.
+A map item is meant to be normal, rare or unique (magic maps can still drop for now; a plugin hook to block them is planned). A rare map gets modifiers from the game's own affix tables (rows with `itype1` `cmap`); a unique map has its own in `uniqueitems.txt`. Some make monsters tougher (`mon-life`, `mon-damage` and so on); the others change what happens to you. They show on hover and apply when the map opens. See [tables.md](tables.md).
 
 ## Events (optional, phase 6)
 
@@ -134,7 +123,7 @@ The kinds are `Boss`, `Ambush`, `Horde`, `Treasure` and `Shrine`. Events with pu
 
 ## Global settings (optional, phase 5)
 
-`cartographer.txt` has two columns, `Setting` and `Value`. You can change the default number of properties, the default event chance, and the town the portal opens from.
+`cartographer.txt` has two columns, `Setting` and `Value`. You can change the default event chance, and the town the portal opens from.
 
 ## Advanced
 

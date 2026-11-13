@@ -1,12 +1,35 @@
 #include "outdoor_plan.h"
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
 #include "outdoor_tilesets.h"
+#include "siege_plan.h"
 #include "snow_plan.h"
 
 namespace cartographer::outdoor {
+
+std::string capJungleOpenRules(layout::Rules &rules) {
+	if (!rules.open) return std::string();
+	rules.width = std::min(rules.width, kJungleOpenMaxCells);
+	rules.height = std::min(rules.height, kJungleOpenMaxCells);
+	const std::string grid = std::to_string(rules.width) + " x " + std::to_string(rules.height);
+	const int cells = rules.width * rules.height;
+	if (rules.pathMin > cells) {
+		return "an Open map on Jungle is at most " + grid + " cells, so MinPath can't be more than " + std::to_string(cells) + ".";
+	}
+	rules.pathMax = std::min(rules.pathMax, cells);
+	std::string problem = layout::validateRules(rules);
+	// An Open path is the shortest walk across the grid, so a MinPath that fit the uncapped grid may be out of reach on the capped one.
+	for (uint64_t seed = 1; problem.empty() && seed <= 16; ++seed) {
+		if (!layout::generate(rules, seed).rulesMet) problem = "MinPath " + std::to_string(rules.pathMin) + " is too long for it.";
+	}
+	if (!problem.empty()) {
+		return "an Open map on Jungle is capped at " + grid + " cells, and " + problem;
+	}
+	return std::string();
+}
 
 namespace {
 
@@ -82,6 +105,27 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		out.ok = true;
 		return out;
 	}
+	if (tileset->planner == Planner::Siege) {
+		// Siege is one line of 16 x 48 strips: only the stamps reach the hook and the grid comparison, as for Snow.
+		siege::SiegeRequest siegeRequest;
+		if (!siege::siegeSizeStrips(request.size, &siegeRequest.strips)) {
+			return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
+		}
+		siegeRequest.seed = request.seed;
+		siegeRequest.options.originX = request.options.originX;
+		siegeRequest.options.originY = request.options.originY;
+		siegeRequest.options.maxTilesX = request.options.maxTilesX;
+		siegeRequest.options.maxTilesY = request.options.maxTilesY;
+		siegeRequest.options.pinFiles = request.options.pinFiles;
+		siege::SiegePlan siegePlan = siege::planSiegeMap(siegeRequest);
+		if (!siegePlan.ok) {
+			return fail("Cartographer could not plan the Siege map: " + siegePlan.reason);
+		}
+		out.stamps = std::move(siegePlan.stamps);
+		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
+		out.ok = true;
+		return out;
+	}
 	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Medium") : std::string_view(request.size));
 	if (!size) {
 		return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
@@ -91,6 +135,12 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	std::string error;
 	if (!layout::resolveRules(request.shapes != nullptr ? *request.shapes : none, request.shape.empty() ? std::string_view("Winding") : std::string_view(request.shape), *size, rules, error)) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + error);
+	}
+	// An Open map stamps every block (no void), so a Large one is 144 blocks, 2304 rooms: 6 to 8 times the other Jungle maps. Cap it at
+	// the 9 x 9 grid of Medium (81 blocks, 1296 rooms). The cap applies to any outdoor Open layout this planner builds, and the capped
+	// rules are checked again (maps.txt checks them at load with capJungleOpenRules).
+	if (const std::string capped = capJungleOpenRules(rules); !capped.empty()) {
+		return fail("The shape '" + request.shape + "' cannot be used: " + capped);
 	}
 	out.layout = layout::generate(rules, request.seed);
 	out.picks = pickPieces(out.layout, catalogue, tileset->name, request.seed);
@@ -201,7 +251,8 @@ std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &gr
 		c.other += (!piece && !covered && !voided) ? 1 : 0;
 	}
 	// A stamped macro-cell: its origin grid cell holds a piece; no cell inside it is void.
-	const int macroGrid = plan.macroW > 0 ? plan.cellsW / plan.macroW : 0; // grid cells per macro-cell side
+	const int macroGridX = plan.macroW > 0 ? plan.cellsW / plan.macroW : 0; // grid cells per macro-cell, across and down (a Siege strip is 2 x 6)
+	const int macroGridY = plan.macroH > 0 ? plan.cellsH / plan.macroH : 0;
 	for (const Stamp &s : plan.stamps) {
 		if (s.cx < 0 || s.cy < 0 || s.cx >= plan.cellsW || s.cy >= plan.cellsH) {
 			problems.push_back("a stamp at grid cell (" + std::to_string(s.cx) + "," + std::to_string(s.cy) + ") is outside the grid");
@@ -211,8 +262,8 @@ std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &gr
 		if (grid.piece[at] == 0) {
 			problems.push_back("the stamp for piece " + std::to_string(s.lvlPrest) + " at grid cell (" + std::to_string(s.cx) + "," + std::to_string(s.cy) + ") left no piece there");
 		}
-		for (int dy = 0; dy < macroGrid; ++dy) {
-			for (int dx = 0; dx < macroGrid; ++dx) {
+		for (int dy = 0; dy < macroGridY; ++dy) {
+			for (int dx = 0; dx < macroGridX; ++dx) {
 				const int x = s.cx + dx, y = s.cy + dy;
 				if (x >= plan.cellsW || y >= plan.cellsH) continue;
 				if ((grid.flags[static_cast<size_t>(y) * plan.cellsW + x] & Void) != 0) {

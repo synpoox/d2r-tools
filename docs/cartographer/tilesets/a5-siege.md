@@ -1,6 +1,8 @@
 # Act 5 siege (issue #288)
 
-Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
+Status: built as the `Siege` outdoor tileset (`src/outdoor/siege_plan.*`); evidence in [cartographer-siege.md](../../reverse-engineering/cartographer-siege.md), game check in [siege-check](../checks/2026-11-12-siege-check.md). The notes below are the research that came first.
+
+Research: Vanilla tables of build 3.3.0 were read, nothing copied.
 
 | Item | Finding |
 |---|---|
