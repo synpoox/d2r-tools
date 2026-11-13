@@ -15,6 +15,7 @@
 #include "engine/map_stat_text.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
+#include "engine/map_quality.h"
 #include "engine/level_row.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
@@ -473,6 +474,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			Say(command, "Cartographer " + carto::BossNamesSummary() + ".");
 			Say(command, "Cartographer " + carto::MapStatTextSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
+			Say(command, "Cartographer " + carto::MapQualitySummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
@@ -567,6 +569,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallStatApply(context, g_overrides, &statParts);
 		std::vector<carto::PartStatus> itemParts;
 		(void)carto::InstallItemStats(context, g_overrides, &itemParts);
+		(void)carto::InstallMapQuality(context, g_overrides, nullptr);
 		std::vector<carto::PartStatus> eventParts;
 		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
 		std::vector<carto::PartStatus> nameParts;

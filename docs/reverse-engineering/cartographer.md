@@ -2,7 +2,7 @@
 
 This is the index. Each section of the record is its own file under [`cartographer/`](cartographer/); section numbers ("section 5", "§5") name the files below. Status, date, consumer, module and evidence sources are in [the overview](cartographer/00-overview.md).
 
-New sections go in new files (the next free number, `18-<topic>.md`), and a new check or result for an existing section goes in that section's file, so open PRs do not conflict on one file. Add a new file to this list.
+New sections go in new files (the next free number, `27-<topic>.md`), and a new check or result for an existing section goes in that section's file, so open PRs do not conflict on one file. Add a new file to this list.
 
 - [Overview: status, date, consumer, module, evidence](cartographer/00-overview.md)
 - [1. Addresses](cartographer/01-addresses.md)
@@ -30,4 +30,6 @@ New sections go in new files (the next free number, `18-<topic>.md`), and a new 
 - [21. `ptWarp` and `bPiece` asserts in a Crypt map (issue #263)](cartographer/21-crypt-asserts.md)
 - [22. Map panel on the right of the screen (issue #308)](cartographer/22-map-panel.md)
 - [23. The maze builder's case for LevelType 28, Lava (issue #239)](cartographer/23-maze-lava.md)
+- [24. The Ice caves case of the maze builder (issue #245)](cartographer/24-ice-caves-builder.md)
 - [25. The cube sets a map's level (issue #330)](cartographer/25-cube-map-level.md)
+- [26. Map items are never magic (issue #352)](cartographer/26-map-quality.md)

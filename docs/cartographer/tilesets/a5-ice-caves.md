@@ -1,6 +1,6 @@
 # Act 5 ice caves (issue #245)
 
-Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
+Built (issue #245) as the `Ice` row of `MazeTilesets`. Vanilla tables of build 3.3.0 were read, nothing copied. Game check: [2026-11-12-ice-caves-check](../checks/2026-11-12-ice-caves-check.md); builder case: [RE section 24](../../reverse-engineering/cartographer/24-ice-caves-builder.md).
 
 | Item | Finding |
 |---|---|
@@ -15,10 +15,10 @@ Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
 
 ## Does the Cave/Crypt path work unchanged?
 
-Closest of the seven: the piece set and Prev family are the Cave pattern exactly. One new `builtinTileset` entry (levelType 33, roomTiles 16, pieceBase 1002, prev 1018-1021) plus the usual table touch points. Still open, as for every non-Cave tileset:
+Closest of the seven: the piece set and Prev family are the Cave pattern exactly. One new `builtinTileset` entry (levelType 33, roomTiles 16, pieceBase 1002, prev 1018-1021) plus the usual table touch points. Open points and how they came out:
 
 - **A slot per tileset** (done by the `MazeTilesets` table, #303: Ice Caves needs its own row).
-- **The `0x3e69e0` Ice case** is not recorded (ring grower call, walk after it). The plan lists Ice among the "one extra hook" tilesets (ring grower as a no-op), unchecked here.
+- **The `0x3e69e0` Ice case** is recorded in RE section 24: ring grower, walk, three special-room calls. The ring is a no-op in the plan (`callsRingGrower`), as planned.
 - **Waypoint pieces.** The vanilla Ice levels place a waypoint room through the special-room calls; Cartographer answers every non-entrance `0x3eb850` call with a suppression, so the waypoint is simply absent. Not expected to matter, but unchecked.
 - **Tiles.** Act 5 tiles in the Act 5 slot level: no cross-act problem. At 360 tiles 21 rooms fit across.
 

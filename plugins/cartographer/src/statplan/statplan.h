@@ -123,6 +123,8 @@ int parsePropertyId(std::string_view text, std::string_view code);
 // `map-level` mod; [min, max] is the mod's range and `roll` the value picked in it. The recipe adds `roll` to the level the map has: when the
 // game left the stat alone, or set it instead of adding, the result is before + roll; otherwise `after` stands. Cut to 1..kMaxStatValue.
 constexpr int kMaxStatValue = 511;
+// A value in min..max from `entropy` (min when the range is empty or 1000 or more wide).
+int cubeRoll(int min, int max, uint64_t entropy);
 // `levelKnown` is false when the map's level (or the input map's) could not be read; the game's own result then stands.
 int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown = true);
 // Whether the level to add to was read: the item reads worked (`itemReadsOk`) and, when the cube step is hooked, its inputs walk gave a level

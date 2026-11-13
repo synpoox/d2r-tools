@@ -200,6 +200,12 @@ int parsePropertyId(std::string_view text, std::string_view code)
 	return -1;
 }
 
+int cubeRoll(int min, int max, uint64_t entropy)
+{
+	if (max <= min || max - min >= 1000) return min;
+	return min + static_cast<int>(mix(entropy) % static_cast<uint64_t>(max - min + 1));
+}
+
 int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown)
 {
 	if (!levelKnown) return after; // the level could not be read: the game's result stands
