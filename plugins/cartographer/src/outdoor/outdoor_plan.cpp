@@ -4,6 +4,7 @@
 #include <utility>
 
 #include "outdoor_tilesets.h"
+#include "siege_plan.h"
 #include "snow_plan.h"
 
 namespace cartographer::outdoor {
@@ -78,6 +79,27 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 			return fail("Cartographer could not plan the Snow map: " + snowPlan.reason);
 		}
 		out.stamps = std::move(snowPlan.stamps);
+		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
+		out.ok = true;
+		return out;
+	}
+	if (tileset->planner == Planner::Siege) {
+		// Siege is one line of 16 x 48 strips: only the stamps reach the hook and the grid comparison, as for Snow.
+		siege::SiegeRequest siegeRequest;
+		if (!siege::siegeSizeStrips(request.size, &siegeRequest.strips)) {
+			return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
+		}
+		siegeRequest.seed = request.seed;
+		siegeRequest.options.originX = request.options.originX;
+		siegeRequest.options.originY = request.options.originY;
+		siegeRequest.options.maxTilesX = request.options.maxTilesX;
+		siegeRequest.options.maxTilesY = request.options.maxTilesY;
+		siegeRequest.options.pinFiles = request.options.pinFiles;
+		siege::SiegePlan siegePlan = siege::planSiegeMap(siegeRequest);
+		if (!siegePlan.ok) {
+			return fail("Cartographer could not plan the Siege map: " + siegePlan.reason);
+		}
+		out.stamps = std::move(siegePlan.stamps);
 		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
 		out.ok = true;
 		return out;
@@ -201,7 +223,8 @@ std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &gr
 		c.other += (!piece && !covered && !voided) ? 1 : 0;
 	}
 	// A stamped macro-cell: its origin grid cell holds a piece; no cell inside it is void.
-	const int macroGrid = plan.macroW > 0 ? plan.cellsW / plan.macroW : 0; // grid cells per macro-cell side
+	const int macroGridX = plan.macroW > 0 ? plan.cellsW / plan.macroW : 0; // grid cells per macro-cell, across and down (a Siege strip is 2 x 6)
+	const int macroGridY = plan.macroH > 0 ? plan.cellsH / plan.macroH : 0;
 	for (const Stamp &s : plan.stamps) {
 		if (s.cx < 0 || s.cy < 0 || s.cx >= plan.cellsW || s.cy >= plan.cellsH) {
 			problems.push_back("a stamp at grid cell (" + std::to_string(s.cx) + "," + std::to_string(s.cy) + ") is outside the grid");
@@ -211,8 +234,8 @@ std::vector<std::string> compareGrid(const StampPlan &plan, const GridSample &gr
 		if (grid.piece[at] == 0) {
 			problems.push_back("the stamp for piece " + std::to_string(s.lvlPrest) + " at grid cell (" + std::to_string(s.cx) + "," + std::to_string(s.cy) + ") left no piece there");
 		}
-		for (int dy = 0; dy < macroGrid; ++dy) {
-			for (int dx = 0; dx < macroGrid; ++dx) {
+		for (int dy = 0; dy < macroGridY; ++dy) {
+			for (int dx = 0; dx < macroGridX; ++dx) {
 				const int x = s.cx + dx, y = s.cy + dy;
 				if (x >= plan.cellsW || y >= plan.cellsH) continue;
 				if ((grid.flags[static_cast<size_t>(y) * plan.cellsW + x] & Void) != 0) {
