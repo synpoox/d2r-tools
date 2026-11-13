@@ -38,6 +38,7 @@
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
       itemstatcost.txt also seven monster-side stats, cartographer_mon_life, _damage, _fire_res, _cold_res, _light_res, _poison_res and _speed (signed, shown on the item as "+20% Monster Life" and so on).
                     A map item that carries one gives its monsters the matching vanilla stat; a vanilla stat on a map item is the player's. See docs/cartographer/tables.md.
+      itemstatcost.txt also "cartographer_map_density" (signed, shown as "+20% Map Density"): bonus Density added to the map's Density when it opens, with the property "map-density".
       properties.txt one new property, "map-level" (a copy of str, stat cartographer_map_level), so a cubemain.txt recipe can set the stat, and one property for each monster-side stat
                     (mon-life, mon-damage, mon-fire-res, mon-cold-res, mon-light-res, mon-poison-res, mon-speed), so an affix or unique row can use them. Left out when the mod has no properties.txt.
     It does not add any items: each map is opened by an item the mod already has (the Item column of maps.txt), with
@@ -123,8 +124,13 @@ $pending = [System.Collections.Generic.List[object]]::new()
 $bom = [string][char]0xEF + [char]0xBB + [char]0xBF
 
 # A tab-separated table with a header: lines kept as they are, edited by column name.
+# A table is read once per run: nothing is written until the end, so a second read of the same file must give the same object (with the rows
+# added so far), or two edits of one table would each count the rows from the file and give two new rows the same id (#358).
+$tableCache = @{}
 function Read-Table([string]$path) {
     if (-not (Test-Path $path)) { throw "Missing $path. This mod does not carry that table, so it cannot be edited here." }
+    $key = [System.IO.Path]::GetFullPath($path).ToLowerInvariant()
+    if ($tableCache.ContainsKey($key)) { return $tableCache[$key] }
     $text = $bytes.GetString([System.IO.File]::ReadAllBytes($path))
     $eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
     $lines = [System.Collections.Generic.List[string]]($text -split [regex]::Escape($eol))
@@ -132,7 +138,9 @@ function Read-Table([string]$path) {
     if ($final) { $lines.RemoveAt($lines.Count - 1) }
     if ($lines.Count -eq 0 -or $lines[0] -eq '') { throw "$path is empty." }
     $header = ($lines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t"
-    [pscustomobject]@{ Path = $path; Eol = $eol; Lines = $lines; Header = $header; FinalEol = $final }
+    $table = [pscustomobject]@{ Path = $path; Eol = $eol; Lines = $lines; Header = $header; FinalEol = $final }
+    $tableCache[$key] = $table
+    $table
 }
 
 # Queues the table; nothing is written until every table has been read and checked.
@@ -540,7 +548,10 @@ $MonsterStats = @(
     @{ Stat = 'cartographer_mon_cold_res';   Key = 'cartographer:mon_cold_res';   Property = 'mon-cold-res';   Note = 'monster cold resistance' },
     @{ Stat = 'cartographer_mon_light_res';  Key = 'cartographer:mon_light_res';  Property = 'mon-light-res';  Note = 'monster lightning resistance' },
     @{ Stat = 'cartographer_mon_poison_res'; Key = 'cartographer:mon_poison_res'; Property = 'mon-poison-res'; Note = 'monster poison resistance' },
-    @{ Stat = 'cartographer_mon_speed';      Key = 'cartographer:mon_speed';      Property = 'mon-speed';      Note = 'monster speed' }
+    @{ Stat = 'cartographer_mon_speed';      Key = 'cartographer:mon_speed';      Property = 'mon-speed';      Note = 'monster speed' },
+    # Not a monster stat: the bonus Density of a map (summed over the item's affixes and added to the map's Density when it opens, src/statplan mapDensityBonus).
+    # Same row shape, so it is added the same way.
+    @{ Stat = 'cartographer_map_density';    Key = 'cartographer:map_density';    Property = 'map-density';    Note = 'map density' }
 )
 if (Test-Path $statCostPath) {
     $statCost = Read-Table $statCostPath

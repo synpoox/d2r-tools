@@ -113,6 +113,19 @@ MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds 
 // `stats` without the map-level stat, so it is not reported as a stat with no meaning on a map.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
 
+// The itemstatcost.txt stat that holds a map affix's bonus Density in percent (tools/install.ps1 adds the row and the `map-density` property).
+inline constexpr const char *kMapDensityStat = "cartographer_map_density";
+
+// The bonus Density of a map item: the sum of every layer 0 value of the map-density stat over `stats` (one entry per affix that carries it, or
+// one entry the game already added up). 0 when `ids` does not name the stat or the item has none. Not capped; the result is only kept inside int.
+int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids);
+
+// The map's Density with the bonus added: `base` plus `bonus` percentage points, never below 0.
+int densityWithBonus(int base, int bonus);
+
+// `stats` without the map-density stat, so it is not reported as a stat with no meaning on a map.
+std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids);
+
 struct ItemProperties {
 	std::vector<Property> properties; // in the item's order
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out

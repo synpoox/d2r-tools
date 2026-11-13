@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
+- The installer now adds all its item stats and properties in one run, each with its own id (a fresh install no longer left the map level stat out until the second run).
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
