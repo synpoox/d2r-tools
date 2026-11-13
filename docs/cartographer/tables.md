@@ -83,9 +83,8 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 | `ItemType`, `Code` | `Map`, `cmap` | The game names an item of type `scro` or `book` after its item spell (a spell-16 item would read "Scroll of Town Portal"), so a map item needs a type of its own. A row with code `cmap` that is not this one stops the installer. |
 | `Equiv1` | `misc` | The parent of `herb`, `scro`, `key` and `elix`: plain miscellaneous. `scro`, `book` or a potion type would make it a scroll (a Town Portal scroll) or a potion (belt). |
 | `Equiv2`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition. |
-| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Normal and rare quality only (see Map item rarity and modifiers). |
+| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Rare on, Magic and Normal off. This does not stop magic maps (see Map item rarity and modifiers). |
 | `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Beltable` | 0 | Not throwable, not beltable, no auto-stack. |
-| `Normal` | 0 | 1 would mean normal quality only (as on `scro`, `book` and `key`); the item never spawns, so it is harmless, and 0 is what `herb` has. |
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
 | everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
 
@@ -119,7 +118,7 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 
 ## Map item rarity and modifiers
 
-A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes (an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
+A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes. Maps are meant to be normal, rare or unique, but magic maps can still drop for now: `Magic` 1 would mean always magic, so no column can stop them, and a plugin hook to block them is planned (an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
 
 | Quality | Where the modifiers come from |
 |---|---|

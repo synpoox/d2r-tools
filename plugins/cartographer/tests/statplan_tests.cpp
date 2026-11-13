@@ -690,7 +690,7 @@ TEST_CASE("every monster-side map stat is a row the installer adds, with a descr
 	}
 }
 
-TEST_CASE("the installer writes and repairs the Map type as rare, not magic, not forced normal")
+TEST_CASE("the installer writes and repairs the Map type with Rare on and Magic and Normal off")
 {
 	std::string here = __FILE__;
 	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);

@@ -28,9 +28,9 @@
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
-                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic,
+                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
-                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. The one row the installer changes
+                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. Maps are meant to be normal, rare or unique; magic maps can still drop for now (Magic 1 would mean always magic, so no column stops them) and a plugin hook to block them is planned. The one row the installer changes
                     after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
                     before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
@@ -469,14 +469,14 @@ if ($mapTypeRow -ge 0) {
     Set-Cell $itemTypes $cells 'Equiv2' ''
     foreach ($col in 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable') { Set-CellIf $itemTypes $cells $col '0' }
     foreach ($col in 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
-    # Rare on, Magic and Normal off: the game then rolls the item's quality as normal or rare (Normal on forces every item Normal).
+    # Rare on, Magic and Normal off (Normal on forces every item Normal). Magic maps can still drop: Magic 1 means always magic, so no column blocks them; a plugin hook is planned.
     Set-CellIf $itemTypes $cells 'Rare' '1'
     Set-CellIf $itemTypes $cells 'Magic' '0'
     $itemTypes.Lines.Add($cells -join "`t")
     Save-Table $itemTypes
-    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, rare (not magic), not throwable, not beltable, no auto-stack, StorePage misc as herb."
+    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, Rare on, not throwable, not beltable, no auto-stack, StorePage misc as herb."
 }
-# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can be normal or rare, not magic.
+# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can roll rare.
 if ($mapTypeRow -ge 0) {
     $cells = Cells $itemTypes $itemTypes.Lines[$mapTypeRow]
     $before = $cells -join "`t"
