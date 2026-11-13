@@ -66,18 +66,18 @@ TEST_CASE("a four-cell map loads with every default") {
 	CHECK(report.problems.empty());
 	CHECK(maps[0].name == "First");
 	CHECK(maps[0].item == "t20");
-	CHECK(maps[0].size == "Medium");
+	CHECK(maps[0].size == "Large");
 	CHECK(maps[0].level == 85);
 	CHECK(maps[0].eventChance == -1);
 }
 
 TEST_CASE("our own words ignore case, the game's names do not") {
 	Report report;
-	const auto maps = Load("a\tCAVE\tcorridor\tsmall\t\tt20\t\t\n", report);
+	const auto maps = Load("a\tCAVE\tcorridor\tmedium\t\tt20\t\t\n", report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].tileset == "Cave");
 	CHECK(maps[0].shape == "Corridor");
-	CHECK(maps[0].size == "Small");
+	CHECK(maps[0].size == "Medium");
 	Report exact;
 	const auto bad = Load("b\tCave\tCorridor\t\t\tt21\t\tZombie1\n", exact);
 	CHECK(bad.empty());
@@ -105,7 +105,7 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	Report report;
 	const auto maps = Load(
 		"A\tCave\tOpen\t\t\tt20\n"
-		"B\tCrypt\topen\tExtraSmall\t\tt21\n"
+		"B\tCrypt\topen\tSmall\t\tt21\n"
 		"C\tJungle\tOpen\t\t\tt22\n"
 		"D\tSnow\tOpen\t\t\tt23\n"
 		"E\tSnow\tSprawl\t\t\tt24\n",
@@ -125,7 +125,7 @@ TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid 
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);
 	REQUIRE(shapes.shapes.size() == 2);
-	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tJungle\tLong\tLarge\t\tt20\nB\tJungle\tWide\tLarge\t\tt21\nC\tCave\tLong\tLarge\t\tt22\n", Names(), report, &shapes);
+	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tJungle\tLong\tExtraLarge\t\tt20\nB\tJungle\tWide\tExtraLarge\t\tt21\nC\tCave\tLong\tExtraLarge\t\tt22\n", Names(), report, &shapes);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "B");
 	CHECK(maps[1].name == "C");
@@ -951,7 +951,7 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
-	CHECK(maps[0].size == "Large");
+	CHECK(maps[0].size == "ExtraLarge");
 	CHECK(maps[0].level == 90);
 	CHECK(maps[0].monsters.size() == 2);
 	CHECK(maps[0].minCharLevel == 80);
@@ -1340,44 +1340,51 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(HasOutdoorSlot({maze, snow}));
 }
 
-TEST_CASE("Size accepts ExtraSmall, and Density, Champions and Uniques have no 1000 cap") {
+TEST_CASE("the retired size name ExtraSmall is refused with a note about the rename") {
+	Report report;
+	const auto maps = Load("a\tCave\tcorridor\tExtraSmall\t\tt20\t\t\n", report);
+	CHECK(maps.empty());
+	CHECK(Joined(report).find("ExtraSmall was renamed Small") != std::string::npos);
+}
+
+TEST_CASE("Size accepts Small, and Density, Champions and Uniques have no 1000 cap") {
 	Report report;
 	const auto maps = LoadMaps(
 		"Name\tTileset\tShape\tSize\tItem\tDensity\tChampions\tUniques\n"
-		"A\tCave\tCorridor\tExtraSmall\tt20\t5000\t2000\t1000000\n"
-		"B\tCave\tCorridor\textrasmall\tt21\t2147483647\t\t\n"
+		"A\tCave\tCorridor\tSmall\tt20\t5000\t2000\t1000000\n"
+		"B\tCave\tCorridor\tsmall\tt21\t2147483647\t\t\n"
 		"C\tCave\tCorridor\t\tt22\t-1\t\t\n"
 		"D\tCave\tCorridor\t\tt23\t2147483648\t\t\n"
 		"E\tCave\tCorridor\t\tt24\t99999999999999999999\t\t\n",
 		Names(), report);
 	REQUIRE(maps.size() == 2);
-	CHECK(maps[0].size == "ExtraSmall");
+	CHECK(maps[0].size == "Small");
 	CHECK(maps[0].density == 5000);
 	CHECK(maps[0].champions == 2000);
 	CHECK(maps[0].uniques == 1000000);
-	CHECK(maps[1].size == "ExtraSmall");
+	CHECK(maps[1].size == "Small");
 	CHECK(maps[1].density == 2147483647);
 	CHECK(Joined(report).find("Density '-1' must be a whole number, 0 or more") != std::string::npos);
 	CHECK(Joined(report).find("Density '2147483648' must be") != std::string::npos);
 	CHECK(Joined(report).find("Density '99999999999999999999' must be") != std::string::npos);
 }
 
-TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load for an ExtraSmall row only") {
+TEST_CASE("a shapes.txt shape that does not fit Small is refused at load for a Small row only") {
 	Report shapeReport;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\nSnake\tWinding\t20\t24\n", shapeReport);
-	REQUIRE(shapes.shapes.size() == 1);  // fine at Small, Medium and Large
+	REQUIRE(shapes.shapes.size() == 1);  // fine at Medium, Large and ExtraLarge
 	Report report;
 	const auto maps = LoadMaps(
 		"Name\tTileset\tShape\tSize\tItem\n"
-		"Tiny\tCave\tSnake\tExtraSmall\tt20\n"
-		"Roomy\tCave\tSnake\tSmall\tt21\n"
-		"Plain\tCave\tWinding\tExtraSmall\tt22\n",
+		"Tiny\tCave\tSnake\tSmall\tt20\n"
+		"Roomy\tCave\tSnake\tMedium\tt21\n"
+		"Plain\tCave\tWinding\tSmall\tt22\n",
 		Names(), report, &shapes);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "Roomy");
 	CHECK(maps[1].name == "Plain");
 	CHECK(Joined(report).find("Snake") != std::string::npos);
-	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
+	CHECK(Joined(report).find("does not fit Size Small") != std::string::npos);
 }
 
 TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava slots, each on the level the installer wrote") {

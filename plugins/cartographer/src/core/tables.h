@@ -85,7 +85,7 @@ auto BossKey(std::string_view name) -> std::string;
 
 struct MapDef {
 	int line = 0;  // row in maps.txt
-	std::string name, tileset, shape, size = "Medium", item, boss;
+	std::string name, tileset, shape, size = "Large", item, boss;
 	std::vector<std::string> monsters;
 	int level = DefaultMonsterLevel;
 	int minCharLevel = 1;

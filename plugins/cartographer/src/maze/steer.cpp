@@ -95,9 +95,9 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 		out.reason = fit.reason;
 		return out;
 	}
-	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Medium") : size);
+	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Large") : size);
 	if (!sz) {
-		out.reason = "The size '" + std::string(size) + "' is not ExtraSmall, Small, Medium or Large.";
+		out.reason = "The size '" + std::string(size) + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(size);
 		return out;
 	}
 	layout::Rules rules;

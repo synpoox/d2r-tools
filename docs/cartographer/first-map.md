@@ -52,12 +52,12 @@ with `tools\stage_check.ps1 -MapItems` ([testing.md](testing.md#map-items-in-a-t
 
 ## 3. Add the map
 
-Put `maps.txt` next to `bosses.txt`. Four columns are enough; the rest default (Medium, level 85, 6 properties,
+Put `maps.txt` next to `bosses.txt`. Four columns are enough; the rest default (Large, level 85, 6 properties,
 any character level):
 
 ```
 Name	Tileset	Shape	Item	Size	Boss	MinCharLevel
-Shorelines	Cave	Corridor	t20	Large	Shoreline Warden	80
+Shorelines	Cave	Corridor	t20	ExtraLarge	Shoreline Warden	80
 ```
 
 `Boss` must be a `Name` in `bosses.txt`. `Cave`, `Crypt`, `Ice`, `Jungle` and `Snow` are built. The example `maps.txt` has
