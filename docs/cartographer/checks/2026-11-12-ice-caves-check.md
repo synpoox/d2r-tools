@@ -34,6 +34,24 @@ eventprobe: the map Boss 'Shoreline Warden' goes in the plan's boss room (6496,0
 - Not verified: the named Boss seen on screen (only its spawn log line and its minions), multiplayer, a second Ice map in
   one game, the other shapes in game.
 - `cheat goto <level>,<x>,<y>` takes absolute subtile coordinates (tile x 5 + 2), not tile coordinates.
-- Automap range: this check ran with Ice installed at 6400,0 (the rects above are at that offset), which the engine's signed 16-bit automap cells cannot hold (x about 51200).
-  Ice is now at 2000,0 (in range, clear of Cave 3500, Crypt 3000 and the reserved Lava 2500; RE note 22). The layout and spawns are the same at either spot; the new offset has not been run in game yet.
+- Automap range: the slot-11 and slot-5 runs had Ice at 6400,0, which the engine's signed 16-bit automap cells cannot hold. Ice is now at 2000,0 (in range, clear of Cave 3500, Crypt 3000 and the reserved Lava 2500; RE note 22); see the next section for the run there.
 - The staging slot's Hell had to be chosen in the Select Difficulty box; the character the earlier checks left in Normal does not open maps.
+
+## Run at 2000,0 (slot 7, same day)
+
+Same plugin and save (`cartos`, Hell, god mode), Ice installed at its final offset 2000,0, one game from the map item.
+
+| Check | Result |
+|---|---|
+| Opens from its item in Hell | PASS: Glacial Veins opened through level 143. |
+| Built as planned | PASS: 22 rooms, entrance placed; arrival room 87 of 88 at (2112,128), plan cell (7,8). |
+| Event room | PASS: Ambush armed in cell (6,3), rect (2096,48); `wave 1 of 2: the game made 5 of 5 units`, quill rats seen on screen. |
+| Reveal survives a town trip | PASS for the small reveal made on arrival (the revealed area looked the same before and after Harrogath and back). Not repeated with a large reveal. |
+| Boss on screen | FAIL: boss cell (0,0), rect (2000,0) 8 x 8, at the level's top edge. All 9 spots in the boss room (10000,0) 40 x 40 were refused, first as a superunique and then as a plain monster (`refused by the game in the boss room ... (as a plain monster)`). NOT SEEN. |
+| Stability | PASS: no `[ERROR]` or `[FAULT]` from the plugin. |
+
+Finding: the Boss room is the cell's sub-room nearest the cell centre, and ties go to the top-left one. In this cell
+the top-left 8 x 8 sub-room has no floor (`cheat goto` there does not move the player) while the other sub-rooms of the
+cell do, so no spot in the Boss rect is placeable. The slot-11 run (rect (6496,0), also on the top edge) never showed the
+Boss either; the slot-5 run (rect (6400,112), not on the edge) did spawn it. A fix would fall back to the cell's other
+sub-rooms when the chosen one has no floor; it is not part of this change. #245 stays `Refs`, not `Closes`.
