@@ -48,9 +48,41 @@ std::string independentCheck(const Layout &l, const Rules &r)
 				const bool nUsed = l.inside(nx, ny) && l.at(nx, ny).role != Role::Empty;
 				if (has && !nUsed) return bad("exit to nothing");
 				if (has && !(l.at(nx, ny).mask & opp[d])) return bad("facing bits differ between neighbours");
-				if (!has && nUsed) return bad("unlinked cells touch side to side");
+				if (!has && nUsed && !r.open) return bad("unlinked cells touch side to side");
 			}
+			if (r.open && bitsIn(c.mask) < 2) return bad("open map dead end");
 		}
+	if (r.open) {
+		// Every cell is a room, all joined (flood fill), and the main path is a linked walk from the entrance to the boss room.
+		if (used != l.width * l.height) return bad("open map has an empty cell");
+		std::vector<uint8_t> seen(l.cells.size(), 0);
+		std::vector<int> stack{0};
+		seen[0] = 1;
+		int reached = 0;
+		while (!stack.empty()) {
+			const int i = stack.back();
+			stack.pop_back();
+			++reached;
+			const uint8_t m = l.cells[static_cast<size_t>(i)].mask;
+			const int nb[4] = {(m & kWest) ? i - 1 : -1, (m & kEast) ? i + 1 : -1, (m & kSouth) ? i + l.width : -1, (m & kNorth) ? i - l.width : -1};
+			for (int j : nb)
+				if (j >= 0 && !seen[static_cast<size_t>(j)]) { seen[static_cast<size_t>(j)] = 1; stack.push_back(j); }
+		}
+		if (reached != used) return bad("open map is not connected");
+		const int n = static_cast<int>(l.mainPath.size());
+		if (n < r.pathMin || n > r.pathMax || l.ring) return bad("open path");
+		for (int i = 1; i < n; ++i) {
+			const Point a = l.mainPath[static_cast<size_t>(i - 1)], b = l.mainPath[static_cast<size_t>(i)];
+			const int d = (a.x - b.x) + (a.y - b.y) * 2; // -1 b east of a, 1 west, -2 south, 2 north
+			const uint8_t want = d == -1 ? kEast : d == 1 ? kWest : d == -2 ? kSouth : d == 2 ? kNorth : 0;
+			if (want == 0 || !(l.at(a.x, a.y).mask & want)) return bad("open path step");
+		}
+		const Point e = l.mainPath.front();
+		if (e.x != 0 && e.y != 0 && e.x != l.width - 1 && e.y != l.height - 1) return bad("open entrance not on the border");
+		if (l.eventIdx < 1 || l.eventIdx >= n - 1) return bad("open event room");
+		if (r.bossRoom && l.bossIdx != n - 1) return bad("open boss room");
+		return std::string();
+	}
 	const int n = static_cast<int>(l.mainPath.size());
 	if (n < r.pathMin || n > r.pathMax) return bad("path length");
 	if (l.turns() < r.turnsMin || l.turns() > r.turnsMax) return bad("turns");
@@ -470,6 +502,62 @@ TEST_CASE("shapes.txt: plain-English errors")
 	CHECK_FALSE(errorsOf("Name\tMinPath\tMaxPath\tMinBranches\tMaxBranches\tMinBranchLen\tMaxBranchLen\nTight\t36\t36\t5\t5\t3\t3\n").empty());
 }
 
+TEST_CASE("Open: every cell is a room, a few walls, no dead ends, entrance to the far corner")
+{
+	for (int z = 0; z < kSizeCount; ++z) {
+		const Size size = static_cast<Size>(z);
+		const Rules r = presetRules(Shape::Open, size);
+		CHECK(r.open);
+		int withWalls = 0;
+		for (uint64_t seed = 1; seed <= 300; ++seed) {
+			const Layout l = generate(r, seed);
+			INFO(sizeName(size) << " seed " << seed << "\n" << toAscii(l));
+			REQUIRE(l.rulesMet);
+			CHECK_FALSE(l.fallback);
+			CHECK(l.cellCount() == r.width * r.height);
+			int links = 0;
+			for (const Cell &c : l.cells) links += bitsIn(c.mask);
+			links /= 2;
+			const int gridLinks = r.width * (r.height - 1) + r.height * (r.width - 1);
+			CHECK(links <= gridLinks);
+			CHECK(links >= gridLinks - gridLinks * r.wallPct / 100);
+			if (links < gridLinks) ++withWalls;
+			CHECK(l.branches.empty());
+			CHECK(l.loops.empty());
+			CHECK_FALSE(l.ring);
+			// The far room is a whole grid away, not a neighbour of the entrance.
+			CHECK(static_cast<int>(l.mainPath.size()) >= r.width);
+		}
+		CHECK(withWalls >= 290); // a wall is nearly always present: the shape is "few walls", not "none"
+	}
+	// Not a ring, not a tree: more links than rooms.
+	const Layout l = generate(Shape::Open, Size::Medium, 1);
+	int links = 0;
+	for (const Cell &c : l.cells) links += bitsIn(c.mask);
+	CHECK(links / 2 > l.cellCount());
+}
+
+TEST_CASE("Open in shapes.txt: Base Open keeps the grid rules, and rows that need side rooms or a ring are refused")
+{
+	const ParseResult p = parseShapesTxt("Name\tBase\tWidth\tHeight\tBossRoom\nPlain\tOpen\t5\t7\t\nNoBoss\tOpen\t\t\t0\n");
+	REQUIRE(p.errors.empty());
+	Rules r;
+	std::string e;
+	REQUIRE(resolveRules(p.table, "plain", Size::Medium, r, e));
+	CHECK(r.open);
+	CHECK(r.width == 5);
+	CHECK(r.height == 7);
+	for (uint64_t seed = 1; seed <= 100; ++seed) CHECK(generate(r, seed).rulesMet);
+	REQUIRE(resolveRules(p.table, "NoBoss", Size::Small, r, e));
+	const Layout l = generate(r, 3);
+	CHECK(l.rulesMet);
+	CHECK(l.bossIdx == -1);
+	CHECK_FALSE(parseShapesTxt("Name\tBase\tLoop\nA\tOpen\t1\n").errors.empty());
+	CHECK_FALSE(parseShapesTxt("Name\tBase\tMinBranches\tMaxBranches\nA\tOpen\t1\t2\n").errors.empty());
+	CHECK_FALSE(parseShapesTxt("Name\tBase\tWidth\tHeight\nA\tOpen\t2\t9\n").errors.empty());
+	CHECK_FALSE(parseShapesTxt("Name\nOpen\n").errors.empty()); // a built-in name
+}
+
 TEST_CASE("golden layouts")
 {
 	struct Golden {
@@ -510,6 +598,12 @@ TEST_CASE("golden layouts")
 		{Shape::Sprawl, Size::Small, 0xC0FFEEull, 0xA6E1843017E6C8EBull},
 		{Shape::Sprawl, Size::Medium, 0xC0FFEEull, 0x6D0B61977647383Aull},
 		{Shape::Sprawl, Size::Large, 0xC0FFEEull, 0xF64C39D28B426C3Aull},
+		{Shape::Open, Size::Small, 0x1ull, 0x87ED37D1B3715E22ull},
+		{Shape::Open, Size::Medium, 0x1ull, 0xAB93C9F6789B45BBull},
+		{Shape::Open, Size::Large, 0x1ull, 0x0FBE7C101BA8CCA9ull},
+		{Shape::Open, Size::Small, 0xC0FFEEull, 0xEBD9A2894A3834AEull},
+		{Shape::Open, Size::Medium, 0xC0FFEEull, 0x9FF3473070A6F9B7ull},
+		{Shape::Open, Size::Large, 0xC0FFEEull, 0xEE1A0BA147060377ull},
 	};
 	if (std::getenv("CARTOGRAPHER_PRINT_GOLDEN")) {
 		for (int s = 0; s < kShapeCount; ++s)
