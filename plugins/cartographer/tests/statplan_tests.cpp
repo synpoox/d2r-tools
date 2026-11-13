@@ -665,6 +665,8 @@ TEST_CASE("itemStatsToProperties: a layer, a zero value and an unknown id are dr
 	CHECK(r.properties[0] == cartographer::statplan::Property{Target::Monsters, "item_maxhp_percent", -5});
 	REQUIRE(r.dropped.size() == 3);
 	CHECK(r.dropped[0].find("layer") != std::string::npos);
+	CHECK(r.dropped[0].find("item stat 0 (layer 3)") != std::string::npos);
+	CHECK(r.dropped[2].find("item stat 9999") != std::string::npos);  // the label names the stat read, not a fixed 0
 	CHECK(r.dropped[1].find("value is 0") != std::string::npos);
 	CHECK(r.dropped[2].find("no itemstatcost row has this id") != std::string::npos);
 	CHECK(itemStatsToProperties({}, ids).properties.empty());

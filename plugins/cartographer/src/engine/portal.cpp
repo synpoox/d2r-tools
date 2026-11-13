@@ -14,6 +14,7 @@
 #include "engine/event_apply.h"
 #include "engine/game_memory.h"
 #include "engine/map_names.h"
+#include "engine/map_lighting.h"
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
@@ -195,6 +196,9 @@ void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& table
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
 		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats);
+		if (tables != nullptr) {
+			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
+		}
 	} catch (...) {
 		plog::Error("drawing the map's stats failed; '%s' opens without them", map.name.c_str());
 	}
@@ -757,6 +761,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		MapLightingPlayerTick(PlayerLevelOf(unit));
 		ServeWhere(unit);
 		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
@@ -788,6 +793,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		AutomapResetDisarm();
 		StatApplyGameLeft();
 		MapPanelGameLeft();
+		MapLightingGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
 		LevelRowRestore();
