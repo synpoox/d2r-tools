@@ -106,6 +106,7 @@ CheckFn g_checkOriginal = nullptr;
 UseFn g_useOriginal = nullptr;
 PlayerTickFn g_tickOriginal = nullptr;
 OpenRequest g_request;                     // the console's request; guarded by g_lock
+std::atomic<bool> g_whereRequested{false};  // `cartographer where`: the next tick of the local player logs its position
 std::atomic<bool> g_requested{false};      // g_request has something to serve: the per-frame hook reads only this
 std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
@@ -675,6 +676,21 @@ void MazeArrivalCheck(Unit* unit) noexcept {
 	}
 }
 
+// `cartographer where`, on the game thread: the local player's subtile position, level id and, in the outdoor slot level, the box tile and plan cell. Console and log only.
+void ServeWhere(Unit* unit) noexcept {
+	if (!g_whereRequested.exchange(false)) {
+		return;
+	}
+	const uint8_t* path = At<const uint8_t*>(unit, 0x38);  // the unit's path: players keep subtile x, y at +0x10 and +0x14 (better-auras UnitXY)
+	if (path == nullptr) {
+		Tell("Cartographer where: the player has no position yet.");
+		return;
+	}
+	const int32_t x = At<int32_t>(path, 0x10), y = At<int32_t>(path, 0x14);
+	const int level = PlayerLevelOf(unit);
+	Tell("Cartographer where: level " + std::to_string(level) + ", subtile (" + std::to_string(x) + "," + std::to_string(y) + "), " + OutdoorWhereText(level, x, y));
+}
+
 auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	if (g_tickOriginal == nullptr) {
 		// Reachable: the loader can patch the tick and still return no original (the install then logs an error and marks
@@ -703,6 +719,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		ServeWhere(unit);
 		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
@@ -809,6 +826,14 @@ auto RequiredPartsOn() noexcept -> bool {
 }
 
 }  // namespace
+
+auto RequestWhere() -> bool {
+	if (!g_consoleLive.load() || g_localPlayer.load() == NoPlayer || !g_tickSeen.load()) {
+		return false;
+	}
+	g_whereRequested = true;
+	return true;
+}
 
 auto RequestOpen(const std::string& name, std::string* mapName) -> OpenStart {
 	bool replaced = false;
