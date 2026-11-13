@@ -27,7 +27,7 @@ In Cartographer, the one set of room pieces a map is built from, named in plain 
 _Avoid_: level type, theme
 
 **Shape**:
-In Cartographer, the feel of a map's path: `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`. It decides the layout graph.
+In Cartographer, the feel of a map's path: `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`. It decides the layout graph.
 _Avoid_: layout type, pattern
 
 **Maze level**:

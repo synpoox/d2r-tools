@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
@@ -28,6 +29,7 @@
 - Small maps get their event in a room far enough from where you arrive.
 - You arrive in the planned entrance room of a maze.
 - A map's `Level`, `Density`, `Uniques` and `Monsters` now apply (experimental).
+- `Uniques` packs are spread over the whole map instead of near the entrance.
 - A map's own name shows on its portal, automap and entry banner by default (experimental; `MapNames=0` turns it off; multiplayer not checked yet).
 - `AutoCheck=1` and `AutoCheckMap` run a game check by themselves in a Hell game, for test slots only (off by default).
 - Multiplayer: TCP/IP clients learn the host's map, name and maze layout (experimental, not on Battle.net).

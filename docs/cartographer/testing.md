@@ -1,4 +1,4 @@
-# Cartographer: testing log and developer notes
+﻿# Cartographer: testing log and developer notes
 
 This is the developer-facing detail that used to be in `plugins/cartographer/README.md`: what was unit tested, what
 was run in game (build 93847, D2RLoader 1.3.1-beta), what was not, and the long per-feature behaviour notes. Addresses
@@ -93,7 +93,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (applied). | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the name of a `shapes.txt` row (applied). | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
@@ -186,6 +186,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
     - (d) the Normal refusal passed: the same item on a Normal character logged "Cartographer: HellCave can only be opened in Hell." and showed "I can't use this yet.";
     - not checked: a second map in the same game, TCP/IP, and a natural (non-console) walk to the boss room (Nightmare was refused later, see the next entry).
 - Later Hell checks, single player, test saves (2026-11-12; builds, log lines and limits in [checks/](checks/)): the map Boss, now its own `bosses.txt` entry, spawned in the boss room as a superunique in 6 of 6 games in Cave and Crypt ([hell-check-3](checks/2026-11-12-hell-check-3.md)), with its minions and its name on hover ([hell-check-2](checks/2026-11-12-hell-check-2.md), [names-drop-check](checks/2026-11-12-names-drop-check.md)); a Crypt map opens in Hell and arrives in the entrance cell, and the same item is refused in Normal and Nightmare and kept ([crypt-difficulty-check](checks/2026-11-12-crypt-difficulty-check.md)); Jungle and Snow open from their items with arrival, Boss, map stats and the entry banner ([outdoor-check-2](checks/2026-11-12-outdoor-check-2.md), [outdoor-check-3](checks/2026-11-12-outdoor-check-3.md), [snow-check-1](checks/2026-11-12-snow-check-1.md), [items-check](checks/2026-11-12-items-check.md), [outdoor-gaps-check](checks/2026-11-12-outdoor-gaps-check.md)); Horde 6 of 6 in Cave, Jungle and Snow (snow-check-2); the Boss `Drop` roll fires on death (plain Boss 3 of 3, superunique 2 of 2) but what it dropped is not settled ([boss-drop-check](checks/2026-11-12-boss-drop-check.md)); an unlocked Treasure chest opens but its loot did not drop in one game (#220). Latin-1 names on hover: a Latin-1 file showed `*` before the conversion, and the accents were right after it (PR #261). The Snow Horde was 6 of 6, walked to ([snow-check-2](checks/2026-11-12-snow-check-2.md)). A Snow wall stopped the character and the Snow automap title was seen (snow-check-2); not settled: Snow corners. Siege (Bloody Foothills) opened from its item in two games, arrival, the Boss and a Treasure event ([siege-check](checks/2026-11-12-siege-check.md)); not settled: its north and south edges and the piece seams.
+- Open shape, single player, test save (2026-11-12, [open-check](checks/2026-11-12-open-check.md)): Crypt Large Open (144 rooms, two seeds) and Jungle Large Open (2304 rooms) built and were entered in Hell without a crash, with the arrival in the entrance cell and, on Crypt, the boss in the boss room. Not checked: Cave Open, a full walk of a Large map, Snow refusal live. One unexplained `BC_VERIFY ptRoomFirst` line followed two invalid `cheat goto` calls once.
 - Not reproduced in game: the "no free spot" refusal (tried with 100 zombies around the player; the spot search still
   succeeded; the collision-bit reading is in `docs/reverse-engineering/cartographer/03-phase1-parts.md`, and a refusal needs a
   forced null or a fully blocked area), and the TCP/IP client refusal (needs a second game instance).

@@ -103,6 +103,37 @@ TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
 	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
 }
 
+TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape, so Open is refused there with a report line") {
+	Report report;
+	const auto maps = Load(
+		"A\tCave\tOpen\t\t\tt20\n"
+		"B\tCrypt\topen\tExtraSmall\t\tt21\n"
+		"C\tJungle\tOpen\t\t\tt22\n"
+		"D\tSnow\tOpen\t\t\tt23\n"
+		"E\tSnow\tSprawl\t\t\tt24\n",
+		report);
+	REQUIRE(maps.size() == 4);
+	CHECK(maps[0].shape == "Open");
+	CHECK(maps[1].shape == "Open");
+	CHECK(maps[2].tileset == "Jungle");
+	CHECK(maps[3].name == "E");  // Snow ignores every other Shape, so those rows still load
+	CHECK(report.Errors() == 1);
+	const std::string text = Joined(report);
+	CHECK(text.find("'Snow' cannot build the Open shape") != std::string::npos);
+	CHECK(text.find("This map is skipped.") != std::string::npos);
+}
+
+TEST_CASE("a shapes.txt row based on Open is Open for Snow too") {
+	Report report;
+	const auto shapes = LoadShapes("Name\tBase\nPlains\tOpen\nTwisty\tWinding\n", report);
+	REQUIRE(shapes.shapes.size() == 2);
+	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tSnow\tPlains\t\t\tt20\nB\tSnow\tTwisty\t\t\tt21\nC\tCave\tPlains\t\t\tt22\n", Names(), report, &shapes);
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].name == "B");
+	CHECK(maps[1].name == "C");
+	CHECK(Joined(report).find("Open shape") != std::string::npos);
+}
+
 TEST_CASE("Cave and Crypt are accepted tilesets; the settings file knows MazeProbe") {
 	Report report;
 	const auto maps = Load("Cave One\tcave\tWinding\t\t\tt20\nCrypt One\tCrypt\tLoop\t\t\tt21\n", report);

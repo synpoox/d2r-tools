@@ -44,7 +44,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (the Maze level is one of them: see the installer's `-Tileset`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
@@ -55,7 +55,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 and up (the pack counts stop at 255, the most the game stores; scales the level's own unique pack count; experimental; adds nothing on a level whose count is 0) | 0 | 25 |
+| `Uniques` | no | Percent more unique packs the map may have, 0 and up. Raises the level's `MonUMax` (stops at 255); `MonUMin` is left alone. Past the minimum the game makes about 6 percent of packs unique, so the count depends on `Density` and map size and a larger `Uniques` adds nothing once that is reached (about 73 on a Large Cave at `Density` 100, near 800 percent). Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -64,6 +64,7 @@ A row is refused with a message, and skipped, when:
 - `Name` is empty or already used;
 - `Tileset` is empty, unknown or not built yet;
 - `Shape` or `Size` is not one of the words above;
+- `Shape` is `Open` (or a `shapes.txt` shape based on it) and `Tileset` is `Snow`: Snow is lines of fence pieces, with no rooms to join, and takes no Shape;
 - a number is not a whole number in its range;
 - `Item` is empty, longer than 4 characters, not an item in `misc.txt`, `weapons.txt` or `armor.txt`, an item without item spell 16, or an item another map already uses;
 - a `Monsters` entry is not in the game's tables, or `Monsters` has more than 10 entries.
@@ -189,7 +190,7 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 ## shapes.txt (optional, advanced)
 
-Adds a new shape defined with numbers. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
+Adds a new shape defined with numbers. A row based on `Open` keeps the open room grid: `Width`, `Height`, `BossRoom`, `MinPath`/`MaxPath` and `MinTurns`/`MaxTurns` (checked against the shortest path from the entrance to the boss room) still apply, as does the event position; `Straight` and the side room and loop columns do nothing, and a row that asks for side rooms (`MaxBranches`), extra loops (`MaxLoops`) or a `Loop` ring is refused. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
 
 Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column. The generator gives each layout a fixed amount of work (about 25 ms at most on a desktop), so a row that is too tight to build is reported as too tight right away instead of making the game wait. A row parses with at most 48 tries of that size, about a second at the very worst.
 
