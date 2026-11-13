@@ -82,7 +82,7 @@ $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts tow
 # tileset); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 6000,3600); Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
 $OutdoorTilesets = @(
     # Jungle: the largest plan is 12 x 12 blocks of 32 tiles; the offset is clear of every Act 5 level (x up to 5055) and of the Maze level (x 6000..6360, y 0..360). Template 111 is Act 5 - Barricade 1, the outdoor level the spike (issue #89) copied.
-    @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
+    @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111; Layer = '74' },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; y is clear of the Maze level (y 0..360) and of the Outdoor level (y 3000..3384). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117 }
 )
@@ -333,7 +333,7 @@ if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
 }
 
 # One new outdoor level (Act 5, DrlgType 3) copied from a plain Act 5 outdoor row; an existing row of that name is only repaired. Returns the level id.
-function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param) {
+function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param, [string]$layer = '') {
     $existingRow = Find-Row $levels 'Name' $name
     if ($existingRow -ge 0) {
         $newId = [int](($levels.Lines[$existingRow] -split "`t")[$idCol])
@@ -347,6 +347,7 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$
         Set-CellIf $levels $cells 'LevelWarp' ''
         Set-CellIf $levels $cells 'SubType' '-1'
         Set-CellIf $levels $cells 'SubTheme' '-1'
+        if ($layer) { Set-CellIf $levels $cells 'Layer' $layer }
         for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
         if (($cells -join "`t") -ne $before) {
             $levels.Lines[$existingRow] = $cells -join "`t"
@@ -402,6 +403,8 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$
         }
         if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
         Set-Cell $levels $cells 'Waypoint' '255'
+        # The game keeps a character's revealed automap per Layer; the template's layer is shared with other levels (the Act 5 town for the jungle), which wipes the map on a town trip.
+        if ($layer) { Set-CellIf $levels $cells 'Layer' $layer }
         Set-CellIf $levels $cells 'Quest' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
         Set-CellIf $levels $cells 'LevelEntry' ''
@@ -418,7 +421,7 @@ $outdoorIds = @{}
 foreach ($t in $OutdoorTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
     $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
-    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param
+    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param $t.Layer
 }
 
 # --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------
