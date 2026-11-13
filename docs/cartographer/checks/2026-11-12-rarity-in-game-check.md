@@ -66,9 +66,9 @@ Two rare maps (`Plague ... Shorelines Map`, `Rune ... Tunneling Depths Map`) wit
 
 ## Findings
 
-No bug confirmed; two open questions (not filed from here): the hook saw only about half of the spawned maps (31 of 60),
-so the unseen half was not examined; and the item level label reads `Item Level: 1` whatever `lvl` is, so the item level
-could not be seen and its survival across save and reload is not checked. Also, a modder who adds `rareprefix`/`raresuffix` rows without string
+No bug confirmed; two open questions, filed as #383 and #384: the hook saw only about half of the spawned maps (31 of 60),
+so the unseen half was not examined (#383); and the item level label reads `Item Level: 1` whatever `lvl` is, so the item level
+could not be seen (#384) and its survival across save and reload is not checked. Also, a modder who adds `rareprefix`/`raresuffix` rows without string
 keys sees `Missing string` in the name.
 
 Not checked: multiplayer, traded maps (need multiplayer), item level survival, automap lines, a unique map, maps from the cube or vendors, and other game builds.
