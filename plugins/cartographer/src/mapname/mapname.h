@@ -70,6 +70,7 @@ inline constexpr MonsterStatText MonsterStatTexts[] = {
     {"mon_light_res", "%+d%% Monster Lightning Resistance"},
     {"mon_poison_res", "%+d%% Monster Poison Resistance"},
     {"mon_speed", "%+d%% Monster Speed"},
+    {"map_density", "%+d%% Map Density"},  // not a monster stat: the bonus Density of the map (statplan mapDensityBonus)
 };
 auto MapStatStringsJson() -> std::string;
 
