@@ -732,19 +732,22 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 }
 
-// A map item the gates refuse (second map, not Hell, level, not in town, no free spot, slot problems): the check refusal
-// (the check returning 0) goes down a different path in the item handler (docs/reverse-engineering/cartographer/22-item-refusal-cursor.md),
-// and the map item is a copy of the Scroll of Identify, whose cursor the game may start. The item interaction listener sees the
-// right-click first, on the UI thread, and stops it there with the check's own sentence: no use, the item stays. It reads the
-// gates from the copy the tick keeps (up to GateReadEvery ticks old). Best effort: without the service, or before the first
-// reading, the check refusal stays. Not yet seen to fire in game.
+// A map item the game would refuse (a map already open, not Hell, slot problems): the check refusal (the check returning 0) goes
+// down a different path in the item handler (docs/reverse-engineering/cartographer/22-item-refusal-cursor.md), and the map item is
+// a copy of the Scroll of Identify, whose cursor the game may start. The item interaction listener sees the right-click first, on
+// the UI thread, and stops it there with the check's own sentence: no use, the item stays. Only gates that cannot go stale the wrong
+// way are refused here; the gate copy the tick keeps is up to GateReadEvery ticks old, so level, area and free spot are left to the
+// check, so for character level, area and free spot the item cursor can still come back (follow-up). A map already open is known without that copy (opened here, or told by the host to a joined client). A joined client never
+// fills the copy, so it refuses nothing else and the host's check decides. A held modifier key steps aside. Best effort: without the
+// service the check refusal stays. When a map is open and a slot problem also exists, "already open" is said first on purpose. Not yet seen to fire in game.
 const D2RL::ItemService* g_itemService = nullptr;
 
 auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
 	using D2RL::ItemInteractions::Decision;
 	try {
-		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate) {
-			return Decision::Continue;
+		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate ||
+		    (event->modifiers & (D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Shift) | D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Control))) != 0) {
+			return Decision::Continue;  // Shift or Ctrl held: not a plain use (Alt is let through; the belt is not covered either)
 		}
 		D2RL::Items::ItemInfo info{};
 		info.structSize = D2RL::Items::ItemInfoSize;
@@ -764,20 +767,23 @@ auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::Item
 		if (map == nullptr) {
 			return Decision::Continue;
 		}
-		std::string text = SlotProblem(*map, *tables, SlotLevel(tables->slots, SlotNameFor(*map)));
-		if (text.empty()) {
+		std::string text;
+		if (g_mapOpen.load() || MapSyncRemoteMap().has_value()) {
+			// A map is open: opened here (host, single player) or told by the host (joined client). Needs no reading of the gates.
+			text = RefusalText(Gate::AlreadyOpen, *map, GateState{});
+		} else {
 			GateState state;
 			{
 				std::lock_guard<std::mutex> lock(g_gateLock);
 				if (!g_gateCacheValid) {
-					return Decision::Continue;
+					return Decision::Continue;  // no reading: a joined client never fills it, and the host's check decides there
 				}
 				state = g_gateCache;
 			}
-			if (g_mapOpen.load() && state.openings == 0) {
-				state.openings = 1;  // opened since the last reading
+			text = SlotProblem(*map, *tables, SlotLevel(tables->slots, SlotNameFor(*map)));
+			if (text.empty()) {
+				text = MapItemRefusal(tables->maps, code, state);
 			}
-			text = MapItemRefusal(tables->maps, code, state);
 		}
 		if (text.empty()) {
 			return Decision::Continue;

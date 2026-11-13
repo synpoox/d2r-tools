@@ -744,11 +744,19 @@ TEST_CASE("a refused map item is stopped with the check refusal sentence") {
 	state.difficulty = 1;
 	CHECK(MapItemRefusal(maps, "t20", state) == "Cartographer: Shore can only be opened in Hell.");
 	state.difficulty = 2;
+	// Gates that can be stale (area, free spot, character level) are left to the game's check
 	state.areaId = 1;
-	CHECK(!MapItemRefusal(maps, "t20", state).empty());  // not in town
+	CHECK(MapItemRefusal(maps, "t20", state).empty());
 	state.areaId = 109;
 	state.spotFree = false;
-	CHECK(!MapItemRefusal(maps, "t20", state).empty());
+	CHECK(MapItemRefusal(maps, "t20", state).empty());
+	state.spotFree = true;
+	maps[0].minCharLevel = 80;
+	state.charLevel = 70;
+	CHECK(MapItemRefusal(maps, "t20", state).empty());
+	CHECK(CheckGates(maps[0], state) == Gate::CharLevel);  // the check still refuses it, with a fresh reading
+	state.openings = 1;
+	CHECK(MapItemRefusal(maps, "t20", state).find("already been opened") != std::string::npos);  // open wins over a low level
 }
 
 TEST_CASE("an old Difficulty column is ignored with a note, not an error") {

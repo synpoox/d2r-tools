@@ -297,6 +297,9 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 		uint32_t generation;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
+			if (!g_helloSent) {
+				return;  // no hello sent in this game: a late message from the previous game
+			}
 			verdict = g_clientMap.offer(id, g_hashes);
 			generation = g_generation;
 			if (id.mapIndex < g_names.size()) {
