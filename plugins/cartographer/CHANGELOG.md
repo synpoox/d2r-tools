@@ -17,8 +17,8 @@
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
-- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
-- New map `Size` `ExtraSmall`, smaller than `Small`.
+- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, an ExtraLarge Open map uses the Large grid (9 x 9 blocks).
+- Map sizes were renamed one step up: `Small` (4 x 4, was `ExtraSmall`), `Medium` (6 x 6), `Large` (9 x 9, the blank default) and `ExtraLarge` (12 x 12); update `Size` in `maps.txt`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.

@@ -34,7 +34,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 
 ## What the tileset must supply
 
-The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of ExtraSmall, Small, Medium and Large, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
+The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium, Large and ExtraLarge, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
 
 ## Adding a maze tileset
 
