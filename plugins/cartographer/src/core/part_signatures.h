@@ -85,7 +85,7 @@ inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B D
 inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
-// The map item's own stats (ItemStats=1, cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
+// The map item's own stats (cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
 // finder (with state 0 it matches a list on the unit's chain by flags). ItemListCopy (list, out, max) is D2RLoader's thunk (jmp [rip+x],
 // then the dead original body) into D2RLoader's replacement of up to `max` {stat << 16 | layer, value} pairs; call the thunk, never hook it.
 inline constexpr const char* ItemListFind = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??";

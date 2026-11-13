@@ -10,7 +10,6 @@
 #include "core/tables.h"
 #include "core/tsv.h"
 #include "events.h"
-#include "mapstats.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -21,7 +20,7 @@ using namespace carto;
 
 namespace {
 
-const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tMinCharLevel\tProperties\tEventChance\n";
+const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonsters\tMinCharLevel\tEventChance\n";
 
 auto Names() -> GameNames {
 	GameNames n;
@@ -69,7 +68,6 @@ TEST_CASE("a four-cell map loads with every default") {
 	CHECK(maps[0].item == "t20");
 	CHECK(maps[0].size == "Medium");
 	CHECK(maps[0].level == 85);
-	CHECK(maps[0].properties == -1);
 	CHECK(maps[0].eventChance == -1);
 }
 
@@ -423,12 +421,10 @@ TEST_CASE("windows line endings and a byte order mark are fine") {
 	CHECK(report.problems.empty());
 }
 
-TEST_CASE("settings default to 6 properties, 20 percent events, no item stats, Harrogath") {
+TEST_CASE("settings default to 20 percent events, Harrogath") {
 	Report report;
 	const Settings defaults = LoadSettings("", report);
-	CHECK(defaults.properties == 6);
 	CHECK(defaults.eventChance == 20);
-	CHECK(defaults.itemStats == 0);
 	CHECK(defaults.town == "Harrogath");
 	CHECK(report.Errors() == 0);
 	REQUIRE(report.problems.size() == 1);  // an empty optional file is a note
@@ -437,11 +433,10 @@ TEST_CASE("settings default to 6 properties, 20 percent events, no item stats, H
 
 TEST_CASE("settings: blank means default, a bad value keeps it and says why") {
 	Report report;
-	const Settings s = LoadSettings("Setting\tValue\nproperties\t8\nEventChance\t\nItemStats\t7\nTown\tLut Gholein\nPropertes\t3\n", report);
-	CHECK(s.properties == 8);
+	const Settings s = LoadSettings("Setting\tValue\nEventChance\t\nTown\tLut Gholein\nEventChanse\t3\nPlayerStats\t7\n", report);
 	CHECK(s.eventChance == 20);
-	CHECK(s.itemStats == 0);
 	CHECK(s.town == "Harrogath");
+	CHECK(s.playerStats == 1);
 	CHECK(report.Errors() == 3);
 	CHECK(Joined(report).find("Did you mean") != std::string::npos);
 }
@@ -449,7 +444,7 @@ TEST_CASE("settings: blank means default, a bad value keeps it and says why") {
 TEST_CASE("settings: PlayerStats is on by default and takes 0 or 1")
 {
 	Report report;
-	CHECK(LoadSettings("Setting\tValue\nProperties\t6\n", report).playerStats == 1);
+	CHECK(LoadSettings("Setting\tValue\nMapNames\t1\n", report).playerStats == 1);
 	CHECK(LoadSettings("Setting\tValue\nplayerstats\t0\n", report).playerStats == 0);
 	CHECK(report.Errors() == 0);
 	CHECK(LoadSettings("Setting\tValue\nPlayerStats\t2\n", report).playerStats == 1);
@@ -933,16 +928,13 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(maps[0].level == 90);
 	CHECK(maps[0].monsters.size() == 2);
 	CHECK(maps[0].minCharLevel == 80);
-	CHECK(maps[0].properties == 4);
 	CHECK(maps[1].shape == "Loop");
 	CHECK(maps[1].level == 85);  // blank cells keep the defaults
 
 	Report settingsReport;
 	const Settings settings = LoadSettings(ExampleFile("cartographer.txt"), settingsReport);
 	CHECK_MESSAGE(settingsReport.problems.empty(), Joined(settingsReport));
-	CHECK(settings.properties == 6);
 	CHECK(settings.eventChance == 20);
-	CHECK(settings.itemStats == 0);
 	CHECK(settings.town == "Harrogath");
 }
 
@@ -953,19 +945,15 @@ TEST_CASE("MapNames is on unless cartographer.txt turns it off") {
 	CHECK(LoadSettings("Setting\tValue\nMapNames\t0\n", off).mapNames == 0);
 }
 
-TEST_CASE("the example pack loads every file: maps, settings, shapes, mapstats and mapevents") {
+TEST_CASE("the example pack loads every file: maps, settings, shapes and mapevents") {
 	Report report;
 	const cartographer::layout::ShapeTable shapes = LoadShapes(ExampleFile("shapes.txt"), report);
-	const auto pool = LoadMapStats(ExampleFile("mapstats.txt"), report);
 	const auto events = LoadMapEvents(ExampleFile("mapevents.txt"), report);
 	const auto bosses = LoadBosses(ExampleFile("bosses.txt"), ExampleNames(), report);
 	const auto maps = LoadMaps(ExampleFile("maps.txt"), ExampleNames(), report, &shapes, &bosses);
 	CHECK_MESSAGE(report.problems.empty(), Joined(report));
 	REQUIRE(shapes.shapes.size() == 1);
 	CHECK(shapes.shapes[0].name == "Snake");
-	REQUIRE(pool.size() == 4);
-	CHECK(pool[2].target == cartographer::stats::Target::Players);
-	CHECK(pool[2].min == -25);
 	REQUIRE(events.size() == 3);
 	CHECK(events[0].name == "The Drowned King");
 	CHECK(events[0].kind == cartographer::events::Kind::Boss);
@@ -1014,77 +1002,22 @@ TEST_CASE("maps.txt Shape may name a shapes.txt row, ignoring case; an unknown n
 	CHECK(without.Errors() == 2);
 }
 
-TEST_CASE("mapstats.txt: rows load; bad rows are skipped and the rest are checked") {
-	Report report;
-	const auto pool = LoadMapStats(
-	    "Target\tStat\tMin\tMax\tWeight\n"
-	    "Monsters\tfireresist\t10\t40\t2\n"
-	    "Monster\tfireresist\t1\t2\t1\n"   // not a Target
-	    "Players\thpregen\tabc\t5\t1\n"    // not a number
-	    "Players\t\t1\t5\t1\n"             // no Stat
-	    "Players\tcoldresist\t1\t5\t-1\n"  // negative Weight
-	    "Players\tlightresist\t9\t3\t\n",  // Max below Min: loads, with a note
-	    report);
-	REQUIRE(pool.size() == 2);
-	CHECK(pool[0].stat == "fireresist");
-	CHECK(pool[1].stat == "lightresist");
-	CHECK(pool[1].weight == 1);  // blank means the default
-	CHECK(report.Errors() == 4);
-	REQUIRE(report.problems.size() == 5);
-	CHECK(report.problems[0].line == 3);
-	CHECK(report.problems[0].text.find("Target 'Monster' is not known. Did you mean 'Monsters'?") == 0);
-	CHECK(report.problems[3].line == 6);
-	CHECK_MESSAGE(report.problems[3].text.find("coldresist: Weight is below 0") == 0, report.problems[3].text);
-	CHECK(report.problems[4].severity == Severity::Note);
-	CHECK(report.problems[4].line == 7);
-
-	Report noColumns;
-	CHECK(LoadMapStats("Stat\tMin\nfireresist\t1\n", noColumns).empty());
-	REQUIRE(noColumns.Errors() == 2);
-	CHECK(noColumns.problems[0].text.find("no 'Target' column") != std::string::npos);
-	Report none;
-	CHECK(LoadMapStats("", none).empty());
-	REQUIRE(none.problems.size() == 1);  // an empty optional file is a note, not an error
-	CHECK(none.problems[0].severity == Severity::Note);
+TEST_CASE("retired: the Properties column of maps.txt and the Properties and ItemStats settings are noted and ignored") {
+	Report maps;
+	const auto loaded = LoadMaps("Name\tTileset\tShape\tItem\tProperties\nA\tCave\tLoop\tt20\t4\n", Names(), maps);
+	CHECK(loaded.size() == 1);
+	CHECK(maps.Errors() == 0);
+	REQUIRE(maps.problems.size() == 1);
+	CHECK(maps.problems[0].text.find("'Properties' is no longer used") != std::string::npos);
+	Report settings;
+	LoadSettings("Setting\tValue\nProperties\t8\nItemStats\t1\nEventChance\t30\n", settings);
+	CHECK(settings.Errors() == 0);
+	REQUIRE(settings.problems.size() == 2);
+	CHECK(settings.problems[0].severity == Severity::Note);
+	CHECK(settings.problems[1].text.find("'ItemStats' is no longer used") != std::string::npos);
 }
 
-TEST_CASE("mapstats.txt: Min and Max are required (column and cell)") {
-	Report noMin;
-	CHECK(LoadMapStats("Target\tStat\tMax\nMonsters\tfireresist\t5\n", noMin).empty());
-	REQUIRE(noMin.Errors() == 1);
-	CHECK(noMin.problems[0].text.find("no 'Min' column") != std::string::npos);
-	Report blank;
-	const auto pool = LoadMapStats("Target\tStat\tMin\tMax\nMonsters\titem_maxhp_percent\t\t\nMonsters\tfireresist\t1\t\nMonsters\tcoldresist\t1\t2\n", blank);
-	REQUIRE(pool.size() == 1);
-	CHECK(pool[0].stat == "coldresist");
-	REQUIRE(blank.Errors() == 3);  // Min and Max of the first row, Max of the second
-	CHECK(blank.problems[0].line == 2);
-	CHECK(blank.problems[0].text.find("Min is empty") == 0);
-}
-
-TEST_CASE("mapstats.txt: a number beyond int32 is cut with a warning, not called a non-number") {
-	Report report;
-	const auto pool = LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tfireresist\t1\t3000000000\t99999999999\nMonsters\tcoldresist\t-99999999999\t5\t\n", report);
-	REQUIRE(pool.size() == 2);
-	CHECK(report.Errors() == 0);
-	CHECK(pool[0].max == INT32_MAX);
-	CHECK(pool[1].min == INT32_MIN);
-	bool cut = false;
-	for (const Problem& p : report.problems) {
-		cut = cut || p.text.find("larger values are cut") != std::string::npos;
-	}
-	CHECK(cut);
-	Report text;
-	CHECK(LoadMapStats("Target\tStat\tMin\tMax\nMonsters\tfireresist\t1\t3x\n", text).empty());
-	CHECK(text.problems[0].text.find("is not a whole number") != std::string::npos);
-}
-
-TEST_CASE("repeated header columns are reported in maps, mapstats and mapevents") {
-	Report stats;
-	CHECK(LoadMapStats("Target\tStat\tMin\tMax\tmin\nMonsters\tfireresist\t1\t2\t9\n", stats).size() == 1);
-	REQUIRE(stats.Errors() == 1);
-	CHECK(stats.problems[0].line == 1);
-	CHECK(stats.problems[0].text.find("'min' appears more than once") != std::string::npos);
+TEST_CASE("repeated header columns are reported in maps and mapevents") {
 	Report events;
 	CHECK(LoadMapEvents("Name\tKind\tSpawn\tName\nA\tBoss\tx\tB\n", events).size() == 1);
 	CHECK(events.Errors() == 1);
@@ -1145,12 +1078,6 @@ TEST_CASE("mapevents.txt: Waves is only read on Ambush rows; a number beyond int
 }
 
 TEST_CASE("a value cut to int32 gets a suffix naming what was typed; the message is not changed") {
-	Report stats;
-	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tfireresist\t1\t3\t99999999999\n", stats);
-	REQUIRE(!stats.problems.empty());
-	CHECK_MESSAGE(stats.problems[0].text.find("Weight 2147483647 is above") != std::string::npos, stats.problems[0].text);
-	CHECK_MESSAGE(stats.problems[0].text.find("(you typed 99999999999)") != std::string::npos, stats.problems[0].text);
-
 	Report events;
 	LoadMapEvents("Name\tKind\tSpawn\tCount\nBig\tHorde\tzombie1\t3000000000\n", events);
 	REQUIRE(events.Errors() == 1);
@@ -1164,12 +1091,6 @@ TEST_CASE("no suffix for a value that was not cut, or an empty Weight") {
 	REQUIRE(events.Errors() == 1);
 	CHECK_MESSAGE(events.problems[0].text.find("you typed") == std::string::npos, events.problems[0].text);
 	CHECK_MESSAGE(events.problems[0].text.find("'Count 0'") != std::string::npos, events.problems[0].text);
-
-	Report stats;
-	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tWeight 1\t5\t3\t\n", stats);
-	for (const Problem& p : stats.problems) {
-		CHECK_MESSAGE(p.text.find("you typed") == std::string::npos, p.text);
-	}
 }
 
 TEST_CASE("the suffix names only the label the message is about; a Name is kept as typed") {
@@ -1194,21 +1115,6 @@ TEST_CASE("a Kind that holds \"' has Count\" does not get the Count suffix") {
 	CHECK_MESSAGE(report.problems[0].text.find("you typed") == std::string::npos, report.problems[0].text);
 }
 
-TEST_CASE("a Stat named like Weight does not get the Weight suffix on a Max-below-Min note") {
-	Report report;
-	LoadMapStats("Target\tStat\tMin\tMax\tWeight\nMonsters\tWeight x\t5\t3\t99999999999\n", report);
-	bool above = false;
-	for (const Problem& p : report.problems) {
-		if (p.text.find("is above") != std::string::npos) {
-			above = true;
-			CHECK_MESSAGE(p.text.find("(you typed 99999999999)") != std::string::npos, p.text);
-		} else {
-			CHECK_MESSAGE(p.text.find("you typed") == std::string::npos, p.text);
-		}
-	}
-	CHECK(above);
-}
-
 TEST_CASE("a repeated unknown column is reported once") {
 	const GameNames names;
 	Report report;
@@ -1218,14 +1124,6 @@ TEST_CASE("a repeated unknown column is reported once") {
 		unused += p.text.find("is not used") != std::string::npos ? 1 : 0;
 	}
 	CHECK(unused == 1);
-
-	Report stats;
-	LoadMapStats("Target\tStat\tMin\tMax\tfoo\tfoo\n", stats);
-	int statsUnused = 0;
-	for (const Problem& p : stats.problems) {
-		statsUnused += p.text.find("is not used") != std::string::npos ? 1 : 0;
-	}
-	CHECK(statsUnused == 1);
 }
 
 TEST_CASE("no notice when core-maps is not loaded") {

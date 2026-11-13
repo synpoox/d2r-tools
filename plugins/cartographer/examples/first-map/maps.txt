@@ -1,4 +1,4 @@
-Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel	Properties	EventChance	Density	Champions	Uniques
-Shorelines	Cave	Corridor	t20	Large	90	Shoreline Warden	quillrat1,zombie1	80	4	25	50	50	25
+Name	Tileset	Shape	Item	Size	Level	Boss	Monsters	MinCharLevel	EventChance	Density	Champions	Uniques
+Shorelines	Cave	Corridor	t20	Large	90	Shoreline Warden	quillrat1,zombie1	80	25	50	50	25
 Tunneling Depths	Cave	Loop	t21	Small
 Overgrown Reach	Jungle	Winding	t22	Medium

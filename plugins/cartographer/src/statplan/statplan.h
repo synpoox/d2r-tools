@@ -9,14 +9,20 @@
 #include <utility>
 #include <vector>
 
-#include "mapstats.h"
-
 namespace cartographer::statplan {
 
-using stats::PoolIssue;
-using stats::PoolRow;
-using stats::Property;
-using stats::Target;
+enum class Target { Monsters, Players };
+
+// A map property: which stat, on whom, and the value. The stat is an itemstatcost name the game's own tables know.
+struct Property {
+	Target target = Target::Monsters;
+	std::string stat;
+	int value = 0;
+	friend bool operator==(const Property &a, const Property &b)
+	{
+		return a.target == b.target && a.stat == b.stat && a.value == b.value;
+	}
+};
 
 // Highest stat id the engine part will pass to the game (itemstatcost has a few hundred rows).
 constexpr int kMaxStatId = 2047;
@@ -31,6 +37,8 @@ struct StatIds {
 
 	// The id of `name` (exact), or -1.
 	int find(std::string_view name) const;
+	// The name of stat `id`, or "" when no row has it.
+	std::string nameOf(int id) const;
 	// The listed name closest to `name` (for a "did you mean" message), or "" when nothing is close.
 	std::string suggest(std::string_view name) const;
 };
@@ -74,7 +82,7 @@ std::string refusedReason(Target target, std::string_view stat, int id);
 // is skipped. With `playerStats` false every player property is skipped (the PlayerStats setting is off).
 Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats = true);
 
-// One stat read off the map item (ItemStats=1): the game's stat id, layer and value.
+// One stat read off the map item (the map item): the game's stat id, layer and value.
 struct ItemStat {
 	int stat = 0;
 	int layer = 0;
@@ -97,7 +105,7 @@ struct MapLevelPick {
 // (cut to kMaxMapLevel, with a note), else `fallback`. A missing stat is not an error: an item made before the stat existed has none.
 MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback);
 
-// `stats` without the map-level stat, so it is not reported as a stat that no mapstats.txt row has.
+// `stats` without the map-level stat, so it is not reported as a stat with no meaning on a map.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
 
 struct ItemProperties {
@@ -105,15 +113,20 @@ struct ItemProperties {
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out
 };
 
-// Turns the map item's stats into the map's properties, in the item's order. Each stat is matched by id to the first
-// `pool` row whose Stat has that id in `ids`; that row gives the target (monsters or players), so the pool says which
-// item stats a map may carry. A stat with a layer, a value of 0, or no pool row is dropped and listed in `dropped`.
-// With `ids.loaded` false nothing can be matched: every stat is dropped.
-ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids);
+// A monster-side map stat: the itemstatcost row tools/install.ps1 adds (`itemStat`) and the vanilla stat the game applies to
+// monsters for it (`applied`). The rows are the plugin's own so a vanilla stat on a map item never reads as a monster stat.
+struct MonsterStat {
+	const char *itemStat;
+	const char *applied;
+};
+// The monster-side stats a map item can carry (cartographer/14-item-stats.md).
+const std::vector<MonsterStat> &monsterStats();
 
-// Warnings for pool rows whose Stat is not in itemstatcost, or that buildPlan would refuse (row is the 0-based index
-// into the pool). Empty when the table was not read (fail open: unchecked, not wrong).
-std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids);
+// Turns the map item's stats into the map's properties, in the item's order. A stat named in monsterStats() applies its vanilla
+// stat to monsters; any other stat is a player stat, applied to the player under its own (vanilla) name; buildPlan then refuses what
+// the game bakes into a save. A stat with a layer, a value of 0 or an id no itemstatcost row has is dropped and listed in
+// `dropped`. With `ids.loaded` false nothing can be named: every stat is dropped.
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids);
 
 // One line for the log: "monsters: item_maxhp_percent(76)=+30; players: fireresist(39)=-20".
 std::string describe(const Plan &plan);

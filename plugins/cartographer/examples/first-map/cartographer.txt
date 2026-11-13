@@ -1,7 +1,5 @@
 Setting	Value
-Properties	6
 EventChance	20
-ItemStats	0
 PlayerStats	1
 Town	Harrogath
 MapNames	1

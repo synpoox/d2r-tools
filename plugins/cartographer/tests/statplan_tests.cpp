@@ -3,16 +3,15 @@
 #include "doctest.h"
 
 #include <cstring>
+#include <fstream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "statplan.h"
 
 using namespace cartographer::statplan;
-using cartographer::stats::MapRow;
-using cartographer::stats::Settings;
-using cartographer::stats::drawMapStats;
 
 namespace {
 
@@ -147,41 +146,6 @@ TEST_CASE("buildPlan refuses a stat id above the limit")
 	const Plan plan = buildPlan({{Target::Monsters, "huge", 1}, {Target::Monsters, "ok", 1}}, ids);
 	CHECK(plan.monsters.size() == 1);
 	CHECK(plan.skipped.size() == 1);
-}
-
-TEST_CASE("a drawn map yields the same plan for the same seed")
-{
-	const std::vector<PoolRow> pool = {
-		{Target::Monsters, "item_maxhp_percent", 10, 20, 1},
-		{Target::Monsters, "damagepercent", 10, 20, 1},
-		{Target::Players, "fireresist", -30, -10, 1},
-		{Target::Players, "hpregen", -30, -10, 1},
-	};
-	Settings s;
-	s.properties = 3;
-	const StatIds ids = testIds();
-	const Plan a = buildPlan(drawMapStats(42, MapRow{}, s, pool), ids);
-	const Plan b = buildPlan(drawMapStats(42, MapRow{}, s, pool), ids);
-	CHECK(describe(a) == describe(b));
-	CHECK(a.monsters.size() + a.players.size() + a.skipped.size() == 3);
-	for (const Entry &e : a.monsters) CHECK(e.value >= 10);
-	for (const Entry &e : a.players) CHECK(e.value <= -10);
-}
-
-TEST_CASE("checkPoolStats warns about unknown stats, only for rows that can be drawn")
-{
-	const std::vector<PoolRow> pool = {
-		{Target::Monsters, "fireresist", 1, 2, 1},
-		{Target::Monsters, "fireresits", 1, 2, 1},
-		{Target::Monsters, "madeup", 1, 2, 0},  // off: never drawn
-		{Target::Monsters, "madeup", 1, 2, -1}, // error row: already reported
-	};
-	const auto issues = checkPoolStats(pool, testIds());
-	REQUIRE(issues.size() == 1);
-	CHECK(issues[0].row == 1);
-	CHECK_FALSE(issues[0].error);
-	CHECK(issues[0].message.find("fireresist") != std::string::npos);
-	CHECK(checkPoolStats(pool, StatIds{}).empty()); // table not read: unchecked
 }
 
 TEST_CASE("the player's list goes on in the map, off when it no longer applies")
@@ -351,24 +315,6 @@ TEST_CASE("stats that need a skill or state number are refused on both targets")
 	}
 	CHECK(refusedReason(Target::Players, "fireresist", 39).empty());
 	CHECK(refusedReason(Target::Monsters, "item_skillonxyz", 200).empty()); // the list is exact: no prefix match
-}
-
-TEST_CASE("checkPoolStats names each refused row")
-{
-	StatIds ids;
-	ids.loaded = true;
-	ids.byName = {{"gold", 14}, {"fireresist", 39}};
-	const std::vector<PoolRow> pool = {
-		{Target::Players, "fireresist", 1, 2, 1},
-		{Target::Players, "gold", 1, 2, 1},
-		{Target::Monsters, "gold", 1, 2, 1}, // fine on monsters
-		{Target::Players, "gold", 1, 2, 0},  // off: not reported
-	};
-	const auto issues = checkPoolStats(pool, ids);
-	REQUIRE(issues.size() == 1);
-	CHECK(issues[0].row == 1);
-	CHECK(issues[0].message.find("gold") != std::string::npos);
-	CHECK(issues[0].message.find("refused on players") != std::string::npos);
 }
 
 TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
@@ -628,45 +574,52 @@ TEST_CASE("checkTableView accepts only the game's own table")
 	CHECK_FALSE(checkTableView(nullptr, 0, kStateRowSize, nullptr, 0, kStateRowSize).empty());
 }
 
-TEST_CASE("itemStatsToProperties: item stats become properties in the item's order, the pool row gives the target")
+TEST_CASE("itemStatsToProperties: monster-side item stats apply their vanilla stat to monsters, the rest are player stats, in the item's order")
 {
-	using cartographer::stats::PoolRow;
-	using cartographer::stats::Target;
-	const StatIds ids = testIds();
-	const std::vector<PoolRow> pool = {
-		{Target::Players, "fireresist", -30, -10, 1},
-		{Target::Monsters, "item_maxhp_percent", 10, 50, 1},
-		{Target::Monsters, "strength", 1, 5, 1},
-		{Target::Players, "strength", 1, 5, 1}, // a second row for the same stat: the first one wins
-	};
-	const auto r = itemStatsToProperties({{ids.find("item_maxhp_percent"), 0, 30}, {ids.find("fireresist"), 0, -20}, {ids.find("strength"), 0, 7}}, pool, ids);
-	REQUIRE(r.properties.size() == 3);
+	const StatIds ids = parseItemStatCost(
+	    "Stat\nstrength\nitem_maxhp_percent\nfireresist\ncartographer_mon_life\ncartographer_mon_fire_res\n");  // ids 0 to 4, the row numbers
+	const auto r = itemStatsToProperties({{3, 0, 30}, {2, 0, -20}, {0, 0, 7}, {4, 0, 25}}, ids);
+	REQUIRE(r.properties.size() == 4);
 	CHECK(r.dropped.empty());
-	CHECK(r.properties[0] == cartographer::stats::Property{Target::Monsters, "item_maxhp_percent", 30});
-	CHECK(r.properties[1] == cartographer::stats::Property{Target::Players, "fireresist", -20});
-	CHECK(r.properties[2] == cartographer::stats::Property{Target::Monsters, "strength", 7});
+	CHECK(r.properties[0] == cartographer::statplan::Property{Target::Monsters, "item_maxhp_percent", 30});
+	CHECK(r.properties[1] == cartographer::statplan::Property{Target::Players, "fireresist", -20});
+	CHECK(r.properties[2] == cartographer::statplan::Property{Target::Players, "strength", 7});
+	CHECK(r.properties[3] == cartographer::statplan::Property{Target::Monsters, "fireresist", 25});
+	// A vanilla stat on the item is the player's, never the monsters'.
+	const auto plan = buildPlan(r.properties, ids);
+	REQUIRE(plan.monsters.size() == 2);
+	CHECK(plan.monsters[0].stat == 1);
+	CHECK(plan.monsters[1].stat == 2);
+	REQUIRE(plan.players.size() == 2);
 }
 
-TEST_CASE("itemStatsToProperties: a layer, a zero value and a stat no pool row names are dropped with a line each")
+TEST_CASE("itemStatsToProperties: a layer, a zero value and an unknown id are dropped with a line each")
 {
-	using cartographer::stats::PoolRow;
-	using cartographer::stats::Target;
-	const StatIds ids = testIds();
-	const std::vector<PoolRow> pool = {{Target::Players, "fireresist", -30, -10, 1}};
-	const auto r = itemStatsToProperties({{ids.find("fireresist"), 3, -20}, {ids.find("fireresist"), 0, 0}, {ids.find("hpregen"), 0, 5}, {9999, 0, 1}, {ids.find("fireresist"), 0, -5}}, pool, ids);
+	const StatIds ids = parseItemStatCost("Stat\nfireresist\ncartographer_mon_life\n");
+	const auto r = itemStatsToProperties({{0, 3, -20}, {0, 0, 0}, {9999, 0, 1}, {1, 0, -5}}, ids);
 	REQUIRE(r.properties.size() == 1);
-	CHECK(r.properties[0].value == -5);
-	CHECK(r.dropped.size() == 4);
-	CHECK(itemStatsToProperties({}, pool, ids).properties.empty());
-	// Fail open: with no stat table nothing matches, and drawMapStats then draws as usual.
-	const auto none = itemStatsToProperties({{2, 0, -20}}, pool, StatIds{});
+	CHECK(r.properties[0] == cartographer::statplan::Property{Target::Monsters, "item_maxhp_percent", -5});
+	REQUIRE(r.dropped.size() == 3);
+	CHECK(r.dropped[0].find("layer") != std::string::npos);
+	CHECK(r.dropped[1].find("value is 0") != std::string::npos);
+	CHECK(r.dropped[2].find("no itemstatcost row has this id") != std::string::npos);
+	CHECK(itemStatsToProperties({}, ids).properties.empty());
+	// Fail open: with no stat table nothing can be named.
+	const auto none = itemStatsToProperties({{0, 0, -20}}, StatIds{});
 	CHECK(none.properties.empty());
-	CHECK(none.dropped.size() == 1);
-	Settings s;
-	s.properties = 1;
-	s.itemStats = true;
-	CHECK(drawMapStats(1, MapRow{}, s, pool, none.properties).size() == 1);
-	CHECK(drawMapStats(1, MapRow{}, s, pool, r.properties) == r.properties);
+	REQUIRE(none.dropped.size() == 1);
+}
+
+TEST_CASE("every monster-side map stat names a vanilla stat buildPlan accepts on monsters")
+{
+	StatIds ids;
+	ids.loaded = true;
+	int next = 100;  // clear of the ids buildPlan refuses
+	for (const auto &m : monsterStats()) ids.byName.emplace_back(m.applied, next++);
+	for (const auto &m : monsterStats()) {
+		const auto plan = buildPlan({{Target::Monsters, m.applied, 10}}, ids);
+		CHECK_MESSAGE(plan.monsters.size() == 1, m.applied);
+	}
 }
 
 TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")
@@ -723,4 +676,16 @@ TEST_CASE("isStaticState lists the fixed ids")
 {
 	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));
 	for (int s : {1, 39, 108, 116, 230, 231}) CHECK_FALSE(isStaticState(s));
+}
+
+TEST_CASE("every monster-side map stat is a row the installer adds, with a description text")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	for (const auto &m : monsterStats()) {
+		CHECK_MESSAGE(all.str().find(std::string("'") + m.itemStat + "'") != std::string::npos, m.itemStat);
+	}
 }

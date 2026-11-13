@@ -179,7 +179,7 @@ void SettleStats(const StatApplyCounts& counts) noexcept {
 		Settle(ac::Item::StatChanges, true, std::to_string(counts.monstersChanged) + " monster(s) took " + std::to_string(counts.drawnMonster) + " drawn propert" +
 		                                        (counts.drawnMonster == 1 ? "y" : "ies"));
 	} else {
-		Settle(ac::Item::StatChanges, false, "properties were drawn but no monster was given them (" + std::to_string(counts.monstersFailed) + " failed)");
+		Settle(ac::Item::StatChanges, false, "map modifiers were read but no monster was given them (" + std::to_string(counts.monstersFailed) + " failed)");
 	}
 }
 

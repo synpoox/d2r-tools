@@ -5,6 +5,7 @@
 #include "log.h"
 
 #include <cstdint>
+#include <cstdio>
 
 namespace carto {
 
@@ -21,7 +22,7 @@ constexpr int CopyMax = 0x200;
 struct Unit;
 
 using FindListFn = void* (*)(Unit*, int32_t state, int32_t flags) noexcept;
-// Copies up to `max` {stat << 16 | layer, value} pairs (two int32 each) from the list into `out`; returns how many.
+// Copies up to `max` entries of four int32 each, {layer, stat, value, 0}, from the list into `out`; returns how many.
 using ListCopyFn = int32_t (*)(void* list, int32_t* out, int32_t max) noexcept;
 
 enum PartId { FindList, ListCopy, PartCount };
@@ -74,7 +75,7 @@ auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<
 	if (list == nullptr) {
 		return out;  // the item has no magic list: no stats
 	}
-	int32_t pairs[CopyMax * 2] = {};
+	int32_t pairs[CopyMax * 4] = {};
 	const int32_t n = reinterpret_cast<ListCopyFn>(const_cast<uint8_t*>(g_parts[ListCopy].address))(list, pairs, CopyMax);
 	if (n < 0 || n > CopyMax) {
 		if (note != nullptr) {
@@ -83,8 +84,8 @@ auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<
 		return out;
 	}
 	for (int32_t i = 0; i < n && i < MaxStats; ++i) {
-		const int32_t key = pairs[i * 2];
-		out.push_back({static_cast<int>((static_cast<uint32_t>(key) >> 16) & 0xffff), static_cast<int>(key & 0xffff), pairs[i * 2 + 1]});
+		const int32_t* e = pairs + i * 4;  // D2RLoader's copy writes 16 bytes an entry: {layer, stat, value, 0}
+		out.push_back({static_cast<int>(e[1]), static_cast<int>(e[0]), e[2]});
 	}
 	if (n > MaxStats && note != nullptr) {
 		*note = "the item has " + std::to_string(n) + " stats; only the first " + std::to_string(MaxStats) + " are read";
