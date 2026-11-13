@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "statplan.h"
+#include "../src/mappanel/mappanel.h"
 
 using namespace cartographer::statplan;
 
@@ -125,6 +126,57 @@ TEST_CASE("buildPlan keeps the first 16 player stats in plan order and says why"
 	CHECK(plan.skipped[1].stat == "capstat17");
 	CHECK(plan.skipped[0].why == "the game sends at most 16 stats of a list to the character sheet");
 	CHECK(plan.skipped[1].why == plan.skipped[0].why);
+}
+
+TEST_CASE("buildPlan merges two properties of one stat on one target into one entry with the sum")
+{
+	const std::vector<Property> props = {
+		{Target::Monsters, "item_maxhp_percent", 20}, {Target::Players, "fireresist", -10}, {Target::Monsters, "item_maxhp_percent", 15},
+		{Target::Players, "fireresist", -5},          {Target::Players, "item_maxhp_percent", 7}, {Target::Monsters, "damagepercent", 30}};
+	const Plan plan = buildPlan(props, testIds());
+	REQUIRE(plan.monsters.size() == 2);
+	CHECK(plan.monsters[0].name == "item_maxhp_percent");
+	CHECK(plan.monsters[0].value == 35);
+	CHECK(plan.monsters[1].value == 30);
+	REQUIRE(plan.players.size() == 2);
+	CHECK(plan.players[0].name == "fireresist");
+	CHECK(plan.players[0].value == -15);
+	CHECK(plan.players[1].value == 7); // the same stat on the other target is its own entry
+	CHECK(plan.skipped.empty());
+}
+
+TEST_CASE("buildPlan drops an entry whose merged value is 0, and a merge does not use up a player slot")
+{
+	const Plan cancel = buildPlan({{Target::Monsters, "damagepercent", 10}, {Target::Monsters, "damagepercent", -10}}, testIds());
+	CHECK(cancel.monsters.empty());
+	REQUIRE(cancel.skipped.size() == 1);
+	CHECK(cancel.skipped[0].stat == "damagepercent");
+	CHECK(cancel.skipped[0].why.find("add up to 0") != std::string::npos);
+	std::string text = "Stat\tSend Other\n";
+	for (int i = 0; i < 20; ++i) text += "filler" + std::to_string(i) + "\t1\n"; // ids 0..19 include refused ones
+	std::vector<Property> props;
+	for (int i = 0; i < 16; ++i) {
+		text += "capstat" + std::to_string(i) + "\t1\n";
+		props.push_back({Target::Players, "capstat" + std::to_string(i), 1});
+	}
+	props.push_back({Target::Players, "capstat0", 4});
+	const Plan plan = buildPlan(props, parseItemStatCost(text), true);
+	REQUIRE(plan.players.size() == 16);
+	CHECK(plan.players[0].value == 5);
+	CHECK(plan.skipped.empty());
+	// 17 distinct stats where one adds up to 0: the cap counts the 16 that are left, not the 17
+	std::string text2 = "Stat\tSend Other\n";
+	for (int i = 0; i < 20; ++i) text2 += "filler" + std::to_string(i) + "\t1\n";
+	std::vector<Property> props2;
+	for (int i = 0; i < 17; ++i) {
+		text2 += "capstat" + std::to_string(i) + "\t1\n";
+		props2.push_back({Target::Players, "capstat" + std::to_string(i), 1});
+	}
+	props2.push_back({Target::Players, "capstat3", -1});
+	const Plan plan2 = buildPlan(props2, parseItemStatCost(text2), true);
+	CHECK(plan2.players.size() == 16);
+	REQUIRE(plan2.skipped.size() == 1);
+	CHECK(plan2.skipped[0].stat == "capstat3");
 }
 
 TEST_CASE("buildPlan skips what it cannot resolve, with a reason")
@@ -859,16 +911,16 @@ TEST_CASE("a monster velocitypercent is cut to -99 with a note")
 	const auto plan = buildPlan({{Target::Monsters, "velocitypercent", -512}, {Target::Monsters, "velocitypercent", -100}, {Target::Monsters, "velocitypercent", -99},
 	                             {Target::Monsters, "velocitypercent", -50}, {Target::Monsters, "velocitypercent", 40}, {Target::Monsters, "damagepercent", -300}},
 	                            ids);
-	REQUIRE(plan.monsters.size() == 6);
-	CHECK(plan.monsters[0].value == -99);
-	CHECK(plan.monsters[1].value == -99);
-	CHECK(plan.monsters[2].value == -99);
-	CHECK(plan.monsters[3].value == -50);
-	CHECK(plan.monsters[4].value == 40);
-	CHECK(plan.monsters[5].value == -300);  // only the speed is cut
-	REQUIRE(plan.notes.size() == 2);        // one note for each value that was cut (-512 and -100)
-	CHECK(plan.notes[0].find("-512") != std::string::npos);
+	REQUIRE(plan.monsters.size() == 2);
+	CHECK(plan.monsters[0].value == -99);   // the speeds add up to -721, cut once
+	CHECK(plan.monsters[1].value == -300);  // only the speed is cut
+	REQUIRE(plan.notes.size() == 1);
+	CHECK(plan.notes[0].find("-721") != std::string::npos);
 	CHECK(plan.notes[0].find("-99") != std::string::npos);
+	const auto small = buildPlan({{Target::Monsters, "velocitypercent", -60}, {Target::Monsters, "velocitypercent", -30}}, ids);
+	REQUIRE(small.monsters.size() == 1);
+	CHECK(small.monsters[0].value == -90);
+	CHECK(small.notes.empty());
 	// A speed on the player is the player's own and is not cut.
 	const auto player = buildPlan({{Target::Players, "velocitypercent", -150}}, ids);
 	REQUIRE(player.players.size() == 1);
@@ -897,4 +949,10 @@ TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a k
 	CHECK(r[0].layer == 5);
 	CHECK(r[0].stat == 0);
 	CHECK(r[0].value == 7);
+}
+
+TEST_CASE("the map panel is sized for the monster and player stat lines the plan can hold")
+{
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxMonsterLines) == monsterStats().size());
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxPlayerLines) == kMaxPlayerStats);
 }
