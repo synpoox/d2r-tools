@@ -39,7 +39,20 @@ A runtime path looks feasible and independent of mod files: hook the apply funct
   - `+0x40` = 2125, a colour temperature (1000: warmer and darker; 6500 and 20000: cooler and brighter). The plugin multiplies it by `100 / Warmth`. `+0x40..0x50` and `+0x1d0..0x1dc` are copied by the apply function to globals (not into FrameSettings), so brightness and temperature are not part of the `FrameSettings` bytes it writes.
   - `+0x44` 5.5, `+0x48` 1.333, `+0x4c` 1, `+0x50` 0.666 (not changed). `+0x18..0x28` light direction and intensity (copied to FrameSettings `+0x58..0x68`). `+0xa4..0xac` and `+0xb0..0xb8` (RGB 0.976, 0.922, 0.976) are the fog and bloom group (FrameSettings `+0x74..`); no visible effect in caves (fog density 0). `+0x7c` = 1; 0 makes the picture brighter.
 - Writing floats into `FrameSettings` after the original had no visible effect.
-- Two maps on the Cave tileset (one slot level), mean RGB over the central crop of a 1920x1080 screenshot: unchanged cave 28.6 / 18.7 / 15.6 (luma 20.6), Brightness 50 and Warmth 60: 12.9 / 7.0 / 6.4 (luma 8.2), Brightness 250 and Warmth 300: 47.5 / 32.9 / 26.4 (luma 35.6, visibly warmer and brighter). The hook set each look only while the player's level was the slot level ("map look: applied" and "off" in the log).
+- Two maps on the Cave tileset (one slot level), mean RGB over the central crop of a 1920x1080 screenshot: unchanged cave 28.6 / 18.7 / 15.6 (luma 20.6), Brightness 50 and Warmth 60: 12.9 / 7.0 / 6.4 (luma 8.2), Brightness 250 and Warmth 300: 47.5 / 32.9 / 26.4 (luma 35.6). The hook set each look only while the player's level was the slot level ("map look: applied" and "off" in the log).
 - Not found: a hue, saturation or per-channel RGB handle in the component or the frame settings the apply function writes, so Hue, Saturation and Tint columns are not offered. Light colours (the `lights` entities of the vis JSON) are gathered elsewhere (`0xf55d60`, `0xf51f00`) and were not explored; a per-map light tint would start there.
 - Legacy (G key) mode was not examined (`LoadActPalette` `0x9041a0`, above); Brightness and Warmth do nothing there.
 - Only one Maze level can be built per game, so a second map on the same tileset needs a new game (a restart of the game with the same character was used).
+
+### Warmth on its own (build 93847, in game, fix cycle 1)
+
+Brightness blank, Warmth only, the same map row (Shorelines, Cave tileset, base temperature 2125 K), a fresh game per value, the map opened with `cartographer open`. Mean RGB over the central crop (300..1600 x 100..900) of a 1920x1080 screenshot; the layout is random per game, so the ratios are only a trend:
+
+| Warmth | Scale on 2125 K | Mean RGB | R/B | G/R | Luma |
+|---|---|---|---|---|---|
+| blank (stock) | 1.0 | 25.1 / 16.3 / 14.1 | 1.78 | 0.649 | 18.0 |
+| 50 | 2.0 (4250 K) | 22.1 / 15.0 / 13.1 | 1.69 | 0.679 | 16.4 |
+| 300 | 1/3 (708 K, clamped to 1000 K) | 23.9 / 13.4 / 10.7 | 2.23 | 0.561 | 15.4 |
+| 400 | 1/4 (531 K, clamped to 1000 K) | 22.3 / 13.4 / 10.6 | 2.10 | 0.601 | 15.1 |
+
+Warmth above 100 raises R/B (warmer), below 100 lowers it (cooler): the mapping `100 / Warmth` is the right way round. The earlier pair of screenshots mixed Brightness into the ratios (tone mapping), which is why they did not show it. Before the clamp existed, Warmth 300 (708 K) was shown in the Brightness 250 and Warmth 300 map above and gave a normal picture (no black or NaN). The plugin now clamps the resulting temperature to 1000..20000 K (only 1000, 6500 and 20000 K were tried on the raw value), so 531 K was not shown unclamped. Also in this cycle: one look is kept per slot level (a map opened later on another tileset does not replace the first one's), and the per-frame readable check runs only while a look is active.

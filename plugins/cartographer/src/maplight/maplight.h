@@ -28,6 +28,11 @@ auto exposureScale(const Look& look) -> float;
 // so this is 100 / warmth.
 auto temperatureScale(const Look& look) -> float;
 
+// The colour temperatures seen working in game (1000 K to 20000 K, note 32): a result outside this range is clamped to it, because
+// below it the game's behaviour was not checked.
+inline constexpr float MinKelvin = 1000.0f, MaxKelvin = 20000.0f;
+auto clampKelvin(float kelvin) -> float;
+
 // A short description for the log.
 auto describe(const Look& look) -> std::string;
 

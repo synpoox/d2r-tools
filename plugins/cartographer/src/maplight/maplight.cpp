@@ -14,6 +14,10 @@ auto temperatureScale(const Look& look) -> float {
 	return 100.0f / static_cast<float>(look.warmth);
 }
 
+auto clampKelvin(float kelvin) -> float {
+	return kelvin < MinKelvin ? MinKelvin : (kelvin > MaxKelvin ? MaxKelvin : kelvin);
+}
+
 auto describe(const Look& look) -> std::string {
 	return "brightness " + std::to_string(look.brightness) + "%, warmth " + std::to_string(look.warmth) + "%";
 }

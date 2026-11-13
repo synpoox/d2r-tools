@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <intrin.h>
+#include <map>
 #include <mutex>
 
 namespace carto {
@@ -33,11 +34,10 @@ ApplyFn g_original = nullptr;
 uint64_t g_base = 0;
 std::atomic<bool> g_live{false};
 
-std::mutex g_lock;  // g_look, g_slotLevel and the two scales (no engine call while held)
-ml::Look g_look;
+std::mutex g_lock;  // g_looks and the two scales (no engine call while held)
+std::map<int, ml::Look> g_looks;  // slot level -> the look of the map opened there last (maps that share a tileset share the level)
 float g_exposure = 1.0f;
 float g_temperature = 1.0f;
-int g_slotLevel = -1;
 std::atomic<bool> g_active{false};  // the local player stands in the map's slot level and the map has a look
 
 std::atomic<uint32_t> g_instanceCalls{0}, g_changed{0};
@@ -45,23 +45,26 @@ std::atomic<uint32_t> g_instanceCalls{0}, g_changed{0};
 auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame) noexcept -> uint64_t {
 	const bool instance = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_base == InstanceReturnRva;
 	try {
-		if (instance && component != nullptr && frame != nullptr && Readable(component, ComponentSize)) {
+		if (instance && component != nullptr && frame != nullptr) {
 			g_instanceCalls.fetch_add(1, std::memory_order_relaxed);
-			if (g_active.load(std::memory_order_relaxed)) {
+			if (g_active.load(std::memory_order_relaxed) && Readable(component, ComponentSize)) {
 				float exposure = 1.0f, temperature = 1.0f;
 				{
 					std::lock_guard<std::mutex> lock(g_lock);
 					exposure = g_exposure;
 					temperature = g_temperature;
 				}
-				const auto scale = [&](size_t offset, float factor) {
+				const auto scale = [&](size_t offset, float factor, bool kelvin) {
 					float value = 0;
 					std::memcpy(&value, component + offset, 4);
 					value *= factor;
+					if (kelvin) {
+						value = ml::clampKelvin(value);
+					}
 					std::memcpy(component + offset, &value, 4);
 				};
-				scale(ExposureOffset, exposure);
-				scale(TemperatureOffset, temperature);
+				scale(ExposureOffset, exposure, false);
+				scale(TemperatureOffset, temperature, true);
 				g_changed.fetch_add(1, std::memory_order_relaxed);
 			}
 		}
@@ -98,14 +101,14 @@ auto MapLightingPartStatuses() -> std::vector<PartStatus> {
 
 void MapLightingMapOpened(const MapDef& map, int slotLevel) {
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_look = map.look;
-	g_exposure = ml::exposureScale(g_look);
-	g_temperature = ml::temperatureScale(g_look);
-	g_slotLevel = g_look.any() ? slotLevel : -1;
-	g_active = false;
-	if (g_slotLevel > 0) {
-		plog::Info("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(g_look).c_str(), g_live.load() ? "" : " (not applied: the hook is off)");
+	// One look per slot level: a map opened later on another tileset does not replace the look of the first one.
+	if (map.look.any() && slotLevel > 0) {
+		g_looks[slotLevel] = map.look;
+		plog::Info("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(map.look).c_str(), g_live.load() ? "" : " (not applied: the hook is off)");
+	} else {
+		g_looks.erase(slotLevel);
 	}
+	g_active = false;
 }
 
 void MapLightingPlayerTick(int playerLevel) noexcept {
@@ -115,7 +118,12 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 	bool active = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		active = g_slotLevel > 0 && playerLevel == g_slotLevel;
+		const auto look = g_looks.find(playerLevel);
+		active = look != g_looks.end();
+		if (active) {
+			g_exposure = ml::exposureScale(look->second);
+			g_temperature = ml::temperatureScale(look->second);
+		}
 	}
 	if (g_active.exchange(active) != active) {
 		plog::Info("map look: %s", active ? "applied (the player is in the map)" : "off (the player left the map)");
@@ -124,8 +132,7 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 
 void MapLightingGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_slotLevel = -1;
-	g_look = {};
+	g_looks.clear();
 	g_active = false;
 }
 

@@ -39,6 +39,12 @@ TEST_CASE("warmth is a percent: a warmer light has a lower colour temperature") 
 	CHECK(Near(temperatureScale(look), 2.0f));
 }
 
+TEST_CASE("the colour temperature is clamped to the range seen working in game") {
+	CHECK(Near(clampKelvin(2125.0f), 2125.0f));
+	CHECK(Near(clampKelvin(531.0f), 1000.0f));
+	CHECK(Near(clampKelvin(50000.0f), 20000.0f));
+}
+
 TEST_CASE("describe names every column") {
 	Look look;
 	look.brightness = 80;
