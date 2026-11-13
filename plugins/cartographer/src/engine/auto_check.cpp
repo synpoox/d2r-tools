@@ -173,8 +173,10 @@ void SettleStats(const StatApplyCounts& counts) noexcept {
 	     (counts.drawnMonster + counts.drawnPlayer == 1 ? "y" : "ies") + (counts.drawnText.empty() ? "" : " (" + counts.drawnText + ")") + "; " +
 	     std::to_string(counts.monstersChanged) + " monster(s) given the list, " + std::to_string(counts.monstersFailed) + " failed, player stats applied " +
 	     std::to_string(counts.playersChanged) + " time(s)");
-	if (counts.drawnMonster == 0) {
-		Settle(ac::Item::StatChanges, false, "no monster property was drawn for the map (monster stats off, or an empty pool; see the 'map stats' lines)");
+	if (counts.drawnMonster + counts.drawnPlayer == 0) {
+		SettleNotApplicable(ac::Item::StatChanges, "the map was opened without an item, so it has no modifiers (see the 'map stats' lines)");
+	} else if (counts.drawnMonster == 0) {
+		SettleNotApplicable(ac::Item::StatChanges, "the map has no monster modifiers, only player ones");
 	} else if (counts.monstersChanged > 0) {
 		Settle(ac::Item::StatChanges, true, std::to_string(counts.monstersChanged) + " monster(s) took " + std::to_string(counts.drawnMonster) + " drawn propert" +
 		                                        (counts.drawnMonster == 1 ? "y" : "ies"));

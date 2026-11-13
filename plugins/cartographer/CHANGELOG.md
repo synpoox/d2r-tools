@@ -16,13 +16,10 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Normal, rare and unique map items: a rare map gets random modifiers from the game's own affix tables, a unique map has its own fixed ones, a normal map has none. They show on hover and apply when the map opens (monster modifiers to its monsters, the rest to you). Run `tools\install.ps1` again.
+- Map items can be normal, rare or unique; their modifiers show on hover and apply in the map. Run `tools\install.ps1` again.
 - New monster modifiers for map items: life, damage, speed and fire, cold, lightning and poison resistance.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).
-- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
-- Opening a Treasure chest now rolls its `Drop`.
-- `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot when the Boss dies (a rune seen dropping in game, one kill).
 - Opening a Treasure chest rolls its `Drop` (a rune seen dropping in game, one chest).
 - A map's Treasure chest is never locked.

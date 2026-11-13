@@ -14,7 +14,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `cartographer-report.txt`; the rest load.
 - **Cave and Crypt mazes**: every map is generated (Cave or Crypt) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the `Maze` slot that `tools\install.ps1` adds (see below).
-- **Map items**: a map item is normal, magic or rare like any item. A rare (or magic) map is rolled by the game from the
+- **Map items**: a map item is normal, rare or unique. A rare map is rolled by the game from the
   `magicprefix`, `magicsuffix`, `rareprefix` and `raresuffix` rows whose type is `cmap`; a unique map is a
   `uniqueitems.txt` row. The map level and the modifiers are stats on the item, shown on hover. When the map opens,
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
@@ -103,7 +103,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
    header `Slot` and `Level`, then rows `Maze`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
-5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, and `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
+5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
    type, so no belt). A row with code `cmap` that is not this one must be changed first.
@@ -287,8 +287,8 @@ Checked in single player, Hell: opening from the item, arriving in the entrance 
 Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and test save, mostly in single player.
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
-  in town, the plain-English table report, Cave and Crypt mazes built from the plan, map item modifiers on monsters,
-  Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit), and `ItemStats=1` for a player stat.
+  in town, the plain-English table report, Cave and Crypt mazes built from the plan,
+  Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit).
 - **Outdoor maps (Jungle, Snow and Siege)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen. Siege was checked in two games (opening, arrival, Boss and Treasure event); its north and south edges and how its pieces meet were not settled.
 - **Experimental or not verified in game**: what a Boss `Drop` roll drops beyond a rune in one kill and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event
   name in the banner (not seen on screen), `PlayerStats` in multiplayer, `MapNames` in multiplayer, multiplayer sync.

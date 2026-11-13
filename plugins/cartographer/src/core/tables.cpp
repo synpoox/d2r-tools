@@ -355,6 +355,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 					     " (pSpell in misc.txt), and " + (spell < 0 ? std::string("it is not a misc.txt item.") : "it has " + std::to_string(spell) + "."));
 				}
 			}
+			if (spellOk && ContainsNoCase(names.compactItems, map.item)) {
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
+			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
 					fail("item '" + map.item + "' already opens the map '" + other.name + "' (row " + std::to_string(other.line) +

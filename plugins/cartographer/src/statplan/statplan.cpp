@@ -590,4 +590,24 @@ std::vector<std::string> explainNoPick(const uint8_t *states, uint32_t count, co
 	return lines;
 }
 
+std::vector<ItemStat> decodeItemStatList(const int32_t *buffer, int count, int maxStats, std::string *problem) {
+	std::vector<ItemStat> out;
+	if (buffer == nullptr || count <= 0) {
+		return out;
+	}
+	const int n = count < maxStats ? count : maxStats;
+	for (int i = 0; i < n; ++i) {
+		const int32_t *e = buffer + i * 4;
+		if (e[3] != 0 || e[0] < 0 || e[0] > 0xffff || e[1] < 0 || e[1] > kMaxStatId) {
+			if (problem != nullptr) {
+				*problem = "ItemListCopy layout not recognised (entry " + std::to_string(i) + " is " + std::to_string(e[0]) + ", " +
+				           std::to_string(e[1]) + ", " + std::to_string(e[2]) + ", " + std::to_string(e[3]) + "); the item's stats are not used";
+			}
+			return {};
+		}
+		out.push_back({e[1], e[0], e[2]});
+	}
+	return out;
+}
+
 } // namespace cartographer::statplan

@@ -159,13 +159,13 @@ auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 }
 
 // misc.txt code and pSpell for every item that has a code (a blank pSpell is 0). False when the table or a column is missing.
-auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out) -> bool {
+auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out, std::vector<std::string>* compact) -> bool {
 	std::string text;
 	if (!ReadFile(file, &text)) {
 		return false;
 	}
 	const carto::Tsv table = carto::ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell");
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
 	if (cCode < 0 || cSpell < 0) {
 		return false;
 	}
@@ -173,6 +173,9 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 		const std::string code = table.Cell(row, cCode);
 		if (!code.empty()) {
 			out->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
+			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
+				compact->push_back(code);
+			}
 		}
 	}
 	return true;
@@ -220,7 +223,7 @@ auto ReadGameNames() -> carto::GameNames {
 	for (const wchar_t* file : {L"\\misc.txt", L"\\weapons.txt", L"\\armor.txt"}) {
 		names.haveItems = ReadColumn(g_excelDir + file, "code", &names.itemCodes) && names.haveItems;
 	}
-	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells);
+	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells, &names.compactItems);
 	return names;
 }
 

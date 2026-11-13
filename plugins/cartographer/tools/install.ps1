@@ -28,11 +28,12 @@
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
-                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
-                    and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Magic and Rare are on (Normal off), so the game rolls an item of
-                    this type as normal, magic or rare and gives it affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. A row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
+                    miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic,
+                    and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
+                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. The one row the installer changes
+                    after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
-                    before anything is written. Existing rows are never changed.
+                    before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
       itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Map Level: N"): a map item's level.
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
       itemstatcost.txt also seven monster-side stats, cartographer_mon_life, _damage, _fire_res, _cold_res, _light_res, _poison_res and _speed (signed, shown on the item as "+20% Monster Life" and so on).
@@ -443,7 +444,7 @@ foreach ($t in $OutdoorTilesets) {
 # --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------
 # A copy of the Herb row (the vanilla non-quest miscellaneous type), appended once. Equiv1 misc is what Herb, Scroll and Key use: the game treats
 # the item as plain miscellaneous. It is not 'scro' or 'book' (so it is not a scroll: not a Town Portal scroll, and the game
-# does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed.
+# does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed (except the Map type's quality cells, repaired below).
 $MapTypeCode = 'cmap'
 $MapTypeName = 'Map'
 $itemTypes = Read-Table (Join-Path $ExcelDir 'itemtypes.txt')
@@ -468,22 +469,24 @@ if ($mapTypeRow -ge 0) {
     Set-Cell $itemTypes $cells 'Equiv2' ''
     foreach ($col in 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable') { Set-CellIf $itemTypes $cells $col '0' }
     foreach ($col in 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
-    # Magic and Rare on, Normal off: the game then rolls the item's quality (Normal on forces every item Normal).
-    foreach ($col in 'Magic', 'Rare') { Set-CellIf $itemTypes $cells $col '1' }
+    # Rare on, Magic and Normal off: the game then rolls the item's quality as normal or rare (Normal on forces every item Normal).
+    Set-CellIf $itemTypes $cells 'Rare' '1'
+    Set-CellIf $itemTypes $cells 'Magic' '0'
     $itemTypes.Lines.Add($cells -join "`t")
     Save-Table $itemTypes
-    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, magic and rare, not throwable, not beltable, no auto-stack, StorePage misc as herb."
+    Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, rare (not magic), not throwable, not beltable, no auto-stack, StorePage misc as herb."
 }
-# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can be magic or rare.
+# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can be normal or rare, not magic.
 if ($mapTypeRow -ge 0) {
     $cells = Cells $itemTypes $itemTypes.Lines[$mapTypeRow]
     $before = $cells -join "`t"
-    foreach ($col in 'Magic', 'Rare') { Set-CellIf $itemTypes $cells $col '1' }
+    Set-CellIf $itemTypes $cells 'Rare' '1'
+    Set-CellIf $itemTypes $cells 'Magic' '0'
     Set-CellIf $itemTypes $cells 'Normal' '0'
     if (($cells -join "`t") -ne $before) {
         $itemTypes.Lines[$mapTypeRow] = $cells -join "`t"
         Save-Table $itemTypes
-        Write-Host "itemtypes.txt: updated the '$MapTypeName' ($MapTypeCode) row: Magic and Rare on, Normal off."
+        Write-Host "itemtypes.txt: updated the '$MapTypeName' ($MapTypeCode) row: Rare on, Magic and Normal off."
     }
 }
 

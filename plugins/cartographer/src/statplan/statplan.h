@@ -82,12 +82,17 @@ std::string refusedReason(Target target, std::string_view stat, int id);
 // is skipped. With `playerStats` false every player property is skipped (the PlayerStats setting is off).
 Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool playerStats = true);
 
-// One stat read off the map item (the map item): the game's stat id, layer and value.
+// One stat read off the map item: the game's stat id, layer and value.
 struct ItemStat {
 	int stat = 0;
 	int layer = 0;
 	int value = 0;
 };
+
+// Decodes the buffer D2RLoader's ItemListCopy fills: `count` entries of four int32, {layer, stat, value, 0} (cartographer/14-item-stats.md
+// section 16). The layout is the loader's, not the game's, so it is checked: every entry (up to `maxStats`) needs a zero fourth int, a layer
+// 0..0xffff and a stat 0..kMaxStatId. If one entry does not fit, nothing is returned and `problem` says why (fail open: no stats).
+std::vector<ItemStat> decodeItemStatList(const int32_t *buffer, int count, int maxStats, std::string *problem = nullptr);
 
 // The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; nothing can put it on a map yet: the cube cannot, affixes are untested).
 inline constexpr const char *kMapLevelStat = "cartographer_map_level";

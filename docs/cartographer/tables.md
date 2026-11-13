@@ -82,7 +82,8 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 |---|---|---|
 | `ItemType`, `Code` | `Map`, `cmap` | The game names an item of type `scro` or `book` after its item spell (a spell-16 item would read "Scroll of Town Portal"), so a map item needs a type of its own. A row with code `cmap` that is not this one stops the installer. |
 | `Equiv1` | `misc` | The parent of `herb`, `scro`, `key` and `elix`: plain miscellaneous. `scro`, `book` or a potion type would make it a scroll (a Town Portal scroll) or a potion (belt). |
-| `Equiv2`, `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition, no magic or rare quality. |
+| `Equiv2`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition. |
+| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Normal and rare quality only (see Map item rarity and modifiers). |
 | `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Beltable` | 0 | Not throwable, not beltable, no auto-stack. |
 | `Normal` | 0 | 1 would mean normal quality only (as on `scro`, `book` and `key`); the item never spawns, so it is harmless, and 0 is what `herb` has. |
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
@@ -114,25 +115,25 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 
 **Does not work on a map item (checked in game, slot 6, Hell).** The cube reads the row, takes the inputs and sets the stat, but `useitem` rebuilds a misc item as a Hand Axe: the map came out as a Hand Axe whose hover showed `Map Level: 95`. The same happened with a type input (`cmap`) and with a vanilla misc item (`isc`), so it is the cube, not the map rows. Outputs that keep a map (`usetype,mod`, `usetype,mag,mod`, and a plain item code such as `t22`) give a normal map and drop the `mod`, so no `Map Level` line appears. The stat itself works: it is saved with the item, shown on hover and kept across a save and reload. Giving the `cmap` item type `Magic` 1, `Rare` 1, `Normal` 1 and `MaxSockets1` 1 in `itemtypes.txt` changed nothing: `useitem,mod` still produced a Hand Axe (`Map Level: 10`), and `usetype,mag,mod` and `usetype,rar,mod` still gave a plain white map with no stat. So the item type flags are not the cause; a plugin hook on the cube result would be needed. Until then, set the level in `maps.txt` (the fallback).
 
-**Keep the stat row where it is.** Once saved items carry `cartographer_map_level`, its row in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
+**Keep the stat rows where they are.** Once saved items carry `cartographer_map_level` or any of the seven `cartographer_mon_*` stats (`life`, `damage`, `speed`, `fire_res`, `cold_res`, `light_res`, `poison_res`), their rows in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
 
 ## Map item rarity and modifiers
 
-A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Magic and Rare on, Normal off, so the game rolls normal, magic or rare quality for a map and gives it affixes; the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
+A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes (an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
 
 | Quality | Where the modifiers come from |
 |---|---|
 | Normal | none |
-| Magic, Rare | `magicprefix.txt` and `magicsuffix.txt` rows, and the `rareprefix.txt` and `raresuffix.txt` names, with `itype1` `cmap`; each `modNcode` is a `properties.txt` code, `Min` and `Max` its range |
+| Rare | `magicprefix.txt` and `magicsuffix.txt` rows, and the `rareprefix.txt` and `raresuffix.txt` names, with `itype1` `cmap`; each `modNcode` is a `properties.txt` code, `Min` and `Max` its range |
 | Unique | a `uniqueitems.txt` row with `code` = the map's `misc.txt` code, `prop1` to `prop12` as for any unique |
 
-Added by `tools\install.ps1` (an existing row is never changed): seven `itemstatcost.txt` stats and a `properties.txt` property for each. They are signed, -512 to 511, and shown as `+20% Monster Life` and so on.
+Added by `tools\install.ps1` (an existing row is never changed, except the `cmap` quality cells): seven `itemstatcost.txt` stats and a `properties.txt` property for each. They are signed, -512 to 511, and shown as `+20% Monster Life` and so on.
 
 | Property | Stat | Monsters get |
 |---|---|---|
 | `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
-| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: -100 or lower stops monsters) |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 
 Any other stat on the map item (a resistance, `str`, `item_magicbonus`) is the player's while in the map. When the map opens the plugin reads the item's stats (up to 16), takes the map level out, and applies the rest: the monster ones to every monster that spawns in the map, the player ones to the player (removed on leaving; `PlayerStats` `0` turns that off). The plugin log line `map stats for ...` lists what was read and applied.

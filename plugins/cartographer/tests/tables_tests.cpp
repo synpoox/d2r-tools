@@ -701,6 +701,19 @@ TEST_CASE("a map's item needs item spell 16 when misc.txt could be read") {
 	CHECK(text.find("it is not a misc.txt item.") != std::string::npos);
 }
 
+TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 does not") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
+	names.compactItems = {"t21"};
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has compactsave 1") != std::string::npos);
+	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
+}
+
 TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
 	GameNames names = Names();
 	names.haveItemSpells = true;

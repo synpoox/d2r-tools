@@ -83,9 +83,14 @@ auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<
 		}
 		return out;
 	}
-	for (int32_t i = 0; i < n && i < MaxStats; ++i) {
-		const int32_t* e = pairs + i * 4;  // D2RLoader's copy writes 16 bytes an entry: {layer, stat, value, 0}
-		out.push_back({static_cast<int>(e[1]), static_cast<int>(e[0]), e[2]});
+	std::string problem;
+	out = sp::decodeItemStatList(pairs, n, MaxStats, &problem);
+	if (!problem.empty()) {
+		plog::Warn("%s", problem.c_str());
+		if (note != nullptr) {
+			*note = problem;
+		}
+		return out;
 	}
 	if (n > MaxStats && note != nullptr) {
 		*note = "the item has " + std::to_string(n) + " stats; only the first " + std::to_string(MaxStats) + " are read";

@@ -689,3 +689,57 @@ TEST_CASE("every monster-side map stat is a row the installer adds, with a descr
 		CHECK_MESSAGE(all.str().find(std::string("'") + m.itemStat + "'") != std::string::npos, m.itemStat);
 	}
 }
+
+TEST_CASE("the installer writes and repairs the Map type as rare, not magic, not forced normal")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	const std::string text = all.str();
+	const std::string magicOff = "Set-CellIf $itemTypes $cells 'Magic' '0'";
+	const size_t first = text.find(magicOff);
+	REQUIRE(first != std::string::npos);
+	CHECK(text.find(magicOff, first + 1) != std::string::npos);  // once when the row is added, once in the repair
+	CHECK(text.find("Set-CellIf $itemTypes $cells 'Normal' '0'") != std::string::npos);
+	CHECK(text.find("foreach ($col in 'Magic', 'Rare')") == std::string::npos);
+}
+
+TEST_CASE("decodeItemStatList reads D2RLoader's 16-byte entries and refuses any other layout")
+{
+	// The unique map from the check (RE note 14, section 16): {layer, stat, value, 0} seven times.
+	const int32_t good[] = {0, 39, 15, 0, 0, 41, 15, 0, 0, 43, 15, 0, 0, 45, 15, 0, 0, 368, 95, 0, 0, 369, 30, 0, 0, 371, -20, 0};
+	std::string problem;
+	const auto ok = decodeItemStatList(good, 7, 16, &problem);
+	REQUIRE(ok.size() == 7);
+	CHECK(problem.empty());
+	CHECK(ok[0].stat == 39);
+	CHECK(ok[0].layer == 0);
+	CHECK(ok[0].value == 15);
+	CHECK(ok[6].stat == 371);
+	CHECK(ok[6].value == -20);
+
+	// Only the first maxStats entries are read.
+	CHECK(decodeItemStatList(good, 7, 3, &problem).size() == 3);
+
+	// 8-byte pairs {stat << 16 | layer, value}: the fourth int of an entry is not 0.
+	const int32_t pairs[] = {(39 << 16), 15, (41 << 16), 15, (43 << 16), 15, (45 << 16), 15};
+	CHECK(decodeItemStatList(pairs, 2, 16, &problem).empty());
+	CHECK(problem.find("layout not recognised") != std::string::npos);
+
+	// Junk: a stat id past kMaxStatId, a negative layer.
+	problem.clear();
+	const int32_t junk[] = {0, 39, 15, 0, 0, 99999, 1, 0};
+	CHECK(decodeItemStatList(junk, 2, 16, &problem).empty());
+	CHECK(problem.find("entry 1") != std::string::npos);
+	problem.clear();
+	const int32_t neg[] = {-1, 39, 15, 0};
+	CHECK(decodeItemStatList(neg, 1, 16, &problem).empty());
+	CHECK(!problem.empty());
+
+	// Nothing to read is not a problem.
+	problem.clear();
+	CHECK(decodeItemStatList(good, 0, 16, &problem).empty());
+	CHECK(problem.empty());
+}

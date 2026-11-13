@@ -56,6 +56,7 @@ struct GameNames {
 	std::vector<int> monsterMods;           // monumod.txt id
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
+	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
 };
 
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
