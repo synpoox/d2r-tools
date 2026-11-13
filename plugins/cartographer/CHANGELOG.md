@@ -3,6 +3,7 @@
 ## Unreleased
 
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
+- A new cave or crypt map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.

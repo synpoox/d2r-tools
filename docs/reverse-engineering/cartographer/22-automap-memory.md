@@ -51,3 +51,16 @@ Nothing here is wired as a plugin part.
   row that is out of range. Live check, Tunneling Depths in slot 7: revealed walls far from the arrival were still
   drawn after `cheat goto 109` and the red portal back, and more were added on top. Limit: any level origin where
   `(tx - ty)` leaves -4096..4095 or `tx + ty` reaches 8192 loses its map the same way. The installer checks this for every slot level whose layer is not the town's 79 (the Maze level and Snow; Jungle and Siege share 79 and are never swapped), moves an older install's row (Snow was at 6000,3600, out of range) and refuses an out-of-range `-<Param>OffsetX/Y`.
+
+## Stale reveal on a new map (issue #306 review; build 93847)
+
+- The map memory is kept per character, per layer and per game seed (`0xd5710` reads a layer's cells back from the
+  `.map` file when that layer becomes current; `0xd5fe0` writes them on leaving). A Cave slot map shares Layer 2 and a
+  Crypt slot map Layer 10 with a game level, and a single-player seed carries over, so map A's revealed walls were
+  drawn on map B's different maze in the next game. Seen live (slot 7, Cave then Crypt maps), before the fix.
+- Fix: part `AutomapRestore` (signature in `part_signatures.h`, 17 bytes hooked: four whole instructions). The build of
+  a slot map arms one skip; the next read for another layer (current layer object, read through the `cmp qword ptr
+  [rip+x],0` at +0x22; key = first dword) is skipped, so the new map starts empty and saves empty. Town trips within
+  the game are untouched. Live check: a new map in a fresh game showed no earlier walls, overlay on; the log line
+  "the revealed cells of an earlier map ... were not read back" fired once. Not checked live: a town trip after the skip
+  (the trip path is unchanged code).
