@@ -143,9 +143,9 @@ is also inconsistent with itself: its RVA table lists `0x349860` as the class an
 8. Is the thread that runs the tick the one the SDK treats as the game thread?
 9. The per-wave time-out value.
 
-### What was built (issue #111, phase 6b first half): written, not verified in game
+### What was built (issue #111, phase 6b first half): written, then seen working in single player
 
-The Shrine event kind and the Boss `Drop` column. Nothing here has run in a game; the unit tests cover only the pure logic and the signature checker only the dump.
+The Shrine event kind and the Boss `Drop` column. Written from the dump with unit tests for the pure logic; later run in game (single player, Hell): see the "Needs game" answers below. Multiplayer is still unchecked.
 
 - **Parts** (`core/part_signatures.h`, own group in `engine/event_6b.cpp`, each through `ResolvePart` with its per-part guard, a part that does not match is logged and left off): `DeathDrop` `0x447b80` (30-byte signature, hooked: the first 15 bytes are the guard), `DropRoller` `0x441300`, `DropLevel` `0x43e8a0`, `SpawnObject` `0x4022a0` (the handler, only to find the free-spot call), `CreateObject` `0x490410`. `DataTablesBase` and `NameToRow` are reused from section 11 (the addresses found by `event_apply.cpp` are handed over, not scanned for again). All are checked on the dump by `check_portal_signatures.py` (`--stamp 0x6ab3782c`, "all signatures ok").
 - **`0x402f50` has no unique signature** (its prologue is shared). It is resolved as the E8 call target at `SpawnObject+0xff` (the call in the debug handler), guarded by 17 context bytes before the call and 20 prologue bytes at the target; the checker has a `check_free_spot` for it. This is the "call target at `0x40239f`" route; the target is `0x402f50` on this build.
@@ -159,6 +159,8 @@ The Shrine event kind and the Boss `Drop` column. Nothing here has run in a game
 Log lines (all `eventprobe:`): `shrine: Spawn '..': ..` (the name resolution), `shrine: objects row N, free spot near (x,y) from room R`, `shrine: free spot (x,y) in room R (in / NOT in the event room)`, `shrine: created objects row N: unit .. at (x,y)`; `boss drop: Drop '..': name map .., the game has N treasure classes, lookup gave I`, `boss drop: tracking unit ..`, `boss drop: the tracked boss .. died: <reason>`, `boss drop: rolling '..' (treasure class I) for unit id ..: killer .., level value .., arg3 ..`, `boss drop: the roll returned`.
 
 #### Needs game (phase 6b)
+
+Answered in game ([shrine check](../../cartographer/checks/2026-11-12-shrine-check.md), [second pass](../../cartographer/checks/2026-11-12-shrine-check-2.md), [drop check](../../cartographer/checks/2026-11-12-drop-check.md)): items 1, 2 (one roll per kill in 9 kills, no double roll), 3 (the boss was seen and rolled), 4, 5 (a shrine by name and by row placed in the event room and usable) and 6. Still open: the quality of non-rune drops beyond what the second pass saw (normal, low, superior, magic and socketed; no rare or unique seen), a superunique's own treasure class, and multiplayer (item 7).
 
 1. Does `*(dt+0xd70)` resolve a stock treasure class name (case, the `-1` miss, index 0 refused), and does the count at `dt+0xd80` match?
 2. Does the second `0x441300` call drop once, at the boss, at the boss's level, with no double drop and no early-out for a monster that already dropped? Is the killer from `info` the right third argument (`r8`), and is `arg3` right as stack argument 7?
