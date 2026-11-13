@@ -784,6 +784,9 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_firstLogged = false;
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
+	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::LevelChanged) {
+		// the player's level for the automap skip where there is no server tick (a TCP/IP client)
+		AutomapResetPlayerTick(event->currentValue);
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		AutomapResetDisarm();
 		StatApplyGameLeft();
@@ -834,6 +837,10 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	D2RL::Lifecycle::ListenerHandle leftHandle = D2RL::Lifecycle::InvalidHandle;
 	if (!listen(D2RL::Lifecycle::GameplayEventKind::GameLeft, &leftHandle)) {
 		plog::Warn("D2RLoader refused the GameLeft listener: the check-to-use state is not reset on leaving a game");
+	}
+	D2RL::Lifecycle::ListenerHandle levelHandle = D2RL::Lifecycle::InvalidHandle;
+	if (!listen(D2RL::Lifecycle::GameplayEventKind::LevelChanged, &levelHandle)) {
+		plog::Warn("D2RLoader refused the LevelChanged listener: the automap skip needs the server tick to know the player's level");
 	}
 	if (part.address == nullptr) {
 		return;
