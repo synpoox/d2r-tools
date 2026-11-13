@@ -107,6 +107,11 @@ std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this
 bool g_installed = false;                       // InstallPortal ran to the end
 std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
 std::atomic<bool> g_mapOpen{false};             // this process opened a map in the current game (cleared on leaving it)
+constexpr uint32_t GateReadEvery = 10;          // ticks between readings of the gates for the item listener
+std::mutex g_gateLock;                          // guards g_gateCache
+GateState g_gateCache;                          // the local player's gates, read on the game thread every few ticks
+bool g_gateCacheValid = false;                  // g_gateCache holds a reading for the current game
+uint32_t g_gateTicks = 0;                       // ticks since the last reading (game thread only)
 
 // Forgets the check-to-use state. g_lock must be held.
 void ClearPending() noexcept {
@@ -620,6 +625,15 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
 		ServeRequest(game, unit);
 	}
+	if (known != NoPlayer && g_live.load() && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+		// A copy of the gates for the item listener, which runs on another thread and cannot read the game.
+		if (g_gateTicks++ % GateReadEvery == 0) {
+			const GateState state = GateStateOf(game, unit);
+			std::lock_guard<std::mutex> lock(g_gateLock);
+			g_gateCache = state;
+			g_gateCacheValid = true;
+		}
+	}
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);
@@ -656,6 +670,10 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_tickSeen = false;
 		g_firstLogged = false;
 		g_mapOpen = false;
+		{
+			std::lock_guard<std::mutex> lock(g_gateLock);
+			g_gateCacheValid = false;
+		}
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
@@ -714,15 +732,18 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	}
 }
 
-// A second map item while a map is open: the game's own refusal (the check returning 0) makes it start the item-spell cursor
-// (the Scroll of Identify cursor on a scroll-based map item). The item interaction listener sees the right-click first, on the
-// UI thread, and stops it there: no cursor, no use, the item stays. Best effort: without the service the check refusal stays.
+// A map item the gates refuse (second map, not Hell, level, not in town, no free spot, slot problems): the check refusal
+// (the check returning 0) goes down a different path in the item handler (docs/reverse-engineering/cartographer/22-item-refusal-cursor.md),
+// and the map item is a copy of the Scroll of Identify, whose cursor the game may start. The item interaction listener sees the
+// right-click first, on the UI thread, and stops it there with the check's own sentence: no use, the item stays. It reads the
+// gates from the copy the tick keeps (up to GateReadEvery ticks old). Best effort: without the service, or before the first
+// reading, the check refusal stays. Not yet seen to fire in game.
 const D2RL::ItemService* g_itemService = nullptr;
 
 auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
 	using D2RL::ItemInteractions::Decision;
 	try {
-		if (event == nullptr || !g_mapOpen.load() || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate) {
+		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate) {
 			return Decision::Continue;
 		}
 		D2RL::Items::ItemInfo info{};
@@ -738,11 +759,30 @@ auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::Item
 		if (tables == nullptr) {
 			return Decision::Continue;
 		}
-		const std::string text = SecondMapRefusal(tables->maps, ItemCodeFromPacked(info.code), true);
+		const std::string code = ItemCodeFromPacked(info.code);
+		const MapDef* map = FindMapByItem(tables->maps, code);
+		if (map == nullptr) {
+			return Decision::Continue;
+		}
+		std::string text = SlotProblem(*map, *tables, SlotLevel(tables->slots, SlotNameFor(*map)));
+		if (text.empty()) {
+			GateState state;
+			{
+				std::lock_guard<std::mutex> lock(g_gateLock);
+				if (!g_gateCacheValid) {
+					return Decision::Continue;
+				}
+				state = g_gateCache;
+			}
+			if (g_mapOpen.load() && state.openings == 0) {
+				state.openings = 1;  // opened since the last reading
+			}
+			text = MapItemRefusal(tables->maps, code, state);
+		}
 		if (text.empty()) {
 			return Decision::Continue;
 		}
-		plog::Info("%s (the item was stopped before the game could start its cursor)", text.c_str());
+		plog::Info("%s (the item was stopped before the game could start a cursor)", text.c_str());
 		ShowPlayerMessage(text);
 		return Decision::Consume;
 	} catch (...) {

@@ -223,8 +223,8 @@ auto RefusalText(Gate gate, const MapDef& map, const GateState& state) -> std::s
 // The item code in an SDK packed code (first letter in the low byte, padded with spaces), without the padding.
 auto ItemCodeFromPacked(uint32_t packed) -> std::string;
 
-// What to tell the player when `itemCode` is a map item and a map is already open in this game, else empty. The item is
-// stopped before the game starts its item-spell cursor (the check refusal alone leaves the cursor up).
-auto SecondMapRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, bool mapOpen) -> std::string;
+// What to tell the player when `itemCode` is a map item and a gate refuses it in `state`, else empty (not a map item, or the
+// gates are open). The same sentence the check refusal uses; the item is stopped before the game can start an item cursor.
+auto MapItemRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, const GateState& state) -> std::string;
 
 }  // namespace carto

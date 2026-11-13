@@ -1016,11 +1016,13 @@ auto ItemCodeFromPacked(uint32_t packed) -> std::string {
 	return code;
 }
 
-auto SecondMapRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, bool mapOpen) -> std::string {
-	if (!mapOpen || FindMapByItem(maps, itemCode) == nullptr) {
+auto MapItemRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, const GateState& state) -> std::string {
+	const MapDef* map = FindMapByItem(maps, itemCode);
+	if (map == nullptr) {
 		return {};
 	}
-	return "Cartographer: a map is already open in this game.";
+	const Gate gate = CheckGates(*map, state);
+	return gate == Gate::Open ? std::string() : RefusalText(gate, *map, state);
 }
 
 }  // namespace carto

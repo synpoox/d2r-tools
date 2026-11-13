@@ -724,16 +724,31 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	CHECK(RefusalText(Gate::AlreadyOpen, map, s).find("already been opened in this game") != std::string::npos);
 }
 
-TEST_CASE("a second map item is stopped with a short message") {
+TEST_CASE("a refused map item is stopped with the check refusal sentence") {
 	std::vector<MapDef> maps(1);
 	maps[0].name = "Shore";
 	maps[0].item = "t20";
 	CHECK(ItemCodeFromPacked('t' | ('2' << 8) | ('0' << 16) | (' ' << 24)) == "t20");
 	CHECK(ItemCodeFromPacked('a' | ('b' << 8) | ('c' << 16) | ('d' << 24)) == "abcd");
-	CHECK(SecondMapRefusal(maps, "t20", true) == "Cartographer: a map is already open in this game.");
-	CHECK(!SecondMapRefusal(maps, "T20", true).empty());
-	CHECK(SecondMapRefusal(maps, "t20", false).empty());  // no map open yet: the item goes on to the game
-	CHECK(SecondMapRefusal(maps, "tsc", true).empty());   // not a map item
+	GateState state;
+	state.difficulty = 2;
+	state.charLevel = 90;
+	state.areaId = 109;
+	state.townId = 109;
+	CHECK(MapItemRefusal(maps, "t20", state).empty());  // every gate open: the item goes on to the game
+	state.openings = 1;
+	CHECK(MapItemRefusal(maps, "t20", state) == "Cartographer: Shore cannot be opened: a map has already been opened in this game.");
+	CHECK(!MapItemRefusal(maps, "T20", state).empty());
+	CHECK(MapItemRefusal(maps, "tsc", state).empty());  // not a map item
+	state.openings = 0;
+	state.difficulty = 1;
+	CHECK(MapItemRefusal(maps, "t20", state) == "Cartographer: Shore can only be opened in Hell.");
+	state.difficulty = 2;
+	state.areaId = 1;
+	CHECK(!MapItemRefusal(maps, "t20", state).empty());  // not in town
+	state.areaId = 109;
+	state.spotFree = false;
+	CHECK(!MapItemRefusal(maps, "t20", state).empty());
 }
 
 TEST_CASE("an old Difficulty column is ignored with a note, not an error") {
