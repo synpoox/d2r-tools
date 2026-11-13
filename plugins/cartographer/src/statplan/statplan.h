@@ -102,7 +102,8 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 
 // The properties.txt property that sets the map level stat (install.ps1 adds the row), and its id: the row number, as the game counts rows.
 inline constexpr const char *kMapLevelProperty = "map-level";
-// The row number of the property whose `code` is `code` in properties.txt text, or -1 (no such row, or no code column).
+// The id of the property whose `code` is `code` in properties.txt text, or -1 (no such row, or no code column): the row number, not counting
+// the "Expansion" separator row.
 int parsePropertyId(std::string_view text, std::string_view code);
 
 // The cube map level (issue #330). `before` and `after` are the item's map level stat before and after the game applied the recipe's

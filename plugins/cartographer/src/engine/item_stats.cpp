@@ -73,6 +73,12 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 			}
 		}
 	}
+	static std::atomic<int> s_seen{0};
+	if (s_seen.fetch_add(1) < 60) {  // experiment: what the applier is called with
+		plog::Info("prop apply #%d: cl=%u edx=%u item=%p p5=%p(%d) p9=%p(%d) propId %d", s_seen.load(), static_cast<unsigned>(a1 & 0xff), static_cast<unsigned>(a2), reinterpret_cast<void*>(item),
+		           reinterpret_cast<void*>(p5), Readable(p5) ? At<int32_t>(reinterpret_cast<const void*>(p5), 0) : -1, reinterpret_cast<void*>(p9),
+		           Readable(p9) ? At<int32_t>(reinterpret_cast<const void*>(p9), 0) : -1, propId);
+	}
 	if (!match) {
 		return g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
 	}

@@ -184,6 +184,8 @@ int parsePropertyId(std::string_view text, std::string_view code)
 	if (cCode < 0) return -1;
 	int ordinal = 0;
 	for (const carto::TsvRow &row : table.rows) {
+		// The "Expansion" row of vanilla properties.txt is a separator the game does not count (seen in game: the map-level row, 285 by row, is 284 to the game).
+		if (table.Cell(row, cCode) == "Expansion") continue;
 		const int id = ordinal++;
 		if (table.Cell(row, cCode) == code) return id;
 	}

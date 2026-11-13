@@ -675,6 +675,13 @@ TEST_CASE("parsePropertyId: the row number of the property code")
 	CHECK(parsePropertyId(t, "str") == 0);
 	CHECK(parsePropertyId(t, "map-level") == 1); // a blank line is not a row, as for itemstatcost.txt
 	CHECK(parsePropertyId(t, "nope") == -1);
+	// The vanilla "Expansion" separator row is not counted by the game: the rows after it are one lower.
+	const std::string e = "code	func1
+str	1
+Expansion	
+map-level	1
+";
+	CHECK(parsePropertyId(e, "map-level") == 1);
 	CHECK(parsePropertyId("x\ty\n", "str") == -1);
 }
 
