@@ -27,11 +27,11 @@ constexpr const char* PanelName = "cartographer/map-panel";
 constexpr const char* TextName = "Text";          // the header lines, gold
 constexpr const char* BlueTextName = "TextBlue";  // the property lines, blue (item property blue), over the same area
 constexpr int PanelWidth = 760;
-constexpr int PanelTop = 270;
+constexpr int PanelTop = cartographer::mappanel::kPanelTop;
 constexpr int PanelRight = 40;
 constexpr int PointSize = 30;
-constexpr int LineUnits = 44;       // one line of the panel text, in layout units (measured live at PointSize 30)
-constexpr int MaxPadLines = 8;
+constexpr int LineUnits = cartographer::mappanel::kLineUnits;  // one line of the panel text, in layout units (measured live at PointSize 30)
+constexpr int MaxPadLines = cartographer::mappanel::kMaxPadLines;
 constexpr int PanelHeight = cartographer::mappanel::panelHeight(LineUnits, MaxPadLines);  // room for the padding and the longest panel text (1540: ends at 1810 of 2160)
 constexpr uint32_t PadTasks = 15;   // the game's terror zone text is measured this often
 // The entry banner (issue #357): the Overlay service's drawText returned Success but drew nothing (see below), so the banner is a second panel

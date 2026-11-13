@@ -114,16 +114,16 @@ TEST_CASE("Density alone makes the Monsters group, 0 leaves it out, a negative t
 TEST_CASE("the longest panel text fits the panel under the most padding")
 {
 	std::vector<Stat> stats;
-	for (int i = 0; i < 7; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
-	for (int i = 0; i < 16; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
+	for (int i = 0; i < kMaxMonsterLines; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
+	for (int i = 0; i < kMaxPlayerLines; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
 	const PanelText p = panelText(85, stats, 40);
 	CHECK(lineCount(p.gold) == kMaxLines);
 	CHECK(lineCount(p.blue) == kMaxLines);
 	CHECK(lineCount("") == 0);
 	CHECK(lineCount("a\nb\n") == 3);
-	const int units = 44;
-	const int pad = 8;
-	const int top = 270;
+	const int units = kLineUnits;
+	const int pad = kMaxPadLines;
+	const int top = kPanelTop;
 	const int height = panelHeight(units, pad);
 	CHECK((pad + lineCount(p.gold)) * units <= height);
 	CHECK(top + height <= 2160); // the layout's height in units: the panel stays on screen

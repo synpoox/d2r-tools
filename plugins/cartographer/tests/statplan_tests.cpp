@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "statplan.h"
+#include "../src/mappanel/mappanel.h"
 
 using namespace cartographer::statplan;
 
@@ -148,6 +149,9 @@ TEST_CASE("buildPlan drops an entry whose merged value is 0, and a merge does no
 {
 	const Plan cancel = buildPlan({{Target::Monsters, "damagepercent", 10}, {Target::Monsters, "damagepercent", -10}}, testIds());
 	CHECK(cancel.monsters.empty());
+	REQUIRE(cancel.skipped.size() == 1);
+	CHECK(cancel.skipped[0].stat == "damagepercent");
+	CHECK(cancel.skipped[0].why.find("add up to 0") != std::string::npos);
 	std::string text = "Stat\tSend Other\n";
 	for (int i = 0; i < 20; ++i) text += "filler" + std::to_string(i) + "\t1\n"; // ids 0..19 include refused ones
 	std::vector<Property> props;
@@ -160,6 +164,19 @@ TEST_CASE("buildPlan drops an entry whose merged value is 0, and a merge does no
 	REQUIRE(plan.players.size() == 16);
 	CHECK(plan.players[0].value == 5);
 	CHECK(plan.skipped.empty());
+	// 17 distinct stats where one adds up to 0: the cap counts the 16 that are left, not the 17
+	std::string text2 = "Stat\tSend Other\n";
+	for (int i = 0; i < 20; ++i) text2 += "filler" + std::to_string(i) + "\t1\n";
+	std::vector<Property> props2;
+	for (int i = 0; i < 17; ++i) {
+		text2 += "capstat" + std::to_string(i) + "\t1\n";
+		props2.push_back({Target::Players, "capstat" + std::to_string(i), 1});
+	}
+	props2.push_back({Target::Players, "capstat3", -1});
+	const Plan plan2 = buildPlan(props2, parseItemStatCost(text2), true);
+	CHECK(plan2.players.size() == 16);
+	REQUIRE(plan2.skipped.size() == 1);
+	CHECK(plan2.skipped[0].stat == "capstat3");
 }
 
 TEST_CASE("buildPlan skips what it cannot resolve, with a reason")
@@ -932,4 +949,10 @@ TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a k
 	CHECK(r[0].layer == 5);
 	CHECK(r[0].stat == 0);
 	CHECK(r[0].value == 7);
+}
+
+TEST_CASE("the map panel is sized for the monster and player stat lines the plan can hold")
+{
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxMonsterLines) == monsterStats().size());
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxPlayerLines) == kMaxPlayerStats);
 }

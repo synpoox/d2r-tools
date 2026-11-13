@@ -48,7 +48,15 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int densit
 
 // The most lines panelText can give: the level, "Monsters have", one line for each monster-side map stat (statplan monsterStats(): 7), the
 // Density, "Players have" and the most player stats the game sends (statplan kMaxPlayerStats: 16).
-constexpr int kMaxLines = 1 + 1 + 7 + 1 + 1 + 16;
+constexpr int kMaxMonsterLines = 7;  // statplan monsterStats().size(); a test ties the two
+constexpr int kMaxPlayerLines = 16;  // statplan kMaxPlayerStats
+constexpr int kMaxLines = 1 + 1 + kMaxMonsterLines + 1 + 1 + kMaxPlayerLines;
+
+// The panel's layout, in layout units (twice the 1080p pixels): where it starts, the height of one text line at the panel's font size
+// (measured live) and the most blank lines of padding it puts in front of the text.
+constexpr int kPanelTop = 270;
+constexpr int kLineUnits = 44;
+constexpr int kMaxPadLines = 8;
 
 // The number of lines in a panel text (0 for an empty one).
 int lineCount(const std::string &text);
