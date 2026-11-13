@@ -1,10 +1,10 @@
 // The map panel (issue #308): while the player stands inside a map, a plugin panel down the right side of the screen, under the
-// game's own area and game info, in place of the purple terror zone text (hidden while the panel shows), shows the map's name, monster level and rolled
+// game's own area and game info and below its purple terror zone text (which the plugin cannot hide), shows the map's name, monster level and rolled
 // properties. Outside a map the panel is closed and the game's own HUD is untouched. The panel is a layout the plugin registers
 // through the D2RLoader Panel and Resource services (cartographer/map-panel); its text is set through the game's own FindPanel,
 // FindChild and SetText (found by byte signature, only called), on the UI thread. A part or service that is missing, or a fault,
-// turns the panel off and nothing else. The game's own TerrorZoneInfoText widget and the Overlay service were tried first and
-// could not be made to show (docs/reverse-engineering/cartographer/22-map-panel.md); pure text part: src/mappanel. Only the host
+// turns the panel off and nothing else. Hiding the game's TerrorZoneInfoText widget, writing into it, and the Overlay service were tried first and
+// did not work (docs/reverse-engineering/cartographer/22-map-panel.md); pure text part: src/mappanel. Only the host
 // (or single player) knows the properties, so only it shows the panel.
 #pragma once
 

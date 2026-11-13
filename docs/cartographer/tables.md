@@ -203,7 +203,7 @@ Global settings, read when the game starts; `PlayerStats` is checked in game (si
 |---|---|---|---|
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player while in the map (see above for what was checked); `0` turns it off; `0` or `1` | 1 | 0 |
-| `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the entry banner (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
+| `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the game's own "Entering" text (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 | `OutdoorProbe` | `1` logs what the game builds for an outdoor map, for debugging; `0` or `1` | 0 | 0 |

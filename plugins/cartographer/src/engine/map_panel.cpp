@@ -193,23 +193,34 @@ void NoticeClosed() noexcept {
 }
 
 // The game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText) sits under its area and game info, where
-// the panel starts. The game sets that text, and whether it shows, itself every frame, so the plugin can neither hide it nor write the panel's
-// lines into it (both tried live, see docs/reverse-engineering/cartographer/22-map-panel.md). Instead the panel starts under it: the wrapper's
+// the panel starts. The plugin could neither hide that text nor write the panel's lines into it from its frame callback (both returned Success and
+// changed nothing on screen; the likely cause is that the game sets the text and its visibility itself after the callback, not proven, see
+// docs/reverse-engineering/cartographer/22-map-panel.md). Instead the panel starts under it: the wrapper's
 // rect is 0 high with no zone and as high as the text (in layout units) in a zone, and the panel text gets blank lines in front to reach its
 // bottom. The rect is looked up every PadTasks tasks, a zone can start while the player is in the map. UI thread.
+bool g_lookupLogged = false;
+auto LookupFailed(const char* what) noexcept -> int {
+	if (!g_lookupLogged) {
+		g_lookupLogged = true;
+		plog::Info("map panel: %s not found; the panel is not moved below the game's terror zone text", what);
+	}
+	return 0;
+}
+
+// The rect math assumes the wrapper is a direct child of HUDWarnings (as in hudwarningshd.json); deeper, the parents' offsets in between are missing.
 auto TerrorTextBottom() noexcept -> int {
 	if (g_widgets == nullptr) {
 		return 0;
 	}
 	if (g_hud == D2RL::Widgets::InvalidHandle && g_widgets->findPanel(g_context, "HUDWarnings", &g_hud) != D2RL::Widgets::Result::Success) {
 		g_hud = D2RL::Widgets::InvalidHandle;
-		return 0;
+		return LookupFailed("the HUDWarnings panel");
 	}
 	if (g_terrorWrapper == D2RL::Widgets::InvalidHandle &&
 	    g_widgets->findWidget(g_context, g_hud, "TerrorZoneInfoTextWrapper", &g_terrorWrapper) != D2RL::Widgets::Result::Success) {
 		g_terrorWrapper = D2RL::Widgets::InvalidHandle;
 		g_hud = D2RL::Widgets::InvalidHandle;
-		return 0;
+		return LookupFailed("TerrorZoneInfoTextWrapper");
 	}
 	D2RL::Widgets::Rect hud{};
 	D2RL::Widgets::Rect wrapper{};
@@ -217,7 +228,7 @@ auto TerrorTextBottom() noexcept -> int {
 	    g_widgets->getWidgetRect(g_context, g_terrorWrapper, &wrapper) != D2RL::Widgets::Result::Success) {
 		g_hud = D2RL::Widgets::InvalidHandle;  // maybe stale (a new game): find them again next time
 		g_terrorWrapper = D2RL::Widgets::InvalidHandle;
-		return 0;
+		return LookupFailed("the rect of the HUDWarnings text");
 	}
 	return wrapper.height > 0 ? hud.y + wrapper.y + wrapper.height : 0;
 }
