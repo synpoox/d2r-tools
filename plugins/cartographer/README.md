@@ -48,8 +48,7 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Outdoor and Snow levels and their slots to the mod's
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor, Snow and Siege levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Outdoor, Snow and Siege levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
    no map items. Each tileset has a level of its own, so one install serves Cave and Crypt maps (one map per game).
    Running it again is safe. If the mod ships its own
@@ -112,8 +111,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `Outdoor` and `OutdoorSnow`, each with the `Id` of your own row from step 1.
-   header `Slot` and `Level`, then rows `Maze`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -127,8 +125,6 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (each opens through its own level); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | required |
-| Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |

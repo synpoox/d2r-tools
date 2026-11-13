@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Cave and Crypt maps now each have their own level, so one install opens either. If you installed Crypt before, rerun `tools\install.ps1` once; `-Tileset` is no longer needed.
-- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave, Crypt and Snow levels move to their new spots.
+- Cave and Crypt maps now each have their own level, so one install opens either. Rerun `tools\install.ps1` once to add the new Crypt level; `-Tileset` is no longer needed.
+- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.

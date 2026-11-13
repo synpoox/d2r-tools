@@ -313,7 +313,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
         Set-CellIf $levels $cells 'LevelEntry' ''
         Set-CellIf $levels $cells 'LevelWarp' ''
         for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
-        # An older install put the level where its revealed map is lost after a trip to town (x 6000 for Cave, x 6000, y 4200 for Crypt): move it.
+        # An older install put the level where its revealed map is lost after a trip to town (Cave at x 6000): move it.
         Move-IntoAutomapRange $levels $cells $name $offX $offY
         # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
         $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
