@@ -7,7 +7,7 @@
 using namespace carto;
 
 namespace {
-constexpr int kTown = 79, kCave = 2, kSlotLevel = 138, kTownLevel = 109, kOther = 27;
+constexpr int kTown = 79, kCave = 2, kSlotLevel = 138, kTownLevel = 109, kOtherLayer = 27, kOtherLevel = 3;
 
 SkipState Armed() {
 	SkipState s;
@@ -25,8 +25,8 @@ TEST_CASE("the read made while the player stands in the slot level is skipped on
 
 TEST_CASE("a read before the player is in the slot level is kept, and the skip stays for the entry") {
 	SkipState s = Armed();
-	CHECK(SkipOnRead(s, kOther, kTownLevel) == SkipVerdict::Keep);  // a waypoint trip
-	SkipTick(s, kOther);
+	CHECK(SkipOnRead(s, kOtherLayer, kTownLevel) == SkipVerdict::Keep);  // a waypoint trip
+	SkipTick(s, kOtherLevel);
 	SkipTick(s, kSlotLevel);
 	CHECK(SkipOnRead(s, kCave, kSlotLevel) == SkipVerdict::Skip);
 }
@@ -52,7 +52,7 @@ TEST_CASE("a missed skip (the read came before the tick) is dropped when the pla
 TEST_CASE("ticks before the player enters the slot level do not disarm") {
 	SkipState s = Armed();
 	SkipTick(s, kTownLevel);
-	SkipTick(s, kOther);
+	SkipTick(s, kOtherLevel);
 	CHECK(s.armed);
 }
 
@@ -66,5 +66,13 @@ TEST_CASE("an unarmed state never skips, and a new arm starts clean") {
 	SkipArm(s, kTown, kSlotLevel);
 	CHECK_FALSE(s.entered);
 	SkipTick(s, kSlotLevel);
+	CHECK(SkipOnRead(s, kCave, kSlotLevel) == SkipVerdict::Skip);
+}
+
+TEST_CASE("an unknown player level never drops the skip") {
+	SkipState s = Armed();
+	SkipTick(s, kSlotLevel);
+	SkipTick(s, -1);
+	CHECK(s.armed);
 	CHECK(SkipOnRead(s, kCave, kSlotLevel) == SkipVerdict::Skip);
 }

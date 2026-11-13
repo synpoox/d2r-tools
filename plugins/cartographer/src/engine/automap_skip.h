@@ -22,7 +22,7 @@ inline void SkipArm(SkipState& s, int currentKey, int slotLevel) noexcept {
 // The player's tick reports `level`. Once the player has been in the slot level and is reported anywhere else, the entry read has come and gone
 // without being skipped, so the skip is dropped: it must not land on a later return from town and discard the map's own reveal.
 inline void SkipTick(SkipState& s, int level) noexcept {
-	if (!s.armed) {
+	if (!s.armed || level < 0) {  // an unknown level (-1) says nothing about where the player is
 		return;
 	}
 	if (level == s.armedLevel) {

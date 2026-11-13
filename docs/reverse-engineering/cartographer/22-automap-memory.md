@@ -67,7 +67,7 @@ Nothing here is wired as a plugin part.
   another layer than the one left is current (current layer object read through the `cmp qword ptr [rip+x],0` at +0x22;
   key = first dword). Building the same map again in the same game (the return from a town trip rebuilds it from the same
   plan) arms nothing. Live (slot 5): a waypoint trip and town trips before entering kept their reads (layers 27 and 79,
-  log lines "read of layer N kept"; the waypoint trip is log only, the reveal of that area was not looked at; repeated in slot 7 with a waypoint object from `cheat ospawn 429`, see the automap follow-up check); entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
+  log lines "read of layer N kept"; the waypoint trip is log only, the reveal of that area was not looked at; repeated in slot 7 with a waypoint object from `cheat ospawn 429`, see the automap follow-up check); slot 7 reported layer 10 for the Cave map because its `levels.txt` row 138 (Cartographer Maze) there has Layer 10, not 2; entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
   (Snow) in level 140, in two games in a row; a town trip after the skip and the return showed the map's own reveal
   again, no second skip.
 - Order (issue #354): the skip assumes the player's tick reports the slot level before the layer is read back. A skip that

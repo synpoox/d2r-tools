@@ -6,13 +6,15 @@
 
 #include <atomic>
 #include <cstring>
+#include <algorithm>
 #include <mutex>
+#include <vector>
 
 namespace carto {
 namespace {
 
-// The restore (0xd5710) reads no register argument itself, but its first call (0xd5450, the map file path) is made with rcx as the caller left it, so the hook passes the
-// four argument registers and the result straight on: a hook that took none and called plog first handed the original garbage (a fault in 0xd5450).
+// The restore (0xd5710) takes two arguments (rcx, rdx; its only call site, 0xd18c8, sets both) and hands them on to 0xd5450 (the map file path). The hook passes all four
+// argument registers and the result straight on: a hook that took none and called plog first handed the original garbage (a fault in 0xd5450).
 using RestoreFn = uint64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t) noexcept;
 
 Part g_part = {"AutomapRestore", sig::AutomapRestore, 17, false, nullptr, {}, {}};
@@ -20,6 +22,7 @@ RestoreFn g_original = nullptr;
 const uint8_t* g_currentObject = nullptr;   // the game's "current layer object" global, decoded from the part's own `cmp qword ptr [rip+x], 0`
 std::atomic<bool> g_hooked{false};
 std::mutex g_mutex;                         // the build (any thread), the player's tick and the read (game thread) share the skip state
+std::vector<int> g_keptLogged;              // layers whose kept read was already logged for the armed skip (a waypoint load reads dozens)
 SkipState g_skip;                           // armed / the layer left / the slot level / the player seen in it (automap_skip.h)
 std::atomic<uint64_t> g_lastMap{0};         // the map built last in this game (0: none); building the same map again (the return from a town trip) keeps its cells
 int g_playerLevel = -1;                     // the local player's level id, from the player's tick (-1 unknown)
@@ -45,6 +48,7 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 	int key = -1;
 	int level = -1;
 	int slot = -1;
+	bool logKept = false;
 	{
 		std::lock_guard<std::mutex> lock(g_mutex);
 		armed = g_skip.armed;
@@ -53,6 +57,10 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 			level = g_playerLevel;
 			slot = g_skip.armedLevel;
 			skip = SkipOnRead(g_skip, key, level) == SkipVerdict::Skip;
+			if (!skip && std::find(g_keptLogged.begin(), g_keptLogged.end(), key) == g_keptLogged.end()) {
+				g_keptLogged.push_back(key);
+				logKept = true;
+			}
 		}
 	}
 	if (skip) {
@@ -60,7 +68,7 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 		plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
 		return 0;
 	}
-	if (armed) {
+	if (logKept) {
 		plog::Info("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, slot);
 	}
 	return g_original(a, b, c, d);
@@ -102,6 +110,7 @@ void AutomapResetArm(uint64_t map, int slotLevel) noexcept {
 	}
 	std::lock_guard<std::mutex> lock(g_mutex);
 	SkipArm(g_skip, CurrentKey(), slotLevel);
+	g_keptLogged.clear();
 }
 
 void AutomapResetPlayerTick(int level) noexcept {
@@ -113,6 +122,7 @@ void AutomapResetPlayerTick(int level) noexcept {
 void AutomapResetDisarm() noexcept {
 	std::lock_guard<std::mutex> lock(g_mutex);
 	g_skip = {};
+	g_keptLogged.clear();
 	g_playerLevel = -1;
 	g_lastMap = 0;
 }
