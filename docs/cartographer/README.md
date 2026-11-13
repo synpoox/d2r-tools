@@ -95,7 +95,7 @@ A tileset that is not ready is refused when the game loads, with a message that 
 
 | Column | What it does |
 |---|---|
-| `Size` | `Small`, `Medium` or `Large` |
+| `Size` | `ExtraSmall`, `Small`, `Medium` or `Large` |
 | `Level` | Monster level in the map |
 | `Item` | Required. The item code that opens this map, and only this map; no two maps share one. The item needs item spell 16 in `misc.txt` |
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |

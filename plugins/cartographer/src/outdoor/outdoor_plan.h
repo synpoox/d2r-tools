@@ -38,7 +38,7 @@ bool outdoorTilesetKnown(std::string_view tileset);
 struct MapRequest {
 	std::string tileset;  // the maps.txt Tileset, e.g. "Jungle"
 	std::string shape;    // a shape name; blank means Winding. Snow has no shapes: it is ignored there.
-	std::string size;     // Small, Medium or Large; blank means Medium
+	std::string size;     // ExtraSmall, Small, Medium or Large; blank means Medium
 	uint64_t seed = 0;    // the map's layout seed
 	StampOptions options; // origin, size limits (the slot row's), pinFiles, listVoid
 	const layout::ShapeTable *shapes = nullptr; // shapes.txt rows; null means the built-in shapes only. Not part of the cache key.

@@ -215,11 +215,11 @@ auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed)
 		}
 	}
 	if (allowed.density && r.density > 0) {
-		const int percent = std::min(r.density, MaxPercent);
+		const int percent = r.density;
 		Add(out, RecDensityOffset, 4, ScalePercent(s.density, percent, MaxDensity), static_cast<uint32_t>(s.density));
 	}
 	if (allowed.uniques && r.uniques > 0) {
-		const int percent = std::min(r.uniques, MaxPercent);
+		const int percent = r.uniques;
 		Add(out, RecUMinOffset, 1, ScalePercent(s.uMin, percent, MaxPackCount), static_cast<uint32_t>(s.uMin));
 		Add(out, RecUMaxOffset, 1, ScalePercent(s.uMax, percent, MaxPackCount), static_cast<uint32_t>(s.uMax));
 	}
