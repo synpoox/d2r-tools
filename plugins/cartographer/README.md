@@ -111,7 +111,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (a plains map: all rooms joined, a few walls; not for `Snow`) | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |

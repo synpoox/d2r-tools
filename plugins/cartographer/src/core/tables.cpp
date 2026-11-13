@@ -29,7 +29,7 @@ constexpr Tileset Tilesets[] = {
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 
-const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
+const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
 const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "Properties", "EventChance",
@@ -284,6 +284,19 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				map.size = *known;
 			} else {
 				fail("size '" + size + "' is not known." + DidYouMean(size, Sizes) + " Use " + OneOf(Sizes) + ", or leave it blank for Medium.");
+			}
+		}
+
+		// An Open map needs rooms joined on all four sides. Snow is lines of fence pieces and takes no Shape, so it cannot build one.
+		if (ok && !map.shape.empty() && !map.tileset.empty()) {
+			const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(map.tileset);
+			if (row != nullptr && row->planner == cartographer::outdoor::Planner::Snow) {
+				cartographer::layout::Rules rules;
+				std::string ignored;
+				const cartographer::layout::ShapeTable none;
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::Size::Medium, rules, ignored) && rules.open) {
+					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
+				}
 			}
 		}
 

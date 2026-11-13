@@ -35,7 +35,8 @@ const std::string GOLDEN_SHORELINES =
 const std::string GOLDEN_HASHES =
 	"907cf8217d7b7829 64ece3af063ed751 fd3e0fc0f6d54272 26b1a6ce1f6541c2 ee21102abe478a95 68068c76a2578772 ce4981cb9a1e643a "
 	"2c762be1dbd7e208 606db446a5eb7047 c79697c5b4021c65 1215a7942077a2ae 19fecd3b91d093a6 5c0b71422478a02a 2c520c8edae359ff "
-	"a5e29bd842850fc3 901fab347c753ae8 49c9cba06771a0c0 763e37c95d92c752 08e5bbf643a10c8c 74b3fce4810fad1e ";
+	"a5e29bd842850fc3 901fab347c753ae8 49c9cba06771a0c0 763e37c95d92c752 08e5bbf643a10c8c 74b3fce4810fad1e "
+	"36bb32f5285e6d5f 3766511a9a24892c ef66469bffdeeff7 00f38885818a84b6 ";
 
 const std::string GOLDEN_STAMP_LINE =
 	"224x256 0,0=535 4,0=530 0,4=541 0,8=541 0,12=541 0,16=541 24,16=598 0,20=543 4,20=530 24,20=541 0,24=541 24,24=541 0,28=583 4,28=532 "
@@ -43,7 +44,8 @@ const std::string GOLDEN_STAMP_LINE =
 const std::string GOLDEN_STAMP_HASHES =
 	"bbc9e79c79924f3f 1a4771abad5cde3d 2c9bfd4b0c19b20c 0ea6ab53f22982a7 151c08742a7209c8 da62d59a94796e97 5575e6746fb2e8b8 "
 	"8f2979a836716794 7d42d055239584b1 485a1e0bb7e9ba70 26c18868df38eaa1 51585abd796d49ea a42cec83cc16fdf4 f65c9d35dda89b61 "
-	"c77ebfdc7deca837 eddf55fdbabafa69 e45b406a6be50916 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 ";
+	"c77ebfdc7deca837 eddf55fdbabafa69 e45b406a6be50916 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 "
+	"06c76a6eddf1c7c3 2cb9cb858214889e 5c05387d54e3dfd8 8ae65ae4e7d7937a ";
 
 // The fixtures sit beside this file, so the test needs no build-time path or working directory.
 std::string fixturePath(const char *name)
@@ -295,8 +297,8 @@ TEST_CASE("10k seeds of every shape preset on Jungle: every cell gets a matching
 			INFO(layout::shapeName(shape) << " " << layout::sizeName(size));
 			CHECK(failures == 0);
 			// Jungle has clearings for one or two exits; the event and boss rooms have one or two on these presets.
-			CHECK(clearingBoss == bossRooms);
-			CHECK(clearingEvent == eventRooms);
+			if (shape != layout::Shape::Open) CHECK(clearingBoss == bossRooms); // Open rooms have up to four exits, and Jungle has no such clearing: they take plain path pieces
+			if (shape != layout::Shape::Open) CHECK(clearingEvent == eventRooms);
 			if (std::getenv("CARTOGRAPHER_STATS"))
 				std::printf("%-9s %-6s seeds %d  failures %d  boss rooms %d (clearing %d)  event rooms %d (clearing %d)\n", layout::shapeName(shape),
 					layout::sizeName(size), kSeeds, failures, bossRooms, clearingBoss, eventRooms, clearingEvent);
@@ -796,6 +798,23 @@ TEST_CASE("a Jungle map plans: layout, picks and stamps agree, the rect is the s
 		CHECK(s.lvlPrest != 573);
 		CHECK(s.lvlPrest != 574);
 	}
+}
+
+TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a plan is the same twice")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	for (const char *size : {"ExtraSmall", "Small", "Medium", "Large"})
+		for (uint64_t seed = 1; seed <= 25; ++seed) {
+			MapRequest r = jungleRequest(seed);
+			r.shape = "Open";
+			r.size = size;
+			const MapPlan plan = planOutdoorMap(r, cat);
+			INFO(size << " seed " << seed << ": " << plan.reason);
+			REQUIRE(plan.ok);
+			CHECK(plan.layout.rulesMet);
+			CHECK(!plan.stamps.stamps.empty());
+			CHECK(planOutdoorMap(r, cat).hash == plan.hash);
+		}
 }
 
 TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")
