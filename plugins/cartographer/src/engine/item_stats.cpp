@@ -21,9 +21,11 @@ namespace sp = cartographer::statplan;
 
 // Build 93847; evidence in docs/reverse-engineering/cartographer/14-item-stats.md.
 constexpr int32_t MagicListFlags = 0x40;  // the item's base magic list (created with flags 0x40); state 0 asks for a match by flags
-constexpr int MaxStats = 16;              // the game's own sender sends 16 at most
-// The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use and cut to MaxStats here.
+// The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use. All of it is read: a map
+// carries a few dozen stats at most (six affixes of up to three properties each, plus the base), and the 16-entry limit is the state sender's
+// (statplan kMaxPlayerStats), not the copy's (issue #429).
 constexpr int CopyMax = 0x200;
+constexpr int MaxStats = CopyMax;
 
 struct Unit;
 
@@ -274,7 +276,7 @@ auto ItemMagicStat(void* item, int stat, bool* ok) noexcept -> int {
 			return s.value;
 		}
 	}
-	// Not found: 0 only counts as the item's level when the list was read whole (no note: parts present, layout recognised, at most MaxStats stats).
+	// Not found: 0 only counts as the item's level when the list was read whole (no note: parts present, layout recognised, at most 512 stats).
 	if (ok != nullptr) {
 		*ok = On(FindList) && On(ListCopy) && note.empty();
 	}

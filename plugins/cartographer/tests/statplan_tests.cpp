@@ -956,3 +956,18 @@ TEST_CASE("the map panel is sized for the monster and player stat lines the plan
 	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxMonsterLines) == monsterStats().size());
 	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxPlayerLines) == kMaxPlayerStats);
 }
+
+TEST_CASE("decodeItemStatList reads a list longer than 16 whole when maxStats allows it (issue #429)")
+{
+	int32_t big[24 * 4] = {};
+	for (int i = 0; i < 24; ++i) {
+		big[i * 4 + 1] = 10 + i;
+		big[i * 4 + 2] = i + 1;
+	}
+	std::string problem;
+	const auto all = decodeItemStatList(big, 24, 512, &problem);
+	REQUIRE(all.size() == 24);
+	CHECK(problem.empty());
+	CHECK(all[23].stat == 33);
+	CHECK(all[23].value == 24);
+}
