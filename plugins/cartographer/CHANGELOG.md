@@ -16,6 +16,7 @@
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
+- Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).
 - `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
@@ -45,6 +46,7 @@
 - A map gives you at most 16 stats, the most the character sheet can show (experimental).
 - Snow maps open from their item through a new `OutdoorSnow` level (run `tools\install.ps1` again).
 - Snow maps: you arrive in a planned entrance area, and the map Boss and event use their planned areas.
+- New map `Tileset` `Siege` (Act 5 Bloody Foothills, a long strip); run `tools\install.ps1` again for its level.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
 

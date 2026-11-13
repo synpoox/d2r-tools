@@ -81,6 +81,25 @@ struct ItemStat {
 	int value = 0;
 };
 
+// The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; nothing can put it on a map yet: the cube cannot, affixes are untested).
+inline constexpr const char *kMapLevelStat = "cartographer_map_level";
+// The monster levels maps.txt allows (its Level column).
+constexpr int kMinMapLevel = 1;
+constexpr int kMaxMapLevel = 255;
+
+struct MapLevelPick {
+	int level = 0;         // the level the map opens at
+	bool fromItem = false; // true: the item's stat gave it; false: `fallback` (the maps.txt Level)
+	std::string note;      // one plain-English line when the item's stat was unusable or cut, else empty
+};
+
+// The level a map opens at: the item's map-level stat (layer 0) when `ids` names the stat and the item has it with a value of 1 or more
+// (cut to kMaxMapLevel, with a note), else `fallback`. A missing stat is not an error: an item made before the stat existed has none.
+MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback);
+
+// `stats` without the map-level stat, so it is not reported as a stat that no mapstats.txt row has.
+std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
+
 struct ItemProperties {
 	std::vector<Property> properties; // in the item's order
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out

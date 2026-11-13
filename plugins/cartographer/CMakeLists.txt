@@ -72,6 +72,7 @@ add_library(cartographer SHARED
 	src/engine/maze_hooks.cpp
 	src/engine/outdoor_hooks.cpp
 	src/engine/boss_names.cpp
+	src/engine/map_stat_text.cpp
 	src/engine/map_names.cpp
 	src/engine/map_panel.cpp
 	src/engine/level_row.cpp
