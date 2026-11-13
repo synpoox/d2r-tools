@@ -44,7 +44,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
+| `Shape` | yes (the column); the cell may be blank for `Snow` and `Siege` | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). `Snow` and `Siege` ignore Shape, so leave the cell blank there (`Open` is still refused for Snow); every other tileset needs one. | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
