@@ -40,8 +40,6 @@ inline constexpr int MapItemSpell = 16;
 // tileset had a slot of its own, so it keeps its name. Each maze tileset (Cave, Crypt) opens through the slot level of its table row in
 // maze/maze_tilesets.h, because a level has one LevelType and the tilesets need different ones.
 inline constexpr const char* MazeSlot = "Maze";
-// The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
-inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // Each outdoor tileset (Jungle, Snow) opens through a slot level of its own (levels.txt DrlgType 3, outdoor builder plan section 1.1), because a
 // level has one LevelType and the tilesets need different ones. The tileset's slot name, level name and LevelType are one row of the table in
 // outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook builds it.
@@ -204,6 +202,10 @@ auto MapSlotName(const MapDef& map) -> const char*;
 // Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The outdoor
 // slots (Jungle on Outdoor, Snow on OutdoorSnow) share one open-map job, so a second open on the other slot would leave the first portal's level unplanned.
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
+
+// Empty, or why a maze `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. Every maze slot shares
+// one open-map job, so a second open of another tileset would leave the first portal's level unplanned (a stock maze).
+auto MazeOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;

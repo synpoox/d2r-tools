@@ -1227,6 +1227,22 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 	CHECK(std::string(MapSlotName(snowMaps[0])) == "OutdoorSnow");
 }
 
+TEST_CASE("a maze open is refused while a map of another maze tileset is open and unbuilt") {
+	Report report;
+	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\nWild\tJungle\tWinding\t\t\tt20\n", report);
+	REQUIRE(maps.size() == 3);
+	const MapDef& cave = maps[0];
+	const MapDef& crypt = maps[1];
+	const MapDef& jungle = maps[2];
+	CHECK(MazeOpenConflict(cave, "").empty());          // nothing pending
+	CHECK(MazeOpenConflict(cave, "Cave").empty());      // the same tileset replaces its own job
+	CHECK(MazeOpenConflict(cave, "cave").empty());
+	CHECK(MazeOpenConflict(crypt, "Cave").find("Cave map is already open") != std::string::npos);  // Cave pending, then Crypt
+	CHECK(MazeOpenConflict(cave, "Crypt").find("Crypt map is already open") != std::string::npos);  // and the reverse
+	CHECK(MazeOpenConflict(crypt, "Cave").find("Leave the game and start a new one") != std::string::npos);
+	CHECK(MazeOpenConflict(jungle, "Cave").empty());    // an outdoor map has its own job
+}
+
 TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset is open and unbuilt") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nFrost\tSnow\tWinding\t\t\tt22\nDeep\tCave\tLoop\t\t\tt21\n", report);

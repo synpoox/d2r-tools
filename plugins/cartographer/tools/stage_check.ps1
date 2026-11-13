@@ -83,8 +83,6 @@
 .PARAMETER VanillaExcel
     Folder with the vanilla tables the test mod's excel is seeded from (copy only, never edited). Default: the d2r-game
     d2rloader compiler data next to this repo.
-.PARAMETER Tileset
-    Cave (default) or Crypt, passed to install.ps1.
 .PARAMETER Project
     Project name for the slot table (default: MODKIT_PROJECT, else none).
 .PARAMETER Toolkit
@@ -114,7 +112,6 @@ param(
     [string]$VanillaData,
     [string]$CoreUiAutomap,
     [string]$VanillaExcel,
-    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
     [string]$Project = $env:MODKIT_PROJECT,
     [string]$Toolkit,
     [switch]$KeepPlugins,
@@ -723,10 +720,10 @@ try {
 
     # 5. install.ps1 on the test mod's excel folder (safe to run twice).
     if ($WhatIf) {
-        Plan "powershell install.ps1 -ExcelDir `"$excel`" -Tileset $Tileset"
+        Plan "powershell install.ps1 -ExcelDir `"$excel`""
     } else {
         $before = @(if (Test-Path $excel) { Get-ChildItem $excel -Recurse -File | ForEach-Object { $_.FullName } })
-        try { & $installer -ExcelDir $excel -Tileset $Tileset } finally {
+        try { & $installer -ExcelDir $excel } finally {
             # Files install.ps1 created (backups, slots.txt) are recorded too; changes it made inside tables this script
             # placed are covered by the hashes taken at the end.
             if (Test-Path $excel) { foreach ($n in (Get-ChildItem $excel -Recurse -File | ForEach-Object { $_.FullName })) { if ($before -notcontains $n) { $placed[$n] = '' } } }

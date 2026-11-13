@@ -867,6 +867,11 @@ auto MazeLevelDataFlag() -> int {
 	return g_dataFlag.load();
 }
 
+auto MazePendingTileset() -> std::string {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->tileset : std::string();
+}
+
 auto MazeOpenSeed() -> uint64_t {
 	std::lock_guard<std::mutex> lock(g_lock);
 	return g_job != nullptr ? g_job->seed : 0;

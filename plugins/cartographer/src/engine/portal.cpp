@@ -266,8 +266,9 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 			return problem;
 		}
 		if (MazeSlotBuilt()) {
-			return "Cartographer: the Maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+			return std::string("Cartographer: the ") + SlotNameFor(map) + " slot level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
 		}
+		return MazeOpenConflict(map, MazePendingTileset());
 	}
 	return {};
 }

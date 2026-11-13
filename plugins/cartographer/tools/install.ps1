@@ -23,7 +23,7 @@
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
-    Cave and Crypt maps each open through their own level, so one install serves both (one map per game, as before). A Maze level made by an older install with -Tileset Crypt keeps LevelType 4 and is noted; set it to 3 by hand for Cave maps.
+    Cave and Crypt maps each open through their own level, so one install serves both (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
@@ -73,7 +73,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not used any more: every maze tileset has a level of its own, so Cave and Crypt are both added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave and Crypt are both added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -252,13 +252,17 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
         $mazeId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
         $haveType = (Cells $levels $levels.Lines[$existing])[$typeCol]
         Write-Host "levels.txt: '$name' is already there (level $mazeId)."
-        if ($haveType -ne $type) {
-            Write-Host "levels.txt: note: level $mazeId has LevelType $haveType, not $type ($tilesetName). A level's LevelType fixes its tileset, so change it back to $type by hand."
-        }
+        # A level's LevelType fixes its tileset. An install from before the maze table (made with -Tileset Crypt) left this row a Crypt: set it back
+        # (below), together with the name string of the other tileset.
+        $retyped = $haveType -ne $type
         # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
         $cells = Cells $levels $levels.Lines[$existing]
         Warn-LevelOverlap $levels $name $cells
         $before = $cells -join "`t"
+        if ($retyped) {
+            Set-Cell $levels $cells 'LevelType' $type
+            Write-Host "levels.txt: level $mazeId had LevelType $haveType, not $type ($tilesetName): set it back to $type."
+        }
         Set-CellIf $levels $cells 'Quest' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
         Set-CellIf $levels $cells 'LevelEntry' ''
@@ -266,7 +270,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
         for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
         # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
         $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
-        if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {
+        if ($nameCol -ge 0 -and ($cells[$nameCol] -eq 'Den of Evil' -or $retyped)) {
             $drlgCol = Column $levels 'DrlgType'
             $questCol = [array]::IndexOf($levels.Header, 'Quest')
             for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
