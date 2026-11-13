@@ -160,12 +160,12 @@ auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 }
 
 // misc.txt code and pSpell for every item that has a code (a blank pSpell is 0). False when the table or a column is missing.
-auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out, std::vector<std::string>* compact) -> bool {
+auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out, std::vector<std::string>* compact, std::vector<std::string>* cursor) -> bool {
 	std::string text;
 	if (!ReadFile(file, &text)) {
 		return false;
 	}
-	return carto::ParseItemSpells(text, out, compact);
+	return carto::ParseItemSpells(text, out, compact, cursor);
 }
 
 // monstats.txt Ids whose boss column is 1. False when the table or either column is missing.
@@ -210,7 +210,7 @@ auto ReadGameNames() -> carto::GameNames {
 	for (const wchar_t* file : {L"\\misc.txt", L"\\weapons.txt", L"\\armor.txt"}) {
 		names.haveItems = ReadColumn(g_excelDir + file, "code", &names.itemCodes) && names.haveItems;
 	}
-	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells, &names.compactItems);
+	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells, &names.compactItems, &names.cursorItems);
 	return names;
 }
 
@@ -305,7 +305,7 @@ auto LoadAll() -> Loaded {
 	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapsFile), carto::MapsFile, &text, loaded.report)) {
-		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses);
+		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses, &loaded.tables->skippedMaps);
 	}
 	loaded.tables->maps = std::move(fromFile);
 	text.clear();

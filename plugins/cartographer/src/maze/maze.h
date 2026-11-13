@@ -41,7 +41,7 @@ uint8_t maskBitOfEngineDir(int dir); // engine direction -> exit bit, or 0
 // and the level's origin / size fields (drlg-steering.md section 1) set the real size, so the slot row and the build hook
 // must apply Plan::levelTilesX / Y, which never exceed this. 360 holds 15 Cave rooms across (7 each side of the first
 // room): the largest preset grid is 12, and the extra room per side lets the first room avoid the reserved end rooms.
-// 320 (13 across) still left 0.07% of Cave Corridor Large without a first room. The engine has not been checked to
+// 320 (13 across) still left 0.07% of Cave Corridor ExtraLarge without a first room. The engine has not been checked to
 // accept 360: the hook PR must.
 constexpr int kMaxLevelTiles = 360;
 
@@ -64,6 +64,7 @@ struct Tileset {
 	std::string notSteerableReason; // plain English, shown when steerable is false
 	bool callsRingGrower = false;   // the tileset's case in 0x3e69e0 calls 0x3e9820 first
 	bool walkFollowsRing = true;    // false: no walk follows the ring grower, so the graph must be built inside it
+	int ringCells = 0;              // filler rooms (closed pieces) placed this many cells around the layout, so no void shows past its edges (Lava); 0: none
 	DeadEndFamily prev;             // the "Prev" group: the entrance. Absent: the entrance is an ordinary room
 	// No Next / Down family: a maze has no exit, so those groups are never placed (plan section 3.6).
 };
@@ -130,6 +131,10 @@ struct Plan {
 	LvlMazeRow lvlMaze;
 	int widthRooms = 0, heightRooms = 0; // bounding box of the layout
 	int levelTilesX = 0, levelTilesY = 0; // the level size the plan needs: apply it to the slot row / level fields
+	// Filler rooms around the layout (Tileset::ringCells). fills[k].room is rooms.size() + k, and its parent is a room index below that (a plan room or an
+	// earlier filler): the walk makes them after every plan room has its piece, so a plan room's piece never counts the filler beside it.
+	std::vector<AddStep> fills;
+	std::vector<layout::Point> fillOffsets; // each filler's room offset (dx, dy) from the first room
 	int eventRoom = -1, bossRoom = -1;   // indexes into rooms of the reserved event and boss rooms, or -1
 };
 

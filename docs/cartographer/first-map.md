@@ -35,9 +35,12 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 ## 2. Make the map item
 
 Each map is a row in the mod's `misc.txt` of type `cmap` (the item type `install.ps1` adds to `itemtypes.txt`, so the
-tooltip shows the map's name), `pSpell` 16, `belt` 0, `useable` 1, and a free 3-character `code`. Copy the `isc` row and set
-the columns that [`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists for the three example
-maps (`name` is the row's `name` column, `namestr` the string key); blank the vendor `Min`/`Max` columns so no NPC sells it.
+tooltip shows the map's name), `pSpell` 16, `belt` 0, `useable` 1, `spellicon` -1, and a free 3-character `code`.
+Copy the `isc` row and set the columns that
+[`map-items.txt`](../../plugins/cartographer/examples/first-map/map-items.txt) lists for the three example maps
+(`name` is the row's `name` column, `namestr` the string key); blank the vendor `Min`/`Max` columns so no NPC sells
+it. Set `compactsave` to 0: `isc` has 1, and an item saved compact carries no quality, so every map would stay Normal
+(white name, no property lines).
 Then add two files to the mod, each starting from the game's own copy (the mod's file replaces the game's whole file):
 
 - `<Mod>.mpq\data\hd\items\items.json`, one entry per code, using the picture of the `isc` scroll (without it the item has no
@@ -52,12 +55,12 @@ with `tools\stage_check.ps1 -MapItems` ([testing.md](testing.md#map-items-in-a-t
 
 ## 3. Add the map
 
-Put `maps.txt` next to `bosses.txt`. Four columns are enough; the rest default (Medium, level 85, 6 properties,
+Put `maps.txt` next to `bosses.txt`. Four columns are enough; the rest default (Large, level 85, 6 properties,
 any character level):
 
 ```
 Name	Tileset	Shape	Item	Size	Boss	MinCharLevel
-Shorelines	Cave	Corridor	t20	Large	Shoreline Warden	80
+Shorelines	Cave	Corridor	t20	ExtraLarge	Shoreline Warden	80
 ```
 
 `Boss` must be a `Name` in `bosses.txt`. `Cave`, `Crypt`, `Ice`, `Jungle` and `Snow` are built. The example `maps.txt` has

@@ -44,8 +44,8 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
-| `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
+| `Shape` | yes (the column); the cell may be blank for `Snow` and `Siege` | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). `Snow` and `Siege` ignore Shape, so leave the cell blank there (`Open` is still refused for Snow); every other tileset needs one. | none | Corridor |
+| `Size` | no | `Small`, `Medium`, `Large` or `ExtraLarge` | Large | ExtraLarge |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
@@ -54,7 +54,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on a Large Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when `Uniques` is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
+| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on an ExtraLarge Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when `Uniques` is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -76,7 +76,7 @@ A map opens only in Hell, in Harrogath, for a character of at least `MinCharLeve
 
 ## Map item type (itemtypes.txt)
 
-Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0.
+Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0. Set `spellicon` to -1 as well (a blank cell reads as 0): the game starts the Scroll of Identify cursor for a value of 0 to 9, and `cartographer check` notes a map item row that still has one. As a safety net the plugin also sets it to -1 in memory for the map items your Maps table names (not tested in game).
 
 | Column | Value | Why |
 |---|---|---|
@@ -203,7 +203,7 @@ Global settings, read when the game starts; `PlayerStats` is checked in game (si
 |---|---|---|---|
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player while in the map (see above for what was checked); `0` turns it off; `0` or `1` | 1 | 0 |
-| `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the entry banner (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
+| `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the game's own "Entering" text (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 | `OutdoorProbe` | `1` logs what the game builds for an outdoor map, for debugging; `0` or `1` | 0 | 0 |
@@ -237,5 +237,5 @@ Every column except `Name` is optional. A blank column keeps the value of the ba
 | `MinBranchLen`, `MaxBranchLen` | Cells in one side room (at least 1; `MaxBranchLen` at most half of `Width` x `Height`). `MinBranches` x `MinBranchLen`, plus 2 cells per `MinLoops`, must fit in the grid beside the main path | the base shape's | 1, 3 |
 | `Loop` | `1` for a ring that returns to the entrance, `0` for a path | the base shape's | 1 |
 | `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
-| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against the grids of Small, Medium and Large (6, 9 and 12) when the file loads, so a row has to fit the smallest. At `ExtraSmall` (a 4 x 4 grid) it is checked when a `maps.txt` row uses the shape: a row that does not fit is refused with the reason | the `Size`'s grid | 9, 9 |
+| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against the grids of Medium, Large and ExtraLarge (6, 9 and 12) when the file loads, so a row has to fit the smallest. At `Small` (a 4 x 4 grid) it is checked when a `maps.txt` row uses the shape: a row that does not fit is refused with the reason | the `Size`'s grid | 9, 9 |
 | `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |

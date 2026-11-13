@@ -113,8 +113,8 @@ struct State {
 	std::string bossName;
 	ep::Resolved bossSpawn;
 	bool bossArmed = false;  // the name resolves and the spawn parts are on
-	std::optional<ep::EventRoomTracker> bossTracker;  // made with the event tracker, at the first populated room
-	bool bossSpawned = false;
+	std::optional<ep::BossRoomPicker> bossPicker;  // made with the event tracker, at the first populated room
+	std::vector<void*> bossRooms;                  // the game's room of each picker candidate, once populated (the level's rooms outlive the map's game)
 	int probes = 0;
 };
 std::mutex g_lock;
@@ -531,12 +531,15 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 
 // The map's own Boss, in the boss room: one monster, the centre first and then a few spots around it (a superunique as itself, or as its Class when the game has spawned it this game).
 // No minions and no Drop; those are the Boss event's. The map's stats reach it like any monster (flags 0, section 7).
-void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects) noexcept {
+// Returns Made, Refused (no spot in this room took it: the caller tries another room of the cell, or gives up when none is left) or Gave up (the plan
+// has a problem that no room would fix). The check record is told here of a placed Boss or a plan problem; a refusal is the caller's to report.
+enum class BossTry { Made, Refused, GaveUp };
+BossTry SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects) noexcept {
 	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
 		AutoCheckNoteBoss(state.bossName, false, false, plan.problem);
-		return;
+		return BossTry::GaveUp;
 	}
 	// The game's own free-spot search (p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from the start, so a refusal means no free subtile
 	// on any of those rings (about the whole room for a ~40 x 40 maze room; an outdoor clearing may be larger; section 9, "Plan rooms and
@@ -580,9 +583,12 @@ void SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& r
 	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
 	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
-	AutoCheckNoteBoss(state.bossName, made, asSuper,
-	                  made ? (fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string())
-	                       : std::string("the game refused to spawn it"));
+	if (!made) {
+		return BossTry::Refused;
+	}
+	AutoCheckNoteBoss(state.bossName, true, asSuper,
+	                  fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string());
+	return BossTry::Made;
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -640,15 +646,21 @@ void OnPopulated(Game* game, void* room) noexcept {
 			// The map's own Boss goes in the plan's boss room (the maze's far cell), apart from the event room. No plan rect, no map Boss.
 			if (state->bossArmed) {
 				std::optional<ep::Rect> bossPlan;
+				std::vector<ep::Rect> bossRanked;  // the plan's boss room first, then the rest of its cell (a maze cell has several engine rooms)
 				if (outdoor || state->maze) {
 					const MazeEventRect b = outdoor ? OutdoorBossRoom() : MazeBossRoom();
 					if (b.known && b.levelId == state->level) {
 						bossPlan = ep::Rect{b.x, b.y, b.w, b.h};
+						bossRanked.push_back(*bossPlan);
+						for (const MazeRoomRect& o : b.more) {
+							bossRanked.push_back(ep::Rect{o.x, o.y, o.w, o.h});
+						}
 					}
 				}
 				if (bossPlan) {
-					state->bossTracker.emplace(bossPlan);
-					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s", state->bossName.c_str(), Describe(*bossPlan).c_str());
+					state->bossPicker.emplace(bossRanked);
+					state->bossRooms.assign(bossRanked.size(), nullptr);
+					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell to fall back on)", state->bossName.c_str(), Describe(*bossPlan).c_str(), bossRanked.size() - 1);
 				} else {
 					plog::Warn("the map Boss '%s' is left off: the plan has no boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan)", state->bossName.c_str());
 				}
@@ -674,9 +686,12 @@ void OnPopulated(Game* game, void* room) noexcept {
 			fire = false;
 		}
 		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
-		if (state->bossTracker && !state->bossSpawned && state->bossTracker->onPopulated(rects.drlg)) {
-			state->bossSpawned = true;
-			fireBoss = true;
+		if (state->bossPicker) {
+			const int at = state->bossPicker->indexOf(rects.drlg);
+			if (at >= 0) {
+				state->bossRooms[static_cast<size_t>(at)] = room;
+			}
+			fireBoss = state->bossPicker->onPopulated(rects.drlg);
 		}
 	}
 	if (number <= MaxPopulateProbes) {
@@ -686,14 +701,14 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 	if (fire && SpawnEvent(game, room, *state, rects, ep::eventSeed(state->seed))) {
 		// The banner names the event only now that it has spawned. If the player is already in the map it follows at once,
-		// else the entry tick shows it with the map's name.
+		// else the entry tick shows it.
 		std::vector<std::string> lines;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (generation == g_generation && g_state == state) {
 				state->announced = true;
 				if (state->entry.inside()) {
-					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the map name was shown on entry
+					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the game's own Entering text showed the map name on entry
 				}
 			}
 		}
@@ -701,7 +716,65 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 	if (fireBoss) {
 		plog::Info("eventprobe: room #%d of level %d is the boss room (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
-		SpawnMapBoss(game, room, *state, rects);
+		// The first room of the cell to refuse every spot (a quadrant with no floor) hands over to the next of the cell, one that
+		// was populated already at once, else when it is populated; none left, the Boss is given up (fail open).
+		void* bossRoom = room;
+		RoomRects bossRects = rects;
+		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };
+		noteRoom(rects.drlg);
+		for (;;) {
+			const BossTry result = SpawnMapBoss(game, bossRoom, *state, bossRects);
+			// What happens next is the picker's decision (pure, tested): placed, a plan problem, or a refusal that moves on, waits or gives up.
+			int next = -1;
+			bool gaveUp = false;
+			bool waiting = false;
+			ep::Rect waitRoom{};
+			{
+				std::lock_guard<std::mutex> lock(g_lock);
+				if (generation != g_generation || g_state != state) {
+					break;
+				}
+				if (result == BossTry::Made) {
+					state->bossPicker->finish();
+					break;
+				}
+				if (result == BossTry::GaveUp) {
+					state->bossPicker->giveUp();
+					break;
+				}
+				next = state->bossPicker->refused();
+				// An unreadable room counts as refused: on to the one after it, until one reads, none is populated yet, or none is left.
+				while (next >= 0) {
+					bossRoom = state->bossRooms[static_cast<size_t>(next)];
+					bossRects = ReadRects(bossRoom);
+					if (bossRects.ok) {
+						break;
+					}
+					plog::Warn("map Boss '%s': a room of the boss cell is not readable; skipped", state->bossName.c_str());
+					next = state->bossPicker->refused();
+				}
+				if (next < 0) {
+					gaveUp = state->bossPicker->gaveUp();
+					waiting = !state->bossPicker->done();
+					if (waiting && state->bossPicker->currentRoom() != nullptr) {
+						waitRoom = *state->bossPicker->currentRoom();
+					}
+				}
+			}
+			if (next >= 0) {
+				plog::Info("map Boss '%s': trying the next room of the boss cell %s", state->bossName.c_str(), Describe(bossRects.drlg).c_str());
+				noteRoom(bossRects.drlg);
+				continue;
+			}
+			if (gaveUp) {
+				plog::Warn("map Boss '%s' given up: no room of the plan's boss cell took it", state->bossName.c_str());
+				AutoCheckNoteBoss(state->bossName, false, false, "the game refused to spawn it in any room of the boss cell");
+			} else if (waiting) {
+				plog::Info("map Boss '%s': refused in this room; waiting for the next room of the boss cell %s to be populated", state->bossName.c_str(), Describe(waitRoom).c_str());
+				noteRoom(waitRoom);  // the auto check goes there, which brings the room up
+			}
+			break;
+		}
 	}
 }
 
@@ -1017,7 +1090,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 			if (entered) {
 				lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
 			} else if (late && wasInside) {
-				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the map name was shown on entry
+				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the game's own Entering text showed the map name on entry
 			} else {
 				return;
 			}

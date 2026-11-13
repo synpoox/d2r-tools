@@ -66,18 +66,18 @@ TEST_CASE("a four-cell map loads with every default") {
 	CHECK(report.problems.empty());
 	CHECK(maps[0].name == "First");
 	CHECK(maps[0].item == "t20");
-	CHECK(maps[0].size == "Medium");
+	CHECK(maps[0].size == "Large");
 	CHECK(maps[0].level == 85);
 	CHECK(maps[0].eventChance == -1);
 }
 
 TEST_CASE("our own words ignore case, the game's names do not") {
 	Report report;
-	const auto maps = Load("a\tCAVE\tcorridor\tsmall\t\tt20\t\t\n", report);
+	const auto maps = Load("a\tCAVE\tcorridor\tmedium\t\tt20\t\t\n", report);
 	REQUIRE(maps.size() == 1);
 	CHECK(maps[0].tileset == "Cave");
 	CHECK(maps[0].shape == "Corridor");
-	CHECK(maps[0].size == "Small");
+	CHECK(maps[0].size == "Medium");
 	Report exact;
 	const auto bad = Load("b\tCave\tCorridor\t\t\tt21\t\tZombie1\n", exact);
 	CHECK(bad.empty());
@@ -105,7 +105,7 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	Report report;
 	const auto maps = Load(
 		"A\tCave\tOpen\t\t\tt20\n"
-		"B\tCrypt\topen\tExtraSmall\t\tt21\n"
+		"B\tCrypt\topen\tSmall\t\tt21\n"
 		"C\tJungle\tOpen\t\t\tt22\n"
 		"D\tSnow\tOpen\t\t\tt23\n"
 		"E\tSnow\tSprawl\t\t\tt24\n",
@@ -121,11 +121,32 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	CHECK(text.find("This map is skipped.") != std::string::npos);
 }
 
+TEST_CASE("a blank Shape loads for Snow and Siege, which ignore it, and is still refused for the tilesets that build from it") {
+	Report report;
+	const auto maps = Load(
+		"A\tSnow\t\t\t\tt20\n"
+		"B\tSiege\t\tLarge\t\tt21\n"
+		"C\tSnow\tSprawl\t\t\tt22\n"
+		"D\tCave\t\t\t\tt23\n"
+		"E\tJungle\t\t\t\tt24\n",
+		report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].name == "A");
+	CHECK(maps[0].shape.empty());
+	CHECK(maps[1].name == "B");
+	CHECK(maps[1].shape.empty());
+	CHECK(maps[2].shape == "Sprawl");  // a Shape that is set keeps working
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("the Shape cell is empty: the Cave tileset needs one") != std::string::npos);
+	CHECK(text.find("shape '' is not known") == std::string::npos);
+}
+
 TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);
 	REQUIRE(shapes.shapes.size() == 2);
-	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tJungle\tLong\tLarge\t\tt20\nB\tJungle\tWide\tLarge\t\tt21\nC\tCave\tLong\tLarge\t\tt22\n", Names(), report, &shapes);
+	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tJungle\tLong\tExtraLarge\t\tt20\nB\tJungle\tWide\tExtraLarge\t\tt21\nC\tCave\tLong\tExtraLarge\t\tt22\n", Names(), report, &shapes);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "B");
 	CHECK(maps[1].name == "C");
@@ -717,6 +738,19 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
+TEST_CASE("a map item with a blank spellicon or one of 0 to 9 gets a note, one with -1 does not") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
+	names.cursorItems = {"t21"};
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has a blank spellicon or one of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
+}
+
 TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
@@ -951,7 +985,7 @@ TEST_CASE("the example pack's maps.txt and cartographer.txt load with no problem
 	CHECK(maps[0].boss == "Shoreline Warden");
 	CHECK(maps[0].name == "Shorelines");
 	CHECK(maps[0].item == "t20");
-	CHECK(maps[0].size == "Large");
+	CHECK(maps[0].size == "ExtraLarge");
 	CHECK(maps[0].level == 90);
 	CHECK(maps[0].monsters.size() == 2);
 	CHECK(maps[0].minCharLevel == 80);
@@ -1340,44 +1374,51 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(HasOutdoorSlot({maze, snow}));
 }
 
-TEST_CASE("Size accepts ExtraSmall, and Density, Champions and Uniques have no 1000 cap") {
+TEST_CASE("the retired size name ExtraSmall is refused with a note about the rename") {
+	Report report;
+	const auto maps = Load("a\tCave\tcorridor\tExtraSmall\t\tt20\t\t\n", report);
+	CHECK(maps.empty());
+	CHECK(Joined(report).find("ExtraSmall was renamed Small") != std::string::npos);
+}
+
+TEST_CASE("Size accepts Small, and Density, Champions and Uniques have no 1000 cap") {
 	Report report;
 	const auto maps = LoadMaps(
 		"Name\tTileset\tShape\tSize\tItem\tDensity\tChampions\tUniques\n"
-		"A\tCave\tCorridor\tExtraSmall\tt20\t5000\t2000\t1000000\n"
-		"B\tCave\tCorridor\textrasmall\tt21\t2147483647\t\t\n"
+		"A\tCave\tCorridor\tSmall\tt20\t5000\t2000\t1000000\n"
+		"B\tCave\tCorridor\tsmall\tt21\t2147483647\t\t\n"
 		"C\tCave\tCorridor\t\tt22\t-1\t\t\n"
 		"D\tCave\tCorridor\t\tt23\t2147483648\t\t\n"
 		"E\tCave\tCorridor\t\tt24\t99999999999999999999\t\t\n",
 		Names(), report);
 	REQUIRE(maps.size() == 2);
-	CHECK(maps[0].size == "ExtraSmall");
+	CHECK(maps[0].size == "Small");
 	CHECK(maps[0].density == 5000);
 	CHECK(maps[0].champions == 2000);
 	CHECK(maps[0].uniques == 1000000);
-	CHECK(maps[1].size == "ExtraSmall");
+	CHECK(maps[1].size == "Small");
 	CHECK(maps[1].density == 2147483647);
 	CHECK(Joined(report).find("Density '-1' must be a whole number, 0 or more") != std::string::npos);
 	CHECK(Joined(report).find("Density '2147483648' must be") != std::string::npos);
 	CHECK(Joined(report).find("Density '99999999999999999999' must be") != std::string::npos);
 }
 
-TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load for an ExtraSmall row only") {
+TEST_CASE("a shapes.txt shape that does not fit Small is refused at load for a Small row only") {
 	Report shapeReport;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\nSnake\tWinding\t20\t24\n", shapeReport);
-	REQUIRE(shapes.shapes.size() == 1);  // fine at Small, Medium and Large
+	REQUIRE(shapes.shapes.size() == 1);  // fine at Medium, Large and ExtraLarge
 	Report report;
 	const auto maps = LoadMaps(
 		"Name\tTileset\tShape\tSize\tItem\n"
-		"Tiny\tCave\tSnake\tExtraSmall\tt20\n"
-		"Roomy\tCave\tSnake\tSmall\tt21\n"
-		"Plain\tCave\tWinding\tExtraSmall\tt22\n",
+		"Tiny\tCave\tSnake\tSmall\tt20\n"
+		"Roomy\tCave\tSnake\tMedium\tt21\n"
+		"Plain\tCave\tWinding\tSmall\tt22\n",
 		Names(), report, &shapes);
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "Roomy");
 	CHECK(maps[1].name == "Plain");
 	CHECK(Joined(report).find("Snake") != std::string::npos);
-	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
+	CHECK(Joined(report).find("does not fit Size Small") != std::string::npos);
 }
 
 TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava slots, each on the level the installer wrote") {
@@ -1424,6 +1465,19 @@ TEST_CASE("each maze slot reads the LevelType of its own level") {
 	REQUIRE(slots.size() == 2);
 	CHECK(slots[0].levelType == 3);
 	CHECK(slots[1].levelType == 4);
+}
+
+TEST_CASE("ParseItemSpells lists a blank spellicon and 0 to 9, not -1") {
+	std::vector<std::pair<std::string, int>> spells;
+	std::vector<std::string> compact, cursor;
+	const std::string misc = "code\tpSpell\tcompactsave\tspellicon\r\nt20\t16\t0\t-1\r\nt21\t16\t0\t\r\nt22\t16\t0\t0\r\nt23\t16\t0\t9\r\nt24\t16\t0\t12\r\nt25\t16\t0\t \r\nt26\t16\r\n";
+	REQUIRE(ParseItemSpells(misc, &spells, &compact, &cursor));
+	REQUIRE(cursor.size() == 5);
+	CHECK(cursor[0] == "t21");
+	CHECK(cursor[1] == "t22");
+	CHECK(cursor[2] == "t23");
+	CHECK(cursor[3] == "t25");  // whitespace only is blank
+	CHECK(cursor[4] == "t26");  // a row that ends before the spellicon column is blank
 }
 
 TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text, the way the plugin does") {
@@ -1483,4 +1537,47 @@ TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in
 	Report none;
 	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
 	CHECK(none.problems.empty());
+}
+
+TEST_CASE("a skipped row is kept by its item, with the first reason") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "Good\tCave\tLoop\t\t\tt20\nBad\tNowhere\tLoop\t\t\tt21\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped[0].item == "t21");
+	CHECK(skipped[0].name == "Bad");
+	CHECK(skipped[0].line == 3);
+	CHECK(skipped[0].reason.find("Nowhere") != std::string::npos);
+	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
+	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
+	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: maps.txt row 3 was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
+}
+
+TEST_CASE("a skipped row with an empty Name is named by its item") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	LoadMaps(std::string(Header) + "\tCave\tLoop\t\t\tt22\n\tNowhere\tLoop\t\t\tt23\n", Names(), report, nullptr, nullptr, &skipped);
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name.empty());
+	}
+	const SkippedMap* bad = FindSkippedByItem(skipped, "t23");
+	REQUIRE(bad != nullptr);
+	CHECK(SkippedMapText(*bad) == "Map t23 is not set up: maps.txt row " + std::to_string(bad->line) + " was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(*bad).find("('") == std::string::npos);
+}
+
+TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the code") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "First\tCave\tLoop\t\t\tt24\nSecond\tCave\tLoop\t\t\tt24\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	CHECK(FindMapByItem(maps, "t24") != nullptr);
+	CHECK(FindMapByItem(maps, "t24")->name == "First");
+	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name == "Second");
+		CHECK(s.reason.find("t24") != std::string::npos);
+	}
 }

@@ -194,6 +194,46 @@ private:
 	bool fired_ = false;
 };
 
+// Which room the map's own Boss goes in, when the plan's boss cell has several rooms (a maze cell is 2 x 2 engine rooms, or 3 x 3).
+// `ranked` is the cell's rooms, the preferred one first. The Boss is tried in the first as it is populated; when the game refuses
+// every spot there (a quadrant with no floor), the next one is tried, and so on, in order, even when it was populated earlier.
+// When none is left the Boss is given up (fail open). Pure: the caller keeps the rooms' game pointers by `indexOf`.
+class BossRoomPicker {
+public:
+	explicit BossRoomPicker(std::vector<Rect> ranked);
+	// The candidate's index for a rect, -1 when the rect is not one of them.
+	int indexOf(const Rect &room) const;
+	// A room of the level was populated. True when the Boss should be tried in it now (it is the current candidate and the Boss is
+	// neither placed nor given up); a later candidate is remembered as populated for `refused`.
+	bool onPopulated(const Rect &room);
+	// The Boss was placed: no more tries.
+	void finish() { done_ = true; }
+	// The Boss can never be placed (the plan has a problem no room fixes): no more tries, and `gaveUp()`.
+	void giveUp() {
+		done_ = true;
+		gaveUp_ = true;
+	}
+	// The current candidate has no placeable spot, or cannot be read (counts as refused). Returns the index of the next candidate to try now
+	// (it was populated already), or -1: then either wait for the next candidate to populate (`!done()`, `current()` is the room waited for),
+	// or, when `gaveUp()`, the last room refused and the Boss is given up (fail open).
+	int refused();
+	// The current candidate is the last one: a refusal there gives up.
+	bool lastRoom() const { return !done_ && current_ + 1 >= ranked_.size(); }
+	// The candidate being tried or waited for, when there is one.
+	const Rect *currentRoom() const { return current_ < ranked_.size() ? &ranked_[current_] : nullptr; }
+	bool done() const { return done_; }
+	bool gaveUp() const { return gaveUp_; }
+	size_t size() const { return ranked_.size(); }
+	size_t current() const { return current_; }
+
+private:
+	std::vector<Rect> ranked_;
+	std::vector<bool> populated_;
+	size_t current_ = 0;
+	bool done_ = false;
+	bool gaveUp_ = false;
+};
+
 // --- What is spawned -----------------------------------------------------------------------------------------------
 
 struct Spawn {
@@ -231,8 +271,8 @@ bool superSeen(const uint8_t *bitmap, int row);
 // event only once its room is chosen and something spawned, so a banner never announces an event that did not happen.
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event);
 
-// Which lines a banner shows. The event's lines only once `announced`. A `late` banner (the player is already inside, so the map's
-// name was shown on entry) leaves the map name out and so repeats nothing; an empty result shows nothing.
+// Which lines a banner shows: the event's Name and Message, only once `announced`, never the map's name (the game's own "Entering
+// <name>" is the title; `mapName` and `late` are kept for the callers). An empty result shows nothing.
 std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late);
 
 // True once each time the player goes from outside the map's level to inside it (and again after leaving and coming back).

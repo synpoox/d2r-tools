@@ -15,7 +15,7 @@ MapRequest request(uint64_t seed)
 	MapRequest r;
 	r.tileset = "Jungle";
 	r.shape = "Winding";
-	r.size = "Medium";
+	r.size = "Large";
 	r.seed = seed;
 	r.options.originX = 6000;
 	r.options.originY = 3000;
@@ -72,7 +72,7 @@ TEST_CASE("only the request decides the plan: a different seed or different tabl
 	const uint64_t base = planOutdoorMap(request(5), cat).hash;
 	CHECK(planOutdoorMap(request(6), cat).hash != base);
 	MapRequest big = request(5);
-	big.size = "Large";
+	big.size = "ExtraLarge";
 	big.options.maxTilesX = big.options.maxTilesY = 512;
 	CHECK(planOutdoorMap(big, cat).hash != base);
 }

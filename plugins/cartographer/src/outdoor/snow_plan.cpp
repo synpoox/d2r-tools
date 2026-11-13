@@ -160,10 +160,10 @@ const Piece *findPiece(int lvlPrest) {
 bool snowSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	const std::string s = lowerAscii(size);
 	int w = 0, h = 0;
-	if (s.empty() || s == "medium") { w = 8; h = 5; }
-	else if (s == "extrasmall") { w = 4; h = 3; }
-	else if (s == "small") { w = 6; h = 4; }
-	else if (s == "large") { w = 10; h = 7; }
+	if (s.empty() || s == "large") { w = 8; h = 5; }
+	else if (s == "small") { w = 4; h = 3; }
+	else if (s == "medium") { w = 6; h = 4; }
+	else if (s == "extralarge") { w = 10; h = 7; }
 	else return false;
 	if (cellsW) *cellsW = w;
 	if (cellsH) *cellsH = h;

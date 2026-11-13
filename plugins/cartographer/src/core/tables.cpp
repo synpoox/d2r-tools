@@ -33,7 +33,7 @@ constexpr Tileset Tilesets[] = {
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
-const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
+const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "EventChance",
                                              "Density", "Champions",   "Uniques"};
@@ -184,7 +184,7 @@ void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
 
 }  // namespace
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses, std::vector<SkippedMap>* skipped) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -229,8 +229,12 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		MapDef map;
 		map.line = row.line;
 		bool ok = true;
+		std::string firstProblem;
 		const auto fail = [&](const std::string& message) {
 			report.Error(MapsFile, row.line, message + " This map is skipped.");
+			if (firstProblem.empty()) {
+				firstProblem = message;
+			}
 			ok = false;
 		};
 		// An optional whole-number column: blank keeps the default.
@@ -279,7 +283,19 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
-		if (const std::string* known = Canonical(Shapes, shape)) {
+		// Snow and Siege build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
+		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege);
+		if (shape.empty() && ignoresShape) {
+			map.shape.clear();
+		} else if (shape.empty()) {
+			// A refused tileset already has its own error; a second one about the blank Shape would only add noise.
+			if (!map.tileset.empty()) {
+				std::vector<std::string> all = Shapes;
+				all.insert(all.end(), customShapes.begin(), customShapes.end());
+				fail("the Shape cell is empty: the " + map.tileset + " tileset needs one. Use " + OneOf(all) + (customShapes.empty() ? "" : " (the last ones are from shapes.txt)") + ".");
+			}
+		} else if (const std::string* known = Canonical(Shapes, shape)) {
 			map.shape = *known;
 		} else if (const std::string* custom = Canonical(customShapes, shape)) {
 			map.shape = *custom;
@@ -294,7 +310,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			if (const std::string* known = Canonical(Sizes, size)) {
 				map.size = *known;
 			} else {
-				fail("size '" + size + "' is not known." + DidYouMean(size, Sizes) + " Use " + OneOf(Sizes) + ", or leave it blank for Medium.");
+				fail("size '" + size + "' is not known." + DidYouMean(size, Sizes) + " Use " + OneOf(Sizes) + ", or leave it blank for Large." + cartographer::layout::sizeRenameNote(size));
 			}
 		}
 
@@ -305,7 +321,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				cartographer::layout::Rules rules;
 				std::string ignored;
 				const cartographer::layout::ShapeTable none;
-				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored) && rules.open) {
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Large), rules, ignored) && rules.open) {
 					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
 				}
 			}
@@ -318,7 +334,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				cartographer::layout::Rules rules;
 				std::string ignored;
 				const cartographer::layout::ShapeTable none;
-				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored)) {
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Large), rules, ignored)) {
 					if (const std::string problem = cartographer::outdoor::capJungleOpenRules(rules); !problem.empty()) {
 						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath in shapes.txt.");
 					}
@@ -326,11 +342,11 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
-		// ExtraSmall is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
+		// Small is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
 		// row that asks for it checks its shapes.txt shape here.
-		if (ok && map.size == "ExtraSmall" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
-			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::ExtraSmall); !problem.empty()) {
-				fail(problem + " The shape does not fit Size ExtraSmall (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
+		if (ok && map.size == "Small" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
+			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::Small); !problem.empty()) {
+				fail(problem + " The shape does not fit Size Small (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
 			}
 		}
 
@@ -365,6 +381,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 			if (spellOk && ContainsNoCase(names.compactItems, map.item)) {
 				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
+			}
+			if (spellOk && ContainsNoCase(names.cursorItems, map.item)) {
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has a blank spellicon or one of 0 to 9 in misc.txt, so a second map used while one is open shows an item cursor. Set spellicon to -1 on its row.");
 			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
@@ -404,6 +423,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 
 		if (ok) {
 			maps.push_back(std::move(map));
+		} else if (skipped != nullptr && !map.item.empty() && map.item.size() <= 4) {
+			skipped->push_back({row.line, map.name, map.item, firstProblem});
 		}
 	}
 	return maps;
@@ -417,9 +438,9 @@ auto PickBossPath(bool rowFound, bool baseFound) -> BossPath {
 	return rowFound ? BossPath::Superunique : (baseFound ? BossPath::PlainMonster : BossPath::None);
 }
 
-auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact) -> bool {
+auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact, std::vector<std::string>* cursor) -> bool {
 	const Tsv table = ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave"), cIcon = table.Column("spellicon");
 	if (cCode < 0 || cSpell < 0) {
 		return false;
 	}
@@ -429,6 +450,12 @@ auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, i
 			spells->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
 			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
 				compact->push_back(code);
+			}
+			if (cursor != nullptr && cIcon >= 0) {
+				const std::string icon = table.Cell(row, cIcon);
+				if (icon.empty() || (icon.size() == 1 && icon[0] >= '0' && icon[0] <= '9')) {  // a blank cell compiles to 0 (RE note 27)
+					cursor->push_back(code);
+				}
 			}
 		}
 	}
@@ -1047,6 +1074,24 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 		}
 	}
 	return nullptr;
+}
+
+auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap* {
+	for (const SkippedMap& s : skipped) {
+		if (!s.item.empty() && EqualsNoCase(s.item, itemCode)) {
+			return &s;
+		}
+	}
+	return nullptr;
+}
+
+auto SkippedMapText(const SkippedMap& skipped) -> std::string {
+	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: maps.txt row " + std::to_string(skipped.line) + " was skipped (see cartographer-report.txt).";
+}
+
+auto SkippedMapLog(const SkippedMap& skipped) -> std::string {
+	return "the item '" + skipped.item + "' opens nothing: its maps.txt row " + std::to_string(skipped.line) + (skipped.name.empty() ? std::string() : " ('" + skipped.name + "')") +
+	       " was skipped at load: " + skipped.reason;
 }
 
 auto CheckGates(const MapDef& map, const GateState& state) -> Gate {

@@ -26,6 +26,7 @@ bool builtinTileset(std::string_view name, Tileset &out)
 	t.roomTiles = row->roomTiles;
 	t.pieceBase = row->pieceBase;
 	t.callsRingGrower = row->callsRingGrower;
+	t.ringCells = row->ringCells;
 	t.prev.present = row->prevPiece[0] != 0;
 	for (int i = 0; i < 4; ++i) t.prev.piece[i] = row->prevPiece[i];  // Prev W, E, S, N
 	out = std::move(t);
@@ -95,9 +96,9 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 		out.reason = fit.reason;
 		return out;
 	}
-	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Medium") : size);
+	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Large") : size);
 	if (!sz) {
-		out.reason = "The size '" + std::string(size) + "' is not ExtraSmall, Small, Medium or Large.";
+		out.reason = "The size '" + std::string(size) + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(size);
 		return out;
 	}
 	layout::Rules rules;
@@ -198,9 +199,19 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	if (unit <= 0) return refuse("the plan cell size is unknown");
 	if (rects.empty()) return refuse("the level has no rooms");
 	int pMinX = plan.rooms[0].dx, pMinY = plan.rooms[0].dy;
+	int pMaxX = pMinX, pMaxY = pMinY;
 	for (const Room &r : plan.rooms) {
 		pMinX = std::min(pMinX, r.dx);
 		pMinY = std::min(pMinY, r.dy);
+		pMaxX = std::max(pMaxX, r.dx);
+		pMaxY = std::max(pMaxY, r.dy);
+	}
+	// The filler ring (a tileset with one) is built too, so the built box is the rooms' and the fillers' together.
+	for (const layout::Point &f : plan.fillOffsets) {
+		pMinX = std::min(pMinX, f.x);
+		pMinY = std::min(pMinY, f.y);
+		pMaxX = std::max(pMaxX, f.x);
+		pMaxY = std::max(pMaxY, f.y);
 	}
 	const Room &cell = plan.rooms[static_cast<size_t>(planRoom)];
 	out.cellX = cell.dx - pMinX;
@@ -226,33 +237,37 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
 	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
 	const int64_t w = maxX - minX, h = maxY - minY;
-	if (w != static_cast<int64_t>(plan.widthRooms) * unit || h != static_cast<int64_t>(plan.heightRooms) * unit) {
+	if (w != static_cast<int64_t>(pMaxX - pMinX + 1) * unit || h != static_cast<int64_t>(pMaxY - pMinY + 1) * unit) {
 		return refuse("the built rooms do not span the plan's box");
 	}
 	out.minX = static_cast<int32_t>(minX);
 	out.minY = static_cast<int32_t>(minY);
 	out.originX = out.minX + out.cellX * unit;
 	out.originY = out.minY + out.cellY * unit;
-	// The room whose top-left corner is in the cell and whose centre is nearest the cell's centre (doubled coordinates, so
-	// there are no halves); ties go to the smaller y, then the smaller x.
-	int64_t best = -1;
+	// The rooms whose top-left corner is in the cell, nearest the cell's centre first (doubled coordinates, so there are no
+	// halves); ties go to the smaller y, then the smaller x. The first is the cell's room; the rest are its fallbacks.
+	struct Cand {
+		int64_t d;
+		int index;
+	};
+	std::vector<Cand> cands;
 	for (size_t i = 0; i < rects.size(); ++i) {
 		const RoomRect &r = rects[i];
 		if (r.w <= 0 || r.h <= 0) continue;  // a room with no area is not a room of the cell
 		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unit) continue;
 		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - (2 * static_cast<int64_t>(out.originX) + unit);
 		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unit);
-		const int64_t d = dx * dx + dy * dy;
-		bool better = best < 0 || d < best;
-		if (!better && d == best) {
-			const RoomRect &cur = rects[static_cast<size_t>(out.room)];
-			better = r.y < cur.y || (r.y == cur.y && r.x < cur.x);
-		}
-		if (better) {
-			best = d;
-			out.room = static_cast<int>(i);
-		}
+		cands.push_back({dx * dx + dy * dy, static_cast<int>(i)});
 	}
+	std::sort(cands.begin(), cands.end(), [&rects](const Cand &a, const Cand &b) {
+		if (a.d != b.d) return a.d < b.d;
+		const RoomRect &ra = rects[static_cast<size_t>(a.index)], &rb = rects[static_cast<size_t>(b.index)];
+		if (ra.y != rb.y) return ra.y < rb.y;
+		if (ra.x != rb.x) return ra.x < rb.x;
+		return a.index < b.index;
+	});
+	for (const Cand &c : cands) out.ranked.push_back(c.index);
+	if (!out.ranked.empty()) out.room = out.ranked.front();
 	if (out.room < 0) return refuse("the cell holds no room");
 	return out;
 }

@@ -38,7 +38,7 @@ bool outdoorTilesetKnown(std::string_view tileset);
 struct MapRequest {
 	std::string tileset;  // the maps.txt Tileset, e.g. "Jungle"
 	std::string shape;    // a shape name; blank means Winding. Snow and Siege have no shapes: it is ignored there.
-	std::string size;     // ExtraSmall, Small, Medium or Large; blank means Medium
+	std::string size;     // Small, Medium, Large or ExtraLarge; blank means Large
 	uint64_t seed = 0;    // the map's layout seed
 	StampOptions options; // origin, size limits (the slot row's), pinFiles, listVoid
 	const layout::ShapeTable *shapes = nullptr; // shapes.txt rows; null means the built-in shapes only. Not part of the cache key.
@@ -54,7 +54,7 @@ struct MapPlan {
 	std::string cacheKey;   // what PlanCache keyed it by
 };
 
-// The most cells an Open map may have along each side (the 9 x 9 grid of Medium, 81 blocks). It applies to any outdoor Open layout this
+// The most cells an Open map may have along each side (the 9 x 9 grid of Large, 81 blocks). It applies to any outdoor Open layout this
 // planner builds, whatever the shape's Width and Height.
 constexpr int kJungleOpenMaxCells = 9;
 

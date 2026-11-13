@@ -19,12 +19,12 @@ an ambush, a shrine or a treasure). MIT licensed.
   `uniqueitems.txt` row. The map level and the modifiers are stats on the item, shown on hover. When the map opens,
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
-- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
+- **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties) show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).
-- **Map names** (experimental): a map's own name shows on its portal, automap and entry banner; `MapNames=0` turns it off.
+- **Map names** (experimental): a map's own name shows on its portal, automap and the game's "Entering" text; `MapNames=0` turns it off.
 - **Multiplayer sync** (experimental): when the host opens a map, TCP/IP clients are told which map it is. Not on Battle.net.
 - **Console**: `cartographer check` lists what is wrong in your tables; `cartographer open <Name>` opens a map's portal
   in town without its item.
@@ -55,8 +55,8 @@ in [`examples/first-map/`](examples/first-map/).
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
-4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`), for example a copy
-   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
+4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`) and `spellicon` -1, for example a copy
+   of a scroll with `compactsave` set to 0 (1 keeps every map Normal). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
@@ -119,8 +119,8 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave`, `Crypt`, `Lava` or `Ice` (each opens through its own level); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
-| Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow` and `Siege` ignore Shape: leave the cell blank there | required (blank is fine for Snow and Siege) |
+| Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
 | Boss | The `Name` of a boss in `bosses.txt`; a vanilla boss is refused | none |
@@ -136,7 +136,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | EventChance | Percent chance a map has an event | 20 |
 | PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
-| MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
+| MapNames | `0` turns off showing a map's own name on the portal, automap and "Entering" text (experimental) | 1 |
 | MazeProbe | `1` logs what the game builds for a maze and, per room, the level record's room and unique counters (for debugging) | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
@@ -281,8 +281,8 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0)); a Snow map's Shape is ignored and its Size
-is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
-A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
+is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
+A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 

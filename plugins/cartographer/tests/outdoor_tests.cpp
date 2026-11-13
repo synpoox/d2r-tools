@@ -308,12 +308,12 @@ TEST_CASE("10k seeds of every shape preset on Jungle: every cell gets a matching
 TEST_CASE("picks are stable: same inputs give the same picks, and goldens do not move")
 {
 	const LoadResult cat = loadJungle();
-	const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Medium, 1);
+	const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Large, 1);
 	const PickResult a = pickPieces(l, cat.catalogue, "Jungle", 1), b = pickPieces(l, cat.catalogue, "Jungle", 1);
 	CHECK(picksHash(a) == picksHash(b));
 	CHECK(picksHash(a) != picksHash(pickPieces(l, cat.catalogue, "Jungle", 2)));
 
-	// Golden: the Shorelines (Jungle / Corridor, medium) layout for map seed 1, piece by piece.
+	// Golden: the Shorelines (Jungle / Corridor, large) layout for map seed 1, piece by piece.
 	std::string line;
 	for (int y = 0; y < a.height; ++y)
 		for (int x = 0; x < a.width; ++x)
@@ -674,7 +674,7 @@ TEST_CASE("10k seeds of every shape preset on Jungle: the stamp plan is complete
 TEST_CASE("stamp plans are stable: same inputs give the same plan, and the goldens do not move")
 {
 	const LoadResult cat = loadJungle();
-	const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Medium, 1);
+	const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Large, 1);
 	const PickResult r = pickPieces(l, cat.catalogue, "Jungle", 1);
 	REQUIRE(r.ok());
 	const StampPlan a = planStamps(l, r, StampOptions{}), b = planStamps(l, r, StampOptions{});
@@ -710,7 +710,7 @@ MapRequest jungleRequest(uint64_t seed)
 	MapRequest r;
 	r.tileset = "Jungle";
 	r.shape = "Winding";
-	r.size = "Medium";
+	r.size = "Large";
 	r.seed = seed;
 	r.options.originX = 6000;
 	r.options.originY = 3000;
@@ -764,7 +764,7 @@ TEST_CASE("the built-in Jungle catalogue is the fixture's rows, column for colum
 		CHECK(a.openMask == b.openMask);
 	}
 	// The picker gives the same answer on both, so nothing the picker reads was lost in the copy.
-	const Layout l = layout::generate(layout::Shape::Branching, layout::Size::Large, 77);
+	const Layout l = layout::generate(layout::Shape::Branching, layout::Size::ExtraLarge, 77);
 	CHECK(picksHash(pickPieces(l, builtin, "Jungle", 77)) == picksHash(pickPieces(l, fixture.catalogue, "Jungle", 77)));
 }
 
@@ -803,7 +803,7 @@ TEST_CASE("a Jungle map plans: layout, picks and stamps agree, the rect is the s
 TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a plan is the same twice")
 {
 	const Catalogue &cat = builtinJungleCatalogue();
-	for (const char *size : {"ExtraSmall", "Small", "Medium", "Large"})
+	for (const char *size : {"Small", "Medium", "Large", "ExtraLarge"})
 		for (uint64_t seed = 1; seed <= 25; ++seed) {
 			MapRequest r = jungleRequest(seed);
 			r.shape = "Open";
@@ -814,8 +814,8 @@ TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a p
 			CHECK(plan.layout.rulesMet);
 			CHECK(!plan.stamps.stamps.empty());
 			CHECK(planOutdoorMap(r, cat).hash == plan.hash);
-			// Open stamps every block, so Large is capped at the Medium grid (9 x 9 blocks).
-			if (std::string(size) == "Large") {
+			// Open stamps every block, so ExtraLarge is capped at the Large grid (9 x 9 blocks).
+			if (std::string(size) == "ExtraLarge") {
 				CHECK(plan.layout.width == 9);
 				CHECK(plan.layout.height == 9);
 				CHECK(plan.stamps.stamps.size() == 81);
@@ -830,7 +830,7 @@ TEST_CASE("a shapes.txt Open row with a large Width and Height is capped at 81 s
 	REQUIRE(parsed.errors.empty());
 	MapRequest r = jungleRequest(7);
 	r.shape = "Huge Plains";
-	r.size = "Large";
+	r.size = "ExtraLarge";
 	r.shapes = &parsed.table;
 	const MapPlan plan = planOutdoorMap(r, cat);
 	REQUIRE_MESSAGE(plan.ok, plan.reason);
@@ -849,7 +849,7 @@ TEST_CASE("capJungleOpenRules names the 81-cell limit for a MinPath above it, an
 	layout::Rules rules;
 	std::string ignored;
 	const layout::ShapeTable none;
-	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, rules, ignored));
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::ExtraLarge, rules, ignored));
 	rules.width = 20;
 	rules.height = 20;
 	rules.pathMin = 90;
@@ -859,7 +859,7 @@ TEST_CASE("capJungleOpenRules names the 81-cell limit for a MinPath above it, an
 	CHECK(problem.find("MaxPath") == std::string::npos);
 
 	layout::Rules reach;
-	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, reach, ignored));
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::ExtraLarge, reach, ignored));
 	reach.width = 20;
 	reach.height = 20;
 	reach.pathMin = 20;
@@ -898,7 +898,7 @@ TEST_CASE("the build plan refuses what the game must build itself: other tileset
 	CHECK(t.stamps.stamps.empty());
 	CHECK(t.stamps.voidCells.empty());
 
-	// A blank shape and size mean Winding and Medium; a blank tileset is not Jungle.
+	// A blank shape and size mean Winding and Large; a blank tileset is not Jungle.
 	MapRequest blank = jungleRequest(9);
 	blank.shape.clear();
 	blank.size.clear();
@@ -1129,7 +1129,7 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 	MapRequest r;
 	r.tileset = "Snow";
 	r.shape = "Winding";  // ignored: Snow has no shapes
-	r.size = "";          // Medium: 8 x 5 cells of 16 tiles
+	r.size = "";          // Large: 8 x 5 cells of 16 tiles
 	r.seed = 4242;
 	r.options.originX = 6000;
 	r.options.originY = 3600;
@@ -1162,7 +1162,7 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 	CHECK(planOutdoorMap(other, cat).hash != plan.hash);
 
 	MapRequest big = r;
-	big.size = "Large";  // 160 x 112 tiles
+	big.size = "ExtraLarge";  // 160 x 112 tiles
 	big.options.maxTilesY = 100;
 	const MapPlan tooBig = planOutdoorMap(big, cat);
 	CHECK_FALSE(tooBig.ok);

@@ -1,12 +1,18 @@
-﻿# Changelog
+# Changelog
 
 ## Unreleased
 
+- The map name no longer shows as a second title on entry; only the game's own text does.
+- The map panel now sits below the terror zone text instead of over it.
+- A map can now roll rare (yellow name, blue property lines): set `compactsave` to 0 on the map rows in `misc.txt`; `cartographer check` notes rows that still have 1.
+- The Lava map now fills most of its edges with lava and cliff, so no black void shows from the ground near the outer wall (a layout that fills the whole level can keep a bare side).
+- A second map item no longer turns the cursor into the identify cursor when a map is already open: set `spellicon` to -1 on the map rows in `misc.txt` (`cartographer check` points at rows that need it).
 - Unique packs are now paced over the whole map instead of all spawning in the first quarter (experimental; maps with `Uniques` 0 are unchanged).
 - A map's monster speed modifier is cut to -99, and `cartographer check` notes rows at -100 or lower.
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - New map `Tileset` `Ice` (Act 5 Ice caves): rerun `tools\install.ps1` once to add its level.
+- A map's Boss now tries the other rooms of its boss cell when the first room has no spot for it.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.
@@ -15,8 +21,8 @@
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
-- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
-- New map `Size` `ExtraSmall`, smaller than `Small`.
+- New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, an ExtraLarge Open map uses the Large grid (9 x 9 blocks).
+- Map sizes were renamed one step up: `Small` (4 x 4, was `ExtraSmall`), `Medium` (6 x 6), `Large` (9 x 9, the blank default) and `ExtraLarge` (12 x 12); update `Size` in `maps.txt`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
