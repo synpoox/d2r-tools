@@ -164,7 +164,7 @@ writes it; the others can be left out. A bad row is skipped and named in `cartog
 There is no `mapstats.txt`. Rarity and modifiers are the game's own: add `magicprefix.txt`, `magicsuffix.txt`, `rareprefix.txt`,
 `raresuffix.txt` rows with `itype1` `cmap`, and `uniqueitems.txt` rows for unique maps (`code` is the map's `misc.txt` code). The
 installer adds the monster properties `mon-life`, `mon-damage`, `mon-speed`, `mon-fire-res`, `mon-cold-res`, `mon-light-res` and
-`mon-poison-res`; any other property is the player's. [tables.md](../../docs/cartographer/tables.md#map-item-rarity-and-modifiers) has the rows and an example.
+`mon-poison-res`, and `map-density`, a bonus to the map's `Density` that adds up over the item's modifiers (magic find is the vanilla `mag%`); any other property is the player's. [tables.md](../../docs/cartographer/tables.md#map-item-rarity-and-modifiers) has the rows and an example.
 
 #### bosses.txt
 
