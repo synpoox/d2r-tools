@@ -109,10 +109,10 @@ Example recipe, one `cubemain.txt` row (columns not named are empty):
 | `enabled`, `version` | `1`, `100` |
 | `numinputs` | `2` |
 | `input 1`, `input 2` | the map's `misc.txt` code (for example `t20`), `tsc` |
-| `output` | `usetype,mod` |
+| `output` | `useitem,mod` |
 | `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `95`, `95` |
 
-Not confirmed in game: with this row the cube did not consume the scroll or change the map (the hover showed no `Map Level` line and the plugin log read the `maps.txt` Level), also with `usetype,mag,mod`. Why was not found (the recipe itself, a Normal-quality item not keeping a cube mod, or the stat landing in a list the plugin does not read). Treat the recipe as untested.
+**Does not work on a map item (checked in game, slot 6, Hell).** The cube reads the row, takes the inputs and sets the stat, but `useitem` rebuilds a misc item as a Hand Axe: the map came out as a Hand Axe whose hover showed `Map Level: 95`. The same happened with a type input (`cmap`) and with a vanilla misc item (`isc`), so it is the cube, not the map rows. Outputs that keep a map (`usetype,mod`, `usetype,mag,mod`, and a plain item code such as `t22`) give a normal map and drop the `mod`, so no `Map Level` line appears. The stat itself works: it is saved with the item, shown on hover and kept across a save and reload. Until another way to put it on a map exists, set the level in `maps.txt` (the fallback).
 
 ## mapstats.txt (optional)
 

@@ -13,7 +13,7 @@
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
-- A map item can carry its own map level, shown on hover as `Map Level: N`; without it the map uses the `maps.txt` Level (run `tools\install.ps1` again; a cube recipe that changes it is not working in game yet).
+- A map item can carry its own map level, shown on hover as `Map Level: N`; without it the map uses the `maps.txt` Level (run `tools\install.ps1` again; a cube recipe cannot set it on a map yet).
 - `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
 - Opening a Treasure chest now rolls its `Drop`.
