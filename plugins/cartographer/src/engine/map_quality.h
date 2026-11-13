@@ -1,6 +1,6 @@
 // Map items are never magic: hooks the game's item quality roll and turns a magic result for a map item into normal.
 // Found by byte signature at load; a part that is missing leaves the hook out and the game rolls as it always did.
-// Notes: docs/reverse-engineering/cartographer/23-map-quality.md.
+// Notes: docs/reverse-engineering/cartographer/26-map-quality.md.
 #pragma once
 
 #include "engine/portal.h"

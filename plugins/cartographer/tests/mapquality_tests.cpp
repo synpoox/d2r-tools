@@ -30,6 +30,12 @@ TEST_CASE("an item that is not a map keeps its quality, magic included")
 	}
 }
 
+TEST_CASE("a map takes the normal fallback instead of the magic one")
+{
+	CHECK(useNormalFallback(true));
+	CHECK_FALSE(useNormalFallback(false));
+}
+
 TEST_CASE("a value outside the game's qualities passes through")
 {
 	CHECK(mapQuality(0, true) == 0);

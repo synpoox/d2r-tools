@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Map items are never magic: one the game rolls as magic becomes normal.
+- A map the game rolls as magic now drops as normal.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
@@ -20,7 +20,7 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Rare and unique map items: their modifiers show on hover and apply in the map (magic maps are blocked). Run `tools\install.ps1` again.
+- Rare and unique map items: their modifiers show on hover and apply in the map. Run `tools\install.ps1` again.
 - New monster modifiers for map items: life, damage, speed and fire, cold, lightning and poison resistance.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).

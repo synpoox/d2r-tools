@@ -159,6 +159,7 @@ static const char* HookConsequence(const char* name) noexcept {
 	if (n == "PlayerTick") return "the game's player mana step is skipped for every player";
 	if (n == "ItemSpellUse" || n == "ItemSpellCheck") return "every item-spell use is dropped (not only map items)";
 	if (n == "ItemQualityRoll") return "the game's item quality roll is skipped for EVERY item";
+	if (n == "MagicFallback") return "the game's magic fallback is skipped for EVERY item that reaches it";
 	if (n == "MonsterSetup") return "the game's own setup is skipped for EVERY monster (not only the map's)";
 	return "the game's own function is skipped (the maze code, for a maze part)";
 }
