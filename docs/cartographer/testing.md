@@ -146,7 +146,7 @@ Run in game for Cave maps and, in a second run, for a Crypt slot (see Tested): t
 
 ## Tested
 
-- Game check records, one file per run: [docs/cartographer/checks/](checks/), latest [map item check](checks/2026-11-12-items-check.md).
+- Game check records, one file per run: [docs/cartographer/checks/](checks/), latest [maze slot table check](checks/2026-11-12-maze-slot-table-check.md) (a Cave map then a Crypt map on one install, the refusal while a maze map is open, an old `-Tileset Crypt` install upgraded).
 - Unit tests of the table loader, the gates and the signature scanner (`tools\build.ps1 -Plugin cartographer -Test`).
 - The installer on a copy of the vanilla 93847 tables, run twice.
 - The portal parts' byte signatures, each unique and resolving to its recorded address in a dump of build 93847
