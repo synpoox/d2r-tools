@@ -100,3 +100,26 @@ Build 93847, slot 5. Read-only look at `d2rloader/crashes`, the logs and `D2R.ex
 
 To settle it (needs a game): reproduce in a slot with only Cartographer, then with Cartographer off, same save and
 steps; keep `d2rloader.log` and the full crash report; read the string at `0x1c783d0` and the caller in a live dump.
+
+### Cartographer-only run (2026-11-12, slot 5): no crash
+
+Build 93847, D2RLoader 1.3.1-beta, Cartographer built from origin/main `0eff6f4`, test mod and test character (level 99
+Barbarian, Hell chosen at the difficulty prompt; not read back from a log), single player, `debug_mode` and `cheat god 1` before the first map.
+Only Cartographer and the test harness were loaded: the slot's PD2 `core-maps`, `core-rules` and `core-ui` were parked
+(the slot's other plugins were already parked from earlier checks) and put back afterwards, with the mod folder, config and
+saves restored from a copy taken before. Staged with `tools\stage_check.ps1 -MapItems` using the example tables.
+
+- Game 1: Shorelines (Cave, opened with `cartographer open Shorelines`), 7 round trips about 8 minutes into one game. Each: red portal in
+  Harrogath, `cheat goto` calls in the map level, a Scroll or Tome of Town Portal back to Harrogath, the red portal again.
+- Game 2 (after Save and Exit): Overgrown Reach (Jungle, opened by right-clicking the `t22` item), 4 round trips, same steps.
+- 11 map entries in all, 19 `arrival` lines in `cartographer.log`. The game stayed up; no new report in `d2rloader\crashes`, no
+  `0x1255802`, no fail-fast, no "Character save failed". Both games ended with Save and Exit.
+- Two non-fatal loader assertions (dialogs off, game continued): `BC_ASSERT: i != dataTable->warpDefs.end()`
+  (`D2Common\src\DataTbls\LvlTbls.cpp:817`, "Error in DRLG related to stairs that connect levels", caller `exe+0x78EF6`) at
+  the first Shorelines entry, and `BC_VERIFY: ptDrlgLevel->ptRoomFirst` (`Drlg.cpp:882`, caller `exe+0x7600A`) right after a
+  `cheat goto` to a coordinate outside the map. Neither is the `0x1255802` function; the first came with the map's first build and did not repeat.
+
+Reading: the path that crashed in the earlier slot 5 runs did not fire with Cartographer alone in 11 round trips, so it is not
+shown to be Cartographer's. One run does not prove it is not: the earlier crashes came 5 to 8 minutes into a game
+and this run's longer game ran about 8 minutes. Not done: a run with the other plugins loaded and Cartographer off
+(the still-open comparison above), and reading the string at `0x1c783d0`. Logs were kept outside the repository.
