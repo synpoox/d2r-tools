@@ -167,31 +167,32 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	int levelX = 0, levelY = 0;
 	const int maxSteps = ts.maxLevelTiles / ts.roomTiles + 1;
 	const int ring = std::max(ts.ringCells, 0);
-	// The filler ring wants `ring` free cells around the layout. A layout that cannot have them in even the largest level is planned with no
-	// margin and its ring is cut to what fits (a gap of void at that one side beats the game's own unsteered maze).
-	for (int margin = ring; root.x < 0 && margin >= 0; margin = margin > 0 ? 0 : -1) {
+	// The filler ring wants `ring` free cells around the layout. A layout that cannot have them in any level is planned in the largest
+	// level with no margin and its ring is cut to what fits (a gap of void at that one side beats the game's own unsteered maze).
+	const auto findRoot = [&](int lx, int ly, int margin) {
+		levelX = lx;
+		levelY = ly;
+		const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
+		int bestScore = 0;
+		for (int y = minY; y <= maxY; ++y)
+			for (int x = minX; x <= maxX; ++x) {
+				if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
+				if (x - minX + margin > cap.left || maxX - x + margin > cap.right || y - minY + margin > cap.up || maxY - y + margin > cap.down) continue;
+				const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
+				if (root.x < 0 || score < bestScore) {
+					root = Point{x, y};
+					bestScore = score;
+				}
+			}
+	};
 	bool searchedLargest = false;
 	for (int total = 0; total <= 2 * maxSteps && root.x < 0 && !searchedLargest; ++total)
 		for (int sx = 0; sx <= total && root.x < 0 && !searchedLargest; ++sx) {
-			levelX = levelTilesFor(ts, spanX / 2 + sx);
-			levelY = levelTilesFor(ts, spanY / 2 + (total - sx));
-			const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
-			int bestScore = 0;
-			for (int y = minY; y <= maxY; ++y)
-				for (int x = minX; x <= maxX; ++x) {
-					if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
-					if (x - minX + margin > cap.left || maxX - x + margin > cap.right || y - minY + margin > cap.up || maxY - y + margin > cap.down) continue;
-					const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
-					if (root.x < 0 || score < bestScore) {
-						root = Point{x, y};
-						bestScore = score;
-					}
-				}
+			findRoot(levelTilesFor(ts, spanX / 2 + sx), levelTilesFor(ts, spanY / 2 + (total - sx)), ring);
 			// Both axes at the maximum is the largest level; every later step would repeat it.
 			if (root.x < 0 && levelX == ts.maxLevelTiles && levelY == ts.maxLevelTiles) searchedLargest = true;
 		}
-	if (margin == 0) break;
-	}
+	if (root.x < 0 && ring > 0) findRoot(ts.maxLevelTiles, ts.maxLevelTiles, 0);
 	if (root.x < 0)
 		return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
 
