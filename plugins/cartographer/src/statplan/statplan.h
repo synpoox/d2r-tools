@@ -81,7 +81,7 @@ struct ItemStat {
 	int value = 0;
 };
 
-// The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; a cube recipe or an affix can set it).
+// The itemstatcost.txt stat that holds a map item's level (tools/install.ps1 adds the row; nothing can put it on a map yet: the cube cannot, affixes are untested).
 inline constexpr const char *kMapLevelStat = "cartographer_map_level";
 // The monster levels maps.txt allows (its Level column).
 constexpr int kMinMapLevel = 1;

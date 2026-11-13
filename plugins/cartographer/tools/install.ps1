@@ -458,7 +458,7 @@ if ($mapTypeRow -ge 0) {
 }
 
 # --- itemstatcost.txt: the map level stat -----------------------------------------------------------------------------
-# A map item's level is a stat on the item (src/statplan mapLevelFromItem): a cube recipe or an affix sets it, and the game's tooltip shows it
+# A map item's level is a stat on the item (src/statplan mapLevelFromItem): a cube recipe or an affix may set it (the cube cannot on a map yet, affixes are untested), and the game's tooltip shows it
 # through descfunc 19 (the string is a format with the value) and the plugin's own string key. A copy of the vanilla item_maxhp_percent row
 # (a plain unsigned-looking item stat), with the price columns and the stat-link columns emptied, 9 bits saved and sent (0 to 511), appended once.
 # The mod may not carry itemstatcost.txt: then the stat is left out and every map opens at its maps.txt Level.
@@ -477,6 +477,8 @@ if (-not (Test-Path $statCostPath)) {
         $cells = Cells $statCost $statCost.Lines[$template]
         $newId = 0
         for ($i = 1; $i -lt $statCost.Lines.Count; $i++) { if ($statCost.Lines[$i].Trim() -ne '') { $newId++ } }
+        # 511 ends the stat list in an item save, so a stat id of 511 or more cannot be stored.
+        if ($newId -ge 511) { throw "itemstatcost.txt already has $newId stat rows; the new '$MapLevelStat' stat would get id $newId, but an item save cannot hold a stat id of 511 or more." }
         Set-Cell $statCost $cells 'Stat' $MapLevelStat
         Set-CellIf $statCost $cells '*ID' "$newId"
         foreach ($col in 'Signed', 'Send Other', 'Add', 'Multiply', 'ValShift', 'Save Add', '1.09-Save Add', 'op', 'op param', 'op base', 'op stat1', 'op stat2', 'op stat3', 'direct', 'maxstat') { Set-CellIf $statCost $cells $col '' }
