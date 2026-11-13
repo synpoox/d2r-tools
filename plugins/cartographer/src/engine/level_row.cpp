@@ -203,6 +203,10 @@ void LevelRowProbeSet(bool on) noexcept {
 	g_probeLevel = 0;
 }
 
+auto LevelRowProbeOn() noexcept -> bool {
+	return g_probe.load();
+}
+
 void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const char* where) noexcept {
 	if (!g_probe.load()) {
 		return;
@@ -217,6 +221,9 @@ void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const cha
 		const uint8_t* r = RecordOf(game, level, levelCount, &why);
 		if (r == nullptr) {
 			plog::Info("record probe: no record: %s", why.c_str());
+			return;
+		}
+		if (!Readable(r + 0x2c8, 1)) {
 			return;
 		}
 		if (g_probeLevel != level) {
@@ -335,8 +342,8 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			if (recOn.density && map.density > 0 && recSnap.density == 0) {
 				plog::Info("map monsters: '%s': Density %d%% adds nothing, the slot level's MonDen is 0 in this difficulty", map.name.c_str(), map.density);
 			}
-			if (recOn.uniques && map.uniques > 0 && recSnap.uMin == 0 && recSnap.uMax == 0) {
-				plog::Info("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMin and MonUMax are 0 in this difficulty", map.name.c_str(), map.uniques);
+			if (recOn.uniques && map.uniques > 0 && recSnap.uMax == 0) {
+				plog::Info("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMax is 0 in this difficulty", map.name.c_str(), map.uniques);
 			}
 		}
 

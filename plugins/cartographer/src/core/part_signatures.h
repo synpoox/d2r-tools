@@ -123,4 +123,10 @@ inline constexpr const char* UnitMove = "40 55 53 56 57 41 54 41 55 41 56 41 57 
 inline constexpr const char* RoomAtTile = "48 8B 52 70 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC 48 8B 49 18 E9";
 inline constexpr const char* RoomBringUp = "48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 85 C0 75 ?? 48 8B D3 48 8B CF E8";
 
+// The map panel (issue #308; cartographer/22-map-panel.md). The UI text calls the other plugins use (docs/reverse-engineering/better-xp-bar.md,
+// dps-counter.md, player-bars.md): FindPanel(name), FindChild(parent, name) (direct children only) and TextBoxWidget::SetText(box, {ptr, len}). Only called.
+inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 C9 0F 85 ?? ?? ?? ?? 33 C0 C3";
+inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
+inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
+
 }  // namespace carto::sig

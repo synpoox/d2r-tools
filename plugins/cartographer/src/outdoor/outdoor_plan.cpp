@@ -62,7 +62,7 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		// Snow is lines of fence pieces, not a layout of exit-mask pieces: only the stamps reach the hook and the grid comparison.
 		int cellsW = 0, cellsH = 0;
 		if (!snow::snowSizeCells(request.size, &cellsW, &cellsH)) {
-			return fail("The size '" + request.size + "' is not Small, Medium or Large.");
+			return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
 		}
 		snow::SnowRequest snowRequest;
 		snowRequest.seed = request.seed;
@@ -84,7 +84,7 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	}
 	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Medium") : std::string_view(request.size));
 	if (!size) {
-		return fail("The size '" + request.size + "' is not Small, Medium or Large.");
+		return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
 	}
 	const layout::ShapeTable none;
 	layout::Rules rules;

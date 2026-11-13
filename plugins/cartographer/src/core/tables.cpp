@@ -5,6 +5,7 @@
 #include "tsv.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -29,7 +30,7 @@ constexpr Tileset Tilesets[] = {
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
-const std::vector<std::string> Sizes = {"Small", "Medium", "Large"};
+const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "Properties", "EventChance",
                                              "Density", "Champions",   "Uniques"};
@@ -58,8 +59,9 @@ auto ParseInt(const std::string& cell, int lo, int hi, int* out) -> bool {
 		return false;
 	}
 	char* end = nullptr;
-	const long v = std::strtol(cell.c_str(), &end, 10);
-	if (end == cell.c_str() || *end != '\0' || v < lo || v > hi) {
+	errno = 0;
+	const long long v = std::strtoll(cell.c_str(), &end, 10);
+	if (end == cell.c_str() || *end != '\0' || errno == ERANGE || v < lo || v > hi) {
 		return false;
 	}
 	*out = static_cast<int>(v);
@@ -228,6 +230,14 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		};
 
+		// A percent column: 0 or more, any whole number up to int32.
+		const auto percent = [&](int column, const char* label, int* out) {
+			const std::string cell = table.Cell(row, column);
+			if (!cell.empty() && !ParseInt(cell, 0, INT32_MAX, out)) {
+				fail(std::string(label) + " '" + cell + "' must be a whole number, 0 or more, up to " + std::to_string(INT32_MAX) + ".");
+			}
+		};
+
 		map.name = table.Cell(row, cName);
 		if (map.name.empty()) {
 			fail("the Name cell is empty.");
@@ -277,13 +287,21 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
+		// ExtraSmall is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
+		// row that asks for it checks its shapes.txt shape here.
+		if (ok && map.size == "ExtraSmall" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
+			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::ExtraSmall); !problem.empty()) {
+				fail(problem + " The shape does not fit Size ExtraSmall (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
+			}
+		}
+
 		number(cLevel, "Level", 1, 255, &map.level);
 		number(cMinChar, "MinCharLevel", 1, 99, &map.minCharLevel);
 		number(cProps, "Properties", 0, 20, &map.properties);
 		number(cEvent, "EventChance", 0, 100, &map.eventChance);
-		number(cDensity, "Density", 0, 1000, &map.density);
-		number(cChampions, "Champions", 0, 1000, &map.champions);
-		number(cUniques, "Uniques", 0, 1000, &map.uniques);
+		percent(cDensity, "Density", &map.density);
+		percent(cChampions, "Champions", &map.champions);
+		percent(cUniques, "Uniques", &map.uniques);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {

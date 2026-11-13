@@ -16,6 +16,7 @@
 #include "engine/item_stats.h"
 #include "engine/level_row.h"
 #include "engine/map_names.h"
+#include "engine/map_panel.h"
 #include "engine/map_sync.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
@@ -450,6 +451,10 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			for (const carto::PartStatus& part : carto::MapNamesPartStatuses()) {
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
+			Say(command, "Cartographer " + carto::MapPanelSummary() + ".");
+			for (const carto::PartStatus& part : carto::MapPanelPartStatuses()) {
+				Say(command, "part " + part.name + ": " + part.detail);
+			}
 			Say(command, "Cartographer " + carto::BossNamesSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
@@ -549,6 +554,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallEventApply(context, g_overrides, &eventParts);
 		std::vector<carto::PartStatus> nameParts;
 		(void)carto::InstallMapNames(context, g_overrides, &nameParts);
+		std::vector<carto::PartStatus> panelParts;
+		(void)carto::InstallMapPanel(context, g_overrides, &panelParts);
 		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;
@@ -559,6 +566,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 }
 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
+	carto::UnloadMapPanel();
 	carto::BossNamesUnload();
 	carto::MapNamesUnload();  // the slot level's own text back in the game's table
 	carto::LevelRowUnload();  // ... and its own monster fields

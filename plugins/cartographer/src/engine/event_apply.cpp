@@ -31,6 +31,7 @@ namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
 
 // --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/09-map-events.md.
+constexpr int GameDataFlagOffset = 0x106;    // uint8 on the game, what the engine's own room lookups read
 constexpr int UnitTypeOffset = 0x00;        // int32: 0 player
 constexpr int UnitIdOffset = 0x08;          // uint32
 constexpr int ServerDrlgRoomOffset = 0x18;  // a server room's DRLG room
@@ -672,9 +673,9 @@ void OnPopulated(Game* game, void* room) noexcept {
 		return;
 	}
 	const RoomRects rects = ReadRects(room);
-	{
+	if (LevelRowProbeOn()) {
 		const std::string where = rects.ok ? Describe(rects.drlg) : std::string("unreadable");
-		LevelRowProbeRoom(game, state->level, At<uint8_t>(game, 0x106), where.c_str());
+		LevelRowProbeRoom(game, state->level, At<uint8_t>(game, GameDataFlagOffset), where.c_str());
 	}
 	bool fire = false;
 	bool fireBoss = false;
