@@ -284,7 +284,7 @@ second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0
 is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
-Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Snow edges: a cliff and ravine border ring seen on all four sides and corners; black void remains at the cap ends (issue #395). Not checked: Jungle edges and void cells (issue #142), and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
+Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Snow edges: a cliff and ravine border ring seen on all four sides and corners; no black void at the line ends, and the border strip was walked to on all four sides in a horizontal and a vertical Medium map (issue #395). Not checked: Jungle edges and void cells (issue #142), and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 
 ## Status
 
