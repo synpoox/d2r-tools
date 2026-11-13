@@ -24,24 +24,35 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
 6. **#388** draft research for #380 (tint): RE note 32, lighting via VisualDataComponent apply `0xf5dad0`. No
    implementation yet.
 
-## Open issues with no work yet
+## Open issues with no work yet (priority order)
 
-- **Owner report after the rare-map install (first priority):** #390 rare map item white with no properties on hover
-  (affixes do roll and apply), #391 panel wording/colour (`Monsters have`, `Players have`, blue, readable stat names, no
-  map-name line), #392 panel shows total Density and MF. All under #309. Owner found the #390 cause: the map's misc.txt row needs `compactsave` 0 (the `isc` row it was
-  copied from has 1, so the item is saved as Normal). #390 is now docs (first-map.md, map-items.txt), an optional
-  `check` warning, and an in-game re-check (owner confirmed: rare name and blue lines show).
-- #393 using a map item whose maps.txt row was skipped says nothing (found on the owner's `m05`, Snow + Shape Open).
-- #394 blank Shape refused for Snow/Siege although they ignore it (owner's `m05` uses any shape but Open as a workaround).
-- #395 Snow maps leave black void at the edges (like Lava #372/#377; under #142). It also adds an Edges step to adding-a-tileset.md.
-  Owner rule (2026-11-13): every tileset ticket fixes its own edge void; all open tileset issues now have an **Edges** done line.
-- #396 research spike: one map from several tilesets woven together (owner request; under #19). Same screenshot shows the terror zone text
-  still overlapping the panel (#371, #389).
+Owner reports from 2026-11-12 night / 2026-11-13, after the rare-map install:
+
+1. **#390** rare map name and tooltip. **Cause found by the owner:** the map's `misc.txt` row needs `compactsave` 0 (the
+   `isc` row it was copied from has 1, so the item is saved as Normal). With 0 the owner confirmed in game: yellow rare
+   name, property lines in blue. Left: docs (`first-map.md` section 2, `examples/first-map/map-items.txt`) and an optional
+   `check` warning for `compactsave` 1 on a map row. Small docs PR.
+2. **#391** map panel like item properties: `Monsters have`, `Players have`, blue lines, readable stat names (today
+   `Magicbonus`, `Fastermovevelocity`), no map-name line (the game shows it above `Difficulty`). Under #309.
+3. **#392** map panel shows total Density and MF (maps.txt value plus affixes). Under #309.
+4. **#393** using a map item whose `maps.txt` row was skipped opens nothing and says nothing (owner's `m05`).
+5. **#394** blank `Shape` refused for Snow and Siege although both ignore it. Workaround: any shape except `Open`.
+   Why they ignore it: Snow pieces are fence lines that join only on one axis; Siege is one fixed west-east strip chain.
+6. **#395** Snow maps leave black void at the edges (like Lava #372/#377; under #142); also adds an Edges step to
+   `docs/cartographer/adding-a-tileset.md`. **Owner rule:** every tileset ticket fixes its own edge void; all 27 open
+   `Cartographer tileset:` issues now carry an **Edges** done line.
+7. **#396** research spike: one map from several tilesets woven together (owner request; under #19). Spike only.
+
+Also seen in the owner's screenshots, already tracked: terror zone text still overlaps the map panel (#371, #389);
+drops show `Item Level: 1` beside `91` on a Snow map (#384).
+
+Older, no work yet:
+
 - #383 quality hook sees about half of spawned maps; #384 Item Level 1 (lead: ItemLevel getter `0x36ccf0`); both under #353.
 - #385 unique pace undercounts with Lava filler rooms (under #317).
 - #380 tint (research in #388), #371 remainder (in #389).
 
-## Owner install (done 2026-11-12)
+## Owner install (done 2026-11-12; owner edits since)
 
 - `d2rloader\plugins\cartographer.dll` = main `0f0335a` build (backup `cartographer.dll.before-0f0335a`).
 - `install.ps1` run on ProjectForever: added level 144 Cartographer Ice Caves + its lvlmaze row.
@@ -50,6 +61,9 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
   Infernal, Glacial, Stormbound, Blighted, Teeming), `magicsuffix.txt` 6 rows (9200-9205: of Resilience, Might, Vitality,
   Haste, Fortune, the Horde), `raresuffix.txt` cmap rows, `item-nameaffixes.json` ids 60100-60106 (English only) in
   `strings` and `strings-legacy`. Owner checked in game: affixes roll and apply; tooltip/name bugs filed as #390-#392.
+- Owner's own edits: `compactsave` 0 on the map rows; added map `m05` Frostfire Ridge by hand (Snow, ExtraSmall, level
+  91, icon `map_60_red`); fixing its `Shape` per #394. The owner's `cartographer.txt` still has the retired `Properties`
+  and `ItemStats` lines and `maps.txt` a `Properties` column (`check` notes only, harmless).
 - Earlier: 60 map icons (HD, lowend, DC6) imported to the mod; t20-t23 use map_08/23/37/45; owner set spellicon -1.
 
 ## Hazards
