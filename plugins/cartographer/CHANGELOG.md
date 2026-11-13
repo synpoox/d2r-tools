@@ -4,6 +4,8 @@
 
 - The event banner (the event's `Name` and `Message`) now shows on screen at the top of the screen, as a panel; before, the text was drawn but never appeared.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Maze and Snow levels move to their new spots.
+- Cave and Crypt maps now each have their own level, so one install opens either. Rerun `tools\install.ps1` once to add the new Crypt level; `-Tileset` is no longer needed.
+- A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls (Crypt and Jungle seen in game at Large; Cave not tested in game yet).
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
@@ -17,7 +19,7 @@
 - Each map's `Item` in `maps.txt` names its item; there is no generic map item, random map or built-in map.
 - Plain-English checking of `maps.txt` and `cartographer.txt`, with a skipped-row report in `cartographer-report.txt`.
 - `cartographer check` lists problems in your tables; `cartographer open <Name>` opens a map in town without its item.
-- `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
+- `tools\install.ps1` adds the map levels to your mod, keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Rare and unique map items: their modifiers show on hover and apply in the map (magic maps can still drop for now). Run `tools\install.ps1` again.

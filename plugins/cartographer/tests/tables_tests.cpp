@@ -1183,6 +1183,22 @@ TEST_CASE("Jungle and Snow are ready tilesets and open through the Outdoor and O
 	CHECK(std::string(MapSlotName(snowMaps[0])) == "OutdoorSnow");
 }
 
+TEST_CASE("a maze open is refused while a map of another maze tileset is open and unbuilt") {
+	Report report;
+	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\nWild\tJungle\tWinding\t\t\tt20\n", report);
+	REQUIRE(maps.size() == 3);
+	const MapDef& cave = maps[0];
+	const MapDef& crypt = maps[1];
+	const MapDef& jungle = maps[2];
+	CHECK(MazeOpenConflict(cave, "").empty());          // nothing pending
+	CHECK(MazeOpenConflict(cave, "Cave").empty());      // the same tileset replaces its own job
+	CHECK(MazeOpenConflict(cave, "cave").empty());
+	CHECK(MazeOpenConflict(crypt, "Cave").find("Cave map is already open") != std::string::npos);  // Cave pending, then Crypt
+	CHECK(MazeOpenConflict(cave, "Crypt").find("Crypt map is already open") != std::string::npos);  // and the reverse
+	CHECK(MazeOpenConflict(crypt, "Cave").find("Leave the game and start a new one") != std::string::npos);
+	CHECK(MazeOpenConflict(jungle, "Cave").empty());    // an outdoor map has its own job
+}
+
 TEST_CASE("an outdoor open is refused while a map of the other outdoor tileset is open and unbuilt") {
 	Report report;
 	const auto maps = Load("Wild\tJungle\tWinding\t\t\tt20\nFrost\tSnow\tWinding\t\t\tt22\nDeep\tCave\tLoop\t\t\tt21\n", report);
@@ -1360,4 +1376,48 @@ TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load fo
 	CHECK(maps[1].name == "Plain");
 	CHECK(Joined(report).find("Snake") != std::string::npos);
 	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
+}
+
+TEST_CASE("Cave opens through the Maze slot and Crypt through the MazeCrypt slot, each on the level the installer wrote") {
+	Report report;
+	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\n", report);
+	REQUIRE(maps.size() == 2);
+	CHECK(report.Errors() == 0);
+	CHECK(std::string(MapSlotName(maps[0])) == "Maze");
+	CHECK(std::string(MapSlotName(maps[1])) == "MazeCrypt");
+	CHECK_FALSE(MapIsOutdoor(maps[1]));
+	CHECK(IsMazeSlotName("MazeCrypt"));
+	CHECK(IsMazeSlotName("maze"));
+	CHECK_FALSE(IsMazeSlotName("Outdoor"));
+	CHECK(MazeSlotLevelName("MazeCrypt") == "Cartographer Crypt");
+	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
+	CHECK(MazeSlotLevelName("Outdoor").empty());
+
+	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Crypt\t141\t4\nSomeone's Level\t150\t4\n";
+	Report good;
+	auto both = LoadSlots("Slot\tLevel\nMaze\t138\nMazeCrypt\t141\n", good);
+	ValidateSlots(both, levels, good);
+	CHECK(good.Errors() == 0);
+	CHECK(SlotLevel(both, "Maze") == 138);
+	CHECK(SlotLevel(both, "MazeCrypt") == 141);
+	CHECK(HasMazeSlot(both));
+	CHECK_FALSE(HasMazeSlot({}));
+
+	Report crossed;  // the Crypt level under the Maze name, and a level of someone else under the Crypt name: both refused
+	auto wrong = LoadSlots("Slot\tLevel\nMaze\t141\nMazeCrypt\t150\n", crossed);
+	ValidateSlots(wrong, levels, crossed);
+	CHECK(wrong.empty());
+	CHECK(crossed.Errors() == 2);
+	CHECK(Joined(crossed).find("Cartographer Crypt") != std::string::npos);
+}
+
+TEST_CASE("each maze slot reads the LevelType of its own level") {
+	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Crypt\t141\t4\n";
+	Report r;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nMazeCrypt\t141\n", r);
+	ValidateSlots(slots, levels, r);
+	ReadSlotLevelTypes(slots, levels);
+	REQUIRE(slots.size() == 2);
+	CHECK(slots[0].levelType == 3);
+	CHECK(slots[1].levelType == 4);
 }
