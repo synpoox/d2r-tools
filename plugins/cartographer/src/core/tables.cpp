@@ -383,7 +383,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
 			}
 			if (spellOk && ContainsNoCase(names.cursorItems, map.item)) {
-				report.Note(MapsFile, row.line, "Item '" + map.item + "' has a spellicon of 0 to 9 in misc.txt, so a second map used while one is open shows an item cursor. Set spellicon to -1 on its row.");
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has a blank spellicon or one of 0 to 9 in misc.txt, so a second map used while one is open shows an item cursor. Set spellicon to -1 on its row.");
 			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
@@ -453,7 +453,7 @@ auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, i
 			}
 			if (cursor != nullptr && cIcon >= 0) {
 				const std::string icon = table.Cell(row, cIcon);
-				if (icon.size() == 1 && icon[0] >= '0' && icon[0] <= '9') {
+				if (icon.empty() || (icon.size() == 1 && icon[0] >= '0' && icon[0] <= '9')) {  // a blank cell compiles to 0 (RE note 27)
 					cursor->push_back(code);
 				}
 			}
