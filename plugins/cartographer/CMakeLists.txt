@@ -78,6 +78,7 @@ add_library(cartographer SHARED
 	src/engine/map_panel.cpp
 	src/engine/level_row.cpp
 	src/engine/auto_check.cpp
+	src/engine/automap_reset.cpp
 	src/engine/game_memory.cpp
 	src/log.cpp
 	src/cartographer.rc

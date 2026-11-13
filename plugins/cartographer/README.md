@@ -84,9 +84,9 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
-   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 6000, 0 |
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
-   | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 6000, 3600 |
+   | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
 
    The outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
@@ -276,7 +276,7 @@ installer wrote, not Act 5 or not an outdoor Jungle level, or an outdoor part ca
 plain message, named in `cartographer-report.txt` and `cartographer check`. Players with no Jungle map see no change.
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
-second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
+second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0)); a Snow map's Shape is ignored and its Size
 is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 

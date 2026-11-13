@@ -16,6 +16,7 @@
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
+#include "engine/automap_reset.h"
 #include "log.h"
 #include "hookguard.h"
 #include "steer.h"
@@ -627,6 +628,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);
@@ -653,6 +655,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
+		AutomapResetDisarm();
 		StatApplyGameLeft();
 		MapPanelGameLeft();
 		EventsGameLeft();
@@ -864,6 +867,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
 	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	InstallAutoCheck(context, overrides, ranges, count);
+	InstallAutomapReset(context, overrides, ranges, count);
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}
