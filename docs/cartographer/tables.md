@@ -55,6 +55,8 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
 | `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on an ExtraLarge Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when `Uniques` is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
+| `Brightness` | no | Percent, 10 to 400 (HD only): lower is darker, higher is brighter, 100 is the tileset's look. The look is per map: maps on one tileset share one level, so the plugin applies the map's value while the player is in it, and the game's own look is back outside it. Only the host (or a single-player game) sees it; a TCP/IP client does not. Blank keeps the tileset's look. A value outside the range or not a whole number is reported in the console and the log and treated as blank | tileset's own | 150 |
+| `Warmth` | no | Percent, 25 to 400 (HD only): above 100 is warmer (more orange), below 100 cooler (more blue), 100 is the tileset's look. It scales the tileset's colour temperature (divides it by Warmth/100), and the result is kept between 1000 K and 20000 K (the range checked in game), so a high Warmth stops having an effect: on the cave tileset (2125 K) everything above about 212 looks the same. It also shifts the overall brightness a little. Same rules as `Brightness` | tileset's own | 150 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -135,7 +137,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 |---|---|---|
 | `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
-| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: the plugin cuts a map's own value to -99, because what -100 or lower does to monsters has not been checked in game, and other slows on a monster still stack; `cartographer check` notes a `magicprefix.txt`, `magicsuffix.txt`, `uniqueitems.txt`, `setitems.txt` or `cubemain.txt` row that reaches -100 or lower) |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: the plugin applies the value as it is, and what -100 or lower does to monsters has not been checked in game; `cartographer check` notes a `magicprefix.txt`, `magicsuffix.txt`, `uniqueitems.txt`, `setitems.txt` or `cubemain.txt` row that reaches -100 or lower) |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 | `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 

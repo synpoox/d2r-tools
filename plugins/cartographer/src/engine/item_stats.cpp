@@ -397,9 +397,6 @@ auto ReadMapItemStats(void* rawItem, std::string* note) noexcept -> std::vector<
 		}
 		return out;
 	}
-	if (n > MaxStats && note != nullptr) {
-		*note = "the item has " + std::to_string(n) + " stats; only the first " + std::to_string(MaxStats) + " are read";
-	}
 	return out;
 }
 

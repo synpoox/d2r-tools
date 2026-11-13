@@ -1075,7 +1075,18 @@ TEST_CASE("retired: the Properties column of maps.txt and the Properties and Ite
 	CHECK(settings.Errors() == 0);
 	REQUIRE(settings.problems.size() == 2);
 	CHECK(settings.problems[0].severity == Severity::Note);
+	CHECK(settings.problems[0].text.find("'Properties' is no longer used") != std::string::npos);
 	CHECK(settings.problems[1].text.find("'ItemStats' is no longer used") != std::string::npos);
+}
+
+TEST_CASE("a leftover mapstats.txt is noted as retired, not an error") {
+	Report report;
+	NoteRetiredMapStats(report);
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].severity == Severity::Note);
+	CHECK(report.problems[0].file == "mapstats.txt");
+	CHECK(report.problems[0].text.find("no longer used") != std::string::npos);
 }
 
 TEST_CASE("repeated header columns are reported in maps and mapevents") {
@@ -1581,4 +1592,21 @@ TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the c
 		CHECK(s.name == "Second");
 		CHECK(s.reason.find("t24") != std::string::npos);
 	}
+}
+
+TEST_CASE("the look columns load, blank keeps the tileset's own look and a bad cell is ignored with a message") {
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tItem\tBrightness\tWarmth\n"
+		"A\tCave\tCorridor\tt20\t150\t200\n"
+		"B\tCave\tCorridor\tt21\t\t\n"
+		"C\tCave\tCorridor\tt22\t5\t401\n",
+		Names(), report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].look.brightness == 150);
+	CHECK(maps[0].look.warmth == 200);
+	CHECK_FALSE(maps[1].look.any());
+	CHECK_FALSE(maps[2].look.any());
+	CHECK(Joined(report).find("Brightness '5' is not a whole number") != std::string::npos);
+	CHECK(Joined(report).find("Warmth '401'") != std::string::npos);
 }
