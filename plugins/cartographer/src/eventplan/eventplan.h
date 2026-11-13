@@ -194,6 +194,34 @@ private:
 	bool fired_ = false;
 };
 
+// Which room the map's own Boss goes in, when the plan's boss cell has several rooms (a maze cell is 2 x 2 engine rooms, or 3 x 3).
+// `ranked` is the cell's rooms, the preferred one first. The Boss is tried in the first as it is populated; when the game refuses
+// every spot there (a quadrant with no floor), the next one is tried, and so on, in order, even when it was populated earlier.
+// When none is left the Boss is given up (fail open). Pure: the caller keeps the rooms' game pointers by `indexOf`.
+class BossRoomPicker {
+public:
+	explicit BossRoomPicker(std::vector<Rect> ranked);
+	// The candidate's index for a rect, -1 when the rect is not one of them.
+	int indexOf(const Rect &room) const;
+	// A room of the level was populated. True when the Boss should be tried in it now (it is the current candidate and the Boss is
+	// neither placed nor given up); a later candidate is remembered as populated for `refused`.
+	bool onPopulated(const Rect &room);
+	// The Boss was placed, or can never be (the caller gives up): no more tries.
+	void finish() { done_ = true; }
+	// The current candidate has no placeable spot. Returns the index of the next candidate to try now (it was populated already), or -1:
+	// then either wait for the next candidate to populate, or, when `done()`, the Boss is given up.
+	int refused();
+	bool done() const { return done_; }
+	size_t size() const { return ranked_.size(); }
+	size_t current() const { return current_; }
+
+private:
+	std::vector<Rect> ranked_;
+	std::vector<bool> populated_;
+	size_t current_ = 0;
+	bool done_ = false;
+};
+
 // --- What is spawned -----------------------------------------------------------------------------------------------
 
 struct Spawn {

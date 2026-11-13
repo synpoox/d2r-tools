@@ -41,7 +41,7 @@ uint8_t maskBitOfEngineDir(int dir); // engine direction -> exit bit, or 0
 // and the level's origin / size fields (drlg-steering.md section 1) set the real size, so the slot row and the build hook
 // must apply Plan::levelTilesX / Y, which never exceed this. 360 holds 15 Cave rooms across (7 each side of the first
 // room): the largest preset grid is 12, and the extra room per side lets the first room avoid the reserved end rooms.
-// 320 (13 across) still left 0.07% of Cave Corridor Large without a first room. The engine has not been checked to
+// 320 (13 across) still left 0.07% of Cave Corridor ExtraLarge without a first room. The engine has not been checked to
 // accept 360: the hook PR must.
 constexpr int kMaxLevelTiles = 360;
 

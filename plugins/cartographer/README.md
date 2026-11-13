@@ -56,7 +56,7 @@ in [`examples/first-map/`](examples/first-map/).
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
 4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`), for example a copy
-   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
+   of a scroll with `compactsave` set to 0 (1 keeps every map Normal). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
@@ -119,8 +119,8 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave`, `Crypt`, `Lava` or `Ice` (each opens through its own level); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
-| Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped | required |
+| Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
 | Boss | The `Name` of a boss in `bosses.txt`; a vanilla boss is refused | none |
@@ -281,8 +281,8 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0)); a Snow map's Shape is ignored and its Size
-is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
-A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (ExtraSmall, Small, Medium or Large), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
+is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
+A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 

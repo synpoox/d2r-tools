@@ -75,7 +75,7 @@ struct SiegeRequest {
 	SiegeOptions options;
 };
 
-// ExtraSmall, Small, Medium or Large (blank means Medium), case-insensitive. False for any other word. 12, 13, 14 and 15 strips.
+// Small, Medium, Large or ExtraLarge (blank means Large), case-insensitive. False for any other word. 12, 13, 14 and 15 strips.
 bool siegeSizeStrips(std::string_view size, int *strips);
 
 struct SiegePlan {

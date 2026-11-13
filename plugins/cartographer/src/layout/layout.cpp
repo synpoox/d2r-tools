@@ -830,7 +830,7 @@ struct Preset {
 	bool loop;
 };
 
-// [shape][size]: ExtraSmall, Small, Medium, Large. The grid is 4x4, 6x6, 9x9 and 12x12 macro-cells.
+// [shape][size]: Small, Medium, Large, ExtraLarge. The grid is 4x4, 6x6, 9x9 and 12x12 macro-cells.
 const Preset kPresets[kShapeCount][kSizeCount] = {
 	// Corridor: one long, mostly straight path, few dead ends.
 	{{5, 6, 90, 0, 1, 0, 0, 1, 2, 0, 0, false},
@@ -876,7 +876,7 @@ const char *shapeName(Shape shape)
 
 const char *sizeName(Size size)
 {
-	static const char *const names[kSizeCount] = {"ExtraSmall", "Small", "Medium", "Large"};
+	static const char *const names[kSizeCount] = {"Small", "Medium", "Large", "ExtraLarge"};
 	return names[static_cast<int>(size)];
 }
 
@@ -892,6 +892,12 @@ std::optional<Size> parseSizeName(std::string_view name)
 	for (int i = 0; i < kSizeCount; ++i)
 		if (equalsNoCase(name, sizeName(static_cast<Size>(i)))) return static_cast<Size>(i);
 	return std::nullopt;
+}
+
+std::string sizeRenameNote(std::string_view name)
+{
+	if (!equalsNoCase(name, "ExtraSmall")) return std::string();
+	return " ExtraSmall was renamed Small, and the other sizes moved up one step: Small is now Medium, Medium is now Large and Large is now ExtraLarge.";
 }
 
 Rules presetRules(Shape shape, Size size)
@@ -1495,9 +1501,9 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
 		if (res.errors.size() != errorsBefore) continue;
 
 		res.table.shapes.push_back(def);
-		// Every size must resolve to usable rules that the generator can build. ExtraSmall is checked only when a map uses it
+		// Every size must resolve to usable rules that the generator can build. Small is checked only when a map uses it
 		// (resolveRules), so a shape written before it existed is not rejected for a size it never asked for.
-		for (int s = static_cast<int>(Size::Small); s < kSizeCount; ++s) {
+		for (int s = static_cast<int>(Size::Medium); s < kSizeCount; ++s) {
 			const std::string e = checkShapeAtSize(res.table, def.name, static_cast<Size>(s));
 			if (!e.empty()) { err(lineNo, e); break; }
 		}

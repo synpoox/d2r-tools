@@ -78,7 +78,7 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
    its own `.bin` table files, the game reads those instead and ignores the edited `.txt`: rebuild the `.bin` files from the
    edited tables, or remove them, before starting.
 4. Give each map an item of its own in your mod's `misc.txt`: a new row with item spell 16 (`pSpell`) and type `cmap` (the installer adds that item type), for example a copy of the
-   Scroll of Identify with `belt` 0. Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
+   Scroll of Identify with `belt` 0 and `compactsave` 0 (1 keeps every map Normal). Put `maps.txt` and, if you like, `cartographer.txt` in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader. Check `cartographer-report.txt` in the plugin's log folder.
 
 ## Configuration
@@ -92,7 +92,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the name of a `shapes.txt` row (applied). | required |
-| Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
+| Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |

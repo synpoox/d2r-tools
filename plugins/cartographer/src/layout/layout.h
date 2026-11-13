@@ -40,7 +40,7 @@ struct Point {
 };
 
 enum class Shape : uint8_t { Corridor, Winding, Branching, Loop, Sprawl, Open };
-enum class Size : uint8_t { ExtraSmall, Small, Medium, Large };
+enum class Size : uint8_t { Small, Medium, Large, ExtraLarge };
 constexpr int kShapeCount = 6;
 constexpr int kSizeCount = 4;
 
@@ -115,6 +115,8 @@ struct Layout {
 Rules presetRules(Shape shape, Size size);
 std::optional<Shape> parseShapeName(std::string_view name); // case-insensitive
 std::optional<Size> parseSizeName(std::string_view name);   // case-insensitive
+// " ExtraSmall was renamed Small ..." for the one retired size name, else "". Appended to an unknown-size refusal; the old names are not aliases.
+std::string sizeRenameNote(std::string_view name);
 const char *shapeName(Shape shape);
 const char *sizeName(Size size);
 
@@ -171,7 +173,7 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName = "s
 bool resolveRules(const ShapeTable &table, std::string_view shapeName, Size size, Rules &out, std::string &error);
 
 // The check parseShapesTxt runs for a shape at a size (resolves to valid rules and the generator meets them for 16 seeds). Empty when the
-// shape builds; else a plain-English reason. maps.txt uses it for ExtraSmall rows, which parseShapesTxt does not check.
+// shape builds; else a plain-English reason. maps.txt uses it for Small rows, which parseShapesTxt does not check.
 std::string checkShapeAtSize(const ShapeTable &table, std::string_view shapeName, Size size);
 
 } // namespace cartographer::layout
