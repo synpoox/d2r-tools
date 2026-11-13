@@ -102,6 +102,12 @@ auto UniqueTotal(const Request& request, const RecordSnapshot& record, bool uniq
 // `total`. `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0 or less gives 0.
 auto PaceBudget(int total, int seen, int rooms) -> int;
 
+// The MonUMax for one room's populate call. `seen` is the game's room counter (+4) and `rooms` the level's room total (+0xc); the counter
+// counts Lava's closed filler rooms (`fillersSeen` of them so far) and the total does not. A filler room gets `made` (the packs so far:
+// it gets none, and a pack there would never be met). Any other room gets PaceBudget over the plan rooms seen; once a filler has been seen
+// (a ring map) the total is reached at 80 percent of `rooms`, so a plan room whose packs roll no unique does not leave a shortfall.
+auto RoomBudget(int total, int seen, int rooms, int fillersSeen, bool filler, int made) -> int;
+
 // The 1 to 255 monster level.
 auto ClampLevel(int level) -> int;
 

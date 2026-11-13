@@ -646,3 +646,26 @@ TEST_CASE("the pace gives the unique packs out with the rooms done, from the fir
 	}
 	CHECK(PaceBudget(255, 400, 401) == 255);
 }
+
+TEST_CASE("the room budget: a filler room gets none, a ring map reaches its total at 80 percent of the plan rooms (issue #317)") {
+	// A filler room gets the packs made so far, whatever the counters say.
+	CHECK(RoomBudget(14, 300, 585, 80, true, 5) == 5);
+	CHECK(RoomBudget(14, 300, 585, 80, true, 0) == 0);
+	// No filler seen yet (any map without a ring, and the first room of a ring map): the plain pace.
+	CHECK(RoomBudget(16, 279, 558, 0, false, 3) == PaceBudget(16, 279, 558));
+	CHECK(RoomBudget(16, 558, 558, 0, false, 3) == 16);
+	// A ring map: the fillers do not count as rooms done, and the total is due at 80 percent of the plan rooms.
+	CHECK(RoomBudget(14, 100, 585, 20, false, 0) == PaceBudget(14, 80, 468));
+	CHECK(RoomBudget(14, 468 + 90, 585, 90, false, 0) == 14);
+	CHECK(RoomBudget(14, 468 + 90 - 40, 585, 90, false, 0) < 14);
+	int last = 0;
+	for (int seen = 1; seen <= 740; ++seen) {
+		const int b = RoomBudget(14, seen, 585, seen / 5, false, 0);
+		CHECK(b >= last);
+		CHECK(b <= 14);
+		last = b;
+	}
+	CHECK(last == 14);
+	CHECK(RoomBudget(0, 100, 585, 20, false, 0) == 0);
+	CHECK(RoomBudget(14, 5, 0, 2, false, 0) == 1);  // the room total is not known yet
+}

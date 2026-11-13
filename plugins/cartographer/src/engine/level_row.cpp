@@ -201,14 +201,12 @@ struct Pace {
 	uint8_t* record = nullptr;
 	int total = 0;
 	uint8_t restoreMin = 0, restoreMax = 0;  // what the record holds outside a populate call: the planned MonUMin / MonUMax
+	int fillers = 0;  // filler rooms (Lava's closed ring) populated since the pace was armed: the room counter (+4) counts them, the room total (+0xc) does not
 };
 Pace g_pace;
 std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
 // The last room's pace, for the probe line (game thread only).
 int g_paceLastBudget = 0;
-// Filler rooms (Lava's closed ring) populated since the pace was armed: the game's room counter (+4) counts them, the room total (+0xc) does not
-// (game thread only; reset when the pace ends).
-int g_paceFillers = 0;
 // Set between UniquePaceBegin and UniquePaceEnd (game thread only): what the two bytes held.
 bool g_paceOpen = false;
 uint8_t g_paceSavedMin = 0, g_paceSavedMax = 0;
@@ -216,7 +214,6 @@ uint8_t* g_paceRecord = nullptr;
 
 void DisarmPaceLocked() noexcept {
 	g_pace = Pace{};
-	g_paceFillers = 0;
 	g_paceArmed.store(false);
 }
 
@@ -493,6 +490,9 @@ auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> b
 		Pace pace;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
+			if (g_pace.armed && filler) {
+				++g_pace.fillers;
+			}
 			pace = g_pace;
 		}
 		if (!pace.armed || pace.game != game || pace.level != roomLevel || pace.record == nullptr || !Readable(pace.record, lr::RecSpan)) {
@@ -502,13 +502,11 @@ auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> b
 		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
 		// A filler room is closed: a unique pack there is never met, so it gets none (its budget is the count already made), and it does not
-		// count as map done (the room total leaves the fillers out, so counting them would hand out the packs early).
-		int budget = 0;
-		if (filler) {
-			++g_paceFillers;
-			budget = pace.record[lr::RecUniqueCountOffset];
-		} else {
-			budget = lr::PaceBudget(pace.total, seen - g_paceFillers, rooms);
+		// count as map done. See RoomBudget.
+		const int made = pace.record[lr::RecUniqueCountOffset];
+		const int budget = lr::RoomBudget(pace.total, seen, rooms, pace.fillers, filler, made);
+		if (g_probe.load()) {
+			plog::Info("record probe: pace begin: filler %d +4=%d +0xc=%d fillers seen %d unique count %d budget %d", filler ? 1 : 0, seen, rooms, pace.fillers, made, budget);
 		}
 		g_paceLastBudget = budget;
 		g_paceSavedMin = pace.restoreMin;

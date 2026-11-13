@@ -144,7 +144,7 @@ struct FillerMask {
 	int w = 0, h = 0;
 	std::vector<uint8_t> planCell;  // w * h, 1 where a plan room is
 	bool empty() const { return planCell.empty(); }
-	// True for a cell inside the box that holds no plan room.
+	// True for a cell inside the box that holds no plan room: the ring and any hole in the plan alike (only plan and ring cells hold rooms).
 	bool isFiller(int cellX, int cellY) const
 	{
 		if (cellX < 0 || cellY < 0 || cellX >= w || cellY >= h) return false;

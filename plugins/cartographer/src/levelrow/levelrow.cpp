@@ -210,6 +210,16 @@ auto PaceBudget(int total, int seen, int rooms) -> int {
 	return static_cast<int>(std::min<int64_t>(std::max<int64_t>(scaled, 1), total));
 }
 
+auto RoomBudget(int total, int seen, int rooms, int fillersSeen, bool filler, int made) -> int {
+	if (filler) {
+		return std::max(made, 0);
+	}
+	if (fillersSeen > 0 && rooms > 0) {
+		rooms = std::max(1, rooms - rooms / 5);  // a ring map: the plan reaches the total at 80 percent of its rooms
+	}
+	return PaceBudget(total, std::max(seen - fillersSeen, 0), rooms);
+}
+
 auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed) -> std::vector<Field> {
 	std::vector<Field> out;
 	const size_t n = r.monsterRows.size();
