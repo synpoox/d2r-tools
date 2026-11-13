@@ -89,6 +89,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    |---|---|---|---|---|---|
    | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 3500, 0 |
    | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 3000, 0 |
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
