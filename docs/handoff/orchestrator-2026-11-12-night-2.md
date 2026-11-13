@@ -33,7 +33,8 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
   `check` warning, and an in-game re-check (owner confirmed: rare name and blue lines show).
 - #393 using a map item whose maps.txt row was skipped says nothing (found on the owner's `m05`, Snow + Shape Open).
 - #394 blank Shape refused for Snow/Siege although they ignore it (owner's `m05` uses any shape but Open as a workaround).
-- #395 Snow maps leave black void at the edges (like Lava #372/#377; under #142).
+- #395 Snow maps leave black void at the edges (like Lava #372/#377; under #142). It also adds an Edges step to adding-a-tileset.md.
+  Owner rule (2026-11-13): every tileset ticket fixes its own edge void; all open tileset issues now have an **Edges** done line.
 - #396 research spike: one map from several tilesets woven together (owner request; under #19). Same screenshot shows the terror zone text
   still overlapping the panel (#371, #389).
 - #383 quality hook sees about half of spawned maps; #384 Item Level 1 (lead: ItemLevel getter `0x36ccf0`); both under #353.
