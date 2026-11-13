@@ -709,7 +709,18 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 	if (g_original == nullptr) {
 		return 0;  // reachable only if the loader gave no original (the install logs it and marks the part off)
 	}
+	// Unique pace (issue #317): while this room is populated, MonUMax is the share of the unique packs due so far.
+	bool paced = false;
+	if (game != nullptr && room != nullptr && UniquePaceArmed() && On(EvRoomLevelId)) {
+		try {
+			paced = UniquePaceBegin(game, Call<RoomLevelFn>(EvRoomLevelId)(room));
+		} catch (...) {
+		}
+	}
 	const uint64_t result = g_original(game, room);
+	if (paced) {
+		UniquePaceEnd();
+	}
 	if (g_busy.load(std::memory_order_relaxed) && game != nullptr) {
 		try {
 			OnPopulated(game, room);

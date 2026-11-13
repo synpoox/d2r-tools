@@ -717,6 +717,19 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
+TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does not") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
+	names.cursorItems = {"t21"};
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has a spellicon of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
+}
+
 TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
@@ -1319,7 +1332,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[15] == "Snow");
 	CHECK(all[16] == "Siege");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Jungle", "Snow", "Siege"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Jungle", "Snow", "Siege"};
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
@@ -1392,6 +1405,8 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(IsMazeSlotName("maze"));
 	CHECK_FALSE(IsMazeSlotName("Outdoor"));
 	CHECK(MazeSlotLevelName("MazeCrypt") == "Cartographer Crypt");
+	CHECK(IsMazeSlotName("MazeIce"));
+	CHECK(MazeSlotLevelName("MazeIce") == "Cartographer Ice Caves");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
 
@@ -1422,4 +1437,63 @@ TEST_CASE("each maze slot reads the LevelType of its own level") {
 	REQUIRE(slots.size() == 2);
 	CHECK(slots[0].levelType == 3);
 	CHECK(slots[1].levelType == 4);
+}
+
+TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text, the way the plugin does") {
+	std::vector<std::pair<std::string, int>> spells;
+	std::vector<std::string> compact;
+	const std::string misc = "name\tcode\tpSpell\tcompactsave\r\nMap A\tt20\t16\t0\r\nMap B\tt21\t16\t1\r\nBlank\tt22\t\t\r\nNo code\t\t5\t1\r\n";
+	REQUIRE(ParseItemSpells(misc, &spells, &compact));
+	REQUIRE(spells.size() == 3);
+	CHECK(spells[0] == std::make_pair(std::string("t20"), 16));
+	CHECK(spells[1] == std::make_pair(std::string("t21"), 16));
+	CHECK(spells[2] == std::make_pair(std::string("t22"), 0));
+	REQUIRE(compact.size() == 1);
+	CHECK(compact[0] == "t21");
+	// A table without a compactsave column is read, with nothing compact; without pSpell it is not read.
+	spells.clear();
+	compact.clear();
+	CHECK(ParseItemSpells("code\tpSpell\r\nt20\t16\r\n", &spells, &compact));
+	CHECK(spells.size() == 1);
+	CHECK(compact.empty());
+	CHECK_FALSE(ParseItemSpells("code\tcompactsave\r\nt20\t1\r\n", &spells, &compact));
+	// And the result drives the note LoadMaps prints.
+	GameNames names = Names();
+	REQUIRE(ParseItemSpells(misc, &names.itemSpells, &names.compactItems));
+	names.haveItemSpells = true;
+	names.itemCodes.push_back("t20");
+	names.itemCodes.push_back("t21");
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has compactsave 1") != std::string::npos);
+	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
+}
+
+TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in an affix or unique row") {
+	Report report;
+	CheckMonSpeedRows("Name\tmod1code\tmod1min\tmod1max\tmod2code\tmod2min\tmod2max\r\nSlow\tmon-speed\t-100\t-50\t\t\t\r\nOk\tmon-speed\t-99\t-10\t\t\t\r\nLate\tmon-life\t10\t20\tmon-speed\t-300\t-200\r\nOther\tmon-life\t-500\t0\t\t\t\r\n",
+	                  "magicprefix.txt", report);
+	const std::string text = Joined(report);
+	CHECK(report.problems.size() == 2);
+	CHECK(report.Errors() == 0);
+	CHECK(text.find("magicprefix.txt row 2: mon-speed goes down to -100") != std::string::npos);
+	CHECK(text.find("row 4: mon-speed goes down to -300") != std::string::npos);
+	Report unique;
+	CheckMonSpeedRows("index\tprop1\tpar1\tmin1\tmax1\tprop2\tpar2\tmin2\tmax2\r\nU\tmon-life\t\t5\t5\tmon-speed\t\t-120\t-120\r\n", "uniqueitems.txt", unique);
+	REQUIRE(unique.problems.size() == 1);
+	CHECK(Joined(unique).find("mon-speed goes down to -120") != std::string::npos);
+	Report reversed;  // max below min: the lower one counts; a capitalised code matches; cubemain.txt and setitems.txt columns are read
+	CheckMonSpeedRows("Name\tmod1code\tmod1min\tmod1max\r\nR\tmon-speed\t-50\t-150\r\n", "magicsuffix.txt", reversed);
+	CHECK(reversed.problems.size() == 1);
+	Report cube;
+	CheckMonSpeedRows("description\tmod 1\tmod 1 min\tmod 1 max\tb mod 2\tb mod 2 min\tb mod 2 max\r\nup\tMon-Speed\t-100\t-100\tmon-speed\t-20\t-130\r\nok\tmon-speed\t-20\t-20\t\t\t\r\n", "cubemain.txt", cube);
+	CHECK(cube.problems.size() == 2);
+	Report set;
+	CheckMonSpeedRows("index\tprop1\tmin1\tmax1\taprop1a\tamin1a\tamax1a\r\nS\tmon-life\t1\t1\tmon-speed\t-200\t-200\r\n", "setitems.txt", set);
+	CHECK(set.problems.size() == 1);
+	Report none;
+	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
+	CHECK(none.problems.empty());
 }
