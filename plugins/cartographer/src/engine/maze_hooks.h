@@ -84,9 +84,13 @@ auto IsMazeSlotLevel(int level) -> bool;
 
 // The plan's event room in the built slot level, as the game's own room rect (tiles; the DRLG room's x, y, width, height).
 // Known once the slot build has run for the opened map; cleared when a map is opened and when the game is left.
+struct MazeRoomRect {
+	int32_t x = 0, y = 0, w = 0, h = 0;
+};
 struct MazeEventRect {
 	bool known = false;
 	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0;
+	std::vector<MazeRoomRect> more;  // the plan cell's other rooms, nearest the centre first: the fallbacks when this one cannot host the Boss
 };
 auto MazeEventRoom() -> MazeEventRect;
 
