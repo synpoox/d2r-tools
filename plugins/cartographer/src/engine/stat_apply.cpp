@@ -559,7 +559,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	return g_monstersOn.load() || g_playersOn.load();
 }
 
-void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
+void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats) {
 	if (tables == nullptr) {
 		MapPanelNoMap();  // no tables: no map text, and not the previous map's
@@ -571,7 +571,6 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		MapPanelMapOpened(text.gold, text.blue, slot);
 		return;
 	}
-	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);  // names the open in the log
 	const auto mapped = sp::itemStatsToProperties(itemStats, tables->statIds);
 	for (const std::string& line : mapped.dropped) {
 		plog::Warn("map item stats: %s", line.c_str());
@@ -579,7 +578,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	const std::vector<cartographer::statplan::Property>& drawn = mapped.properties;
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
-	plog::Info("map stats for '%s' (open %llu, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), static_cast<unsigned long long>(seed), slot,
+	plog::Info("map stats for '%s' (open %u, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), openings, slot,
 	           itemStats.size(), sp::describe(*plan).c_str());
 	for (const sp::Skipped& s : plan->skipped) {
 		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::statplan::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());
