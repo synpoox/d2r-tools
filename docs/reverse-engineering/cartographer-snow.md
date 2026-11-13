@@ -148,13 +148,19 @@ Two DS1 families:
 
 Rule: the isometric camera shows a cliff face only on the N and W sides (the face stands up and away from the camera). On S and E the face is hidden behind the floor, and 960 draws its blocked block black. So N and W use the cliff pieces and S and E use the ravine pieces. Each piece has 4 to 7 floor tiles on its inner side (the walkable strip); the outer part is a face, a drop or blocked.
 
-Seen in game (`cheat goto` plus screenshots, god mode, Hell, test save), no black void on any side or corner of Small, Medium, Large and ExtraLarge:
+Orientation and caps. A Snow map is a set of lines of pieces, chosen by seed: horizontal lines are rows with a cap at the W end (997, 998) and at the E end (995, 996); vertical lines are columns with a cap at the N end (1001, 1002) and at the S end (999, 1000). The side without caps has plain run pieces all along. Small, Medium, Large and ExtraLarge are cell counts (4x3, 6x4, 8x5, 10x7), so either orientation occurs at every size. A cap piece has an empty outer half: its floor ends about halfway across the cell, a blocked wall row follows, and nothing is drawn past it. The ring cell beside a cap starts at the cell edge, so about 8 tiles of void stay between the cap wall and the ring strip on the two cap sides. The ring does not remove that void; it only removes the void past the sides without caps and the corners. The cap-end void is not fixed here.
+
+Seen in game (`cheat goto` plus screenshots, god mode, Hell, test save). Only this was seen:
 - West and north show a rock face past the strip; south and east show a ravine edge with a drop; NW and NE show the cliff, SE and SW the ravine; 972 on the east draws a ravine, so the all-ravine fallback is not needed.
-- The inner strip joins the fence area without a gap.
 - `cheat goto` to an inner tile of the north or south edge sometimes landed on the arrival cell instead, so those sides were judged from the ring shots. There is no position readout.
-- Medium, one map: 22 uniques in total, 177 of 192 rooms populated (95 of 96 in the rectangle, 82 of 96 in the ring); 14 uniques spawned, 7 from rectangle rooms and 7 from ring rooms, so about half the unique pace is spent in the ring. Monster counts have no probe and were not measured.
+- A Small horizontal map (seed 6121691029032835047), `cheat goto` to the W ring strip beside the W cap: a snowy strip with a cliff face on the west side and a black void edge on the east side (the cap-end void), with monsters standing on the strip.
+- Medium, one map: 22 uniques were set for the map and 177 of 192 rooms were populated (95 of 96 in the rectangle, 82 of 96 in the ring). 14 is the count of uniques that actually spawned in that run, 7 from rectangle rooms and 7 from ring rooms, so about half of the spawned uniques stood in the ring. Monster counts have no probe and were not measured.
 - ExtraLarge: the plan logged "built as planned (108 stamps, 0 void cells)".
 
-Not done: voiding the ring cells (0x3ede00); the inner strip stays walkable and can spawn monsters.
+Reachability. Ring rooms hold monsters and uniques, because the engine spawns on any walkable floor and the ring pieces are walkable. Walk flags of the pieces (DS1 and DT1, flood fill over 80 x 80 subtiles per piece, vertical 4x3 and horizontal 3x4 maps) show nearly all ring floor, including the strips on the cap sides, joined to the fence area: the N and S strips join the E and W strips through the corner pieces. This is from the data only. Walking from the fence area to the cap-side strip in game was tried on one Small map and not finished (the character stalled in dense trees on the strip, near monsters), so connection in game is not confirmed.
 
-Screenshots: `C:/D2RTestSlots/runs/snow-edges3/screenshots/` (`L_montage`, `M_montage`, `S_montage`, `X_montage`; kept outside the repo).
+Not done: the cap-end void (filling the empty cap halves needs stamps that overlap or sit offset from the cell grid); voiding the ring cells (0x3ede00); keeping monsters and uniques off ring rooms (nothing in the plugin does that yet; Lava's filler ring has no walkable ground, so it needs nothing).
+
+Adding a tileset: [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md) lists every touch point, what the table drives and what a tileset gets for free.
+
+Screenshots: `C:/D2RTestSlots/runs/snow-edges3/screenshots/` (`L_montage`, `M_montage`, `S_montage`, `X_montage`) and `C:/D2RTestSlots/runs/snowfix/screenshots/` (kept outside the repo).

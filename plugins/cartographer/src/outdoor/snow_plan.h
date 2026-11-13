@@ -31,7 +31,7 @@ constexpr int kDirtOffset = 72;    // the dirt twin of a snow piece is lvlPrest 
 constexpr int kMaxCells = 12;      // longest side of the fence rectangle, in 16-tile cells; with the edge ring that is 224 tiles, so the slot's maxTilesX/Y is what limits a real map
 constexpr int kMinRunCells = 3;    // a line needs a cap, a run piece and a cap
 // The edge ring: every side of the fence rectangle gets kEdgeCells more cells, so the screen has something to draw past the outer fence
-// lines and the empty side of a cap, where it was black void (issue #395). Each side and corner has its own border piece, the way the
+// lines (issue #395). The empty half of a cap still leaves void between its wall and the ring. Each side and corner has its own border piece, the way the
 // game's own outline border picks one per direction. docs/reverse-engineering/cartographer-snow.md, section 8.
 constexpr int kEdgeCells = 1;
 struct EdgePieces {

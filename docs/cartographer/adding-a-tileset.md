@@ -16,7 +16,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 5. **The independent plan check** (`checkSnowPlan` is the model: re-derive every cell, socket and rectangle without the planner).
 6. **Tests**: the pins in `tests/outdoor_tests.cpp` (the table test) and `tests/tables_tests.cpp` (tileset names, ready list) name every row, so they change with the table. Add the planner's own tests.
 7. **Docs**: the tileset in the plugin README and `docs/cartographer/tables.md`, a changelog fragment (`plugins/cartographer/changelog.d/<issue>.md`, one line), and a reverse-engineering note with the evidence for any new engine fact.
-8. **The edges**: black shows past the planned rectangle. Ring it with the tileset's border pieces, one straight piece per side and a corner piece at each corner (Snow: `kEdgePieces` in `snow_plan.cpp`, notes in `cartographer-snow.md` section 8). A border piece has floor on one side only: pick pieces by which side has floor (read the DS1 walk flags) and check each side in game. The camera shows a cliff face only on N and W, so expect S and E to need a ravine or drop piece, not a cliff face (the cliff and ravine rule is in `cartographer-snow.md` section 8). The inner floor strip stays walkable. A uniform walkable piece does not work.
+8. **The edges**: black shows past the planned rectangle. Ring it with the tileset's border pieces, one straight piece per side and a corner piece at each corner (Snow: `kEdgePieces` in `snow_plan.cpp`, notes in `cartographer-snow.md` section 8). A border piece has floor on one side only: pick pieces by which side has floor (read the DS1 walk flags) and check each side in game. The camera shows a cliff face only on N and W, so expect S and E to need a ravine or drop piece, not a cliff face (the cliff and ravine rule is in `cartographer-snow.md` section 8). The inner floor strip stays walkable. A uniform walkable piece does not work. A line piece with an empty half (Snow's caps) leaves black void between its wall and the ring on that side; the ring does not fill it, so check those sides in game, and keep monsters off any ring room the player cannot reach.
 9. **The in-game checks** for the new level (arrival in the entrance cell, the Boss and the event standing in their rooms). Unit tests do not cover these.
 
 ## What the table drives (no edit needed)
@@ -35,7 +35,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 
 ## What the tileset must supply
 
-The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium, Large and ExtraLarge, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
+The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium, Large and ExtraLarge, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break. If the tileset has edge pieces, one straight piece per side (W, N, E, S) and one per corner (NW, NE, SE, SW), each with floor on its inner side.
 
 ## Adding a maze tileset
 
