@@ -210,7 +210,7 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	if (!match) {
 		return g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
 	}
-	if (!g_inCube.load() && g_stampedItem.load() == item) {
+	if (g_cubeOriginal != nullptr && !g_inCube.load() && g_stampedItem.load() == item) {  // replace only with the cube hook in place, so a missing CubeExec part cannot turn a cube add into a replace
 		// A map just made with its maps.txt Level: a modder's own map-level (an affix or a unique's property) is the level, not an addition to it.
 		g_stampedItem.store(0);
 		const bool cleared = SafeSetMagicStat(reinterpret_cast<void*>(item), statId, 0);
@@ -303,6 +303,10 @@ auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<Sign
 		*parts = ItemStatsPartStatuses();
 	}
 	return On(FindList) && On(ListCopy);
+}
+
+void ClearStampedMap() {
+	g_stampedItem.store(0);
 }
 
 void NoteStampedMap(void* item) {

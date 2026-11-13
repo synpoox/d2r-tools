@@ -55,4 +55,4 @@ Run 2 (the final DLL of this head, slot 5, Hell, god mode, test save; recipe `t2
 
 ### Not checked
 
-A `Area Level` line on the hover of a map item (map-class items show no property lines; it shows on non-map outputs, section 15). Recipe forms other than `usetype,nor,mod` with the final DLL, and a multiplayer or client-side view.
+The `Area Level` line on the hover of a map item was not seen in the #310 check (before #422); with the stat given to every map it shows (PR #425). Recipe forms other than `usetype,nor,mod` with the final DLL, and a multiplayer or client-side view.

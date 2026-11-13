@@ -28,6 +28,8 @@ void CubeMapLevelConfigure(int propertyId, int statId);
 // Issue #422: `item` is a map just given its maps.txt Level. The next map-level property applied to it outside a cube (an affix, a unique's
 // property) starts from 0, so the modder's value is the level and is not added to the maps.txt one. Game thread only.
 void NoteStampedMap(void* item);
+// The map made by the current roll takes no affix or unique maker (an ordinary quality): forget it, so a later property apply is not taken for its own.
+void ClearStampedMap();
 
 // Writing (the cube map level, issue #330). True when the list maker and the stat setter were found too.
 auto ItemStatsWritable() -> bool;

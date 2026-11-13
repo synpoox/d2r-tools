@@ -183,6 +183,9 @@ auto QualityRollHook(Unit* item, void* request) noexcept -> uint64_t {
 	if (seen <= 20 && request != nullptr) {
 		plog::Info("map quality: map roll %u: rolled %d, item level %d", seen, static_cast<int>(rolled), At<int32_t>(request, RequestLevelOffset));
 	}
+	if (decided < 4) {
+		ClearStampedMap();  // normal, low or superior: no affix or unique maker follows
+	}
 	return static_cast<uint64_t>(decided);
 }
 
