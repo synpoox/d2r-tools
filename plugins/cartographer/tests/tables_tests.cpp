@@ -131,7 +131,10 @@ TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid 
 	REQUIRE(maps.size() == 2);
 	CHECK(maps[0].name == "B");
 	CHECK(maps[1].name == "C");
-	CHECK(Joined(report).find("capped at 9 x 9") != std::string::npos);
+	const std::string text = Joined(report);
+	CHECK(text.find("capped at 9 x 9 cells, and MinPath 20 is too long for it. Lower MinPath in shapes.txt.") != std::string::npos);
+	CHECK(text.find("seed") == std::string::npos);
+	CHECK(text.find("Width and Height") == std::string::npos);
 }
 
 TEST_CASE("a shapes.txt row based on Open is Open for Snow too") {
