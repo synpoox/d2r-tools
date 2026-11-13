@@ -10,10 +10,10 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss`, `Properties` and `EventChance` act; a Cave, Crypt or Ice map opens the installed Maze level of its tileset, a Jungle or Snow map the Outdoor or OutdoorSnow level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave, Crypt or Ice map opens the installed Maze level of its tileset, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
 | `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
 | `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `MazeIce`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
-| `shapes.txt`, `mapstats.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `mapstats.txt`: yes, when a map opens its properties are drawn and applied to the map's monsters, and to the player unless `PlayerStats` is 0 (monsters and the player checked in game, single player, one test character). `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
+| `shapes.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
 Where a column below says what a map "gets" or "places", that is the plan the column is checked against, not yet what
@@ -23,17 +23,17 @@ Nothing in this plugin has been run in a game yet. This page is checked against 
 
 General rules for every table:
 
-- Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt`, `mapstats.txt` and `mapevents.txt` say so in the report).
+- Column names ignore case and can be in any order. A column the plugin does not know is ignored (`maps.txt` and `mapevents.txt` say so in the report).
 - Blank lines are skipped. A leading byte order mark (what some editors add) is fine.
 - Text is UTF-8, in game and in the installer. A file that is not valid UTF-8 is read as Latin-1 (what an editor's "ANSI" save gives) and converted, with one note in the log and `check`; characters outside Latin-1 need UTF-8. A Boss `Name` gives the same key and the same shown name either way.
 - Each cell is trimmed of spaces at both ends.
-- An empty optional file (`shapes.txt`, `mapstats.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
-- A column named twice in the header of `maps.txt`, `mapstats.txt`, `mapevents.txt` or `shapes.txt` is an error, but the file still loads and only the first one is used. (`cartographer.txt` is not checked for this.)
+- An empty optional file (`shapes.txt`, `mapevents.txt`, `cartographer.txt`) is the same as no file: `check` shows a note.
+- A column named twice in the header of `maps.txt`, `mapevents.txt` or `shapes.txt` is an error, but the file still loads and only the first one is used. (`cartographer.txt` is not checked for this.)
 - Words that are Cartographer's own (tileset, shape, size, target, kind) ignore case.
 - The old `maps.txt` column `Difficulty` is no longer used. A table that still has it loads, and `cartographer check` notes that the column is ignored.
 - Names from the game's own tables (monster `Id`, superunique name, stat names) must match exactly, capital letters included. Item codes ignore case. The check suggests the right spelling.
 - A blank cell or a missing optional column takes the default.
-- In `mapstats.txt` and `mapevents.txt`, a message about a `Weight`, `Count` or `Waves` past 2,147,483,647 (or below -2,147,483,648) adds "(you typed N)".
+- In `mapevents.txt`, a message about a `Weight`, `Count` or `Waves` past 2,147,483,647 (or below -2,147,483,648) adds "(you typed N)".
 - A bad row is skipped and named in `cartographer-report.txt` (and by `cartographer check`); the other rows still load.
 
 ## maps.txt (required)
@@ -43,19 +43,18 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave`, `Crypt` and `Ice` are built (each opens through its own level, `Maze`, `MazeCrypt` and `MazeIce`), and `Jungle` and `Snow` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
+| `Tileset` | yes | A tileset name. `Cave`, `Crypt` and `Ice` are built (each opens through its own level, `Maze`, `MazeCrypt` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
 | `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; the listed monsters filled the map in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
-| `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; checked in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 and up (the pack counts stop at 255, the most the game stores; scales the level's own unique pack count; experimental; adds nothing on a level whose count is 0) | 0 | 25 |
+| `Uniques` | no | Percent more unique packs the map may have, 0 and up. Raises the level's `MonUMax` (stops at 255); `MonUMin` is left alone. Past the minimum the game makes about 6 percent of packs unique, so the count depends on `Density` and map size and a larger `Uniques` adds nothing once that is reached (about 73 on a Large Cave at `Density` 100, near 800 percent). Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -64,6 +63,7 @@ A row is refused with a message, and skipped, when:
 - `Name` is empty or already used;
 - `Tileset` is empty, unknown or not built yet;
 - `Shape` or `Size` is not one of the words above;
+- `Shape` is `Open` (or a `shapes.txt` shape based on it) and `Tileset` is `Snow`: Snow is lines of fence pieces, with no rooms to join, and takes no Shape;
 - a number is not a whole number in its range;
 - `Item` is empty, longer than 4 characters, not an item in `misc.txt`, `weapons.txt` or `armor.txt`, an item without item spell 16, or an item another map already uses;
 - a `Monsters` entry is not in the game's tables, or `Monsters` has more than 10 entries.
@@ -82,40 +82,74 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 |---|---|---|
 | `ItemType`, `Code` | `Map`, `cmap` | The game names an item of type `scro` or `book` after its item spell (a spell-16 item would read "Scroll of Town Portal"), so a map item needs a type of its own. A row with code `cmap` that is not this one stops the installer. |
 | `Equiv1` | `misc` | The parent of `herb`, `scro`, `key` and `elix`: plain miscellaneous. `scro`, `book` or a potion type would make it a scroll (a Town Portal scroll) or a potion (belt). |
-| `Equiv2`, `Magic`, `Rare`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition, no magic or rare quality. |
+| `Equiv2`, `Shoots`, `Quiver`, `BodyLoc1`, `BodyLoc2` | empty | Not wearable, not ammunition. |
+| `Rare`, `Magic`, `Normal` | `1`, `0`, `0` | Rare on, Magic and Normal off. This does not stop magic maps (see Map item rarity and modifiers). |
 | `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Beltable` | 0 | Not throwable, not beltable, no auto-stack. |
-| `Normal` | 0 | 1 would mean normal quality only (as on `scro`, `book` and `key`); the item never spawns, so it is harmless, and 0 is what `herb` has. |
 | `StorePage` | `misc` (as `herb`) | Only names the vendor tab the item shows on, for example when a player sells it to an NPC. Vendors do not stock the item because the `misc.txt` vendor columns are blank, not because of this column. |
 | everything else | as `herb` | `herb` is a vanilla non-quest miscellaneous type. |
 
-## mapstats.txt (optional)
+## Map level on the item (itemstatcost.txt, properties.txt, cubemain.txt)
 
-One shared pool of random properties. Each map draws `Properties` of them. A property is never drawn twice in one map. If the file is missing, a small built-in pool is used.
+A map item can carry its own map level as a stat, so a cube recipe can change it and the item shows it on hover. `tools\install.ps1` adds two rows (never changing an existing one); a modder without the installer adds them by hand.
 
-There is no text column. The text comes from the game's own stat description.
+| File | Row | Notes |
+|---|---|---|
+| `itemstatcost.txt` | `cartographer_map_level` | A copy of `item_maxhp_percent` with 9 save bits (0 to 511), unsigned, no op, `descfunc` 19, `descstrpos` and `descstrneg` `cartographer:map_level_stat` (the plugin registers the text `Map Level: %d`). The stat id is the row number, so the row goes last. |
+| `properties.txt` | `map-level` | A copy of `str` with `stat1` `cartographer_map_level`, so `cubemain.txt` can write `map-level` in a `mod` column. |
 
-| Column | What to put | Default | Example |
-|---|---|---|---|
-| `Target` | `Monsters` or `Players` | none (required) | Monsters |
-| `Stat` | A stat name from the game's stat table | none (required) | `item_maxhp_percent` |
-| `Min` | Lowest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 10 |
-| `Max` | Highest rolled value (limit -500,000,000 to 500,000,000) | none (required) | 20 |
-| `Weight` | How often it is drawn compared with the others. 0 switches the row off. Limit 1,000,000 | 1 | 3 |
+- **Fallback:** a map item without the stat, with a value under 1 or with a layer uses the `maps.txt` Level. A value over 255 is cut to 255. The log line `map level N (...)` says which one applied.
+- **Where it is read:** the item-use hook, from the item's stat list (the stat is taken out before the rest are used as modifiers). `cartographer open` has no item and uses the `maps.txt` Level.
+- **Rarity and modifiers** are in the next section; this stat is only the level.
 
-Rules and limits:
+Example recipe, one `cubemain.txt` row (columns not named are empty):
 
-- `Weight` 0 means the row is off: never drawn, no message. A negative `Weight` is an error: the row is skipped and `cartographer check` says why. A `Weight` above 1,000,000 is used as 1,000,000 and `check` warns. Only the proportions matter, so `5000` and `2000` work as written.
-- `Min` and `Max` need a column and a number on every row; a blank cell is an error and the row is skipped.
-- `Min` and `Max` beyond 500,000,000 (or below -500,000,000), even past 2,147,483,647, are cut to that, and `check` warns.
-- `Stat` must be a `Stat` name in the game's `itemstatcost.txt` (exact spelling). `check` reports a name it does not find, with a suggestion. A row with a wrong name is still in the pool; if it is drawn it is skipped and the plugin log says so. A value that rolls 0 is skipped, as it changes nothing.
-- When a map opens, `Monsters` rows are applied to every monster that spawns in the map level, and `Players` rows to the player while the player is in the map level. Neither has been seen working in a game yet; the plugin log (`statprobe:` lines) records what happened.
-- If `Max` is below `Min`, `Min` is rolled every time, and `check` warns.
-- Two rows with the same `Target` and `Stat` are one property: drawing one removes the other for that map.
-- If a map asks for more properties than there are distinct ones, all of them are drawn. No error.
-- `Properties` in `maps.txt` and in `cartographer.txt` is 0 to 20. A negative value is refused (the map row is skipped; the setting keeps its default).
-- With `ItemStats` on, the item's own stats are used as they are, in order, and `Properties` is ignored. Each item stat is matched to the first `mapstats.txt` row with the same `Stat`, which says whether it goes on monsters or players; a stat with no such row (or a layer, or a value of 0) is left out and the log says so. If the item has no usable stats, a normal draw is made instead (seen in game: a player stat from the item went onto the character; monster stats from an item were not checked). At most the first 16 stats are read.
-- `Players` rows are applied unless `PlayerStats` is `0` in `cartographer.txt` (default `1`; `Monsters` rows are applied either way). The player's stats sit on the character while it is in the map and are removed on leaving it. In the Hell check (single player, one test character, 2026-11-12) a Save and Exit inside the map and a reload left the character as before the map. An autosave inside the map, multiplayer, death and curses were not checked.
-- Some stats cannot be used. The game reads them as a total and writes the result back as the saved value, so the map's value would stay in the character: `statpts`, `newskills`, `gold`, `goldbank`, `hitpoints`, `mana`, `stamina`, `level` and `experience`. Such a `Players` row is skipped when drawn, and `cartographer check` and the report name it. `level` is also skipped on `Monsters`, because the game sets the monster's level itself, and so are `hitpoints`, `mana` and `stamina`, because the game rewrites them on every hit and regeneration (use `maxhp`, `maxmana`, `maxstamina`). Stats that need a skill, state or monster type number (`item_addclassskills`, `item_nonclassskill`, `state`, `item_singleskill`, `item_elemskill`, `item_aura`, `item_reanimate`, `attack_vs_montype`, `damage_vs_montype`, `item_addskill_tab`, `item_skillonattack`, `item_skillonkill`, `item_skillondeath`, `item_skillonhit`, `item_skillonlevelup`, `item_skillongethit` and `item_charged_skill`; the stats with a Save Param Bits value in the vanilla 3.3.0 `itemstatcost.txt`) are skipped on both, because a map row cannot name the skill, state or monster type yet. The maxima (`maxhp`, `maxmana`, `maxstamina`) and the attributes are fine.
+| Column | Value |
+|---|---|
+| `description` | `Map + Town Portal scroll: map level 95` |
+| `enabled`, `version` | `1`, `100` |
+| `numinputs` | `2` |
+| `input 1`, `input 2` | the map's `misc.txt` code (for example `t20`), `tsc` |
+| `output` | `useitem,mod` |
+| `mod 1`, `mod 1 chance`, `mod 1 min`, `mod 1 max` | `map-level`, `100`, `95`, `95` |
+
+**Does not work on a map item (checked in game, slot 6, Hell).** The cube reads the row, takes the inputs and sets the stat, but `useitem` rebuilds a misc item as a Hand Axe: the map came out as a Hand Axe whose hover showed `Map Level: 95`. The same happened with a type input (`cmap`) and with a vanilla misc item (`isc`), so it is the cube, not the map rows. Outputs that keep a map (`usetype,mod`, `usetype,mag,mod`, and a plain item code such as `t22`) give a normal map and drop the `mod`, so no `Map Level` line appears. The stat itself works: it is saved with the item, shown on hover and kept across a save and reload. Giving the `cmap` item type `Magic` 1, `Rare` 1, `Normal` 1 and `MaxSockets1` 1 in `itemtypes.txt` changed nothing: `useitem,mod` still produced a Hand Axe (`Map Level: 10`), and `usetype,mag,mod` and `usetype,rar,mod` still gave a plain white map with no stat. So the item type flags are not the cause; a plugin hook on the cube result would be needed. Until then, set the level in `maps.txt` (the fallback).
+
+**Keep the stat rows where they are.** Once saved items carry `cartographer_map_level` or any of the seven `cartographer_mon_*` stats (`life`, `damage`, `speed`, `fire_res`, `cold_res`, `light_res`, `poison_res`), their rows in `itemstatcost.txt` must stay at the same position: restoring the `.bak`, or replacing the file with one that has more rows and running the installer again (it appends at a new id), makes saved items read the wrong stat or fail to load.
+
+## Map item rarity and modifiers
+
+A map item has the game's own quality. The installer sets the `Map` item type (`cmap`) to Rare on, Magic and Normal off, so the game rolls normal or rare quality for a map and gives a rare one affixes. Maps are meant to be normal, rare or unique, but magic maps can still drop for now: `Magic` 1 would mean always magic, so no column can stop them, and a plugin hook to block them is planned (an existing `cmap` row is repaired to this; it is the one existing row the installer changes); the map's `misc.txt` row needs `compactsave` 0 (a compact item carries no quality or stats). A unique map is a `uniqueitems.txt` row.
+
+| Quality | Where the modifiers come from |
+|---|---|
+| Normal | none |
+| Rare | `magicprefix.txt` and `magicsuffix.txt` rows, and the `rareprefix.txt` and `raresuffix.txt` names, with `itype1` `cmap`; each `modNcode` is a `properties.txt` code, `Min` and `Max` its range |
+| Unique | a `uniqueitems.txt` row with `code` = the map's `misc.txt` code, `prop1` to `prop12` as for any unique |
+
+Added by `tools\install.ps1` (an existing row is never changed, except the `cmap` quality cells): seven `itemstatcost.txt` stats and a `properties.txt` property for each. They are signed, -512 to 511, and shown as `+20% Monster Life` and so on.
+
+| Property | Stat | Monsters get |
+|---|---|---|
+| `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
+| `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: -100 or lower stops monsters) |
+| `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
+
+Any other stat on the map item (a resistance, `str`, `item_magicbonus`) is the player's while in the map. When the map opens the plugin reads the item's stats (up to 16), takes the map level out, and applies the rest: the monster ones to every monster that spawns in the map, the player ones to the player (removed on leaving; `PlayerStats` `0` turns that off). The plugin log line `map stats for ...` lists what was read and applied.
+
+Example rows (columns not named are as in the vanilla file; `spawnable` 1, `rare` 1, `itype1` `cmap`):
+
+| File | Row |
+|---|---|
+| `magicprefix.txt` | `Name` `Brutish`, `mod1code` `mon-life`, `mod1min` 20, `mod1max` 40 |
+| `magicsuffix.txt` | `Name` `of Resilience`, `mod1code` `res-all`, `mod1min` 5, `mod1max` 9 |
+| `uniqueitems.txt` | `index` `Cartographer Test Unique`, `code` the map code, `prop1` `mon-life` 30, `prop2` `mon-fire-res` -20, `prop3` `res-all` 15, `prop4` `map-level` 95 |
+
+**Bonus density and magic find (#313).** An affix row's first mod is the property itself (the `mon-life` above). Its other mods are fixed values (`Min` = `Max`) for the map's density and for `item_magicbonus`, added up over all the item's affixes when the map opens. Only the `item_magicbonus` part exists today, as the property `mag%`; the density property comes with #313. Example `magicprefix.txt` row: `mod1code` `mon-life` 20 to 40, `mod2code` `mag%` 15 to 15, so every `Brutish` map adds 15 magic find on top of the life roll.
+
+Name text: the game shows an affix by its `Name` as a string key. Add the names to your strings (a missing one shows as the key, and the log notes `Missing string`).
+
+Retired: `mapstats.txt`, the `Properties` column and setting and `ItemStats`. A file or column left over is ignored and `cartographer check` says so.
 
 ## bosses.txt (optional)
 
@@ -162,13 +196,11 @@ The kinds:
 
 ## cartographer.txt (optional)
 
-Global settings, read when the game starts; `Properties` and `PlayerStats` are checked in game (single player). Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
+Global settings, read when the game starts; `PlayerStats` is checked in game (single player). Two columns, `Setting` and `Value`; one setting per row. Setting names ignore case. A blank `Value` keeps the default. An unknown setting, or a value outside its range, is reported and the default is kept. Without the file, every default applies.
 
 | Setting | Meaning | Default | Example |
 |---|---|---|---|
-| `Properties` | Random properties per map, 0 to 20 | 6 | 4 |
 | `EventChance` | Percent chance of an event per map, 0 to 100 | 20 | 30 |
-| `ItemStats` | `1` means a map item's own stats are used in place of a draw; `0` or `1` | 0 | 1 |
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player while in the map (see above for what was checked); `0` turns it off; `0` or `1` | 1 | 0 |
 | `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the entry banner (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
@@ -189,7 +221,7 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 ## shapes.txt (optional, advanced)
 
-Adds a new shape defined with numbers. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
+Adds a new shape defined with numbers. A row based on `Open` keeps the open room grid: `Width`, `Height`, `BossRoom`, `MinPath`/`MaxPath` and `MinTurns`/`MaxTurns` (checked against the shortest path from the entrance to the boss room) still apply, as does the event position; `Straight` and the side room and loop columns do nothing, and a row that asks for side rooms (`MaxBranches`), extra loops (`MaxLoops`) or a `Loop` ring is refused. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).
 
 Every column except `Name` is optional. A blank column keeps the value of the base shape (`Base`) at the chosen `Size`. A row that can't be built is skipped with an error that names the line and column. The generator gives each layout a fixed amount of work (about 25 ms at most on a desktop), so a row that is too tight to build is reported as too tight right away instead of making the game wait. A row parses with at most 48 tries of that size, about a second at the very worst.
 

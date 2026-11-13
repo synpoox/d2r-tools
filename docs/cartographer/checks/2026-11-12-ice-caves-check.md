@@ -34,7 +34,6 @@ eventprobe: the map Boss 'Shoreline Warden' goes in the plan's boss room (6496,0
 - Not verified: the named Boss seen on screen (only its spawn log line and its minions), multiplayer, a second Ice map in
   one game, the other shapes in game.
 - `cheat goto <level>,<x>,<y>` takes absolute subtile coordinates (tile x 5 + 2), not tile coordinates.
-- Automap range: the engine saves automap cells as signed 16-bit words (x = (tx-ty)*8, y = (tx+ty)*4). Ice at the installed
-  offset 6400,0 gives x about 51200, out of range, so its reveal is lost after a town trip. Not changed here; Ice gets an
-  in-range offset once the installer range check of #329 lands.
+- Automap range: this check ran with Ice installed at 6400,0 (the rects above are at that offset), which the engine's signed 16-bit automap cells cannot hold (x about 51200).
+  Ice is now at 2000,0 (in range, clear of Cave 3500, Crypt 3000 and the reserved Lava 2500; RE note 22). The layout and spawns are the same at either spot; the new offset has not been run in game yet.
 - The staging slot's Hell had to be chosen in the Select Difficulty box; the character the earlier checks left in Normal does not open maps.

@@ -12,6 +12,7 @@
 #include "event6b.h"
 #include "crash_guard.h"
 #include "engine/boss_names.h"
+#include "engine/map_stat_text.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
 #include "engine/level_row.h"
@@ -158,13 +159,13 @@ auto ReadSpawnNames() -> cartographer::eventplan::SpawnTable {
 }
 
 // misc.txt code and pSpell for every item that has a code (a blank pSpell is 0). False when the table or a column is missing.
-auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out) -> bool {
+auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string, int>>* out, std::vector<std::string>* compact) -> bool {
 	std::string text;
 	if (!ReadFile(file, &text)) {
 		return false;
 	}
 	const carto::Tsv table = carto::ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell");
+	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave");
 	if (cCode < 0 || cSpell < 0) {
 		return false;
 	}
@@ -172,6 +173,9 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 		const std::string code = table.Cell(row, cCode);
 		if (!code.empty()) {
 			out->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
+			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
+				compact->push_back(code);
+			}
 		}
 	}
 	return true;
@@ -219,7 +223,7 @@ auto ReadGameNames() -> carto::GameNames {
 	for (const wchar_t* file : {L"\\misc.txt", L"\\weapons.txt", L"\\armor.txt"}) {
 		names.haveItems = ReadColumn(g_excelDir + file, "code", &names.itemCodes) && names.haveItems;
 	}
-	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells);
+	names.haveItemSpells = ReadItemSpells(g_excelDir + L"\\misc.txt", &names.itemSpells, &names.compactItems);
 	return names;
 }
 
@@ -229,7 +233,7 @@ struct Loaded {
 };
 
 // Reads the tables. A missing maps.txt or cartographer.txt is fine: there are no maps, and the defaults apply.
-// shapes.txt, mapstats.txt and mapevents.txt are optional too.
+// shapes.txt and mapevents.txt are optional too.
 auto LoadAll() -> Loaded {
 	Loaded loaded;
 	if (g_tableDir.empty()) {
@@ -245,26 +249,30 @@ auto LoadAll() -> Loaded {
 		loaded.report.Note("maps.txt", 0, "misc.txt or its pSpell column could not be read, so the check that each Item has item spell 16 was skipped. An item without spell 16 will never open its map.");
 	}
 	std::string text;
-	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt, mapstats.txt and mapevents.txt are all optional.
+	// shapes.txt first: a map's Shape may name one of its rows. shapes.txt and mapevents.txt are both optional.
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::ShapesFile), carto::ShapesFile, &text, loaded.report)) {
 		loaded.tables->shapes = carto::LoadShapes(text, loaded.report);
 	}
 	text.clear();
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapStatsFile), carto::MapStatsFile, &text, loaded.report)) {
-		loaded.tables->pool = carto::LoadMapStats(text, loaded.report);
+		loaded.report.Note(carto::MapStatsFile, 0, "the file is no longer used: a map's properties are stats on its item (rare and unique maps). It is ignored.");
 	}
-	// The stat names are checked against itemstatcost.txt, which also gives the ids the game is asked for.
+	// itemstatcost.txt gives the ids the game is asked for, and the names of the stats on a map item.
 	text.clear();
 	if (ReadFile(g_excelDir + L"\\itemstatcost.txt", &text)) {
 		loaded.tables->statIds = cartographer::statplan::parseItemStatCost(text);
 	}
 	if (!loaded.tables->statIds.loaded) {
-		loaded.report.Note(carto::MapStatsFile, 0, "itemstatcost.txt could not be read, so Stat names are not checked and no map stats can be applied.");
+		loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt could not be read, so no map stats can be applied.");
 	} else {
-		const bool builtIn = loaded.tables->pool.empty();
-		const auto& checked = builtIn ? cartographer::stats::builtInPool() : loaded.tables->pool;
-		for (const cartographer::stats::PoolIssue& issue : cartographer::statplan::checkPoolStats(checked, loaded.tables->statIds)) {
-			loaded.report.Error(carto::MapStatsFile, 0, (builtIn ? "built-in pool " : "") + issue.message);
+		std::string missing;
+		for (const cartographer::statplan::MonsterStat& m : cartographer::statplan::monsterStats()) {
+			if (loaded.tables->statIds.find(m.itemStat) < 0) {
+				missing += (missing.empty() ? "" : ", ") + std::string(m.itemStat);
+			}
+		}
+		if (!missing.empty()) {
+			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
 		}
 	}
 	text.clear();
@@ -364,7 +372,7 @@ void WriteReport(const Loaded& loaded) {
 	if (!coreMaps.empty()) {
 		out << "WARNING: " << coreMaps << "\r\n";
 	}
-	out << loaded.tables->shapes.shapes.size() << " shape(s), " << loaded.tables->pool.size() << " property row(s) and " << loaded.tables->events.size() << " event(s) loaded. Shapes and events are read and checked only; the properties are applied when a map opens (" << carto::StatApplySummary() << ").\r\n\r\n";
+	out << loaded.tables->shapes.shapes.size() << " shape(s) and " << loaded.tables->events.size() << " event(s) loaded. Shapes and events are read and checked only; the stats on a map item are applied when the map opens (" << carto::StatApplySummary() << ").\r\n\r\n";
 	for (const carto::Problem& p : loaded.report.problems) {
 		out << carto::Report::Line(p) << "\r\n";
 	}
@@ -456,6 +464,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 				Say(command, "part " + part.name + ": " + part.detail);
 			}
 			Say(command, "Cartographer " + carto::BossNamesSummary() + ".");
+			Say(command, "Cartographer " + carto::MapStatTextSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
@@ -543,6 +552,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		carto::InstallBossNames(context);  // first: the boss strings must be there before the game compiles superuniques.txt
+		carto::InstallMapStatText(context);  // likewise the map level stat's text before itemstatcost.txt is compiled
 		std::vector<carto::PartStatus> parts;
 		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);
@@ -568,6 +578,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
 	carto::UnloadMapPanel();
 	carto::BossNamesUnload();
+	carto::MapStatTextUnload();
 	carto::MapNamesUnload();  // the slot level's own text back in the game's table
 	carto::LevelRowUnload();  // ... and its own monster fields
 	carto::UnloadMapSync();

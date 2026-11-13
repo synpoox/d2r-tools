@@ -33,3 +33,15 @@ TEST_CASE("a map without properties or a level still has a name")
 	CHECK(panelText("Shorelines", 0, {}) == "Shorelines");
 	CHECK(panelText("", 0, {}) == "Map");
 }
+
+TEST_CASE("a failed terror zone text call keeps the previous hidden state")
+{
+	CHECK(hiddenAfter(false, true, false));
+	CHECK(hiddenAfter(false, true, true));
+	CHECK_FALSE(hiddenAfter(false, false, false));
+	CHECK(hiddenAfter(false, false, true));  // an earlier hide in the same map still counts
+	CHECK_FALSE(hiddenAfter(true, true, true));
+	CHECK_FALSE(hiddenAfter(true, true, false));
+	CHECK(hiddenAfter(true, false, true));   // a failed restore stays marked hidden
+	CHECK_FALSE(hiddenAfter(true, false, false));
+}
