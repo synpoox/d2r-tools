@@ -717,6 +717,19 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
+TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does not") {
+	GameNames names = Names();
+	names.haveItemSpells = true;
+	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
+	names.cursorItems = {"t21"};
+	Report report;
+	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
+	CHECK(maps.size() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("Item 't21' has a spellicon of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
+}
+
 TEST_CASE("item codes are matched ignoring case in the item tables and the spell check") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
@@ -775,41 +788,6 @@ TEST_CASE("gates: Hell, Harrogath, level, one map per game, a free spot") {
 	CHECK(CheckGates(high, s) == Gate::CharLevel);
 	CHECK(RefusalText(Gate::CharLevel, high, s).find("needs character level 80 (you are 70)") != std::string::npos);
 	CHECK(RefusalText(Gate::AlreadyOpen, map, s).find("already been opened in this game") != std::string::npos);
-}
-
-TEST_CASE("a refused map item is stopped with the check refusal sentence") {
-	std::vector<MapDef> maps(1);
-	maps[0].name = "Shore";
-	maps[0].item = "t20";
-	CHECK(ItemCodeFromPacked('t' | ('2' << 8) | ('0' << 16) | (' ' << 24)) == "t20");
-	CHECK(ItemCodeFromPacked('a' | ('b' << 8) | ('c' << 16) | ('d' << 24)) == "abcd");
-	GateState state;
-	state.difficulty = 2;
-	state.charLevel = 90;
-	state.areaId = 109;
-	state.townId = 109;
-	CHECK(MapItemRefusal(maps, "t20", state).empty());  // every gate open: the item goes on to the game
-	state.openings = 1;
-	CHECK(MapItemRefusal(maps, "t20", state) == "Cartographer: Shore cannot be opened: a map has already been opened in this game.");
-	CHECK(!MapItemRefusal(maps, "T20", state).empty());
-	CHECK(MapItemRefusal(maps, "tsc", state).empty());  // not a map item
-	state.openings = 0;
-	state.difficulty = 1;
-	CHECK(MapItemRefusal(maps, "t20", state) == "Cartographer: Shore can only be opened in Hell.");
-	state.difficulty = 2;
-	// Gates that can be stale (area, free spot, character level) are left to the game's check
-	state.areaId = 1;
-	CHECK(MapItemRefusal(maps, "t20", state).empty());
-	state.areaId = 109;
-	state.spotFree = false;
-	CHECK(MapItemRefusal(maps, "t20", state).empty());
-	state.spotFree = true;
-	maps[0].minCharLevel = 80;
-	state.charLevel = 70;
-	CHECK(MapItemRefusal(maps, "t20", state).empty());
-	CHECK(CheckGates(maps[0], state) == Gate::CharLevel);  // the check still refuses it, with a fresh reading
-	state.openings = 1;
-	CHECK(MapItemRefusal(maps, "t20", state).find("already been opened") != std::string::npos);  // open wins over a low level
 }
 
 TEST_CASE("an old Difficulty column is ignored with a note, not an error") {

@@ -366,6 +366,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			if (spellOk && ContainsNoCase(names.compactItems, map.item)) {
 				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
 			}
+			if (spellOk && ContainsNoCase(names.cursorItems, map.item)) {
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has a spellicon of 0 to 9 in misc.txt, so a second map used while one is open shows an item cursor. Set spellicon to -1 on its row.");
+			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
 					fail("item '" + map.item + "' already opens the map '" + other.name + "' (row " + std::to_string(other.line) +
@@ -1014,33 +1017,6 @@ auto RefusalText(Gate gate, const MapDef& map, const GateState& state) -> std::s
 	case Gate::Open: break;
 	}
 	return who + "is open.";
-}
-
-auto ItemCodeFromPacked(uint32_t packed) -> std::string {
-	std::string code;
-	for (int i = 0; i < 4; ++i) {
-		const char c = static_cast<char>((packed >> (8 * i)) & 0xFF);
-		if (c != ' ' && c != '\0') {
-			code += c;
-		}
-	}
-	return code;
-}
-
-auto MapItemRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, const GateState& state) -> std::string {
-	const MapDef* map = FindMapByItem(maps, itemCode);
-	if (map == nullptr) {
-		return {};
-	}
-	// Only the gates that cannot go stale the wrong way: the reading can be a few ticks old, and the difficulty is fixed for the game and
-	// the opening count never goes down. Character level, area and free spot change under the player and are left to the game's check.
-	if (state.difficulty != Hell) {
-		return RefusalText(Gate::Difficulty, *map, state);
-	}
-	if (state.openings > 0) {
-		return RefusalText(Gate::AlreadyOpen, *map, state);
-	}
-	return {};
 }
 
 }  // namespace carto

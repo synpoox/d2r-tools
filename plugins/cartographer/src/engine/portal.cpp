@@ -12,6 +12,7 @@
 #include "engine/stat_apply.h"
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
+#include "engine/game_memory.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
@@ -89,6 +90,7 @@ Part g_parts[PartCount] = {
 
 std::mutex g_lock;
 std::shared_ptr<const Tables> g_tables;
+std::atomic<uint32_t> g_iconsCleared{0};  // bit per data bank whose map rows have spellicon -1 this process (never restored)
 const MapDef* g_pending = nullptr;  // chosen at the check, used at the use; kept alive by g_pendingTables
 std::shared_ptr<const Tables> g_pendingTables;
 enum class Verdict { None, Map, Plain };  // what the check decided for g_pendingItem: opens a map, or goes to the game
@@ -109,14 +111,7 @@ std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events 
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
 std::atomic<bool> g_tickSeen{false};            // the tick hook has run in this game: this process has a server
 bool g_installed = false;                       // InstallPortal ran to the end
-std::atomic<bool> g_iconsCleared{false};        // the map rows' spellicon has been set to -1 this game
 std::atomic<bool> g_firstLogged{false};         // the first player the tick saw this game has been logged
-std::atomic<bool> g_mapOpen{false};             // this process opened a map in the current game (cleared on leaving it)
-constexpr uint32_t GateReadEvery = 10;          // ticks between readings of the gates for the item listener
-std::mutex g_gateLock;                          // guards g_gateCache
-GateState g_gateCache;                          // the local player's gates, read on the game thread every few ticks
-bool g_gateCacheValid = false;                  // g_gateCache holds a reading for the current game
-uint32_t g_gateTicks = 0;                       // ticks since the last reading (game thread only)
 
 // Forgets the check-to-use state. g_lock must be held.
 void ClearPending() noexcept {
@@ -146,37 +141,6 @@ auto CodeOf(Game* game, Unit* item, const uint8_t** record) noexcept -> std::str
 	char code[5] = {};
 	std::memcpy(code, *record + RecordCodeOffset, 4);
 	return Trim(code);
-}
-
-// The client starts the item (identify) cursor on any right-click of an item whose spellicon is 0 to 9, before the server answers
-// (27-item-cursor-in-game.md). A map item copied from the Scroll of Identify has spellicon 0, so a refused second map leaves that
-// cursor on. Setting the byte to -1 in the loaded record, as the Town Portal scroll has, turns the client cursor off for map rows
-// (pSpell 16) only. The record table is one table for the whole process; the walk stops at the first row past its count.
-// Returns the number of rows changed, -1 when the lookup is not available.
-auto ClearMapItemCursor() noexcept -> int {
-	if (g_iconsCleared.load(std::memory_order_relaxed)) {
-		return 0;
-	}
-	if (!g_parts[ItemRecord].status.on || g_parts[ItemRecord].address == nullptr) {
-		return -1;
-	}
-	int changed = 0;
-	int32_t rows = 0;
-	for (; rows < RecordScanCap; ++rows) {
-		const uint8_t* record = Call<ItemRecordFn>(ItemRecord)(0, rows);
-		if (record == nullptr) {
-			break;
-		}
-		if (At<int32_t>(record, RecordSpellOffset) == MapSpell && At<uint8_t>(record, RecordSpellIconOffset) < 10) {
-			const_cast<uint8_t*>(record)[RecordSpellIconOffset] = 0xff;
-			++changed;
-		}
-	}
-	if (rows > 0) {
-		g_iconsCleared = true;
-		plog::Info("map items: spellicon set to -1 on %d item row(s) of %d (no item cursor on a refused map)", changed, rows);
-	}
-	return changed;
 }
 
 auto PlayerLevelId(Unit* player) noexcept -> int32_t {
@@ -346,9 +310,6 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	if (shaped && opened == 0) {
 		LevelRowOpenFailed(level);
 	}
-	if (opened != 0) {
-		g_mapOpen = true;
-	}
 	if (maze && opened == 0) {
 		MazeMapCancelled();
 	}
@@ -356,6 +317,61 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 		OutdoorMapCancelled();
 	}
 	return opened;
+}
+
+// The client starts the identify-style item cursor on a right-click for any item whose misc.txt spellicon is 0 to 9 (note 27).
+// A map row cloned from isc keeps 0, so a second map used while one is open shows the cursor. Setting spellicon to -1 is the
+// verified fix (the owner confirmed it from misc.txt); this does the same in memory for rows a modder has not fixed. The item
+// record lookup takes a data flag that picks one of up to four record tables (the game's own flag, game+0x106), so the walk
+// covers the table the running game uses. Only rows whose item code a Maps table row names are touched: any other pSpell 16 row
+// is not ours and keeps the game's check. The write is process-wide and is never restored. Static analysis only: not run in game.
+void ClearMapItemCursor(Game* game) noexcept {
+	if (game == nullptr || !g_parts[ItemRecord].status.on || g_parts[ItemRecord].address == nullptr) {
+		return;
+	}
+	const uint8_t flag = At<uint8_t>(game, GameDataFlagOffset);
+	if (flag >= 4) {
+		return;  // the lookup asserts on a flag of 4 or more
+	}
+	const uint32_t bit = 1u << flag;
+	if ((g_iconsCleared.load(std::memory_order_relaxed) & bit) != 0) {
+		return;
+	}
+	std::shared_ptr<const Tables> tables;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+	}
+	if (tables == nullptr) {
+		return;
+	}
+	int changed = 0;
+	int failed = 0;
+	int32_t rows = 0;
+	for (; rows < RecordScanCap; ++rows) {
+		const uint8_t* record = Call<ItemRecordFn>(ItemRecord)(flag, rows);
+		if (record == nullptr) {
+			break;
+		}
+		if (At<int32_t>(record, RecordSpellOffset) != MapSpell || At<uint8_t>(record, RecordSpellIconOffset) >= 10) {
+			continue;
+		}
+		char code[5] = {};
+		std::memcpy(code, record + RecordCodeOffset, 4);
+		if (FindMapByItem(tables->maps, Trim(code)) == nullptr) {
+			continue;
+		}
+		const uint8_t minusOne = 0xff;
+		if (WriteGame(const_cast<uint8_t*>(record) + RecordSpellIconOffset, &minusOne, 1)) {
+			++changed;
+		} else {
+			++failed;
+		}
+	}
+	if (rows > 0) {
+		g_iconsCleared.fetch_or(bit);
+		plog::Info("map items: spellicon set to -1 on %d map item row(s) of %d in data bank %u (%d write(s) failed)", changed, rows, static_cast<unsigned>(flag), failed);
+	}
 }
 
 // --- The hooks ---------------------------------------------------------------------------------------------------------
@@ -662,7 +678,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	}
 	const uint64_t result = g_tickOriginal(game, unit);
 	if (g_live.load(std::memory_order_relaxed)) {
-		(void)ClearMapItemCursor();
+		ClearMapItemCursor(game);
 	}
 	if (!g_tickSeen.load(std::memory_order_relaxed)) {
 		g_tickSeen = true;
@@ -677,15 +693,6 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	}
 	if (g_requested.load(std::memory_order_relaxed) && g_live.load() && game != nullptr && unit != nullptr) {
 		ServeRequest(game, unit);
-	}
-	if (known != NoPlayer && g_live.load() && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
-		// A copy of the gates for the item listener, which runs on another thread and cannot read the game.
-		if (g_gateTicks++ % GateReadEvery == 0) {
-			const GateState state = GateStateOf(game, unit);
-			std::lock_guard<std::mutex> lock(g_gateLock);
-			g_gateCache = state;
-			g_gateCacheValid = true;
-		}
 	}
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
@@ -714,7 +721,6 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		}
 		g_tickSeen = false;  // an old server may tick once more after GameLeft: this game must show its own tick
 		g_firstLogged = false;
-		g_iconsCleared = false;
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
@@ -729,12 +735,6 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_localPlayer = NoPlayer;
 		g_tickSeen = false;
 		g_firstLogged = false;
-		g_iconsCleared = false;
-		g_mapOpen = false;
-		{
-			std::lock_guard<std::mutex> lock(g_gateLock);
-			g_gateCacheValid = false;
-		}
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
@@ -791,99 +791,6 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 			(void)lifecycle->unregisterGameplayEventListener(context, readyHandle);  // GameLeft stays
 		}
 	}
-}
-
-// A map item the game would refuse (a map already open, not Hell, slot problems): the check refusal (the check returning 0) goes
-// down a different path in the item handler (docs/reverse-engineering/cartographer/22-item-refusal-cursor.md), and the map item is
-// a copy of the Scroll of Identify, whose cursor the game may start. The item interaction listener sees the right-click first, on
-// the UI thread, and stops it there with the check's own sentence: no use, the item stays. Only gates that cannot go stale the wrong
-// way are refused here; the gate copy the tick keeps is up to GateReadEvery ticks old, so level, area and free spot are left to the
-// check, so for character level, area and free spot the item cursor can still come back (follow-up). A map already open is known without that copy (opened here, or told by the host to a joined client). A joined client never
-// fills the copy, so it refuses nothing else and the host's check decides. A held modifier key steps aside. Best effort: without the
-// service the check refusal stays. When a map is open and a slot problem also exists, "already open" is said first on purpose. Not yet seen to fire in game.
-const D2RL::ItemService* g_itemService = nullptr;
-
-auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
-	using D2RL::ItemInteractions::Decision;
-	try {
-		if (g_live.load()) {
-			(void)ClearMapItemCursor();  // before the game's own right-click handling reads the record
-		}
-		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate ||
-		    (event->modifiers & (D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Shift) | D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Control))) != 0) {
-			return Decision::Continue;  // Shift or Ctrl held: not a plain use (Alt is let through; the belt is not covered either)
-		}
-		D2RL::Items::ItemInfo info{};
-		info.structSize = D2RL::Items::ItemInfoSize;
-		if (g_itemService->getItemInfo(context, event->item, &info) != D2RL::Items::Result::Success) {
-			return Decision::Continue;
-		}
-		std::shared_ptr<const Tables> tables;
-		{
-			std::lock_guard<std::mutex> lock(g_lock);
-			tables = g_tables;
-		}
-		if (tables == nullptr) {
-			return Decision::Continue;
-		}
-		const std::string code = ItemCodeFromPacked(info.code);
-		const MapDef* map = FindMapByItem(tables->maps, code);
-		if (map == nullptr) {
-			return Decision::Continue;
-		}
-		std::string text;
-		if (g_mapOpen.load() || MapSyncRemoteMap().has_value()) {
-			// A map is open: opened here (host, single player) or told by the host (joined client). Needs no reading of the gates.
-			text = RefusalText(Gate::AlreadyOpen, *map, GateState{});
-		} else {
-			GateState state;
-			{
-				std::lock_guard<std::mutex> lock(g_gateLock);
-				if (!g_gateCacheValid) {
-					return Decision::Continue;  // no reading: a joined client never fills it, and the host's check decides there
-				}
-				state = g_gateCache;
-			}
-			text = SlotProblem(*map, *tables, SlotLevel(tables->slots, SlotNameFor(*map)));
-			if (text.empty()) {
-				text = MapItemRefusal(tables->maps, code, state);
-			}
-		}
-		if (text.empty()) {
-			return Decision::Continue;
-		}
-		plog::Info("%s (the item was stopped before the game could start a cursor)", text.c_str());
-		ShowPlayerMessage(text);
-		return Decision::Consume;
-	} catch (...) {
-		return Decision::Continue;
-	}
-}
-
-void InstallItemGuard(const D2RL::PluginContext* context) noexcept {
-	const D2RL::ItemInteractionService* interactions = nullptr;
-	if (context->QueryService(&interactions) != D2RL::ServiceQueryResult::Success || interactions == nullptr ||
-	    !D2RL::HasItemInteractionServiceField(interactions, D2RL::ItemInteractionServiceRequiredSize) || interactions->registerListener == nullptr) {
-		plog::Warn("D2RLoader has no ItemInteraction service of the expected version: a second map item may start the item cursor");
-		return;
-	}
-	const D2RL::ItemService* items = nullptr;
-	if (context->QueryService(&items) != D2RL::ServiceQueryResult::Success || items == nullptr || !D2RL::HasItemServiceField(items, D2RL::ItemServiceRequiredSize) ||
-	    items->getItemInfo == nullptr) {
-		plog::Warn("D2RLoader has no Item service of the expected version: a second map item may start the item cursor");
-		return;
-	}
-	g_itemService = items;
-	D2RL::ItemInteractions::ItemInteractionListener listener{};
-	listener.structSize = D2RL::ItemInteractions::ItemInteractionListenerSize;
-	listener.callback = &OnItemActivate;
-	D2RL::ItemInteractions::ListenerHandle handle = D2RL::ItemInteractions::InvalidHandle;
-	if (interactions->registerListener(context, &listener, &handle) != D2RL::ItemInteractions::Result::Success) {
-		plog::Warn("D2RLoader refused the item interaction listener: a second map item may start the item cursor");
-		g_itemService = nullptr;
-		return;
-	}
-	plog::Info("item guard on: a second map item is stopped before the game can start its cursor");
 }
 
 auto RequiredPartsOn() noexcept -> bool {
@@ -1026,7 +933,6 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	}
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
-	InstallItemGuard(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
 	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	InstallAutoCheck(context, overrides, ranges, count);

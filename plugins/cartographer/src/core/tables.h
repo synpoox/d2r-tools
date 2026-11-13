@@ -57,6 +57,7 @@ struct GameNames {
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
 	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
+	std::vector<std::string> cursorItems;                 // misc.txt codes with spellicon 0 to 9: the client starts an item cursor on use
 };
 
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
@@ -225,13 +226,5 @@ auto CheckGates(const MapDef& map, const GateState& state) -> Gate;
 
 // The sentence shown to the player and logged when a gate refuses.
 auto RefusalText(Gate gate, const MapDef& map, const GateState& state) -> std::string;
-
-// The item code in an SDK packed code (first letter in the low byte, padded with spaces), without the padding.
-auto ItemCodeFromPacked(uint32_t packed) -> std::string;
-
-// What to tell the player when `itemCode` is a map item and `state` (possibly a few ticks old) shows a refusal that cannot go stale the wrong
-// way: not Hell, or a map already open. Else empty (not a map item, or the game's check decides: character level, area and free spot are
-// left to it). The same sentence the check refusal uses; the item is stopped before the game can start an item cursor.
-auto MapItemRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, const GateState& state) -> std::string;
 
 }  // namespace carto

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- A second map item no longer turns the cursor into the identify cursor when a map is already open.
+- A second map item no longer turns the cursor into the identify cursor when a map is already open: set `spellicon` to -1 on the map rows in `misc.txt` (`cartographer check` points at rows that need it).
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
