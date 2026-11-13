@@ -55,7 +55,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs the map may have, 0 and up (raises the level's own most-unique-packs limit, `MonUMax`, which stops at 255, the most the game stores; the level's minimum is left alone. How many appear is the minimum plus about 6 percent of the map's packs, so it depends on `Density` and the map size, and a `Uniques` above that adds nothing: about 73 on a Large Cave with `Density` 100, reached at about 800 percent; experimental; adds nothing on a level whose `MonUMax` is 0) | 0 | 25 |
+| `Uniques` | no | Percent more unique packs the map may have, 0 and up. Raises the level's `MonUMax` (stops at 255); `MonUMin` is left alone. Past the minimum the game makes about 6 percent of packs unique, so the count depends on `Density` and map size and a larger `Uniques` adds nothing once that is reached (about 73 on a Large Cave at `Density` 100, near 800 percent). Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
