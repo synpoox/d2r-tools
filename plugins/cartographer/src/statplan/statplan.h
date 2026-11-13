@@ -100,6 +100,17 @@ MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds 
 // `stats` without the map-level stat, so it is not reported as a stat that no mapstats.txt row has.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
 
+// The properties.txt property that sets the map level stat (install.ps1 adds the row), and its id: the row number, as the game counts rows.
+inline constexpr const char *kMapLevelProperty = "map-level";
+// The row number of the property whose `code` is `code` in properties.txt text, or -1 (no such row, or no code column).
+int parsePropertyId(std::string_view text, std::string_view code);
+
+// The cube map level (issue #330). `before` and `after` are the item's map level stat before and after the game applied the recipe's
+// `map-level` mod; [min, max] is the mod's range and `roll` the value picked in it. The recipe adds `roll` to the level the map has: when the
+// game left the stat alone, or set it instead of adding, the result is before + roll; otherwise `after` stands. Cut to 1..kMaxStatValue.
+constexpr int kMaxStatValue = 511;
+int cubeMapLevelTarget(int before, int after, int min, int max, int roll);
+
 struct ItemProperties {
 	std::vector<Property> properties; // in the item's order
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out

@@ -177,6 +177,35 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 	return plan;
 }
 
+int parsePropertyId(std::string_view text, std::string_view code)
+{
+	const carto::Tsv table = carto::ParseTsv(text);
+	const int cCode = table.Column("code");
+	if (cCode < 0) return -1;
+	int ordinal = 0;
+	for (const carto::TsvRow &row : table.rows) {
+		const int id = ordinal++;
+		if (table.Cell(row, cCode) == code) return id;
+	}
+	return -1;
+}
+
+int cubeMapLevelTarget(int before, int after, int min, int max, int roll)
+{
+	if (max < min) max = min;
+	const int delta = roll < min ? min : (roll > max ? max : roll);
+	if (delta < 1) return after;
+	int target = after;
+	if (after == before) {
+		target = before + delta; // the game did not touch the stat (a map has no list for it to land on)
+	} else if (before > 0 && after >= min && after <= max && after < before + min) {
+		target = before + after; // the game set the stat to the recipe's value instead of adding it
+	}
+	if (target < kMinMapLevel) target = kMinMapLevel;
+	if (target > kMaxStatValue) target = kMaxStatValue;
+	return target;
+}
+
 MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback)
 {
 	MapLevelPick out;

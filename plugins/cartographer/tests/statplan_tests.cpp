@@ -669,6 +669,28 @@ TEST_CASE("itemStatsToProperties: a layer, a zero value and a stat no pool row n
 	CHECK(drawMapStats(1, MapRow{}, s, pool, r.properties) == r.properties);
 }
 
+TEST_CASE("parsePropertyId: the row number of the property code")
+{
+	const std::string t = "code\tfunc1\nstr\t1\n\nmap-level\t1\n";
+	CHECK(parsePropertyId(t, "str") == 0);
+	CHECK(parsePropertyId(t, "map-level") == 1); // a blank line is not a row, as for itemstatcost.txt
+	CHECK(parsePropertyId(t, "nope") == -1);
+	CHECK(parsePropertyId("x\ty\n", "str") == -1);
+}
+
+TEST_CASE("cubeMapLevelTarget: the recipe adds to the map's level")
+{
+	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5) == 5);       // untouched, a map with no stat
+	CHECK(cubeMapLevelTarget(70, 70, 5, 5, 5) == 75);    // untouched, a second transmute
+	CHECK(cubeMapLevelTarget(70, 5, 5, 5, 5) == 75);     // the game set it instead of adding
+	CHECK(cubeMapLevelTarget(70, 75, 5, 5, 5) == 75);    // the game added: stands
+	CHECK(cubeMapLevelTarget(0, 5, 5, 5, 5) == 5);       // set on a map with none
+	CHECK(cubeMapLevelTarget(10, 7, 5, 9, 7) == 17);     // set to a value in range
+	CHECK(cubeMapLevelTarget(500, 500, 20, 20, 20) == 511); // cut to the stat's 9 bits
+	CHECK(cubeMapLevelTarget(3, 3, 0, 0, 0) == 3);       // a recipe that adds nothing leaves it
+	CHECK(cubeMapLevelTarget(3, 3, 8, 4, 6) == 11);      // max below min: min is used
+}
+
 TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")
 {
 	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");
