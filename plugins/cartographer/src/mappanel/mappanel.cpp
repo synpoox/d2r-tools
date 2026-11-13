@@ -66,8 +66,11 @@ std::string panelText(const std::string &mapName, int monsterLevel, const std::v
 	return out;
 }
 
-bool hiddenAfter(bool visible, bool succeeded) {
-	return visible ? !succeeded : succeeded;
+bool hiddenAfter(bool visible, bool succeeded, bool wasHidden) {
+	if (!succeeded) {
+		return wasHidden;
+	}
+	return !visible;
 }
 
 } // namespace cartographer::mappanel

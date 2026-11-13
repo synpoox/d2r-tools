@@ -22,6 +22,9 @@
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
 - Opening a Treasure chest now rolls its `Drop`.
+- `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
+- Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot when the Boss dies (a rune seen dropping in game, one kill).
+- Opening a Treasure chest rolls its `Drop` (a rune seen dropping in game, one chest).
 - A map's Treasure chest is never locked.
 - A `Monsters` list whose weights are all 0 or add up to more than 255 is refused with a log line; monsters the game never puts in a level's groups are left out.
 - A map's `Boss` now appears in the far room of Cave and Crypt mazes.

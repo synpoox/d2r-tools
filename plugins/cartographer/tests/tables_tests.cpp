@@ -121,6 +121,17 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	CHECK(text.find("This map is skipped.") != std::string::npos);
 }
 
+TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
+	Report report;
+	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);
+	REQUIRE(shapes.shapes.size() == 2);
+	std::vector<MapDef> maps = LoadMaps(std::string(Header) + "A\tJungle\tLong\tLarge\t\tt20\nB\tJungle\tWide\tLarge\t\tt21\nC\tCave\tLong\tLarge\t\tt22\n", Names(), report, &shapes);
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].name == "B");
+	CHECK(maps[1].name == "C");
+	CHECK(Joined(report).find("capped at 9 x 9") != std::string::npos);
+}
+
 TEST_CASE("a shapes.txt row based on Open is Open for Snow too") {
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\nPlains\tOpen\nTwisty\tWinding\n", report);
