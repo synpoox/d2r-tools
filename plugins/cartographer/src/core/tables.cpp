@@ -29,7 +29,7 @@ constexpr Tileset Tilesets[] = {
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
-const std::vector<std::string> Sizes = {"Small", "Medium", "Large"};
+const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "Properties", "EventChance",
                                              "Density", "Champions",   "Uniques"};
@@ -281,9 +281,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		number(cMinChar, "MinCharLevel", 1, 99, &map.minCharLevel);
 		number(cProps, "Properties", 0, 20, &map.properties);
 		number(cEvent, "EventChance", 0, 100, &map.eventChance);
-		number(cDensity, "Density", 0, 1000, &map.density);
-		number(cChampions, "Champions", 0, 1000, &map.champions);
-		number(cUniques, "Uniques", 0, 1000, &map.uniques);
+		number(cDensity, "Density", 0, INT32_MAX, &map.density);
+		number(cChampions, "Champions", 0, INT32_MAX, &map.champions);
+		number(cUniques, "Uniques", 0, INT32_MAX, &map.uniques);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {

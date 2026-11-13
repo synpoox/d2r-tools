@@ -748,31 +748,36 @@ struct Preset {
 	bool loop;
 };
 
-// [shape][size]: Small, Medium, Large. The grid is 6x6, 9x9 and 12x12 macro-cells.
+// [shape][size]: ExtraSmall, Small, Medium, Large. The grid is 4x4, 6x6, 9x9 and 12x12 macro-cells.
 const Preset kPresets[kShapeCount][kSizeCount] = {
 	// Corridor: one long, mostly straight path, few dead ends.
-	{{8, 10, 90, 0, 2, 0, 1, 1, 2, 0, 0, false},
+	{{5, 6, 90, 0, 1, 0, 0, 1, 2, 0, 0, false},
+	 {8, 10, 90, 0, 2, 0, 1, 1, 2, 0, 0, false},
 	 {14, 18, 90, 0, 3, 0, 1, 1, 2, 0, 0, false},
 	 {22, 28, 90, 0, 4, 0, 1, 1, 2, 0, 0, false}},
 	// Winding: one long path with many turns, few dead ends.
-	{{10, 14, 40, 5, 99, 0, 1, 1, 2, 0, 0, false},
+	{{6, 8, 40, 3, 99, 0, 1, 1, 2, 0, 0, false},
+	 {10, 14, 40, 5, 99, 0, 1, 1, 2, 0, 0, false},
 	 {18, 24, 40, 8, 99, 0, 1, 1, 2, 0, 0, false},
 	 {28, 38, 40, 12, 99, 0, 1, 1, 2, 0, 0, false}},
 	// Branching: a main path with several side rooms and dead ends.
-	{{8, 10, 70, 1, 99, 2, 3, 1, 3, 0, 0, false},
+	{{6, 8, 70, 1, 99, 1, 2, 1, 2, 0, 0, false},
+	 {8, 10, 70, 1, 99, 2, 3, 1, 3, 0, 0, false},
 	 {12, 16, 70, 1, 99, 3, 5, 2, 4, 0, 0, false},
 	 {18, 24, 70, 1, 99, 4, 7, 2, 5, 0, 0, false}},
 	// Loop: the path runs in a ring and returns to its start, with a few short side rooms.
-	{{8, 12, 0, 3, 99, 0, 2, 1, 2, 0, 0, true},
+	{{6, 8, 0, 3, 99, 0, 1, 1, 2, 0, 0, true},
+	 {8, 12, 0, 3, 99, 0, 2, 1, 2, 0, 0, true},
 	 {12, 20, 0, 3, 99, 0, 2, 1, 2, 0, 0, true},
 	 {20, 32, 0, 3, 99, 0, 3, 1, 2, 0, 0, true}},
 	// Sprawl: wide and open, with loops and many branches.
-	{{12, 16, 0, 3, 99, 2, 4, 1, 2, 0, 1, true},
+	{{6, 8, 0, 3, 99, 1, 2, 1, 2, 0, 0, true},
+	 {12, 16, 0, 3, 99, 2, 4, 1, 2, 0, 1, true},
 	 {20, 28, 0, 3, 99, 4, 7, 1, 3, 0, 2, true},
 	 {32, 40, 0, 3, 99, 6, 10, 2, 4, 0, 2, true}},
 };
 
-const int kGridSize[kSizeCount] = {6, 9, 12};
+const int kGridSize[kSizeCount] = {4, 6, 9, 12};
 
 } // namespace
 
@@ -784,7 +789,7 @@ const char *shapeName(Shape shape)
 
 const char *sizeName(Size size)
 {
-	static const char *const names[kSizeCount] = {"Small", "Medium", "Large"};
+	static const char *const names[kSizeCount] = {"ExtraSmall", "Small", "Medium", "Large"};
 	return names[static_cast<int>(size)];
 }
 
@@ -1351,8 +1356,9 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName)
 		if (res.errors.size() != errorsBefore) continue;
 
 		res.table.shapes.push_back(def);
-		// Every size must resolve to usable rules that the generator can build.
-		for (int s = 0; s < kSizeCount; ++s) {
+		// Every size must resolve to usable rules that the generator can build. ExtraSmall is checked only when a map uses it
+		// (resolveRules), so a shape written before it existed is not rejected for a size it never asked for.
+		for (int s = static_cast<int>(Size::Small); s < kSizeCount; ++s) {
 			Rules r;
 			std::string e;
 			if (!resolveRules(res.table, def.name, static_cast<Size>(s), r, e)) { err(lineNo, e); break; }

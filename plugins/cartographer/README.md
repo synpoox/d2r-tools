@@ -112,14 +112,14 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl` | required |
-| Size | `Small`, `Medium` or `Large` | Medium |
+| Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
 | Boss | The `Name` of a boss in `bosses.txt`; a vanilla boss is refused | none |
 | Monsters | Up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Uniques | Percent more monsters and unique packs than the level's own (experimental) | 0 |
+| Density, Uniques | Percent more monsters and unique packs than the level's own, no upper limit except the game's own field sizes (experimental) | 0 |
 | Champions | Read and checked, never applied: the game has no setting for it | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
@@ -278,7 +278,7 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 `examples/first-map` has one Jungle row (item `t22`).
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (6000, 3600)); a Snow map's Shape is ignored and its Size
-is Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
+is ExtraSmall, Small, Medium or Large. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Not checked: the edges and void cells (issue #142), Snow corners, and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 

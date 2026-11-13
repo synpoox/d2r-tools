@@ -38,9 +38,9 @@ struct Point {
 };
 
 enum class Shape : uint8_t { Corridor, Winding, Branching, Loop, Sprawl };
-enum class Size : uint8_t { Small, Medium, Large };
+enum class Size : uint8_t { ExtraSmall, Small, Medium, Large };
 constexpr int kShapeCount = 5;
-constexpr int kSizeCount = 3;
+constexpr int kSizeCount = 4;
 
 // What a cell is for. Entrance, Event and Boss are the reserved rooms.
 enum class Role : uint8_t { Empty, Entrance, Path, Event, Boss, Branch };

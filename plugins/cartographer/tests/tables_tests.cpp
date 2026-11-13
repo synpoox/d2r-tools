@@ -1362,3 +1362,21 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK_FALSE(HasOutdoorSlot({maze}));
 	CHECK(HasOutdoorSlot({maze, snow}));
 }
+
+TEST_CASE("Size accepts ExtraSmall, and Density, Champions and Uniques have no 1000 cap") {
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tSize\tItem\tDensity\tChampions\tUniques\n"
+		"A\tCave\tCorridor\tExtraSmall\tt20\t5000\t2000\t1000000\n"
+		"B\tCave\tCorridor\textrasmall\tt21\t2147483647\t\t\n"
+		"C\tCave\tCorridor\t\tt22\t-1\t\t\n",
+		Names(), report);
+	REQUIRE(maps.size() == 2);
+	CHECK(maps[0].size == "ExtraSmall");
+	CHECK(maps[0].density == 5000);
+	CHECK(maps[0].champions == 2000);
+	CHECK(maps[0].uniques == 1000000);
+	CHECK(maps[1].size == "ExtraSmall");
+	CHECK(maps[1].density == 2147483647);
+	CHECK(Joined(report).find("Density '-1'") != std::string::npos);
+}

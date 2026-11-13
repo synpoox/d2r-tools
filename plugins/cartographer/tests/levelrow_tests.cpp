@@ -597,3 +597,19 @@ TEST_CASE("monster groups round trip through the record") {
 	CHECK(Undo(ledger, 139, done, memory.Writer()) == 0);
 	CHECK(std::memcmp(memory.bytes.data(), rec.data(), rec.size()) == 0);
 }
+
+TEST_CASE("Density and Uniques have no 1000 percent cap; only the game's field sizes limit them") {
+	Record rec = SampleRecord();  // MonUMin 2, MonUMax 15
+	PutRec(rec, RecDensityOffset, 4, 100);
+	Request r;
+	r.density = 5000;
+	r.uniques = 5000;
+	const RecordSnapshot s = RecordSnapshotOf(rec.data());
+	CHECK(FindField(PlanRecord(r, s, RecordOnly(false, true, false)), RecDensityOffset)->value == 5100);  // 100 + 5000%
+	const std::vector<Field> packs = PlanRecord(r, s, RecordOnly(false, false, true));
+	CHECK(FindField(packs, RecUMinOffset)->value == 102);   // 2 + 100
+	CHECK(FindField(packs, RecUMaxOffset)->value == 255);   // 15 + 750 stops at a byte
+	r.density = 2147483647;
+	CHECK(FindField(PlanRecord(r, s, RecordOnly(false, true, false)), RecDensityOffset)->value == 0x7fffffffu);  // MonDen is a signed 32-bit value
+	CHECK(ScalePercent(0x7fffffff, 2147483647, 0x7fffffff) == 0x7fffffff);
+}
