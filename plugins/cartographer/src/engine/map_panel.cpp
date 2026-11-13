@@ -50,6 +50,8 @@ const D2RL::PluginContext* g_context = nullptr;
 const D2RL::OverlayService* g_overlay = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
 const D2RL::PanelService* g_panels = nullptr;
+const D2RL::ResourceService* g_resources = nullptr;
+const D2RL::WidgetService* g_widgets = nullptr;  // optional: hides the game's terror zone text while the panel shows
 D2RL::Panels::RegistrationHandle g_panel = D2RL::Panels::InvalidHandle;
 D2RL::Resources::RegistrationHandle g_resource = D2RL::Resources::InvalidHandle;
 D2RL::Overlay::CallbackHandle g_callback = D2RL::Overlay::InvalidCallbackHandle;
@@ -65,6 +67,8 @@ std::atomic<bool> g_inMap{false};
 bool g_open = false;      // the plugin opened the panel and has not closed it
 std::string g_shown;      // what the plugin last put in the text; empty: nothing yet
 uint32_t g_tasks = 0;
+std::atomic<bool> g_hidden{false};  // the plugin hid the game's terror zone text and has not restored it
+int32_t g_hideResult = -1;
 bool g_openFailedLogged = false;
 bool g_notFoundLogged = false;
 std::atomic<bool> g_queued{false};
@@ -107,7 +111,38 @@ void NoticeClosed() noexcept {
 	}
 }
 
+// The panel takes the place of the game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText),
+// so the text is hidden while the panel shows. The game sets the widget's visibility itself, so this runs every task in a map, and
+// the widget is shown again when the panel closes. UI thread.
+void SetTerrorTextVisible(bool visible) noexcept {
+	if (g_widgets == nullptr) {
+		return;
+	}
+	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
+	D2RL::Widgets::WidgetHandle wrapper = D2RL::Widgets::InvalidHandle;
+	D2RL::Widgets::WidgetHandle text = D2RL::Widgets::InvalidHandle;
+	auto result = g_widgets->findPanel(g_context, "HUDWarnings", &hud);
+	if (result == D2RL::Widgets::Result::Success) {
+		result = g_widgets->findWidget(g_context, hud, "TerrorZoneInfoTextWrapper", &wrapper);
+	}
+	if (result == D2RL::Widgets::Result::Success) {
+		result = g_widgets->findWidget(g_context, wrapper, "TerrorZoneInfoText", &text);
+	}
+	if (result == D2RL::Widgets::Result::Success) {
+		result = g_widgets->setWidgetVisible(g_context, text, visible);
+	}
+	const auto last = static_cast<int32_t>(result);
+	if (last != g_hideResult) {
+		g_hideResult = last;
+		plog::Info("map panel: terror zone text %s: result %d", visible ? "shown" : "hidden", last);
+	}
+	g_hidden = !visible && result == D2RL::Widgets::Result::Success;
+}
+
 void ClosePanel() noexcept {
+	if (g_hidden.load()) {
+		SetTerrorTextVisible(true);
+	}
 	if (g_open) {
 		(void)g_panels->closePanel(g_context, g_panel);
 		g_open = false;
@@ -133,6 +168,7 @@ void Apply(const std::string& want) noexcept {
 		g_open = true;
 		g_shown.clear();
 	}
+	SetTerrorTextVisible(false);
 	if (want == g_shown && ++g_tasks % RefreshTasks != 0) {
 		return;
 	}
@@ -182,12 +218,19 @@ void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Fr
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!g_inMap.load() && !g_open) {
+	if (!g_inMap.load() && !g_open && !g_hidden.load()) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
 		g_queued = false;
 	}
+}
+
+void ReleaseResource() noexcept {
+	if (g_resources != nullptr && g_context != nullptr && g_resource != D2RL::Resources::InvalidHandle) {
+		(void)g_resources->unregisterResource(g_context, g_resource);
+	}
+	g_resource = D2RL::Resources::InvalidHandle;
 }
 
 auto BuildLayout() -> std::string {
@@ -222,6 +265,10 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 		return false;
 	}
 	const D2RL::ResourceService* resources = nullptr;
+	if (context->QueryService(&g_widgets) != D2RL::ServiceQueryResult::Success || !D2RL::HasWidgetServiceField(g_widgets, D2RL::WidgetServiceRequiredSize)) {
+		g_widgets = nullptr;
+		plog::Warn("map panel: no Widget service of the expected version; the game's terror zone text stays");
+	}
 	if (context->QueryService(&g_overlay) != D2RL::ServiceQueryResult::Success || !D2RL::HasOverlayServiceField(g_overlay, D2RL::OverlayServiceRequiredSize) ||
 	    context->QueryService(&g_threads) != D2RL::ServiceQueryResult::Success || !D2RL::HasThreadServiceField(g_threads, D2RL::ThreadServiceRequiredSize) ||
 	    context->QueryService(&g_panels) != D2RL::ServiceQueryResult::Success || !D2RL::HasPanelServiceField(g_panels, D2RL::PanelServiceRequiredSize) ||
@@ -232,6 +279,7 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 		plog::Warn("map panel: off (no Overlay, Thread, Panel or Resource service of the expected version)");
 		return false;
 	}
+	g_resources = resources;
 	g_layout = BuildLayout();
 	char path[96];
 	std::snprintf(path, sizeof(path), "data/global/ui/layouts/%s/%shd.json", PluginId, LocalId);
@@ -247,6 +295,10 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 	registration.localId = LocalId;
 	const auto panelResult = g_panels->registerPanel(context, &registration, &g_panel);
 	if (resourceResult != D2RL::Resources::Result::Success || panelResult != D2RL::Panels::Result::Success) {
+		if (g_panel != D2RL::Panels::InvalidHandle) {
+			(void)g_panels->unregisterPanel(context, g_panel);
+		}
+		ReleaseResource();
 		g_panel = D2RL::Panels::InvalidHandle;
 		g_panels = nullptr;
 		plog::Warn("map panel: off (the panel was refused: resource %u, panel %u)", static_cast<uint32_t>(resourceResult), static_cast<uint32_t>(panelResult));
@@ -277,6 +329,7 @@ void UnloadMapPanel() noexcept {
 		(void)g_panels->unregisterPanel(g_context, g_panel);
 		g_panel = D2RL::Panels::InvalidHandle;
 	}
+	ReleaseResource();
 }
 
 void MapPanelMapOpened(const std::string& text, int slotLevel) {

@@ -568,7 +568,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 D2RL_PLUGIN_EXPORT void D2RLoaderUnloadPlugin() noexcept {
 	carto::UnloadMapPanel();
 	carto::BossNamesUnload();
-	carto::MapNamesUnload(); // the slot level's own text back in the game's table
+	carto::MapNamesUnload();  // the slot level's own text back in the game's table
 	carto::LevelRowUnload();  // ... and its own monster fields
 	carto::UnloadMapSync();
 	crash_guard::Remove();

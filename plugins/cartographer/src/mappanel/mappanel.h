@@ -1,6 +1,6 @@
 // Cartographer map panel text: what the side-of-screen panel says while the player is inside a map (the map's name, its
 // monster level and the rolled properties). Pure C++ on plain structs: no engine, no SDK. The engine part
-// (src/engine/map_panel.cpp) puts the text into the game's own terror zone text.
+// (src/engine/map_panel.cpp) puts the text into the plugin's panel.
 #pragma once
 #include <string>
 #include <vector>

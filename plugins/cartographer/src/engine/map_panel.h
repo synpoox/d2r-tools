@@ -1,5 +1,5 @@
 // The map panel (issue #308): while the player stands inside a map, a plugin panel down the right side of the screen, under the
-// game's own area and game info (where the purple terror zone text sits), shows the map's name, monster level and rolled
+// game's own area and game info, in place of the purple terror zone text (hidden while the panel shows), shows the map's name, monster level and rolled
 // properties. Outside a map the panel is closed and the game's own HUD is untouched. The panel is a layout the plugin registers
 // through the D2RLoader Panel and Resource services (cartographer/map-panel); its text is set through the game's own FindPanel,
 // FindChild and SetText (found by byte signature, only called), on the UI thread. A part or service that is missing, or a fault,
