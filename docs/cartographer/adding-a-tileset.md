@@ -15,7 +15,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 4. **The data the planner reads**: the piece table (LvlPrest ids, DS1 files, file counts, and whatever joins pieces: exit masks for Jungle, fence sockets for Snow). Jungle's catalogue is built into the plugin; the planner receives it as an argument.
 5. **The independent plan check** (`checkSnowPlan` is the model: re-derive every cell, socket and rectangle without the planner).
 6. **Tests**: the pins in `tests/outdoor_tests.cpp` (the table test) and `tests/tables_tests.cpp` (tileset names, ready list) name every row, so they change with the table. Add the planner's own tests.
-7. **Docs**: the tileset in the plugin README and `docs/cartographer/tables.md`, a `CHANGELOG.md` line under `Unreleased`, and a reverse-engineering note with the evidence for any new engine fact.
+7. **Docs**: the tileset in the plugin README and `docs/cartographer/tables.md`, a changelog fragment (`plugins/cartographer/changelog.d/<issue>.md`, one line), and a reverse-engineering note with the evidence for any new engine fact.
 8. **The in-game checks** for the new level (arrival in the entrance cell, the Boss and the event standing in their rooms). Unit tests do not cover these.
 
 ## What the table drives (no edit needed)
@@ -34,7 +34,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 
 ## What the tileset must supply
 
-The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of ExtraSmall, Small, Medium and Large, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
+The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium, Large and ExtraLarge, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
 
 ## Adding a maze tileset
 

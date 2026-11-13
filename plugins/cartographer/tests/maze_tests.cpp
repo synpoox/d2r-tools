@@ -372,7 +372,7 @@ TEST_CASE("level size is an output: (2 x k + 1) x room, clamped to the allowed m
 	CHECK(levelTilesFor(caveTileset(200), 6) == 200);
 	CHECK(capacityAt(24, 312, 312).left == 6);
 	CHECK(capacityAt(24, 312, 312).right == 6);
-	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::ExtraLarge);
 	for (uint64_t seed = 1; seed <= 200; ++seed) {
 		const SeedPlan sp = planForSeed(cave, r, seed);
 		REQUIRE(sp.plan.steer);
@@ -422,8 +422,8 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 					CHECK(t.badShape == 0);
 				} else {
 					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all (Open is not one: its grid shrinks to fit).
-					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small && size != layout::Size::ExtraSmall) ||
-					                        (shape == layout::Shape::Loop && size == layout::Size::Large);
+					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Medium && size != layout::Size::Small) ||
+					                        (shape == layout::Shape::Loop && size == layout::Size::ExtraLarge);
 					CHECK((t.steered > 0) != impossible);
 				}
 				// Crypt rooms are tiny: nothing may fall back, whatever the reason.
@@ -478,7 +478,7 @@ TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
 	const Case cases[2] = {{caveTileset(), layout::Shape::Corridor}, {cryptTileset(), layout::Shape::Branching}};
 	for (const Case &c : cases) {
 		INFO(c.ts.name << " " << layout::shapeName(c.shape));
-		for (layout::Size size : {layout::Size::Small}) {
+		for (layout::Size size : {layout::Size::Medium}) {
 			const SeedPlan sp = planForSeed(c.ts, layout::presetRules(c.shape, size), 1);
 			REQUIRE(sp.plan.steer);
 			const Plan &p = sp.plan;
@@ -511,22 +511,22 @@ TEST_CASE("same seed gives the same plan; the plan hash is stable")
 	const Tileset cave = caveTileset();
 	const Tileset crypt = cryptTileset();
 	for (uint64_t seed = 1; seed <= 20; ++seed) {
-		const SeedPlan a = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), seed);
-		const SeedPlan b = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), seed);
+		const SeedPlan a = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), seed);
+		const SeedPlan b = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), seed);
 		CHECK(planHash(a.plan) == planHash(b.plan));
 	}
-	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) !=
-	      planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 2).plan));
+	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 1).plan) !=
+	      planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 2).plan));
 	// Golden values (FNV-1a over the plan): they pin the plan across compilers and platforms.
-	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1).plan) == 13524385595187565503ull);
-	CHECK(planHash(planForSeed(crypt, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), 1).plan) == 8847548717809474728ull);
+	CHECK(planHash(planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 1).plan) == 13524385595187565503ull);
+	CHECK(planHash(planForSeed(crypt, layout::presetRules(layout::Shape::Branching, layout::Size::Large), 1).plan) == 8847548717809474728ull);
 }
 
 TEST_CASE("fixed-flag timing: a placed end fixed before 0x3eb850 runs is missed by its scan")
 {
 	for (const Tileset &ts : {caveTileset(), cryptTileset()})
 		for (uint64_t seed = 1; seed <= 50; ++seed) {
-			const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), seed);
+			const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Large), seed);
 			REQUIRE(sp.plan.steer);
 			CHECK(verify(ts, sp.layout, sp.plan).empty());
 			// The wrong order (fix the entrance right after the walk) must be caught by the replay.
@@ -543,7 +543,7 @@ TEST_CASE("a maze has an entrance and no exit: Down and Next calls never move th
 		const int *down = ts.name == "Crypt" ? kCryptNext : kCaveDown;
 		for (uint64_t seed = 1; seed <= 200; ++seed)
 			for (layout::Shape shape : {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching}) {
-				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Small), seed);
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), seed);
 				REQUIRE(sp.plan.steer);
 				REQUIRE(sp.plan.entrance.place);
 				INFO(verify(ts, sp.layout, sp.plan));
@@ -566,7 +566,7 @@ TEST_CASE("a maze has an entrance and no exit: Down and Next calls never move th
 TEST_CASE("verify is not vacuous: a plan whose entrance names the wrong room is rejected")
 {
 	const Tileset ts = caveTileset();
-	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 7);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 7);
 	REQUIRE(sp.plan.steer);
 	Plan bad = sp.plan;
 	bad.entrance.room = 0;
@@ -578,7 +578,7 @@ TEST_CASE("loops: link steps close the rings, and the ends of a ring are ordinar
 	const Tileset crypt = cryptTileset();
 	int withLinks = 0;
 	for (uint64_t seed = 1; seed <= 200; ++seed) {
-		const SeedPlan sp = planForSeed(crypt, layout::presetRules(layout::Shape::Loop, layout::Size::Medium), seed);
+		const SeedPlan sp = planForSeed(crypt, layout::presetRules(layout::Shape::Loop, layout::Size::Large), seed);
 		REQUIRE(sp.plan.steer);
 		CHECK(verify(crypt, sp.layout, sp.plan).empty());
 		CHECK(!sp.plan.links.empty()); // the ring has one non-tree edge at least
@@ -596,7 +596,7 @@ TEST_CASE("a tileset without an entrance family suppresses the call and keeps th
 	Tileset ts = caveTileset();
 	ts.prev = DeadEndFamily{};
 	for (uint64_t seed = 1; seed <= 200; ++seed) {
-		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), seed);
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), seed);
 		REQUIRE(sp.plan.steer);
 		CHECK(verify(ts, sp.layout, sp.plan).empty());
 		CHECK(!sp.plan.entrance.place);
@@ -609,7 +609,7 @@ TEST_CASE("a tileset without an entrance family suppresses the call and keeps th
 TEST_CASE("steerSpecial: the hook is told which rotation, and strays are suppressed")
 {
 	const Tileset ts = caveTileset();
-	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 7);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 7);
 	REQUIRE(sp.plan.steer);
 	const SpecialCall &en = sp.plan.entrance;
 	SpecialSteer s = steerSpecial(ts, sp.plan, en.toPiece);
@@ -630,23 +630,23 @@ TEST_CASE("ring grower: no-op only for tilesets that call it, and the graph move
 	Tileset ts = caveTileset();
 	ts.name = "Jail";
 	ts.callsRingGrower = true;
-	SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Small), 3);
+	SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 3);
 	REQUIRE(sp.plan.steer);
 	CHECK(sp.plan.ring.noOp);
 	CHECK(!sp.plan.ring.graphInRing);
 	ts.walkFollowsRing = false;
-	sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Small), 3);
+	sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 3);
 	CHECK(sp.plan.ring.noOp);
 	CHECK(sp.plan.ring.graphInRing);
 	INFO(verify(ts, sp.layout, sp.plan));
 	CHECK(verify(ts, sp.layout, sp.plan).empty());
-	CHECK(!planForSeed(caveTileset(), layout::presetRules(layout::Shape::Winding, layout::Size::Small), 3).plan.ring.noOp);
+	CHECK(!planForSeed(caveTileset(), layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 3).plan.ring.noOp);
 }
 
 TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 {
 	const Tileset cave = caveTileset();
-	const Layout good = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 5).layout;
+	const Layout good = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 5).layout;
 	INFO(planMaze(cave, good).reason << "\n" << layout::toAscii(good));
 	REQUIRE(planMaze(cave, good).steer);
 
@@ -666,7 +666,7 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 	{
 		bool found = false;
 		for (uint64_t seed = 1; seed < 400 && !found; ++seed) {
-			const Layout l = layout::generate(layout::presetRules(layout::Shape::Winding, layout::Size::Large), seed);
+			const Layout l = layout::generate(layout::presetRules(layout::Shape::Winding, layout::Size::ExtraLarge), seed);
 			int minX = l.width, maxX = -1;
 			for (int y = 0; y < l.height; ++y)
 				for (int x = 0; x < l.width; ++x)
@@ -686,7 +686,7 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 	{
 		Tileset ts = cave;
 		ts.maskPieces = static_cast<uint16_t>(0xFFFE & ~(1u << 3)); // no "EW" piece
-		const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Small, 5);
+		const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Medium, 5);
 		bool needs = false;
 		for (const layout::Cell &c : l.cells) needs = needs || c.mask == 3;
 		const Plan p = planMaze(ts, l);
@@ -714,7 +714,7 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 	{
 		Tileset ts = cave;
 		ts.maxLevelTiles = 24;
-		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1);
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 1);
 		CHECK(!sp.plan.steer);
 		CHECK(!sp.plan.reason.empty());
 	}
@@ -722,7 +722,7 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 	{
 		Tileset ts = cave;
 		ts.maxLevelTiles = 72; // 1 + 1 + 1 rooms: a corridor of 3 can not hold a 10-room path
-		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 1);
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 1);
 		CHECK(!sp.plan.steer);
 		CHECK(sp.plan.reason.find("0x") == std::string::npos);
 		// No preset field names: an author never sees them.
@@ -734,11 +734,11 @@ TEST_CASE("fallback: each way a layout cannot fit gives a plain-English reason")
 
 TEST_CASE("fitRules clamps the grid to the level and leaves a roomy level alone")
 {
-	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::ExtraLarge);
 	CHECK(r.width == 12);
 	CHECK(fitRules(caveTileset(200), r).width == 7);  // a 200-tile slot
 	CHECK(fitRules(caveTileset(200), r).height == 7);
-	CHECK(fitRules(caveTileset(), r).width == 12);    // the allowed maximum holds the whole Large grid
+	CHECK(fitRules(caveTileset(), r).width == 12);    // the allowed maximum holds the whole ExtraLarge grid
 	CHECK(fitRules(cryptTileset(), r).width == 12);
 }
 
@@ -786,7 +786,7 @@ Group caveGroup()
 
 Plan steeringCavePlan(const Tileset &ts)
 {
-	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Medium);
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
 	for (uint64_t seed = 1; seed < 200; ++seed) {
 		const SeedPlan sp = planForSeed(ts, r, seed);
 		if (sp.plan.steer && sp.plan.entrance.place) return sp.plan;
@@ -830,7 +830,7 @@ TEST_CASE("the slot row's declared size clamps the tileset and a row below one r
 	CHECK(tiny.reason.find("less than one Cave room") != std::string::npos);
 	CHECK(!clampToSlot(cave, 0, 0).ok);
 	// A plan on the clamped tileset never asks for more than the row declares.
-	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::Large);
+	const layout::Rules r = layout::presetRules(layout::Shape::Winding, layout::Size::ExtraLarge);
 	for (uint64_t seed = 1; seed <= 100; ++seed) {
 		const SeedPlan sp = planForSeed(small.tileset, r, seed);
 		if (!sp.plan.steer) continue;
@@ -850,7 +850,7 @@ TEST_CASE("planForMap: a shapes.txt shape plans within the size caps across many
 	for (const int slot : {360, 200}) {
 		for (const char *tileset : {"Cave", "Crypt"}) {
 			for (const char *name : {"Snake", "fat snake"}) {
-				for (const char *size : {"Small", "Medium", "Large"}) {  // ExtraSmall (4 x 4) is too tight for these 12+ cell shapes
+				for (const char *size : {"Medium", "Large", "ExtraLarge"}) {  // Small (4 x 4) is too tight for these 12+ cell shapes
 					int steered = 0;
 					for (uint64_t seed = 1; seed <= 150; ++seed) {
 						const MapPlan p = planForMap(tileset, parsed.table, name, size, seed, slot, slot);
@@ -878,8 +878,8 @@ TEST_CASE("planForMap: a shape whose shapes.txt row was bad falls back with a re
 		"Snake\tWinding\t12\t16\n"
 		"Broken\tWinding\tmany\t16\n");
 	CHECK_FALSE(parsed.errors.empty());
-	CHECK(planForMap("Cave", parsed.table, "Snake", "Medium", 7, 360, 360).steer);
-	const MapPlan bad = planForMap("Cave", parsed.table, "Broken", "Medium", 7, 360, 360);
+	CHECK(planForMap("Cave", parsed.table, "Snake", "Large", 7, 360, 360).steer);
+	const MapPlan bad = planForMap("Cave", parsed.table, "Broken", "Large", 7, 360, 360);
 	CHECK_FALSE(bad.steer);
 	CHECK(bad.reason.find("Broken") != std::string::npos);
 	CHECK(bad.reason.find("cannot be used") != std::string::npos);
@@ -888,24 +888,24 @@ TEST_CASE("planForMap: a shape whose shapes.txt row was bad falls back with a re
 TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot size bounds it; bad input gives a reason")
 {
 	const layout::ShapeTable none;
-	const MapPlan a = planForMap("Cave", none, "Winding", "Medium", 12345, 360, 360);
-	const MapPlan b = planForMap("cave", none, "winding", "medium", 12345, 360, 360);
+	const MapPlan a = planForMap("Cave", none, "Winding", "Large", 12345, 360, 360);
+	const MapPlan b = planForMap("cave", none, "winding", "large", 12345, 360, 360);
 	REQUIRE(a.steer);
 	REQUIRE(b.steer);
 	CHECK(a.hash == b.hash);
 	CHECK(a.seedPlan.plan.levelTilesX <= 360);
-	const MapPlan c = planForMap("Cave", none, "Winding", "Large", 777, 200, 200);
+	const MapPlan c = planForMap("Cave", none, "Winding", "ExtraLarge", 777, 200, 200);
 	if (c.steer) {
 		CHECK(c.seedPlan.plan.levelTilesX <= 200);
 		CHECK(c.seedPlan.plan.levelTilesY <= 200);
 	} else {
 		CHECK(!c.reason.empty());
 	}
-	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
-	CHECK(planForMap("Barracks", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
-	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
-	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
-	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
+	CHECK(planForMap("Crypt", none, "Loop", "Medium", 5, 360, 360).steer);
+	CHECK(planForMap("Barracks", none, "Winding", "Large", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Zigzag", "Large", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium, Large or ExtraLarge") != std::string::npos);
+	CHECK(planForMap("Cave", none, "Winding", "Large", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
 	CHECK(mixSeed(1, 2) != mixSeed(2, 1));
 	CHECK(mixSeed(1, 2) == mixSeed(1, 2));
 }
@@ -1130,7 +1130,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 		CHECK(t.prev.present == (row.prevPiece[0] != 0));
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
+	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
 	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava or Ice.");
 }
@@ -1242,7 +1242,7 @@ TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece,
 	Tileset ts;
 	REQUIRE(builtinTileset("Ice", ts));
 	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
-	const layout::Size sizes[] = {layout::Size::ExtraSmall, layout::Size::Small, layout::Size::Medium, layout::Size::Large};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
 	int steered = 0;
 	for (layout::Shape shape : shapes)
 		for (layout::Size size : sizes)
@@ -1263,7 +1263,7 @@ TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece,
 				}
 			}
 	CHECK(steered > 200);
-	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 4);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 1022; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
 	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
@@ -1275,7 +1275,7 @@ TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 g
 	Tileset ts;
 	REQUIRE(builtinTileset("Ice", ts));
 	for (uint64_t seed = 1; seed <= 40; ++seed) {
-		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), seed);
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Branching, layout::Size::Large), seed);
 		if (!sp.plan.steer) continue;
 		int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
 		for (const Room &r : sp.plan.rooms) {
@@ -1341,7 +1341,7 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 		for (size_t si = 0; si < 4; ++si) {
 			const layout::Shape shape = shapes[si];
 			for (int seed = 1; seed <= 60; ++seed) {
-				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), static_cast<uint64_t>(seed));
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Large), static_cast<uint64_t>(seed));
 				if (!sp.plan.steer) continue;
 				const std::vector<RoomRect> rects = builtRects(sp.plan, ts.roomTiles, 1000, 2000, seed % 7);
 				const ArrivalMark m = planArrival(sp.plan, ts.roomTiles, rects);
@@ -1383,7 +1383,7 @@ TEST_CASE("arrival: the room in the middle of the entrance cell is marked, for e
 TEST_CASE("arrival: a room that already carries the mark is cleared, and the marked room is never in the clear list")
 {
 	const Tileset cave = caveTileset();
-	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Small), 3);
+	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 3);
 	REQUIRE(sp.plan.steer);
 	std::vector<RoomRect> rects = builtRects(sp.plan, 24, 0, 0);
 	const ArrivalMark first = planArrival(sp.plan, 24, rects);
@@ -1404,7 +1404,7 @@ TEST_CASE("arrival: a room that already carries the mark is cleared, and the mar
 TEST_CASE("arrival: the level is left to the game, with a reason, when nothing can be proven")
 {
 	const Tileset cave = caveTileset();
-	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Winding, layout::Size::Small), 5);
+	const SeedPlan sp = planForSeed(cave, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 5);
 	REQUIRE(sp.plan.steer);
 	const std::vector<RoomRect> good = builtRects(sp.plan, 24, 0, 0);
 	REQUIRE(planArrival(sp.plan, 24, good).mark);
@@ -1429,7 +1429,7 @@ TEST_CASE("arrival: the level is left to the game, with a reason, when nothing c
 	SeedPlan inner;
 	for (const layout::Shape shape : {layout::Shape::Loop, layout::Shape::Branching, layout::Shape::Winding}) {
 		for (int seed = 1; seed <= 200 && !inner.plan.steer; ++seed) {
-			const SeedPlan c = planForSeed(cave, layout::presetRules(shape, layout::Size::Large), static_cast<uint64_t>(seed));
+			const SeedPlan c = planForSeed(cave, layout::presetRules(shape, layout::Size::ExtraLarge), static_cast<uint64_t>(seed));
 			if (!c.plan.steer) continue;
 			const ArrivalMark m0 = planArrival(c.plan, 24, builtRects(c.plan, 24, 0, 0));
 			if (m0.mark && m0.cellX > 0 && m0.cellY > 0 && m0.cellX < c.plan.widthRooms - 1 && m0.cellY < c.plan.heightRooms - 1) inner = c;
@@ -1457,7 +1457,7 @@ TEST_CASE("cell room: the event and boss rooms are found by rect in their plan c
 	for (const Tileset &ts : tiles) {
 		for (const layout::Shape shape : shapes) {
 			for (int seed = 1; seed <= 40; ++seed) {
-				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Medium), static_cast<uint64_t>(seed));
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, layout::Size::Large), static_cast<uint64_t>(seed));
 				if (!sp.plan.steer) continue;
 				std::vector<RoomRect> rects = builtRects(sp.plan, ts.roomTiles, 1000, 2000);
 				// The real failure (issue #184): the walk's record of a plan room is stale after the build. It reads as a 0 x 0 room at
@@ -1497,7 +1497,7 @@ TEST_CASE("cell room: the event and boss rooms are found by rect in their plan c
 TEST_CASE("cell room: refused with a reason when there is nothing to match")
 {
 	const Tileset ts = caveTileset();
-	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 3);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Large), 3);
 	REQUIRE(sp.plan.steer);
 	const std::vector<RoomRect> rects = builtRects(sp.plan, ts.roomTiles, 1000, 2000);
 	CHECK(planCellRoom(sp.plan, ts.roomTiles, -1, rects).room < 0);
@@ -1512,4 +1512,41 @@ TEST_CASE("cell room: refused with a reason when there is nothing to match")
 	const CellRoom c = planCellRoom(sp.plan, ts.roomTiles, 0, cut);
 	CHECK(c.room < 0);
 	CHECK_FALSE(c.why.empty());
+}
+
+TEST_CASE("cell room: every room of the cell is ranked, the chosen one first, ties by y then x")
+{
+	const Tileset ts = caveTileset();
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Corridor, layout::Size::Medium), 3);
+	REQUIRE(sp.plan.steer);
+	// every cell built as 2 x 2 engine rooms of 8 tiles, as an Ice cell is
+	const int unit = 16, half = 8;
+	int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+	for (const Room &r : sp.plan.rooms) {
+		minX = std::min(minX, r.dx);
+		minY = std::min(minY, r.dy);
+	}
+	std::vector<RoomRect> rects;
+	for (const Room &r : sp.plan.rooms) {
+		for (int j = 1; j >= 0; --j) {
+			for (int i = 1; i >= 0; --i) {
+				rects.push_back({1000 + (r.dx - minX) * unit + i * half, 2000 + (r.dy - minY) * unit + j * half, half, half, 0});
+			}
+		}
+	}
+	const CellRoom c = planCellRoom(sp.plan, unit, 0, rects);
+	REQUIRE(c.room >= 0);
+	REQUIRE(c.ranked.size() == 4);
+	CHECK(c.ranked.front() == c.room);
+	// all four are equally near the centre: top-left, top-right, bottom-left, bottom-right
+	const auto at = [&](int k) -> const RoomRect & { return rects[static_cast<size_t>(c.ranked[static_cast<size_t>(k)])]; };
+	CHECK(at(0).x == c.originX);
+	CHECK(at(0).y == c.originY);
+	CHECK(at(1).x == c.originX + half);
+	CHECK(at(1).y == c.originY);
+	CHECK(at(2).x == c.originX);
+	CHECK(at(2).y == c.originY + half);
+	CHECK(at(3).x == c.originX + half);
+	CHECK(at(3).y == c.originY + half);
+	CHECK(planCellRoom(sp.plan, unit, -1, rects).ranked.empty());
 }

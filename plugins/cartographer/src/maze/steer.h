@@ -175,9 +175,11 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 // top-left room, or freed memory read as (1,0) 0 x 0), so the room is found by its rect in the level's list, as the arrival is: the
 // room with area whose corner is in the plan room's cell and whose centre is nearest the cell's centre. Rooms with no area are
 // skipped everywhere, the box check included. room < 0, with `why`, when the built rooms do not span the plan's box or the
-// cell holds no room.
+// cell holds no room. `ranked` lists all the cell's rooms in that order, so a caller whose first choice has no usable spot
+// (a quadrant with no floor) can try the next.
 struct CellRoom {
 	int room = -1;  // index into the rects
+	std::vector<int> ranked;  // every room of the cell (indexes into the rects), `room` first, then the rest by the same rule
 	std::string why;
 	int cellX = 0, cellY = 0;
 	int32_t originX = 0, originY = 0, minX = 0, minY = 0;

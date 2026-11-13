@@ -85,7 +85,7 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		// Snow is lines of fence pieces, not a layout of exit-mask pieces: only the stamps reach the hook and the grid comparison.
 		int cellsW = 0, cellsH = 0;
 		if (!snow::snowSizeCells(request.size, &cellsW, &cellsH)) {
-			return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
+			return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
 		}
 		snow::SnowRequest snowRequest;
 		snowRequest.seed = request.seed;
@@ -109,7 +109,7 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		// Siege is one line of 16 x 48 strips: only the stamps reach the hook and the grid comparison, as for Snow.
 		siege::SiegeRequest siegeRequest;
 		if (!siege::siegeSizeStrips(request.size, &siegeRequest.strips)) {
-			return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
+			return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
 		}
 		siegeRequest.seed = request.seed;
 		siegeRequest.options.originX = request.options.originX;
@@ -126,9 +126,9 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		out.ok = true;
 		return out;
 	}
-	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Medium") : std::string_view(request.size));
+	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Large") : std::string_view(request.size));
 	if (!size) {
-		return fail("The size '" + request.size + "' is not ExtraSmall, Small, Medium or Large.");
+		return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
 	}
 	const layout::ShapeTable none;
 	layout::Rules rules;
@@ -136,8 +136,8 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	if (!layout::resolveRules(request.shapes != nullptr ? *request.shapes : none, request.shape.empty() ? std::string_view("Winding") : std::string_view(request.shape), *size, rules, error)) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + error);
 	}
-	// An Open map stamps every block (no void), so a Large one is 144 blocks, 2304 rooms: 6 to 8 times the other Jungle maps. Cap it at
-	// the 9 x 9 grid of Medium (81 blocks, 1296 rooms). The cap applies to any outdoor Open layout this planner builds, and the capped
+	// An Open map stamps every block (no void), so an ExtraLarge one is 144 blocks, 2304 rooms: 6 to 8 times the other Jungle maps. Cap it at
+	// the 9 x 9 grid of Large (81 blocks, 1296 rooms). The cap applies to any outdoor Open layout this planner builds, and the capped
 	// rules are checked again (maps.txt checks them at load with capJungleOpenRules).
 	if (const std::string capped = capJungleOpenRules(rules); !capped.empty()) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + capped);
