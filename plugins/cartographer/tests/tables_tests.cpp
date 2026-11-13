@@ -1075,7 +1075,18 @@ TEST_CASE("retired: the Properties column of maps.txt and the Properties and Ite
 	CHECK(settings.Errors() == 0);
 	REQUIRE(settings.problems.size() == 2);
 	CHECK(settings.problems[0].severity == Severity::Note);
+	CHECK(settings.problems[0].text.find("'Properties' is no longer used") != std::string::npos);
 	CHECK(settings.problems[1].text.find("'ItemStats' is no longer used") != std::string::npos);
+}
+
+TEST_CASE("a leftover mapstats.txt is noted as retired, not an error") {
+	Report report;
+	NoteRetiredMapStats(report);
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].severity == Severity::Note);
+	CHECK(report.problems[0].file == "mapstats.txt");
+	CHECK(report.problems[0].text.find("no longer used") != std::string::npos);
 }
 
 TEST_CASE("repeated header columns are reported in maps and mapevents") {

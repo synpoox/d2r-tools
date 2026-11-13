@@ -243,7 +243,7 @@ auto LoadAll() -> Loaded {
 	}
 	text.clear();
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapStatsFile), carto::MapStatsFile, &text, loaded.report)) {
-		loaded.report.Note(carto::MapStatsFile, 0, "the file is no longer used: a map's properties are stats on its item (rare and unique maps). It is ignored.");
+		carto::NoteRetiredMapStats(loaded.report);
 	}
 	// itemstatcost.txt gives the ids the game is asked for, and the names of the stats on a map item.
 	text.clear();

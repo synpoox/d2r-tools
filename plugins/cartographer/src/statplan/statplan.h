@@ -71,7 +71,7 @@ struct Plan {
 	std::vector<Entry> monsters;
 	std::vector<Entry> players;
 	std::vector<Skipped> skipped;
-	std::vector<std::string> notes; // a value that was cut to a safe one, in plain English
+	std::vector<std::string> notes; // a value the plan kept that may misbehave, in plain English (logged)
 	bool empty() const { return monsters.empty() && players.empty(); }
 };
 
@@ -84,10 +84,9 @@ struct Plan {
 // caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
 std::string refusedReason(Target target, std::string_view stat, int id);
 
-// The lowest value a map gives monsters for velocitypercent. The stat is read as a percent added to 100% speed, so -100 would be no movement and
-// lower would walk backwards, and the monster stat allows -512; this is unverified (not checked against the game binary or in game). buildPlan cuts
-// a monster velocitypercent to this and notes it in Plan::notes. Only the map's own value is cut: other slows on the monster still stack.
-constexpr int kMinMonsterSpeed = -99;
+// A monster velocitypercent at or below this is read as a percent added to 100% speed, so it would be no movement or less. What it does is not
+// checked in game and the value is not limited (the mod's tables are the modder's): buildPlan keeps it and notes it in Plan::notes, which goes to the log.
+constexpr int kStillMonsterSpeed = -100;
 
 // Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
 // refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property

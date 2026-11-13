@@ -192,10 +192,10 @@ void Tell(const std::string& text) noexcept {
 }
 
 // The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
-void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
+void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* /*player*/,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), itemStats);
+		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats);
 		if (tables != nullptr) {
 			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
 		}

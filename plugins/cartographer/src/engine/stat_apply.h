@@ -21,11 +21,11 @@ namespace carto {
 // Returns whether at least one half (monsters or players) can be applied; `parts` gets the parts added by this call.
 auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
-// A map was opened for `playerId` (the opening count is how many maps this game has opened, for the seed). Draws the
+// A map was opened (`openings` is how many maps this game has opened; it only numbers the open in the log). Draws the
 // map item's stats and starts applying them. Game thread. Does nothing when neither half is on.
 // `itemStats` are the map item's own stats (read before it is used up, without the map level): the monster-side ones apply to the map's
 // monsters, the rest to the player. A normal map has none.
-void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
+void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats = {});
 
 // The PlayerStats setting of cartographer.txt (on by default). While off, nothing is ever attached to the player. While on, the

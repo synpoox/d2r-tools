@@ -65,8 +65,11 @@ struct GameNames {
 // False when the code or pSpell column is missing (a missing compactsave column is fine: nothing is compact). With `cursor`, the codes with a blank spellicon or one of 0 to 9 go there.
 auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, int>>* spells, std::vector<std::string>* compact, std::vector<std::string>* cursor = nullptr) -> bool;
 
+// The note for a leftover mapstats.txt (retired: a map's properties are stats on its item). Console and log only, never an error.
+void NoteRetiredMapStats(Report& report);
+
 // Text of an item table with mods (magicprefix, magicsuffix, uniqueitems, setitems or cubemain; `file` names it in the report): a note for each
-// mon-speed mod whose lowest value (min or max) is -100 or lower, because the plugin cuts a map's monster speed to -99 (what -100 or lower does has not been checked in game).
+// mon-speed mod whose lowest value (min or max) is -100 or lower, because what -100 or lower does to monsters has not been checked in game (the plugin does not limit the value).
 void CheckMonSpeedRows(std::string_view text, const std::string& file, Report& report);
 
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
