@@ -53,13 +53,23 @@ using FindPanelFn = void* (*)(const char* name) noexcept;
 using FindChildFn = void* (*)(void* parent, const char* name) noexcept;
 using SetTextFn = void (*)(void* textBox, const StringView* text) noexcept;
 
-enum PartId { FindPanel, FindChild, SetText, PartCount };
+// The game's HUDWarnings update (issue #371): this+0x180 is its TerrorZoneInfoText widget; the vtable entry at +0x50 is SetVisible(bool).
+constexpr int HudTerrorWidgetOffset = 0x180;
+constexpr int WidgetSetVisibleSlot = 0x50;
+using HudUpdateFn = uint64_t (*)(void* self, void* a2, void* a3, void* a4) noexcept;
+
+enum PartId { FindPanel, FindChild, SetText, HudUpdate, PartCount };
+constexpr int PanelPartCount = HudUpdate;  // the parts the plugin's own panel needs; HudUpdate is optional
 
 Part g_parts[PartCount] = {
 	{"UiFindPanel", sig::UiFindPanel, 0, false, nullptr, {}, {}},
 	{"UiFindChild", sig::UiFindChild, 0, false, nullptr, {}, {}},
 	{"UiSetText", sig::UiSetText, 0, false, nullptr, {}, {}},
+	{"HudWarningsUpdate", sig::HudWarningsUpdate, 18, false, nullptr, {}, {}},
 };
+HudUpdateFn g_hudOriginal = nullptr;
+std::atomic<bool> g_hudLive{false};     // the HUDWarnings update is hooked: the map text goes into the game's terror zone field, the own panel stays closed
+std::atomic<uint32_t> g_hudWrites{0};
 
 const D2RL::PluginContext* g_context = nullptr;
 const D2RL::OverlayService* g_overlay = nullptr;
@@ -129,6 +139,48 @@ auto SetRaw(const std::string& text, const char* panelName = PanelName, const ch
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
 		return SetResult::Fault;
 	}
+}
+
+// The hook's write, after the game's own update of the HUDWarnings panel: the map text goes into its terror zone text and the text is shown.
+// Kept apart from the lock: __try and objects with destructors do not mix.
+auto WriteHudText(void* self, const char* text, size_t size) noexcept -> bool {
+	__try {
+		void* const widget = At<void*>(self, HudTerrorWidgetOffset);
+		if (widget == nullptr) {
+			return true;
+		}
+		const StringView view{text, size};
+		Call<SetTextFn>(SetText)(widget, &view);
+		void** const vtable = *static_cast<void***>(widget);
+		reinterpret_cast<void (*)(void*, bool)>(vtable[WidgetSetVisibleSlot / sizeof(void*)])(widget, true);
+		return true;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+auto HudUpdateHook(void* self, void* a2, void* a3, void* a4) noexcept -> uint64_t {
+	const uint64_t result = g_hudOriginal(self, a2, a3, a4);
+	{ static std::atomic<uint32_t> n{0}; const uint32_t c = n.fetch_add(1); if (c % 120 == 0) plog::Info("DEBUGHUD call %u inMap=%d live=%d self=%p", c, g_inMap.load() ? 1 : 0, g_hudLive.load() ? 1 : 0, self); }  // TEMP
+	if (!g_hudLive.load(std::memory_order_relaxed) || !g_inMap.load(std::memory_order_relaxed) || self == nullptr) {
+		return result;
+	}
+	bool ok = true;
+	try {
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (!g_text.empty()) {
+			ok = WriteHudText(self, g_text.c_str(), g_text.size());
+			if (ok && g_hudWrites.fetch_add(1) < 3) {
+				plog::Info("map panel: map text written into the game's terror zone text (%zu character(s))", g_text.size());
+			}
+		}
+	} catch (...) {
+	}
+	if (!ok) {
+		g_hudLive = false;  // the game's text shows again; the plugin's own panel takes over
+		plog::Error("map panel: memory fault while writing the terror zone text; back to the plugin's own panel");
+	}
+	return result;
 }
 
 // Something other than this plugin may close the panel (a game left): the next task then opens it again.
@@ -345,7 +397,7 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 		if (g_on.load()) {
 			std::string want;
 			std::string wantBlue;
-			if (g_inMap.load()) {
+			if (g_inMap.load() && !g_hudLive.load()) {  // with the game's own field in use the plugin's panel stays closed
 				std::lock_guard<std::mutex> lock(g_lock);
 				want = g_text;
 				wantBlue = g_textBlue;
@@ -363,7 +415,7 @@ void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Fr
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!(g_on.load() && (g_inMap.load() || g_open)) && !(g_bannerOn.load() && BannerPending())) {
+	if (!(g_on.load() && ((g_inMap.load() && !g_hudLive.load()) || g_open)) && !(g_bannerOn.load() && BannerPending())) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
@@ -422,6 +474,20 @@ auto BuildBannerLayout() -> std::string {
 
 }  // namespace
 
+// The HUDWarnings update hook (issue #371), after the parts are resolved. Fails open: a part not found or a guard that does not match leaves the
+// plugin's own panel (below the game's terror zone text) as it was. Needs UiSetText.
+void InstallHudHook(const D2RL::PluginContext* context) noexcept {
+	Part& part = g_parts[HudUpdate];
+	if (part.address == nullptr || !part.status.on || !g_parts[SetText].status.on) {
+		plog::Warn("map panel: the game's terror zone text is not used (%s); the panel sits below it", part.status.detail.c_str());
+		return;
+	}
+	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+	const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&HudUpdateHook), reinterpret_cast<void**>(&g_hudOriginal));
+	g_hudLive = HookOutcome(part, hooked, g_hudOriginal != nullptr);
+	plog::Info("map panel: the game's terror zone text %s", g_hudLive.load() ? "shows the map text in a map" : "is not used; the panel sits below it");
+}
+
 auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
 	g_context = context;
 	CodeRange ranges[8];
@@ -433,8 +499,11 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 		if (parts != nullptr) {
 			parts->push_back(part.status);
 		}
-		allOn = allOn && part.status.on;
+		if (&part - g_parts < PanelPartCount) {
+			allOn = allOn && part.status.on;
+		}
 	}
+	InstallHudHook(context);
 	if (!allOn) {
 		plog::Warn("map panel: off (a game part was not found)");
 		return false;
@@ -536,6 +605,7 @@ auto ShowEntryBanner(const std::vector<std::string>& lines) noexcept -> bool {
 }
 
 void UnloadMapPanel() noexcept {
+	g_hudLive = false;  // the hook stays in the game but writes nothing
 	g_on = false;
 	g_clock = false;
 	g_bannerOn = false;
@@ -575,7 +645,7 @@ void MapPanelMapOpened(const std::string& gold, const std::string& blue, int slo
 }
 
 void MapPanelPlayerTick(void* player) noexcept {
-	if (!g_on.load(std::memory_order_relaxed)) {
+	if (!g_on.load(std::memory_order_relaxed) && !g_hudLive.load(std::memory_order_relaxed)) {
 		return;
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -607,8 +677,11 @@ auto MapPanelSummary() -> std::string {
 	if (g_bannerFaulted.load()) {
 		return std::string("Entry banner: off (a memory fault; see the plugin log). ") + (g_on.load() ? "Map panel: on" : "Map panel: off");
 	}
-	if (g_faulted.load()) {
+	if (g_faulted.load() && !g_hudLive.load()) {
 		return "Map panel: off (a memory fault; see the plugin log)";
+	}
+	if (g_hudLive.load()) {
+		return "Map text: on, in the game's terror zone text (the host shows it, a TCP/IP client does not know the properties)";
 	}
 	if (!g_on.load()) {
 		return "Map panel: off (a game part or D2RLoader service was not found)";
