@@ -2,9 +2,11 @@
 
 #include "core/part_signatures.h"
 #include "core/text.h"
+#include "engine/map_panel.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "hookguard.h"
+#include "mappanel.h"
 #include "statplan.h"
 
 #include <windows.h>
@@ -569,6 +571,15 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	if (!g_monstersOn.load() && !plan->monsters.empty()) {
 		plog::Warn("map stats: %zu monster stat(s) drawn, but monster stats are off", plan->monsters.size());
 	}
+	// The map panel (issue #308): the map's name, level and the properties that were drawn and could be applied.
+	std::vector<cartographer::mappanel::Stat> shown;
+	for (const sp::Entry& e : plan->monsters) {
+		shown.push_back({true, e.name, e.value});
+	}
+	for (const sp::Entry& e : plan->players) {
+		shown.push_back({false, e.name, e.value});
+	}
+	MapPanelMapOpened(cartographer::mappanel::panelText(map.name, map.level, shown), slot);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plan = std::move(plan);
 	g_slotLevel = slot;

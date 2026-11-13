@@ -1,0 +1,329 @@
+#include "map_panel.h"
+
+#include "core/part_signatures.h"
+#include "log.h"
+#include "scan.h"
+
+#include <windows.h>
+
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+
+namespace carto {
+
+namespace {
+
+// The panel: a layout the plugin ships as a resource, one TextBoxWidget under a Panel anchored to the top right. Layout units are
+// twice the 1080p pixels. The game's info text (area, difficulty, version, mod) ends 40 units from the right edge and takes about
+// 260 units from the top, so the panel starts under it.
+constexpr const char* PluginId = "cartographer";
+constexpr const char* LocalId = "map-panel";
+constexpr const char* PanelName = "cartographer/map-panel";
+constexpr const char* TextName = "Text";
+constexpr int PanelWidth = 760;
+constexpr int PanelHeight = 420;
+constexpr int PanelTop = 270;
+constexpr int PanelRight = 40;
+constexpr int PointSize = 30;
+constexpr uint32_t RefreshTasks = 30;  // while in the map the text is set again this often, in case it was lost
+
+struct StringView {
+	const char* text;
+	uint64_t size;
+};
+using FindPanelFn = void* (*)(const char* name) noexcept;
+using FindChildFn = void* (*)(void* parent, const char* name) noexcept;
+using SetTextFn = void (*)(void* textBox, const StringView* text) noexcept;
+
+enum PartId { FindPanel, FindChild, SetText, PartCount };
+
+Part g_parts[PartCount] = {
+	{"UiFindPanel", sig::UiFindPanel, 0, false, nullptr, {}, {}},
+	{"UiFindChild", sig::UiFindChild, 0, false, nullptr, {}, {}},
+	{"UiSetText", sig::UiSetText, 0, false, nullptr, {}, {}},
+};
+
+const D2RL::PluginContext* g_context = nullptr;
+const D2RL::OverlayService* g_overlay = nullptr;
+const D2RL::ThreadService* g_threads = nullptr;
+const D2RL::PanelService* g_panels = nullptr;
+D2RL::Panels::RegistrationHandle g_panel = D2RL::Panels::InvalidHandle;
+D2RL::Resources::RegistrationHandle g_resource = D2RL::Resources::InvalidHandle;
+D2RL::Overlay::CallbackHandle g_callback = D2RL::Overlay::InvalidCallbackHandle;
+std::atomic<bool> g_on{false};  // the parts and services are there, the panel is registered and the callback is set
+
+// The open map. Written on the game thread, read on the UI thread.
+std::mutex g_lock;
+std::string g_text;       // the panel text; empty: no map is open
+int g_slotLevel = -1;
+std::atomic<bool> g_inMap{false};
+
+// UI thread only.
+bool g_open = false;      // the plugin opened the panel and has not closed it
+std::string g_shown;      // what the plugin last put in the text; empty: nothing yet
+uint32_t g_tasks = 0;
+bool g_openFailedLogged = false;
+bool g_notFoundLogged = false;
+std::atomic<bool> g_queued{false};
+std::atomic<uint32_t> g_sets{0};
+std::atomic<bool> g_faulted{false};
+std::string g_layout;
+
+template <typename Fn>
+auto Call(PartId id) noexcept -> Fn {
+	return reinterpret_cast<Fn>(const_cast<uint8_t*>(g_parts[id].address));
+}
+
+enum class SetResult { Done, NoWidget, Fault };
+
+auto SetRaw(const std::string& text) noexcept -> SetResult {
+	__try {
+		void* const panel = Call<FindPanelFn>(FindPanel)(PanelName);
+		void* const box = panel != nullptr ? Call<FindChildFn>(FindChild)(panel, TextName) : nullptr;
+		if (box == nullptr) {
+			return SetResult::NoWidget;
+		}
+		const StringView view{text.c_str(), text.size()};
+		Call<SetTextFn>(SetText)(box, &view);
+		return SetResult::Done;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return SetResult::Fault;
+	}
+}
+
+// Something other than this plugin may close the panel (a game left): the next task then opens it again.
+void NoticeClosed() noexcept {
+	if (!g_open) {
+		return;
+	}
+	D2RL::Panels::PanelInfo info{};
+	info.structSize = D2RL::Panels::PanelInfoSize;
+	if (g_panels->getPanelInfo(g_context, g_panel, &info) == D2RL::Panels::Result::Success && info.presentationState != D2RL::Panels::PresentationState::Open) {
+		g_open = false;
+		g_shown.clear();
+	}
+}
+
+void ClosePanel() noexcept {
+	if (g_open) {
+		(void)g_panels->closePanel(g_context, g_panel);
+		g_open = false;
+		g_shown.clear();
+	}
+}
+
+void Apply(const std::string& want) noexcept {
+	NoticeClosed();
+	if (want.empty()) {
+		ClosePanel();
+		return;
+	}
+	if (!g_open) {
+		const auto result = g_panels->openPanel(g_context, g_panel);
+		if (result != D2RL::Panels::Result::Success) {
+			if (!g_openFailedLogged) {
+				g_openFailedLogged = true;
+				plog::Warn("map panel: the panel did not open (result %u); trying again", static_cast<uint32_t>(result));
+			}
+			return;
+		}
+		g_open = true;
+		g_shown.clear();
+	}
+	if (want == g_shown && ++g_tasks % RefreshTasks != 0) {
+		return;
+	}
+	switch (SetRaw(want)) {
+	case SetResult::Done:
+		g_shown = want;
+		g_notFoundLogged = false;
+		if (g_sets.fetch_add(1) < 3) {
+			plog::Info("map panel: text set (%zu character(s))", want.size());
+		}
+		break;
+	case SetResult::NoWidget:
+		g_shown.clear();
+		if (!g_notFoundLogged) {
+			g_notFoundLogged = true;
+			plog::Info("map panel: the panel's text is not there yet; trying again");
+		}
+		break;
+	case SetResult::Fault:
+		g_faulted = true;
+		g_on = false;
+		ClosePanel();
+		plog::Error("map panel: memory fault while setting the text; the panel is now off");
+		break;
+	}
+}
+
+void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
+	g_queued = false;
+	if (!g_on.load()) {
+		return;
+	}
+	try {
+		std::string want;
+		if (g_inMap.load()) {
+			std::lock_guard<std::mutex> lock(g_lock);
+			want = g_text;
+		}
+		Apply(want);
+	} catch (...) {
+		plog::Error("map panel: the panel update failed");
+	}
+}
+
+void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Frame*, void*) noexcept {
+	if (!g_on.load()) {
+		return;
+	}
+	// Idle: no map and no panel of ours open.
+	if (!g_inMap.load() && !g_open) {
+		return;
+	}
+	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
+		g_queued = false;
+	}
+}
+
+auto BuildLayout() -> std::string {
+	char buf[900];
+	std::snprintf(buf, sizeof(buf),
+	              "{\n\"type\": \"Panel\", \"name\": \"%s\",\n\"fields\": { \"rect\": { \"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d }, "
+	              "\"anchor\": { \"x\": 1, \"y\": 0 } },\n\"children\": [\n"
+	              "{ \"type\": \"TextBoxWidget\", \"name\": \"%s\", \"fields\": { \"text\": \"\", \"rect\": { \"x\": 0, \"y\": 0, \"width\": %d, "
+	              "\"height\": %d }, \"style\": { \"fontColor\": { \"r\": 220, \"g\": 195, \"b\": 118, \"a\": 255 }, \"pointSize\": %d, "
+	              "\"alignment\": { \"h\": \"right\", \"v\": \"top\" }, \"options\": { \"newlineHandling\": \"standard\" } } } }\n]\n}\n",
+	              PanelName, -(PanelWidth + PanelRight), PanelTop, PanelWidth, PanelHeight, TextName, PanelWidth, PanelHeight, PointSize);
+	return buf;
+}
+
+}  // namespace
+
+auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {
+	g_context = context;
+	CodeRange ranges[8];
+	const int count = CodeRanges(context->exeBase, ranges, 8);
+	bool allOn = true;
+	for (Part& part : g_parts) {
+		ResolvePart(context, overrides, ranges, count, part);
+		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
+		if (parts != nullptr) {
+			parts->push_back(part.status);
+		}
+		allOn = allOn && part.status.on;
+	}
+	if (!allOn) {
+		plog::Warn("map panel: off (a game part was not found)");
+		return false;
+	}
+	const D2RL::ResourceService* resources = nullptr;
+	if (context->QueryService(&g_overlay) != D2RL::ServiceQueryResult::Success || !D2RL::HasOverlayServiceField(g_overlay, D2RL::OverlayServiceRequiredSize) ||
+	    context->QueryService(&g_threads) != D2RL::ServiceQueryResult::Success || !D2RL::HasThreadServiceField(g_threads, D2RL::ThreadServiceRequiredSize) ||
+	    context->QueryService(&g_panels) != D2RL::ServiceQueryResult::Success || !D2RL::HasPanelServiceField(g_panels, D2RL::PanelServiceRequiredSize) ||
+	    context->QueryService(&resources) != D2RL::ServiceQueryResult::Success || resources == nullptr || resources->serviceSize < D2RL::ResourceServiceRequiredSize) {
+		g_overlay = nullptr;
+		g_threads = nullptr;
+		g_panels = nullptr;
+		plog::Warn("map panel: off (no Overlay, Thread, Panel or Resource service of the expected version)");
+		return false;
+	}
+	g_layout = BuildLayout();
+	char path[96];
+	std::snprintf(path, sizeof(path), "data/global/ui/layouts/%s/%shd.json", PluginId, LocalId);
+	D2RL::Resources::ResourceRegistration resource{};
+	resource.structSize = D2RL::Resources::ResourceRegistrationSize;
+	resource.path = path;
+	resource.bytes = g_layout.data();
+	resource.byteCount = g_layout.size();
+	const auto resourceResult = resources->registerResource(context, &resource, &g_resource);
+	D2RL::Panels::PanelRegistration registration{};
+	registration.structSize = D2RL::Panels::PanelRegistrationSize;
+	registration.flags = D2RL::Panels::PanelFlags::None;
+	registration.localId = LocalId;
+	const auto panelResult = g_panels->registerPanel(context, &registration, &g_panel);
+	if (resourceResult != D2RL::Resources::Result::Success || panelResult != D2RL::Panels::Result::Success) {
+		g_panel = D2RL::Panels::InvalidHandle;
+		g_panels = nullptr;
+		plog::Warn("map panel: off (the panel was refused: resource %u, panel %u)", static_cast<uint32_t>(resourceResult), static_cast<uint32_t>(panelResult));
+		return false;
+	}
+	D2RL::Overlay::CallbackRegistration callback{};
+	callback.structSize = D2RL::Overlay::CallbackRegistrationSize;
+	callback.phase = D2RL::Overlay::Phase::AfterGameUi;
+	callback.callback = OnFrame;
+	const auto result = g_overlay->registerFrameCallback(context, &callback, &g_callback);
+	if (result != D2RL::Overlay::Result::Success) {
+		g_callback = D2RL::Overlay::InvalidCallbackHandle;
+		plog::Warn("map panel: off (the overlay refused the frame callback, result %u)", static_cast<uint32_t>(result));
+		return false;
+	}
+	g_on = true;
+	return true;
+}
+
+void UnloadMapPanel() noexcept {
+	g_on = false;
+	if (g_overlay != nullptr && g_context != nullptr && g_callback != D2RL::Overlay::InvalidCallbackHandle) {
+		(void)g_overlay->unregisterFrameCallback(g_context, g_callback);
+		g_callback = D2RL::Overlay::InvalidCallbackHandle;
+	}
+	if (g_panels != nullptr && g_context != nullptr && g_panel != D2RL::Panels::InvalidHandle) {
+		(void)g_panels->closePanel(g_context, g_panel);
+		(void)g_panels->unregisterPanel(g_context, g_panel);
+		g_panel = D2RL::Panels::InvalidHandle;
+	}
+}
+
+void MapPanelMapOpened(const std::string& text, int slotLevel) {
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_text = text;
+	g_slotLevel = slotLevel;
+	g_inMap = false;  // the player's tick says when it stands in the map
+}
+
+void MapPanelPlayerTick(void* player) noexcept {
+	if (!g_on.load(std::memory_order_relaxed)) {
+		return;
+	}
+	int slot = -1;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (g_text.empty()) {
+			return;
+		}
+		slot = g_slotLevel;
+	}
+	g_inMap = slot > 0 && PlayerLevelOf(player) == slot;
+}
+
+void MapPanelGameLeft() noexcept {
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_text.clear();
+	g_slotLevel = -1;
+	g_inMap = false;
+}
+
+auto MapPanelPartStatuses() -> std::vector<PartStatus> {
+	std::vector<PartStatus> out;
+	for (const Part& part : g_parts) {
+		out.push_back(part.status);
+	}
+	return out;
+}
+
+auto MapPanelSummary() -> std::string {
+	if (g_faulted.load()) {
+		return "Map panel: off (a memory fault; see the plugin log)";
+	}
+	if (!g_on.load()) {
+		return "Map panel: off (a game part or D2RLoader service was not found)";
+	}
+	return "Map panel: on (the host shows it, a TCP/IP client does not know the properties)";
+}
+
+}  // namespace carto
