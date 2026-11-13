@@ -30,7 +30,8 @@ hook-build cartographer.dll; run `stage_check -Restore` before using it).
   (affixes do roll and apply), #391 panel wording/colour (`Monsters have`, `Players have`, blue, readable stat names, no
   map-name line), #392 panel shows total Density and MF. All under #309. Owner found the #390 cause: the map's misc.txt row needs `compactsave` 0 (the `isc` row it was
   copied from has 1, so the item is saved as Normal). #390 is now docs (first-map.md, map-items.txt), an optional
-  `check` warning, and an in-game re-check. Same screenshot shows the terror zone text
+  `check` warning, and an in-game re-check (owner confirmed: rare name and blue lines show).
+- #393 using a map item whose maps.txt row was skipped says nothing (found on the owner's `m05`, Snow + Shape Open). Same screenshot shows the terror zone text
   still overlapping the panel (#371, #389).
 - #383 quality hook sees about half of spawned maps; #384 Item Level 1 (lead: ItemLevel getter `0x36ccf0`); both under #353.
 - #385 unique pace undercounts with Lava filler rooms (under #317).
