@@ -1,6 +1,6 @@
 ## 8a. Outdoor build hook (issue #141)
 
-Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks ran in game on 2026-11-12 (single player, Hell): Jungle and Snow maps built as planned in every game, with arrival in the entrance cell and the Boss and events in their planned rooms (outdoor-check-2, outdoor-check-3, snow-check-1, map-item-type-check in `docs/cartographer/checks/`). The edges and void cells (#142) are still open.
+Code: `plugins/cartographer/src/engine/outdoor_hooks.{h,cpp}`, the pure plan in `src/outdoor/outdoor_plan.*`. Build 93847 (stamp `0x6ab3782c`). Unit tested (the plan, the cache, the seed arithmetic, the grid comparison) and built; the hooks ran in game on 2026-11-12 (single player, Hell): Jungle and Snow maps built as planned in every game, with arrival in the entrance cell and the Boss and events in their planned rooms (summary in `docs/cartographer/testing.md`, Game check notes). The edges and void cells (#142) are still open.
 
 ### Hook lengths (derived 2026-11-12)
 

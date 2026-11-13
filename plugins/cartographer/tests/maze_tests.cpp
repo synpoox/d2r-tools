@@ -1559,8 +1559,9 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	const int seeds = 2000;
 	int before[2] = {0, 0}, after[2] = {0, 0}, total[2] = {0, 0};
 	for (int z = 0; z < 2; ++z)
-		for (layout::Shape shape : {layout::Shape::Corridor, layout::Shape::Winding}) {
+		for (layout::Shape shape : {layout::Shape::Branching, layout::Shape::Loop, layout::Shape::Sprawl, layout::Shape::Open, layout::Shape::Corridor, layout::Shape::Winding}) {
 			const layout::Rules rules = layout::presetRules(shape, z == 0 ? layout::Size::Large : layout::Size::ExtraLarge);
+			const int beforeAll = before[z], afterAll = after[z], totalAll = total[z];
 			for (int i = 0; i < seeds; ++i) {
 				const uint64_t seed = layout::splitmix64(static_cast<uint64_t>(i) + 0x9000);
 				const Plan first = planMaze(lava, layout::generate(fitRules(lava, rules), seed)); // the old behaviour: no other layout tried
@@ -1572,19 +1573,18 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 				if (!now.plan.ringClipped) {
 					// Whole ring: every room's 8 neighbours lie inside the level box.
 					const Capacity box = capacityAt(lava.roomTiles, now.plan.levelTilesX, now.plan.levelTilesY);
-					for (const Room &r : now.plan.rooms) {
-						CHECK(r.dx - 1 >= -box.left);
-						CHECK(r.dx + 1 <= box.right);
-						CHECK(r.dy - 1 >= -box.up);
-						CHECK(r.dy + 1 <= box.down);
-					}
+					bool inside = true;
+					for (const Room &r : now.plan.rooms)
+						inside = inside && r.dx - 1 >= -box.left && r.dx + 1 <= box.right && r.dy - 1 >= -box.up && r.dy + 1 <= box.down;
+					CHECK(inside);
 				}
 				CHECK(now.plan.levelTilesX <= lava.maxLevelTiles);
 				CHECK(now.plan.levelTilesY <= lava.maxLevelTiles);
 			}
+			MESSAGE("size ", z, " shape ", static_cast<int>(shape), ": clipped before ", before[z] - beforeAll, " after ", after[z] - afterAll, " of ", total[z] - totalAll);
 		}
 	MESSAGE("Large clipped before ", before[0], " after ", after[0], " of ", total[0], "; ExtraLarge clipped before ", before[1], " after ", after[1], " of ", total[1]);
-	CHECK(before[1] * 10 > total[1]);  // the problem is real: over a tenth of ExtraLarge Corridor and Winding layouts were clipped
-	CHECK(after[1] * 200 <= total[1]); // now at most half a percent
-	CHECK(after[0] <= before[0]);
+	CHECK(before[1] * 20 > total[1]);  // the problem is real: over a twentieth of ExtraLarge Lava layouts (all six shapes) were clipped
+	CHECK(after[0] == 0);
+	CHECK(after[1] == 0);
 }

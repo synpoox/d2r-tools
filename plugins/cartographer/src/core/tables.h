@@ -8,6 +8,7 @@
 
 #include "events.h"
 #include "layout.h"
+#include "maplight.h"
 #include "report.h"
 
 #include <cstdint>
@@ -92,6 +93,7 @@ struct MapDef {
 	int minCharLevel = 1;
 	int eventChance = -1;  // -1: use the cartographer.txt value
 	int density = 0, champions = 0, uniques = 0;
+	cartographer::maplight::Look look;  // Brightness, Warmth: the map's own look (blank: the tileset's)
 };
 
 // A maps.txt row that was skipped at load, kept so using its item can say so instead of doing nothing.

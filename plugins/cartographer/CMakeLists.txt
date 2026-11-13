@@ -58,7 +58,7 @@ endforeach()
 
 # core is the one place that names cores by hand (see #36 for the discovery above); a new core it reads needs a line here.
 # The table loader also reads shapes.txt and mapevents.txt through these cores.
-target_link_libraries(cartographer_core PUBLIC cartographer_layout cartographer_events cartographer_outdoor cartographer_maze)
+target_link_libraries(cartographer_core PUBLIC cartographer_layout cartographer_events cartographer_outdoor cartographer_maze cartographer_maplight)
 
 add_library(cartographer SHARED
 	src/plugin.cpp
@@ -77,6 +77,7 @@ add_library(cartographer SHARED
 	src/engine/map_names.cpp
 	src/engine/map_panel.cpp
 	src/engine/level_row.cpp
+	src/engine/map_lighting.cpp
 	src/engine/auto_check.cpp
 	src/engine/automap_reset.cpp
 	src/engine/game_memory.cpp

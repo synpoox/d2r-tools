@@ -10,7 +10,7 @@ Companion to [cartographer-snow.md](cartographer-snow.md) and [cartographer.md](
 | Build identity | D2R 3.3.0 build 93847, D2RLoader 1.3.1-beta |
 | Data read | `levels.txt` (110), `lvltypes.txt` (30), `lvlprest.txt` (865..880), the DS1 files `strip01..13`, `striptownsiege`, `stripseigebar` under `data/global/tiles/expansion/siege/` |
 | Guard | none needed. A request the plan cannot satisfy is refused with a reason and the game builds its own level |
-| Validation | Unit tests (the plan, its independent check, a pinned golden). In game: two games in Hell opened the map, built it as planned and spawned the Boss and a Treasure event in their rooms ([siege-check](../cartographer/checks/2026-11-12-siege-check.md)). Seams are matched by socket letter from a hand reading of the DS1 walk flags (`kPieces`); no test checks them against the DS1 files. Template 110 is Layer 79, shared with Harrogath, so the 16-bit automap limit from #306 does not apply to it. Not settled: the north and south edge and the seams on screen beyond a few screenshots |
+| Validation | Unit tests (the plan, its independent check, a pinned golden). In game: two games in Hell opened the map, built it as planned and spawned the Boss and a Treasure event in their rooms (#288). Seams are matched by socket letter from a hand reading of the DS1 walk flags (`kPieces`); no test checks them against the DS1 files. Template 110 is Layer 79, shared with Harrogath, so the 16-bit automap limit from #306 does not apply to it. Not settled: the north and south edge and the seams on screen beyond a few screenshots |
 
 ## Layout
 
