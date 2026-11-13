@@ -1525,3 +1525,46 @@ TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in
 	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
 	CHECK(none.problems.empty());
 }
+
+TEST_CASE("a skipped row is kept by its item, with the first reason") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "Good\tCave\tLoop\t\t\tt20\nBad\tNowhere\tLoop\t\t\tt21\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped[0].item == "t21");
+	CHECK(skipped[0].name == "Bad");
+	CHECK(skipped[0].line == 3);
+	CHECK(skipped[0].reason.find("Nowhere") != std::string::npos);
+	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
+	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
+	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: maps.txt row 3 was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
+}
+
+TEST_CASE("a skipped row with an empty Name is named by its item") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	LoadMaps(std::string(Header) + "\tCave\tLoop\t\t\tt22\n\tNowhere\tLoop\t\t\tt23\n", Names(), report, nullptr, nullptr, &skipped);
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name.empty());
+	}
+	const SkippedMap* bad = FindSkippedByItem(skipped, "t23");
+	REQUIRE(bad != nullptr);
+	CHECK(SkippedMapText(*bad) == "Map t23 is not set up: maps.txt row " + std::to_string(bad->line) + " was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(*bad).find("('") == std::string::npos);
+}
+
+TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the code") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "First\tCave\tLoop\t\t\tt24\nSecond\tCave\tLoop\t\t\tt24\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	CHECK(FindMapByItem(maps, "t24") != nullptr);
+	CHECK(FindMapByItem(maps, "t24")->name == "First");
+	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name == "Second");
+		CHECK(s.reason.find("t24") != std::string::npos);
+	}
+}
