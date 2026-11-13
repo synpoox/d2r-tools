@@ -1,5 +1,6 @@
 #include "tables.h"
 
+#include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
 #include "text.h"
 #include "tsv.h"
@@ -296,6 +297,21 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				const cartographer::layout::ShapeTable none;
 				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored) && rules.open) {
 					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
+				}
+			}
+		}
+
+		// The Jungle planner caps an Open map's grid, and then its rules must still hold and build (a MinPath the capped grid cannot reach does not).
+		if (ok && !map.shape.empty() && !map.tileset.empty()) {
+			const cartographer::outdoor::OutdoorTileset* outdoorRow = cartographer::outdoor::findOutdoorTileset(map.tileset);
+			if (outdoorRow != nullptr && outdoorRow->planner == cartographer::outdoor::Planner::Jungle) {
+				cartographer::layout::Rules rules;
+				std::string ignored;
+				const cartographer::layout::ShapeTable none;
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored)) {
+					if (const std::string problem = cartographer::outdoor::capJungleOpenRules(rules); !problem.empty()) {
+						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath or Width and Height in shapes.txt.");
+					}
 				}
 			}
 		}
