@@ -27,12 +27,12 @@ constexpr const char* PanelName = "cartographer/map-panel";
 constexpr const char* TextName = "Text";          // the header lines, gold
 constexpr const char* BlueTextName = "TextBlue";  // the property lines, blue (item property blue), over the same area
 constexpr int PanelWidth = 760;
-constexpr int PanelHeight = 700;
 constexpr int PanelTop = 270;
 constexpr int PanelRight = 40;
 constexpr int PointSize = 30;
 constexpr int LineUnits = 44;       // one line of the panel text, in layout units (measured live at PointSize 30)
 constexpr int MaxPadLines = 8;
+constexpr int PanelHeight = cartographer::mappanel::panelHeight(LineUnits, MaxPadLines);  // room for the padding and the longest panel text (1540: ends at 1810 of 2160)
 constexpr uint32_t PadTasks = 15;   // the game's terror zone text is measured this often
 // The entry banner (issue #357): the Overlay service's drawText returned Success but drew nothing (see below), so the banner is a second panel
 // of two centred TextBoxWidgets (event name, event message; the map name is the game's own "Entering" text), 16% down from the top, open for the banner's time.
@@ -578,15 +578,11 @@ void MapPanelPlayerTick(void* player) noexcept {
 	if (!g_on.load(std::memory_order_relaxed)) {
 		return;
 	}
-	int slot = -1;
-	{
-		std::lock_guard<std::mutex> lock(g_lock);
-		if (!g_mapOpen) {
-			return;
-		}
-		slot = g_slotLevel;
+	std::lock_guard<std::mutex> lock(g_lock);
+	if (!g_mapOpen) {
+		return;
 	}
-	g_inMap = slot > 0 && PlayerLevelOf(player) == slot;
+	g_inMap = g_slotLevel > 0 && PlayerLevelOf(player) == g_slotLevel;
 }
 
 void MapPanelGameLeft() noexcept {

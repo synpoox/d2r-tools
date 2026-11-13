@@ -171,6 +171,15 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int densi
 	return out;
 }
 
+int lineCount(const std::string &text)
+{
+	if (text.empty()) return 0;
+	int lines = 1;
+	for (char c : text)
+		if (c == '\n') ++lines;
+	return lines;
+}
+
 int padLines(int textBottom, int panelTop, int lineUnits, int maxLines)
 {
 	if (textBottom <= panelTop || lineUnits <= 0) {
