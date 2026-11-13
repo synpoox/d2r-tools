@@ -614,11 +614,11 @@ TEST_CASE("Density and Uniques have no 1000 percent cap; only the game's field s
 	CHECK(ScalePercent(0x7fffffff, 2147483647, 0x7fffffff) == 0x7fffffff);
 }
 
-TEST_CASE("the unique total is MonUMax scaled by Uniques, and 0 when the part is off or the level has none") {
+TEST_CASE("the unique total is MonUMax scaled by Uniques, and 0 for Uniques 0, the part off or no MonUMax") {
 	RecordSnapshot rec;
 	rec.uMax = 8;
 	Request r;
-	CHECK(UniqueTotal(r, rec, true) == 8);  // Uniques 0: the level's own count, still spread
+	CHECK(UniqueTotal(r, rec, true) == 0);  // Uniques 0: not paced
 	r.uniques = 100;
 	CHECK(UniqueTotal(r, rec, true) == 16);
 	r.uniques = 5000;

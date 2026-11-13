@@ -94,8 +94,8 @@ struct Request {
 	int density = 0, uniques = 0;
 };
 
-// How many unique packs the map may make over the whole level (Uniques scaling applied to the record's MonUMax), 0 when it has none
-// or `Uniques` is not allowed. The pace (PaceBudget) spreads this number over the rooms.
+// How many unique packs the map may make over the whole level (Uniques scaling applied to the record's MonUMax), 0 when it has none,
+// `Uniques` is 0 (that map is not paced) or the part is not allowed. The pace (PaceBudget) spreads this number over the rooms.
 auto UniqueTotal(const Request& request, const RecordSnapshot& record, bool uniquesAllowed) -> int;
 
 // The unique packs allowed after `seen` of `rooms` rooms: `total` times the share of rooms done, rounded up, at least 1 and at most

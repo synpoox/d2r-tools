@@ -1,4 +1,4 @@
-# Cartographer table reference
+﻿# Cartographer table reference
 
 > Every column of every table, with its default and an example. New here? Start with [first-map.md](first-map.md).
 > A working copy of each table is in [`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/).
@@ -54,7 +54,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on a Large Cave at `Density` 100) is not reached; `Density` raises it. Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
+| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on a Large Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when Uniques is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -239,3 +239,4 @@ Every column except `Name` is optional. A blank column keeps the value of the ba
 | `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
 | `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against the grids of Small, Medium and Large (6, 9 and 12) when the file loads, so a row has to fit the smallest. At `ExtraSmall` (a 4 x 4 grid) it is checked when a `maps.txt` row uses the shape: a row that does not fit is refused with the reason | the `Size`'s grid | 9, 9 |
 | `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |
+

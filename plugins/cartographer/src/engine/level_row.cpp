@@ -191,13 +191,16 @@ auto RecordOf(const void* game, int level, int64_t levelCount, std::string* why)
 	return record;
 }
 
-// The unique pace (issue #317): armed at map open for the slot level, used by the room populator hook. All under g_lock.
+// The unique pace (issue #317): armed at map open for the slot level, used by the room populator hook. g_pace is under g_lock. One game is
+// supported: the open-state globals below are for the game thread of one local game (a second game populating at the same time, or a
+// populate on another thread, is not handled).
 struct Pace {
 	bool armed = false;
 	int level = 0;
 	const void* game = nullptr;
 	uint8_t* record = nullptr;
 	int total = 0;
+	uint8_t restoreMin = 0, restoreMax = 0;  // what the record holds outside a populate call: the planned MonUMin / MonUMax
 };
 Pace g_pace;
 std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
@@ -278,6 +281,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			g_row.lastValid = g_rec.lastValid = false;
 			g_row.lastOps.clear();
 			g_rec.lastOps.clear();
+			DisarmPaceLocked();  // the previous map's pace ends here, whatever this open does
 			if (g_stuck) {
 				return skip("an earlier restore failed, so the game's memory is left alone");
 			}
@@ -370,11 +374,10 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 		}
 
 		// The pace (the whole map gets its unique packs, issue #317): armed whenever the record's Uniques part is allowed.
-		DisarmPaceLocked();
 		if (record != nullptr && difficulty >= 0) {
 			const int total = lr::UniqueTotal(request, recSnap, recOn.uniques);
 			if (total > 0) {
-				g_pace = Pace{true, level, game, record, total};
+				g_pace = Pace{true, level, game, record, total, static_cast<uint8_t>(recSnap.uMin), static_cast<uint8_t>(total)};
 				g_paceArmed.store(true);
 				plog::Info("map monsters: level %d: unique packs are paced over the whole map, %d in all (MonUMin 0, MonUMax follows the share of rooms done)", level, total);
 			}
@@ -492,14 +495,14 @@ auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
 		const int budget = lr::PaceBudget(pace.total, seen, rooms);
 		g_paceLastBudget = budget;
-		g_paceSavedMin = pace.record[lr::RecUMinOffset];
-		g_paceSavedMax = pace.record[lr::RecUMaxOffset];
+		g_paceSavedMin = pace.restoreMin;
+		g_paceSavedMax = pace.restoreMax;
 		const uint32_t zero = 0, max = static_cast<uint32_t>(budget);
 		if (!WriteGame(pace.record + lr::RecUMinOffset, &zero, 1)) {
 			return false;
 		}
 		if (!WriteGame(pace.record + lr::RecUMaxOffset, &max, 1)) {
-			const uint32_t back = g_paceSavedMin;
+			const uint32_t back = pace.restoreMin;
 			WriteGame(pace.record + lr::RecUMinOffset, &back, 1);
 			return false;
 		}
@@ -527,10 +530,6 @@ void UniquePaceEnd() noexcept {
 		}
 	} catch (...) {
 	}
-}
-
-auto UniquePaceBudget() noexcept -> int {
-	return g_paceLastBudget;
 }
 
 auto LevelRowSummary() -> std::string {

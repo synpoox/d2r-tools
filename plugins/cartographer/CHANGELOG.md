@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Unique packs now keep spawning through the whole map, in proportion to `Uniques`, instead of stopping about a quarter in.
+- Unique packs are now paced over the whole map instead of all spawning in the first quarter (experimental; maps with `Uniques` 0 are unchanged).
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
@@ -62,3 +62,4 @@
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
 
 - Event monsters in a map with a `Monsters` list no longer trigger a game error.
+

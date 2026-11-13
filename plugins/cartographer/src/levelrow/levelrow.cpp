@@ -190,10 +190,10 @@ auto MonstersRefusal(const Request& r) -> std::string {
 }
 
 auto UniqueTotal(const Request& r, const RecordSnapshot& s, bool uniquesAllowed) -> int {
-	if (!uniquesAllowed || s.uMax <= 0) {
+	if (!uniquesAllowed || s.uMax <= 0 || r.uniques <= 0) {
 		return 0;
 	}
-	return static_cast<int>(r.uniques > 0 ? ScalePercent(s.uMax, r.uniques, MaxPackCount) : s.uMax);
+	return static_cast<int>(ScalePercent(s.uMax, r.uniques, MaxPackCount));
 }
 
 auto PaceBudget(int total, int seen, int rooms) -> int {
