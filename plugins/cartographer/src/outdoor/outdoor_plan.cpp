@@ -14,14 +14,19 @@ std::string capJungleOpenRules(layout::Rules &rules) {
 	if (!rules.open) return std::string();
 	rules.width = std::min(rules.width, kJungleOpenMaxCells);
 	rules.height = std::min(rules.height, kJungleOpenMaxCells);
-	rules.pathMax = std::min(rules.pathMax, rules.width * rules.height);
+	const std::string grid = std::to_string(rules.width) + " x " + std::to_string(rules.height);
+	const int cells = rules.width * rules.height;
+	if (rules.pathMin > cells) {
+		return "an Open map on Jungle is at most " + grid + " cells, so MinPath can't be more than " + std::to_string(cells) + ".";
+	}
+	rules.pathMax = std::min(rules.pathMax, cells);
 	std::string problem = layout::validateRules(rules);
 	// An Open path is the shortest walk across the grid, so a MinPath that fit the uncapped grid may be out of reach on the capped one.
 	for (uint64_t seed = 1; problem.empty() && seed <= 16; ++seed) {
-		if (!layout::generate(rules, seed).rulesMet) problem = "the generator could not meet the rules for seed " + std::to_string(seed) + " (check MinPath).";
+		if (!layout::generate(rules, seed).rulesMet) problem = "MinPath " + std::to_string(rules.pathMin) + " is too long for it.";
 	}
 	if (!problem.empty()) {
-		return "An Open map is capped at " + std::to_string(rules.width) + " x " + std::to_string(rules.height) + " cells, and then " + problem;
+		return "an Open map on Jungle is capped at " + grid + " cells, and " + problem;
 	}
 	return std::string();
 }
