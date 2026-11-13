@@ -69,9 +69,9 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Outdoor and Snow levels, the `cmap` item type and a `superuniques.txt` row per boss (see the README); each maze level is one level
-   ("Cartographer Maze" copied from a plain game Cave level (level 9) and "Cartographer Crypt" from a Crypt level (18), so each keeps a name string; `Quest` 0, `LevelGroup` `Null` and no `LevelEntry` or `LevelWarp`, so it is in no vanilla level group)
-   and their maze rows to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` and `MazeCrypt` rows to
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Ice caves, Outdoor and Snow levels, the `cmap` item type and a `superuniques.txt` row per boss (see the README); each maze level is one level
+   ("Cartographer Maze" copied from a plain game Cave level (level 9), "Cartographer Crypt" from a Crypt level (18) and "Cartographer Ice Caves" from an Act 5 ice caves level (113), so each keeps a name string; `Quest` 0, `LevelGroup` `Null` and no `LevelEntry` or `LevelWarp`, so it is in no vanilla level group)
+   and their maze rows to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze`, `MazeCrypt` and `MazeIce` rows to
    `slots.txt` (other rows are kept). It adds no map items (step 4). Running it again changes nothing once the tables are up to date.
    Rows of an older install ("Cartographer Preset", its `lvlprest.txt` row, the `Preset` slot row) are left alone and
    can be deleted. A "Cartographer Maze" row from an earlier install (copied from the Den of Evil) has its quest flag, level group, entry and warp text, `Vis0` to `Vis7` and name string (tooltip) repaired on re-run. Written and run on a copy of the vanilla 3.3.0 tables only; not run against a game install. D2RLoader compiles the
@@ -117,7 +117,7 @@ instead of the game's random maze. **One maze slot is one tileset**: its level h
 or 4 (Crypt), and each tileset has its own slot level (`src/maze/maze_tilesets.h`). A slot whose level has another LevelType (an old install's Maze level made a Crypt with `-Tileset Crypt`, until the installer is rerun) is refused with a plain message when you
 try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
 refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
-`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds both levels
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds the maze levels
 (`-Tileset` is ignored now):
 
 - `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer writes
@@ -129,7 +129,7 @@ refused later, at build time (for example the slot is too small for the map's si
   ```
 
   Running `tools\install.ps1` again keeps it: the installer only adds or updates the `Maze` row and leaves every other row alone.
-- `levels.txt`: the installer's new level is in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave) or 4 (Crypt), `SizeX` and `SizeY` 360 in
+- `levels.txt`: the installer's new level is in Act 5 with `DrlgType` 1, `LevelType` 3 (Cave), 4 (Crypt) or 33 (Ice caves), `SizeX` and `SizeY` 360 in
   all three difficulty columns, `Depend` 0, `Position` 0, `OffsetX` 3500, every `Warp` -1 (0 crashed the game), `Quest` 0, `LevelGroup` `Null`, empty `LevelEntry` and `LevelWarp`, a `LevelName` copied from a
   game level so it has a string, and a matching `lvlmaze.txt` row. The row also keeps the copied level's Act 1 monster list and
   `MonLvl*` values; check in game that the map's own `Monsters` and `Level` settings override them. At load, a `Maze` slot is kept only if

@@ -20,7 +20,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
 - **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
-- **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Ice caves maze.
+- **Map boss**: a map's `Boss` stands in the far room of a Cave or Crypt maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).

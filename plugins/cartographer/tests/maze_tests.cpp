@@ -978,7 +978,7 @@ TEST_CASE("a maze slot level serves one tileset: the other is refused in plain E
 
 // --- The tileset table (maze_tilesets.h) -------------------------------------------------------------------------------------
 
-TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hooks and the installer rely on")
+TEST_CASE("the maze tileset table holds the Cave, Crypt and Ice rows, with the values the hooks and the installer rely on")
 {
 	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
 	REQUIRE(MazeTilesetCount >= 3);  // Cave, Crypt, then Ice (pinned in its own test below)
