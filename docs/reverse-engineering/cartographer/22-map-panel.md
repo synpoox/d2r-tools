@@ -41,6 +41,10 @@ The owner asked for the map name and level in place of the purple terror zone te
   game version, mod) with the automap open, and was gone after leaving. Not checked: a map with properties after the fix, a TCP/IP client (it does not know the properties), a second map in a game, other
   resolutions, other languages, a Steam build.
 
+## Colour (issue #391)
+
+The text set through UiSetText does not read colour codes: `ÿc3` (UTF-8 C3 BF), U+E07E plus a code, `^c3`, `<c3>` and `[c3]` all print as plain text, and a raw 0xFF byte changes the font (seen in game, 2026-11-13, build 93847, D2RLoader 1.3.1-beta; [check](../../cartographer/checks/2026-11-13-map-panel-check.md)). The panel has two TextBoxWidgets over one area instead: `Text` (gold, the header lines) and `TextBlue` (105, 105, 255, the property lines), each with an empty line where the other has text, so the lines land in the same place.
+
 ## The entry banner (issue #357)
 
 The Overlay service route above is also why the event banner never showed: `drawText` returned Success and drew nothing. The banner is now a second panel in the same

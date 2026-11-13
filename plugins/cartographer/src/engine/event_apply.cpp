@@ -531,10 +531,10 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 
 // The map's own Boss, in the boss room: one monster, the centre first and then a few spots around it (a superunique as itself, or as its Class when the game has spawned it this game).
 // No minions and no Drop; those are the Boss event's. The map's stats reach it like any monster (flags 0, section 7).
-// Returns Made, Refused (no spot in this room took it: the caller may try another room of the cell; `lastRoom` false) or Gave up (the plan has a
-// problem that no room would fix, or `lastRoom` and refused). The check record is told only of the final result.
+// Returns Made, Refused (no spot in this room took it: the caller tries another room of the cell, or gives up when none is left) or Gave up (the plan
+// has a problem that no room would fix). The check record is told here of a placed Boss or a plan problem; a refusal is the caller's to report.
 enum class BossTry { Made, Refused, GaveUp };
-BossTry SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects, bool lastRoom) noexcept {
+BossTry SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects& rects) noexcept {
 	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned: %s", state.bossName.c_str(), plan.problem.c_str());
@@ -583,13 +583,12 @@ BossTry SpawnMapBoss(Game* game, void* room, const State& state, const RoomRects
 	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
 	plog::Info("map Boss '%s': %s in the boss room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
 	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
-	if (!made && !lastRoom) {
+	if (!made) {
 		return BossTry::Refused;
 	}
-	AutoCheckNoteBoss(state.bossName, made, asSuper,
-	                  made ? (fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string())
-	                       : std::string("the game refused to spawn it"));
-	return made ? BossTry::Made : BossTry::GaveUp;
+	AutoCheckNoteBoss(state.bossName, true, asSuper,
+	                  fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string());
+	return BossTry::Made;
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
@@ -721,54 +720,60 @@ void OnPopulated(Game* game, void* room) noexcept {
 		// was populated already at once, else when it is populated; none left, the Boss is given up (fail open).
 		void* bossRoom = room;
 		RoomRects bossRects = rects;
+		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };
+		noteRoom(rects.drlg);
 		for (;;) {
-			bool last = false;
-			{
-				std::lock_guard<std::mutex> lock(g_lock);
-				if (generation != g_generation || g_state != state) {
-					break;
-				}
-				last = state->bossPicker->current() + 1 >= state->bossPicker->size();
-			}
-			const BossTry result = SpawnMapBoss(game, bossRoom, *state, bossRects, last);
+			const BossTry result = SpawnMapBoss(game, bossRoom, *state, bossRects);
+			// What happens next is the picker's decision (pure, tested): placed, a plan problem, or a refusal that moves on, waits or gives up.
 			int next = -1;
+			bool gaveUp = false;
+			bool waiting = false;
+			ep::Rect waitRoom{};
 			{
 				std::lock_guard<std::mutex> lock(g_lock);
 				if (generation != g_generation || g_state != state) {
 					break;
 				}
-				if (result != BossTry::Refused) {
+				if (result == BossTry::Made) {
 					state->bossPicker->finish();
 					break;
 				}
+				if (result == BossTry::GaveUp) {
+					state->bossPicker->giveUp();
+					break;
+				}
 				next = state->bossPicker->refused();
-				if (next < 0) {
-					if (state->bossPicker->done()) {
-						plog::Warn("map Boss '%s' given up: no room of the plan's boss cell took it", state->bossName.c_str());
+				// An unreadable room counts as refused: on to the one after it, until one reads, none is populated yet, or none is left.
+				while (next >= 0) {
+					bossRoom = state->bossRooms[static_cast<size_t>(next)];
+					bossRects = ReadRects(bossRoom);
+					if (bossRects.ok) {
+						break;
 					}
-					break;
+					plog::Warn("map Boss '%s': a room of the boss cell is not readable; skipped", state->bossName.c_str());
+					next = state->bossPicker->refused();
 				}
-				bossRoom = state->bossRooms[static_cast<size_t>(next)];
-			}
-			bossRects = ReadRects(bossRoom);
-			if (!bossRects.ok) {
-				// an unreadable room counts as refused: on to the one after it
-				plog::Warn("map Boss '%s': a room of the boss cell is not readable; skipped", state->bossName.c_str());
-				std::lock_guard<std::mutex> lock(g_lock);
-				if (generation != g_generation || g_state != state) {
-					break;
-				}
-				next = state->bossPicker->refused();
 				if (next < 0) {
-					break;
-				}
-				bossRoom = state->bossRooms[static_cast<size_t>(next)];
-				bossRects = ReadRects(bossRoom);
-				if (!bossRects.ok) {
-					break;
+					gaveUp = state->bossPicker->gaveUp();
+					waiting = !state->bossPicker->done();
+					if (waiting && state->bossPicker->currentRoom() != nullptr) {
+						waitRoom = *state->bossPicker->currentRoom();
+					}
 				}
 			}
-			plog::Info("map Boss '%s': trying the next room of the boss cell %s", state->bossName.c_str(), Describe(bossRects.drlg).c_str());
+			if (next >= 0) {
+				plog::Info("map Boss '%s': trying the next room of the boss cell %s", state->bossName.c_str(), Describe(bossRects.drlg).c_str());
+				noteRoom(bossRects.drlg);
+				continue;
+			}
+			if (gaveUp) {
+				plog::Warn("map Boss '%s' given up: no room of the plan's boss cell took it", state->bossName.c_str());
+				AutoCheckNoteBoss(state->bossName, false, false, "the game refused to spawn it in any room of the boss cell");
+			} else if (waiting) {
+				plog::Info("map Boss '%s': refused in this room; waiting for the next room of the boss cell %s to be populated", state->bossName.c_str(), Describe(waitRoom).c_str());
+				noteRoom(waitRoom);  // the auto check goes there, which brings the room up
+			}
+			break;
 		}
 	}
 }
