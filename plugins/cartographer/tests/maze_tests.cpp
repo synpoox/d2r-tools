@@ -722,7 +722,7 @@ TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
 	CHECK(t.prev.piece[3] == 86);
 	REQUIRE(builtinTileset("CRYPT", t));
 	CHECK(t.roomTiles == 8);
-	CHECK(!builtinTileset("Lava", t));
+	CHECK(!builtinTileset("Arcane", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -814,7 +814,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
-	CHECK(planForMap("Lava", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Arcane", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -981,7 +981,7 @@ TEST_CASE("a maze slot level serves one tileset: the other is refused in plain E
 TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hooks and the installer rely on")
 {
 	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
-	REQUIRE(MazeTilesetCount == 2);
+	REQUIRE(MazeTilesetCount >= 3);  // Cave, Crypt, then the later rows (each pinned in its own test below)
 	CHECK(std::string(MazeTilesets[0].name) == "Cave");
 	CHECK(MazeTilesets[0].levelType == 3);
 	CHECK(std::string(MazeTilesets[0].slot) == "Maze");
@@ -1001,13 +1001,13 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 	CHECK(MazeTilesets[1].prevPiece[3] == 142);
 	CHECK_FALSE(MazeTilesets[1].callsRingGrower);
 	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
-	CHECK(findMazeTileset("Lava") == nullptr);
+	CHECK(findMazeTileset("Arcane") == nullptr);
 	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
 	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
-	CHECK(mazeTilesetIndex("Lava") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave or Crypt");
+	CHECK(mazeTilesetIndex("Arcane") == MazeTilesetCount);
+	CHECK(mazeTilesetNames().rfind("Cave, Crypt", 0) == 0);  // the table order, last name after "or"
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1027,9 +1027,9 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 		CHECK(t.prev.present);
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Lava", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
+	const MapPlan refused = planForMap("Arcane", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Lava'. Use Cave or Crypt.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Arcane'. Use " + mazeTilesetNames() + ".");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")

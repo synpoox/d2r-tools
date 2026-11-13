@@ -27,7 +27,7 @@ struct Tileset {
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Lava", false},     {"Barracks", false}, {"Jail", false},
-	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
+	{"Lair", false},   {"Durance", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 

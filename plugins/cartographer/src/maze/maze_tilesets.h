@@ -29,6 +29,8 @@ struct MazeTileset {
 inline constexpr MazeTileset MazeTilesets[] = {
 	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false},
 	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false},
+	// Dungeon: its case in the builder calls the ring grower first (docs/reverse-engineering/cartographer/23-dungeon-builder.md).
+	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {695, 696, 697, 698}, true},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
