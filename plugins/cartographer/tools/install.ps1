@@ -31,7 +31,7 @@
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
-                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. Maps are meant to be normal, rare or unique; magic maps can still drop for now (Magic 1 would mean always magic, so no column stops them) and a plugin hook to block them is planned. The one row the installer changes
+                    this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. Maps are meant to be normal, rare or unique; a map the game rolls as magic is made normal by the plugin (Magic 1 would mean always magic, so no column can do it). The one row the installer changes
                     after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
                     namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
                     before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
@@ -542,7 +542,7 @@ if ($mapTypeRow -ge 0) {
     Set-Cell $itemTypes $cells 'Equiv2' ''
     foreach ($col in 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable') { Set-CellIf $itemTypes $cells $col '0' }
     foreach ($col in 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2') { Set-CellIf $itemTypes $cells $col '' }
-    # Rare on, Magic and Normal off (Normal on forces every item Normal). Magic maps can still drop: Magic 1 means always magic, so no column blocks them; a plugin hook is planned.
+    # Rare on, Magic and Normal off (Normal on forces every item Normal). Magic 1 would mean always magic, so no column blocks magic maps; the plugin makes a magic roll normal.
     Set-CellIf $itemTypes $cells 'Rare' '1'
     Set-CellIf $itemTypes $cells 'Magic' '0'
     $itemTypes.Lines.Add($cells -join "`t")

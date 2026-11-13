@@ -14,7 +14,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `cartographer-report.txt`; the rest load.
 - **Cave, Crypt, Lava and Ice caves mazes**: every map is generated (Cave, Crypt, Lava or Ice) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the maze slots that `tools\install.ps1` adds (see below).
-- **Map items**: a map item is meant to be normal, rare or unique (magic maps can still drop for now; a plugin hook to block them is planned). A rare map is rolled by the game from the
+- **Map items**: a map item is meant to be normal, rare or unique (a plugin hook makes a map the game rolls as magic normal; a map forced magic by a cheat or already existing stays magic, and the hook applies to any item with the map spell 16). A rare map is rolled by the game from the
   `magicprefix`, `magicsuffix`, `rareprefix` and `raresuffix` rows whose type is `cmap`; a unique map is a
   `uniqueitems.txt` row. The map level and the modifiers are stats on the item, shown on hover. When the map opens,
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
