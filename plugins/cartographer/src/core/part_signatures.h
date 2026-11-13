@@ -142,6 +142,17 @@ inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 
 inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
 inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
+// The HUDWarnings panel's per-frame update (issue #371; cartographer/30-hud-warnings-hook.md): sets its InfoText from the string at this+0x198 and its
+// TerrorZoneInfoText (widget at this+0x180) from the string at this+0x1e8, then shows or hides it. Hooked: the hook cuts the first 18 bytes (seven whole
+// instructions, no relative operand), calls the original, and while a map is open writes the map text into the terror zone widget.
+inline constexpr const char* HudWarningsUpdate = "48 89 5C 24 18 48 89 74 24 20 55 57 41 54 41 56 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 1F 48 8B F1 B9 0A 00 00 00 E8 ?? ?? ?? ?? 84 C0 0F 84";
+
+// The generic widget size and position calls the HUDWarnings update uses in its layout loop (issue #371; cartographer/30-hud-warnings-hook.md):
+// WidgetSize(widget, out16) fills a 16-byte rect (width int at +8, height int at +0xc, unscaled) and returns out; WidgetMove(widget, {int x, int y}) sets the
+// widget's offset (+0x70, +0x74). The map text replays the update's layout loop with them.
+inline constexpr const char* WidgetSize = "40 53 48 83 EC 30 80 79 52 00 48 8B DA 74 2A 48 8B 49 30 48 8D 54 24 20 E8 ?? ?? ?? ?? 33 C0 48 89 03 8B 44 24 28 89 43 08 8B 44 24 2C 89 43 0C 48 8B C3 48 83 C4 30 5B C3 0F 10 41";
+inline constexpr const char* WidgetMove = "48 89 5C 24 10 57 48 83 EC 20 80 79 52 00 48 8B FA 48 8B D9 74 14 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 07 89 43 70 48 C1";
+
 // The side panel shift setter (0xb9c20 in build 93847; better-automap.md): its `mov [rip+x], ecx` at +0xf writes the global that says which sides
 // an open panel shifts (1 right, 2 left, 3 both). Only read.
 inline constexpr const char* ScreenShiftSetter = "48 83 EC 38 44 8B 0D ?? ?? ?? ?? 41 8B C1 99 89 0D ?? ?? ?? ?? 83 E2 03 44 8D 14 02 41 C1 FA 02";

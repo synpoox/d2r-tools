@@ -1,5 +1,6 @@
 #include "mappanel.h"
 
+#include <algorithm>
 #include <cctype>
 
 namespace cartographer::mappanel {
@@ -178,6 +179,30 @@ int lineCount(const std::string &text)
 	for (char c : text)
 		if (c == '\n') ++lines;
 	return lines;
+}
+
+std::string mergeLines(const std::string &gold, const std::string &blue)
+{
+	std::string out;
+	size_t a = 0;
+	size_t b = 0;
+	while (a <= gold.size() || b <= blue.size()) {
+		std::string g;
+		std::string u;
+		if (a <= gold.size()) {
+			const size_t end = (std::min)(gold.find('\n', a), gold.size());
+			g = gold.substr(a, end - a);
+			a = end + 1;
+		}
+		if (b <= blue.size()) {
+			const size_t end = (std::min)(blue.find('\n', b), blue.size());
+			u = blue.substr(b, end - b);
+			b = end + 1;
+		}
+		if (!out.empty()) out += '\n';
+		out += g.empty() ? u : g;
+	}
+	return out;
 }
 
 int padLines(int textBottom, int panelTop, int lineUnits, int maxLines)
