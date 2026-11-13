@@ -12,6 +12,8 @@ Issue #310. Plugin built from this branch (`cartographer/map-level-stat`), D2R 3
 | 4 | Cube recipe `useitem,mod` (`version` 100, `numinputs` 2, `mod 1` `map-level` 95) sets the stat on a map | FAIL: the recipe fires and sets the stat, but the output is a Hand Axe, not a map; same with input type `cmap` and with the vanilla `isc` |
 | 5 | `Map Level: N` shown on hover for an item that has the stat | PASS (on the Hand Axe from check 4: `Map Level: 95`); the stat was still there after a save and reload |
 | 6 | `usetype,mod`, `usetype,mag,mod`, plain code output `t22` | Give a map without the stat (the `mod` is dropped on a Normal item); no `Map Level` line |
+| 6b | Same three recipes (map input plus a Town Portal scroll, `mod` level 10) after setting `cmap` `Magic` 1 and `Rare` 1 in the test mod's `itemtypes.txt` | No change: `useitem,mod` gave a Hand Axe with `Map Level: 10`; `usetype,mag,mod` and `usetype,rar,mod` gave plain, non-magic maps (Tunneling Depths, Overgrown Reach) with no `Map Level` line |
+| 6c | Again with `Normal` 1 and `MaxSockets1` 1 added (second boot; only the `usetype,rar,mod` row was run) | Plain Overgrown Reach Map, no stat |
 | 7 | Opening a map that has the stat logs `from the item's stat` | Not checked: no map could be given the stat |
 | 8 | Stat adds to an existing value on a second transmute | Not checked |
 
