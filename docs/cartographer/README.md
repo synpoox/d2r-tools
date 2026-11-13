@@ -108,7 +108,7 @@ See [tables.md](tables.md) for every column of every file.
 
 ## Map item modifiers
 
-A map item is meant to be normal, rare or unique (magic maps can still drop for now; a plugin hook to block them is planned). A rare map gets modifiers from the game's own affix tables (rows with `itype1` `cmap`); a unique map has its own in `uniqueitems.txt`. Some make monsters tougher (`mon-life`, `mon-damage` and so on); the others change what happens to you. They show on hover and apply when the map opens. See [tables.md](tables.md).
+A map item is meant to be normal, rare or unique (a map the game rolls as magic is made normal by a plugin hook). A rare map gets modifiers from the game's own affix tables (rows with `itype1` `cmap`); a unique map has its own in `uniqueitems.txt`. Some make monsters tougher (`mon-life`, `mon-damage` and so on); the others change what happens to you. They show on hover and apply when the map opens. See [tables.md](tables.md).
 
 ## Events (optional, phase 6)
 

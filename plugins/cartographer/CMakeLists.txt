@@ -65,6 +65,7 @@ add_library(cartographer SHARED
 	src/engine/portal.cpp
 	src/engine/stat_apply.cpp
 	src/engine/item_stats.cpp
+	src/engine/map_quality.cpp
 	src/engine/event_apply.cpp
 	src/engine/event_6b.cpp
 	src/engine/map_sync.cpp

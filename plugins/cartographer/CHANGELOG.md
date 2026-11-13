@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Map items are never magic: one the game rolls as magic becomes normal.
 - `mapstats.txt`, the `Properties` column and setting and `ItemStats` are gone: a map's modifiers come from its item.
 - New map `Shape` `Open`: an open room grid where every room joins its neighbours, with only a few walls. On Jungle, a Large Open map uses the Medium grid (9 x 9 blocks).
 - New map `Size` `ExtraSmall`, smaller than `Small`.
@@ -16,7 +17,7 @@
 - `tools\install.ps1` adds the map level to your mod (Cave, or `-Tileset Crypt`), keeps a `.bak` and is safe to run twice.
 - Every map is a generated Cave or Crypt maze; the `Preset` tileset is gone.
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
-- Rare and unique map items: their modifiers show on hover and apply in the map (magic maps can still drop for now). Run `tools\install.ps1` again.
+- Rare and unique map items: their modifiers show on hover and apply in the map (magic maps are blocked). Run `tools\install.ps1` again.
 - New monster modifiers for map items: life, damage, speed and fire, cold, lightning and poison resistance.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
 - Inside a map, its name, level and properties show on the right of the screen (host and single player).
