@@ -77,6 +77,10 @@ Nothing here is wired as a plugin part.
 
 ## Crash at `0x1255802` (issue #328)
 
+> Correction, superseded by [note 31](31-crash-1255802-abort.md): the function range below is wrong (`.pdata` gives `0x12557f0..0x125580f`;
+> `0x1255790..0x125581a` is the initializer that installs it), it is not a fail-fast under an assert but the SIGABRT handler reached from `abort()`, and
+> `0x1c783d0` is a `jmp rax` thunk, not a string. The to-do to read that string is dropped.
+
 Build 93847, slot 5. Read-only look at `d2rloader/crashes`, the logs and `D2R.exe`; no game was started.
 
 - Three last-resort reports hold it (start times UTC 2026-11-07 17:15, 2026-11-13 01:06 and 01:15). Each is a first-chance
@@ -99,7 +103,7 @@ Build 93847, slot 5. Read-only look at `d2rloader/crashes`, the logs and `D2R.ex
   also writes to address 0, one report each.
 
 To settle it (needs a game): reproduce in a slot with only Cartographer, then with Cartographer off, same save and
-steps; keep `d2rloader.log` and the full crash report; read the string at `0x1c783d0` and the caller in a live dump.
+steps; keep `d2rloader.log` and the full crash report.
 
 ### Cartographer-only run (2026-11-12, slot 5): no crash
 

@@ -1060,7 +1060,7 @@ TEST_CASE("a maze slot level serves one tileset: the other is refused in plain E
 TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values the hooks and the installer rely on")
 {
 	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
-	REQUIRE(MazeTilesetCount == 3);
+	REQUIRE(MazeTilesetCount >= 3);  // Cave, Crypt, Lava, then Ice (pinned in its own test)
 	CHECK(std::string(MazeTilesets[0].name) == "Cave");
 	CHECK(MazeTilesets[0].levelType == 3);
 	CHECK(std::string(MazeTilesets[0].slot) == "Maze");
@@ -1096,8 +1096,9 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
 	CHECK(mazeTilesetIndex("lava") == 2);
+	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt or Lava");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava or Ice");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1119,7 +1120,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt or Lava.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava or Ice.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1182,10 +1183,9 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 	// The old spots were out of range: Cave at 6000,0.
 	CHECK_FALSE(automapInRange(6000, 0, levelTiles));
 	CHECK(automapInRange(3500, 0, levelTiles));
-	// The planned spot of the row still to come (Ice) and Snow (192 wide, installer default 1500,0) are in range and apart from every row
-	// and from each other: the rule is x 3500, 3000, 2500, 2000 for the maze rows, y 0.
+	// Snow (192 wide, installer default 1500,0) is in range and apart from every row: the rule is x 3500, 3000, 2500, 2000 for the maze rows, y 0.
 	struct Spot { int x, y, size; };
-	constexpr Spot planned[] = {{2000, 0, levelTiles}, {1500, 0, 192}};
+	constexpr Spot planned[] = {{1500, 0, 192}};
 	for (const Spot &a : planned) {
 		CHECK(automapInRange(a.x, a.y, a.size));
 		CHECK(a.y + a.size <= 1000);
@@ -1201,6 +1201,93 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 			                   MazeTilesets[i].offsetY + levelTiles <= MazeTilesets[j].offsetY || MazeTilesets[j].offsetY + levelTiles <= MazeTilesets[i].offsetY;
 			CHECK_MESSAGE(apart, MazeTilesets[i].name << " overlaps " << MazeTilesets[j].name);
 		}
+}
+
+TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev family 1018-1021, the ring grower called first")
+{
+	const MazeTileset *row = findMazeTileset("ice");
+	REQUIRE(row != nullptr);
+	CHECK(row == &MazeTilesets[mazeTilesetIndex("Ice")]);
+	CHECK(row->levelType == 33);
+	CHECK(std::string(row->slot) == "MazeIce");
+	CHECK(std::string(row->levelName) == "Cartographer Ice Caves");
+	CHECK(row->roomTiles == 16);
+	CHECK(row->pieceBase == 1002);  // base + mask: W 1003, E 1004, S 1006, N 1010 ... SEW+N 1017
+	CHECK(row->pieceBase + 15 == 1017);
+	CHECK(row->prevPiece[0] == 1018);
+	CHECK(row->prevPiece[1] == 1019);
+	CHECK(row->prevPiece[2] == 1020);
+	CHECK(row->prevPiece[3] == 1021);
+	CHECK(row->callsRingGrower);  // docs/reverse-engineering/cartographer/24-ice-caves-builder.md
+	CHECK(findMazeTilesetBySlot("mazeice") == row);
+	Tileset t;
+	REQUIRE(builtinTileset("Ice", t));
+	CHECK(t.walkFollowsRing);  // the walk 0x3e96d0 runs after the ring grower in the case, so the graph is built in the walk
+}
+
+TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece, Next and Down are suppressed, the ring grower is skipped")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Ice", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::ExtraSmall, layout::Size::Small, layout::Size::Medium, layout::Size::Large};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.ring.noOp);
+				CHECK_FALSE(sp.plan.ring.graphInRing);
+				CHECK(sp.plan.lvlMaze.sizeX == 16);
+				CHECK(sp.plan.levelTilesX <= 360);
+				if (sp.plan.entrance.place) {
+					CHECK(sp.plan.entrance.toPiece >= 1018);
+					CHECK(sp.plan.entrance.toPiece <= 1021);
+					CHECK(steerSpecial(ts, sp.plan, sp.plan.entrance.toPiece).action == SpecialSteer::Action::Redirect);
+				}
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 1022; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
+	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
+	CHECK(maxCapacity(ts).across() >= 21);
+}
+
+TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Ice", ts));
+	for (uint64_t seed = 1; seed <= 40; ++seed) {
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), seed);
+		if (!sp.plan.steer) continue;
+		int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+		for (const Room &r : sp.plan.rooms) {
+			minX = std::min(minX, r.dx);
+			minY = std::min(minY, r.dy);
+		}
+		std::vector<RoomRect> rects;
+		for (const Room &r : sp.plan.rooms)
+			for (int j = 0; j < 2; ++j)
+				for (int i = 0; i < 2; ++i) rects.push_back({500 + (r.dx - minX) * 16 + i * 8, 700 + (r.dy - minY) * 16 + j * 8, 8, 8, 0});
+		const ArrivalMark m = planArrival(sp.plan, 16, rects);
+		INFO("seed " << seed << ": " << m.why);
+		REQUIRE(m.mark);
+		const Room &e = sp.plan.rooms[static_cast<size_t>(sp.plan.entrance.room)];
+		CHECK(m.originX == 500 + (e.dx - minX) * 16);
+		CHECK(m.originY == 700 + (e.dy - minY) * 16);
+		// The four rooms of the cell tie on the distance to its centre: the smaller y, then the smaller x, wins.
+		CHECK(rects[static_cast<size_t>(m.room)].x == m.originX);
+		CHECK(rects[static_cast<size_t>(m.room)].y == m.originY);
+		const CellRoom boss = planCellRoom(sp.plan, 16, sp.plan.bossRoom, rects);
+		CHECK(boss.room >= 0);
+		const CellRoom event = planCellRoom(sp.plan, 16, sp.plan.eventRoom, rects);
+		CHECK(event.room >= 0);
+	}
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------
