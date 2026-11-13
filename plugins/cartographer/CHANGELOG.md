@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New map `Tileset` `Ice` (Act 5 Ice caves): rerun `tools\install.ps1` once to add its level.
 - Cave and Crypt maps now each have their own level, so one install opens either. If you installed Crypt before, rerun `tools\install.ps1` once; `-Tileset` is no longer needed.
 - New map `Size` `ExtraSmall`, smaller than `Small`.
 - `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.

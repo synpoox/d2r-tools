@@ -1360,7 +1360,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[14] == "Jungle");  // the outdoor rows come last, in table order
 	CHECK(all[15] == "Snow");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Jungle", "Snow"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Ice", "Jungle", "Snow"};
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
@@ -1431,6 +1431,8 @@ TEST_CASE("Cave opens through the Maze slot and Crypt through the MazeCrypt slot
 	CHECK(IsMazeSlotName("maze"));
 	CHECK_FALSE(IsMazeSlotName("Outdoor"));
 	CHECK(MazeSlotLevelName("MazeCrypt") == "Cartographer Crypt");
+	CHECK(IsMazeSlotName("MazeIce"));
+	CHECK(MazeSlotLevelName("MazeIce") == "Cartographer Ice Caves");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
 

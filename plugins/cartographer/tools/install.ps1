@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt) and Outdoor levels (Jungle, Snow) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Ice) and Outdoor levels (Jungle, Snow) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -23,7 +23,8 @@
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
-    Cave and Crypt maps each open through their own level, so one install serves both (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
+    The Ice level ("Cartographer Ice Caves", slot MazeIce) is a third maze level of the same kind with LevelType 33 (Act 5 ice caves), copied from a plain game ice cave level.
+    Cave, Crypt and Ice maps each open through their own level, so one install serves all three (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack, not magic or rare,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). The game names an item of type scro or book after its item spell, not its
@@ -45,7 +46,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 6000) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (6000, 4200), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (6000, 4200), -IceOffsetX and -IceOffsetY (6400, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000) and -SnowOffsetX and -SnowOffsetY (6000, 3600). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -69,7 +70,9 @@ param(
     [int]$SnowOffsetX = 6000,
     [int]$SnowOffsetY = 3600,
     [int]$CryptOffsetX = 6000,
-    [int]$CryptOffsetY = 4200
+    [int]$CryptOffsetY = 4200,
+    [int]$IceOffsetX = 6400,
+    [int]$IceOffsetY = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,7 +88,9 @@ $MazeTilesets = @(
     # Cave keeps the slot "Maze" and the level name of the installs from before this table.
     @{ Tileset = 'Cave';  Slot = 'Maze';      LevelName = 'Cartographer Maze';  LevelType = '3'; Size = '360'; Param = 'Maze' },
     # Crypt: y is clear of the Maze level (y 0..360), the Outdoor level (y 3000..3384) and the Snow level (y 3600..3792).
-    @{ Tileset = 'Crypt'; Slot = 'MazeCrypt'; LevelName = 'Cartographer Crypt'; LevelType = '4'; Size = '360'; Param = 'Crypt' }
+    @{ Tileset = 'Crypt'; Slot = 'MazeCrypt'; LevelName = 'Cartographer Crypt'; LevelType = '4'; Size = '360'; Param = 'Crypt' },
+    # Ice: x is clear of the Maze level (x 6000..6360), so it sits beside it; y 0..360.
+    @{ Tileset = 'Ice';   Slot = 'MazeIce';   LevelName = 'Cartographer Ice Caves'; LevelType = '33'; Size = '360'; Param = 'Ice' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the

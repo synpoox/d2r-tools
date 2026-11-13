@@ -722,7 +722,7 @@ TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
 	CHECK(t.prev.piece[3] == 86);
 	REQUIRE(builtinTileset("CRYPT", t));
 	CHECK(t.roomTiles == 8);
-	CHECK(!builtinTileset("Lava", t));
+	CHECK(!builtinTileset("Arcane", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -814,7 +814,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
-	CHECK(planForMap("Lava", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Arcane", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -981,7 +981,7 @@ TEST_CASE("a maze slot level serves one tileset: the other is refused in plain E
 TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hooks and the installer rely on")
 {
 	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
-	REQUIRE(MazeTilesetCount == 2);
+	REQUIRE(MazeTilesetCount >= 3);  // Cave, Crypt, then Ice (pinned in its own test below)
 	CHECK(std::string(MazeTilesets[0].name) == "Cave");
 	CHECK(MazeTilesets[0].levelType == 3);
 	CHECK(std::string(MazeTilesets[0].slot) == "Maze");
@@ -1001,13 +1001,13 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 	CHECK(MazeTilesets[1].prevPiece[3] == 142);
 	CHECK_FALSE(MazeTilesets[1].callsRingGrower);
 	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
-	CHECK(findMazeTileset("Lava") == nullptr);
+	CHECK(findMazeTileset("Arcane") == nullptr);
 	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
 	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
-	CHECK(mazeTilesetIndex("Lava") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave or Crypt");
+	CHECK(mazeTilesetIndex("Arcane") == MazeTilesetCount);
+	CHECK(mazeTilesetNames().rfind("Cave, Crypt", 0) == 0);  // the table order, last name after "or"
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1027,9 +1027,9 @@ TEST_CASE("the maze tileset table holds Cave then Crypt, with the values the hoo
 		CHECK(t.prev.present);
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Lava", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
+	const MapPlan refused = planForMap("Arcane", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Lava'. Use Cave or Crypt.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Arcane'. Use " + mazeTilesetNames() + ".");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1062,6 +1062,93 @@ TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the s
 		at += 2;
 	}
 	CHECK(row == MazeTilesetCount);
+}
+
+TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev family 1018-1021, the ring grower called first")
+{
+	const MazeTileset *row = findMazeTileset("ice");
+	REQUIRE(row != nullptr);
+	CHECK(row == &MazeTilesets[mazeTilesetIndex("Ice")]);
+	CHECK(row->levelType == 33);
+	CHECK(std::string(row->slot) == "MazeIce");
+	CHECK(std::string(row->levelName) == "Cartographer Ice Caves");
+	CHECK(row->roomTiles == 16);
+	CHECK(row->pieceBase == 1002);  // base + mask: W 1003, E 1004, S 1006, N 1010 ... SEW+N 1017
+	CHECK(row->pieceBase + 15 == 1017);
+	CHECK(row->prevPiece[0] == 1018);
+	CHECK(row->prevPiece[1] == 1019);
+	CHECK(row->prevPiece[2] == 1020);
+	CHECK(row->prevPiece[3] == 1021);
+	CHECK(row->callsRingGrower);  // docs/reverse-engineering/cartographer/23-ice-caves-builder.md
+	CHECK(findMazeTilesetBySlot("mazeice") == row);
+	Tileset t;
+	REQUIRE(builtinTileset("Ice", t));
+	CHECK(t.walkFollowsRing);  // the walk 0x3e96d0 runs after the ring grower in the case, so the graph is built in the walk
+}
+
+TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece, Next and Down are suppressed, the ring grower is skipped")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Ice", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::ExtraSmall, layout::Size::Small, layout::Size::Medium, layout::Size::Large};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.ring.noOp);
+				CHECK_FALSE(sp.plan.ring.graphInRing);
+				CHECK(sp.plan.lvlMaze.sizeX == 16);
+				CHECK(sp.plan.levelTilesX <= 360);
+				if (sp.plan.entrance.place) {
+					CHECK(sp.plan.entrance.toPiece >= 1018);
+					CHECK(sp.plan.entrance.toPiece <= 1021);
+					CHECK(steerSpecial(ts, sp.plan, sp.plan.entrance.toPiece).action == SpecialSteer::Action::Redirect);
+				}
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 1022; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
+	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
+	CHECK(maxCapacity(ts).across() >= 21);
+}
+
+TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Ice", ts));
+	for (uint64_t seed = 1; seed <= 40; ++seed) {
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Branching, layout::Size::Medium), seed);
+		if (!sp.plan.steer) continue;
+		int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+		for (const Room &r : sp.plan.rooms) {
+			minX = std::min(minX, r.dx);
+			minY = std::min(minY, r.dy);
+		}
+		std::vector<RoomRect> rects;
+		for (const Room &r : sp.plan.rooms)
+			for (int j = 0; j < 2; ++j)
+				for (int i = 0; i < 2; ++i) rects.push_back({500 + (r.dx - minX) * 16 + i * 8, 700 + (r.dy - minY) * 16 + j * 8, 8, 8, 0});
+		const ArrivalMark m = planArrival(sp.plan, 16, rects);
+		INFO("seed " << seed << ": " << m.why);
+		REQUIRE(m.mark);
+		const Room &e = sp.plan.rooms[static_cast<size_t>(sp.plan.entrance.room)];
+		CHECK(m.originX == 500 + (e.dx - minX) * 16);
+		CHECK(m.originY == 700 + (e.dy - minY) * 16);
+		// The four rooms of the cell tie on the distance to its centre: the smaller y, then the smaller x, wins.
+		CHECK(rects[static_cast<size_t>(m.room)].x == m.originX);
+		CHECK(rects[static_cast<size_t>(m.room)].y == m.originY);
+		const CellRoom boss = planCellRoom(sp.plan, 16, sp.plan.bossRoom, rects);
+		CHECK(boss.room >= 0);
+		const CellRoom event = planCellRoom(sp.plan, 16, sp.plan.eventRoom, rects);
+		CHECK(event.room >= 0);
+	}
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------

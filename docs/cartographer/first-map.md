@@ -26,10 +26,10 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
    ```
    levels.txt: added 'Cartographer Maze' as level N (Cave, copied from level N).
-   slots.txt: Maze is level N, MazeCrypt is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
+   slots.txt: Maze is level N, MazeCrypt is level N, MazeIce is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
    ```
 
-   Cave and Crypt each get a level of their own. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
+   Cave, Crypt and Ice each get a level of their own. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
    edited table, or the game ignores the `.txt`.
 
 ## 2. Make the map item
@@ -60,7 +60,7 @@ Name	Tileset	Shape	Item	Size	Boss	MinCharLevel
 Shorelines	Cave	Corridor	t20	Large	Shoreline Warden	80
 ```
 
-`Boss` must be a `Name` in `bosses.txt`. `Cave`, `Crypt`, `Jungle` and `Snow` are built. The example `maps.txt` has
+`Boss` must be a `Name` in `bosses.txt`. `Cave`, `Crypt`, `Ice`, `Jungle` and `Snow` are built. The example `maps.txt` has
 three maps (`t20`, `t21`, `t22`); `check` skips a row whose item is not in your tables.
 
 ## 4. Check
@@ -99,5 +99,5 @@ map Boss 'Shoreline Warden': spawned in the boss room (x,y) 40 x 40 (as a superu
 |---|---|
 | `Item ... cannot open a map: it needs item spell 16` | `pSpell` in the `misc.txt` row is not 16 |
 | `item code ... is not in the item tables` | the code is not in the mod's `misc.txt`, `weapons.txt` or `armor.txt` |
-| `tileset ... is planned but Cartographer cannot build it yet` | use `Cave`, `Crypt`, `Jungle` or `Snow` |
+| `tileset ... is planned but Cartographer cannot build it yet` | use `Cave`, `Crypt`, `Ice`, `Jungle` or `Snow` |
 | `Check that the Maze row in slots.txt names a level that exists in levels.txt` | run `tools\install.ps1` and restart the game |
