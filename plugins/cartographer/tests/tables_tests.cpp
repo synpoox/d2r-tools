@@ -121,6 +121,27 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	CHECK(text.find("This map is skipped.") != std::string::npos);
 }
 
+TEST_CASE("a blank Shape loads for Snow and Siege, which ignore it, and is still refused for the tilesets that build from it") {
+	Report report;
+	const auto maps = Load(
+		"A\tSnow\t\t\t\tt20\n"
+		"B\tSiege\t\tLarge\t\tt21\n"
+		"C\tSnow\tSprawl\t\t\tt22\n"
+		"D\tCave\t\t\t\tt23\n"
+		"E\tJungle\t\t\t\tt24\n",
+		report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].name == "A");
+	CHECK(maps[0].shape.empty());
+	CHECK(maps[1].name == "B");
+	CHECK(maps[1].shape.empty());
+	CHECK(maps[2].shape == "Sprawl");  // a Shape that is set keeps working
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("the Shape cell is empty: the Cave tileset needs one") != std::string::npos);
+	CHECK(text.find("shape '' is not known") == std::string::npos);
+}
+
 TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);
@@ -717,7 +738,7 @@ TEST_CASE("a map item with compactsave 1 gets a note, one with compactsave 0 doe
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
-TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does not") {
+TEST_CASE("a map item with a blank spellicon or one of 0 to 9 gets a note, one with -1 does not") {
 	GameNames names = Names();
 	names.haveItemSpells = true;
 	names.itemSpells = {{"t20", MapItemSpell}, {"t21", MapItemSpell}};
@@ -726,7 +747,7 @@ TEST_CASE("a map item with a spellicon of 0 to 9 gets a note, one with -1 does n
 	const auto maps = LoadMaps(std::string(Header) + "A\tCave\tLoop\t\t\tt20\nB\tCave\tLoop\t\t\tt21\n", names, report);
 	CHECK(maps.size() == 2);
 	const std::string text = Joined(report);
-	CHECK(text.find("Item 't21' has a spellicon of 0 to 9") != std::string::npos);
+	CHECK(text.find("Item 't21' has a blank spellicon or one of 0 to 9") != std::string::npos);
 	CHECK(text.find("Item 't20' has a spellicon") == std::string::npos);
 }
 
@@ -1446,6 +1467,19 @@ TEST_CASE("each maze slot reads the LevelType of its own level") {
 	CHECK(slots[1].levelType == 4);
 }
 
+TEST_CASE("ParseItemSpells lists a blank spellicon and 0 to 9, not -1") {
+	std::vector<std::pair<std::string, int>> spells;
+	std::vector<std::string> compact, cursor;
+	const std::string misc = "code\tpSpell\tcompactsave\tspellicon\r\nt20\t16\t0\t-1\r\nt21\t16\t0\t\r\nt22\t16\t0\t0\r\nt23\t16\t0\t9\r\nt24\t16\t0\t12\r\nt25\t16\t0\t \r\nt26\t16\r\n";
+	REQUIRE(ParseItemSpells(misc, &spells, &compact, &cursor));
+	REQUIRE(cursor.size() == 5);
+	CHECK(cursor[0] == "t21");
+	CHECK(cursor[1] == "t22");
+	CHECK(cursor[2] == "t23");
+	CHECK(cursor[3] == "t25");  // whitespace only is blank
+	CHECK(cursor[4] == "t26");  // a row that ends before the spellicon column is blank
+}
+
 TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text, the way the plugin does") {
 	std::vector<std::pair<std::string, int>> spells;
 	std::vector<std::string> compact;
@@ -1503,4 +1537,47 @@ TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in
 	Report none;
 	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
 	CHECK(none.problems.empty());
+}
+
+TEST_CASE("a skipped row is kept by its item, with the first reason") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "Good\tCave\tLoop\t\t\tt20\nBad\tNowhere\tLoop\t\t\tt21\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped[0].item == "t21");
+	CHECK(skipped[0].name == "Bad");
+	CHECK(skipped[0].line == 3);
+	CHECK(skipped[0].reason.find("Nowhere") != std::string::npos);
+	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
+	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
+	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: maps.txt row 3 was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
+}
+
+TEST_CASE("a skipped row with an empty Name is named by its item") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	LoadMaps(std::string(Header) + "\tCave\tLoop\t\t\tt22\n\tNowhere\tLoop\t\t\tt23\n", Names(), report, nullptr, nullptr, &skipped);
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name.empty());
+	}
+	const SkippedMap* bad = FindSkippedByItem(skipped, "t23");
+	REQUIRE(bad != nullptr);
+	CHECK(SkippedMapText(*bad) == "Map t23 is not set up: maps.txt row " + std::to_string(bad->line) + " was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(*bad).find("('") == std::string::npos);
+}
+
+TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the code") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "First\tCave\tLoop\t\t\tt24\nSecond\tCave\tLoop\t\t\tt24\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	CHECK(FindMapByItem(maps, "t24") != nullptr);
+	CHECK(FindMapByItem(maps, "t24")->name == "First");
+	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name == "Second");
+		CHECK(s.reason.find("t24") != std::string::npos);
+	}
 }

@@ -305,7 +305,7 @@ auto LoadAll() -> Loaded {
 	text.clear();
 	std::vector<carto::MapDef> fromFile;
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapsFile), carto::MapsFile, &text, loaded.report)) {
-		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses);
+		fromFile = carto::LoadMaps(text, names, loaded.report, &loaded.tables->shapes, &loaded.tables->bosses, &loaded.tables->skippedMaps);
 	}
 	loaded.tables->maps = std::move(fromFile);
 	text.clear();

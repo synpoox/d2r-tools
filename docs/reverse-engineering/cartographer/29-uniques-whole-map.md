@@ -31,3 +31,20 @@ Cave Sprawl Large, Level 90, Density 100, 576 rooms (`+0xc`). Each run opened th
 | 2 | 400 | 40 | 38 (512 rooms probed) | 11, 9, 8, 10 | room 27, room 487 |
 
 The same quarters by distance from the entrance (x + y of the room rect) were 5, 3, 4, 5 (run 1) and 11, 9, 8, 10 (run 2). The total follows `Uniques` (16 against 40), and the count tracks the budget through the whole map. Single game assumption: the pace state is one global (game pointer, level, record) touched only from the game thread; two games in one process are not supported. Not run: the same map without the pace (the #320 build); the section 15 runs of that build and the formula above are the comparison. Small overshoot is expected: the game reads the count after a pack's units exist, so several packs of one room can be unique together (one room made 4 in run 1). The ~73 ceiling below was measured on the #320 build, without the pace. Not seen: a character walking the map (a click-walk attempt reached only 11 rooms; whether `+4` counts distinct rooms or repeated activations, and so whether uniques could bunch near the entrance when walking back and forth, is unverified), a second layout per setting, other densities, multiplayer, a total above the 6 percent ceiling (about 73 on this map).
+
+### Lava filler rooms (issue #385): measured, no shortfall
+
+Question (#385): the Lava edge fill (section 23) adds closed filler rooms to the level's room list; if they never activate, `+4` would never reach `+0xc` and `PaceBudget` would stop short of the total. Date 2026-11-13, same build and loader as above, slot 7, Hell, test save, `debug_mode` and `cheat god 1` first, `MazeProbe=1`. Map `LavaXL` (Lava, Sprawl, ExtraLarge, Level 90, Density 100, Uniques 100, total 14), opened with `cartographer open`, then every 24-tile cell of the 13 x 14 grid visited by `cheat goto`, nearest the entrance first (cells without ground leave the player where he was). Not walked by a character.
+
+| Number | Value |
+|---|---|
+| plan rooms (cells) | 55 (cells are 24 x 24 tiles, 9 rooms of 8 x 8 each) |
+| filler rooms made | 96 cells (log line `maze filler ring: 96 of 96 rooms made`) |
+| rooms in the level list | 1359 = 495 + 96 x 9 |
+| `+0xc` (rooms in level) | 495 from the first populated room to the last = 55 x 9: the plan rooms only |
+| rooms populated (probe lines, all distinct rects) | 590 |
+| `+4` at the end | 591 (the probe's room number plus 1 on every line) |
+| `+8` at the end | 397 |
+| unique count at the end | 15 (total 14) |
+
+So the premise is wrong twice. `+0xc` does not hold the fillers (495 is the plan alone), and `+4` counts every room the game populates, 95 more than the plan has rooms: the rooms beside a visited plan room activate with it, the fillers among them. `+4` passed `+0xc` at the 494th populated room (84 percent of the 590), so the unpatched budget `total * +4 / +0xc` reaches the total before the last rooms and nothing falls short. The first version of this fix (`PaceBudget` dividing by `rooms - fillers`, 495 - 96 = 399 here) subtracted fillers that were never in the count and reached the total at the 375th probed room (about 64 percent), front-loading the packs; the run above was made on that build. It is reverted: the pace is unchanged from the section above for Lava maps. Not measured: the same map on the unpatched build (the budget column of the log gives it by formula: 14 * `+4` / 495), a second layout or size, a character walking the map. `+4` also overruns `+0xc` here, so on a map of this kind the share is capped at the total near the last sixth of the rooms.

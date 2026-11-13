@@ -1,4 +1,4 @@
-## 27. Map item cursor, in-game attempt (issue #307, follow-up to note 22)
+## 27. Map item cursor, in-game attempt (issue #307)
 
 Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Slot 5, test character, `debug_mode` + `cheat god 1`.
 
@@ -11,7 +11,7 @@ The cause is still not established, and the fix is unverified in game. No code c
 - Static: the client right-click use (`FUN_140161f20`, InventoryItemManager.cpp) only sends the use packet (0x26) through `FUN_1400ed1e0`; no cursor or identify
   prediction was found in it. The identify handler (`pSpell` 1, `0x57ec30` -> `FUN_14046e8c0`) is a server-side ItemMode change that probably puts the item on the cursor.
   A refused map item never reaches it (`ItemSpellCheck` returns 0 at `0x4f52c6`), so the cursor likely comes from client data (the `isc` base art or `spellicon`), not the server.
-- In game: the item guard installed (`cartographer.log`: "item guard on"). Harness mouse hover highlights inventory items, but harness right-clicks
+- In game: harness mouse hover highlights inventory items, but harness right-clicks
   (`game_ctl.py click fx fy right`) on a Town Portal scroll and on a map item neither used the item nor reached the guard (no portal, no log line, no cursor change).
   The harness cannot reach the client's right-click use handling, so the symptom was not reproduced and no fix could be checked.
 
@@ -45,7 +45,7 @@ targeting mode. The hotkey use (`0x1c7a30`) also calls `0x1c26b0`. The item inte
 
 ### Fix
 
-The real fix is data: `spellicon` -1 on the map rows in `misc.txt` (documented in `docs/cartographer/tables.md`; `cartographer check` notes a map item row with 0 to 9).
+The real fix is data: `spellicon` -1 on the map rows in `misc.txt` (documented in `docs/cartographer/tables.md`; `cartographer check` notes a map item row with a blank cell or 0 to 9).
 As a safety net for rows a modder has not fixed, `ClearMapItemCursor` (`portal.cpp`) does the same in memory. It runs from the player tick (the server side of the game, so single
 player and the host; a joined client never runs it), once per data bank. It reads the data flag from `game+0x106` and walks that bank's records (`ItemRecord` part, rows from 0
 until the first null; the flag must be below 4), and writes `0xff` to `+0x144` only for a row with `pSpell` 16, a spellicon byte below 10, and an item code that a row of the
@@ -54,10 +54,25 @@ Maps table names. A pSpell 16 row that no map names is left to the game's own ch
 and is never restored (not on leaving the game, not on unload), because the record table belongs to the process. A client item whose `unit+0x1bd` differs from the game's
 flag would read another bank; that is not handled. No code bytes are written. With the part off nothing changes and the old behaviour stays.
 
+### Blank spellicon cell (settled: reads as 0)
+
+`0x315fd0` only builds the column table (`spellicon`, type 6, offset `0x144`). The byte the game reads is whatever D2RLoader's compiler writes for the cell (notes 07 and 11: the game loads the compiled table, so the empty value depends on the column; D2RCore's parser is not involved). Vanilla `misc.txt` cannot show it: the only blank `spellicon` is the `Expansion` marker row, which the compiler drops (`misc.bin` has 169 records).
+
+Tried in game (D2R 3.3 build 93847, D2RLoader 1.3.1-beta, slot 11, test mod; the loader compiled the mod's `misc.txt` in memory at startup, "Compiled 188 tables from TXT", and wrote no `misc.bin`). Three map item rows with `pSpell` 16 and `spellicon` blank (`t20`), `0` (`t21`) and `-1` (`t22`). The record bytes were read from process memory (ReadProcessMemory, record found by its code at `+0x80`, `pSpell` `+0x94`) at the main menu, before any player tick, with no "spellicon set to -1" line in `cartographer.log` (so `ClearMapItemCursor` had not run):
+
+| Row | `spellicon` cell | Byte at `+0x144` |
+|---|---|---|
+| `t20` | blank | `0x00` |
+| `t21` | `0` | `0x00` |
+| `t22` | `-1` | `0xff` |
+
+A blank cell is therefore the same as 0 and shows the item cursor like it. `cartographer check` notes a blank cell as well as 0 to 9.
+
 ### Verification levels
 
 - Static: the chain above, read in Ghidra and Capstone from the dump. Not run.
 - Unit tests and a clean build: see the PR.
+- In game (memory read, no play): a blank `spellicon` cell compiles to byte 0 (table above).
 - In game: the data fix (`spellicon` -1 in `misc.txt`) was confirmed by the owner with a real mouse. The runtime write is static only: not run in game.
 
 ### Reference

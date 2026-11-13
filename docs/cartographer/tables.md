@@ -44,7 +44,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
+| `Shape` | yes (the column); the cell may be blank for `Snow` and `Siege` | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). `Snow` and `Siege` ignore Shape, so leave the cell blank there (`Open` is still refused for Snow); every other tileset needs one. | none | Corridor |
 | `Size` | no | `Small`, `Medium`, `Large` or `ExtraLarge` | Large | ExtraLarge |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
@@ -76,7 +76,7 @@ A map opens only in Hell, in Harrogath, for a character of at least `MinCharLeve
 
 ## Map item type (itemtypes.txt)
 
-Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0. Set `spellicon` to -1 as well: the game starts the Scroll of Identify cursor for a value of 0 to 9, and `cartographer check` notes a map item row that still has one. As a safety net the plugin also sets it to -1 in memory for the map items your Maps table names (not tested in game).
+Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `itemtypes.txt` (never changing an existing row), and a modder without the installer adds by hand. Every map item in `misc.txt` has `type` `cmap` and `belt` 0. Set `spellicon` to -1 as well (a blank cell reads as 0): the game starts the Scroll of Identify cursor for a value of 0 to 9, and `cartographer check` notes a map item row that still has one. As a safety net the plugin also sets it to -1 in memory for the map items your Maps table names (not tested in game).
 
 | Column | Value | Why |
 |---|---|---|

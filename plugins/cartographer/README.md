@@ -19,7 +19,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   `uniqueitems.txt` row. The map level and the modifiers are stats on the item, shown on hover. When the map opens,
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
-- **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
+- **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties) show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
@@ -55,7 +55,7 @@ in [`examples/first-map/`](examples/first-map/).
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
-4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`), for example a copy
+4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`) and `spellicon` -1, for example a copy
    of a scroll with `compactsave` set to 0 (1 keeps every map Normal). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
@@ -119,7 +119,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave`, `Crypt`, `Lava` or `Ice` (each opens through its own level); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped | required |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow` and `Siege` ignore Shape: leave the cell blank there | required (blank is fine for Snow and Siege) |
 | Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
