@@ -60,3 +60,18 @@ So the premise is wrong twice. `+0xc` does not hold the fillers (495 is the plan
 Filler rooms are in `+4` but not in `+0xc` (above). With the pace unchanged they advance it, so the total is due at about `+4 = +0xc`, 61 to 71 percent of the rooms of a Lava map; leaving them out and leading the plan rooms was tried and not kept: no run showed a gain over the unchanged pace (the unchanged pace put 0 of 13 in fillers), and which way the early budget moves depends on where the fillers fall in the room order.
 
 Not measured: the unchanged pace on a full sweep of the same seed, a second seed, Crypt, Jungle, a walking character.
+
+### Pace excludes filler rooms from the rooms done (issue #317)
+
+2026-11-13, slot 7, Hell, test save, god mode, `MazeProbe=1`, `cheat goto` sweeps (not walked), maps Level 90, Density 100, Uniques 100. Maze seeds are random per game, so the before and after runs are different maps of the same size.
+
+`+4` counts every populated room, the Lava filler ring included, and `+0xc` counts plan rooms only. The pace now counts only the plan rooms among the rooms done: a populate whose DRLG room piece id (`+0x40`, id at `+0`) equals the closed filler piece made at slot build (836 in the slot) is a filler and is left out (`MazeRoomIsFiller`). Plan rooms carry the base piece plus an exit mask (846 and the like), never the closed piece. The probe line is now `pace begin: +4 +0xc unique count pack units filler (piece) fillers seen budget`. A pack that added several units (a pack with its minions) also shifts the budget a little later (`PaceBudget` `packUnits`, from the mean units per pack event so far); the simulation in `levelrow_tests.cpp` shows this alone helps little because most pack events add one unit, and that the filler rule carries the effect.
+
+| Run | Total | Uniques by thirds of plan rooms | Last pack |
+|---|---|---|---|
+| Lava, origin/main (fillers advance the pace) | 14 | 8 / 6 / 0 | plan room 61 percent |
+| Lava, this change | 14 | 5 / 5 / 5 (15 made: a burst of 3 at count 12) | plan room 87 percent |
+| Cave control, origin/main | 10 | 4 / 3 / 3 | 91 percent |
+| Cave control, this change | 10 | 4 / 3 / 3 | 91 percent |
+
+Not checked: the same seed before and after, Snow, a walking character, `cartographer where`, a second Lava seed.

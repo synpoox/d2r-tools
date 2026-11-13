@@ -94,6 +94,7 @@ std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
 std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
+std::atomic<int> g_closedFillerPiece{-1};  // the closed piece the filler ring's rooms were given in this game's slot build, -1: no ring built
 cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
 
 // The map that was opened, and the plan for it. Guarded by g_lock.
@@ -590,6 +591,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 			all.push_back(made);  // a null keeps the indices; its children are refused too
 		}
 		const int made = static_cast<int>(plan.fills.size()) - refused;
+		g_closedFillerPiece.store(closed > 0 ? static_cast<int>(closedPiece) : -1);
 		if (refused != 0) {
 			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
@@ -922,6 +924,7 @@ void MazeMapCancelled() {
 
 void MazeGameLeft() {
 	g_dataFlag = -1;
+	g_closedFillerPiece = -1;
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();
 	g_cache = {};
@@ -933,6 +936,22 @@ void MazeGameLeft() {
 	g_bossRoom = {};
 	g_arrivalLogged = false;
 	g_arrivalResult = 0;
+}
+
+auto MazeRoomPieceId(const void* drlgRoom) noexcept -> int {
+	if (drlgRoom == nullptr || !Readable(drlgRoom, 0x48)) {
+		return -1;
+	}
+	const void* piece = Read<const void*>(drlgRoom, RoomPiece);
+	if (piece == nullptr || !Readable(piece, 4)) {
+		return -1;
+	}
+	return Read<int32_t>(piece, PieceId);
+}
+
+auto MazeRoomIsFiller(const void* drlgRoom) noexcept -> bool {
+	const int closed = g_closedFillerPiece.load();
+	return closed >= 0 && MazeRoomPieceId(drlgRoom) == closed;
 }
 
 auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool {

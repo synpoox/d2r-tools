@@ -196,7 +196,7 @@ auto UniqueTotal(const Request& r, const RecordSnapshot& s, bool uniquesAllowed)
 	return static_cast<int>(ScalePercent(s.uMax, r.uniques, MaxPackCount));
 }
 
-auto PaceBudget(int total, int seen, int rooms) -> int {
+auto PaceBudget(int total, int seen, int rooms, int packUnits) -> int {
 	if (total <= 0) {
 		return 0;
 	}
@@ -206,8 +206,20 @@ auto PaceBudget(int total, int seen, int rooms) -> int {
 	if (seen >= rooms) {
 		return total;
 	}
-	const int64_t scaled = (static_cast<int64_t>(total) * seen + rooms - 1) / rooms;
+	// The game adds a whole pack (leader and minions) once it lets one through, so the count lands up to a pack above the line. Half a
+	// pack's extra units are taken off the line so the count crosses it instead of leading it: total * seen / rooms - (packUnits - 1) / 2,
+	// rounded up, kept in 1 .. total.
+	const int64_t lag = std::max(packUnits - 1, 0) * static_cast<int64_t>(rooms);
+	const int64_t twice = 2 * static_cast<int64_t>(total) * seen - lag;
+	const int64_t scaled = twice <= 0 ? 0 : (twice + 2 * static_cast<int64_t>(rooms) - 1) / (2 * static_cast<int64_t>(rooms));
 	return static_cast<int>(std::min<int64_t>(std::max<int64_t>(scaled, 1), total));
+}
+
+auto PackUnitsEstimate(int events, int units) -> int {
+	if (events <= 0 || units <= 0) {
+		return 1;
+	}
+	return std::max(1, static_cast<int>((static_cast<int64_t>(units) + events / 2) / events));
 }
 
 auto PlanRecord(const Request& r, const RecordSnapshot& s, const Parts& allowed) -> std::vector<Field> {

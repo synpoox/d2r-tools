@@ -42,7 +42,9 @@ void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const cha
 // LevelRowBeforeOpen (only for a map with Uniques above 0), disarmed on a failed open, leaving the game and unload. Begin returns false
 // (nothing written) when not armed or the room is not of the armed level/game. Game thread. One game, one thread.
 auto UniquePaceArmed() noexcept -> bool;
-auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool;
+// `filler` is true for a closed filler room of the Lava ring: the game counts it in +4 but the plan's room total (+0xc) does not hold it, so it
+// does not advance the share of rooms done. `pieceId` is the room's piece id (probe line only).
+auto UniquePaceBegin(const void* game, int roomLevel, bool filler, int pieceId) noexcept -> bool;
 void UniquePaceEnd() noexcept;
 
 // What the columns do now, for 'cartographer check'.
