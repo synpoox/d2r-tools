@@ -1,6 +1,7 @@
 #include "engine/item_stats.h"
 
 #include "core/part_signatures.h"
+#include "engine/map_quality.h"
 #include "engine/scan.h"
 #include "log.h"
 
@@ -21,9 +22,11 @@ namespace sp = cartographer::statplan;
 
 // Build 93847; evidence in docs/reverse-engineering/cartographer/14-item-stats.md.
 constexpr int32_t MagicListFlags = 0x40;  // the item's base magic list (created with flags 0x40); state 0 asks for a match by flags
-constexpr int MaxStats = 16;              // the game's own sender sends 16 at most
-// The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use and cut to MaxStats here.
+// The original asserts when the list count is at least `max`, so ask for the 0x200 that the game's own callers use. All of it is read: a map
+// carries a few dozen stats at most (six affixes of up to three properties each, plus the base), and the 16-entry limit is the state sender's
+// (statplan kMaxPlayerStats), not the copy's (issue #429).
 constexpr int CopyMax = 0x200;
+constexpr int MaxStats = CopyMax;
 
 struct Unit;
 
@@ -73,6 +76,8 @@ std::atomic<int> g_logged{0};
 constexpr int CubePageOffset = 0x55;
 constexpr uint8_t CubePage = 3;
 CubeExecFn g_cubeOriginal = nullptr;
+std::atomic<bool> g_inCube{false};            // inside the game's cube output step
+std::atomic<uint64_t> g_stampedItem{0};       // the map item just given its maps.txt Level (issue #422); its first map-level property starts from 0
 std::atomic<int> g_cubeInput{-1};  // the highest map level among the cube's inputs, read when the output step starts (the game frees the inputs during it)
 
 auto CubeInputsFound() noexcept -> bool {
@@ -110,11 +115,16 @@ auto SafeSetMagicStat(void* item, int statId, int value) noexcept -> bool {
 }
 
 auto CubeInputLevel(uint64_t player, int statId) noexcept -> int;
+void StampCubeOutputs(uint64_t player) noexcept;
 
 auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10) noexcept -> uint64_t {
+	g_stampedItem.store(0);
+	g_inCube.store(true);
 	g_cubeInput.store(CubeInputLevel(a2, g_statId.load(std::memory_order_relaxed)));
 	const uint64_t result = g_cubeOriginal(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
 	g_cubeInput.store(-1);
+	g_inCube.store(false);
+	StampCubeOutputs(a2);
 	return result;
 }
 
@@ -143,6 +153,33 @@ auto CubeInputLevelRaw(uint64_t player, int statId) noexcept -> int {
 		}
 	}
 	return trusted ? best : -1;
+}
+
+// Issue #422: a map the cube made (a recipe whose output is a map code, which the game builds without the item maker) has no map level stat; it
+// takes its maps.txt Level now. A map that already has the stat (the reused input, or an output whose map-level mod was applied) is left alone.
+void StampCubeOutputsRaw(uint64_t player) noexcept {
+	void* inv = reinterpret_cast<UnitInventoryFn>(const_cast<uint8_t*>(g_parts[UnitInventory].address))(reinterpret_cast<void*>(player));
+	if (!Readable(reinterpret_cast<uint64_t>(inv))) {
+		return;
+	}
+	void* it = reinterpret_cast<InventoryFirstFn>(const_cast<uint8_t*>(g_parts[InventoryFirst].address))(inv);
+	for (int n = 0; n < 40 && Readable(reinterpret_cast<uint64_t>(it)); ++n) {
+		const uint64_t data = At<uint64_t>(it, 0x10);
+		if (At<int32_t>(it, 0) == 4 && Readable(data) && At<uint8_t>(reinterpret_cast<const void*>(data), CubePageOffset) == CubePage) {
+			StampMapOutput(it);
+		}
+		it = reinterpret_cast<InventoryNextFn>(const_cast<uint8_t*>(g_parts[InventoryNext].address))(it);
+	}
+}
+
+void StampCubeOutputs(uint64_t player) noexcept {
+	if (player == 0 || g_statId.load() < 0 || !CubeInputsFound() || !ItemStatsWritable() || !Readable(player)) {
+		return;
+	}
+	__try {
+		StampCubeOutputsRaw(player);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+	}
 }
 
 auto CubeInputLevel(uint64_t player, int statId) noexcept -> int {
@@ -175,6 +212,19 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	if (!match) {
 		return g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
 	}
+	if (g_cubeOriginal != nullptr && !g_inCube.load() && g_stampedItem.load() == item) {  // replace only with the cube hook in place, so a missing CubeExec part cannot turn a cube add into a replace
+		// A map just made with its maps.txt Level: a modder's own map-level (an affix or a unique's property) is the level, not an addition to it.
+		g_stampedItem.store(0);
+		const bool cleared = SafeSetMagicStat(reinterpret_cast<void*>(item), statId, 0);
+		const uint64_t applied = g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
+		int now = 0;
+		bool okNow = false;
+		if (!SafeMagicStat(reinterpret_cast<void*>(item), statId, &now, &okNow)) {
+			okNow = false;
+		}
+		plog::Info("map level line: the item's own map-level property gives Area Level %d, replacing its maps.txt Level (%s)", okNow ? now : -1, cleared ? "set" : "reset failed");
+		return applied;
+	}
 	int before = 0;
 	int after = 0;
 	bool okBefore = false;
@@ -193,7 +243,11 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	const int roll = (after >= pmin && after <= pmax) ? after : sp::cubeRoll(pmin, pmax, sp::mixSeed(GetTickCount64(), static_cast<uint32_t>(item >> 4), static_cast<uint32_t>(g_logged.load())));
 	const int inputLevel = g_cubeInput.load();
 	// Fail open: both reads of the item and the cube inputs walk must have worked. A level read as 0 (a fresh map) counts; an unread one does not.
-	const int base = before > inputLevel ? before : inputLevel;
+	// A map with no stat yet (one made before #422, or a fresh cube output) is at its maps.txt Level, which the recipe's value is added to.
+	int base = before > inputLevel ? before : inputLevel;
+	if (base < 1) {
+		base = MapsLevelOfItem(reinterpret_cast<void*>(item));
+	}
 	const bool ok = okBefore && okAfter;
 	const bool known = sp::cubeLevelKnown(ok, inputLevel, On(CubeExec));
 	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, known);
@@ -253,6 +307,14 @@ auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<Sign
 	return On(FindList) && On(ListCopy);
 }
 
+void ClearStampedMap() {
+	g_stampedItem.store(0);
+}
+
+void NoteStampedMap(void* item) {
+	g_stampedItem.store(reinterpret_cast<uint64_t>(item));
+}
+
 void CubeMapLevelConfigure(int propertyId, int statId) {
 	g_statId.store(statId);
 	g_propId.store(propertyId);
@@ -274,7 +336,7 @@ auto ItemMagicStat(void* item, int stat, bool* ok) noexcept -> int {
 			return s.value;
 		}
 	}
-	// Not found: 0 only counts as the item's level when the list was read whole (no note: parts present, layout recognised, at most MaxStats stats).
+	// Not found: 0 only counts as the item's level when the list was read whole (no note: parts present, layout recognised, at most 512 stats).
 	if (ok != nullptr) {
 		*ok = On(FindList) && On(ListCopy) && note.empty();
 	}

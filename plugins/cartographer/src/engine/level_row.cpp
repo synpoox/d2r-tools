@@ -499,6 +499,9 @@ auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
 		const int budget = lr::PaceBudget(pace.total, seen, rooms);
 		g_paceLastBudget = budget;
+		if (g_probe.load()) {
+			plog::Info("record probe: pace begin: +4=%d +0xc=%d unique count %d budget %d", seen, rooms, pace.record[lr::RecUniqueCountOffset], budget);
+		}
 		g_paceSavedMin = pace.restoreMin;
 		g_paceSavedMax = pace.restoreMax;
 		const uint32_t zero = 0, max = static_cast<uint32_t>(budget);

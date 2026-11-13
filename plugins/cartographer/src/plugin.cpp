@@ -476,6 +476,13 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
 		}
+		if (carto::EqualsNoCase(verb, "where")) {
+			if (!carto::RequestWhere()) {
+				Say(command, "Cartographer: join a game you host first.");
+				return D2RL::ConsoleCommandResult::Failed;
+			}
+			return D2RL::ConsoleCommandResult::Handled;  // the answer comes from the game thread, in the console and the log
+		}
 		if (carto::EqualsNoCase(verb, "open")) {
 			if (rest.empty()) {
 				Say(command, "Usage: cartographer open <Name>");
@@ -505,7 +512,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 		plog::Error("the cartographer command failed");
 		return D2RL::ConsoleCommandResult::Failed;
 	}
-	Say(command, "Usage: cartographer check | cartographer open <Name>");
+	Say(command, "Usage: cartographer check | cartographer open <Name> | cartographer where");
 	return D2RL::ConsoleCommandResult::InvalidArguments;
 }
 

@@ -17,13 +17,19 @@ namespace carto {
 auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
 // The stats on the base magic list of `item` (an item unit), in the list's order. Empty when a part is off, the item has no such list or
-// the list is empty; `note` then says why when there is something to say. At most 16 stats are read (the game's own copy limit).
+// the list is empty; `note` then says why when there is something to say. Every stat on the list is read (up to 512, the copy's own limit).
 // Game thread only.
 auto ReadMapItemStats(void* item, std::string* note) noexcept -> std::vector<cartographer::statplan::ItemStat>;
 
 // The cube map level (issue #330): the properties.txt row of 'map-level' and the itemstatcost.txt row of the map level stat (-1: off). Call after
 // the tables are read. The hook is installed at load by InstallItemStats and does nothing until both are set.
 void CubeMapLevelConfigure(int propertyId, int statId);
+
+// Issue #422: `item` is a map just given its maps.txt Level. The next map-level property applied to it outside a cube (an affix, a unique's
+// property) starts from 0, so the modder's value is the level and is not added to the maps.txt one. Game thread only.
+void NoteStampedMap(void* item);
+// The map made by the current roll takes no affix or unique maker (an ordinary quality): forget it, so a later property apply is not taken for its own.
+void ClearStampedMap();
 
 // Writing (the cube map level, issue #330). True when the list maker and the stat setter were found too.
 auto ItemStatsWritable() -> bool;

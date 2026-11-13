@@ -130,6 +130,12 @@ struct ArrivalFact {
 	int32_t cellX = 0, cellY = 0, cellW = 0, cellH = 0;  // the entrance cell
 };
 ArrivalFact g_arrival;
+// The box of the last slot build, for `cartographer where` (guarded by g_lock): the level id, its origin in tiles, the macro cell size in tiles and the macro grid.
+struct WhereBox {
+	bool known = false;
+	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0, macroTiles = 0, macroMinX = 0, macroMinY = 0, macroW = 0, macroH = 0;
+};
+WhereBox g_whereBox;
 std::atomic<bool> g_arrivalLogged{false};
 std::atomic<int> g_arrivalResult{0};  // OutdoorArrivalResult: what the arrival probe found (AutoCheck reads it); reset in ArrangeRooms and OutdoorGameLeft
 cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
@@ -457,6 +463,11 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 	const int id = Read<int32_t>(level, LvlId);
 	const co::LevelRect rect = co::levelRectOf(plan.stamps);
 	ProbeLevel(level, "before the slot build");
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		const co::StampPlan& sp = plan.stamps;
+		g_whereBox = {true, id, rect.x, rect.y, rect.w, rect.h, sp.macroW > 0 ? sp.tilesW / sp.macroW : 0, sp.macroMinX, sp.macroMinY, sp.macroW, sp.macroH};
+	}
 	// The rectangle is written before the build, as act start-up does for the game's own outdoor levels: it is 0 for a slot (section 4, S1).
 	Write<int32_t>(level, LvlOriginX, rect.x);
 	Write<int32_t>(level, LvlOriginY, rect.y);
@@ -701,6 +712,24 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 	plog::Info("[outdoor probe] arrival: the player is in DRLG room %p (server room %p) of level %d at (%d,%d) size %d x %d; the entrance cell is %s (%d,%d) %d x %d%s", drlg, room, levelId, x, y, w, h,
 	           have ? "at" : "unknown, last seen at", fact.cellX, fact.cellY, fact.cellW, fact.cellH,
 	           have ? (inCell ? ": ARRIVAL IS IN THE ENTRANCE CELL" : ": arrival is NOT in the entrance cell") : "");
+}
+
+auto OutdoorWhereText(int32_t levelId, int32_t subX, int32_t subY) -> std::string {
+	WhereBox box;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		box = g_whereBox;
+	}
+	if (!box.known || box.levelId != levelId || box.macroTiles <= 0) {
+		return "not in the outdoor slot level";
+	}
+	const int tx = subX / 5, ty = subY / 5;  // subtiles to tiles
+	const int rx = tx - box.x, ry = ty - box.y;
+	const bool inside = rx >= 0 && ry >= 0 && rx < box.w && ry < box.h;
+	char buf[200];
+	std::snprintf(buf, sizeof buf, "tile (%d,%d), box tile (%d,%d) of %d x %d, plan cell (%d,%d) of x %d..%d, y %d..%d%s", tx, ty, rx, ry, box.w, box.h, rx / box.macroTiles + box.macroMinX,
+	              ry / box.macroTiles + box.macroMinY, box.macroMinX, box.macroMinX + box.macroW - 1, box.macroMinY, box.macroMinY + box.macroH - 1, inside ? "" : " (OUTSIDE the box)");
+	return buf;
 }
 
 void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {

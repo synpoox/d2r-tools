@@ -46,6 +46,10 @@ struct SignatureOverride {
 // The tables the hooks use. Safe to call from any thread, at any time.
 void SetTables(std::shared_ptr<const Tables> tables);
 
+// The maps.txt Level of the map whose Item is `code` and the itemstatcost.txt row of the map level stat (issue #422: a new map item is given the
+// stat). False when no loaded map names the code or the stat is not in the tables. Safe to call from any thread.
+auto MapLevelStatFor(const std::string& code, int* statId, int* level) -> bool;
+
 // Called once, on the first LocalPlayerReady event (only registered when the PlayerTick part was found). Set before InstallPortal.
 void SetFirstGameStartNotify(void (*notify)() noexcept);
 
@@ -72,6 +76,9 @@ enum class OpenStart {
 // `mapName` (optional) gets the map's own name, as written in maps.txt, when the request was posted. A stale earlier request
 // that this one replaces is reported to the player.
 auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> OpenStart;
+
+// 'cartographer where': the next tick of the local player logs its position (subtiles, level, plan cell). False when no game is running here.
+auto RequestWhere() -> bool;
 
 auto PortalLive() -> bool;
 
