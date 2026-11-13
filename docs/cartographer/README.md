@@ -83,6 +83,7 @@ The blank cell under `Level` for Tunneling Depths keeps level 85.
 | `Branching` | A main path with side rooms and dead ends |
 | `Loop` | A ring that comes back to where it started, with a few short side rooms |
 | `Sprawl` | Wide and open, with loops and many branches |
+| `Open` | An open room grid: every room joins its neighbours and only a few walls get in the way, so there are many crossings and no dead ends. It is not yet a bordered field; that is a later tileset. `Snow` cannot build it |
 
 ### The tilesets
 

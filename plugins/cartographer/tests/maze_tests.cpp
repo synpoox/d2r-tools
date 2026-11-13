@@ -374,15 +374,15 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 					CHECK(t.noFit == 0);
 					CHECK(t.badShape == 0);
 				} else {
-					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all.
+					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all (Open is not one: its grid shrinks to fit).
 					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small && size != layout::Size::ExtraSmall) ||
 					                        (shape == layout::Shape::Loop && size == layout::Size::Large);
 					CHECK((t.steered > 0) != impossible);
 				}
 				// Crypt rooms are tiny: nothing may fall back, whatever the reason.
 				if (cfg.ts.name == "Crypt") CHECK(t.fallbacks == 0);
-				// A one-exit entrance gets its special piece in every shape except the rings.
-				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl) CHECK(t.placedEntrance == t.steered);
+				// A one-exit entrance gets its special piece in every shape except the rings and Open (its entrance has two or more exits).
+				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl && shape != layout::Shape::Open) CHECK(t.placedEntrance == t.steered);
 			}
 }
 
