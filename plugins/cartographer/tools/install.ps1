@@ -564,7 +564,8 @@ if ($mapTypeRow -ge 0) {
 }
 
 # --- itemstatcost.txt: the map level stat -----------------------------------------------------------------------------
-# A map item's level is a stat on the item (src/statplan mapLevelFromItem): a cube recipe or an affix may set it (the cube cannot on a map yet, affixes are untested), and the game's tooltip shows it
+# A map item's level is a stat on the item (src/statplan mapLevelFromItem): the plugin gives every new map item its maps.txt Level (src/engine/map_quality.cpp), a cube recipe or an affix may add to it, and the game's tooltip shows it,
+# first, because descpriority 255 is above every other stat's (issue #422)
 # through descfunc 19 (the string is a format with the value) and the plugin's own string key. A copy of the vanilla item_maxhp_percent row
 # (a plain unsigned-looking item stat), with the price columns and the stat-link columns emptied, 9 bits saved and sent (0 to 511), appended once.
 # The mod may not carry itemstatcost.txt: then the stat is left out and every map opens at its maps.txt Level.

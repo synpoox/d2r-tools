@@ -898,3 +898,12 @@ TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a k
 	CHECK(r[0].stat == 0);
 	CHECK(r[0].value == 7);
 }
+
+TEST_CASE("mapLevelToStamp: a new map item is given its maps.txt Level")
+{
+	CHECK(mapLevelToStamp(85, 0, true) == 85);   // a fresh map: the maps.txt Level
+	CHECK(mapLevelToStamp(300, 0, true) == 255); // cut to the maps.txt maximum
+	CHECK(mapLevelToStamp(85, 95, true) == 0);   // the item already carries a level: leave it
+	CHECK(mapLevelToStamp(85, 0, false) == 0);   // the stat could not be read: leave the item alone
+	CHECK(mapLevelToStamp(0, 0, true) == 0);     // no usable Level
+}

@@ -1,12 +1,17 @@
 #include "engine/map_quality.h"
 
 #include "core/part_signatures.h"
+#include "engine/item_stats.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "mapquality.h"
+#include "statplan/statplan.h"
 
 #include <atomic>
 #include <cstdint>
+#include <cstring>
+#include <string>
+#include <windows.h>
 #include <intrin.h>
 
 namespace carto {
@@ -16,6 +21,7 @@ namespace {
 // Build 93847; evidence in docs/reverse-engineering/cartographer/26-map-quality.md.
 constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 on a unit: the first argument of the item record lookup (the game's own getter 0x34a0e0)
 constexpr int RecordSpellOffset = 0x94;    // int32: misc.txt pSpell, as in portal.cpp
+constexpr int RecordCodeOffset = 0x80;     // uint32: the item code, four letters
 constexpr int32_t MapSpell = 16;           // the map item's spell: what makes an item a map for this plugin
 constexpr int RequestForcedOffset = 0x40;  // int32 on the item request: a nonzero quality forced by the caller (cheat spawn typ m)
 constexpr int RequestLevelOffset = 0x18;   // int32 on the item request: the item level the caller asked for (game thread; the client copy of an item reads 1)
@@ -59,6 +65,7 @@ constexpr int MaxQuality = 9;
 std::atomic<uint32_t> g_maps[MaxQuality];  // natural map rolls by quality as the item maker gets them (not forced, not a fallback's)
 std::atomic<uint32_t> g_seen{0};      // map rolls logged with their item level (the first 20 are written to the log)
 std::atomic<uint32_t> g_rolled{0};    // magic rolls of the item maker turned normal
+std::atomic<uint32_t> g_stamped{0};    // new map items given the map level stat (issue #422)
 std::atomic<uint32_t> g_fallbacks{0};  // magic fallbacks (a failed set, rare or unique maker) sent to the normal one
 
 auto On(PartId id) noexcept -> bool {
@@ -78,17 +85,83 @@ auto IsMapItem(Unit* item) noexcept -> bool {
 	return record != nullptr && At<int32_t>(record, RecordSpellOffset) == MapSpell;
 }
 
+// The map item's code from its misc.txt row (trailing blanks cut); empty when it cannot be read.
+auto MapCodeOf(Unit* item) noexcept -> std::string {
+	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(g_parts[UnitClassOf].address))(item, __FILE__, __LINE__);
+	if (row < 0) {
+		return {};
+	}
+	const uint8_t* record = reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(g_parts[ItemRecord].address))(At<uint8_t>(item, UnitDataFlagOffset), row);
+	if (record == nullptr) {
+		return {};
+	}
+	char code[5] = {};
+	std::memcpy(code, record + RecordCodeOffset, 4);
+	std::string out(code);
+	while (!out.empty() && (out.back() == ' ' || out.back() == '\t')) {
+		out.pop_back();
+	}
+	return out;
+}
+
+// The game-facing read and write, in functions of their own (a function with __try holds no C++ objects): a fault reads as "not done".
+auto ReadStatSafe(Unit* item, int stat, int* value, bool* known) noexcept -> bool {
+	__try {
+		*value = ItemMagicStat(item, stat, known);
+		return true;
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+auto WriteStatSafe(Unit* item, int stat, int value) noexcept -> bool {
+	__try {
+		return SetItemMagicStat(item, stat, value);
+	} __except (EXCEPTION_EXECUTE_HANDLER) {
+		return false;
+	}
+}
+
+// Issue #422: a new map item carries its maps.txt Level as the map level stat (itemstatcost.txt), so its tooltip shows `Map Level: N` first
+// (the stat's descpriority is the highest). An item that already carries the stat is left alone; affixes the game applies after the roll add
+// to it, as the cube does. Fail open: any part or table missing leaves the item as the game made it.
+void StampMapLevel(Unit* item) noexcept {
+	if (!ItemStatsWritable()) {
+		return;
+	}
+	int statId = -1;
+	int mapsLevel = 0;
+	if (!MapLevelStatFor(MapCodeOf(item), &statId, &mapsLevel)) {
+		return;  // no loaded map names this item, or the mod has no map level stat: nothing to show
+	}
+	int current = 0;
+	bool known = false;
+	if (!ReadStatSafe(item, statId, &current, &known)) {
+		return;
+	}
+	const int level = cartographer::statplan::mapLevelToStamp(mapsLevel, current, known);
+	if (level < 1) {
+		return;
+	}
+	const bool done = WriteStatSafe(item, statId, level);
+	const uint32_t n = done ? g_stamped.fetch_add(1) + 1 : g_stamped.load();
+	if (!done || n <= 10) {
+		plog::Info("map level line: %s Map Level %d on a new map item (%u so far)", done ? "set" : "could not set", level, n);
+	}
+}
+
 auto QualityRollHook(Unit* item, void* request) noexcept -> uint64_t {
 	const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress());
 	const uint64_t rolled = g_original(item, request);
 	if (caller - g_base != MainRollReturnRva) {
 		return rolled;  // a roll inside a fallback: the game throws its result away
 	}
-	if (request != nullptr && At<int32_t>(request, RequestForcedOffset) != 0) {
-		return rolled;  // a quality forced by the caller (cheat spawn typ m) wins over the roll in the game; leave it
-	}
 	if (!IsMapItem(item)) {
 		return rolled;
+	}
+	StampMapLevel(item);  // every new map item, whatever its quality
+	if (request != nullptr && At<int32_t>(request, RequestForcedOffset) != 0) {
+		return rolled;  // a quality forced by the caller (cheat spawn typ m) wins over the roll in the game; leave it
 	}
 	const int decided = cartographer::mapquality::mapQuality(static_cast<int>(rolled), true);
 	if (decided != static_cast<int>(rolled)) {

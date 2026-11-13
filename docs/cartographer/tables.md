@@ -90,13 +90,16 @@ Not a Cartographer table: one row `tools\install.ps1` appends to the mod's `item
 
 ## Map level on the item (itemstatcost.txt, properties.txt, cubemain.txt)
 
-A map item can carry its own map level as a stat, so a cube recipe can change it and the item shows it on hover. `tools\install.ps1` adds two rows (never changing an existing one); a modder without the installer adds them by hand.
+Every new map item carries its own map level as a stat: the plugin gives it the `maps.txt` Level when the game makes the item (a monster drop, a chest, `cheat spawn`), and the item shows `Map Level: N` as the first line of its properties, above any affix (normal, rare and unique maps alike). A cube recipe can change it. `tools\install.ps1` adds two rows (never changing an existing one); a modder without the installer adds them by hand.
 
 | File | Row | Notes |
 |---|---|---|
 | `itemstatcost.txt` | `cartographer_map_level` | A copy of `item_maxhp_percent` with 9 save bits (0 to 511), unsigned, no op, `descfunc` 19, `descstrpos` and `descstrneg` `cartographer:map_level_stat` (the plugin registers the text `Map Level: %d`). The stat id is the row number, so the row goes last. |
 | `properties.txt` | `map-level` | A copy of `str` with `stat1` `cartographer_map_level`, so `cubemain.txt` can write `map-level` in a `mod` column. |
 
+- **First line:** the line's place comes from `descpriority` on the `cartographer_map_level` row (255, above every vanilla stat and above the monster stats at 250); the game sorts a tooltip by it, so nothing in the plugin places the line. Do not give another stat a higher priority if you want the level to stay first.
+- **Given at creation:** the plugin sets the stat on the item the game is making, from the `Level` of the `maps.txt` row whose `Item` is that item (cut to 1 to 255), unless the item already carries one. An affix or unique with a `map-level` property should add to it (95 for `map-level 10` on a Level 85 map; expected from the cube's add behaviour, not seen on a map). No `itemstatcost.txt` row or no `maps.txt` row for the item: nothing is set. It needs `compactsave` 0 on the map's `misc.txt` row (with 1 the item keeps no stats, so no line and no level); `cartographer check` notes such rows.
+- **Not covered:** maps that already exist (a save, a stash), a vendor's maps and cube outputs that make a plain map are not given the stat (the cube step does not go through the item maker); they show no line and open at their `maps.txt` Level.
 - **Fallback:** a map item without the stat, with a value under 1 or with a layer uses the `maps.txt` Level. A value over 255 is cut to 255. The log line `map level N (...)` says which one applied.
 - **Where it is read:** the item-use hook, from the item's stat list (the stat is taken out before the rest are used as modifiers). `cartographer open` has no item and uses the `maps.txt` Level.
 - **Rarity and modifiers** are in the next section; this stat is only the level.

@@ -858,6 +858,25 @@ void SetTables(std::shared_ptr<const Tables> tables) {
 	g_tables = std::move(tables);
 }
 
+auto MapLevelStatFor(const std::string& code, int* statId, int* level) -> bool {
+	std::shared_ptr<const Tables> tables;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+	}
+	if (tables == nullptr) {
+		return false;
+	}
+	const MapDef* map = FindMapByItem(tables->maps, code);
+	const int stat = tables->statIds.find(cartographer::statplan::kMapLevelStat);
+	if (map == nullptr || stat < 0) {
+		return false;
+	}
+	*statId = stat;
+	*level = map->level;
+	return true;
+}
+
 auto RescanPortal() -> bool {
 	// The hooks are written at load only, never here. This looks again for the called parts (a part that was missing at
 	// load, such as D2RLoader's UnitStat thunk, may be there now) and turns the portal on when every required part is.

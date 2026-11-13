@@ -252,6 +252,12 @@ bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked)
 	return itemReadsOk && (inputLevel >= 0 || !cubeStepHooked);
 }
 
+int mapLevelToStamp(int mapsLevel, int current, bool currentKnown)
+{
+	if (!currentKnown || current >= 1 || mapsLevel < kMinMapLevel) return 0;
+	return mapsLevel > kMaxMapLevel ? kMaxMapLevel : mapsLevel;
+}
+
 MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback)
 {
 	MapLevelPick out;

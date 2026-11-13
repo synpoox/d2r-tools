@@ -33,6 +33,14 @@ three also call the roll, so the roll hook runs in them; those calls are not cou
 (or failed rare or unique) would come out as a full magic map; the fallback hook sends a map to `0x442820`. `0x442750` takes its level by
 pointer in `r9`, `0x442820` by value in `r9d`, so the hook passes `*level`.
 
+### The map level line (issue #422)
+
+No new address, signature or table row. The quality roll hook (`0x444200`, main roll only) also gives a new map item its `maps.txt` Level as the `cartographer_map_level` stat (`StampMapLevel` in `map_quality.cpp`; the pure decision is `statplan::mapLevelToStamp`), through the existing `ItemMagicStat` / `SetItemMagicStat` (list maker + `SetListStat`, notes 14, 15 and 25). It runs before the forced-quality early return, so `typ m` and `typ r` spawns get it too. The line sorts first because the row's `descpriority` is 255 (the installer value from #310, above the monster stats at 250 and every vanilla row, whose highest is 180).
+
+Seen in game, 2026-11-13, build 93847, D2RLoader 1.3.1-beta, slot 7, Hell, test save, [check](../../cartographer/checks/2026-11-13-map-level-line-check.md): the stat written during the roll (item made, list made by the stat writer) is kept by the later makers: normal, magic (forced) and rare maps show `Map Level: N` as the first line, ahead of `+x% Monster ...` and player stats; it survives Save and Exit and a restart; the map opens at it (`map level 85 (from the item's stat)`). The affix makers add their lines after it. The stat is on the base magic list the open reads (`from the item's stat` logged).
+
+Limits: items made without the item maker (cube outputs, `0x527009`) and existing items get no stat; `compactsave` 1 on the `misc.txt` row keeps no stats (note 16; not retested here, the check slot's rows were switched to 0 first). That an affix with a `map-level` property adds to the stamped level is expected from the game's add behaviour in note 25, not seen on a map. A natural monster drop was not run (the test rows have `rarity` 0); `cheat spawn` reaches the same call site (see the coverage table).
+
 ### What it does not cover
 
 - A quality forced by the caller (`cheat spawn ...,typ m`) stays magic: the game puts it over the roll.
