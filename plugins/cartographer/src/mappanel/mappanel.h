@@ -13,6 +13,7 @@ struct Stat {
 	std::string name;     // an itemstatcost Stat name
 	int value = 0;
 	std::string gameText; // the game's own text for the stat ("+%d%% Faster Run/Walk"), "" when it could not be read
+	std::string gameTextNeg; // the game's text for a negative value (descstrneg), "" when none: gameText is used
 };
 
 // The game's colour code for item property blue and for gold (the panel's own colour), as UTF-8: U+00FF, 'c', digit.
@@ -20,15 +21,16 @@ inline constexpr const char *kBlue = "\xC3\xBF" "c3";
 inline constexpr const char *kGold = "\xC3\xBF" "c4";
 
 // A game string with the value put in: "%d" and "%i" are the number, "%+d" the number with its sign, "%%" a percent sign. A '+'
-// in front of "%d" is dropped for a negative value. "" when the text has no number placeholder (the caller then falls back).
+// in front of "%d" is dropped for a negative value. "" when the text does not have exactly one number placeholder or has another
+// conversion such as "%s" (the caller then falls back).
 std::string formatGameText(const std::string &text, int value);
 
 // A readable name for an itemstatcost Stat name that has no entry in the fallback table: underscores turned into spaces and a
 // leading "item " dropped, first letter upper case.
 std::string statLabel(const std::string &stat);
 
-// The property text without the group: "+30% Life", "-20% Fire Resistance". The stat's game text when it has one with a number
-// in it, else the fallback table's wording, else "+25 Magic bonus" (the plain number and the tidied name).
+// The property text without the group: "+30% Life", "-20% Fire Resistance". The stat's game text (the negative one for a negative
+// value, when there is one) when it has one with a number in it and keeps the percent sign a fallback entry has, else the fallback table's wording, else "+25 Magic bonus" (the plain number and the tidied name).
 std::string statLine(const Stat &stat);
 
 // The whole panel text, lines joined by newlines: "Monster level N" (left out when level is 0 or below), then "Monsters have" and its

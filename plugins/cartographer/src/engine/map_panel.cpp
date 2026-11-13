@@ -72,7 +72,8 @@ std::atomic<bool> g_on{false};  // the parts and services are there, the panel i
 
 // The open map. Written on the game thread, read on the UI thread.
 std::mutex g_lock;
-std::string g_text;       // the panel text; empty: no map is open
+std::string g_text;       // the panel text; empty: nothing to show
+bool g_mapOpen = false;   // a map was opened and not left; independent of the text
 int g_slotLevel = -1;
 std::atomic<bool> g_inMap{false};
 std::atomic<bool> g_bannerOn{false};  // the banner panel is registered: ShowEntryBanner can show
@@ -537,8 +538,17 @@ void UnloadMapPanel() noexcept {
 	ReleaseResource();
 }
 
+void MapPanelNoMap() {
+	std::lock_guard<std::mutex> lock(g_lock);
+	g_mapOpen = false;
+	g_text.clear();
+	g_slotLevel = -1;
+	g_inMap = false;
+}
+
 void MapPanelMapOpened(const std::string& text, int slotLevel) {
 	std::lock_guard<std::mutex> lock(g_lock);
+	g_mapOpen = true;
 	g_text = text;
 	g_slotLevel = slotLevel;
 	g_inMap = false;  // the player's tick says when it stands in the map
@@ -551,7 +561,7 @@ void MapPanelPlayerTick(void* player) noexcept {
 	int slot = -1;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (g_text.empty()) {
+		if (!g_mapOpen) {
 			return;
 		}
 		slot = g_slotLevel;
@@ -561,6 +571,7 @@ void MapPanelPlayerTick(void* player) noexcept {
 
 void MapPanelGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
+	g_mapOpen = false;
 	g_text.clear();
 	g_slotLevel = -1;
 	g_inMap = false;

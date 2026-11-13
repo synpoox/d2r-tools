@@ -107,13 +107,15 @@ const D2RL::LocalizationService* g_localization = nullptr;  // optional: the gam
 MonsterSetupFn g_original = nullptr;
 
 // The game's text for a stat's descstrpos key in the current language, "" when there is no key, no service or no such string.
+// A bare key is looked up in this plugin's own namespace, so the game's strings are asked for as "d2r:<key>".
 auto GameStatText(const std::string& key) noexcept -> std::string {
 	if (key.empty() || g_localization == nullptr || g_context == nullptr) {
 		return std::string();
 	}
 	char buffer[256] = {};
 	uint32_t required = 0;
-	if (g_localization->getStringByKey(g_context, key.c_str(), buffer, sizeof(buffer), &required) != D2RL::Localization::Result::Success) {
+	const std::string full = "d2r:" + key;
+	if (g_localization->getStringByKey(g_context, full.c_str(), buffer, sizeof(buffer), &required) != D2RL::Localization::Result::Success) {
 		return std::string();
 	}
 	return buffer;
@@ -560,7 +562,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats) {
 	if (tables == nullptr) {
-		MapPanelMapOpened("", -1);  // no tables: no map text, and not the previous map's
+		MapPanelNoMap();  // no tables: no map text, and not the previous map's
 		return;
 	}
 	const int slot = SlotLevel(tables->slots, MapSlotName(map));
@@ -591,11 +593,11 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	std::vector<cartographer::mappanel::Stat> shown;
 	if (g_monstersOn.load()) {
 		for (const sp::Entry& e : plan->monsters) {
-			shown.push_back({true, e.name, e.value, GameStatText(tables->statIds.descKey(e.name))});
+			shown.push_back({true, e.name, e.value, GameStatText(tables->statIds.descKey(e.name)), GameStatText(tables->statIds.descNegKey(e.name))});
 		}
 	}
 	for (const sp::Entry& e : plan->players) {
-		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name))});
+		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name)), GameStatText(tables->statIds.descNegKey(e.name))});
 	}
 	MapPanelMapOpened(cartographer::mappanel::panelText(map.level, shown), slot);
 	std::lock_guard<std::mutex> lock(g_lock);

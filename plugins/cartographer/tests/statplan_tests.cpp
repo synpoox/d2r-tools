@@ -60,6 +60,9 @@ TEST_CASE("itemstatcost: the descstrpos key is read for rows that have one")
 	CHECK(ids.descKey("item_magicbonus").empty());
 	CHECK(ids.descKey("hitpoints") == "ModStr2");
 	CHECK(ids.descKey("nothing").empty());
+	const StatIds neg = parseItemStatCost("Stat\tdescstrpos\tdescstrneg\nfireresist\tModStr1\tModStr1neg\nstrength\tModStr1a\t\n");
+	CHECK(neg.descNegKey("fireresist") == "ModStr1neg");
+	CHECK(neg.descNegKey("strength").empty());
 }
 
 TEST_CASE("itemstatcost: without an *ID column the row number is the id")

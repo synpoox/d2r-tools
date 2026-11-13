@@ -67,7 +67,7 @@ std::string bluePropertyLine(const Stat &stat)
 std::string formatGameText(const std::string &text, int value)
 {
 	std::string out;
-	bool number = false;
+	int numbers = 0;
 	for (size_t i = 0; i < text.size(); ++i) {
 		if (text[i] != '%') {
 			out.push_back(text[i]);
@@ -80,18 +80,18 @@ std::string formatGameText(const std::string &text, int value)
 		} else if (rest == "+d" || rest == "+i") {
 			if (value >= 0) out.push_back('+');
 			out += std::to_string(value);
-			number = true;
+			++numbers;
 			i += 2;
 		} else if (rest.compare(0, 1, "d") == 0 || rest.compare(0, 1, "i") == 0) {
 			if (value < 0 && !out.empty() && out.back() == '+') out.pop_back();  // "+%d" with a negative value
 			out += std::to_string(value);
-			number = true;
+			++numbers;
 			i += 1;
 		} else {
-			out.push_back('%');
+			return std::string();  // %s or another conversion: the game fills it from something this panel does not have
 		}
 	}
-	return number ? out : std::string();
+	return numbers == 1 ? out : std::string();  // two numbers would show the one value twice
 }
 
 std::string statLabel(const std::string &stat)
@@ -105,11 +105,16 @@ std::string statLabel(const std::string &stat)
 
 std::string statLine(const Stat &stat)
 {
-	if (!stat.gameText.empty()) {
-		std::string text = formatGameText(stat.gameText, stat.value);
-		if (!text.empty()) return text;
+	const Known *known = find(stat.name);
+	const std::string *sources[] = {(stat.value < 0 && !stat.gameTextNeg.empty()) ? &stat.gameTextNeg : nullptr, &stat.gameText};
+	for (const std::string *source : sources) {
+		if (source == nullptr || source->empty()) continue;
+		std::string text = formatGameText(*source, stat.value);
+		// A percent stat whose game text lost its percent sign (the game adds it by descfunc): the fallback has it.
+		const bool losesPercent = known != nullptr && std::string(known->text).find("%%") != std::string::npos && text.find('%') == std::string::npos;
+		if (!text.empty() && !losesPercent) return text;
 	}
-	if (const Known *k = find(stat.name)) return formatGameText(k->text, stat.value);
+	if (known != nullptr) return formatGameText(known->text, stat.value);
 	std::string out;
 	if (stat.value >= 0) out += '+';
 	out += std::to_string(stat.value);

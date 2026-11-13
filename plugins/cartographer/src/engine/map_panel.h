@@ -25,6 +25,7 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 void UnloadMapPanel() noexcept;
 
 // A map opened: `text` is the panel text, `slotLevel` the level id the map is built in. Any thread.
+void MapPanelNoMap();  // no map is open: the panel stays closed
 void MapPanelMapOpened(const std::string& text, int slotLevel);
 
 // The local player's tick (game thread): whether the player stands in the open map's level.

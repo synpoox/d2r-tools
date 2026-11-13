@@ -75,6 +75,13 @@ std::string StatIds::descKey(std::string_view name) const
 	return "";
 }
 
+std::string StatIds::descNegKey(std::string_view name) const
+{
+	for (const auto &p : descNegKeys)
+		if (p.first == name) return p.second;
+	return "";
+}
+
 int StatIds::find(std::string_view name) const
 {
 	for (const auto &p : byName)
@@ -105,6 +112,7 @@ StatIds parseItemStatCost(std::string_view text)
 	if (cStat < 0) return out;
 	out.loaded = true;
 	const int cDesc = table.Column("descstrpos");
+	const int cDescNeg = table.Column("descstrneg");
 	// The stat id is the row number: the game counts data rows from 0. A column that starts with '*' (such as
 	// *ID) is a comment to the game, and vanilla has one wrong (row 212 says 213), so it is not read.
 	int ordinal = 0;
@@ -114,6 +122,7 @@ StatIds parseItemStatCost(std::string_view text)
 		if (name.empty()) continue;
 		out.byName.emplace_back(name, id);
 		if (const std::string key = table.Cell(row, cDesc); !key.empty()) out.descKeys.emplace_back(name, key);
+		if (const std::string key = table.Cell(row, cDescNeg); !key.empty()) out.descNegKeys.emplace_back(name, key);
 	}
 	return out;
 }

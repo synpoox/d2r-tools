@@ -32,6 +32,28 @@ TEST_CASE("a game text with no number is not used")
 	CHECK(formatGameText("%d%% 100%%", 7) == "7% 100%");
 }
 
+TEST_CASE("a game text with a %s or two numbers is not used")
+{
+	CHECK(formatGameText("%+d to %s", 5).empty());
+	CHECK(formatGameText("%d%% to %d", 5).empty());
+	CHECK(statLine({true, "item_magicbonus", 9, "%d to %s"}) == "+9% Better Chance of Getting Magic Items");
+	CHECK(statLine({true, "weird", 9, "%d to %s"}) == "+9 Weird");
+}
+
+TEST_CASE("the negative game text is used for a negative value")
+{
+	CHECK(statLine({false, "fireresist", -20, "%+d%% Fire Resist", "Fire Weakness %d%%"}) == "Fire Weakness -20%");
+	CHECK(statLine({false, "fireresist", 20, "%+d%% Fire Resist", "Fire Weakness %d%%"}) == "+20% Fire Resist");
+	CHECK(statLine({false, "fireresist", -20, "%+d%% Fire Resist", "to Weakness"}) == "-20% Fire Resist");  // no number: the positive text
+}
+
+TEST_CASE("a percent stat keeps its percent sign when the game text has none")
+{
+	CHECK(statLine({true, "item_fastermovevelocity", 16, "%+d Faster Run/Walk"}) == "+16% Faster Run/Walk");
+	CHECK(statLine({true, "strength", 5, "%+d to Strength"}) == "+5 to Strength");
+	CHECK(statLine({true, "weird", 5, "%+d Weird"}) == "+5 Weird");
+}
+
 TEST_CASE("an unknown stat is tidied and shows the plain number")
 {
 	CHECK(statLabel("item_goldbonus") == "Goldbonus");
