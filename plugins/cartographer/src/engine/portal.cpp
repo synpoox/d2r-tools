@@ -737,17 +737,17 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 // a copy of the Scroll of Identify, whose cursor the game may start. The item interaction listener sees the right-click first, on
 // the UI thread, and stops it there with the check's own sentence: no use, the item stays. Only gates that cannot go stale the wrong
 // way are refused here; the gate copy the tick keeps is up to GateReadEvery ticks old, so level, area and free spot are left to the
-// check. A map already open is known without that copy (opened here, or told by the host to a joined client). A joined client never
+// check, so for character level, area and free spot the item cursor can still come back (follow-up). A map already open is known without that copy (opened here, or told by the host to a joined client). A joined client never
 // fills the copy, so it refuses nothing else and the host's check decides. A held modifier key steps aside. Best effort: without the
-// service the check refusal stays. Not yet seen to fire in game.
+// service the check refusal stays. When a map is open and a slot problem also exists, "already open" is said first on purpose. Not yet seen to fire in game.
 const D2RL::ItemService* g_itemService = nullptr;
 
 auto __cdecl OnItemActivate(const D2RL::PluginContext* context, const D2RL::ItemInteractions::ItemInteractionEvent* event, void*) noexcept -> D2RL::ItemInteractions::Decision {
 	using D2RL::ItemInteractions::Decision;
 	try {
 		if (event == nullptr || !g_live.load() || g_itemService == nullptr || event->action != D2RL::ItemInteractions::Action::Activate ||
-		    event->modifiers != 0) {
-			return Decision::Continue;  // a held modifier key: not a plain use (the belt is not covered either)
+		    (event->modifiers & (D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Shift) | D2RL::ItemInteractions::ModifierBit(D2RL::ItemInteractions::Modifier::Control))) != 0) {
+			return Decision::Continue;  // Shift or Ctrl held: not a plain use (Alt is let through; the belt is not covered either)
 		}
 		D2RL::Items::ItemInfo info{};
 		info.structSize = D2RL::Items::ItemInfoSize;
