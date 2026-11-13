@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The event's `Name` and `Message` now show on screen as a banner; before, they never appeared.
 - Cave and Crypt maps now each have their own level, so one install opens either. Rerun `tools\install.ps1` once to add the new Crypt level; `-Tileset` is no longer needed.
 - A cave or crypt map keeps its revealed automap after a trip to town and back. Re-run `tools\install.ps1` on an existing mod so the Cave and Snow levels move to their new spots.
 - A new cave, crypt or snow map no longer shows the revealed walls of an earlier map from the previous game.
