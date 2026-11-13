@@ -97,6 +97,8 @@ bool g_notFoundLogged = false;
 std::atomic<bool> g_queued{false};
 std::atomic<uint32_t> g_sets{0};
 std::atomic<bool> g_faulted{false};
+std::atomic<bool> g_bannerFaulted{false};  // the banner's own fault, separate from the map panel's
+std::atomic<bool> g_clock{false};  // the frame callback is set: it drives both the map panel and the banner
 std::string g_layout;
 std::string g_bannerLayout;
 
@@ -306,7 +308,7 @@ void ApplyBanner() noexcept {
 		const std::string text = i < static_cast<int>(lines.size()) ? lines[static_cast<size_t>(i)] : std::string();
 		const SetResult result = SetRaw(text, BannerPanelName, name);
 		if (result == SetResult::Fault) {
-			g_faulted = true;
+			g_bannerFaulted = true;
 			g_bannerOn = false;
 			(void)g_panels->closePanel(g_context, g_bannerPanel);
 			g_bannerOpen = false;
@@ -323,16 +325,18 @@ void ApplyBanner() noexcept {
 
 void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 	g_queued = false;
-	if (!g_on.load()) {
+	if (!g_clock.load()) {
 		return;
 	}
 	try {
-		std::string want;
-		if (g_inMap.load()) {
-			std::lock_guard<std::mutex> lock(g_lock);
-			want = g_text;
+		if (g_on.load()) {
+			std::string want;
+			if (g_inMap.load()) {
+				std::lock_guard<std::mutex> lock(g_lock);
+				want = g_text;
+			}
+			Apply(want);
 		}
-		Apply(want);
 		ApplyBanner();
 	} catch (...) {
 		plog::Error("map panel: the panel update failed");
@@ -340,11 +344,11 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 }
 
 void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Frame*, void*) noexcept {
-	if (!g_on.load()) {
+	if (!g_clock.load()) {
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!g_inMap.load() && !g_open && !g_hidden.load() && !BannerPending()) {
+	if (!(g_on.load() && (g_inMap.load() || g_open || g_hidden.load())) && !(g_bannerOn.load() && BannerPending())) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
@@ -488,15 +492,16 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 		           static_cast<uint32_t>(bannerPanelResult));
 	}
 	g_on = true;
+	g_clock = true;
 	return true;
 }
 
 auto EntryBannerAvailable() noexcept -> bool {
-	return g_on.load() && g_bannerOn.load();
+	return g_clock.load() && g_bannerOn.load();
 }
 
 auto ShowEntryBanner(const std::vector<std::string>& lines) noexcept -> bool {
-	if (!g_on.load() || !g_bannerOn.load() || lines.empty()) {
+	if (!g_clock.load() || !g_bannerOn.load() || lines.empty()) {
 		return false;
 	}
 	try {
@@ -513,6 +518,7 @@ auto ShowEntryBanner(const std::vector<std::string>& lines) noexcept -> bool {
 
 void UnloadMapPanel() noexcept {
 	g_on = false;
+	g_clock = false;
 	g_bannerOn = false;
 	if (g_panels != nullptr && g_context != nullptr && g_bannerPanel != D2RL::Panels::InvalidHandle) {
 		(void)g_panels->closePanel(g_context, g_bannerPanel);
@@ -558,7 +564,7 @@ void MapPanelGameLeft() noexcept {
 	g_text.clear();
 	g_slotLevel = -1;
 	g_inMap = false;
-	g_bannerActive = false;
+	g_bannerStartMs = 0;  // a banner still open is out of time: the next pass closes it (bannerVisible of the whole tick count is false)
 }
 
 auto MapPanelPartStatuses() -> std::vector<PartStatus> {
@@ -570,6 +576,9 @@ auto MapPanelPartStatuses() -> std::vector<PartStatus> {
 }
 
 auto MapPanelSummary() -> std::string {
+	if (g_bannerFaulted.load()) {
+		return std::string("Entry banner: off (a memory fault; see the plugin log). ") + (g_on.load() ? "Map panel: on" : "Map panel: off");
+	}
 	if (g_faulted.load()) {
 		return "Map panel: off (a memory fault; see the plugin log)";
 	}

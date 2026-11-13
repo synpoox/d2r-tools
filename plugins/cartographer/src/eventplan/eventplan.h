@@ -247,11 +247,7 @@ private:
 };
 
 // The banner's opacity (0..255) `elapsedMs` after it started: fades in, holds, fades out, then 0 for good.
-constexpr int kBannerFadeInMs = 400;
-constexpr int kBannerHoldMs = 4500;
-constexpr int kBannerFadeOutMs = 1200;
-constexpr int kBannerTotalMs = kBannerFadeInMs + kBannerHoldMs + kBannerFadeOutMs;
-int bannerAlpha(int elapsedMs);
+constexpr int kBannerTotalMs = 6100;  // how long the banner panel stays open
 // Whether the banner is still up this long (ms) after it started.
 bool bannerVisible(int64_t elapsedMs);
 

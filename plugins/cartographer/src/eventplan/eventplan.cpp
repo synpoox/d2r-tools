@@ -453,19 +453,6 @@ bool bannerVisible(int64_t elapsedMs) {
 	return elapsedMs >= 0 && elapsedMs < kBannerTotalMs;
 }
 
-int bannerAlpha(int elapsedMs) {
-	if (elapsedMs < 0 || elapsedMs >= kBannerTotalMs) {
-		return 0;
-	}
-	if (elapsedMs < kBannerFadeInMs) {
-		return elapsedMs * 255 / kBannerFadeInMs;
-	}
-	if (elapsedMs < kBannerFadeInMs + kBannerHoldMs) {
-		return 255;
-	}
-	return (kBannerTotalMs - elapsedMs) * 255 / kBannerFadeOutMs;
-}
-
 uint64_t eventSeed(uint64_t mapSeed) {
 	uint64_t z = mapSeed ^ 0xE7E47C0FFEE5A11Dull;
 	z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
