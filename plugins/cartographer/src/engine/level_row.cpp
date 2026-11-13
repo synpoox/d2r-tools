@@ -191,6 +191,28 @@ auto RecordOf(const void* game, int level, int64_t levelCount, std::string* why)
 	return record;
 }
 
+// The unique pace (issue #317): armed at map open for the slot level, used by the room populator hook. All under g_lock.
+struct Pace {
+	bool armed = false;
+	int level = 0;
+	const void* game = nullptr;
+	uint8_t* record = nullptr;
+	int total = 0;
+};
+Pace g_pace;
+std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
+// The last room's pace, for the probe line (game thread only).
+int g_paceLastBudget = 0;
+// Set between UniquePaceBegin and UniquePaceEnd (game thread only): what the two bytes held.
+bool g_paceOpen = false;
+uint8_t g_paceSavedMin = 0, g_paceSavedMax = 0;
+uint8_t* g_paceRecord = nullptr;
+
+void DisarmPaceLocked() noexcept {
+	g_pace = Pace{};
+	g_paceArmed.store(false);
+}
+
 std::atomic<bool> g_probe{false};
 int g_probeLevel = 0;  // game thread only
 int g_probeRooms = 0;
@@ -237,8 +259,8 @@ void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const cha
 		std::memcpy(&fc, r + 0xc, 4);
 		std::memcpy(&den, r + 0x2b8, 4);
 		const int uniques = r[0x2c8];
-		plog::Info("record probe: room #%d level %d %s: +4=%d +8=%d +0xc=%d uniqueCount(+0x2c8)=%d (+%d this room) MonUMin=%d MonUMax=%d MonDen=%d", ++g_probeRooms, level, where, f4, f8, fc,
-		           uniques, uniques - g_probeUniques, r[0x2bc], r[0x2bd], den);
+		plog::Info("record probe: room #%d level %d %s: +4=%d +8=%d +0xc=%d uniqueCount(+0x2c8)=%d (+%d this room) MonUMin=%d MonUMax=%d MonDen=%d pace budget %d", ++g_probeRooms, level, where, f4, f8, fc,
+		           uniques, uniques - g_probeUniques, r[0x2bc], r[0x2bd], den, g_paceLastBudget);
 		g_probeUniques = uniques;
 	} catch (...) {
 	}
@@ -347,6 +369,17 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			}
 		}
 
+		// The pace (the whole map gets its unique packs, issue #317): armed whenever the record's Uniques part is allowed.
+		DisarmPaceLocked();
+		if (record != nullptr && difficulty >= 0) {
+			const int total = lr::UniqueTotal(request, recSnap, recOn.uniques);
+			if (total > 0) {
+				g_pace = Pace{true, level, game, record, total};
+				g_paceArmed.store(true);
+				plog::Info("map monsters: level %d: unique packs are paced over the whole map, %d in all (MonUMin 0, MonUMax follows the share of rooms done)", level, total);
+			}
+		}
+
 		const size_t rowCount = rowPrep.ops.size() + rowPrep.reverts.size();
 		const size_t recCount = recPrep.ops.size() + recPrep.reverts.size();
 		if (rowCount == 0 && recCount == 0) {
@@ -401,6 +434,9 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 void LevelRowOpenFailed(int level) noexcept {
 	try {
 		std::lock_guard<std::mutex> lock(g_lock);
+		if (g_pace.armed && g_pace.level == level) {
+			DisarmPaceLocked();
+		}
 		bool undone = false;
 		for (Space* space : {&g_row, &g_rec}) {
 			if (space->lastValid && space->lastLevel == level) {
@@ -426,11 +462,75 @@ void LevelRowUnload() noexcept {
 		g_row.lastValid = g_rec.lastValid = false;
 		g_row.lastOps.clear();
 		g_rec.lastOps.clear();
+		DisarmPaceLocked();
 		RestoreRowsLocked();
 		ForgetRecordsLocked();
 	} catch (...) {
 		plog::Error("map monsters: restoring the level row failed");
 	}
+}
+
+auto UniquePaceArmed() noexcept -> bool {
+	return g_paceArmed.load(std::memory_order_relaxed);
+}
+
+auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
+	if (!g_paceArmed.load(std::memory_order_relaxed) || g_paceOpen) {
+		return false;
+	}
+	try {
+		Pace pace;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			pace = g_pace;
+		}
+		if (!pace.armed || pace.game != game || pace.level != roomLevel || pace.record == nullptr || !Readable(pace.record, lr::RecSpan)) {
+			return false;
+		}
+		int32_t seen = 0, rooms = 0;
+		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
+		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
+		const int budget = lr::PaceBudget(pace.total, seen, rooms);
+		g_paceLastBudget = budget;
+		g_paceSavedMin = pace.record[lr::RecUMinOffset];
+		g_paceSavedMax = pace.record[lr::RecUMaxOffset];
+		const uint32_t zero = 0, max = static_cast<uint32_t>(budget);
+		if (!WriteGame(pace.record + lr::RecUMinOffset, &zero, 1)) {
+			return false;
+		}
+		if (!WriteGame(pace.record + lr::RecUMaxOffset, &max, 1)) {
+			const uint32_t back = g_paceSavedMin;
+			WriteGame(pace.record + lr::RecUMinOffset, &back, 1);
+			return false;
+		}
+		g_paceRecord = pace.record;
+		g_paceOpen = true;
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
+void UniquePaceEnd() noexcept {
+	if (!g_paceOpen) {
+		return;
+	}
+	g_paceOpen = false;
+	try {
+		const uint32_t min = g_paceSavedMin, max = g_paceSavedMax;
+		const bool a = WriteGame(g_paceRecord + lr::RecUMinOffset, &min, 1);
+		const bool b = WriteGame(g_paceRecord + lr::RecUMaxOffset, &max, 1);
+		if (!a || !b) {
+			plog::Error("map monsters: the unique pace could not put MonUMin / MonUMax back; it is off");
+			std::lock_guard<std::mutex> lock(g_lock);
+			DisarmPaceLocked();
+		}
+	} catch (...) {
+	}
+}
+
+auto UniquePaceBudget() noexcept -> int {
+	return g_paceLastBudget;
 }
 
 auto LevelRowSummary() -> std::string {

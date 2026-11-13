@@ -32,3 +32,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [23. The maze builder's case for LevelType 28, Lava (issue #239)](cartographer/23-maze-lava.md)
 - [25. The cube sets a map's level (issue #330)](cartographer/25-cube-map-level.md)
 - [26. Map items are never magic (issue #352)](cartographer/26-map-quality.md)
+- [29. Unique packs through the whole map (issue #317)](cartographer/29-uniques-whole-map.md)
