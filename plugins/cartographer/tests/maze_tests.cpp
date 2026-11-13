@@ -375,7 +375,7 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 					CHECK(t.badShape == 0);
 				} else {
 					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all.
-					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small) ||
+					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small && size != layout::Size::ExtraSmall) ||
 					                        (shape == layout::Shape::Loop && size == layout::Size::Large);
 					CHECK((t.steered > 0) != impossible);
 				}
@@ -759,7 +759,7 @@ TEST_CASE("planForMap: a shapes.txt shape plans within the size caps across many
 	for (const int slot : {360, 200}) {
 		for (const char *tileset : {"Cave", "Crypt"}) {
 			for (const char *name : {"Snake", "fat snake"}) {
-				for (const char *size : {"Small", "Medium", "Large"}) {
+				for (const char *size : {"Small", "Medium", "Large"}) {  // ExtraSmall (4 x 4) is too tight for these 12+ cell shapes
 					int steered = 0;
 					for (uint64_t seed = 1; seed <= 150; ++seed) {
 						const MapPlan p = planForMap(tileset, parsed.table, name, size, seed, slot, slot);

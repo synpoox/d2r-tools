@@ -38,9 +38,9 @@ struct Point {
 };
 
 enum class Shape : uint8_t { Corridor, Winding, Branching, Loop, Sprawl };
-enum class Size : uint8_t { Small, Medium, Large };
+enum class Size : uint8_t { ExtraSmall, Small, Medium, Large };
 constexpr int kShapeCount = 5;
-constexpr int kSizeCount = 3;
+constexpr int kSizeCount = 4;
 
 // What a cell is for. Entrance, Event and Boss are the reserved rooms.
 enum class Role : uint8_t { Empty, Entrance, Path, Event, Boss, Branch };
@@ -163,5 +163,9 @@ ParseResult parseShapesTxt(std::string_view text, std::string_view fileName = "s
 
 // Rules for a shape name (a preset or a custom shape from the table) at a size. False with a plain-English error.
 bool resolveRules(const ShapeTable &table, std::string_view shapeName, Size size, Rules &out, std::string &error);
+
+// The check parseShapesTxt runs for a shape at a size (resolves to valid rules and the generator meets them for 16 seeds). Empty when the
+// shape builds; else a plain-English reason. maps.txt uses it for ExtraSmall rows, which parseShapesTxt does not check.
+std::string checkShapeAtSize(const ShapeTable &table, std::string_view shapeName, Size size);
 
 } // namespace cartographer::layout

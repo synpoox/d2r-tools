@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- New map `Size` `ExtraSmall`, smaller than `Small`.
+- `Density`, `Uniques` and `Champions` in `maps.txt` are no longer capped at 1000%.
 - Map items show their own name: the installer adds a new item type, `Map`, for them (modders without it add one row to `itemtypes.txt`).
 - The download now includes the installer (`tools\install.ps1`) and the first-map example files.
 - Open a map from its own item: a red portal from Harrogath, in Hell, once per game.
@@ -14,6 +16,7 @@
 - Cartographer never changes the game's own levels; the map level is in no quest or level group.
 - Random map properties from `mapstats.txt` apply to monsters; the same properties are on you in the map by default (`PlayerStats=0` turns that off) and are removed when you leave the map and not kept in your save.
 - Maps can read a map level stat from the item (nothing in the game can put it on a map yet); without it the map uses the `maps.txt` Level. Run `tools\install.ps1` again to add the stat.
+- Inside a map, its name, level and properties show on the right of the screen (host and single player).
 - `ItemStats=1` uses a map item's own stats as the map's properties (seen working for a player stat; monster stats from an item not checked yet).
 - Map events: Boss, Horde, Ambush, Shrine and Treasure, with a banner on entry; Boss `Drop` rolls extra loot (a Treasure chest's loot is not confirmed in game yet).
 - Opening a Treasure chest now rolls its `Drop`.

@@ -77,7 +77,7 @@ struct SnowRequest {
 	SnowOptions options;
 };
 
-// Small, Medium or Large (blank means Medium), case-insensitive. False for any other word. 6 x 4, 8 x 5 and 10 x 7 cells.
+// ExtraSmall, Small, Medium or Large (blank means Medium), case-insensitive. False for any other word. 4 x 3, 6 x 4, 8 x 5 and 10 x 7 cells.
 bool snowSizeCells(std::string_view size, int *cellsW, int *cellsH);
 
 struct SnowPlan {

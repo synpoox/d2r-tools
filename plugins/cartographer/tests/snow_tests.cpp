@@ -150,6 +150,9 @@ TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
 	CHECK(h == 5);
 	CHECK(w * kCellTiles == 128); // level 117 is 128 x 80 tiles
 	CHECK(h * kCellTiles == 80);
+	CHECK(snowSizeCells("ExtraSmall", &w, &h));
+	CHECK(w == 4);
+	CHECK(h == 3);
 	CHECK(snowSizeCells("SMALL", &w, &h));
 	CHECK(w == 6);
 	CHECK(h == 4);

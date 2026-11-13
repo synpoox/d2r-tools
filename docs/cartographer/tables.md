@@ -45,7 +45,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
 | `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (the Maze level is one of them: see the installer's `-Tileset`), and `Jungle` and `Snow` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
-| `Size` | no | `Small`, `Medium` or `Large` | Medium | Large |
+| `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
@@ -53,9 +53,9 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
 | `Properties` | no | Random properties for this map, 0 to 20 (drawn from `mapstats.txt` when the map opens; checked in game) | the `cartographer.txt` value (6) | 4 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
-| `Density` | no | Percent more monsters than the tileset's normal, 0 to 1000 (scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
-| `Champions` | no | Percent more champion packs, 0 to 1000 (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs, 0 to 1000 (scales the level's own unique pack count; experimental; adds nothing on a level whose count is 0) | 0 | 25 |
+| `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
+| `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
+| `Uniques` | no | Percent more unique packs, 0 and up (the pack counts stop at 255, the most the game stores; scales the level's own unique pack count; experimental; adds nothing on a level whose count is 0) | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -232,5 +232,5 @@ Every column except `Name` is optional. A blank column keeps the value of the ba
 | `MinBranchLen`, `MaxBranchLen` | Cells in one side room (at least 1; `MaxBranchLen` at most half of `Width` x `Height`). `MinBranches` x `MinBranchLen`, plus 2 cells per `MinLoops`, must fit in the grid beside the main path | the base shape's | 1, 3 |
 | `Loop` | `1` for a ring that returns to the entrance, `0` for a path | the base shape's | 1 |
 | `MinLoops`, `MaxLoops` | Extra loops that rejoin the layout (at most half of `Width` x `Height`) | the base shape's | 0, 2 |
-| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against every `Size`'s grid (6, 9 and 12), so a row has to fit the smallest | the `Size`'s grid | 9, 9 |
+| `Width`, `Height` | Grid size in cells, 2 to 32 each. When blank, the caps above are checked against the grids of Small, Medium and Large (6, 9 and 12) when the file loads, so a row has to fit the smallest. At `ExtraSmall` (a 4 x 4 grid) it is checked when a `maps.txt` row uses the shape: a row that does not fit is refused with the reason | the `Size`'s grid | 9, 9 |
 | `BossRoom` | `1` to place a boss room, `0` for none | the base shape's | 1 |

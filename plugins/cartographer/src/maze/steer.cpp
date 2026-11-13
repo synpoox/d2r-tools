@@ -100,7 +100,7 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 	}
 	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Medium") : size);
 	if (!sz) {
-		out.reason = "The size '" + std::string(size) + "' is not Small, Medium or Large.";
+		out.reason = "The size '" + std::string(size) + "' is not ExtraSmall, Small, Medium or Large.";
 		return out;
 	}
 	layout::Rules rules;

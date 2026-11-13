@@ -49,7 +49,6 @@ inline constexpr int MaxMonsters = 10;                     // maps.txt Monsters:
 inline constexpr int LastVanillaLevel = 137;               // Colossal Summit, the last vanilla 3.3.0 level; the slots start above it
 
 inline constexpr int MaxLevel = 255;
-inline constexpr int MaxPercent = 1000;
 inline constexpr int MaxRow = 32766;  // a monster row is a 16-bit signed index
 
 struct Field {

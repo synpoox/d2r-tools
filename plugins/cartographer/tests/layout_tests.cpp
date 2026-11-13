@@ -110,6 +110,9 @@ TEST_CASE("names")
 	CHECK(parseShapeName("SPRAWL") == Shape::Sprawl);
 	CHECK_FALSE(parseShapeName("Maze").has_value());
 	CHECK(parseSizeName("large") == Size::Large);
+	CHECK(parseSizeName("extrasmall") == Size::ExtraSmall);
+	CHECK(parseSizeName("ExtraSmall") == Size::ExtraSmall);
+	CHECK(static_cast<int>(Size::ExtraSmall) < static_cast<int>(Size::Small));
 	CHECK_FALSE(parseSizeName("huge").has_value());
 	for (int s = 0; s < kShapeCount; ++s) CHECK(parseShapeName(shapeName(static_cast<Shape>(s))) == static_cast<Shape>(s));
 }

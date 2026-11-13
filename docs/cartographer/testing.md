@@ -94,7 +94,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 | Name | Unique name | required |
 | Tileset | `Cave` or `Crypt` (needs the `Maze` slot below); the other tileset names are accepted but refused until they are built | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop` or `Sprawl`, or the name of a `shapes.txt` row (applied). | required |
-| Size | `Small`, `Medium` or `Large` | Medium |
+| Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
 | Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |

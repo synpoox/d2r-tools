@@ -74,6 +74,7 @@ add_library(cartographer SHARED
 	src/engine/boss_names.cpp
 	src/engine/map_stat_text.cpp
 	src/engine/map_names.cpp
+	src/engine/map_panel.cpp
 	src/engine/level_row.cpp
 	src/engine/auto_check.cpp
 	src/engine/game_memory.cpp
