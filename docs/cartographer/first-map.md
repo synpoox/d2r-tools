@@ -3,7 +3,7 @@
 One map: an item opens a red portal in Harrogath (Hell only) to a generated level. The example tables are in
 [`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/); every column is in
 [tables.md](tables.md), Cartographer's own terms in the [glossary](glossary.md). What was checked in game is in
-[checks/](checks/). More maps are one row and one item each; `mapevents.txt`, `shapes.txt` and
+[testing.md](testing.md). More maps are one row and one item each; `mapevents.txt`, `shapes.txt` and
 `cartographer.txt` are in tables.md.
 
 You need D2RLoader, a mod, and its tables as `.txt` in `<Mod>.mpq\data\global\excel`: `levels`, `lvlmaze`, `itemtypes`, `misc`, `weapons` and `armor` (`check` reads the

@@ -127,7 +127,7 @@ Not run here: the stock-table `Class` against the txt (done in the first run), a
 
 ### Status of the "Needs game" items (2026-11-12, issue #106)
 
-A summary of the records above and of [slot11-check](../../cartographer/checks/2026-11-12-slot11-check.md) (S11); nothing new was run for this note. The desk nits (cache on `TableView.revision`, repeated `Id`, superuniques row index, txt `Class` from the game's monstats, the order change) are done and recorded under "What was built". Item numbers are those of "Needs game"; the second-run table above calls the blank-line check "item 8" (the issue's numbering), which is the same check as S11 section 5. Levels: **live** = seen in the running game; **not checked** = no evidence in any record.
+A summary of the records above and of the slot 11 check (S11); nothing new was run for this note. The desk nits (cache on `TableView.revision`, repeated `Id`, superuniques row index, txt `Class` from the game's monstats, the order change) are done and recorded under "What was built". Item numbers are those of "Needs game"; the second-run table above calls the blank-line check "item 8" (the issue's numbering), which is the same check as S11 section 5. Levels: **live** = seen in the running game; **not checked** = no evidence in any record.
 
 | Item | Status | Evidence |
 |---|---|---|
