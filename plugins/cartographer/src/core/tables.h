@@ -68,10 +68,6 @@ auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, i
 // The note for a leftover mapstats.txt (retired: a map's properties are stats on its item). Console and log only, never an error.
 void NoteRetiredMapStats(Report& report);
 
-// Text of an item table with mods (magicprefix, magicsuffix, uniqueitems, setitems or cubemain; `file` names it in the report): a note for each
-// mon-speed mod whose lowest value (min or max) is -100 or lower, because what -100 or lower does to monsters has not been checked in game (the plugin does not limit the value).
-void CheckMonSpeedRows(std::string_view text, const std::string& file, Report& report);
-
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
 struct BossDef {
 	int line = 0;  // row in bosses.txt

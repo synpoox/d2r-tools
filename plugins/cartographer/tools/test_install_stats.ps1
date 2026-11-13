@@ -144,7 +144,9 @@ try {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     $dir = $full
 } finally {
+    # A throw can leave $dir on the -full copy: remove both folders.
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+    if ($full) { Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue }
 }
 if ($failed -gt 0) { Write-Host "$failed check(s) failed."; exit 1 }
 Write-Host 'All install stat checks passed.'

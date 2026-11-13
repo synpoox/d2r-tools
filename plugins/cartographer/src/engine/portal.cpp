@@ -192,7 +192,7 @@ void Tell(const std::string& text) noexcept {
 }
 
 // The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
-void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* /*player*/,
+void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
 		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats);
@@ -561,7 +561,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(opening, tables, game, player, itemStats);
+		StartMapStats(opening, tables, game, itemStats);
 		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
@@ -607,7 +607,7 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 		out.why = "the game would not open a portal for " + map->name;
 		return out;
 	}
-	StartMapStats(*map, tables, game, player);
+	StartMapStats(*map, tables, game);
 	StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
 	NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	if (mapOut != nullptr) {
