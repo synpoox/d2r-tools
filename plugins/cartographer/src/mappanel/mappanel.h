@@ -61,6 +61,10 @@ constexpr int kMaxPadLines = 8;
 // The number of lines in a panel text (0 for an empty one).
 int lineCount(const std::string &text);
 
+// The two panel texts (header lines and property lines) have the same line count, an empty line where the other has text: one text takes the
+// non-empty line of each (the gold one when both have text), for the game's single-colour terror zone field.
+std::string mergeLines(const std::string &gold, const std::string &blue);
+
 // The height of the panel's text boxes, in layout units, so the longest panel text still fits under `maxPadLines` blank lines of padding.
 constexpr int panelHeight(int lineUnits, int maxPadLines)
 {
