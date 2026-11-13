@@ -120,7 +120,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Monsters | Up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | Properties, EventChance | Numbers that override the global setting for this map | cartographer.txt |
-| Density, Uniques | `Density`: percent more monsters than the level's own, no upper limit except the game's own field size. `Uniques`: percent more unique packs the map may have (the level's own most-unique-packs limit); how many appear is also set by `Density` and the map size, since past the level's own minimum the game makes about 6 percent of packs unique, so a larger `Uniques` stops adding packs once that is reached (about 73 on a Large Cave with `Density` 100; raise `Density` for more) (experimental) | 0 |
+| Density, Uniques | `Density`: percent more monsters than the level's own, no upper limit except the game's own field size. `Uniques`: percent more unique packs a map may have. Past the level's minimum the game makes about 6 percent of packs unique, so the count stops rising at a point set by `Density` and map size (about 73 on a Large Cave at `Density` 100, reached near 800 percent); raise `Density` for more (experimental) | 0 |
 | Champions | Read and checked, never applied: the game has no setting for it | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:

@@ -6,8 +6,8 @@
 #include "levelrow.h"
 #include "log.h"
 
-#include <cstdint>
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <mutex>
 #include <string>
