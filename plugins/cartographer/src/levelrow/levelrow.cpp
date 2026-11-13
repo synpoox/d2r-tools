@@ -196,12 +196,9 @@ auto UniqueTotal(const Request& r, const RecordSnapshot& s, bool uniquesAllowed)
 	return static_cast<int>(ScalePercent(s.uMax, r.uniques, MaxPackCount));
 }
 
-auto PaceBudget(int total, int seen, int rooms, int fillers) -> int {
+auto PaceBudget(int total, int seen, int rooms) -> int {
 	if (total <= 0) {
 		return 0;
-	}
-	if (fillers > 0 && rooms > fillers) {
-		rooms -= fillers;  // closed filler rooms are in the level's room count but never activate
 	}
 	if (rooms <= 0 || seen <= 0) {
 		return 1;

@@ -99,8 +99,8 @@ struct Request {
 auto UniqueTotal(const Request& request, const RecordSnapshot& record, bool uniquesAllowed) -> int;
 
 // The unique packs allowed after `seen` of `rooms` rooms: `total` times the share of rooms done, rounded up, at least 1 and at most
-// `total`. `fillers` closed filler rooms are in `rooms` but never activate, so they come off it (ignored when nothing would be left). `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0 or less gives 0.
-auto PaceBudget(int total, int seen, int rooms, int fillers = 0) -> int;
+// `total`. `rooms` of 0 or less (not known yet) gives 1; `seen` past `rooms` gives `total`. A `total` of 0 or less gives 0.
+auto PaceBudget(int total, int seen, int rooms) -> int;
 
 // The 1 to 255 monster level.
 auto ClampLevel(int level) -> int;

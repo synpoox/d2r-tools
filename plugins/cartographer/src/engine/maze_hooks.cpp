@@ -92,7 +92,6 @@ RingFn g_ringOriginal = nullptr;
 
 std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
-std::atomic<int> g_fillerRooms{0};  // filler rooms the last build made (MazeFillerRooms)
 std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
 cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
@@ -571,7 +570,6 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	// a plan room's piece never counts the link to the filler beside it. The picker gives a filler 836 + the mask of its link to its parent (a
 	// walkable dead end), so the piece id is set back to the tileset's closed piece (pieceBase, no exits) after the pick. A refused filler is
 	// only a gap in the ring (it also makes the built box differ from the plan's, so arrival, event and boss fall back): logged, the build goes on.
-	g_fillerRooms = 0;
 	if (!plan.fills.empty()) {
 		std::vector<void*> all(ctx.rooms);
 		int refused = 0, closed = 0;
@@ -592,7 +590,6 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 			all.push_back(made);  // a null keeps the indices; its children are refused too
 		}
 		const int made = static_cast<int>(plan.fills.size()) - refused;
-		g_fillerRooms = made;
 		if (refused != 0) {
 			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
@@ -899,10 +896,6 @@ auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostS
 	return SetJob(map, tables, 0, hostSeed, true);  // false when the slot level exists already: it is not rebuilt
 }
 
-auto MazeFillerRooms() -> int {
-	return g_fillerRooms.load();
-}
-
 auto MazeSlotRanAny() -> bool {
 	return g_slotState.ranAny();
 }
@@ -928,7 +921,6 @@ void MazeMapCancelled() {
 }
 
 void MazeGameLeft() {
-	g_fillerRooms = 0;
 	g_dataFlag = -1;
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_job.reset();

@@ -3,7 +3,6 @@
 #include "engine/event_apply.h"
 #include "engine/game_memory.h"
 #include "engine/map_names.h"
-#include "engine/maze_hooks.h"
 #include "levelrow.h"
 #include "log.h"
 
@@ -498,7 +497,7 @@ auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
 		int32_t seen = 0, rooms = 0;
 		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
-		const int budget = lr::PaceBudget(pace.total, seen, rooms, MazeFillerRooms());
+		const int budget = lr::PaceBudget(pace.total, seen, rooms);
 		g_paceLastBudget = budget;
 		g_paceSavedMin = pace.restoreMin;
 		g_paceSavedMax = pace.restoreMax;
