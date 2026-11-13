@@ -312,7 +312,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 				const cartographer::layout::ShapeTable none;
 				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored)) {
 					if (const std::string problem = cartographer::outdoor::capJungleOpenRules(rules); !problem.empty()) {
-						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath or Width and Height in shapes.txt.");
+						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath in shapes.txt.");
 					}
 				}
 			}
