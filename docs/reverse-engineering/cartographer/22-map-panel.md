@@ -13,7 +13,7 @@ Inside a map, a plugin panel under the game's area and game info shows the map's
 | Guard | Byte signatures in `part_signatures.h` (`UiFindPanel`, `UiFindChild`, `UiSetText`), each found once by `ResolvePart`; a part that is not found leaves the panel off. Only called, never hooked |
 | Contract | The panel is a layout the plugin registers (`data/global/ui/layouts/cartographer/map-panel` through the Resource service, `cartographer/map-panel` through the Panel service): a `Panel` anchored top right with one `TextBoxWidget` named `Text`, right aligned. It is opened and closed with `openPanel`/`closePanel` and its text set on the UI thread (`runOnUiThread` from an Overlay frame callback) |
 | Failure mode | Fail open: a missing part or service, a refused panel, or a fault (SEH around the three calls) turns the panel off with a log line; nothing else changes |
-| Coexistence | Needs no mod file. The panel stands in place of the terror zone text: while the panel shows, the plugin sets `TerrorZoneInfoText` invisible (SDK Widget service, every UI task in a map) and visible again when the panel closes; no Widget service means the text is left alone. The rest of `HUDWarnings` is not touched |
+| Coexistence | Needs no mod file. The game's purple terror zone text is left alone (it cannot be hidden or written into, see below). The panel starts under it: the plugin reads the rect of `HUDWarnings` > `TerrorZoneInfoTextWrapper` (SDK Widget service, every 15 UI tasks) and puts blank lines in front of the panel text to reach its bottom; no Widget service means no padding |
 
 ### What was tried first, and why it was dropped
 
@@ -30,13 +30,9 @@ Inside a map, a plugin panel under the game's area and game info shows the map's
    `better-xp-bar.md` section (e) found.
 3. **A plugin panel** (this): shows, under the game's info text. The same route `player-bars` uses.
 
-### In place of the terror zone text
+### Under the terror zone text (issue #371)
 
-The owner asked for the panel in place of the purple text. Hiding it is done with the SDK `setWidgetVisible` on `HUDWarnings` > `TerrorZoneInfoTextWrapper` > `TerrorZoneInfoText`
-(the call returns Success live). Whether the hide changes anything was not seen: there is no zone API (d2rAI-toolkit `knowledge/tables.md`, "Terror Zones"), the map's
-slot level is a level the schedule never lists, and the game's text never drew in the earlier attempt, so no zone text could be put on screen to hide. The hide is
-a safeguard (the README says only that the panel shows in a map, not that it replaces the text); the panel sits at the
-top right (`PanelTop` 270) just under the game's info text, where the zone text would be. (Live, 2026-11-12.)
+The owner asked for the map name and level in place of the purple terror zone text (or appended into its field). Both were tried live (2026-11-12, slot 11, test save, Hell, single player, `cheat desecrate 139` for a zone, build 93847): `setWidgetVisible` on the wrapper and on the text returns Success and changes nothing, and `SetText` on `TerrorZoneInfoText` returns and shows nothing. The game rewrites that text and its visibility every frame before the plugin's AfterGameUi callback, so only a native hook on the game's HUDWarnings update could replace it (not searched for). Instead the panel starts under it. The wrapper rect (layout units, 2 per 1080p pixel) is 0 high with no zone and about 114 high in a two line zone; the panel text gets `padLines` blank lines (44 units each at 30 pt, at most 8) in front. Live after the change: with no zone the panel starts where it did before (y 147 at 1080p); with a zone ("Terrorized: 96", "Extra Fast") the name and level sit below the purple lines with no overlap (screenshots `f1-inmap.png` and `f1-zone2.png`, run carto-hudtext). Not checked: a zone with more than two lines, other resolutions, the text returning outside maps (it is never touched now).
 
 ### Validation
 
@@ -53,5 +49,5 @@ top right (`PanelTop` 270) just under the game's info text, where the zone text 
 ## The entry banner (issue #357)
 
 The Overlay service route above is also why the event banner never showed: `drawText` returned Success and drew nothing. The banner is now a second panel in the same
-file (`cartographer/entry-banner`, three centred text boxes, open 6.1 s), set through the same FindPanel, FindChild and SetText parts on the UI thread, driven by the same
+file (`cartographer/entry-banner`, two centred text boxes (event name and message; the map name is the game's own red Entering text, issue #370), open 6.1 s), set through the same FindPanel, FindChild and SetText parts on the UI thread, driven by the same
 frame callback. It has its own on and fault state. Seen on screen at entry and after the event spawned: [banner check](../../cartographer/checks/2026-11-12-banner-check.md).

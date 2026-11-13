@@ -26,19 +26,22 @@ constexpr const char* LocalId = "map-panel";
 constexpr const char* PanelName = "cartographer/map-panel";
 constexpr const char* TextName = "Text";
 constexpr int PanelWidth = 760;
-constexpr int PanelHeight = 420;
+constexpr int PanelHeight = 700;
 constexpr int PanelTop = 270;
 constexpr int PanelRight = 40;
 constexpr int PointSize = 30;
+constexpr int LineUnits = 44;       // one line of the panel text, in layout units (measured live at PointSize 30)
+constexpr int MaxPadLines = 8;
+constexpr uint32_t PadTasks = 15;   // the game's terror zone text is measured this often
 // The entry banner (issue #357): the Overlay service's drawText returned Success but drew nothing (see below), so the banner is a second panel
-// of three centred TextBoxWidgets (map name, event name, event message), 16% down from the top, open for the banner's time.
+// of two centred TextBoxWidgets (event name, event message; the map name is the game's own "Entering" text), 16% down from the top, open for the banner's time.
 constexpr const char* BannerLocalId = "entry-banner";
 constexpr const char* BannerPanelName = "cartographer/entry-banner";
 constexpr int BannerWidth = 1600;
 constexpr int BannerTop = 345;  // 16% of the 2160 layout units
-constexpr int BannerLines = 3;
-constexpr int BannerPoint[BannerLines] = {48, 40, 30};
-constexpr int BannerColour[BannerLines][3] = {{220, 195, 118}, {235, 82, 66}, {217, 217, 217}};
+constexpr int BannerLines = 2;
+constexpr int BannerPoint[BannerLines] = {40, 30};
+constexpr int BannerColour[BannerLines][3] = {{235, 82, 66}, {217, 217, 217}};
 constexpr uint32_t RefreshTasks = 30;  // while in the map the text is set again this often, in case it was lost
 
 struct StringView {
@@ -62,7 +65,7 @@ const D2RL::OverlayService* g_overlay = nullptr;
 const D2RL::ThreadService* g_threads = nullptr;
 const D2RL::PanelService* g_panels = nullptr;
 const D2RL::ResourceService* g_resources = nullptr;
-const D2RL::WidgetService* g_widgets = nullptr;  // optional: hides the game's terror zone text while the panel shows
+const D2RL::WidgetService* g_widgets = nullptr;  // optional: where the game's terror zone text ends, so the panel can start under it
 D2RL::Panels::RegistrationHandle g_panel = D2RL::Panels::InvalidHandle;
 D2RL::Resources::RegistrationHandle g_resource = D2RL::Resources::InvalidHandle;
 D2RL::Panels::RegistrationHandle g_bannerPanel = D2RL::Panels::InvalidHandle;
@@ -88,10 +91,10 @@ uint64_t g_bannerShownSeq = 0;
 bool g_bannerFailedLogged = false;
 std::string g_shown;      // what the plugin last put in the text; empty: nothing yet
 uint32_t g_tasks = 0;
-std::atomic<bool> g_hidden{false};  // the plugin hid the game's terror zone text and has not restored it
-uint32_t g_restoreWait = 0;  // tasks since a restore failed; the restore is tried again every RefreshTasks tasks (0: not failing)
-int32_t g_hideResult = -1;
-D2RL::Widgets::WidgetHandle g_terrorText = D2RL::Widgets::InvalidHandle;  // the game's terror zone text, once found
+D2RL::Widgets::WidgetHandle g_hud = D2RL::Widgets::InvalidHandle;      // the game's HUDWarnings panel and its terror zone text wrapper, once found
+D2RL::Widgets::WidgetHandle g_terrorWrapper = D2RL::Widgets::InvalidHandle;
+int g_padLines = 0;  // blank lines in front of the panel text, so it starts under the game's terror zone text
+uint32_t g_padTasks = 0;
 bool g_openFailedLogged = false;
 bool g_notFoundLogged = false;
 std::atomic<bool> g_queued{false};
@@ -137,55 +140,37 @@ void NoticeClosed() noexcept {
 	}
 }
 
-// The panel takes the place of the game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText),
-// so the text is hidden while the panel shows. The game may set the widget's visibility itself, so this runs every task in a map
-// (the widget is looked up once and the handle kept; a failed call looks it up again next time), and the widget is shown again when
-// the panel closes. g_hidden stays set until a restore call succeeds, so a failed restore is retried, but only every RefreshTasks tasks
-// (the widget is gone in the menu, so the lookup would fail every frame). UI thread.
-auto FindTerrorText(D2RL::Widgets::WidgetHandle* text) noexcept -> D2RL::Widgets::Result {
-	D2RL::Widgets::WidgetHandle hud = D2RL::Widgets::InvalidHandle;
-	D2RL::Widgets::WidgetHandle wrapper = D2RL::Widgets::InvalidHandle;
-	auto result = g_widgets->findPanel(g_context, "HUDWarnings", &hud);
-	if (result == D2RL::Widgets::Result::Success) {
-		result = g_widgets->findWidget(g_context, hud, "TerrorZoneInfoTextWrapper", &wrapper);
-	}
-	if (result == D2RL::Widgets::Result::Success) {
-		result = g_widgets->findWidget(g_context, wrapper, "TerrorZoneInfoText", text);
-	}
-	return result;
-}
-
-void SetTerrorTextVisible(bool visible) noexcept {
+// The game's purple terror zone text (HUDWarnings > TerrorZoneInfoTextWrapper > TerrorZoneInfoText) sits under its area and game info, where
+// the panel starts. The game sets that text, and whether it shows, itself every frame, so the plugin can neither hide it nor write the panel's
+// lines into it (both tried live, see docs/reverse-engineering/cartographer/22-map-panel.md). Instead the panel starts under it: the wrapper's
+// rect is 0 high with no zone and as high as the text (in layout units) in a zone, and the panel text gets blank lines in front to reach its
+// bottom. The rect is looked up every PadTasks tasks, a zone can start while the player is in the map. UI thread.
+auto TerrorTextBottom() noexcept -> int {
 	if (g_widgets == nullptr) {
-		return;
+		return 0;
 	}
-	if (visible && g_restoreWait != 0 && ++g_restoreWait % RefreshTasks != 0) {
-		return;  // a restore just failed: wait before looking the widget up again
+	if (g_hud == D2RL::Widgets::InvalidHandle && g_widgets->findPanel(g_context, "HUDWarnings", &g_hud) != D2RL::Widgets::Result::Success) {
+		g_hud = D2RL::Widgets::InvalidHandle;
+		return 0;
 	}
-	auto result = D2RL::Widgets::Result::Success;
-	if (g_terrorText == D2RL::Widgets::InvalidHandle) {
-		result = FindTerrorText(&g_terrorText);
+	if (g_terrorWrapper == D2RL::Widgets::InvalidHandle &&
+	    g_widgets->findWidget(g_context, g_hud, "TerrorZoneInfoTextWrapper", &g_terrorWrapper) != D2RL::Widgets::Result::Success) {
+		g_terrorWrapper = D2RL::Widgets::InvalidHandle;
+		g_hud = D2RL::Widgets::InvalidHandle;
+		return 0;
 	}
-	if (result == D2RL::Widgets::Result::Success) {
-		result = g_widgets->setWidgetVisible(g_context, g_terrorText, visible);
-		if (result != D2RL::Widgets::Result::Success) {
-			g_terrorText = D2RL::Widgets::InvalidHandle;  // maybe stale (a new game): find it again next time
-		}
+	D2RL::Widgets::Rect hud{};
+	D2RL::Widgets::Rect wrapper{};
+	if (g_widgets->getWidgetRect(g_context, g_hud, &hud) != D2RL::Widgets::Result::Success ||
+	    g_widgets->getWidgetRect(g_context, g_terrorWrapper, &wrapper) != D2RL::Widgets::Result::Success) {
+		g_hud = D2RL::Widgets::InvalidHandle;  // maybe stale (a new game): find them again next time
+		g_terrorWrapper = D2RL::Widgets::InvalidHandle;
+		return 0;
 	}
-	const auto last = static_cast<int32_t>(result);
-	if (last != g_hideResult) {
-		g_hideResult = last;
-		plog::Info("map panel: terror zone text %s: result %d", visible ? "shown" : "hidden", last);
-	}
-	const bool ok = result == D2RL::Widgets::Result::Success;
-	g_hidden = cartographer::mappanel::hiddenAfter(visible, ok, g_hidden.load());  // a failed call keeps the previous state
-	g_restoreWait = (visible && !ok) ? 1 : 0;
+	return wrapper.height > 0 ? hud.y + wrapper.y + wrapper.height : 0;
 }
 
 void ClosePanel() noexcept {
-	if (g_hidden.load()) {
-		SetTerrorTextVisible(true);
-	}
 	if (g_open) {
 		(void)g_panels->closePanel(g_context, g_panel);
 		g_open = false;
@@ -193,9 +178,9 @@ void ClosePanel() noexcept {
 	}
 }
 
-void Apply(const std::string& want) noexcept {
+void Apply(const std::string& text) noexcept {
 	NoticeClosed();
-	if (want.empty()) {
+	if (text.empty()) {
 		ClosePanel();
 		return;
 	}
@@ -206,15 +191,21 @@ void Apply(const std::string& want) noexcept {
 				g_openFailedLogged = true;
 				plog::Warn("map panel: the panel did not open (result %u); trying again", static_cast<uint32_t>(result));
 			}
-			if (g_hidden.load()) {
-				SetTerrorTextVisible(true);  // the panel is not there to take its place
-			}
 			return;
 		}
 		g_open = true;
 		g_shown.clear();
+		g_padTasks = 0;
 	}
-	SetTerrorTextVisible(false);
+	if (g_padTasks++ % PadTasks == 0) {
+		const int bottom = TerrorTextBottom();
+		const int lines = cartographer::mappanel::padLines(bottom, PanelTop, LineUnits, MaxPadLines);
+		if (lines != g_padLines) {
+			g_padLines = lines;
+			plog::Info("map panel: the game's terror zone text ends at %d, %d blank line(s) in front of the panel text", bottom, lines);
+		}
+	}
+	const std::string want = std::string(static_cast<size_t>(g_padLines), '\n') + text;
 	if (want == g_shown && ++g_tasks % RefreshTasks != 0) {
 		return;
 	}
@@ -348,7 +339,7 @@ void __cdecl OnFrame(const D2RL::PluginContext* context, const D2RL::Overlay::Fr
 		return;
 	}
 	// Idle: no map and no panel of ours open.
-	if (!(g_on.load() && (g_inMap.load() || g_open || g_hidden.load())) && !(g_bannerOn.load() && BannerPending())) {
+	if (!(g_on.load() && (g_inMap.load() || g_open)) && !(g_bannerOn.load() && BannerPending())) {
 		return;
 	}
 	if (!g_queued.exchange(true) && (g_threads == nullptr || g_threads->runOnUiThread(context, UiTask, nullptr) != D2RL::Threads::Result::Success)) {
@@ -423,7 +414,7 @@ auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<Signa
 	const D2RL::ResourceService* resources = nullptr;
 	if (context->QueryService(&g_widgets) != D2RL::ServiceQueryResult::Success || !D2RL::HasWidgetServiceField(g_widgets, D2RL::WidgetServiceRequiredSize)) {
 		g_widgets = nullptr;
-		plog::Warn("map panel: no Widget service of the expected version; the game's terror zone text stays");
+		plog::Warn("map panel: no Widget service of the expected version; the panel may overlap the game's terror zone text");
 	}
 	if (context->QueryService(&g_overlay) != D2RL::ServiceQueryResult::Success || !D2RL::HasOverlayServiceField(g_overlay, D2RL::OverlayServiceRequiredSize) ||
 	    context->QueryService(&g_threads) != D2RL::ServiceQueryResult::Success || !D2RL::HasThreadServiceField(g_threads, D2RL::ThreadServiceRequiredSize) ||
