@@ -756,6 +756,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		MapSyncGameLeft();
 		AutoCheckGameLeft();
 		g_localPlayer = NoPlayer;
+		g_whereRequested = false;
 		g_tickSeen = false;
 		g_firstLogged = false;
 		std::lock_guard<std::mutex> lock(g_lock);

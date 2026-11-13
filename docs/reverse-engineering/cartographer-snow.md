@@ -161,6 +161,8 @@ Reachability. The cap-side ring strips are reachable on foot: the walks above we
 
 Not done: voiding the ring cells (0x3ede00).
 
+Player position (used by `cartographer where`), build 93847: the unit's path pointer is at unit `+0x38`; a player has a dynamic path, so subtile x and y are uint16 at path `+0x2` and `+0x6` (the static `+0x10`/`+0x14` is for objects, items and tiles). Source: better-auras `UnitXY` (`plugins/better-auras/src/d2r.h`); confirmed in game, where the readout matched the box tile and plan cell walked to.
+
 Adding a tileset: [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md) lists every touch point, what the table drives and what a tileset gets for free.
 
 Screenshots: `C:/D2RTestSlots/runs/snow-edges3/screenshots/` (`L_montage`, `M_montage`, `S_montage`, `X_montage`) and `C:/D2RTestSlots/runs/snowfix/screenshots/` (kept outside the repo).

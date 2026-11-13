@@ -225,8 +225,8 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 			files[at] = request.options.pinFiles ? static_cast<int>(fileRng.below(static_cast<uint32_t>(p->files))) : -1;
 			return true;
 		};
-		// A line is run pieces only, no caps: a cap's empty half left black void between its wall and the edge ring (issue #395), and the ring
-		// strip beside it could not be reached. The first run's start socket is drawn from the two letters of the axis, each run's end socket
+		// A line is run pieces only, no caps: a cap's empty half left black void between its wall and the edge ring (issue #395). The walk-flag data showed the
+		// cap-side ring strip connected and it is now walked in game. The first run's start socket is drawn from the two letters of the axis, each run's end socket
 		// feeds the next, and the last run's end socket meets the ring.
 		char carry = static_cast<char>(first + static_cast<int>(rng.below(2)));
 		for (int i = 0; i < along; ++i) {
