@@ -56,7 +56,7 @@ in [`examples/first-map/`](examples/first-map/).
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
 4. Give each map an item of its own in your mod's `misc.txt`: a row of type `cmap` with item spell 16 (`pSpell`), for example a copy
-   of a scroll. Put `maps.txt` and, if you like, `cartographer.txt` in
+   of a scroll with `compactsave` set to 0 (1 keeps every map Normal). Put `maps.txt` and, if you like, `cartographer.txt` in
    `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`.
 5. Start the game through D2RLoader, then run `cartographer check` in the console and read `cartographer-report.txt` in
    the plugin's log folder. If an engine part is not found, the plugin still loads and checks your tables, but the
