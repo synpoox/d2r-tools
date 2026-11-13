@@ -1,32 +1,32 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze level and its Outdoor, Snow and Siege levels to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt) and Outdoor levels (Jungle, Snow, Siege) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level, "Cartographer Maze": Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
-                    360 x 360, Depend 0, Position 0, OffsetX 3500, no warps; copied from a plain (non-quest) game maze level of that type,
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave) and "Cartographer Crypt" (Crypt; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave) or 4 (Crypt),
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
-      lvlmaze.txt   its maze row (a maze level needs one with its own level id)
+      lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
       levels.txt    a second new level, "Cartographer Outdoor", for outdoor (Jungle) maps: Act 5 (the outdoor build only runs in Act 5),
                     DrlgType 3 (outdoor), LevelType 21 (Jungle), SizeX and SizeY 384 (12 blocks of 32 tiles, the largest outdoor map),
                     OffsetX 6000 and OffsetY 3000 (clear of every Act 5 level and of the Maze level), no warps; copied from the
                     game's Act 5 outdoor level 111 (a plain, non-quest DrlgType 3 row; the first such row if that one is missing), with Quest 0,
                     LevelGroup Null, no LevelEntry or LevelWarp, SubType and SubTheme -1 (level 111's Siege sub-level set is not carried over), Vis0..Vis7 = 0 (-1 crashes the game), Waypoint 255. An outdoor level needs no
                     lvlprest.txt or lvlmaze.txt row of its own: its pieces are the game's own Jungle presets.
-    levels.txt    a third new level, "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
+    levels.txt    a third new level (the second outdoor one), "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 1500, OffsetY 0, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
     levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
-    One Maze level serves one tileset: Cave by default, or Crypt with -Tileset Crypt. Every map in maps.txt must use that tileset.
+    Cave and Crypt maps each open through their own level, so one install serves both (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
@@ -55,15 +55,18 @@
     The excel folder to edit instead of the one under ModDirectory (for a test copy).
 
 .PARAMETER MazeOffsetX
-    Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -OutdoorOffsetX and
-    -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
+    Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
+    -CryptOffsetY (3000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
-    no size (-1) are not. Offsets must be 0 or more, and offset plus level size at most 13107.
+    no size (-1) are not. Offsets must be 0 or more, and offset plus level size at most 13107. A maze level has one more limit: the game
+    saves its automap cells as 16-bit numbers (x = (tx - ty) * 8, y = (tx + ty) * 4) when the player leaves it, so a maze offset that puts
+    any corner of the level out of range (the level loses its revealed map after a trip to town) is refused; in short, OffsetX minus OffsetY
+    at most 3735 (and at least -3736) and OffsetX plus OffsetY at most 7471 for a 360-tile level.
 
 .PARAMETER Tileset
-    Cave (the default) or Crypt: the kind of maze the Maze level builds.
+    Not used any more (every maze tileset gets a level of its own); accepted so older command lines still run.
 
 .EXAMPLE
     plugins\cartographer\tools\install.ps1 -ModDirectory "C:\Games\Diablo II Resurrected\mods\MyMod"
@@ -72,24 +75,36 @@
 param(
     [string]$ModDirectory,
     [string]$ExcelDir,
-    [ValidateSet('Cave', 'Crypt')][string]$Tileset = 'Cave',
+    [string]$Tileset,
     [int]$MazeOffsetX = 3500,
     [int]$MazeOffsetY = 0,
     [int]$OutdoorOffsetX = 6000,
     [int]$OutdoorOffsetY = 3000,
     [int]$SnowOffsetX = 1500,
     [int]$SnowOffsetY = 0,
+    [int]$CryptOffsetX = 3000,
+    [int]$CryptOffsetY = 0,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900
 )
 
 $ErrorActionPreference = 'Stop'
-$LevelName = 'Cartographer Maze'
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave and Crypt are both added." }
 $OldLevelName = 'Cartographer Preset'
-$LevelType = if ($Tileset -eq 'Crypt') { '4' } else { '3' }  # levels.txt LevelType: 3 Cave, 4 Crypt
-$MazeSize = '360'  # SizeX and SizeY in every difficulty: the largest plan is 360 tiles on a side
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
+# One row per maze tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/maze/maze_tilesets.h);
+# tests/maze_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (360: the largest plan is 360
+# tiles on a side); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters. A level's LevelType fixes its tileset, so each maze
+# tileset has a level of its own; the level is copied from a plain game maze level (DrlgType 1) of that LevelType.
+$MazeTilesets = @(
+    # Cave keeps the slot "Maze" and the level name of the installs from before this table.
+    @{ Tileset = 'Cave';  Slot = 'Maze';      LevelName = 'Cartographer Maze';  LevelType = '3'; Size = '360'; Param = 'Maze' },
+    # Maze offsets: y 0, x 3500, 3000, 2500, 2000 (500 apart: a 360-tile level and a gap), so the whole row stays inside the 16-bit automap range
+    # (see Test-AutomapRange) and clear of every Act 5 level (the first is at y 1000). Lava takes x 2500 and Ice x 2000; Snow (192 wide) sits at x 1500.
+    # Crypt: x 3000..3360, y 0..360.
+    @{ Tileset = 'Crypt'; Slot = 'MazeCrypt'; LevelName = 'Cartographer Crypt'; LevelType = '4'; Size = '360'; Param = 'Crypt' }
+)
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
 # tileset; SizeY, when a row has it, is its height if that differs from Size, as for Siege's 240 x 48); Param is the prefix of its -<Param>OffsetX/-<Param>OffsetY script parameters (defaults 6000,3000 and 1500,0); Range is a per-tileset flag, $true for a level whose layer is not the town's 79 (Maze: Cave 2, Crypt 10; Snow: 84), whose map the game saves as 16-bit cells (see Test-AutomapRange); it is not read from the written row's Layer; Template is the Act 5 level row copied (any other plain Act 5 DrlgType 3 row is the fallback).
@@ -109,11 +124,12 @@ function Test-AutomapRange([int]$offX, [int]$offY, [int]$sx, [int]$sy = 0) {
     return ($offX + $sx - $offY) -le 4095 -and ($offY + $sy - $offX) -le 4096 -and ($offX + $offY + $sx + $sy) -le 8191
 }
 $AutomapHint = 'keep OffsetX minus OffsetY within -3736..3735 and OffsetX plus OffsetY at most 7471 for a 360-tile level (smaller levels have a little more room)'
-foreach ($p in @(@(@{ Param = 'Maze'; Size = [int]$MazeSize; SizeY = [int]$MazeSize; Range = $true }) + @($OutdoorTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size; SizeY = $(if ($_.SizeY) { [int]$_.SizeY } else { [int]$_.Size }); Range = [bool]$_.Range } }))) {
+foreach ($p in @(@($MazeTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size; SizeY = [int]$_.Size; Range = $true } }) + @($OutdoorTilesets | ForEach-Object { @{ Param = $_.Param; Size = [int]$_.Size; SizeY = $(if ($_.SizeY) { [int]$_.SizeY } else { [int]$_.Size }); Range = [bool]$_.Range } }))) {
     $x = Get-Variable -Name "$($p.Param)OffsetX" -ValueOnly; $y = Get-Variable -Name "$($p.Param)OffsetY" -ValueOnly
     if ($x -lt 0 -or $y -lt 0 -or $x + $p.Size -gt 13107 -or $y + $p.SizeY -gt 13107) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY must be 0 or more and leave room for the $($p.Size) x $($p.SizeY)-tile level (offset plus size at most 13107) (got $x, $y)." }
     if ($p.Range -and -not (Test-AutomapRange $x $y $p.Size $p.SizeY)) { throw "-$($p.Param)OffsetX and -$($p.Param)OffsetY ($x, $y) put part of the $($p.Size) x $($p.SizeY)-tile level out of the range the game keeps a revealed map in (it would lose its map after a trip to town): $AutomapHint." }
 }
+
 
 if (-not $ExcelDir) {
     if (-not $ModDirectory) { throw 'Pass -ModDirectory <game>\mods\<Mod> (or -ExcelDir for a test copy).' }
@@ -276,99 +292,116 @@ foreach ($name in 'levels.txt', 'lvlmaze.txt', 'itemtypes.txt') {
 $levels = Read-Table (Join-Path $ExcelDir 'levels.txt')
 $idCol = Column $levels 'Id'
 $typeCol = Column $levels 'LevelType'
-$existing = Find-Row $levels 'Name' $LevelName
-if ($existing -ge 0) {
-    $levelId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
-    $haveType = (Cells $levels $levels.Lines[$existing])[$typeCol]
-    Write-Host "levels.txt: '$LevelName' is already there (level $levelId)."
-    if ($haveType -ne $LevelType) {
-        Write-Host "levels.txt: note: level $levelId has LevelType $haveType, not $LevelType ($Tileset). One Maze level serves one tileset; change its LevelType by hand to switch."
-    }
-    # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
-    $cells = Cells $levels $levels.Lines[$existing]
-    Warn-LevelOverlap $levels $LevelName $cells
-    $before = $cells -join "`t"
-    Set-CellIf $levels $cells 'Quest' '0'
-    Set-CellIf $levels $cells 'LevelGroup' $NoGroup
-    Set-CellIf $levels $cells 'LevelEntry' ''
-    Set-CellIf $levels $cells 'LevelWarp' ''
-    for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
-    Move-IntoAutomapRange $levels $cells $LevelName $MazeOffsetX $MazeOffsetY
-    # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
-    $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
-    if ($nameCol -ge 0 -and $cells[$nameCol] -eq 'Den of Evil') {
-        $drlgCol = Column $levels 'DrlgType'
-        $questCol = [array]::IndexOf($levels.Header, 'Quest')
-        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-            $t = $levels.Lines[$i] -split "`t"
-            $parsed = 0
-            if ($t.Count -gt [Math]::Max([Math]::Max($drlgCol, $typeCol), [Math]::Max($idCol, [Math]::Max($questCol, $nameCol))) -and
-                $t[$drlgCol] -eq '1' -and $t[$typeCol] -eq $LevelType -and ($questCol -lt 0 -or $t[$questCol] -in '', '0') -and
-                [int]::TryParse($t[$idCol], [ref]$parsed) -and $parsed -le 137) { $cells[$nameCol] = $t[$nameCol]; break }
+# One new maze level (Act 5, DrlgType 1) copied from a plain game maze level of the tileset's LevelType; an existing row of that name is only repaired. Returns the level id.
+function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [string]$tilesetName, [string]$param) {
+    $existing = Find-Row $levels 'Name' $name
+    if ($existing -ge 0) {
+        $mazeId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
+        $haveType = (Cells $levels $levels.Lines[$existing])[$typeCol]
+        Write-Host "levels.txt: '$name' is already there (level $mazeId)."
+        # A level's LevelType fixes its tileset. An install from before the maze table (made with -Tileset Crypt) left this row a Crypt: set it back
+        # (below), together with the name string of the other tileset.
+        $retyped = $haveType -ne $type
+        # An older install copied the Den of Evil, so the row kept its quest flag, level group and warp text: repair those.
+        $cells = Cells $levels $levels.Lines[$existing]
+        Warn-LevelOverlap $levels $name $cells
+        $before = $cells -join "`t"
+        if ($retyped) {
+            Set-Cell $levels $cells 'LevelType' $type
+            Write-Host "levels.txt: level $mazeId had LevelType $haveType, not $type ($tilesetName): set it back to $type."
         }
-    }
-    if (($cells -join "`t") -ne $before) {
-        $levels.Lines[$existing] = $cells -join "`t"
-        Save-Table $levels
-        Write-Host "levels.txt: repaired level $levelId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0, plain name string), so it counts toward none of the game's levels."
-    }
-} else {
-    # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),
-    # and not a quest level (the Den of Evil is the only one).
-    $drlgCol = Column $levels 'DrlgType'
-    $questCol = [array]::IndexOf($levels.Header, 'Quest')
-    $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, [Math]::Max($idCol, $questCol)))
-    $templateRow = -1
-    for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-        $cells = $levels.Lines[$i] -split "`t"
-        $parsed = 0
-        if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $LevelType -and
-            ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
-            [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
-    }
-    if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $LevelType ($Tileset) to copy." }
-    $levelId = $null
-    $hit = Find-LevelOverlap $levels $LevelName $MazeOffsetX $MazeOffsetY ([int]$MazeSize)
-    if ($hit) { Write-OverlapRefusal $LevelName 'Maze' $MazeOffsetX $MazeOffsetY ([int]$MazeSize) $hit }
-    else {
-        $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
-        $maxId = 0
-        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
-            $cells = $levels.Lines[$i] -split "`t"
-            $parsed = 0
-            if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
-        }
-        $levelId = $maxId + 1
-        $cells = Cells $levels $levels.Lines[$templateRow]
-        Set-Cell $levels $cells 'Name' $LevelName
-        Set-Cell $levels $cells 'Id' "$levelId"
-        Set-Cell $levels $cells 'Act' $ActFive
-        Set-Cell $levels $cells 'DrlgType' '1'
-        Set-Cell $levels $cells 'LevelType' $LevelType
-        Set-Cell $levels $cells 'Depend' '0'
-        Set-Cell $levels $cells 'OffsetX' "$MazeOffsetX"
-        Set-Cell $levels $cells 'OffsetY' "$MazeOffsetY"
-        Set-CellIf $levels $cells 'Position' '0'
-        for ($n = 0; $n -lt 8; $n++) {
-            Set-Cell $levels $cells "Vis$n" '0'
-            Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
-        }
-        $sized = 0
-        foreach ($h in $levels.Header) {
-            if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $MazeSize; $sized++ }
-        }
-        if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
-        Set-Cell $levels $cells 'Waypoint' '255'
-        # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
         Set-CellIf $levels $cells 'Quest' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
         Set-CellIf $levels $cells 'LevelEntry' ''
         Set-CellIf $levels $cells 'LevelWarp' ''
-        # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
-        $levels.Lines.Add($cells -join "`t")
-        Save-Table $levels
-        Write-Host "levels.txt: added '$LevelName' as level $levelId ($Tileset, copied from level $templateId)."
+        for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
+        # An older install put the level where its revealed map is lost after a trip to town (Cave at x 6000): move it.
+        Move-IntoAutomapRange $levels $cells $name $offX $offY
+        # The Den of Evil copy also kept its name string, so the tooltip read "Den of Evil": use the plain game maze level's string instead.
+        $nameCol = [array]::IndexOf($levels.Header, 'LevelName')
+        if ($nameCol -ge 0 -and ($cells[$nameCol] -eq 'Den of Evil' -or $retyped)) {
+            $drlgCol = Column $levels 'DrlgType'
+            $questCol = [array]::IndexOf($levels.Header, 'Quest')
+            for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+                $t = $levels.Lines[$i] -split "`t"
+                $parsed = 0
+                if ($t.Count -gt [Math]::Max([Math]::Max($drlgCol, $typeCol), [Math]::Max($idCol, [Math]::Max($questCol, $nameCol))) -and
+                    $t[$drlgCol] -eq '1' -and $t[$typeCol] -eq $type -and ($questCol -lt 0 -or $t[$questCol] -in '', '0') -and
+                    [int]::TryParse($t[$idCol], [ref]$parsed) -and $parsed -le 137) { $cells[$nameCol] = $t[$nameCol]; break }
+            }
+        }
+        if (($cells -join "`t") -ne $before) {
+            $levels.Lines[$existing] = $cells -join "`t"
+            Save-Table $levels
+            Write-Host "levels.txt: repaired level $mazeId (no quest, no level group, no entry or warp text, Vis0..Vis7 = 0, plain name string), so it counts toward none of the game's levels."
+        }
+    } else {
+        # A game maze level of the wanted type to copy: DrlgType 1, that LevelType, one of the game's own rows (id 137 or below),
+        # and not a quest level (the Den of Evil is the only one).
+        $drlgCol = Column $levels 'DrlgType'
+        $questCol = [array]::IndexOf($levels.Header, 'Quest')
+        $widest = [Math]::Max($drlgCol, [Math]::Max($typeCol, [Math]::Max($idCol, $questCol)))
+        $templateRow = -1
+        for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+            $cells = $levels.Lines[$i] -split "`t"
+            $parsed = 0
+            if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $type -and
+                ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
+                [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
+        }
+        if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $type ($tilesetName) to copy." }
+        $mazeId = $null
+        $hit = Find-LevelOverlap $levels $name $offX $offY ([int]$size)
+        if ($hit) { Write-OverlapRefusal $name $param $offX $offY ([int]$size) $hit }
+        else {
+            $templateId = ($levels.Lines[$templateRow] -split "`t")[$idCol]
+            $maxId = 0
+            for ($i = 1; $i -lt $levels.Lines.Count; $i++) {
+                $cells = $levels.Lines[$i] -split "`t"
+                $parsed = 0
+                if ($cells.Count -gt $idCol -and [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -gt $maxId) { $maxId = $parsed }
+            }
+            $mazeId = $maxId + 1
+            $cells = Cells $levels $levels.Lines[$templateRow]
+            Set-Cell $levels $cells 'Name' $name
+            Set-Cell $levels $cells 'Id' "$mazeId"
+            Set-Cell $levels $cells 'Act' $ActFive
+            Set-Cell $levels $cells 'DrlgType' '1'
+            Set-Cell $levels $cells 'LevelType' $type
+            Set-Cell $levels $cells 'Depend' '0'
+            Set-Cell $levels $cells 'OffsetX' "$offX"
+            Set-Cell $levels $cells 'OffsetY' "$offY"
+            Set-CellIf $levels $cells 'Position' '0'
+            for ($n = 0; $n -lt 8; $n++) {
+                Set-Cell $levels $cells "Vis$n" '0'
+                Set-Cell $levels $cells "Warp$n" '-1'  # 0 crashed the game
+            }
+            $sized = 0
+            foreach ($h in $levels.Header) {
+                if ($h -match '^Size[XY]') { Set-Cell $levels $cells $h $size; $sized++ }
+            }
+            if ($sized -lt 2) { throw 'levels.txt has no SizeX and SizeY columns.' }
+            Set-Cell $levels $cells 'Waypoint' '255'
+            # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
+            Set-CellIf $levels $cells 'Quest' '0'
+            Set-CellIf $levels $cells 'LevelGroup' $NoGroup
+            Set-CellIf $levels $cells 'LevelEntry' ''
+            Set-CellIf $levels $cells 'LevelWarp' ''
+            # LevelName stays the copied key: it is the string the portal tooltip shows, and a key of our own would have no string ("Missing String").
+            $levels.Lines.Add($cells -join "`t")
+            Save-Table $levels
+            Write-Host "levels.txt: added '$name' as level $mazeId ($tilesetName, copied from level $templateId)."
+        }
     }
+    $mazeId
+}
+
+# --- levels.txt: one level per maze tileset (Cave, Crypt) -------------------------------------------------------------
+$mazeIds = @{}
+foreach ($t in $MazeTilesets) {
+    $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
+    $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
+    $mazeIds[$t.Slot] = Ensure-MazeLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Tileset $t.Param
 }
 if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
     Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
@@ -653,23 +686,26 @@ if (Test-Path $propsPath) {
 
 # --- lvlmaze.txt ------------------------------------------------------------------------------------------------------
 $mazes = Read-Table (Join-Path $ExcelDir 'lvlmaze.txt')
-if ($null -eq $levelId) {
-    Write-Host 'lvlmaze.txt: no Maze level, so no maze row.'
-} elseif ((Find-Row $mazes 'Level' "$levelId") -ge 0) {
-    Write-Host "lvlmaze.txt: level $levelId already has its maze row."
-} else {
-    if ($mazes.Lines.Count -lt 2) { throw 'lvlmaze.txt has no row to copy.' }
-    $cells = Cells $mazes $mazes.Lines[1]
-    Set-Cell $mazes $cells 'Name' $LevelName
-    Set-Cell $mazes $cells 'Level' "$levelId"
-    foreach ($h in $mazes.Header) {
-        if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
-        elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h '24' }
-        elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
+foreach ($t in $MazeTilesets) {
+    $mazeId = $mazeIds[$t.Slot]
+    if ($null -eq $mazeId) {
+        Write-Host "lvlmaze.txt: no $($t.Slot) level, so no maze row for it."
+    } elseif ((Find-Row $mazes 'Level' "$mazeId") -ge 0) {
+        Write-Host "lvlmaze.txt: level $mazeId ($($t.Slot)) already has its maze row."
+    } else {
+        if ($mazes.Lines.Count -lt 2) { throw 'lvlmaze.txt has no row to copy.' }
+        $cells = Cells $mazes $mazes.Lines[1]
+        Set-Cell $mazes $cells 'Name' $t.LevelName
+        Set-Cell $mazes $cells 'Level' "$mazeId"
+        foreach ($h in $mazes.Header) {
+            if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
+            elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h '24' }
+            elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
+        }
+        $mazes.Lines.Add($cells -join "`t")
+        Save-Table $mazes
+        Write-Host "lvlmaze.txt: added the maze row for level $mazeId ($($t.Slot))."
     }
-    $mazes.Lines.Add($cells -join "`t")
-    Save-Table $mazes
-    Write-Host "lvlmaze.txt: added the maze row for level $levelId."
 }
 
 # --- superuniques.txt: one row per bosses.txt entry -------------------------------------------------------------------
@@ -867,14 +903,15 @@ Write-Pending
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
 New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
-# Existing rows are kept (an older install's Preset row, for one): only the Maze row and one row per outdoor tileset (`$OutdoorTilesets) are added or updated.
+# Existing rows are kept (an older install's Preset row, for one): only one row per maze tileset (`$MazeTilesets) and one per outdoor tileset (`$OutdoorTilesets) are added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
 if (Test-Path $slotPath) {
     foreach ($line in ([System.IO.File]::ReadAllText($slotPath, $utf8) -split "`r?`n")) { if ($line.Trim() -ne '') { $slotLines.Add($line) } }
 }
 $slotHeader = if ($slotLines.Count -gt 0) { ($slotLines[0] -replace ('^' + [regex]::Escape($bom)), '') -split "`t" } else { @() }
 if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -eq 'Level') {
-    $slotRows = @(,@('Maze', $levelId))
+    $slotRows = @()
+    foreach ($t in $MazeTilesets) { $slotRows += ,@($t.Slot, $mazeIds[$t.Slot]) }
     foreach ($t in $OutdoorTilesets) { $slotRows += ,@($t.Slot, $outdoorIds[$t.Slot]) }
     foreach ($row in $slotRows) {
         if ($null -eq $row[1]) { continue }  # refused above: keep whatever the row says
@@ -886,7 +923,8 @@ if ($slotHeader.Count -ge 2 -and $slotHeader[0] -eq 'Slot' -and $slotHeader[1] -
 } else {
     if ($slotLines.Count -gt 0) { Write-Host 'slots.txt: unreadable header, replaced.' }
     $slotLines.Clear(); $slotLines.Add("Slot`tLevel")
-    $slotRows = @(,@('Maze', $levelId))
+    $slotRows = @()
+    foreach ($t in $MazeTilesets) { $slotRows += ,@($t.Slot, $mazeIds[$t.Slot]) }
     foreach ($t in $OutdoorTilesets) { $slotRows += ,@($t.Slot, $outdoorIds[$t.Slot]) }
     foreach ($row in $slotRows) { if ($null -ne $row[1]) { $slotLines.Add("$($row[0])`t$($row[1])") } }
 }
@@ -897,7 +935,7 @@ $slotText = ($slotLines -join "`r`n") + "`r`n"
 if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
     [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
     $shown = { param($id) if ($null -ne $id) { "is level $id" } else { 'not added' } }
-    Write-Host ("slots.txt: Maze $(& $shown $levelId), " + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) $(& $shown $outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
+    Write-Host ("slots.txt: " + (($MazeTilesets | ForEach-Object { "$($_.Slot) $(& $shown $mazeIds[$_.Slot])" }) -join ', ') + ', ' + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) $(& $shown $outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
 } else {
     Write-Host 'slots.txt: already up to date.'
 }

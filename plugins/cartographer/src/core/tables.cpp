@@ -1,5 +1,6 @@
 #include "tables.h"
 
+#include "maze_tilesets.h"
 #include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
 #include "text.h"
@@ -21,11 +22,12 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the outdoor tilesets (the table in
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave and Crypt) are buildable through the maze
+// steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
+	{"Lava", false},     {"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
@@ -134,6 +136,9 @@ auto NotInTable(const char* what, const std::string& word, const char* table, co
 
 auto TilesetNames() -> std::vector<std::string> {
 	std::vector<std::string> out;
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		out.emplace_back(t.name);
+	}
 	for (const Tileset& t : Tilesets) {
 		out.emplace_back(t.name);
 	}
@@ -145,6 +150,9 @@ auto TilesetNames() -> std::vector<std::string> {
 
 auto ReadyTilesetNames() -> std::vector<std::string> {
 	std::vector<std::string> out;
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		out.emplace_back(t.name);
+	}
 	for (const Tileset& t : Tilesets) {
 		if (t.ready) {
 			out.emplace_back(t.name);
@@ -786,9 +794,9 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 			drop("a level of the original game. Run the installer again (tools\\install.ps1)");
 		} else if (std::find(ids.begin(), ids.end(), slot.level) == ids.end()) {
 			drop(cId < 0 ? "but levels.txt could not be read" : "which has no row in levels.txt. Run the installer again (tools\\install.ps1)");
-		} else if (EqualsNoCase(slot.name, MazeSlot) &&
-		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
-			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
+		} else if (IsMazeSlotName(slot.name) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeSlotLevelName(slot.name))) {
+			drop("which is not the level the installer wrote (its levels.txt Name must be '" + MazeSlotLevelName(slot.name) + "'). Run the installer again (tools\\install.ps1)");
 		} else if (IsOutdoorSlotName(slot.name) &&
 		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], OutdoorSlotLevelName(slot.name))) {
 			drop("which is not the level the installer wrote (its levels.txt Name must be '" + OutdoorSlotLevelName(slot.name) + "'). Run the installer again (tools\\install.ps1)");
@@ -845,6 +853,24 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 			}
 		}
 	}
+}
+
+auto IsMazeSlotName(std::string_view slot) -> bool {
+	return cartographer::maze::findMazeTilesetBySlot(slot) != nullptr;
+}
+
+auto HasMazeSlot(const std::vector<Slot>& slots) -> bool {
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		if (SlotLevel(slots, t.slot) > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+auto MazeSlotLevelName(std::string_view slot) -> std::string {
+	const cartographer::maze::MazeTileset* row = cartographer::maze::findMazeTilesetBySlot(slot);
+	return row != nullptr ? std::string(row->levelName) : std::string();
 }
 
 auto IsOutdoorSlotName(std::string_view slot) -> bool {
@@ -911,12 +937,23 @@ auto MapIsOutdoor(const MapDef& map) -> bool {
 }
 
 auto MapSlotName(const MapDef& map) -> const char* {
+	if (const cartographer::maze::MazeTileset* maze = cartographer::maze::findMazeTileset(map.tileset)) {
+		return maze->slot;
+	}
 	const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(map.tileset);
 	return row != nullptr ? row->slot : MazeSlot;
 }
 
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
 	if (!MapIsOutdoor(map) || pendingTileset.empty() || EqualsNoCase(pendingTileset, map.tileset)) {
+		return {};
+	}
+	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +
+	       ") cannot be opened in this game. Leave the game and start a new one to open it.";
+}
+
+auto MazeOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
+	if (MapIsOutdoor(map) || pendingTileset.empty() || EqualsNoCase(pendingTileset, map.tileset)) {
 		return {};
 	}
 	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +
