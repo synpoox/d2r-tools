@@ -30,6 +30,11 @@ void LevelRowRestore() noexcept;
 // and only into fields that still hold the plugin's values.
 void LevelRowUnload() noexcept;
 
+// MazeProbe: after the game populates a room of the map level, logs the region record's room counters and unique count
+// (`+4`, `+8`, `+0xc`, `+0x2c8`, MonUMin / MonUMax) and how many uniques that room added. Game thread; reads only.
+void LevelRowProbeSet(bool on) noexcept;
+void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const char* where) noexcept;
+
 // What the columns do now, for 'cartographer check'.
 auto LevelRowSummary() -> std::string;
 

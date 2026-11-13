@@ -4,6 +4,7 @@
 #include "engine/auto_check.h"
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
+#include "engine/level_row.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"
 #include "engine/scan.h"
@@ -671,6 +672,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 		return;
 	}
 	const RoomRects rects = ReadRects(room);
+	{
+		const std::string where = rects.ok ? Describe(rects.drlg) : std::string("unreadable");
+		LevelRowProbeRoom(game, state->level, At<uint8_t>(game, 0x106), where.c_str());
+	}
 	bool fire = false;
 	bool fireBoss = false;
 	bool planned = false;
@@ -1000,6 +1005,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
+	LevelRowProbeSet(tables->settings.mazeProbe != 0);
 	auto state = std::make_shared<State>();
 	state->mapName = map.name;
 	state->level = level;

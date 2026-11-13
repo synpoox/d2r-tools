@@ -130,7 +130,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | EventChance | Percent chance a map has an event | 20 |
 | PlayerStats | `1` applies the map's player properties while you are in the map (at most 16 stats, the most the character sheet shows); removed when you leave the map and not kept in your save (checked in single player, one test character); `0` turns it off | 1 |
 | MapNames | `0` turns off showing a map's own name on the portal, automap and banner (experimental) | 1 |
-| MazeProbe | `1` logs what the game builds for a maze (for debugging) | 0 |
+| MazeProbe | `1` logs what the game builds for a maze and, per room, the level record's room and unique counters (for debugging) | 0 |
 | OutdoorProbe | `1` logs what the game builds for an outdoor map (for debugging) | 0 |
 | ItemStats | `1` uses the map item's own stats as the map's properties (a player stat from the item was seen in game once; monster stats from an item not checked) | 0 |
 | Town | The town the portal opens in; only `Harrogath` is supported | Harrogath |
