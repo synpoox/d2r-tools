@@ -206,6 +206,9 @@ Pace g_pace;
 std::atomic<bool> g_paceArmed{false};  // the hook's cheap test
 // The last room's pace, for the probe line (game thread only).
 int g_paceLastBudget = 0;
+// Filler rooms (Lava's closed ring) populated since the pace was armed: the game's room counter (+4) counts them, the room total (+0xc) does not
+// (game thread only; reset when the pace ends).
+int g_paceFillers = 0;
 // Set between UniquePaceBegin and UniquePaceEnd (game thread only): what the two bytes held.
 bool g_paceOpen = false;
 uint8_t g_paceSavedMin = 0, g_paceSavedMax = 0;
@@ -213,6 +216,7 @@ uint8_t* g_paceRecord = nullptr;
 
 void DisarmPaceLocked() noexcept {
 	g_pace = Pace{};
+	g_paceFillers = 0;
 	g_paceArmed.store(false);
 }
 
@@ -481,7 +485,7 @@ auto UniquePaceArmed() noexcept -> bool {
 	return g_paceArmed.load(std::memory_order_relaxed);
 }
 
-auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
+auto UniquePaceBegin(const void* game, int roomLevel, bool filler) noexcept -> bool {
 	if (!g_paceArmed.load(std::memory_order_relaxed) || g_paceOpen) {
 		return false;
 	}
@@ -497,7 +501,15 @@ auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool {
 		int32_t seen = 0, rooms = 0;
 		std::memcpy(&seen, pace.record + lr::RecRoomsSeenOffset, 4);
 		std::memcpy(&rooms, pace.record + lr::RecRoomsOffset, 4);
-		const int budget = lr::PaceBudget(pace.total, seen, rooms);
+		// A filler room is closed: a unique pack there is never met, so it gets none (its budget is the count already made), and it does not
+		// count as map done (the room total leaves the fillers out, so counting them would hand out the packs early).
+		int budget = 0;
+		if (filler) {
+			++g_paceFillers;
+			budget = pace.record[lr::RecUniqueCountOffset];
+		} else {
+			budget = lr::PaceBudget(pace.total, seen - g_paceFillers, rooms);
+		}
 		g_paceLastBudget = budget;
 		g_paceSavedMin = pace.restoreMin;
 		g_paceSavedMax = pace.restoreMax;

@@ -386,4 +386,28 @@ uint64_t planHash(const Plan &p)
 	return h;
 }
 
+FillerMask fillerMask(const Plan &plan)
+{
+	FillerMask out;
+	if (plan.rooms.empty() || plan.fillOffsets.empty()) return out;
+	int minX = plan.rooms[0].dx, minY = plan.rooms[0].dy, maxX = minX, maxY = minY;
+	for (const Room &r : plan.rooms) {
+		minX = std::min(minX, r.dx);
+		minY = std::min(minY, r.dy);
+		maxX = std::max(maxX, r.dx);
+		maxY = std::max(maxY, r.dy);
+	}
+	for (const layout::Point &f : plan.fillOffsets) {
+		minX = std::min(minX, f.x);
+		minY = std::min(minY, f.y);
+		maxX = std::max(maxX, f.x);
+		maxY = std::max(maxY, f.y);
+	}
+	out.w = maxX - minX + 1;
+	out.h = maxY - minY + 1;
+	out.planCell.assign(static_cast<size_t>(out.w) * static_cast<size_t>(out.h), 0);
+	for (const Room &r : plan.rooms) out.planCell[static_cast<size_t>(r.dy - minY) * static_cast<size_t>(out.w) + static_cast<size_t>(r.dx - minX)] = 1;
+	return out;
+}
+
 } // namespace cartographer::maze

@@ -472,6 +472,28 @@ TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one 
 	CHECK(bareCells <= 800);
 }
 
+TEST_CASE("Lava: the filler mask tells plan cells from filler cells (issue #317)")
+{
+	const Tileset cave = caveTileset(), lava = lavaTileset();
+	for (int i = 0; i < 50; ++i) {
+		const layout::Rules rules = layout::presetRules(layout::Shape::Sprawl, layout::Size::Large);
+		const uint64_t seed = layout::splitmix64(static_cast<uint64_t>(i) + 0x9100);
+		const SeedPlan c = planForSeed(cave, rules, seed);
+		if (c.plan.steer) CHECK(fillerMask(c.plan).empty());  // no ring: no cell is a filler
+		const SeedPlan l = planForSeed(lava, rules, seed);
+		if (!l.plan.steer) continue;
+		const FillerMask m = fillerMask(l.plan);
+		REQUIRE(!m.empty());
+		int minX = l.plan.rooms[0].dx, minY = l.plan.rooms[0].dy;
+		for (const Room &r : l.plan.rooms) { minX = std::min(minX, r.dx); minY = std::min(minY, r.dy); }
+		for (const layout::Point &f : l.plan.fillOffsets) { minX = std::min(minX, f.x); minY = std::min(minY, f.y); }
+		for (const Room &r : l.plan.rooms) CHECK(!m.isFiller(r.dx - minX, r.dy - minY));
+		for (const layout::Point &f : l.plan.fillOffsets) CHECK(m.isFiller(f.x - minX, f.y - minY));
+		CHECK(!m.isFiller(-1, 0));  // outside the box is not a filler
+		CHECK(!m.isFiller(m.w, 0));
+	}
+}
+
 TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
 {
 	struct Case { Tileset ts; layout::Shape shape; };

@@ -138,6 +138,21 @@ struct Plan {
 	int eventRoom = -1, bossRoom = -1;   // indexes into rooms of the reserved event and boss rooms, or -1
 };
 
+// Which cells of the built box are filler (a tileset with a ring, Lava): cells counted from the box's top-left cell, the box being the plan
+// rooms and the fillers together, as the built level is. Empty (no cell is a filler) for a plan with no fills.
+struct FillerMask {
+	int w = 0, h = 0;
+	std::vector<uint8_t> planCell;  // w * h, 1 where a plan room is
+	bool empty() const { return planCell.empty(); }
+	// True for a cell inside the box that holds no plan room.
+	bool isFiller(int cellX, int cellY) const
+	{
+		if (cellX < 0 || cellY < 0 || cellX >= w || cellY >= h) return false;
+		return planCell[static_cast<size_t>(cellY) * static_cast<size_t>(w) + static_cast<size_t>(cellX)] == 0;
+	}
+};
+FillerMask fillerMask(const Plan &plan);
+
 // The plan for a layout on a tileset. Always returns a plan: steer is false (with a reason) when the layout cannot
 // be built on the tileset. This does not generate anything.
 Plan planMaze(const Tileset &ts, const layout::Layout &layout);

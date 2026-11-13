@@ -94,6 +94,10 @@ struct MazeEventRect {
 };
 auto MazeEventRoom() -> MazeEventRect;
 
+// True when the DRLG room at tile (x, y) of `levelId` is in a filler cell of the opened maze map (Lava's closed ring around the layout): no player
+// reaches it. False when the map has no filler, the plan's box was not matched to the built rooms, or the level is another. Any thread.
+auto MazeRoomIsFiller(int32_t levelId, int32_t x, int32_t y) -> bool;
+
 // The plan's boss room (the far cell of the main path), in the same form and with the same lifetime. Not known when the layout has no boss room.
 auto MazeBossRoom() -> MazeEventRect;
 

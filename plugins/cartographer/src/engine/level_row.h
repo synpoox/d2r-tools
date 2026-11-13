@@ -42,7 +42,8 @@ void LevelRowProbeRoom(const void* game, int level, uint32_t dataFlag, const cha
 // LevelRowBeforeOpen (only for a map with Uniques above 0), disarmed on a failed open, leaving the game and unload. Begin returns false
 // (nothing written) when not armed or the room is not of the armed level/game. Game thread. One game, one thread.
 auto UniquePaceArmed() noexcept -> bool;
-auto UniquePaceBegin(const void* game, int roomLevel) noexcept -> bool;
+// `filler`: the room is a closed filler room of the plan (MazeRoomIsFiller); it gets no unique pack.
+auto UniquePaceBegin(const void* game, int roomLevel, bool filler = false) noexcept -> bool;
 void UniquePaceEnd() noexcept;
 
 // What the columns do now, for 'cartographer check'.
