@@ -71,7 +71,6 @@ struct Plan {
 	std::vector<Entry> monsters;
 	std::vector<Entry> players;
 	std::vector<Skipped> skipped;
-	std::vector<std::string> notes; // a value the plan kept that may misbehave, in plain English (logged)
 	bool empty() const { return monsters.empty() && players.empty(); }
 };
 
@@ -83,10 +82,6 @@ struct Plan {
 // monster setup. Matched by name or by the engine's fixed id (4, 5, 6, 8, 10, 12 to 15), so a renamed row is still
 // caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
 std::string refusedReason(Target target, std::string_view stat, int id);
-
-// A monster velocitypercent at or below this is read as a percent added to 100% speed, so it would be no movement or less. What it does is not
-// checked in game and the value is not limited (the mod's tables are the modder's): buildPlan keeps it and notes it in Plan::notes, which goes to the log.
-constexpr int kStillMonsterSpeed = -100;
 
 // Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
 // refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property

@@ -137,7 +137,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 |---|---|---|
 | `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
-| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: the plugin applies the value as it is, and what -100 or lower does to monsters has not been checked in game; `cartographer check` notes a `magicprefix.txt`, `magicsuffix.txt`, `uniqueitems.txt`, `setitems.txt` or `cubemain.txt` row that reaches -100 or lower) |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 | `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 

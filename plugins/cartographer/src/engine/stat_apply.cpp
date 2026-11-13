@@ -583,9 +583,6 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	for (const sp::Skipped& s : plan->skipped) {
 		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::statplan::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());
 	}
-	for (const std::string& note : plan->notes) {
-		plog::Warn("map stats: %s", note.c_str());
-	}
 	if (!g_monstersOn.load() && !plan->monsters.empty()) {
 		plog::Warn("map stats: %zu monster stat(s) on the map item, but monster stats are off", plan->monsters.size());
 	}

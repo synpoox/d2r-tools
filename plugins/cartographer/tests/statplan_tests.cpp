@@ -905,7 +905,7 @@ TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a
 	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
 }
 
-TEST_CASE("a monster velocitypercent of -100 or lower is kept as it is, with a note")
+TEST_CASE("a monster velocitypercent of -100 or lower is kept as it is")
 {
 	StatIds ids;
 	ids.loaded = true;
@@ -916,22 +916,16 @@ TEST_CASE("a monster velocitypercent of -100 or lower is kept as it is, with a n
 	REQUIRE(plan.monsters.size() == 2);
 	CHECK(plan.monsters[0].value == -721);  // the speeds add up and nothing limits the total
 	CHECK(plan.monsters[1].value == -300);
-	REQUIRE(plan.notes.size() == 1);
-	CHECK(plan.notes[0].find("-721") != std::string::npos);
-	CHECK(plan.notes[0].find("applied as it is") != std::string::npos);
 	const auto small = buildPlan({{Target::Monsters, "velocitypercent", -60}, {Target::Monsters, "velocitypercent", -30}}, ids);
 	REQUIRE(small.monsters.size() == 1);
 	CHECK(small.monsters[0].value == -90);
-	CHECK(small.notes.empty());
 	const auto exact = buildPlan({{Target::Monsters, "velocitypercent", -100}}, ids);
 	REQUIRE(exact.monsters.size() == 1);
 	CHECK(exact.monsters[0].value == -100);
-	CHECK(exact.notes.size() == 1);
 	// A speed on the player is the player's own and has no note.
 	const auto player = buildPlan({{Target::Players, "velocitypercent", -150}}, ids);
 	REQUIRE(player.players.size() == 1);
 	CHECK(player.players[0].value == -150);
-	CHECK(player.notes.empty());
 	// A map item's own speed stat becomes velocitypercent on monsters, and buildPlan keeps it.
 	StatIds item = parseItemStatCost("Stat\ncartographer_mon_speed\nvelocitypercent\n");
 	const auto mapped = itemStatsToProperties({{0, 0, -300}}, item);
@@ -940,7 +934,6 @@ TEST_CASE("a monster velocitypercent of -100 or lower is kept as it is, with a n
 	const auto fromItem = buildPlan(mapped.properties, item);
 	REQUIRE(fromItem.monsters.size() == 1);
 	CHECK(fromItem.monsters[0].value == -300);
-	CHECK(fromItem.notes.size() == 1);
 }
 
 TEST_CASE("decodeItemStatList accepts 8-byte pairs whose odd ints are all 0 (a known gap in the guard, RE note 14 section 16)")
