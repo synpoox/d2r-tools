@@ -13,6 +13,7 @@
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
+#include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
 #include "log.h"
@@ -617,6 +618,9 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		ServeRequest(game, unit);
 	}
 	StatApplyPlayerTick(game, unit);
+	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+		MapPanelPlayerTick(unit);
+	}
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);
 		AutoCheckTick(game, unit, known);
@@ -643,6 +647,7 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		StatApplyGameLeft();
+		MapPanelGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
 		LevelRowRestore();
