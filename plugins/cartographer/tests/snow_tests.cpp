@@ -58,7 +58,7 @@ const std::string GOLDEN_HORIZONTAL =
 	"Fb ba aa ab ba aa ab bR\n"
 	"Fb bb ba aa ab bb ba aR\n"
 	"Fa ab ba aa ab bb ba aR\n";
-const uint64_t GOLDEN_HORIZONTAL_HASH = 7403547009893076699ull;
+const uint64_t GOLDEN_HORIZONTAL_HASH = 10896496030343949601ull;
 
 } // namespace
 
@@ -142,7 +142,7 @@ TEST_CASE("the piece table matches the Snow rows of tools/catalogue.tsv")
 	CHECK(found == 16);
 }
 
-TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
+TEST_CASE("sizes: Small, Medium, Large, ExtraLarge, and the game's own Frozen Tundra size")
 {
 	int w = 0, h = 0;
 	CHECK(snowSizeCells("", &w, &h));
@@ -150,13 +150,13 @@ TEST_CASE("sizes: Small, Medium, Large, and the game's own Frozen Tundra size")
 	CHECK(h == 5);
 	CHECK(w * kCellTiles == 128); // level 117 is 128 x 80 tiles
 	CHECK(h * kCellTiles == 80);
-	CHECK(snowSizeCells("ExtraSmall", &w, &h));
+	CHECK(snowSizeCells("Small", &w, &h));
 	CHECK(w == 4);
 	CHECK(h == 3);
-	CHECK(snowSizeCells("SMALL", &w, &h));
+	CHECK(snowSizeCells("MEDIUM", &w, &h));
 	CHECK(w == 6);
 	CHECK(h == 4);
-	CHECK(snowSizeCells("Large", &w, &h));
+	CHECK(snowSizeCells("ExtraLarge", &w, &h));
 	CHECK(w == 10);
 	CHECK(h == 7);
 	CHECK_FALSE(snowSizeCells("Huge", &w, &h));
@@ -310,7 +310,7 @@ TEST_CASE("pinned files stay inside each piece's file count, unpinned plans leav
 		REQUIRE(pinned.ok);
 		for (const Stamp &s : pinned.stamps.stamps) {
 			CHECK(s.file >= 0);
-			if (s.lvlPrest == kEdgePiece) {  // the edge ring: one file
+			if (s.lvlPrest < kFirstLvlPrest) {  // the edge ring: one file
 				CHECK(s.file == 0);
 				continue;
 			}
@@ -365,8 +365,9 @@ TEST_CASE("stamps sit on the 8-tile grid, row-major, and the entrance is a run c
 TEST_CASE("the edge ring: every side of the rectangle has kEdgeCells cells of the edge piece, at every size and orientation (issue #395)")
 {
 	CHECK(kEdgeCells >= 1);
-	CHECK(findPiece(kEdgePiece) == nullptr);  // not a fence piece: the fence grammar never picks it
-	const int sizes[4][2] = {{4, 3}, {6, 4}, {8, 5}, {10, 7}};  // ExtraSmall, Small, Medium, Large
+	// Not fence pieces: the fence grammar never picks them.
+	for (const int id : {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw}) CHECK(findPiece(id) == nullptr);
+	const int sizes[4][2] = {{4, 3}, {6, 4}, {8, 5}, {10, 7}};  // Small, Medium, Large, ExtraLarge
 	for (const auto &size : sizes) {
 		for (const Orientation o : {Orientation::Horizontal, Orientation::Vertical}) {
 			const SnowRequest r = request(31, size[0], size[1], o);
@@ -389,7 +390,7 @@ TEST_CASE("the edge ring: every side of the rectangle has kEdgeCells cells of th
 						CHECK(s.lvlPrest <= 1002);
 						++inside;
 					} else {
-						CHECK(s.lvlPrest == kEdgePiece);
+						CHECK(s.lvlPrest == edgePieceAt(x - kEdgeCells, y - kEdgeCells, size[0], size[1]));
 						CHECK(s.file == -1);
 						++ring;
 					}
@@ -411,6 +412,29 @@ TEST_CASE("the edge ring: every side of the rectangle has kEdgeCells cells of th
 			CHECK(p.stamps.voidCells.empty());
 		}
 	}
+}
+
+TEST_CASE("the edge ring has its own border piece on each side and each corner (issue #395)")
+{
+	// The ring cell west, north, east and south of a 6 x 4 rectangle, then its four corners.
+	CHECK(edgePieceAt(-1, 2, 6, 4) == kEdgePieces.west);
+	CHECK(edgePieceAt(3, -1, 6, 4) == kEdgePieces.north);
+	CHECK(edgePieceAt(6, 2, 6, 4) == kEdgePieces.east);
+	CHECK(edgePieceAt(3, 4, 6, 4) == kEdgePieces.south);
+	CHECK(edgePieceAt(-1, -1, 6, 4) == kEdgePieces.nw);
+	CHECK(edgePieceAt(6, -1, 6, 4) == kEdgePieces.ne);
+	CHECK(edgePieceAt(6, 4, 6, 4) == kEdgePieces.se);
+	CHECK(edgePieceAt(-1, 4, 6, 4) == kEdgePieces.sw);
+	CHECK(edgePieceAt(0, 0, 6, 4) == 0);
+	CHECK(edgePieceAt(5, 3, 6, 4) == 0);
+	// Eight different pieces, all rows of the game's own Act 5 Barricade border table (Cliff and Ravine Border 1 to 12 Snow, 957..982).
+	std::set<int> seen;
+	for (const int id : {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw}) {
+		CHECK(id >= 957);
+		CHECK(id <= 982);
+		seen.insert(id);
+	}
+	CHECK(seen.size() == 8);
 }
 
 TEST_CASE("the edge ring is checked: a missing or wrong ring cell fails the plan check")
@@ -440,6 +464,11 @@ TEST_CASE("the edge ring is checked: a missing or wrong ring cell fails the plan
 	{ // a level box without the ring
 		SnowPlan p = good;
 		p.stamps.tilesW -= 2 * kEdgeCells * kCellTiles;
+		CHECK(fails(p));
+	}
+	{ // the north side holding the piece of the west side
+		SnowPlan p = good;
+		p.stamps.stamps[1].lvlPrest = kEdgePieces.west;
 		CHECK(fails(p));
 	}
 	{ // a pinned file on the ring of an unpinned plan

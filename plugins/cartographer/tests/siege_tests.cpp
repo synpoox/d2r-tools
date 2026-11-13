@@ -78,13 +78,13 @@ TEST_CASE("size names map to 12 to 15 strips")
 	int n = 0;
 	CHECK(siegeSizeStrips("", &n));
 	CHECK(n == 14);
-	CHECK(siegeSizeStrips("Medium", &n));
-	CHECK(n == 14);
-	CHECK(siegeSizeStrips("EXTRASMALL", &n));
-	CHECK(n == 12);
-	CHECK(siegeSizeStrips("small", &n));
-	CHECK(n == 13);
 	CHECK(siegeSizeStrips("Large", &n));
+	CHECK(n == 14);
+	CHECK(siegeSizeStrips("SMALL", &n));
+	CHECK(n == 12);
+	CHECK(siegeSizeStrips("medium", &n));
+	CHECK(n == 13);
+	CHECK(siegeSizeStrips("ExtraLarge", &n));
 	CHECK(n == 15);
 	n = 99;
 	CHECK_FALSE(siegeSizeStrips("Huge", &n));
@@ -274,7 +274,7 @@ TEST_CASE("planOutdoorMap plans Siege through the tileset table and the grid com
 {
 	MapRequest m;
 	m.tileset = "siege";
-	m.size = "Small";
+	m.size = "Medium";
 	m.seed = 42;
 	m.options.originX = 6000;
 	m.options.originY = 3900;
@@ -309,7 +309,7 @@ TEST_CASE("planOutdoorMap plans Siege through the tileset table and the grid com
 	// The same request for another size, and a bad size.
 	m.size = "Huge";
 	CHECK_FALSE(planOutdoorMap(m, builtinJungleCatalogue()).ok);
-	m.size = "Large";
+	m.size = "ExtraLarge";
 	m.options.maxTilesX = 224;
 	const MapPlan tight = planOutdoorMap(m, builtinJungleCatalogue());
 	CHECK_FALSE(tight.ok);

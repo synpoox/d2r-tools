@@ -175,10 +175,10 @@ const std::vector<int> &funnelBlock() { return kFunnel; }
 bool siegeSizeStrips(std::string_view size, int *strips) {
 	const std::string s = lowerAscii(size);
 	int n = 0;
-	if (s.empty() || s == "medium") n = 14;
-	else if (s == "extrasmall") n = 12;
-	else if (s == "small") n = 13;
-	else if (s == "large") n = 15;
+	if (s.empty() || s == "large") n = 14;
+	else if (s == "small") n = 12;
+	else if (s == "medium") n = 13;
+	else if (s == "extralarge") n = 15;
 	else return false;
 	if (strips) *strips = n;
 	return true;

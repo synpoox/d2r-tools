@@ -149,6 +149,23 @@ const char *orientationName(Orientation orientation) {
 	return orientation == Orientation::Horizontal ? "horizontal" : "vertical";
 }
 
+// Ring pieces, from the game's own Act 5 Barricade border rows (lvlprest.txt 957..982, DS1 Brdr_snow*; cartographer-snow.md section 8). Each straight piece
+// has its ground on the side of the rectangle and nothing on the outer side; each corner has ground on the diagonal toward the rectangle.
+const EdgePieces kEdgePieces = {958, 959, 960, 969, 962, 975, 976, 973};
+
+int edgePieceAt(int x, int y, int w, int h) {
+	const bool west = x < 0, east = x >= w, north = y < 0, south = y >= h;
+	if (north && west) return kEdgePieces.nw;
+	if (north && east) return kEdgePieces.ne;
+	if (south && east) return kEdgePieces.se;
+	if (south && west) return kEdgePieces.sw;
+	if (west) return kEdgePieces.west;
+	if (east) return kEdgePieces.east;
+	if (north) return kEdgePieces.north;
+	if (south) return kEdgePieces.south;
+	return 0;
+}
+
 const std::vector<Piece> &pieces() { return kPieces; }
 
 const Piece *findPiece(int lvlPrest) {
@@ -160,10 +177,10 @@ const Piece *findPiece(int lvlPrest) {
 bool snowSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	const std::string s = lowerAscii(size);
 	int w = 0, h = 0;
-	if (s.empty() || s == "medium") { w = 8; h = 5; }
-	else if (s == "extrasmall") { w = 4; h = 3; }
-	else if (s == "small") { w = 6; h = 4; }
-	else if (s == "large") { w = 10; h = 7; }
+	if (s.empty() || s == "large") { w = 8; h = 5; }
+	else if (s == "small") { w = 4; h = 3; }
+	else if (s == "medium") { w = 6; h = 4; }
+	else if (s == "extralarge") { w = 10; h = 7; }
 	else return false;
 	if (cellsW) *cellsW = w;
 	if (cellsH) *cellsH = h;
@@ -245,7 +262,7 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 			Stamp s;
 			s.cx = (x + kEdgeCells) * per;
 			s.cy = (y + kEdgeCells) * per;
-			s.lvlPrest = inside ? out.grid[at] : kEdgePiece;
+			s.lvlPrest = inside ? out.grid[at] : edgePieceAt(x, y, request.cellsW, request.cellsH);
 			s.file = inside ? files[at] : (request.options.pinFiles ? 0 : -1);
 			s.macroX = x;
 			s.macroY = y;
@@ -308,7 +325,7 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 			const Stamp &s = sp.stamps[static_cast<size_t>(y + kEdgeCells) * TW + (x + kEdgeCells)];
 			const std::string where = "edge cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
 			if (s.macroX != x || s.macroY != y || s.cx != (x + kEdgeCells) * per || s.cy != (y + kEdgeCells) * per) bad.push_back(where + " is not stamped at its place in row-major order, aligned to the 16-tile grid");
-			if (s.lvlPrest != kEdgePiece) bad.push_back(where + " does not hold the edge piece " + std::to_string(kEdgePiece));
+			if (s.lvlPrest != edgePieceAt(x, y, W, H)) bad.push_back(where + " does not hold the edge piece " + std::to_string(edgePieceAt(x, y, W, H)) + " for its side");
 			if (s.file != (request.options.pinFiles ? 0 : -1)) bad.push_back(where + " has the wrong file index");
 			if (s.role != layout::Role::Path || s.mask != 0) bad.push_back(where + " has the wrong role or mask");
 		}

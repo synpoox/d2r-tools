@@ -213,6 +213,43 @@ bool EventRoomTracker::onPopulated(const Rect &room) {
 	return false;
 }
 
+BossRoomPicker::BossRoomPicker(std::vector<Rect> ranked) : ranked_(std::move(ranked)), populated_(ranked_.size(), false) {
+	done_ = ranked_.empty();
+}
+
+int BossRoomPicker::indexOf(const Rect &room) const {
+	for (size_t i = 0; i < ranked_.size(); ++i) {
+		if (ranked_[i].x == room.x && ranked_[i].y == room.y && ranked_[i].w == room.w && ranked_[i].h == room.h) {
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
+bool BossRoomPicker::onPopulated(const Rect &room) {
+	if (done_) {
+		return false;
+	}
+	const int i = indexOf(room);
+	if (i < 0) {
+		return false;
+	}
+	populated_[static_cast<size_t>(i)] = true;
+	return static_cast<size_t>(i) == current_;
+}
+
+int BossRoomPicker::refused() {
+	if (done_) {
+		return -1;
+	}
+	++current_;
+	if (current_ >= ranked_.size()) {
+		done_ = true;  // none left: given up
+		return -1;
+	}
+	return populated_[current_] ? static_cast<int>(current_) : -1;
+}
+
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
 	if (event.kind == events::Kind::Shrine) {
@@ -424,7 +461,9 @@ bool superSeen(const uint8_t *bitmap, int row) {
 }
 
 std::vector<std::string> bannerLines(const std::string &mapName, const events::Event *event, bool announced, bool late) {
-	return entryLines(late ? std::string() : mapName, announced ? event : nullptr);
+	(void)mapName;
+	(void)late;
+	return entryLines(std::string(), announced ? event : nullptr);  // the game's own "Entering <name>" is the map's title
 }
 
 std::vector<std::string> entryLines(const std::string &mapName, const events::Event *event) {

@@ -66,11 +66,13 @@ std::string panelText(const std::string &mapName, int monsterLevel, const std::v
 	return out;
 }
 
-bool hiddenAfter(bool visible, bool succeeded, bool wasHidden) {
-	if (!succeeded) {
-		return wasHidden;
+int padLines(int textBottom, int panelTop, int lineUnits, int maxLines)
+{
+	if (textBottom <= panelTop || lineUnits <= 0) {
+		return 0;
 	}
-	return !visible;
+	const int lines = (textBottom - panelTop + lineUnits - 1) / lineUnits;
+	return lines < maxLines ? lines : maxLines;
 }
 
 } // namespace cartographer::mappanel

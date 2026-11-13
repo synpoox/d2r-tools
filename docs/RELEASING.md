@@ -6,8 +6,10 @@ The root `README.md` table lists released plugins only. An unreleased plugin has
 
 ## 1. Release a plugin version
 
-1. In `plugins/<name>/`, move `CHANGELOG.md` entries from `Unreleased` to a new `## X.Y.Z - YYYY-MM-DD` heading (the
-   release date). The release notes are exactly this section, so write it for players.
+1. Fold the plugin's `changelog.d/*.md` fragments (one line per PR) and any old `Unreleased` lines into a new
+   `## X.Y.Z - YYYY-MM-DD` heading (the release date), deleting the fragments:
+   `powershell -ExecutionPolicy Bypass -File tools\changelog-fold.ps1 -Plugin <name> -Version X.Y.Z`. The release notes
+   are exactly this section, so read it and edit the lines for players.
 2. Bump `MODKIT_PLUGIN_VERSION` (or the plugin's version constant) to `X.Y.Z` and update the plugin's version in the
    root `README.md` table (add a row at a plugin's first release).
 3. Commit to `main`, wait for `ci` to go green, then tag and push:

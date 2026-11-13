@@ -28,12 +28,19 @@ constexpr int kGridTiles = 8;      // the engine's grid cell
 constexpr int kFirstLvlPrest = 987;
 constexpr int kLastLvlPrest = 1002;
 constexpr int kDirtOffset = 72;    // the dirt twin of a snow piece is lvlPrest - 72 (915..930); same fence grammar, noisier edges
-constexpr int kMaxCells = 12;      // longest side of a map, in 16-tile cells (192 tiles)
+constexpr int kMaxCells = 12;      // longest side of the fence rectangle, in 16-tile cells; with the edge ring that is 224 tiles, so the slot's maxTilesX/Y is what limits a real map
 constexpr int kMinRunCells = 3;    // a line needs a cap, a run piece and a cap
-// The edge ring: every side of the fence rectangle gets kEdgeCells more cells of kEdgePiece, so the screen has ground to draw past the
-// outer fence lines and the empty side of a cap, where it was black void (issue #395). docs/reverse-engineering/cartographer-snow.md, section 8.
+// The edge ring: every side of the fence rectangle gets kEdgeCells more cells, so the screen has something to draw past the outer fence
+// lines and the empty side of a cap, where it was black void (issue #395). Each side and corner has its own border piece, the way the
+// game's own outline border picks one per direction. docs/reverse-engineering/cartographer-snow.md, section 8.
 constexpr int kEdgeCells = 1;
-constexpr int kEdgePiece = 964;    // "Act 5 - Barricade Cliff Border 8 Snow": a 16 x 16 piece with a tile in every cell
+struct EdgePieces {
+	int west, north, east, south;  // the straight piece of the ring cell west, north, east or south of the rectangle
+	int nw, ne, se, sw;            // the corner piece
+};
+extern const EdgePieces kEdgePieces;
+// The ring piece at macro cell (x, y) of a W x H rectangle: x in -kEdgeCells..W-1+kEdgeCells, y likewise, and not inside the rectangle. 0 for a cell inside it.
+int edgePieceAt(int x, int y, int w, int h);
 
 // How a piece joins: Run pieces have a fence socket on both ends of their axis, Cap pieces on one end only (the other side has no tiles).
 enum class Kind : uint8_t {
@@ -81,7 +88,7 @@ struct SnowRequest {
 	SnowOptions options;
 };
 
-// ExtraSmall, Small, Medium or Large (blank means Medium), case-insensitive. False for any other word. 4 x 3, 6 x 4, 8 x 5 and 10 x 7 cells.
+// Small, Medium, Large or ExtraLarge (blank means Large), case-insensitive. False for any other word. 4 x 3, 6 x 4, 8 x 5 and 10 x 7 cells.
 bool snowSizeCells(std::string_view size, int *cellsW, int *cellsH);
 
 struct SnowPlan {

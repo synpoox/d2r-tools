@@ -279,7 +279,7 @@ TEST_CASE("events take the reserved event room from a generated layout")
 	const std::vector<Row> rows = fiveKinds();
 	int fired = 0;
 	for (int s = 0; s < 500; ++s) {
-		const lay::Layout l = lay::generate(lay::Shape::Winding, lay::Size::Medium, static_cast<uint64_t>(s));
+		const lay::Layout l = lay::generate(lay::Shape::Winding, lay::Size::Large, static_cast<uint64_t>(s));
 		REQUIRE(l.eventIdx >= 0);
 		auto e = decide(rows, 100, l);
 		REQUIRE(e);

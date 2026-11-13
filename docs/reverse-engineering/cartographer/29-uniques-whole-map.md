@@ -1,5 +1,7 @@
 ## 29. Unique packs through the whole map (issue #317)
 
+Map sizes here use the names from before #381: "Large" below is ExtraLarge now (Cave 12 x 12), "Medium" is Large, "Small" is Medium.
+
 Date 2026-11-12. Consumer: Cartographer `Uniques` (`src/engine/level_row.cpp`, called from the room populator hook in `src/engine/event_apply.cpp`; pure part `src/levelrow/`, `tests/levelrow_tests.cpp`). Module `D2R.exe`, build 93847, image stamp `0x6ab3782c`, D2RLoader 1.3.1-beta. No new address and no new signature: it reuses the `PopulateRoom` hook (`0x50acf0`, section 9) and the slot level's region record (section 15).
 
 ### Why a table value cannot do it
