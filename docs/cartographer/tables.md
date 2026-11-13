@@ -12,7 +12,7 @@ What the plugin reads, and what takes effect in game today:
 |---|---|---|
 | `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave or Crypt map opens the installed Maze level, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
 | `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
-| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze` row); you do not edit it. | Yes: it names the level the portal opens. |
+| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
@@ -43,7 +43,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (the Maze level is one of them: see the installer's `-Tileset`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Tileset` | yes | A tileset name. `Cave` and `Crypt` are built (each opens through its own level, `Maze` and `MazeCrypt`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Lava`, `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |

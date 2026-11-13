@@ -48,10 +48,10 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor, Snow and Siege levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Outdoor, Snow and Siege levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
-   no map items. The Maze level is a Cave by default; add
-   `-Tileset Crypt` for a Crypt. One level serves one tileset. Running it again is safe. If the mod ships its own
+   no map items. Each tileset has a level of its own, so one install serves Cave and Crypt maps (one map per game).
+   Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
    to pick another spot (`-MazeOffsetX` and the like).
@@ -66,6 +66,8 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
+   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Outdoor and Snow levels and their four slots,
+   plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
    of the repository (the release zip does not carry it). It adds the Maze, Outdoor, Snow and Siege levels and their four slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`; `-Tileset Crypt` makes the Maze level a Crypt.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
@@ -84,11 +86,18 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
+   | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 3500, 0 |
+   | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 3000, 0 |
    | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
 
+   The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
+   shows). Keep a maze level's offsets small: the game saves its map cells as 16-bit numbers when you leave it, so a maze level with
+   OffsetX minus OffsetY above 3735 (or below -3736), or OffsetX plus OffsetY above 7471, loses its revealed map after a trip to town.
+2. **lvlmaze.txt**: copy the first row once for each maze level; set `Name` to `Cartographer Maze` (or `Cartographer Crypt`), `Level` to that
+   row's `Id`, every `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
    The outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
    shows).
 2. **lvlmaze.txt**: copy the first row; set `Name` to `Cartographer Maze`, `Level` to the Maze row's `Id`, every
@@ -102,7 +111,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -115,7 +124,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Cave` or `Crypt` (the kind the installed Maze level is); other tileset names are accepted but refused for now | required |
+| Tileset | `Cave` or `Crypt` (each opens through its own level); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
@@ -230,13 +239,13 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 
 #### slots.txt
 
-Which level the `Maze` slot opens. `tools\install.ps1` writes the row (see [Maze slot](#maze-slot-cave-and-crypt)). A slot
-that names a level of the original game, a town, a level with no row in `levels.txt`, a `Maze` level whose row is not named `Cartographer Maze`, or a level another slot uses is
+Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `Outdoor` (Jungle) and `OutdoorSnow` (Snow). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-and-crypt)). A slot
+that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`), or a level another slot uses is
 left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Maze` | required |
+| Slot | `Maze`, `MazeCrypt`, `Outdoor` or `OutdoorSnow` | required |
 | Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
@@ -253,13 +262,14 @@ A part found this way is checked before it is used; if the check fails the part 
 
 ## Maze slot (Cave and Crypt)
 
-Every map is a generated maze, built on the `Maze` level that `tools\install.ps1` adds. One Maze level serves one
-tileset (Cave or Crypt); a map of the other tileset is refused. The maze is built once per game, so a second map in the
-same game is refused. Without the level, no map opens.
+Every map is a generated maze, built on a maze level that `tools\install.ps1` adds. A level has one `LevelType`, which fixes
+its tileset, so each maze tileset has a level of its own: `Cartographer Maze` (Cave, slot `Maze`) and `Cartographer Crypt`
+(Crypt, slot `MazeCrypt`). One install serves both, but the maze is built once per game, so a second map in the
+same game is refused. Without the tileset's level, its maps do not open.
 
-The installer adds, to the mod's tables, a level "Cartographer Maze" copied from a plain game Cave (or Crypt) level and
-set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with its `lvlmaze.txt` row and the `Maze` row of
-`slots.txt`. To make a Crypt level, run `tools\install.ps1 -Tileset Crypt`.
+The installer adds, to the mod's tables, those levels copied from a plain game Cave and Crypt level and
+set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with their `lvlmaze.txt` rows and the `Maze` and
+`MazeCrypt` rows of `slots.txt`. `-Tileset` is no longer needed. A Maze level made by an older install with `-Tileset Crypt` is set back to LevelType 3 when you rerun the installer (Crypt maps use the new level).
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Outdoor slot (Jungle)

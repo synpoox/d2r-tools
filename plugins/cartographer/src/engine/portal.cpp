@@ -267,8 +267,9 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 			return problem;
 		}
 		if (MazeSlotBuilt()) {
-			return "Cartographer: the Maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+			return std::string("Cartographer: a maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.");
 		}
+		return MazeOpenConflict(map, MazePendingTileset());
 	}
 	return {};
 }
@@ -601,7 +602,7 @@ void MazeArrivalCheck(Unit* unit) noexcept {
 		return;
 	}
 	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
-	if (maze && level == MazeSlotLevelId() && level > 0) {
+	if (maze && IsMazeSlotLevel(level)) {
 		MazeProbeArrival(room, level);
 	}
 	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {
