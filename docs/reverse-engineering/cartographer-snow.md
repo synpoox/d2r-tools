@@ -137,15 +137,24 @@ Wiring (issue #147, second PR): the tables, the installer, the plan cache and th
 
 ## 8. Edge ring (issue #395)
 
-Build 93847 (D2R 3.3), D2RLoader 1.3.1-beta, slot 6, Hell, test save, single player. The plan stamps one extra cell (`kEdgeCells` 1, 16 tiles) around the fence rectangle, chosen per side from the vanilla Act 5 Barricade border rows (route B in `cartographer-outline.md` section 3: straight pieces per side, corner pieces at the four corners): W 958, N 959, E 960, S 969, NW 962, NE 975, SE 976, SW 973 (`kEdgePieces`, `edgePieceAt`). Sizes are Small 4x3, Medium 6x4, Large 8x5, ExtraLarge 10x7 cells, so the level box is 16 tiles larger on every side (Medium 128 x 96, ExtraLarge 192 x 144; the slot is 192 x 192, so the ring depth cannot grow past 1). The first attempt, one walkable piece (964) all round, was rejected: a player could stand on the ring and still see black past it.
+Build 93847 (D2R 3.3), D2RLoader 1.3.1-beta, slot 6, Hell, test save, single player. The plan stamps one extra cell (`kEdgeCells` 1, 16 tiles) around the fence rectangle, chosen per side from the vanilla Act 5 Barricade border rows (route B in `cartographer-outline.md` section 3): W 958, N 959, E 972, S 969, NW 962, NE 982, SE 976, SW 981 (`kEdgePieces`, `edgePieceAt`; `checkSnowPlan` has its own table, `checkEdgePiece`, so a swapped side fails the check). Sizes are Small 4x3, Medium 6x4, Large 8x5, ExtraLarge 10x7 cells, so the level box is 16 tiles larger on every side (Small 96 x 80, Medium 128 x 96, Large 160 x 112, ExtraLarge 192 x 144; the slot is 192 x 192, so the ring depth cannot grow past 1). One walkable piece (964) all round was rejected: a player could stand on the ring and still see black past it.
 
-DS1 geometry (walk flags from the DT1 reader): 958 and 959 have a drawn rock face with open floor on the inner side; 960 has 4 to 5 floor columns on the inner side and a solid unwalkable block (no art) on the outer side; 969 has floor on the north rows and nothing on the south rows. The ring's inner floor strip (4 to 6 tiles) stays walkable; the outer part is blocked or empty.
+Two DS1 families:
 
-Seen in game (Medium map, `cheat goto` plus screenshots, god mode): west and north show a rock face with no black beside the player; south shows a cliff edge and a dark ravine; east shows floor and then a black diagonal edge (960 draws no face). `cheat goto` to a tile in the blocked part of a corner (SE, 1626,94) left the player in town instead of placing them on the ring, and goto to the east and west outer tiles left the player on the inner floor strip, so nothing reachable behind the face was found. There is no position readout, so "cannot stand behind the face" rests on goto and screenshots only. Not checked in game: ExtraLarge, the NE, NW and SW corners. Not done: voiding the ring cells (0x3ede00) as a fallback; the inner floor strip is still walkable and can spawn monsters.
+| Family | W | N | E | S | Corners |
+|---|---|---|---|---|---|
+| Cliff | 958 | 957 / 959 | 960 | none | 962 (NW), 981 (SW: cliff W, ravine S), 982 (NE: cliff N, ravine E) |
+| Ravine | 970 | 971 | 972 | 969 | 974 (NW), 975 (NE), 976 (SE), 973 (SW) |
 
-Screenshots: `C:/D2RTestSlots/runs/snow-edges2/screenshots/` (`m_w*`, `m_n`, `m_e3`, `s1`).
-uns\snow-edges2\screenshots\` (`m_w*`, `m_n`, `m_e3`, `s1`).
+Rule: the isometric camera shows a cliff face only on the N and W sides (the face stands up and away from the camera). On S and E the face is hidden behind the floor, and 960 draws its blocked block black. So N and W use the cliff pieces and S and E use the ravine pieces. Each piece has 4 to 7 floor tiles on its inner side (the walkable strip); the outer part is a face, a drop or blocked.
 
-## Adding a tileset
+Seen in game (`cheat goto` plus screenshots, god mode, Hell, test save), no black void on any side or corner of Small, Medium, Large and ExtraLarge:
+- West and north show a rock face past the strip; south and east show a ravine edge with a drop; NW and NE show the cliff, SE and SW the ravine; 972 on the east draws a ravine, so the all-ravine fallback is not needed.
+- The inner strip joins the fence area without a gap.
+- `cheat goto` to an inner tile of the north or south edge sometimes landed on the arrival cell instead, so those sides were judged from the ring shots. There is no position readout.
+- Medium, one map: 22 uniques in total, 177 of 192 rooms populated (95 of 96 in the rectangle, 82 of 96 in the ring); 14 uniques spawned, 7 from rectangle rooms and 7 from ring rooms, so about half the unique pace is spent in the ring. Monster counts have no probe and were not measured.
+- ExtraLarge: the plan logged "built as planned (108 stamps, 0 void cells)".
 
-Moved to [docs/cartographer/adding-a-tileset.md](../cartographer/adding-a-tileset.md): every touch point, what the table drives and what a tileset gets for free.
+Not done: voiding the ring cells (0x3ede00); the inner strip stays walkable and can spawn monsters.
+
+Screenshots: `C:/D2RTestSlots/runs/snow-edges3/screenshots/` (`L_montage`, `M_montage`, `S_montage`, `X_montage`; kept outside the repo).

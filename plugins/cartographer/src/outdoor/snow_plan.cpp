@@ -150,8 +150,9 @@ const char *orientationName(Orientation orientation) {
 }
 
 // Ring pieces, from the game's own Act 5 Barricade border rows (lvlprest.txt 957..982, DS1 Brdr_snow*; cartographer-snow.md section 8). Each straight piece
-// has its ground on the side of the rectangle and nothing on the outer side; each corner has ground on the diagonal toward the rectangle.
-const EdgePieces kEdgePieces = {958, 959, 960, 969, 962, 975, 976, 973};
+// has its ground on the side of the rectangle; the camera sees a cliff face on the north and west sides and a ravine on the south and east sides, and
+// 981 and 982 join a cliff to a ravine.
+const EdgePieces kEdgePieces = {958, 959, 972, 969, 962, 982, 976, 981};
 
 int edgePieceAt(int x, int y, int w, int h) {
 	const bool west = x < 0, east = x >= w, north = y < 0, south = y >= h;
@@ -286,6 +287,13 @@ SnowPlan planSnowMap(const SnowRequest &request) {
 	return out;
 }
 
+// The checker's own side-to-piece table (not kEdgePieces), so a swapped side in the planner's table fails the check. Rows are north, middle, south; columns west, middle, east.
+static int checkEdgePiece(int x, int y, int w, int h) {
+	static const int table[3][3] = {{962, 959, 982}, {958, 0, 972}, {981, 969, 976}};
+	const int col = x < 0 ? 0 : (x >= w ? 2 : 1), row = y < 0 ? 0 : (y >= h ? 2 : 1);
+	return table[row][col];
+}
+
 std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPlan &plan) {
 	std::vector<std::string> bad;
 	const Orientation o = plan.orientation;
@@ -325,7 +333,8 @@ std::vector<std::string> checkSnowPlan(const SnowRequest &request, const SnowPla
 			const Stamp &s = sp.stamps[static_cast<size_t>(y + kEdgeCells) * TW + (x + kEdgeCells)];
 			const std::string where = "edge cell (" + std::to_string(x) + "," + std::to_string(y) + ")";
 			if (s.macroX != x || s.macroY != y || s.cx != (x + kEdgeCells) * per || s.cy != (y + kEdgeCells) * per) bad.push_back(where + " is not stamped at its place in row-major order, aligned to the 16-tile grid");
-			if (s.lvlPrest != edgePieceAt(x, y, W, H)) bad.push_back(where + " does not hold the edge piece " + std::to_string(edgePieceAt(x, y, W, H)) + " for its side");
+			const int want = checkEdgePiece(x, y, W, H);
+			if (s.lvlPrest != want) bad.push_back(where + " does not hold the edge piece " + std::to_string(want) + " for its side");
 			if (s.file != (request.options.pinFiles ? 0 : -1)) bad.push_back(where + " has the wrong file index");
 			if (s.role != layout::Role::Path || s.mask != 0) bad.push_back(where + " has the wrong role or mask");
 		}

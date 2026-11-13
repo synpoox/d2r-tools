@@ -58,7 +58,7 @@ const std::string GOLDEN_HORIZONTAL =
 	"Fb ba aa ab ba aa ab bR\n"
 	"Fb bb ba aa ab bb ba aR\n"
 	"Fa ab ba aa ab bb ba aR\n";
-const uint64_t GOLDEN_HORIZONTAL_HASH = 10896496030343949601ull;
+const uint64_t GOLDEN_HORIZONTAL_HASH = 11053312794566208748ull;
 
 } // namespace
 
@@ -427,6 +427,15 @@ TEST_CASE("the edge ring has its own border piece on each side and each corner (
 	CHECK(edgePieceAt(-1, 4, 6, 4) == kEdgePieces.sw);
 	CHECK(edgePieceAt(0, 0, 6, 4) == 0);
 	CHECK(edgePieceAt(5, 3, 6, 4) == 0);
+	// The literal ids: cliff on the north and west sides, ravine on the south and east sides, 981 and 982 join the two.
+	CHECK(edgePieceAt(-1, 2, 6, 4) == 958);
+	CHECK(edgePieceAt(3, -1, 6, 4) == 959);
+	CHECK(edgePieceAt(6, 2, 6, 4) == 972);
+	CHECK(edgePieceAt(3, 4, 6, 4) == 969);
+	CHECK(edgePieceAt(-1, -1, 6, 4) == 962);
+	CHECK(edgePieceAt(6, -1, 6, 4) == 982);
+	CHECK(edgePieceAt(6, 4, 6, 4) == 976);
+	CHECK(edgePieceAt(-1, 4, 6, 4) == 981);
 	// Eight different pieces, all rows of the game's own Act 5 Barricade border table (Cliff and Ravine Border 1 to 12 Snow, 957..982).
 	std::set<int> seen;
 	for (const int id : {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw}) {
@@ -469,6 +478,14 @@ TEST_CASE("the edge ring is checked: a missing or wrong ring cell fails the plan
 	{ // the north side holding the piece of the west side
 		SnowPlan p = good;
 		p.stamps.stamps[1].lvlPrest = kEdgePieces.west;
+		CHECK(fails(p));
+	}
+	{ // the west and east sides swapped: the checker's own table catches it
+		SnowPlan p = good;
+		for (Stamp &st : p.stamps.stamps) {
+			if (st.lvlPrest == 958) st.lvlPrest = 972;
+			else if (st.lvlPrest == 972) st.lvlPrest = 958;
+		}
 		CHECK(fails(p));
 	}
 	{ // a pinned file on the ring of an unpinned plan
