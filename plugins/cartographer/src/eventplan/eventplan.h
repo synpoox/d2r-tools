@@ -206,12 +206,23 @@ public:
 	// A room of the level was populated. True when the Boss should be tried in it now (it is the current candidate and the Boss is
 	// neither placed nor given up); a later candidate is remembered as populated for `refused`.
 	bool onPopulated(const Rect &room);
-	// The Boss was placed, or can never be (the caller gives up): no more tries.
+	// The Boss was placed: no more tries.
 	void finish() { done_ = true; }
-	// The current candidate has no placeable spot. Returns the index of the next candidate to try now (it was populated already), or -1:
-	// then either wait for the next candidate to populate, or, when `done()`, the Boss is given up.
+	// The Boss can never be placed (the plan has a problem no room fixes): no more tries, and `gaveUp()`.
+	void giveUp() {
+		done_ = true;
+		gaveUp_ = true;
+	}
+	// The current candidate has no placeable spot, or cannot be read (counts as refused). Returns the index of the next candidate to try now
+	// (it was populated already), or -1: then either wait for the next candidate to populate (`!done()`, `current()` is the room waited for),
+	// or, when `gaveUp()`, the last room refused and the Boss is given up (fail open).
 	int refused();
+	// The current candidate is the last one: a refusal there gives up.
+	bool lastRoom() const { return !done_ && current_ + 1 >= ranked_.size(); }
+	// The candidate being tried or waited for, when there is one.
+	const Rect *currentRoom() const { return current_ < ranked_.size() ? &ranked_[current_] : nullptr; }
 	bool done() const { return done_; }
+	bool gaveUp() const { return gaveUp_; }
 	size_t size() const { return ranked_.size(); }
 	size_t current() const { return current_; }
 
@@ -220,6 +231,7 @@ private:
 	std::vector<bool> populated_;
 	size_t current_ = 0;
 	bool done_ = false;
+	bool gaveUp_ = false;
 };
 
 // --- What is spawned -----------------------------------------------------------------------------------------------

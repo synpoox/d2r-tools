@@ -70,6 +70,9 @@ struct Run {
 	bool bossSpawned = false;
 	bool bossSuper = false;
 	std::string bossProblem;
+	bool bossRoomWanted = false;  // event_apply is trying, or waiting for, the Boss in the room below (tiles)
+	int wantX = 0, wantY = 0, wantW = 0, wantH = 0;
+	int movedX = 0, movedY = 0, movedW = 0, movedH = 0;  // the room the player was last put in
 };
 
 // g_run is shared by the server thread (tick, Step) and the lifecycle thread (game entered / left) and the Boss note: every access holds g_lock.
@@ -358,6 +361,10 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 			Enter(Phase::Stats);
 			return;
 		}
+		g_run.movedX = room.x;
+		g_run.movedY = room.y;
+		g_run.movedW = room.w;
+		g_run.movedH = room.h;
 		const ac::Point stand = ac::bossStandPoint(room.x, room.y, room.w, room.h);
 		const std::string where = "tiles " + std::to_string(room.x) + "," + std::to_string(room.y) + ", " + std::to_string(room.w) + " x " + std::to_string(room.h);
 		Line("AUTOCHECK boss: moving the player to subtile (" + std::to_string(stand.x) + "," + std::to_string(stand.y) + ") in the boss room (" + where + ")");
@@ -388,12 +395,46 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 		return;
 	}
 	case Phase::WaitBoss: {
+		const int level = g_run.opened.level;
+		// The Boss went to (or waits for) another room of the boss cell: put the player there too (once per room), which also brings the room up
+		// when it is not populated yet, and give the wait a new start.
+		if (g_run.moved && g_run.bossRoomWanted &&
+		    (g_run.wantX != g_run.movedX || g_run.wantY != g_run.movedY || g_run.wantW != g_run.movedW || g_run.wantH != g_run.movedH)) {
+			g_run.movedX = g_run.wantX;
+			g_run.movedY = g_run.wantY;
+			g_run.movedW = g_run.wantW;
+			g_run.movedH = g_run.wantH;
+			const ac::Point stand = ac::bossStandPoint(g_run.wantX, g_run.wantY, g_run.wantW, g_run.wantH);
+			Line("AUTOCHECK boss: the Boss is tried in another room of the boss cell; moving the player to subtile (" + std::to_string(stand.x) + "," + std::to_string(stand.y) + ")");
+			int act = -1;
+			if (g_tables != nullptr) {
+				for (const Slot& slot : g_tables->slots) {
+					if (slot.level == level) {
+						act = slot.act;
+						break;
+					}
+				}
+			}
+			const MoveResult moved = Outside(lock, [&] { return MovePlayerToBoss(game, unit, level, act, stand); });
+			if (g_gen != gen) {
+				return;
+			}
+			if (moved.kind == MoveKind::Left) {
+				Settle(ac::Item::Boss, false, "the player left the map before the move: " + moved.why);
+				Enter(Phase::Stats);
+				return;
+			}
+			if (moved.kind != MoveKind::Moved) {
+				Line("AUTOCHECK boss: the player was not moved to the other room (" + moved.why + ")");
+			}
+			Enter(Phase::WaitBoss);  // restarts the wait
+			return;
+		}
 		if (g_run.bossNoted) {
 			SettleBossFromNote();
 			Enter(Phase::Stats);
 			return;
 		}
-		const int level = g_run.opened.level;
 		if (PlayerLevelOf(unit) != level || GameDifficultyOf(game) != HellDifficulty) {
 			Settle(ac::Item::Boss, false, "the player left the map before the Boss was reported");
 			Enter(Phase::Stats);
@@ -504,6 +545,24 @@ void AutoCheckTick(void* game, void* unit, uint32_t localPlayer) noexcept {
 			Settle(g_run.list.next().value_or(ac::Item::Open), false, "a step threw");
 			Finish("a step threw");
 		}
+	}
+}
+
+void AutoCheckNoteBossRoom(int x, int y, int w, int h) noexcept {
+	if (!g_on.load(std::memory_order_relaxed)) {
+		return;
+	}
+	try {
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (g_run.phase == Phase::Idle || g_run.bossNoted) {
+			return;
+		}
+		g_run.bossRoomWanted = true;
+		g_run.wantX = x;
+		g_run.wantY = y;
+		g_run.wantW = w;
+		g_run.wantH = h;
+	} catch (...) {
 	}
 }
 

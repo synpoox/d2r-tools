@@ -36,4 +36,8 @@ void AutoCheckTick(void* game, void* unit, uint32_t localPlayer) noexcept;
 // event_apply.cpp: the map Boss was (or was not) spawned. `asSuper`: spawned as a superunique; `problem`: why not, when not.
 void AutoCheckNoteBoss(const std::string& name, bool spawned, bool asSuper, const std::string& problem) noexcept;
 
+// event_apply.cpp: the map Boss is tried in, or (a refusal, the next room of the cell not populated yet) waited for in, this room (tiles).
+// The check puts the player there, which also brings the room up, and its Boss wait starts again.
+void AutoCheckNoteBossRoom(int x, int y, int w, int h) noexcept;
+
 }  // namespace carto
