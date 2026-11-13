@@ -104,7 +104,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 map opens through the `Maze` slot (below), a Jungle or Snow map through the `Outdoor` or `OutdoorSnow` slot (README); nothing opens without a mod and a `maps.txt`. The `Preset` tileset is gone: a `Preset` row is refused with "Preset maps are gone: use Cave or Crypt."
 A slot is dropped at load (and named in the report) when its level is one of the original game's (id 137 or below), a town, has no `levels.txt` row, is a `Maze` slot on a level not named `Cartographer Maze`, or repeats another slot's level or name; unit tested, not run in game.
 
-Map names are on by default: a map's own `Name` shows on its portal, the automap and the entry banner; `MapNames=0` turns them off. Seen in single player; multiplayer not verified. A second map opened in the same game shows its name on the first map's portal too.
+Map names are on by default: a map's own `Name` shows on its portal, the automap and the game's Entering text; `MapNames=0` turns them off. Seen in single player; multiplayer not verified. A second map opened in the same game shows its name on the first map's portal too.
 
 Engine signatures that a new game build needs can be given in `signatures.txt` (`Part`, `Signature`) beside `maps.txt`
 without a rebuild; see `docs/reverse-engineering/cartographer.md` (the index of the per-section files). A hooked part (the two item-spell functions) needs at least the hook size in exact bytes (no `??`) and a function start, or it stays off; a part the plugin only calls needs a unique match only.

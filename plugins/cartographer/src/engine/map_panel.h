@@ -30,7 +30,7 @@ void MapPanelMapOpened(const std::string& text, int slotLevel);
 // The local player's tick (game thread): whether the player stands in the open map's level.
 void MapPanelPlayerTick(void* player) noexcept;
 
-// The entry banner (issue #357): shows `lines` (map name, event name, event message; up to three) in a centred panel near the top for the
+// The entry banner (issue #357): shows `lines` (event name, event message; up to two) in a centred panel near the top for the
 // banner's time. Any thread. False when the banner panel is not available; the caller then uses the console.
 auto ShowEntryBanner(const std::vector<std::string>& lines) noexcept -> bool;
 
