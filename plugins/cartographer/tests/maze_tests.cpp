@@ -15,11 +15,14 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "layout.h"
 #include "maze.h"
+#include "maze_tilesets.h"
 #include "rng.h"
 #include "steer.h"
 
@@ -49,6 +52,18 @@ Tileset caveTileset(int maxLevelTiles = kMaxLevelTiles)
 	t.pieceBase = 52;
 	t.maxLevelTiles = maxLevelTiles;
 	t.prev = {true, {83, 84, 85, 86}}; // Prev W, E, S, N
+	return t;
+}
+
+// River of Flame: pieces 836 + mask; the builder case places no entrance, so no Prev family.
+Tileset lavaTileset(int maxLevelTiles = kMaxLevelTiles)
+{
+	Tileset t;
+	t.name = "Lava";
+	t.levelType = 28;
+	t.roomTiles = 24;
+	t.pieceBase = 836;
+	t.maxLevelTiles = maxLevelTiles;
 	return t;
 }
 
@@ -355,7 +370,7 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 {
 	// Cave and Crypt at the allowed maximum, and Cave in a 200-tile slot (the fallback path).
 	struct Config { Tileset ts; const char *label; bool slot200; };
-	const Config configs[3] = {{caveTileset(), "Cave", false}, {cryptTileset(), "Crypt", false}, {caveTileset(200), "Cave in a 200-tile slot", true}};
+	const Config configs[4] = {{caveTileset(), "Cave", false}, {cryptTileset(), "Crypt", false}, {caveTileset(200), "Cave in a 200-tile slot", true}, {lavaTileset(), "Lava", false}};
 	for (const Config &cfg : configs)
 		for (int s = 0; s < layout::kShapeCount; ++s)
 			for (int z = 0; z < layout::kSizeCount; ++z) {
@@ -374,15 +389,16 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 					CHECK(t.noFit == 0);
 					CHECK(t.badShape == 0);
 				} else {
-					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all.
-					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small) ||
+					// In a 200-tile slot, Cave holds 7 x 7 rooms: these combinations cannot be built in it at all (Open is not one: its grid shrinks to fit).
+					const bool impossible = (shape == layout::Shape::Sprawl && size != layout::Size::Small && size != layout::Size::ExtraSmall) ||
 					                        (shape == layout::Shape::Loop && size == layout::Size::Large);
 					CHECK((t.steered > 0) != impossible);
 				}
 				// Crypt rooms are tiny: nothing may fall back, whatever the reason.
 				if (cfg.ts.name == "Crypt") CHECK(t.fallbacks == 0);
-				// A one-exit entrance gets its special piece in every shape except the rings.
-				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl) CHECK(t.placedEntrance == t.steered);
+				// A one-exit entrance gets its special piece in every shape except the rings and Open (its entrance has two or more exits).
+				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl && shape != layout::Shape::Open && cfg.ts.prev.present) CHECK(t.placedEntrance == t.steered);
+				if (!cfg.ts.prev.present) CHECK(t.placedEntrance == 0);  // Lava: the entrance is an ordinary room
 			}
 }
 
@@ -710,7 +726,7 @@ Plan steeringCavePlan(const Tileset &ts)
 
 } // namespace
 
-TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
+TEST_CASE("built-in tilesets are Cave, Crypt and Lava, found ignoring case")
 {
 	Tileset t;
 	REQUIRE(builtinTileset("cave", t));
@@ -719,7 +735,12 @@ TEST_CASE("built-in tilesets are Cave and Crypt, found ignoring case")
 	CHECK(t.prev.piece[3] == 86);
 	REQUIRE(builtinTileset("CRYPT", t));
 	CHECK(t.roomTiles == 8);
-	CHECK(!builtinTileset("Lava", t));
+	REQUIRE(builtinTileset("lava", t));
+	CHECK(t.levelType == 28);
+	CHECK(t.roomTiles == 24);
+	CHECK(t.pieceBase == 836);
+	CHECK(!t.prev.present);
+	CHECK(!builtinTileset("Barracks", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -759,7 +780,7 @@ TEST_CASE("planForMap: a shapes.txt shape plans within the size caps across many
 	for (const int slot : {360, 200}) {
 		for (const char *tileset : {"Cave", "Crypt"}) {
 			for (const char *name : {"Snake", "fat snake"}) {
-				for (const char *size : {"Small", "Medium", "Large"}) {
+				for (const char *size : {"Small", "Medium", "Large"}) {  // ExtraSmall (4 x 4) is too tight for these 12+ cell shapes
 					int steered = 0;
 					for (uint64_t seed = 1; seed <= 150; ++seed) {
 						const MapPlan p = planForMap(tileset, parsed.table, name, size, seed, slot, slot);
@@ -811,7 +832,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Small", 5, 360, 360).steer);
-	CHECK(planForMap("Lava", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Barracks", none, "Winding", "Medium", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Medium", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium or Large") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Medium", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -954,9 +975,12 @@ TEST_CASE("slot build state: ranAny sees a build with no map open, which blocked
 	CHECK(!st.ranAny());
 }
 
-TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English")
+TEST_CASE("a maze slot level serves one tileset: the other is refused in plain English")
 {
-	Tileset cave, crypt;
+	Tileset cave, crypt, lava;
+	REQUIRE(builtinTileset("Lava", lava));
+	CHECK(slotTypeProblem(lava, 28, "L").empty());
+	CHECK(slotTypeProblem(lava, 3, "L").find("the MazeLava slot level") != std::string::npos);
 	REQUIRE(builtinTileset("Cave", cave));
 	REQUIRE(builtinTileset("Crypt", crypt));
 	CHECK(slotTypeProblem(cave, 3, "A").empty());
@@ -965,8 +989,160 @@ TEST_CASE("a Maze slot serves one tileset: the other is refused in plain English
 	CHECK(wrong.find("Cave level (LevelType 3)") != std::string::npos);
 	CHECK(wrong.find("Crypt map 'Deep'") != std::string::npos);
 	CHECK(slotTypeProblem(cave, 4, "C").find("Crypt level") != std::string::npos);
-	CHECK(slotTypeProblem(cave, 5, "C").find("neither Cave") != std::string::npos);
+	CHECK(slotTypeProblem(cave, 5, "C").find("none of the maze tilesets") != std::string::npos);
 	CHECK(slotTypeProblem(cave, -1, "C").find("could not read the LevelType") != std::string::npos);
+	// Each message names the tileset's own slot.
+	CHECK(slotTypeProblem(cave, 4, "C").find("the Maze slot level") != std::string::npos);
+	CHECK(slotTypeProblem(crypt, 3, "D").find("the MazeCrypt slot level") != std::string::npos);
+	CHECK(slotTypeProblem(crypt, -1, "D").find("MazeCrypt row in slots.txt") != std::string::npos);
+}
+
+// --- The tileset table (maze_tilesets.h) -------------------------------------------------------------------------------------
+
+TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values the hooks and the installer rely on")
+{
+	// Pinned: Cave keeps the slot row, level name and LevelType of the installs before the table existed; Crypt's slot level is its own.
+	REQUIRE(MazeTilesetCount == 3);
+	CHECK(std::string(MazeTilesets[0].name) == "Cave");
+	CHECK(MazeTilesets[0].levelType == 3);
+	CHECK(std::string(MazeTilesets[0].slot) == "Maze");
+	CHECK(std::string(MazeTilesets[0].levelName) == "Cartographer Maze");
+	CHECK(MazeTilesets[0].roomTiles == 24);
+	CHECK(MazeTilesets[0].pieceBase == 52);
+	CHECK(MazeTilesets[0].prevPiece[0] == 83);
+	CHECK(MazeTilesets[0].prevPiece[3] == 86);
+	CHECK_FALSE(MazeTilesets[0].callsRingGrower);
+	CHECK(std::string(MazeTilesets[1].name) == "Crypt");
+	CHECK(MazeTilesets[1].levelType == 4);
+	CHECK(std::string(MazeTilesets[1].slot) == "MazeCrypt");
+	CHECK(std::string(MazeTilesets[1].levelName) == "Cartographer Crypt");
+	CHECK(MazeTilesets[1].roomTiles == 8);
+	CHECK(MazeTilesets[1].pieceBase == 108);
+	CHECK(MazeTilesets[1].prevPiece[0] == 139);
+	CHECK(MazeTilesets[1].prevPiece[3] == 142);
+	CHECK_FALSE(MazeTilesets[1].callsRingGrower);
+	// Lava: River of Flame's LevelType 28, 24-tile rooms, pieces 836 + mask, and no entrance family (its builder case places none).
+	CHECK(std::string(MazeTilesets[2].name) == "Lava");
+	CHECK(MazeTilesets[2].levelType == 28);
+	CHECK(std::string(MazeTilesets[2].slot) == "MazeLava");
+	CHECK(std::string(MazeTilesets[2].levelName) == "Cartographer Lava");
+	CHECK(MazeTilesets[2].roomTiles == 24);
+	CHECK(MazeTilesets[2].pieceBase == 836);
+	for (int i = 0; i < 4; ++i) CHECK(MazeTilesets[2].prevPiece[i] == 0);
+	CHECK_FALSE(MazeTilesets[2].callsRingGrower);
+	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
+	CHECK(findMazeTileset("Lava") == &MazeTilesets[2]);
+	CHECK(findMazeTileset("Barracks") == nullptr);
+	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
+	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
+	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
+	CHECK(mazeTilesetIndex("crypt") == 1);
+	CHECK(mazeTilesetIndex("lava") == 2);
+	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
+	CHECK(mazeTilesetNames() == "Cave, Crypt or Lava");
+	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
+	for (size_t i = 0; i < MazeTilesetCount; ++i)
+		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
+			CHECK(std::string(MazeTilesets[i].slot) != MazeTilesets[j].slot);
+			CHECK(std::string(MazeTilesets[i].levelName) != MazeTilesets[j].levelName);
+			CHECK(MazeTilesets[i].levelType != MazeTilesets[j].levelType);
+		}
+	// The planner's Tileset is made from the row.
+	for (const MazeTileset &row : MazeTilesets) {
+		Tileset t;
+		REQUIRE(builtinTileset(row.name, t));
+		CHECK(t.name == row.name);
+		CHECK(t.levelType == row.levelType);
+		CHECK(t.roomTiles == row.roomTiles);
+		CHECK(t.pieceBase == row.pieceBase);
+		CHECK(t.callsRingGrower == row.callsRingGrower);
+		CHECK(t.prev.present == (row.prevPiece[0] != 0));
+		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
+	}
+	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Medium", 1, 360, 360);
+	CHECK_FALSE(refused.steer);
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt or Lava.");
+}
+
+TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	const std::string text = all.str();
+	const size_t start = text.find("$MazeTilesets = @(");
+	REQUIRE(start != std::string::npos);
+	const std::string block = text.substr(start, text.find("\n)", start) - start);
+	// Each row reads  @{ Tileset = 'Cave'; Slot = 'Maze'; LevelName = '...'; LevelType = '3'; ...
+	const auto field = [](const std::string &row, const char *key) {
+		const size_t at = row.find(std::string(key) + " = '");
+		REQUIRE(at != std::string::npos);
+		const size_t from = at + std::string(key).size() + 4;
+		return row.substr(from, row.find('\'', from) - from);
+	};
+	size_t row = 0, at = 0;
+	while ((at = block.find("@{", at)) != std::string::npos) {
+		const std::string body = block.substr(at, block.find('}', at) - at);
+		REQUIRE(row < MazeTilesetCount);
+		CHECK(field(body, "Tileset") == MazeTilesets[row].name);
+		CHECK(field(body, "Slot") == MazeTilesets[row].slot);
+		CHECK(field(body, "LevelName") == MazeTilesets[row].levelName);
+		CHECK(field(body, "LevelType") == std::to_string(MazeTilesets[row].levelType));
+		CHECK(field(body, "Size") == std::to_string(levelTiles));
+		// The installer's -<Param>OffsetX / -<Param>OffsetY defaults are the row's offsets.
+		const std::string param = field(body, "Param");
+		for (const char *axis : {"X", "Y"}) {
+			const std::string key = "[int]$" + param + "Offset" + axis + " = ";
+			const size_t k = text.find(key);
+			REQUIRE(k != std::string::npos);
+			CHECK(std::stoi(text.substr(k + key.size())) == (axis[0] == 'X' ? MazeTilesets[row].offsetX : MazeTilesets[row].offsetY));
+		}
+		++row;
+		at += 2;
+	}
+	CHECK(row == MazeTilesetCount);
+}
+
+TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-bit automap range and overlap nothing")
+{
+	// Range: the corners of each level, and a rule check of the function itself against the cell arithmetic.
+	for (const MazeTileset &row : MazeTilesets) {
+		CHECK_MESSAGE(automapInRange(row.offsetX, row.offsetY, levelTiles), row.name);
+		for (const int tx : {row.offsetX, row.offsetX + levelTiles})
+			for (const int ty : {row.offsetY, row.offsetY + levelTiles}) {
+				CHECK((tx - ty) * 8 >= -32768);
+				CHECK((tx - ty) * 8 <= 32767);
+				CHECK((tx + ty) * 4 <= 32767);
+				CHECK(tx >= 0);
+				CHECK(ty >= 0);
+			}
+		// Above the first Act 5 level of the game (Harrogath and the others start at y 1000), so no vanilla level is hit.
+		CHECK(row.offsetY + levelTiles <= 1000);
+	}
+	// The old spots were out of range: Cave at 6000,0.
+	CHECK_FALSE(automapInRange(6000, 0, levelTiles));
+	CHECK(automapInRange(3500, 0, levelTiles));
+	// The planned spot of the row still to come (Ice) and Snow (192 wide, installer default 1500,0) are in range and apart from every row
+	// and from each other: the rule is x 3500, 3000, 2500, 2000 for the maze rows, y 0.
+	struct Spot { int x, y, size; };
+	constexpr Spot planned[] = {{2000, 0, levelTiles}, {1500, 0, 192}};
+	for (const Spot &a : planned) {
+		CHECK(automapInRange(a.x, a.y, a.size));
+		CHECK(a.y + a.size <= 1000);
+		for (const MazeTileset &row : MazeTilesets)
+			CHECK((a.x + a.size <= row.offsetX || row.offsetX + levelTiles <= a.x));
+		for (const Spot &b : planned)
+			if (&a != &b) CHECK((a.x + a.size <= b.x || b.x + b.size <= a.x));
+	}
+	// No two levels overlap (rectangles of levelTiles x levelTiles).
+	for (size_t i = 0; i < MazeTilesetCount; ++i)
+		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
+			const bool apart = MazeTilesets[i].offsetX + levelTiles <= MazeTilesets[j].offsetX || MazeTilesets[j].offsetX + levelTiles <= MazeTilesets[i].offsetX ||
+			                   MazeTilesets[i].offsetY + levelTiles <= MazeTilesets[j].offsetY || MazeTilesets[j].offsetY + levelTiles <= MazeTilesets[i].offsetY;
+			CHECK_MESSAGE(apart, MazeTilesets[i].name << " overlaps " << MazeTilesets[j].name);
+		}
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------

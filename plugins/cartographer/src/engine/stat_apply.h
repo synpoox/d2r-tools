@@ -22,9 +22,9 @@ namespace carto {
 auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
 // A map was opened for `playerId` (the opening count is how many maps this game has opened, for the seed). Draws the
-// map's properties and starts applying them. Game thread. Does nothing when neither half is on.
-// `itemStats` are the map item's own stats (read before it is used up); they are used only when ItemStats=1 and some of them map to a
-// mapstats.txt row, else the properties are drawn.
+// map item's stats and starts applying them. Game thread. Does nothing when neither half is on.
+// `itemStats` are the map item's own stats (read before it is used up, without the map level): the monster-side ones apply to the map's
+// monsters, the rest to the player. A normal map has none.
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats = {});
 

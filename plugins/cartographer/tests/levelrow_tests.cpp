@@ -288,18 +288,18 @@ TEST_CASE("density scales the record's MonDen and leaves a zero alone") {
 	CHECK(PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, true, false)).empty());  // a base of 0 stays 0
 }
 
-TEST_CASE("uniques alone scale MonUMin and MonUMax, champions are not a request field") {
+TEST_CASE("uniques alone scale MonUMax and leave MonUMin, champions are not a request field") {
 	const Record rec = SampleRecord();  // MonUMin 2, MonUMax 15
 	Request r;
 	r.uniques = 100;  // +100%
 	const std::vector<Field> plan = PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true));
-	REQUIRE(plan.size() == 2);
-	CHECK(FindField(plan, RecUMinOffset)->value == 4);
+	REQUIRE(plan.size() == 1);
+	CHECK(FindField(plan, RecUMinOffset) == nullptr);  // a raised minimum is spent at the first rooms (issue #317)
 	CHECK(FindField(plan, RecUMaxOffset)->value == 30);
-	CHECK(FindField(plan, RecUMinOffset)->size == 1);
+	CHECK(FindField(plan, RecUMaxOffset)->size == 1);
 	r.uniques = 50;
 	const std::vector<Field> half = PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true));
-	CHECK(FindField(half, RecUMinOffset)->value == 3);   // 2 + 1
+	CHECK(FindField(half, RecUMinOffset) == nullptr);
 	CHECK(FindField(half, RecUMaxOffset)->value == 23);  // 15 + 7.5 -> 23
 	r.uniques = 0;
 	CHECK(PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true)).empty());
@@ -596,4 +596,20 @@ TEST_CASE("monster groups round trip through the record") {
 	CHECK(std::memcmp(image, rec.data(), sizeof(image)) == 0);
 	CHECK(Undo(ledger, 139, done, memory.Writer()) == 0);
 	CHECK(std::memcmp(memory.bytes.data(), rec.data(), rec.size()) == 0);
+}
+
+TEST_CASE("Density and Uniques have no 1000 percent cap; only the game's field sizes limit them") {
+	Record rec = SampleRecord();  // MonUMin 2, MonUMax 15
+	PutRec(rec, RecDensityOffset, 4, 100);
+	Request r;
+	r.density = 5000;
+	r.uniques = 5000;
+	const RecordSnapshot s = RecordSnapshotOf(rec.data());
+	CHECK(FindField(PlanRecord(r, s, RecordOnly(false, true, false)), RecDensityOffset)->value == 5100);  // 100 + 5000%
+	const std::vector<Field> packs = PlanRecord(r, s, RecordOnly(false, false, true));
+	CHECK(FindField(packs, RecUMinOffset) == nullptr);      // MonUMin is left alone (issue #317)
+	CHECK(FindField(packs, RecUMaxOffset)->value == 255);   // 15 + 750 stops at a byte
+	r.density = 2147483647;
+	CHECK(FindField(PlanRecord(r, s, RecordOnly(false, true, false)), RecDensityOffset)->value == 0x7fffffffu);  // MonDen is a signed 32-bit value
+	CHECK(ScalePercent(0x7fffffff, 2147483647, 0x7fffffff) == 0x7fffffff);
 }

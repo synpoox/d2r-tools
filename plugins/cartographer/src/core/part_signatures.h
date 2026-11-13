@@ -29,6 +29,14 @@ inline constexpr const char* PlayerTick = "48 89 5C 24 10 48 89 6C 24 18 56 57 4
 // D2RLoader thunks (jmp [rip+x], then the dead original body): call the thunk, never hook it.
 inline constexpr const char* NewStatList = "48 89 5C 24 10 48 89 74 24 18 48 89 7C 24 20 89 4C 24 08 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC B0 00 00 00";
 inline constexpr const char* SetListStat = "FF 25 ?? ?? ?? ?? 90 90 90 90 66 89 44 24 28";
+// The cube map level (issue #330, cartographer/25-cube-map-level.md): the property applier (hooked) and the item list maker (called).
+inline constexpr const char* ItemPropApply = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 60 0F B6 F1 49 8B E9 49 8B C9 4D 8B F0 44 8B FA E8 ?? ?? ?? ?? 66 83 F8 01 72";
+inline constexpr const char* ItemListMake = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 8B F8 41 8B D9 48 8B F2 44 8B C3 41 8B D7 48 8B F9 48 85 C9 74 ?? E8 ?? ?? ?? ??";
+// The cube's output step (hooked, 21 bytes) and the three small inventory walkers it uses to find the cube's items (only called).
+inline constexpr const char* CubeExec = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 08 EA FF FF B8 F8 16 00 00 E8 ?? ?? ?? ??";
+inline constexpr const char* UnitInventory = "48 89 5C 24 18 56 48 83 EC 20 48 8B F1 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 9E A0 00 00 00";
+inline constexpr const char* InventoryFirst = "40 53 48 83 EC 20 48 8B D9 48 85 C9 74 ?? 81 39 04 03 02 01 74 ??";
+inline constexpr const char* InventoryNext = "40 53 48 83 EC 20 48 8B D9 48 85 C9 75 10 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? FF FF EB 67 E8 ?? ?? FC FF 83 F8 04 74 14 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? FF FF 84 C0 74 01 CC 48 8B CB E8 ?? ?? FC FF 83 F8 04 75 41 48 8B CB E8 ?? ?? FC FF 83 F8 04 75 20 48 8B CB E8 ?? ?? FB FF 48 85 C0 75 2F 48 8D 4C 24 30 88 44 24 30 E8 ?? ?? FF FF 84 C0 74 01 CC 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? FF FF 84 C0 74 01 CC 33 C0 48 83 C4 20 5B C3 48 05 A0 00 00 00 74 DC 48 8B 40 10";
 inline constexpr const char* AttachStatList = "FF 25 ?? ?? ?? ?? 90 90 90 90 90 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 A0 00 00 00";
 inline constexpr const char* DetachStatList = "40 53 48 83 EC 20 48 8B DA E8 ?? ?? ?? ?? 0F B6 C8 48 8B D3 48 83 C4 20 5B E9 ?? ?? ?? ??";
 inline constexpr const char* FreeStatList = "48 85 D2 74 ?? 83 7A 1C 00 0F 8D ?? ?? ?? ?? C3 FF 25";
@@ -85,9 +93,9 @@ inline constexpr const char* FindStateList = "48 89 5C 24 10 57 48 83 EC 20 8B D
 inline constexpr const char* SetListState = "48 85 C9 74 03 89 51 20 C3";
 inline constexpr const char* SetStateBit = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 41 8B E8 8B DA 48 8B F1 85 D2 78 ?? E8 ?? ?? ?? ??";
 inline constexpr const char* StateOn = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 ??";
-// The map item's own stats (ItemStats=1, cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
+// The map item's own stats (cartographer/14-item-stats.md); both only called. ItemListFind (unit, state, flags) is the list
 // finder (with state 0 it matches a list on the unit's chain by flags). ItemListCopy (list, out, max) is D2RLoader's thunk (jmp [rip+x],
-// then the dead original body) into D2RLoader's replacement of up to `max` {stat << 16 | layer, value} pairs; call the thunk, never hook it.
+// then the dead original body) into D2RLoader's replacement of up to `max` entries of four int32, {layer, stat, value, 0}; call the thunk, never hook it.
 inline constexpr const char* ItemListFind = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 41 8B F8 8B F2 48 8B D9 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 ?? CC 48 8B CB E8 ?? ?? ?? ??";
 inline constexpr const char* ItemListCopy = "FF 25 ?? ?? ?? ?? 90 90 90 90 57 48 83 EC 20 49 63 F8 48 8B DA 48 8B F1";
 // Phase 6b: the Shrine object and the Boss Drop (cartographer/13-ambush-treasure-shrine.md). DeathDrop (game, victim, arg3, info) is hooked
@@ -122,5 +130,16 @@ inline constexpr const char* TcRoller = "4C 8B DC 55 53 49 8D AB 08 F7 FF FF";
 inline constexpr const char* UnitMove = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 F9 48 81 EC 88 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 EF 44 8B 6D 77 41 8B F1 49 8B D8 48 8B FA 4C 8B F1 48 85 D2 75 11";
 inline constexpr const char* RoomAtTile = "48 8B 52 70 E9 ?? ?? ?? ?? CC CC CC CC CC CC CC 48 8B 49 18 E9";
 inline constexpr const char* RoomBringUp = "48 89 5C 24 08 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 85 C0 75 ?? 48 8B D3 48 8B CF E8";
+
+// The automap memory read (issue #306 review; cartographer/22-automap-memory.md): 0xd5710 reads the current layer's saved cells back from the character's map
+// file when the layer becomes current. Hooked (the hook cuts the first 17 bytes: three whole instructions, no relative operand); a new slot map skips the one read.
+// The `cmp qword ptr [rip+x], 0` at +0x22 is the current layer object pointer.
+inline constexpr const char* AutomapRestore = "40 55 48 8D AC 24 F0 FD FF FF 48 81 EC 10 03 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 D0 01 00 00 48 83 3D ?? ?? ?? ?? 00 0F 84";
+
+// The map panel (issue #308; cartographer/22-map-panel.md). The UI text calls the other plugins use (docs/reverse-engineering/better-xp-bar.md,
+// dps-counter.md, player-bars.md): FindPanel(name), FindChild(parent, name) (direct children only) and TextBoxWidget::SetText(box, {ptr, len}). Only called.
+inline constexpr const char* UiFindPanel = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 C9 0F 85 ?? ?? ?? ?? 33 C0 C3";
+inline constexpr const char* UiFindChild = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
+inline constexpr const char* UiSetText = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
 
 }  // namespace carto::sig

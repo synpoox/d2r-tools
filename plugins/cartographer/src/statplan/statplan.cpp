@@ -58,6 +58,14 @@ uint64_t mix(uint64_t x)
 
 } // namespace
 
+std::string StatIds::nameOf(int id) const
+{
+	for (const auto &e : byName) {
+		if (e.second == id) return e.first;
+	}
+	return "";
+}
+
 int StatIds::find(std::string_view name) const
 {
 	for (const auto &p : byName)
@@ -177,7 +185,139 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 	return plan;
 }
 
-ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const std::vector<PoolRow> &pool, const StatIds &ids)
+int parsePropertyId(std::string_view text, std::string_view code)
+{
+	const carto::Tsv table = carto::ParseTsv(text);
+	const int cCode = table.Column("code");
+	if (cCode < 0) return -1;
+	int ordinal = 0;
+	for (const carto::TsvRow &row : table.rows) {
+		// The "Expansion" row of vanilla properties.txt is a separator the game does not count (seen in game: the map-level row, 285 by row, is 284 to the game).
+		if (table.Cell(row, cCode) == "Expansion") continue;
+		const int id = ordinal++;
+		if (table.Cell(row, cCode) == code) return id;
+	}
+	return -1;
+}
+
+int cubeRoll(int min, int max, uint64_t entropy)
+{
+	if (max <= min || max - min >= 1000) return min;
+	return min + static_cast<int>(mix(entropy) % static_cast<uint64_t>(max - min + 1));
+}
+
+int cubeMapLevelTarget(int before, int after, int min, int max, int roll, bool levelKnown)
+{
+	if (!levelKnown) return after; // the level could not be read: the game's result stands
+	if (max < min) max = min;
+	const int delta = roll < min ? min : (roll > max ? max : roll);
+	if (delta < 1) return after;
+	int target = after;
+	if (after == before) {
+		target = before + delta; // the game did not touch the stat (a map has no list for it to land on)
+	} else if (before > 0 && after >= min && after <= max && after < before + min) {
+		target = before + after; // the game set the stat to the recipe's value instead of adding it
+	}
+	if (target < kMinMapLevel) target = kMinMapLevel;
+	if (target > kMaxStatValue) target = kMaxStatValue;
+	return target;
+}
+
+bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked)
+{
+	return itemReadsOk && (inputLevel >= 0 || !cubeStepHooked);
+}
+
+MapLevelPick mapLevelFromItem(const std::vector<ItemStat> &stats, const StatIds &ids, int fallback)
+{
+	MapLevelPick out;
+	out.level = fallback;
+	const int id = ids.find(kMapLevelStat);
+	if (id < 0) {
+		return out;
+	}
+	for (const ItemStat &s : stats) {
+		if (s.stat != id || s.layer != 0) {
+			continue;
+		}
+		if (s.value < kMinMapLevel) {
+			out.note = std::string(kMapLevelStat) + " is " + std::to_string(s.value) + "; the map opens at its maps.txt Level " + std::to_string(fallback);
+			return out;
+		}
+		out.fromItem = true;
+		out.level = s.value > kMaxMapLevel ? kMaxMapLevel : s.value;
+		if (s.value > kMaxMapLevel) {
+			out.note = std::string(kMapLevelStat) + " is " + std::to_string(s.value) + "; the map level is cut to " + std::to_string(kMaxMapLevel);
+		}
+		return out;
+	}
+	return out;
+}
+
+std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapLevelStat);
+	std::vector<ItemStat> out;
+	for (const ItemStat &s : stats) {
+		if (id < 0 || s.stat != id) {
+			out.push_back(s);
+		}
+	}
+	return out;
+}
+
+int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapDensityStat);
+	if (id < 0) {
+		return 0;
+	}
+	int64_t sum = 0;
+	for (const ItemStat &s : stats) {
+		if (s.stat == id && s.layer == 0) {
+			sum += s.value;
+		}
+	}
+	constexpr int64_t limit = 0x7fffffff;
+	return static_cast<int>(sum > limit ? limit : sum < -limit ? -limit : sum);
+}
+
+int densityWithBonus(int base, int bonus)
+{
+	const int64_t total = static_cast<int64_t>(base) + bonus;
+	if (total < 0) {
+		return 0;
+	}
+	return total > 0x7fffffff ? 0x7fffffff : static_cast<int>(total);
+}
+
+std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	const int id = ids.find(kMapDensityStat);
+	std::vector<ItemStat> out;
+	for (const ItemStat &s : stats) {
+		if (id < 0 || s.stat != id) {
+			out.push_back(s);
+		}
+	}
+	return out;
+}
+
+const std::vector<MonsterStat> &monsterStats()
+{
+	static const std::vector<MonsterStat> table = {
+		{"cartographer_mon_life", "item_maxhp_percent"},
+		{"cartographer_mon_damage", "damagepercent"},
+		{"cartographer_mon_fire_res", "fireresist"},
+		{"cartographer_mon_cold_res", "coldresist"},
+		{"cartographer_mon_light_res", "lightresist"},
+		{"cartographer_mon_poison_res", "poisonresist"},
+		{"cartographer_mon_speed", "velocitypercent"},
+	};
+	return table;
+}
+
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids)
 {
 	ItemProperties out;
 	for (const ItemStat &s : stats) {
@@ -194,40 +334,23 @@ ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const s
 			out.dropped.push_back(label + ": its value is 0");
 			continue;
 		}
-		const PoolRow *row = nullptr;
-		for (const PoolRow &r : pool) {
-			if (ids.find(r.stat) == s.stat) {
-				row = &r;
+		const std::string name = ids.nameOf(s.stat);
+		if (name.empty()) {
+			out.dropped.push_back(label + ": no itemstatcost row has this id");
+			continue;
+		}
+		const MonsterStat *mon = nullptr;
+		for (const MonsterStat &m : monsterStats()) {
+			if (name == m.itemStat) {
+				mon = &m;
 				break;
 			}
 		}
-		if (row == nullptr) {
-			out.dropped.push_back(label + ": no mapstats.txt row has this stat");
-			continue;
+		if (mon != nullptr) {
+			out.properties.push_back({Target::Monsters, mon->applied, s.value});
+		} else {
+			out.properties.push_back({Target::Players, name, s.value});
 		}
-		out.properties.push_back({row->target, row->stat, s.value});
-	}
-	return out;
-}
-
-std::vector<PoolIssue> checkPoolStats(const std::vector<PoolRow> &pool, const StatIds &ids)
-{
-	std::vector<PoolIssue> out;
-	if (!ids.loaded) return out;
-	for (size_t i = 0; i < pool.size(); ++i) {
-		const PoolRow &r = pool[i];
-		if (r.weight <= 0) continue; // an off or erroring row is never drawn
-		const int id = ids.find(r.stat);
-		if (id >= 0) {
-			const std::string refused = refusedReason(r.target, r.stat, id);
-			if (!refused.empty())
-				out.push_back({false, i, "row " + std::to_string(i + 1) + " (" + r.stat + ", " + targetWord(r.target) + "): " + refused + " If it is drawn it is skipped."});
-			continue;
-		}
-		const std::string near = ids.suggest(r.stat);
-		out.push_back({false, i,
-			"row " + std::to_string(i + 1) + " (" + r.stat + "): Stat is not in itemstatcost.txt." +
-				(near.empty() ? "" : " Did you mean '" + near + "'?") + " If it is drawn it is skipped."});
 	}
 	return out;
 }
@@ -545,6 +668,26 @@ std::vector<std::string> explainNoPick(const uint8_t *states, uint32_t count, co
 		lines.push_back(rejectionText(static_cast<int>(ranks[i].state), states + static_cast<size_t>(ranks[i].state) * kStateRowSize));
 	}
 	return lines;
+}
+
+std::vector<ItemStat> decodeItemStatList(const int32_t *buffer, int count, int maxStats, std::string *problem) {
+	std::vector<ItemStat> out;
+	if (buffer == nullptr || count <= 0) {
+		return out;
+	}
+	const int n = count < maxStats ? count : maxStats;
+	for (int i = 0; i < n; ++i) {
+		const int32_t *e = buffer + i * 4;
+		if (e[3] != 0 || e[0] < 0 || e[0] > 0xffff || e[1] < 0 || e[1] > kMaxStatId) {
+			if (problem != nullptr) {
+				*problem = "ItemListCopy layout not recognised (entry " + std::to_string(i) + " is " + std::to_string(e[0]) + ", " +
+				           std::to_string(e[1]) + ", " + std::to_string(e[2]) + ", " + std::to_string(e[3]) + "); the item's stats are not used";
+			}
+			return {};
+		}
+		out.push_back({e[1], e[0], e[2]});
+	}
+	return out;
 }
 
 } // namespace cartographer::statplan

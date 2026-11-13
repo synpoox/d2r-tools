@@ -13,8 +13,10 @@
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
 #include "engine/map_names.h"
+#include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
+#include "engine/automap_reset.h"
 #include "log.h"
 #include "hookguard.h"
 #include "steer.h"
@@ -189,7 +191,7 @@ void Tell(const std::string& text) noexcept {
 	}
 }
 
-// The map is open: draws its properties and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
+// The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
@@ -271,8 +273,9 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 			return problem;
 		}
 		if (MazeSlotBuilt()) {
-			return "Cartographer: the Maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
+			return std::string("Cartographer: a maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.");
 		}
+		return MazeOpenConflict(map, MazePendingTileset());
 	}
 	return {};
 }
@@ -424,30 +427,43 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		return;
 	}
 	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
-	// ItemStats=1: the item's own stats, read now, before the game uses the item up.
+	// The item's own stats, read now, before the game uses the item up: the map level and the map's properties (its rare or unique modifiers).
 	std::vector<cartographer::statplan::ItemStat> itemStats;
-	if (tables->settings.itemStats != 0) {
-		try {
-			std::string note;
-			itemStats = ReadMapItemStats(item, &note);
-			if (!note.empty()) {
-				plog::Warn("ItemStats: %s", note.c_str());
-			}
-		} catch (...) {
-			plog::Error("reading the map item's stats failed; '%s' draws its properties as usual", map->name.c_str());
-			itemStats.clear();
+	try {
+		std::string note;
+		itemStats = ReadMapItemStats(item, &note);
+		if (!note.empty()) {
+			plog::Warn("item stats: %s", note.c_str());
 		}
+	} catch (...) {
+		plog::Error("reading the map item's stats failed; '%s' opens at its maps.txt Level", map->name.c_str());
+		itemStats.clear();
 	}
+	// The map's level is the item's map-level stat, else the maps.txt Level. Everything the open writes or draws uses this copy.
+	MapDef opening = *map;
+	const cartographer::statplan::MapLevelPick pick = cartographer::statplan::mapLevelFromItem(itemStats, tables->statIds, map->level);
+	opening.level = pick.level;
+	if (!pick.note.empty()) {
+		plog::Warn("map level: %s", pick.note.c_str());
+	}
+	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
+	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
+	// Bonus Density: the sum over the item's affixes is added to the map's Density (uncapped), then the stat is taken out like the level.
+	if (const int bonus = cartographer::statplan::mapDensityBonus(itemStats, tables->statIds); bonus != 0) {
+		opening.density = cartographer::statplan::densityWithBonus(map->density, bonus);
+		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, bonus, opening.density);
+	}
+	itemStats = cartographer::statplan::withoutMapDensity(itemStats, tables->statIds);
 	std::string refusal;
-	const int32_t opened = OpenMapPortal(game, player, *map, *tables, level, &refusal);
+	const int32_t opened = OpenMapPortal(game, player, opening, *tables, level, &refusal);
 	if (!refusal.empty()) {
 		Tell(refusal);
 		return;
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(*map, tables, game, player, itemStats);
-		StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
+		StartMapStats(opening, tables, game, player, itemStats);
+		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
 }
@@ -595,7 +611,7 @@ void MazeArrivalCheck(Unit* unit) noexcept {
 		return;
 	}
 	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
-	if (maze && level == MazeSlotLevelId() && level > 0) {
+	if (maze && IsMazeSlotLevel(level)) {
 		MazeProbeArrival(room, level);
 	}
 	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {
@@ -635,6 +651,10 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		}
 	}
 	StatApplyPlayerTick(game, unit);
+	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
+		MapPanelPlayerTick(unit);
+		AutomapResetPlayerTick(PlayerLevelOf(unit));
+	}
 	if (known != NoPlayer) {
 		EventsPlayerTick(game, unit, known);
 		AutoCheckTick(game, unit, known);
@@ -660,7 +680,9 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
+		AutomapResetDisarm();
 		StatApplyGameLeft();
+		MapPanelGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
 		LevelRowRestore();
@@ -966,6 +988,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
 	InstallOutdoorHooks(context, overrides, ranges, count);  // after the maze hooks: the level build hook (0x3271c0) is shared
 	InstallAutoCheck(context, overrides, ranges, count);
+	InstallAutomapReset(context, overrides, ranges, count);
 	if (!g_live) {
 		plog::Warn("the portal is off: not every part it needs was found (see 'cartographer check')");
 	}

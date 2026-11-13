@@ -8,7 +8,6 @@
 
 #include "events.h"
 #include "layout.h"
-#include "mapstats.h"
 #include "report.h"
 
 #include <cstdint>
@@ -22,24 +21,23 @@ inline constexpr const char* MapsFile = "maps.txt";
 inline constexpr const char* SettingsFile = "cartographer.txt";
 inline constexpr const char* SlotsFile = "slots.txt";
 inline constexpr const char* ShapesFile = "shapes.txt";
-inline constexpr const char* MapStatsFile = "mapstats.txt";
+inline constexpr const char* MapStatsFile = "mapstats.txt";  // retired: only noted when it exists
 inline constexpr const char* MapEventsFile = "mapevents.txt";
 inline constexpr const char* BossesFile = "bosses.txt";
 // The superuniques.txt key (Superunique column) of a boss entry. The prefix is on every key, so it can never equal a vanilla row; tools/install.ps1 writes the same.
 inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
-inline constexpr int DefaultProperties = 6;
 inline constexpr int DefaultEventChance = 20;
 inline constexpr int MaxMonsters = 10;
 inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
 inline constexpr int MapItemSpell = 16;
-// The slot (in slots.txt) of the maze level every map opens through (levels.txt DrlgType 1, plan section 3.6).
+// The slot (in slots.txt) of the Cave maze level (levels.txt DrlgType 1, plan section 3.6): the slot every maze map opened through before each maze
+// tileset had a slot of its own, so it keeps its name. Each maze tileset (Cave, Crypt) opens through the slot level of its table row in
+// maze/maze_tilesets.h, because a level has one LevelType and the tilesets need different ones.
 inline constexpr const char* MazeSlot = "Maze";
-// The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
-inline constexpr const char* MazeLevelName = "Cartographer Maze";
 // Each outdoor tileset (Jungle, Snow) opens through a slot level of its own (levels.txt DrlgType 3, outdoor builder plan section 1.1), because a
 // level has one LevelType and the tilesets need different ones. The tileset's slot name, level name and LevelType are one row of the table in
 // outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook builds it.
@@ -58,6 +56,7 @@ struct GameNames {
 	std::vector<int> monsterMods;           // monumod.txt id
 	bool haveItemSpells = false;
 	std::vector<std::pair<std::string, int>> itemSpells;  // misc.txt code and pSpell (0 when blank)
+	std::vector<std::string> compactItems;                // misc.txt codes with compactsave 1: such an item carries no quality and no stats
 };
 
 // One row of bosses.txt: a boss that belongs to Cartographer, never a vanilla one.
@@ -82,15 +81,12 @@ struct MapDef {
 	std::vector<std::string> monsters;
 	int level = DefaultMonsterLevel;
 	int minCharLevel = 1;
-	int properties = -1;   // -1: use the cartographer.txt value
 	int eventChance = -1;  // -1: use the cartographer.txt value
 	int density = 0, champions = 0, uniques = 0;
 };
 
 struct Settings {
-	int properties = DefaultProperties;
 	int eventChance = DefaultEventChance;
-	int itemStats = 0;
 	int playerStats = 1;  // PlayerStats: 1 puts the map's player stats on the player while in the map (removed on leaving and on Save and Exit)
 	int mapNames = 1;   // MapNames: 0 turns off a map's own Name on the portal tooltip, the automap title and the entry banner (on by default; seen in game in single player, multiplayer unverified)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
@@ -139,10 +135,6 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 // shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;
 
-// mapstats.txt (optional): the pool of random properties. A bad row is left out; an empty result means the built-in pool.
-// Stat names are not checked against the game's tables yet (they are used when properties are applied).
-auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartographer::stats::PoolRow>;
-
 // mapevents.txt (optional): the events a map can roll. A bad row is left out. Spawn names are not resolved yet.
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row>;
 
@@ -166,6 +158,15 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
 // and calls the game, so it runs only for a level it has seen to be in Act 5.
 auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
+// True for a maze slot (a slot name in the maze tileset table: Maze, MazeCrypt), ignoring case.
+auto IsMazeSlotName(std::string_view slot) -> bool;
+
+// True when `slots` has a row for any maze tileset's slot, with a level id above zero.
+auto HasMazeSlot(const std::vector<Slot>& slots) -> bool;
+
+// The levels.txt Name a maze slot's level must have (the table's level name, e.g. "Cartographer Crypt"), or "" for another slot name.
+auto MazeSlotLevelName(std::string_view slot) -> std::string;
+
 // True for an outdoor slot (a slot name in the outdoor tileset table), ignoring case.
 auto IsOutdoorSlotName(std::string_view slot) -> bool;
 
@@ -186,12 +187,17 @@ auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> st
 // True for a map built on an outdoor slot (Jungle, Snow): its tileset has an outdoor LevelType. Every other map is a maze map.
 auto MapIsOutdoor(const MapDef& map) -> bool;
 
-// The slot a map opens through: its tileset's slot in the outdoor table ("Outdoor" for Jungle, "OutdoorSnow" for Snow), otherwise "Maze".
+// The slot a map opens through: its tileset's slot in the maze table ("Maze" for Cave, "MazeCrypt" for Crypt) or the outdoor table ("Outdoor" for
+// Jungle, "OutdoorSnow" for Snow), otherwise "Maze".
 auto MapSlotName(const MapDef& map) -> const char*;
 
 // Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The outdoor
 // slots (Jungle on Outdoor, Snow on OutdoorSnow) share one open-map job, so a second open on the other slot would leave the first portal's level unplanned.
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
+
+// Empty, or why a maze `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. Every maze slot shares
+// one open-map job, so a second open of another tileset would leave the first portal's level unplanned (a stock maze).
+auto MazeOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string;
 
 // The slot level id for `slot`, or -1.
 auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;

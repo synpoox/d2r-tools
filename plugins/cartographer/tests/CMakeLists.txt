@@ -22,8 +22,8 @@ foreach(test_source IN LISTS cartographer_core_tests)
 endforeach()
 
 # Tests whose code lives in the outdoor core, so the glob above (tests/<core>_tests.cpp) does not name them:
-# outline_shapes_tests (src/outdoor/outline_shapes.*) and snow_tests (snow_plan.cpp).
-foreach(test_name outline_shapes_tests snow_tests)
+# outline_shapes_tests (src/outdoor/outline_shapes.*) snow_tests (snow_plan.cpp) and siege_tests (siege_plan.cpp).
+foreach(test_name outline_shapes_tests snow_tests siege_tests)
 	add_executable(${test_name} ${test_name}.cpp)
 	target_link_libraries(${test_name} PRIVATE cartographer_outdoor)
 	target_include_directories(${test_name} PRIVATE ../third_party/doctest)
@@ -49,7 +49,7 @@ endif()
 
 # Host tests for the table loader, the gates and the signature scanner.
 add_executable(tables_tests tables_tests.cpp ../src/core/tables.cpp)
-target_link_libraries(tables_tests PRIVATE cartographer_stats cartographer_events cartographer_outdoor)  # the example pack is run through their real checks; outdoor is the tileset table
+target_link_libraries(tables_tests PRIVATE cartographer_events cartographer_outdoor cartographer_maze)  # the example pack is run through their real checks; outdoor and maze are the tileset tables
 target_include_directories(tables_tests PRIVATE ../src ../third_party/doctest)
 target_compile_definitions(tables_tests PRIVATE CARTOGRAPHER_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../examples/first-map")
 if(MSVC)

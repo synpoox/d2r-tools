@@ -449,17 +449,8 @@ bool EntryTracker::update(bool inMap) {
 	return entered;
 }
 
-int bannerAlpha(int elapsedMs) {
-	if (elapsedMs < 0 || elapsedMs >= kBannerTotalMs) {
-		return 0;
-	}
-	if (elapsedMs < kBannerFadeInMs) {
-		return elapsedMs * 255 / kBannerFadeInMs;
-	}
-	if (elapsedMs < kBannerFadeInMs + kBannerHoldMs) {
-		return 255;
-	}
-	return (kBannerTotalMs - elapsedMs) * 255 / kBannerFadeOutMs;
+bool bannerVisible(int64_t elapsedMs) {
+	return elapsedMs >= 0 && elapsedMs < kBannerTotalMs;
 }
 
 uint64_t eventSeed(uint64_t mapSeed) {

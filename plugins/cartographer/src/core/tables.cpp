@@ -1,10 +1,13 @@
 #include "tables.h"
 
+#include "maze_tilesets.h"
+#include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
 #include "text.h"
 #include "tsv.h"
 
 #include <algorithm>
+#include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -19,19 +22,20 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. Cave and Crypt are buildable (through the maze steering hooks, which need the Maze slot); the outdoor tilesets (the table in
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt and Lava) are buildable through the maze
+// steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Cave", true},    {"Crypt", true},    {"Lava", false},     {"Barracks", false}, {"Jail", false},
+	{"Barracks", false}, {"Jail", false},
 	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Ice", false},      {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 
-const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl"};
-const std::vector<std::string> Sizes = {"Small", "Medium", "Large"};
+const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
+const std::vector<std::string> Sizes = {"ExtraSmall", "Small", "Medium", "Large"};
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
-                                             "Boss",   "Monsters",     "MinCharLevel", "Properties", "EventChance",
+                                             "Boss",   "Monsters",     "MinCharLevel", "EventChance",
                                              "Density", "Champions",   "Uniques"};
 
 auto Canonical(const std::vector<std::string>& names, std::string_view word) -> const std::string* {
@@ -58,8 +62,9 @@ auto ParseInt(const std::string& cell, int lo, int hi, int* out) -> bool {
 		return false;
 	}
 	char* end = nullptr;
-	const long v = std::strtol(cell.c_str(), &end, 10);
-	if (end == cell.c_str() || *end != '\0' || v < lo || v > hi) {
+	errno = 0;
+	const long long v = std::strtoll(cell.c_str(), &end, 10);
+	if (end == cell.c_str() || *end != '\0' || errno == ERANGE || v < lo || v > hi) {
 		return false;
 	}
 	*out = static_cast<int>(v);
@@ -131,6 +136,9 @@ auto NotInTable(const char* what, const std::string& word, const char* table, co
 
 auto TilesetNames() -> std::vector<std::string> {
 	std::vector<std::string> out;
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		out.emplace_back(t.name);
+	}
 	for (const Tileset& t : Tilesets) {
 		out.emplace_back(t.name);
 	}
@@ -142,6 +150,9 @@ auto TilesetNames() -> std::vector<std::string> {
 
 auto ReadyTilesetNames() -> std::vector<std::string> {
 	std::vector<std::string> out;
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		out.emplace_back(t.name);
+	}
 	for (const Tileset& t : Tilesets) {
 		if (t.ready) {
 			out.emplace_back(t.name);
@@ -195,6 +206,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const std::string& column = table.header[i];
 		if (EqualsNoCase(column, "Difficulty") && FirstOfName(table.header, i)) {
 			report.Note(MapsFile, 1, "the column 'Difficulty' is ignored: maps can only be opened in Hell.");
+		} else if (EqualsNoCase(column, "Properties") && FirstOfName(table.header, i)) {
+			report.Note(MapsFile, 1, "the column 'Properties' is no longer used: a map's properties are stats on its item (rare and unique maps). The column is ignored.");
 		} else if (Canonical(MapColumns, column) == nullptr && FirstOfName(table.header, i)) {
 			report.Note(MapsFile, 1, "the column '" + column + "' is not used and is ignored." + DidYouMean(column, MapColumns));
 		}
@@ -202,7 +215,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 	const int cName = table.Column("Name"), cTileset = table.Column("Tileset"), cShape = table.Column("Shape");
 	const int cSize = table.Column("Size"), cLevel = table.Column("Level"), cItem = table.Column("Item");
 	const int cBoss = table.Column("Boss"), cMonsters = table.Column("Monsters");
-	const int cMinChar = table.Column("MinCharLevel"), cProps = table.Column("Properties"), cEvent = table.Column("EventChance");
+	const int cMinChar = table.Column("MinCharLevel"), cEvent = table.Column("EventChance");
 	const int cDensity = table.Column("Density"), cChampions = table.Column("Champions"), cUniques = table.Column("Uniques");
 
 	std::vector<std::string> customShapes;
@@ -225,6 +238,14 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			const std::string cell = table.Cell(row, column);
 			if (!cell.empty() && !ParseInt(cell, lo, hi, out)) {
 				fail(std::string(label) + " '" + cell + "' is not a whole number " + Range(lo, hi) + ".");
+			}
+		};
+
+		// A percent column: 0 or more, any whole number up to int32.
+		const auto percent = [&](int column, const char* label, int* out) {
+			const std::string cell = table.Cell(row, column);
+			if (!cell.empty() && !ParseInt(cell, 0, INT32_MAX, out)) {
+				fail(std::string(label) + " '" + cell + "' must be a whole number, 0 or more, up to " + std::to_string(INT32_MAX) + ".");
 			}
 		};
 
@@ -277,13 +298,48 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 			}
 		}
 
+		// An Open map needs rooms joined on all four sides. Snow is lines of fence pieces and takes no Shape, so it cannot build one.
+		if (ok && !map.shape.empty() && !map.tileset.empty()) {
+			const cartographer::outdoor::OutdoorTileset* outdoorRow = cartographer::outdoor::findOutdoorTileset(map.tileset);
+			if (outdoorRow != nullptr && outdoorRow->planner == cartographer::outdoor::Planner::Snow) {
+				cartographer::layout::Rules rules;
+				std::string ignored;
+				const cartographer::layout::ShapeTable none;
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored) && rules.open) {
+					fail("the tileset '" + map.tileset + "' cannot build the Open shape: " + map.tileset + " is lines of fence with no rooms to join, so it takes no Shape. Use Jungle, Cave or Crypt for an Open map.");
+				}
+			}
+		}
+
+		// The Jungle planner caps an Open map's grid, and then its rules must still hold and build (a MinPath the capped grid cannot reach does not).
+		if (ok && !map.shape.empty() && !map.tileset.empty()) {
+			const cartographer::outdoor::OutdoorTileset* outdoorRow = cartographer::outdoor::findOutdoorTileset(map.tileset);
+			if (outdoorRow != nullptr && outdoorRow->planner == cartographer::outdoor::Planner::Jungle) {
+				cartographer::layout::Rules rules;
+				std::string ignored;
+				const cartographer::layout::ShapeTable none;
+				if (cartographer::layout::resolveRules(shapes != nullptr ? *shapes : none, map.shape, cartographer::layout::parseSizeName(map.size).value_or(cartographer::layout::Size::Medium), rules, ignored)) {
+					if (const std::string problem = cartographer::outdoor::capJungleOpenRules(rules); !problem.empty()) {
+						fail("the shape '" + map.shape + "' cannot be built for the " + map.tileset + " tileset: " + problem + " Lower MinPath in shapes.txt.");
+					}
+				}
+			}
+		}
+
+		// ExtraSmall is not checked when shapes.txt loads (an older shape would be refused for a size it never asked for), so a
+		// row that asks for it checks its shapes.txt shape here.
+		if (ok && map.size == "ExtraSmall" && shapes != nullptr && !map.shape.empty() && !cartographer::layout::parseShapeName(map.shape)) {
+			if (const std::string problem = cartographer::layout::checkShapeAtSize(*shapes, map.shape, cartographer::layout::Size::ExtraSmall); !problem.empty()) {
+				fail(problem + " The shape does not fit Size ExtraSmall (a 4 x 4 grid): use a larger Size or change the shape in shapes.txt.");
+			}
+		}
+
 		number(cLevel, "Level", 1, 255, &map.level);
 		number(cMinChar, "MinCharLevel", 1, 99, &map.minCharLevel);
-		number(cProps, "Properties", 0, 20, &map.properties);
 		number(cEvent, "EventChance", 0, 100, &map.eventChance);
-		number(cDensity, "Density", 0, 1000, &map.density);
-		number(cChampions, "Champions", 0, 1000, &map.champions);
-		number(cUniques, "Uniques", 0, 1000, &map.uniques);
+		percent(cDensity, "Density", &map.density);
+		percent(cChampions, "Champions", &map.champions);
+		percent(cUniques, "Uniques", &map.uniques);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {
@@ -306,6 +362,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 					fail("Item '" + map.item + "' cannot open a map: it needs item spell " + std::to_string(MapItemSpell) +
 					     " (pSpell in misc.txt), and " + (spell < 0 ? std::string("it is not a misc.txt item.") : "it has " + std::to_string(spell) + "."));
 				}
+			}
+			if (spellOk && ContainsNoCase(names.compactItems, map.item)) {
+				report.Note(MapsFile, row.line, "Item '" + map.item + "' has compactsave 1 in misc.txt, so it carries no quality, no modifiers and no map level. Set compactsave to 0 on its row.");
 			}
 			for (const MapDef& other : maps) {
 				if (spellOk && EqualsNoCase(other.item, map.item)) {  // a row already refused for its spell is not reported twice
@@ -454,82 +513,6 @@ auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::
 		ReportCoreMessage(report, true, ShapesFile, error);
 	}
 	return std::move(parsed.table);
-}
-
-auto LoadMapStats(std::string_view text, Report& report) -> std::vector<cartographer::stats::PoolRow> {
-	using cartographer::stats::PoolRow;
-	std::vector<PoolRow> pool;
-	std::vector<int> lines;
-	std::vector<std::string> weightText;  // what was typed in Weight, for messages after the int32 cut
-	const Tsv table = ParseTsv(text);
-	if (NoteIfEmpty(MapStatsFile, table, report) || !RequireColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max"}, report)) {
-		return pool;
-	}
-	ReportRepeatedColumns(MapStatsFile, table, report);
-	NoteUnusedColumns(MapStatsFile, table, {"Target", "Stat", "Min", "Max", "Weight"}, report);
-	const int cTarget = table.Column("Target"), cStat = table.Column("Stat"), cMin = table.Column("Min");
-	const int cMax = table.Column("Max"), cWeight = table.Column("Weight");
-	const std::vector<std::string> targets = {"Monsters", "Players"};
-	for (const TsvRow& row : table.rows) {
-		PoolRow entry;
-		bool ok = true;
-		const auto fail = [&](const std::string& message) {
-			report.Error(MapStatsFile, row.line, message + " This row is skipped.");
-			ok = false;
-		};
-		const std::string target = table.Cell(row, cTarget);
-		if (const std::string* known = Canonical(targets, target)) {
-			entry.target = *known == "Players" ? cartographer::stats::Target::Players : cartographer::stats::Target::Monsters;
-		} else {
-			fail("Target '" + target + "' is not known." + DidYouMean(target, targets) + " Use 'Monsters' or 'Players'.");
-		}
-		entry.stat = table.Cell(row, cStat);
-		if (entry.stat.empty()) {
-			fail("Stat is empty. Name a stat from the game's itemstatcost.txt.");
-		}
-		const struct {
-			int column;
-			const char* name;
-			int* value;
-		} numbers[] = {{cMin, "Min", &entry.min}, {cMax, "Max", &entry.max}, {cWeight, "Weight", &entry.weight}};
-		for (const auto& n : numbers) {
-			const std::string cell = table.Cell(row, n.column);
-			if (cell.empty() && n.column != cWeight) {
-				fail(std::string(n.name) + " is empty. Give a whole number.");  // Min and Max are required; Weight defaults to 1
-			} else if (!cell.empty() && !ParseWhole(cell, n.value)) {
-				fail(std::string(n.name) + " '" + cell + "' is not a whole number.");
-			}
-		}
-		if (ok) {
-			pool.push_back(entry);
-			lines.push_back(row.line);
-			weightText.push_back(table.Cell(row, cWeight));
-		}
-	}
-	// The core's own checks. A negative Weight is an error there and the row is dropped; the rest are notes.
-	std::vector<bool> drop(pool.size(), false);
-	for (const cartographer::stats::PoolIssue& issue : cartographer::stats::checkPool(pool)) {
-		const std::string lead = "row " + std::to_string(issue.row + 1) + " (" + pool[issue.row].stat + "): ";
-		const bool leads = issue.message.rfind(lead, 0) == 0;
-		std::string message = leads ? pool[issue.row].stat + ": " + issue.message.substr(lead.size()) : issue.message;
-		// Only the core's own Weight wording (right after the lead), never a Stat name that contains "Weight".
-		if (leads && issue.message.compare(lead.size(), 7, "Weight ") == 0 && WasCut(pool[issue.row].weight, weightText[issue.row])) {
-			message += TypedSuffix(weightText[issue.row]);
-		}
-		if (issue.error) {
-			report.Error(MapStatsFile, lines[issue.row], message);
-			drop[issue.row] = true;
-		} else {
-			report.Note(MapStatsFile, lines[issue.row], message);
-		}
-	}
-	std::vector<PoolRow> kept;
-	for (size_t i = 0; i < pool.size(); ++i) {
-		if (!drop[i]) {
-			kept.push_back(pool[i]);
-		}
-	}
-	return kept;
 }
 
 auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -> std::vector<BossDef> {
@@ -699,7 +682,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"Properties", "EventChance", "ItemStats", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
+	const std::vector<std::string> known = {"EventChance", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
 	bool retiredNoted = false;
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
@@ -708,6 +691,10 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 				report.Note(SettingsFile, row.line, "setting 'OutdoorBuild' is no longer used: outdoor maps are always built. The line is ignored.");
 				retiredNoted = true;
 			}
+			continue;
+		}
+		if (EqualsNoCase(key, "Properties") || EqualsNoCase(key, "ItemStats")) {  // retired: a map's properties are the stats on its item
+			report.Note(SettingsFile, row.line, "setting '" + key + "' is no longer used: a map's properties are stats on its item (rare and unique maps). The line is ignored.");
 			continue;
 		}
 		const std::string* name = Canonical(known, key);
@@ -732,19 +719,14 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 			settings.autoCheckMap = value;  // checked against maps.txt by the engine (autocheck::resolveConfig), which says why a name is unusable
 			continue;
 		}
-		int lo = 0, hi = 20, *target = &settings.properties;
+		int lo = 0, hi = 100, *target = &settings.eventChance;
 		if (*name == "EventChance") {
-			hi = 100;
-			target = &settings.eventChance;
 		} else if (*name == "PlayerStats") {
 			hi = 1;
 			target = &settings.playerStats;
 		} else if (*name == "MapNames") {
 			hi = 1;
 			target = &settings.mapNames;
-		} else if (*name == "ItemStats") {
-			hi = 1;
-			target = &settings.itemStats;
 		} else if (*name == "MazeProbe") {
 			hi = 1;
 			target = &settings.mazeProbe;
@@ -812,9 +794,9 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 			drop("a level of the original game. Run the installer again (tools\\install.ps1)");
 		} else if (std::find(ids.begin(), ids.end(), slot.level) == ids.end()) {
 			drop(cId < 0 ? "but levels.txt could not be read" : "which has no row in levels.txt. Run the installer again (tools\\install.ps1)");
-		} else if (EqualsNoCase(slot.name, MazeSlot) &&
-		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeLevelName)) {
-			drop(std::string("which is not the level the installer wrote (its levels.txt Name must be '") + MazeLevelName + "'). Run the installer again (tools\\install.ps1)");
+		} else if (IsMazeSlotName(slot.name) &&
+		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], MazeSlotLevelName(slot.name))) {
+			drop("which is not the level the installer wrote (its levels.txt Name must be '" + MazeSlotLevelName(slot.name) + "'). Run the installer again (tools\\install.ps1)");
 		} else if (IsOutdoorSlotName(slot.name) &&
 		           !EqualsNoCase(names[static_cast<size_t>(std::find(ids.begin(), ids.end(), slot.level) - ids.begin())], OutdoorSlotLevelName(slot.name))) {
 			drop("which is not the level the installer wrote (its levels.txt Name must be '" + OutdoorSlotLevelName(slot.name) + "'). Run the installer again (tools\\install.ps1)");
@@ -871,6 +853,24 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 			}
 		}
 	}
+}
+
+auto IsMazeSlotName(std::string_view slot) -> bool {
+	return cartographer::maze::findMazeTilesetBySlot(slot) != nullptr;
+}
+
+auto HasMazeSlot(const std::vector<Slot>& slots) -> bool {
+	for (const cartographer::maze::MazeTileset& t : cartographer::maze::MazeTilesets) {
+		if (SlotLevel(slots, t.slot) > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+auto MazeSlotLevelName(std::string_view slot) -> std::string {
+	const cartographer::maze::MazeTileset* row = cartographer::maze::findMazeTilesetBySlot(slot);
+	return row != nullptr ? std::string(row->levelName) : std::string();
 }
 
 auto IsOutdoorSlotName(std::string_view slot) -> bool {
@@ -937,12 +937,23 @@ auto MapIsOutdoor(const MapDef& map) -> bool {
 }
 
 auto MapSlotName(const MapDef& map) -> const char* {
+	if (const cartographer::maze::MazeTileset* maze = cartographer::maze::findMazeTileset(map.tileset)) {
+		return maze->slot;
+	}
 	const cartographer::outdoor::OutdoorTileset* row = cartographer::outdoor::findOutdoorTileset(map.tileset);
 	return row != nullptr ? row->slot : MazeSlot;
 }
 
 auto OutdoorOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
 	if (!MapIsOutdoor(map) || pendingTileset.empty() || EqualsNoCase(pendingTileset, map.tileset)) {
+		return {};
+	}
+	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +
+	       ") cannot be opened in this game. Leave the game and start a new one to open it.";
+}
+
+auto MazeOpenConflict(const MapDef& map, std::string_view pendingTileset) -> std::string {
+	if (MapIsOutdoor(map) || pendingTileset.empty() || EqualsNoCase(pendingTileset, map.tileset)) {
 		return {};
 	}
 	return "Cartographer: a " + std::string(pendingTileset) + " map is already open and not entered yet, so " + map.name + " (" + map.tileset +

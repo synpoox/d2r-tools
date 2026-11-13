@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "ascii.h"
+#include "maze_tilesets.h"
 #include "rng.h"
 
 namespace cartographer::maze {
@@ -17,22 +18,16 @@ using layout::equalsNoCase;
 
 bool builtinTileset(std::string_view name, Tileset &out)
 {
+	const MazeTileset *row = findMazeTileset(name);
+	if (row == nullptr) return false;
 	Tileset t;
-	if (equalsNoCase(name, "Cave")) {
-		t.name = "Cave";
-		t.levelType = 3;
-		t.roomTiles = 24;
-		t.pieceBase = 52;
-		t.prev = {true, {83, 84, 85, 86}}; // Prev W, E, S, N
-	} else if (equalsNoCase(name, "Crypt")) {
-		t.name = "Crypt";
-		t.levelType = 4;
-		t.roomTiles = 8;
-		t.pieceBase = 108;
-		t.prev = {true, {139, 140, 141, 142}};
-	} else {
-		return false;
-	}
+	t.name = row->name;
+	t.levelType = row->levelType;
+	t.roomTiles = row->roomTiles;
+	t.pieceBase = row->pieceBase;
+	t.callsRingGrower = row->callsRingGrower;
+	t.prev.present = row->prevPiece[0] != 0;
+	for (int i = 0; i < 4; ++i) t.prev.piece[i] = row->prevPiece[i];  // Prev W, E, S, N
 	out = std::move(t);
 	return true;
 }
@@ -64,15 +59,17 @@ std::string slotTypeProblem(const Tileset &tileset, int slotLevelType, std::stri
 {
 	if (slotLevelType == tileset.levelType) return {};
 	const std::string who = "the " + tileset.name + " map '" + std::string(mapName) + "'";
+	const MazeTileset *row = findMazeTileset(tileset.name);
+	const std::string slotName = row != nullptr ? row->slot : "Maze";
 	if (slotLevelType < 0) {
-		return "Cartographer: could not read the LevelType of the Maze slot level from the mod's levels.txt, so " + who +
-		       " is not opened. Check that the Maze row in slots.txt names a level that exists in levels.txt (see the Cartographer README).";
+		return "Cartographer: could not read the LevelType of the " + slotName + " slot level from the mod's levels.txt, so " + who +
+		       " is not opened. Check that the " + slotName + " row in slots.txt names a level that exists in levels.txt (see the Cartographer README).";
 	}
-	const std::string slotIs = slotLevelType == 3   ? "a Cave level (LevelType 3)"
-	                           : slotLevelType == 4 ? "a Crypt level (LevelType 4)"
-	                                                : "LevelType " + std::to_string(slotLevelType) + ", neither Cave (3) nor Crypt (4)";
-	return "Cartographer: the Maze slot level is " + slotIs + ", so it cannot build " + who + " (needs LevelType " + std::to_string(tileset.levelType) +
-	       "). One Maze slot serves one tileset: use a map of that tileset, or give the slot a level of the other type (see the Cartographer README).";
+	std::string slotIs = "LevelType " + std::to_string(slotLevelType) + ", which is none of the maze tilesets";
+	for (const MazeTileset &t : MazeTilesets)
+		if (t.levelType == slotLevelType) slotIs = std::string("a ") + t.name + " level (LevelType " + std::to_string(slotLevelType) + ")";
+	return "Cartographer: the " + slotName + " slot level is " + slotIs + ", so it cannot build " + who + " (needs LevelType " + std::to_string(tileset.levelType) +
+	       "). Each maze tileset has a slot level of its own: run tools\\install.ps1 again, and set its LevelType back if it was changed (see the Cartographer README).";
 }
 
 uint64_t mixSeed(uint64_t a, uint64_t b)
@@ -86,7 +83,7 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 	MapPlan out;
 	Tileset base;
 	if (!builtinTileset(tileset, base)) {
-		out.reason = "Cartographer has no maze numbers for the tileset '" + std::string(tileset) + "'. Use Cave or Crypt.";
+		out.reason = "Cartographer has no maze numbers for the tileset '" + std::string(tileset) + "'. Use " + mazeTilesetNames() + ".";
 		return out;
 	}
 	if (!base.steerable) {
@@ -100,7 +97,7 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 	}
 	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Medium") : size);
 	if (!sz) {
-		out.reason = "The size '" + std::string(size) + "' is not Small, Medium or Large.";
+		out.reason = "The size '" + std::string(size) + "' is not ExtraSmall, Small, Medium or Large.";
 		return out;
 	}
 	layout::Rules rules;

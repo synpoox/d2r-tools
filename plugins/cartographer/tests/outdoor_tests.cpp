@@ -33,16 +33,19 @@ const std::string GOLDEN_SHORELINES =
 	"2,0=535/0 3,0=530/0 2,1=541/0 2,2=541/2 2,3=541/2 2,4=541/3 8,4=598/0 2,5=543/0 3,5=530/0 8,5=541/4 2,6=541/3 8,6=541/1 "
 	"2,7=583/1 3,7=532/0 4,7=532/0 5,7=532/1 6,7=532/1 7,7=532/0 8,7=538/1 ";
 const std::string GOLDEN_HASHES =
-	"64ece3af063ed751 fd3e0fc0f6d54272 26b1a6ce1f6541c2 68068c76a2578772 ce4981cb9a1e643a 2c762be1dbd7e208 c79697c5b4021c65 "
-	"1215a7942077a2ae 19fecd3b91d093a6 2c520c8edae359ff a5e29bd842850fc3 901fab347c753ae8 763e37c95d92c752 08e5bbf643a10c8c "
-	"74b3fce4810fad1e ";
+	"907cf8217d7b7829 64ece3af063ed751 fd3e0fc0f6d54272 26b1a6ce1f6541c2 ee21102abe478a95 68068c76a2578772 ce4981cb9a1e643a "
+	"2c762be1dbd7e208 606db446a5eb7047 c79697c5b4021c65 1215a7942077a2ae 19fecd3b91d093a6 5c0b71422478a02a 2c520c8edae359ff "
+	"a5e29bd842850fc3 901fab347c753ae8 49c9cba06771a0c0 763e37c95d92c752 08e5bbf643a10c8c 74b3fce4810fad1e "
+	"36bb32f5285e6d5f 3766511a9a24892c ef66469bffdeeff7 00f38885818a84b6 ";
 
 const std::string GOLDEN_STAMP_LINE =
 	"224x256 0,0=535 4,0=530 0,4=541 0,8=541 0,12=541 0,16=541 24,16=598 0,20=543 4,20=530 24,20=541 0,24=541 24,24=541 0,28=583 4,28=532 "
 	"8,28=532 12,28=532 16,28=532 20,28=532 24,28=538 ";
 const std::string GOLDEN_STAMP_HASHES =
-	"1a4771abad5cde3d 2c9bfd4b0c19b20c 0ea6ab53f22982a7 da62d59a94796e97 5575e6746fb2e8b8 8f2979a836716794 485a1e0bb7e9ba70 "
-	"26c18868df38eaa1 51585abd796d49ea f65c9d35dda89b61 c77ebfdc7deca837 eddf55fdbabafa69 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 ";
+	"bbc9e79c79924f3f 1a4771abad5cde3d 2c9bfd4b0c19b20c 0ea6ab53f22982a7 151c08742a7209c8 da62d59a94796e97 5575e6746fb2e8b8 "
+	"8f2979a836716794 7d42d055239584b1 485a1e0bb7e9ba70 26c18868df38eaa1 51585abd796d49ea a42cec83cc16fdf4 f65c9d35dda89b61 "
+	"c77ebfdc7deca837 eddf55fdbabafa69 e45b406a6be50916 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 "
+	"06c76a6eddf1c7c3 2cb9cb858214889e 5c05387d54e3dfd8 8ae65ae4e7d7937a ";
 
 // The fixtures sit beside this file, so the test needs no build-time path or working directory.
 std::string fixturePath(const char *name)
@@ -294,8 +297,8 @@ TEST_CASE("10k seeds of every shape preset on Jungle: every cell gets a matching
 			INFO(layout::shapeName(shape) << " " << layout::sizeName(size));
 			CHECK(failures == 0);
 			// Jungle has clearings for one or two exits; the event and boss rooms have one or two on these presets.
-			CHECK(clearingBoss == bossRooms);
-			CHECK(clearingEvent == eventRooms);
+			if (shape != layout::Shape::Open) CHECK(clearingBoss == bossRooms); // Open rooms have up to four exits, and Jungle has no such clearing: they take plain path pieces
+			if (shape != layout::Shape::Open) CHECK(clearingEvent == eventRooms);
 			if (std::getenv("CARTOGRAPHER_STATS"))
 				std::printf("%-9s %-6s seeds %d  failures %d  boss rooms %d (clearing %d)  event rooms %d (clearing %d)\n", layout::shapeName(shape),
 					layout::sizeName(size), kSeeds, failures, bossRooms, clearingBoss, eventRooms, clearingEvent);
@@ -797,6 +800,75 @@ TEST_CASE("a Jungle map plans: layout, picks and stamps agree, the rect is the s
 	}
 }
 
+TEST_CASE("the build plan builds the Open shape on Jungle at every size, and a plan is the same twice")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	for (const char *size : {"ExtraSmall", "Small", "Medium", "Large"})
+		for (uint64_t seed = 1; seed <= 25; ++seed) {
+			MapRequest r = jungleRequest(seed);
+			r.shape = "Open";
+			r.size = size;
+			const MapPlan plan = planOutdoorMap(r, cat);
+			INFO(size << " seed " << seed << ": " << plan.reason);
+			REQUIRE(plan.ok);
+			CHECK(plan.layout.rulesMet);
+			CHECK(!plan.stamps.stamps.empty());
+			CHECK(planOutdoorMap(r, cat).hash == plan.hash);
+			// Open stamps every block, so Large is capped at the Medium grid (9 x 9 blocks).
+			if (std::string(size) == "Large") {
+				CHECK(plan.layout.width == 9);
+				CHECK(plan.layout.height == 9);
+				CHECK(plan.stamps.stamps.size() == 81);
+			}
+		}
+}
+
+TEST_CASE("a shapes.txt Open row with a large Width and Height is capped at 81 stamps, and a MinPath the capped grid cannot reach is refused")
+{
+	const Catalogue &cat = builtinJungleCatalogue();
+	const layout::ParseResult parsed = layout::parseShapesTxt("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nHuge Plains\tOpen\t\t\t20\t20\nLong Plains\tOpen\t20\t60\t20\t20\n");
+	REQUIRE(parsed.errors.empty());
+	MapRequest r = jungleRequest(7);
+	r.shape = "Huge Plains";
+	r.size = "Large";
+	r.shapes = &parsed.table;
+	const MapPlan plan = planOutdoorMap(r, cat);
+	REQUIRE_MESSAGE(plan.ok, plan.reason);
+	CHECK(plan.layout.width == 9);
+	CHECK(plan.layout.height == 9);
+	CHECK(plan.stamps.stamps.size() == 81);
+	r.shape = "Long Plains";
+	const MapPlan refused = planOutdoorMap(r, cat);
+	CHECK_FALSE(refused.ok);
+	CHECK(refused.stamps.stamps.empty());
+	CHECK(refused.reason.find("MinPath") != std::string::npos);
+}
+
+TEST_CASE("capJungleOpenRules names the 81-cell limit for a MinPath above it, and no seed or Width/Height advice")
+{
+	layout::Rules rules;
+	std::string ignored;
+	const layout::ShapeTable none;
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, rules, ignored));
+	rules.width = 20;
+	rules.height = 20;
+	rules.pathMin = 90;
+	rules.pathMax = 120;
+	const std::string problem = capJungleOpenRules(rules);
+	CHECK(problem == "an Open map on Jungle is at most 9 x 9 cells, so MinPath can't be more than 81.");
+	CHECK(problem.find("MaxPath") == std::string::npos);
+
+	layout::Rules reach;
+	REQUIRE(layout::resolveRules(none, "Open", layout::Size::Large, reach, ignored));
+	reach.width = 20;
+	reach.height = 20;
+	reach.pathMin = 20;
+	reach.pathMax = 60;
+	const std::string unreachable = capJungleOpenRules(reach);
+	CHECK(unreachable == "an Open map on Jungle is capped at 9 x 9 cells, and MinPath 20 is too long for it.");
+	CHECK(unreachable.find("seed") == std::string::npos);
+}
+
 TEST_CASE("the build plan refuses what the game must build itself: other tilesets, bad shape or size, a level past the declared size")
 {
 	const Catalogue &cat = builtinJungleCatalogue();
@@ -1117,10 +1189,10 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 
 // --- The tileset table (outdoor_tilesets.h) ----------------------------------------------------------------------------------
 
-TEST_CASE("the outdoor tileset table holds Jungle then Snow, with the values the hooks and the installer rely on")
+TEST_CASE("the outdoor tileset table holds Jungle, Snow then Siege, with the values the hooks and the installer rely on")
 {
 	// Pinned: these are the slot rows, levels.txt names and LevelTypes of shipped installs. A change here is a compatibility change.
-	REQUIRE(OutdoorTilesetCount == 2);
+	REQUIRE(OutdoorTilesetCount == 3);
 	CHECK(std::string(OutdoorTilesets[0].name) == "Jungle");
 	CHECK(OutdoorTilesets[0].levelType == 21);
 	CHECK(std::string(OutdoorTilesets[0].slot) == "Outdoor");
@@ -1131,21 +1203,28 @@ TEST_CASE("the outdoor tileset table holds Jungle then Snow, with the values the
 	CHECK(std::string(OutdoorTilesets[1].slot) == "OutdoorSnow");
 	CHECK(std::string(OutdoorTilesets[1].levelName) == "Cartographer Snow");
 	CHECK(OutdoorTilesets[1].planner == Planner::Snow);
+	CHECK(std::string(OutdoorTilesets[2].name) == "Siege");
+	CHECK(OutdoorTilesets[2].levelType == 30);
+	CHECK(std::string(OutdoorTilesets[2].slot) == "OutdoorSiege");
+	CHECK(std::string(OutdoorTilesets[2].levelName) == "Cartographer Siege");
+	CHECK(OutdoorTilesets[2].planner == Planner::Siege);
 	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
 	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);
+	CHECK(findOutdoorTileset("siege") == &OutdoorTilesets[2]);
 	CHECK(findOutdoorTileset("Lava") == nullptr);
 	CHECK(findOutdoorTilesetBySlot("outdoorsnow") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTilesetBySlot("Maze") == nullptr);
 	CHECK(outdoorTilesetIndex("snow") == 1);
+	CHECK(outdoorTilesetIndex("Siege") == 2);
 	CHECK(outdoorTilesetIndex("Jungle") == 0);
 	CHECK(outdoorTilesetIndex("Lava") == 0);
-	CHECK(outdoorTilesetNames() == "Jungle or Snow");
+	CHECK(outdoorTilesetNames() == "Jungle, Snow or Siege");
 	MapRequest r;
 	r.tileset = "Lava";
 	const MapPlan refused = planOutdoorMap(r, builtinJungleCatalogue());
 	CHECK_FALSE(refused.ok);
-	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle or Snow.");
+	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow or Siege.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same outdoor tilesets as the table, in the same order")

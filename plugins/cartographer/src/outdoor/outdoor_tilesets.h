@@ -14,7 +14,7 @@
 namespace cartographer::outdoor {
 
 // Which planner builds the tileset's map (the switch in planOutdoorMap).
-enum class Planner { Jungle, Snow };
+enum class Planner { Jungle, Snow, Siege };
 
 struct OutdoorTileset {
 	const char *name;       // the maps.txt Tileset
@@ -24,10 +24,11 @@ struct OutdoorTileset {
 	Planner planner;
 };
 
-// The row order is the slot index in the outdoor hooks: Jungle is 0 (the default for an unknown tileset), Snow is 1.
+// The row order is the slot index in the outdoor hooks: Jungle is 0 (the default for an unknown tileset), Snow is 1, Siege is 2.
 inline constexpr OutdoorTileset OutdoorTilesets[] = {
 	{"Jungle", 21, "Outdoor", "Cartographer Outdoor", Planner::Jungle},
 	{"Snow", 31, "OutdoorSnow", "Cartographer Snow", Planner::Snow},
+	{"Siege", 30, "OutdoorSiege", "Cartographer Siege", Planner::Siege},
 };
 inline constexpr size_t OutdoorTilesetCount = sizeof(OutdoorTilesets) / sizeof(OutdoorTilesets[0]);
 

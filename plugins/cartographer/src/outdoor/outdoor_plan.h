@@ -37,8 +37,8 @@ bool outdoorTilesetKnown(std::string_view tileset);
 
 struct MapRequest {
 	std::string tileset;  // the maps.txt Tileset, e.g. "Jungle"
-	std::string shape;    // a shape name; blank means Winding. Snow has no shapes: it is ignored there.
-	std::string size;     // Small, Medium or Large; blank means Medium
+	std::string shape;    // a shape name; blank means Winding. Snow and Siege have no shapes: it is ignored there.
+	std::string size;     // ExtraSmall, Small, Medium or Large; blank means Medium
 	uint64_t seed = 0;    // the map's layout seed
 	StampOptions options; // origin, size limits (the slot row's), pinFiles, listVoid
 	const layout::ShapeTable *shapes = nullptr; // shapes.txt rows; null means the built-in shapes only. Not part of the cache key.
@@ -47,12 +47,20 @@ struct MapRequest {
 struct MapPlan {
 	bool ok = false;
 	std::string reason;     // plain English, when !ok: why the game must build its own level
-	layout::Layout layout;  // empty unless the shape resolved (always empty for Snow)
-	PickResult picks;       // empty for Snow
+	layout::Layout layout;  // empty unless the shape resolved (always empty for Snow and Siege)
+	PickResult picks;       // empty for Snow and Siege
 	StampPlan stamps;       // complete only when ok
 	uint64_t hash = 0;      // over the layout, the picks and the stamp plan: stable across platforms
 	std::string cacheKey;   // what PlanCache keyed it by
 };
+
+// The most cells an Open map may have along each side (the 9 x 9 grid of Medium, 81 blocks). It applies to any outdoor Open layout this
+// planner builds, whatever the shape's Width and Height.
+constexpr int kJungleOpenMaxCells = 9;
+
+// Caps the rules of an Open shape to kJungleOpenMaxCells and checks them again, so a MinPath above the capped grid is refused. Empty when
+// the rules are fine (or are not Open); else a plain-English reason. Used by the planner and by the maps.txt loader.
+std::string capJungleOpenRules(layout::Rules &rules);
 
 // Plans a map: resolves the shape and size, generates the layout for the seed, picks the pieces, plans the stamps and
 // checks the stamp plan with checkStampPlan. Any failure leaves ok false with the reason (the first error, with the count

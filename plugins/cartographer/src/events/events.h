@@ -21,7 +21,7 @@ constexpr int kDefaultWaves = 3;        // mapevents.txt Waves default (Ambush)
 constexpr int kDefaultWeight = 1;       // mapevents.txt Weight default
 constexpr int kMaxCount = 200;          // sanity caps, so a typo cannot ask for a million monsters
 constexpr int kMaxWaves = 50;
-constexpr int kMaxWeight = 1000000;     // Weight cap, the same as mapstats.txt; the draw total is 64-bit
+constexpr int kMaxWeight = 1000000;     // Weight cap, the same cap as mapevents.txt weights; the draw total is 64-bit
 // Weight: 0 = off (never drawn, no message), negative = error (row skipped), above kMaxWeight = used as kMaxWeight
 // with a warning (see warnRow).
 

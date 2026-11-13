@@ -3,16 +3,15 @@
 #include "doctest.h"
 
 #include <cstring>
+#include <fstream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "statplan.h"
 
 using namespace cartographer::statplan;
-using cartographer::stats::MapRow;
-using cartographer::stats::Settings;
-using cartographer::stats::drawMapStats;
 
 namespace {
 
@@ -147,41 +146,6 @@ TEST_CASE("buildPlan refuses a stat id above the limit")
 	const Plan plan = buildPlan({{Target::Monsters, "huge", 1}, {Target::Monsters, "ok", 1}}, ids);
 	CHECK(plan.monsters.size() == 1);
 	CHECK(plan.skipped.size() == 1);
-}
-
-TEST_CASE("a drawn map yields the same plan for the same seed")
-{
-	const std::vector<PoolRow> pool = {
-		{Target::Monsters, "item_maxhp_percent", 10, 20, 1},
-		{Target::Monsters, "damagepercent", 10, 20, 1},
-		{Target::Players, "fireresist", -30, -10, 1},
-		{Target::Players, "hpregen", -30, -10, 1},
-	};
-	Settings s;
-	s.properties = 3;
-	const StatIds ids = testIds();
-	const Plan a = buildPlan(drawMapStats(42, MapRow{}, s, pool), ids);
-	const Plan b = buildPlan(drawMapStats(42, MapRow{}, s, pool), ids);
-	CHECK(describe(a) == describe(b));
-	CHECK(a.monsters.size() + a.players.size() + a.skipped.size() == 3);
-	for (const Entry &e : a.monsters) CHECK(e.value >= 10);
-	for (const Entry &e : a.players) CHECK(e.value <= -10);
-}
-
-TEST_CASE("checkPoolStats warns about unknown stats, only for rows that can be drawn")
-{
-	const std::vector<PoolRow> pool = {
-		{Target::Monsters, "fireresist", 1, 2, 1},
-		{Target::Monsters, "fireresits", 1, 2, 1},
-		{Target::Monsters, "madeup", 1, 2, 0},  // off: never drawn
-		{Target::Monsters, "madeup", 1, 2, -1}, // error row: already reported
-	};
-	const auto issues = checkPoolStats(pool, testIds());
-	REQUIRE(issues.size() == 1);
-	CHECK(issues[0].row == 1);
-	CHECK_FALSE(issues[0].error);
-	CHECK(issues[0].message.find("fireresist") != std::string::npos);
-	CHECK(checkPoolStats(pool, StatIds{}).empty()); // table not read: unchecked
 }
 
 TEST_CASE("the player's list goes on in the map, off when it no longer applies")
@@ -351,24 +315,6 @@ TEST_CASE("stats that need a skill or state number are refused on both targets")
 	}
 	CHECK(refusedReason(Target::Players, "fireresist", 39).empty());
 	CHECK(refusedReason(Target::Monsters, "item_skillonxyz", 200).empty()); // the list is exact: no prefix match
-}
-
-TEST_CASE("checkPoolStats names each refused row")
-{
-	StatIds ids;
-	ids.loaded = true;
-	ids.byName = {{"gold", 14}, {"fireresist", 39}};
-	const std::vector<PoolRow> pool = {
-		{Target::Players, "fireresist", 1, 2, 1},
-		{Target::Players, "gold", 1, 2, 1},
-		{Target::Monsters, "gold", 1, 2, 1}, // fine on monsters
-		{Target::Players, "gold", 1, 2, 0},  // off: not reported
-	};
-	const auto issues = checkPoolStats(pool, ids);
-	REQUIRE(issues.size() == 1);
-	CHECK(issues[0].row == 1);
-	CHECK(issues[0].message.find("gold") != std::string::npos);
-	CHECK(issues[0].message.find("refused on players") != std::string::npos);
 }
 
 TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
@@ -628,49 +574,267 @@ TEST_CASE("checkTableView accepts only the game's own table")
 	CHECK_FALSE(checkTableView(nullptr, 0, kStateRowSize, nullptr, 0, kStateRowSize).empty());
 }
 
-TEST_CASE("itemStatsToProperties: item stats become properties in the item's order, the pool row gives the target")
+TEST_CASE("itemStatsToProperties: monster-side item stats apply their vanilla stat to monsters, the rest are player stats, in the item's order")
 {
-	using cartographer::stats::PoolRow;
-	using cartographer::stats::Target;
-	const StatIds ids = testIds();
-	const std::vector<PoolRow> pool = {
-		{Target::Players, "fireresist", -30, -10, 1},
-		{Target::Monsters, "item_maxhp_percent", 10, 50, 1},
-		{Target::Monsters, "strength", 1, 5, 1},
-		{Target::Players, "strength", 1, 5, 1}, // a second row for the same stat: the first one wins
-	};
-	const auto r = itemStatsToProperties({{ids.find("item_maxhp_percent"), 0, 30}, {ids.find("fireresist"), 0, -20}, {ids.find("strength"), 0, 7}}, pool, ids);
-	REQUIRE(r.properties.size() == 3);
+	const StatIds ids = parseItemStatCost(
+	    "Stat\nstrength\nitem_maxhp_percent\nfireresist\ncartographer_mon_life\ncartographer_mon_fire_res\n");  // ids 0 to 4, the row numbers
+	const auto r = itemStatsToProperties({{3, 0, 30}, {2, 0, -20}, {0, 0, 7}, {4, 0, 25}}, ids);
+	REQUIRE(r.properties.size() == 4);
 	CHECK(r.dropped.empty());
-	CHECK(r.properties[0] == cartographer::stats::Property{Target::Monsters, "item_maxhp_percent", 30});
-	CHECK(r.properties[1] == cartographer::stats::Property{Target::Players, "fireresist", -20});
-	CHECK(r.properties[2] == cartographer::stats::Property{Target::Monsters, "strength", 7});
+	CHECK(r.properties[0] == cartographer::statplan::Property{Target::Monsters, "item_maxhp_percent", 30});
+	CHECK(r.properties[1] == cartographer::statplan::Property{Target::Players, "fireresist", -20});
+	CHECK(r.properties[2] == cartographer::statplan::Property{Target::Players, "strength", 7});
+	CHECK(r.properties[3] == cartographer::statplan::Property{Target::Monsters, "fireresist", 25});
+	// A vanilla stat on the item is the player's, never the monsters'.
+	const auto plan = buildPlan(r.properties, ids);
+	REQUIRE(plan.monsters.size() == 2);
+	CHECK(plan.monsters[0].stat == 1);
+	CHECK(plan.monsters[1].stat == 2);
+	REQUIRE(plan.players.size() == 2);
 }
 
-TEST_CASE("itemStatsToProperties: a layer, a zero value and a stat no pool row names are dropped with a line each")
+TEST_CASE("itemStatsToProperties: a layer, a zero value and an unknown id are dropped with a line each")
 {
-	using cartographer::stats::PoolRow;
-	using cartographer::stats::Target;
-	const StatIds ids = testIds();
-	const std::vector<PoolRow> pool = {{Target::Players, "fireresist", -30, -10, 1}};
-	const auto r = itemStatsToProperties({{ids.find("fireresist"), 3, -20}, {ids.find("fireresist"), 0, 0}, {ids.find("hpregen"), 0, 5}, {9999, 0, 1}, {ids.find("fireresist"), 0, -5}}, pool, ids);
+	const StatIds ids = parseItemStatCost("Stat\nfireresist\ncartographer_mon_life\n");
+	const auto r = itemStatsToProperties({{0, 3, -20}, {0, 0, 0}, {9999, 0, 1}, {1, 0, -5}}, ids);
 	REQUIRE(r.properties.size() == 1);
-	CHECK(r.properties[0].value == -5);
-	CHECK(r.dropped.size() == 4);
-	CHECK(itemStatsToProperties({}, pool, ids).properties.empty());
-	// Fail open: with no stat table nothing matches, and drawMapStats then draws as usual.
-	const auto none = itemStatsToProperties({{2, 0, -20}}, pool, StatIds{});
+	CHECK(r.properties[0] == cartographer::statplan::Property{Target::Monsters, "item_maxhp_percent", -5});
+	REQUIRE(r.dropped.size() == 3);
+	CHECK(r.dropped[0].find("layer") != std::string::npos);
+	CHECK(r.dropped[1].find("value is 0") != std::string::npos);
+	CHECK(r.dropped[2].find("no itemstatcost row has this id") != std::string::npos);
+	CHECK(itemStatsToProperties({}, ids).properties.empty());
+	// Fail open: with no stat table nothing can be named.
+	const auto none = itemStatsToProperties({{0, 0, -20}}, StatIds{});
 	CHECK(none.properties.empty());
-	CHECK(none.dropped.size() == 1);
-	Settings s;
-	s.properties = 1;
-	s.itemStats = true;
-	CHECK(drawMapStats(1, MapRow{}, s, pool, none.properties).size() == 1);
-	CHECK(drawMapStats(1, MapRow{}, s, pool, r.properties) == r.properties);
+	REQUIRE(none.dropped.size() == 1);
+}
+
+TEST_CASE("every monster-side map stat names a vanilla stat buildPlan accepts on monsters")
+{
+	StatIds ids;
+	ids.loaded = true;
+	int next = 100;  // clear of the ids buildPlan refuses
+	for (const auto &m : monsterStats()) ids.byName.emplace_back(m.applied, next++);
+	for (const auto &m : monsterStats()) {
+		const auto plan = buildPlan({{Target::Monsters, m.applied, 10}}, ids);
+		CHECK_MESSAGE(plan.monsters.size() == 1, m.applied);
+	}
+}
+
+TEST_CASE("parsePropertyId: the row number of the property code")
+{
+	const std::string t = "code\tfunc1\nstr\t1\n\nmap-level\t1\n";
+	CHECK(parsePropertyId(t, "str") == 0);
+	CHECK(parsePropertyId(t, "map-level") == 1); // a blank line is not a row, as for itemstatcost.txt
+	CHECK(parsePropertyId(t, "nope") == -1);
+	// The vanilla "Expansion" separator row is not counted by the game: the rows after it are one lower.
+	const std::string e = "code\tfunc1\nstr\t1\nExpansion\t\nmap-level\t1\n";
+	CHECK(parsePropertyId(e, "map-level") == 1);
+	CHECK(parsePropertyId("x\ty\n", "str") == -1);
+}
+
+TEST_CASE("cubeRoll: stays in the range")
+{
+	CHECK(cubeRoll(5, 5, 99) == 5);
+	CHECK(cubeRoll(8, 4, 99) == 8);
+	CHECK(cubeRoll(0, 5000, 99) == 0);
+	bool seen[6] = {};
+	for (uint64_t e = 0; e < 200; ++e) {
+		const int r = cubeRoll(5, 10, e);
+		REQUIRE(r >= 5);
+		REQUIRE(r <= 10);
+		seen[r - 5] = true;
+	}
+	for (bool b : seen) CHECK(b);
+}
+
+TEST_CASE("cubeMapLevelTarget: the recipe adds to the map's level")
+{
+	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5) == 5);       // untouched, a map with no stat
+	CHECK(cubeMapLevelTarget(70, 70, 5, 5, 5) == 75);    // untouched, a second transmute
+	CHECK(cubeMapLevelTarget(70, 5, 5, 5, 5) == 75);     // the game set it instead of adding
+	CHECK(cubeMapLevelTarget(70, 75, 5, 5, 5) == 75);    // the game added: stands
+	CHECK(cubeMapLevelTarget(0, 5, 5, 5, 5) == 5);       // set on a map with none
+	CHECK(cubeMapLevelTarget(10, 7, 5, 9, 7) == 17);     // set to a value in range
+	CHECK(cubeMapLevelTarget(500, 500, 20, 20, 20) == 511); // cut to the stat's 9 bits
+	CHECK(cubeMapLevelTarget(3, 3, 0, 0, 0) == 3);       // a recipe that adds nothing leaves it
+	CHECK(cubeMapLevelTarget(3, 3, 8, 4, 6) == 11);      // max below min: min is used
+	// Fail open: a level that could not be read is never treated as 0.
+	CHECK(cubeMapLevelTarget(0, 0, 5, 5, 5, false) == 0);
+	CHECK(cubeMapLevelTarget(20, 20, 10, 10, 10, false) == 20);
+	CHECK(cubeMapLevelTarget(20, 10, 10, 10, 10, false) == 10);
+	// A fresh map reads as a trusted 0 (no stat, nothing in the cube raised it): the first transmute gets the roll.
+	CHECK(cubeLevelKnown(true, 0, true));
+	CHECK(cubeMapLevelTarget(0, 0, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(0, 10, 10, 10, 10, cubeLevelKnown(true, 0, true)) == 10);
+	CHECK(cubeMapLevelTarget(10, 10, 10, 10, 10, cubeLevelKnown(true, 10, true)) == 20);
+	// Not read: the input walk failed (-1) while the cube step is hooked, or an item read failed.
+	CHECK_FALSE(cubeLevelKnown(true, -1, true));
+	CHECK_FALSE(cubeLevelKnown(false, 5, true));
+	CHECK(cubeLevelKnown(true, -1, false));
+}
+
+TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");
+	const int ID = 1;
+	REQUIRE(ids.find(kMapLevelStat) == 1);
+	auto pick = mapLevelFromItem({{0, 0, 5}, {ID, 0, 92}}, ids, 85);
+	CHECK(pick.fromItem);
+	CHECK(pick.level == 92);
+	CHECK(pick.note.empty());
+	// No stat on the item (an item made before the stat existed): the fallback, with nothing to report.
+	pick = mapLevelFromItem({{0, 0, 5}}, ids, 85);
+	CHECK_FALSE(pick.fromItem);
+	CHECK(pick.level == 85);
+	CHECK(pick.note.empty());
+	CHECK(mapLevelFromItem({}, ids, 85).level == 85);
+	// The row is missing from itemstatcost.txt, or the table could not be read: the fallback.
+	CHECK(mapLevelFromItem({{ID, 0, 92}}, testIds(), 85).level == 85);
+	CHECK(mapLevelFromItem({{ID, 0, 92}}, StatIds{}, 85).level == 85);
+	// A stat with a layer is another stat.
+	CHECK(mapLevelFromItem({{ID, 3, 92}}, ids, 85).level == 85);
+}
+
+TEST_CASE("mapLevelFromItem: a value of 0 or less falls back, a value above 255 is cut, both with a note")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\ncartographer_map_level\t400\n");
+	const int ID = 0;
+	auto pick = mapLevelFromItem({{ID, 0, 0}}, ids, 70);
+	CHECK_FALSE(pick.fromItem);
+	CHECK(pick.level == 70);
+	CHECK_FALSE(pick.note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, -4}}, ids, 70).level == 70);
+	pick = mapLevelFromItem({{ID, 0, 300}}, ids, 70);
+	CHECK(pick.fromItem);
+	CHECK(pick.level == 255);
+	CHECK_FALSE(pick.note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, 255}}, ids, 70).note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, 1}}, ids, 70).level == 1);
+}
+
+TEST_CASE("withoutMapLevel drops only the map-level stat")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");
+	const int ID = 1;
+	const auto kept = withoutMapLevel({{0, 0, 5}, {ID, 0, 92}, {0, 0, 6}}, ids);
+	REQUIRE(kept.size() == 2);
+	CHECK(kept[0].value == 5);
+	CHECK(kept[1].value == 6);
+	CHECK(withoutMapLevel({{ID, 0, 92}}, StatIds{}).size() == 1);
 }
 
 TEST_CASE("isStaticState lists the fixed ids")
 {
 	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));
 	for (int s : {1, 39, 108, 116, 230, 231}) CHECK_FALSE(isStaticState(s));
+}
+
+TEST_CASE("every monster-side map stat is a row the installer adds, with a description text")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	for (const auto &m : monsterStats()) {
+		CHECK_MESSAGE(all.str().find(std::string("'") + m.itemStat + "'") != std::string::npos, m.itemStat);
+	}
+}
+
+TEST_CASE("the installer writes and repairs the Map type with Rare on and Magic and Normal off")
+{
+	std::string here = __FILE__;
+	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
+	REQUIRE(in.good());
+	std::stringstream all;
+	all << in.rdbuf();
+	const std::string text = all.str();
+	const std::string magicOff = "Set-CellIf $itemTypes $cells 'Magic' '0'";
+	const size_t first = text.find(magicOff);
+	REQUIRE(first != std::string::npos);
+	CHECK(text.find(magicOff, first + 1) != std::string::npos);  // once when the row is added, once in the repair
+	CHECK(text.find("Set-CellIf $itemTypes $cells 'Normal' '0'") != std::string::npos);
+	CHECK(text.find("foreach ($col in 'Magic', 'Rare')") == std::string::npos);
+}
+
+TEST_CASE("decodeItemStatList reads D2RLoader's 16-byte entries and refuses any other layout")
+{
+	// The unique map from the check (RE note 14, section 16): {layer, stat, value, 0} seven times.
+	const int32_t good[] = {0, 39, 15, 0, 0, 41, 15, 0, 0, 43, 15, 0, 0, 45, 15, 0, 0, 368, 95, 0, 0, 369, 30, 0, 0, 371, -20, 0};
+	std::string problem;
+	const auto ok = decodeItemStatList(good, 7, 16, &problem);
+	REQUIRE(ok.size() == 7);
+	CHECK(problem.empty());
+	CHECK(ok[0].stat == 39);
+	CHECK(ok[0].layer == 0);
+	CHECK(ok[0].value == 15);
+	CHECK(ok[6].stat == 371);
+	CHECK(ok[6].value == -20);
+
+	// Only the first maxStats entries are read.
+	CHECK(decodeItemStatList(good, 7, 3, &problem).size() == 3);
+
+	// 8-byte pairs {stat << 16 | layer, value}: the fourth int of an entry is not 0.
+	const int32_t pairs[] = {(39 << 16), 15, (41 << 16), 15, (43 << 16), 15, (45 << 16), 15};
+	CHECK(decodeItemStatList(pairs, 2, 16, &problem).empty());
+	CHECK(problem.find("layout not recognised") != std::string::npos);
+
+	// Junk: a stat id past kMaxStatId, a negative layer.
+	problem.clear();
+	const int32_t junk[] = {0, 39, 15, 0, 0, 99999, 1, 0};
+	CHECK(decodeItemStatList(junk, 2, 16, &problem).empty());
+	CHECK(problem.find("entry 1") != std::string::npos);
+	problem.clear();
+	const int32_t neg[] = {-1, 39, 15, 0};
+	CHECK(decodeItemStatList(neg, 1, 16, &problem).empty());
+	CHECK(!problem.empty());
+
+	// Nothing to read is not a problem.
+	problem.clear();
+	CHECK(decodeItemStatList(good, 0, 16, &problem).empty());
+	CHECK(problem.empty());
+}
+
+TEST_CASE("mapDensityBonus: the item's map-density values are added up over its affixes")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
+	const int D = 1, MF = 2;
+	REQUIRE(ids.find(kMapDensityStat) == D);
+	// Two affixes with density (20 and 35) and one with magic find: only density counts.
+	CHECK(mapDensityBonus({{D, 0, 20}, {MF, 0, 15}, {D, 0, 35}}, ids) == 55);
+	CHECK(mapDensityBonus({{D, 0, 20}, {D, 0, -50}}, ids) == -30);
+	CHECK(mapDensityBonus({{MF, 0, 15}}, ids) == 0);
+	CHECK(mapDensityBonus({}, ids) == 0);
+	// A layer makes it another stat; a missing row or an unreadable table gives nothing.
+	CHECK(mapDensityBonus({{D, 3, 20}}, ids) == 0);
+	CHECK(mapDensityBonus({{D, 0, 20}}, testIds()) == 0);
+	CHECK(mapDensityBonus({{D, 0, 20}}, StatIds{}) == 0);
+	// Not capped at 1000: an item saves one value of -524288 to 524287 for the stat, so a sum of 500000 is within what a saved item holds.
+	CHECK(mapDensityBonus({{D, 0, 200000}, {D, 0, 200000}, {D, 0, 100000}}, ids) == 500000);
+}
+
+TEST_CASE("densityWithBonus adds percentage points, uncapped, never below 0")
+{
+	CHECK(densityWithBonus(100, 55) == 155);
+	CHECK(densityWithBonus(0, 40) == 40);
+	CHECK(densityWithBonus(1000, 500) == 1500);
+	CHECK(densityWithBonus(100, 0) == 100);
+	CHECK(densityWithBonus(50, -80) == 0);
+}
+
+TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a player stat")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
+	const std::vector<ItemStat> stats = {{1, 0, 20}, {2, 0, 15}, {0, 0, 5}};
+	const auto rest = withoutMapDensity(stats, ids);
+	REQUIRE(rest.size() == 2);
+	CHECK(rest[0].stat == 2);
+	CHECK(rest[1].stat == 0);
+	// The magic find left over is a player stat on the player under its own name.
+	const auto mapped = itemStatsToProperties(rest, ids);
+	REQUIRE(mapped.properties.size() == 2);
+	CHECK(mapped.properties[0] == Property{Target::Players, "item_magicbonus", 15});
+	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
 }

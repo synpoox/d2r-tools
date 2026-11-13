@@ -52,6 +52,28 @@ auto BossRowKey(const std::string& pluginId, const std::string& name) -> std::st
 // The plugin's boss string file: one record per name (a repeated name once), the display text in every language (see DisplayName).
 auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
 
+// The description of the map level stat (itemstatcost.txt, descstrpos): install.ps1 writes RowKey(plugin id, MapLevelStatLocalKey) and the plugin registers
+// this text for MapLevelStatLocalKey. The text is a format that takes the stat's value (descfunc 19).
+inline constexpr const char* MapLevelStatLocalKey = "map_level_stat";
+inline constexpr const char* MapLevelStatText = "Map Level: %d";
+// The monster-side map stats (statplan monsterStats()): itemstatcost.txt row `cartographer_<key>`, description key RowKey(plugin id, key), and the text, a format that
+// takes the stat's signed value.
+struct MonsterStatText {
+	const char* key;
+	const char* text;
+};
+inline constexpr MonsterStatText MonsterStatTexts[] = {
+    {"mon_life", "%+d%% Monster Life"},
+    {"mon_damage", "%+d%% Monster Damage"},
+    {"mon_fire_res", "%+d%% Monster Fire Resistance"},
+    {"mon_cold_res", "%+d%% Monster Cold Resistance"},
+    {"mon_light_res", "%+d%% Monster Lightning Resistance"},
+    {"mon_poison_res", "%+d%% Monster Poison Resistance"},
+    {"mon_speed", "%+d%% Monster Speed"},
+    {"map_density", "%+d%% Map Density"},  // not a monster stat: the bonus Density of the map (statplan mapDensityBonus)
+};
+auto MapStatStringsJson() -> std::string;
+
 // Writes `key` into a 40-byte field (the rest zero). False, and the field untouched, when the key does not fit.
 auto WriteKey(uint8_t* field, const std::string& key) -> bool;
 

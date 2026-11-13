@@ -1,6 +1,6 @@
 // Map events in the game (phase 6a): the entry message, the event decision at map open, and the Boss and Horde events.
 //   * Entry message: when the local player arrives in the map's level, a banner with the map's name and, when an event fired
-//     and can be applied, the event's Name and Message (overlay service, fading; the console when there is no overlay).
+//     and can be applied, the event's Name and Message (a plugin panel; the console when there is none).
 //   * Decision: at map open, with the pure events core (EventChance, the row draw by Weight, the map seed).
 //   * Boss and Horde: spawned in the event room once that room is populated. The hook is on the room populator (0x50acf0),
 //     the one function both activation paths (0x4042a0 and 0x408670) call for each room not yet populated; the original

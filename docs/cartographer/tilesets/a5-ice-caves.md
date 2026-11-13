@@ -17,7 +17,7 @@ Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
 
 Closest of the seven: the piece set and Prev family are the Cave pattern exactly. One new `builtinTileset` entry (levelType 33, roomTiles 16, pieceBase 1002, prev 1018-1021) plus the usual table touch points. Still open, as for every non-Cave tileset:
 
-- **A slot per tileset** (one Maze slot is one LevelType; shared work).
+- **A slot per tileset** (done by the `MazeTilesets` table, #303: Ice Caves needs its own row).
 - **The `0x3e69e0` Ice case** is not recorded (ring grower call, walk after it). The plan lists Ice among the "one extra hook" tilesets (ring grower as a no-op), unchecked here.
 - **Waypoint pieces.** The vanilla Ice levels place a waypoint room through the special-room calls; Cartographer answers every non-entrance `0x3eb850` call with a suppression, so the waypoint is simply absent. Not expected to matter, but unchecked.
 - **Tiles.** Act 5 tiles in the Act 5 slot level: no cross-act problem. At 360 tiles 21 rooms fit across.

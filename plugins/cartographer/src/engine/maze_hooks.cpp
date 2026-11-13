@@ -1,9 +1,11 @@
 #include "maze_hooks.h"
 
 #include "core/part_signatures.h"
+#include "automap_reset.h"
 #include "core/text.h"
 #include "log.h"
 #include "hookguard.h"
+#include "maze_tilesets.h"
 #include "outdoor_hooks.h"
 #include "steer.h"
 
@@ -89,7 +91,7 @@ SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
 
 std::atomic<bool> g_live{false};
-std::atomic<int> g_slotLevel{-1};
+std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
 std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
 cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
@@ -459,7 +461,7 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 // The plan for the current map at the size this level declared when it was first seen in this game (`declX` x `declY`, from
 // g_declared, never the level record's current size, which the hooks overwrite); cached per game, so the server's build and
 // the client's build get the same plan. Empty, with a reason, when no map was opened.
-auto Prepare(void* level, int declX, int declY, std::string* why) -> std::optional<Prepared> {
+auto Prepare(void* level, int slotIndex, int declX, int declY, std::string* why) -> std::optional<Prepared> {
 	std::shared_ptr<const Job> job;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -467,6 +469,10 @@ auto Prepare(void* level, int declX, int declY, std::string* why) -> std::option
 	}
 	if (job == nullptr) {
 		*why = "no maze map was opened in this game";
+		return std::nullopt;
+	}
+	if (static_cast<int>(cm::mazeTilesetIndex(job->tileset)) != slotIndex) {
+		*why = "the map opened in this game is a " + job->tileset + " map, which has a slot level of its own";
 		return std::nullopt;
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
@@ -666,9 +672,22 @@ void RingHook(void* level, int32_t n) noexcept {
 	g_ringOriginal(level, n);
 }
 
-auto IsSlotLevel(const void* level) noexcept -> bool {
-	const int slot = g_slotLevel.load();
-	return slot > 0 && level != nullptr && Readable(level, 0x200) && Read<int32_t>(level, LvlId) == slot;
+// The row of cm::MazeTilesets whose slot level `level` is, or -1.
+auto SlotIndexOfId(int id) noexcept -> int {
+	for (size_t i = 0; i < cm::MazeTilesetCount; ++i) {
+		const int slot = g_slotLevels[i].load();
+		if (slot > 0 && slot == id) {
+			return static_cast<int>(i);
+		}
+	}
+	return -1;
+}
+
+auto SlotIndexOf(const void* level) noexcept -> int {
+	if (level == nullptr || !Readable(level, 0x200)) {
+		return -1;
+	}
+	return SlotIndexOfId(Read<int32_t>(level, LvlId));
 }
 
 auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
@@ -683,7 +702,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			return outdoorResult;
 		}
 	}
-	if (!g_live.load() || !IsSlotLevel(level)) {
+	const int slotIndex = g_live.load() ? SlotIndexOf(level) : -1;
+	if (slotIndex < 0) {
 		return g_levelOriginal(dataFlag, level);  // every other level runs the game's own build, untouched
 	}
 	BuildCtx ctx;
@@ -701,7 +721,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		{
 			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
 			std::lock_guard<std::mutex> lock(g_lock);
-			hadJob = g_job != nullptr;
+			hadJob = g_job != nullptr && static_cast<int>(cm::mazeTilesetIndex(g_job->tileset)) == slotIndex;  // a map of another tileset belongs to its own slot level
 			// Marked as running in the same hold that reads the job, so a remote apply (MazeRemoteMapOpened) sees this build or this build sees its job.
 			g_slotState.begin();
 			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
@@ -710,12 +730,12 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			ctx.orig.row = g_ownRows.emplace(id, Read<const int32_t*>(level, LvlMazeRow)).first->second;
 		}
 		std::string why;
-		if (const std::optional<Prepared> prep = Prepare(level, ctx.orig.sizeX, ctx.orig.sizeY, &why)) {
+		if (const std::optional<Prepared> prep = Prepare(level, slotIndex, ctx.orig.sizeX, ctx.orig.sizeY, &why)) {
 			ctx.prep = *prep;
 			if (!prep->plan->steer) {
 				why = prep->plan->reason;
 			} else if (Read<int32_t>(level, LvlTileType) != prep->plan->tileset.levelType) {
-				why = "the Maze slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
+				why = std::string("the ") + cm::MazeTilesets[slotIndex].slot + " slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
 				      std::to_string(prep->plan->tileset.levelType) + " (levels.txt LevelType)";
 			} else {
 				ctx.steer = true;
@@ -732,6 +752,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			Write<int32_t>(level, LvlSizeX, plan.levelTilesX);
 			Write<int32_t>(level, LvlSizeY, plan.levelTilesY);
 			Write<const int32_t*>(level, LvlMazeRow, ctx.prep.row);
+			AutomapResetArm(ctx.prep.plan->hash ^ (ctx.prep.job->seed * 0x9E3779B97F4A7C15ull), id);  // a new map starts with an empty automap: skip the read of an earlier map's revealed cells in this layer
 			plog::Info("maze slot level %d: steering '%s' (%s %s %s, seed %llu): %d rooms, level %d x %d tiles, plan %016llx, %d refits", id, ctx.prep.job->name.c_str(),
 			           ctx.prep.plan->tileset.name.c_str(), ctx.prep.job->shape.c_str(), ctx.prep.job->size.c_str(), static_cast<unsigned long long>(ctx.prep.job->seed),
 			           static_cast<int>(plan.rooms.size()), plan.levelTilesX, plan.levelTilesY, static_cast<unsigned long long>(ctx.prep.plan->hash), ctx.prep.plan->seedPlan.refits);
@@ -783,15 +804,18 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 	for (const Part& part : g_parts) {
 		out.push_back(part.status);
 	}
+	out.push_back(AutomapResetPartStatus());
 	return out;
 }
 
-auto MazeSlotLevelId() -> int {
-	return g_slotLevel.load();
+auto IsMazeSlotLevel(int level) -> bool {
+	return level > 0 && SlotIndexOfId(level) >= 0;
 }
 
 void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
-	g_slotLevel = tables != nullptr ? SlotLevel(tables->slots, MazeSlot) : -1;
+	for (size_t i = 0; i < cm::MazeTilesetCount; ++i) {
+		g_slotLevels[i] = tables != nullptr ? SlotLevel(tables->slots, cm::MazeTilesets[i].slot) : -1;
+	}
 	g_probe = tables != nullptr && (tables->settings.mazeProbe != 0 || tables->settings.autoCheck != 0);  // AutoCheck reads the arrival probe
 }
 
@@ -844,6 +868,11 @@ auto MazeSlotRanAny() -> bool {
 
 auto MazeLevelDataFlag() -> int {
 	return g_dataFlag.load();
+}
+
+auto MazePendingTileset() -> std::string {
+	std::lock_guard<std::mutex> lock(g_lock);
+	return g_job != nullptr ? g_job->tileset : std::string();
 }
 
 auto MazeOpenSeed() -> uint64_t {
@@ -915,8 +944,18 @@ auto MazeSlotBuilt() -> bool {
 	return g_slotState.blocked();
 }
 
+// Any maze slot level is installed.
+auto AnyMazeSlot() noexcept -> bool {
+	for (const std::atomic<int>& slot : g_slotLevels) {
+		if (slot.load(std::memory_order_relaxed) > 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 auto MazeArrivalPending() -> bool {
-	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && g_slotLevel.load(std::memory_order_relaxed) > 0;
+	return g_probe.load(std::memory_order_relaxed) && !g_arrivalLogged.load(std::memory_order_relaxed) && AnyMazeSlot();
 }
 
 auto MapIsMaze(const MapDef& map) -> bool {
@@ -930,17 +969,17 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string 
 		return {};
 	}
 	for (const Slot& slot : tables.slots) {
-		if (EqualsNoCase(slot.name, MazeSlot)) {
+		if (EqualsNoCase(slot.name, MapSlotName(map))) {
 			return cm::slotTypeProblem(ts, slot.levelType, map.name);
 		}
 	}
-	return {};  // no Maze slot: the "not installed" message says so
+	return {};  // no slot for the map's tileset: the "not installed" message says so
 }
 
 // `room` is what UnitRoom returned: the player's server room. Its DRLG room (+0x18) carries the position and size the build
 // wrote (the server room's own +0x60.. are not a tile rect). Every pointer goes through Read, so a wrong layout logs zeros.
 void MazeProbeArrival(void* room, int32_t levelId) {
-	if (!g_probe.load() || room == nullptr || levelId != g_slotLevel.load() || g_arrivalLogged.exchange(true)) {
+	if (!g_probe.load() || room == nullptr || !IsMazeSlotLevel(levelId) || g_arrivalLogged.exchange(true)) {
 		return;
 	}
 	Entrance entrance;

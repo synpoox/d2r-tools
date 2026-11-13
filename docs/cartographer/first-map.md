@@ -3,7 +3,7 @@
 One map: an item opens a red portal in Harrogath (Hell only) to a generated level. The example tables are in
 [`plugins/cartographer/examples/first-map/`](../../plugins/cartographer/examples/first-map/); every column is in
 [tables.md](tables.md), Cartographer's own terms in the [glossary](glossary.md). What was checked in game is in
-[checks/](checks/). More maps are one row and one item each; `mapstats.txt`, `mapevents.txt`, `shapes.txt` and
+[checks/](checks/). More maps are one row and one item each; `mapevents.txt`, `shapes.txt` and
 `cartographer.txt` are in tables.md.
 
 You need D2RLoader, a mod, and its tables as `.txt` in `<Mod>.mpq\data\global\excel`: `levels`, `lvlmaze`, `itemtypes`, `misc`, `weapons` and `armor` (`check` reads the
@@ -26,10 +26,10 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
    ```
    levels.txt: added 'Cartographer Maze' as level N (Cave, copied from level N).
-   slots.txt: Maze is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
+   slots.txt: Maze is level N, MazeCrypt is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
    ```
 
-   `-Tileset Crypt` makes the Maze level a Crypt. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
+   Cave and Crypt each get a level of their own. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
    edited table, or the game ignores the `.txt`.
 
 ## 2. Make the map item
