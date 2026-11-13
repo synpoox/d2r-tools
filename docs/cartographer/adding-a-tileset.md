@@ -35,3 +35,14 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 ## What the tileset must supply
 
 The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of ExtraSmall, Small, Medium and Large, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells, never caps) with a seed for the tie-break.
+
+## Adding a maze tileset
+
+Cave and Crypt are rows of `MazeTilesets` in `src/maze/maze_tilesets.h`. A level's `LevelType` fixes its tileset, so each maze tileset needs a slot level of its own, as the outdoor tilesets have. A row is `{name, levelType, slot, levelName, roomTiles, pieceBase, prevPiece, callsRingGrower}`: the `maps.txt` Tileset, the `levels.txt` LevelType, the `slots.txt` row name, the `levels.txt` Name the installer gives the level, the room size in tiles, the first LvlPrest id of the tileset's piece set, the four preset pieces of the entrance family, and whether the builder case calls the ring grower. The maze hooks, the loader's ready list, `MapSlotName`, `ValidateSlots` and the planner's `builtinTileset` all read the row, so they need no edit.
+
+1. **The table row** in `maze_tilesets.h`; new rows go at the end (the row order is the slot index in the maze hooks). Keep an existing slot name and level name as they are, so installs already made do not change.
+2. **The installer row** in `$MazeTilesets` in `tools/install.ps1`: the same tileset, slot, level name and LevelType, plus `Size` and `Param`, and the `-<Param>OffsetX`/`-<Param>OffsetY` parameters with defaults clear of every other plugin level. `tests/maze_tests.cpp` reads that block and fails when it differs from the table.
+3. **Tests and docs**: the table pin in `tests/maze_tests.cpp`, the slot names in `tests/tables_tests.cpp`, the README manual-install table and `slots.txt` rows, `docs/cartographer/tables.md`, a `CHANGELOG.md` line, and the evidence for any new engine fact in `docs/reverse-engineering/`.
+4. **The in-game check**: arrival in the entrance room, the Boss and the event in their rooms, and the other slots untouched. Unit tests do not cover these.
+
+The one-map-per-game rule still holds across all slots (`g_job`, `g_slotState` and `MazeSlotBuilt` are shared).

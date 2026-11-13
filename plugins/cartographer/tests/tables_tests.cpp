@@ -1402,3 +1402,47 @@ TEST_CASE("a shapes.txt shape that does not fit ExtraSmall is refused at load fo
 	CHECK(Joined(report).find("Snake") != std::string::npos);
 	CHECK(Joined(report).find("does not fit Size ExtraSmall") != std::string::npos);
 }
+
+TEST_CASE("Cave opens through the Maze slot and Crypt through the MazeCrypt slot, each on the level the installer wrote") {
+	Report report;
+	const auto maps = Load("Deep\tCave\tLoop\t\t\tt21\nTomb\tCrypt\tLoop\t\t\tt23\n", report);
+	REQUIRE(maps.size() == 2);
+	CHECK(report.Errors() == 0);
+	CHECK(std::string(MapSlotName(maps[0])) == "Maze");
+	CHECK(std::string(MapSlotName(maps[1])) == "MazeCrypt");
+	CHECK_FALSE(MapIsOutdoor(maps[1]));
+	CHECK(IsMazeSlotName("MazeCrypt"));
+	CHECK(IsMazeSlotName("maze"));
+	CHECK_FALSE(IsMazeSlotName("Outdoor"));
+	CHECK(MazeSlotLevelName("MazeCrypt") == "Cartographer Crypt");
+	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
+	CHECK(MazeSlotLevelName("Outdoor").empty());
+
+	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Crypt\t141\t4\nSomeone's Level\t150\t4\n";
+	Report good;
+	auto both = LoadSlots("Slot\tLevel\nMaze\t138\nMazeCrypt\t141\n", good);
+	ValidateSlots(both, levels, good);
+	CHECK(good.Errors() == 0);
+	CHECK(SlotLevel(both, "Maze") == 138);
+	CHECK(SlotLevel(both, "MazeCrypt") == 141);
+	CHECK(HasMazeSlot(both));
+	CHECK_FALSE(HasMazeSlot({}));
+
+	Report crossed;  // the Crypt level under the Maze name, and a level of someone else under the Crypt name: both refused
+	auto wrong = LoadSlots("Slot\tLevel\nMaze\t141\nMazeCrypt\t150\n", crossed);
+	ValidateSlots(wrong, levels, crossed);
+	CHECK(wrong.empty());
+	CHECK(crossed.Errors() == 2);
+	CHECK(Joined(crossed).find("Cartographer Crypt") != std::string::npos);
+}
+
+TEST_CASE("each maze slot reads the LevelType of its own level") {
+	const std::string levels = "Name\tId\tLevelType\nCartographer Maze\t138\t3\nCartographer Crypt\t141\t4\n";
+	Report r;
+	auto slots = LoadSlots("Slot\tLevel\nMaze\t138\nMazeCrypt\t141\n", r);
+	ValidateSlots(slots, levels, r);
+	ReadSlotLevelTypes(slots, levels);
+	REQUIRE(slots.size() == 2);
+	CHECK(slots[0].levelType == 3);
+	CHECK(slots[1].levelType == 4);
+}

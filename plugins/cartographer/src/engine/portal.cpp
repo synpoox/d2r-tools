@@ -586,7 +586,7 @@ void MazeArrivalCheck(Unit* unit) noexcept {
 		return;
 	}
 	const int level = Call<RoomLevelFn>(RoomLevelId)(room);
-	if (maze && level == MazeSlotLevelId() && level > 0) {
+	if (maze && IsMazeSlotLevel(level)) {
 		MazeProbeArrival(room, level);
 	}
 	if (outdoor && level == OutdoorSlotLevelId() && level > 0) {

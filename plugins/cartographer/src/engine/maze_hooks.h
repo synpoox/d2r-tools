@@ -69,14 +69,14 @@ auto MazeSlotBuilt() -> bool;
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.
 auto MazeArrivalPending() -> bool;
 
-// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through the Maze slot.
+// True when the map's tileset is one the maze steering builds (Cave, Crypt): it opens through its tileset's slot (MapSlotName).
 auto MapIsMaze(const MapDef& map) -> bool;
 
-// Empty, or why the Maze slot level cannot build `map` (a Cave level cannot build a Crypt map, and the other way round).
+// Empty, or why the map's slot level cannot build it (the level has another LevelType than the tileset needs).
 auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string;
 
-// The Maze slot level id, or -1.
-auto MazeSlotLevelId() -> int;
+// True when `level` is the slot level of any maze tileset.
+auto IsMazeSlotLevel(int level) -> bool;
 
 // The plan's event room in the built slot level, as the game's own room rect (tiles; the DRLG room's x, y, width, height).
 // Known once the slot build has run for the opened map; cleared when a map is opened and when the game is left.

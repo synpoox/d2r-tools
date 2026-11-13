@@ -70,9 +70,9 @@ set of tables is in [`examples/first-map/`](../../plugins/cartographer/examples/
 
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
-3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Outdoor and Snow levels, the `cmap` item type and a `superuniques.txt` row per boss (see the README); the Maze level is one level
-   ("Cartographer Maze", copied from a plain game Cave level (level 9), or a Crypt level (18) with `-Tileset Crypt`, so it keeps a name string; `Quest` 0, `LevelGroup` `Null` and no `LevelEntry` or `LevelWarp`, so it is in no vanilla level group)
-   and its maze row to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` row to
+3. Run `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Outdoor and Snow levels, the `cmap` item type and a `superuniques.txt` row per boss (see the README); each maze level is one level
+   ("Cartographer Maze" copied from a plain game Cave level (level 9) and "Cartographer Crypt" from a Crypt level (18), so each keeps a name string; `Quest` 0, `LevelGroup` `Null` and no `LevelEntry` or `LevelWarp`, so it is in no vanilla level group)
+   and their maze rows to the mod's `levels.txt` and `lvlmaze.txt` (backing each up once as `.bak`), and adds the `Maze` and `MazeCrypt` rows to
    `slots.txt` (other rows are kept). It adds no map items (step 4). Running it again changes nothing once the tables are up to date.
    Rows of an older install ("Cartographer Preset", its `lvlprest.txt` row, the `Preset` slot row) are left alone and
    can be deleted. A "Cartographer Maze" row from an earlier install (copied from the Den of Evil) has its quest flag, level group, entry and warp text, `Vis0` to `Vis7` and name string (tooltip) repaired on re-run. Written and run on a copy of the vanilla 3.3.0 tables only; not run against a game install. D2RLoader compiles the
@@ -113,13 +113,13 @@ without a rebuild; see `docs/reverse-engineering/cartographer.md` (the index of 
 
 ## Maze slot (Cave and Crypt, manual setup)
 
-A `Cave` or `Crypt` map opens through a second level, the `Maze` slot, and the plugin builds that level from the map's layout
-instead of the game's random maze. **One Maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
-or 4 (Crypt), and only maps of that tileset can use it. A map of the other tileset is refused with a plain message when you
+A `Cave` or `Crypt` map opens through a second level, the `Maze` slot (Cave) or the `MazeCrypt` slot (Crypt), and the plugin builds that level from the map's layout
+instead of the game's random maze. **One maze slot is one tileset**: its level has one `LevelType` in `levels.txt`, 3 (Cave)
+or 4 (Crypt), and each tileset has its own slot level (`src/maze/maze_tilesets.h`). A slot whose level has another LevelType (an old install's Maze level made a Crypt with `-Tileset Crypt`) is refused with a plain message when you
 try to open it (and named in `cartographer check` and the report); this check never lets a vanilla maze open in its place. A plan
 refused later, at build time (for example the slot is too small for the map's size), or `.bin` tables that differ from the
-`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds the Maze level
-(`-Tileset Crypt` for a Crypt; Cave is the default):
+`.txt` files the plugin read, can still give a game-built maze; the log says why. `tools\install.ps1` adds both levels
+(`-Tileset` is ignored now):
 
 - `slots.txt` is in the mod's tables at `<Mod>.mpq\data\global\excel\d2rloader\cartographer\slots.txt` (the installer writes
   it). It is tab separated with the header `Slot` and `Level`, one row per slot, the level being the `Id` in `levels.txt`:

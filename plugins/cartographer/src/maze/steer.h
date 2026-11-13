@@ -14,7 +14,7 @@
 
 namespace cartographer::maze {
 
-// The maze tilesets with numbers on record (LvlMaze / LvlPrest, build 93847): Cave and Crypt. Names ignore case.
+// The maze tilesets with numbers on record (LvlMaze / LvlPrest, build 93847), from the table in maze_tilesets.h: Cave and Crypt. Names ignore case.
 bool builtinTileset(std::string_view name, Tileset &out);
 
 // The tileset limited to the level the slot row declares (levels.txt SizeX / SizeY, as the game put them in the level
@@ -73,7 +73,7 @@ private:
 };
 
 // Empty when a Maze slot level of `slotLevelType` (levels.txt LevelType: 3 Cave, 4 Crypt, -1 unknown) can build a map on
-// `tileset`; otherwise the plain-English reason it cannot, naming `mapName`. A Maze slot is one LevelType, so one tileset.
+// `tileset`; otherwise the plain-English reason it cannot, naming `mapName`. A slot level is one LevelType, so one tileset; each tileset has its own slot.
 std::string slotTypeProblem(const Tileset &tileset, int slotLevelType, std::string_view mapName);
 
 // The plan for one opened map: the tileset, shape and size from maps.txt, the seed from the opening, and the level size

@@ -36,7 +36,9 @@ inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
 inline constexpr int MapItemSpell = 16;
-// The slot (in slots.txt) of the maze level every map opens through (levels.txt DrlgType 1, plan section 3.6).
+// The slot (in slots.txt) of the Cave maze level (levels.txt DrlgType 1, plan section 3.6): the slot every maze map opened through before each maze
+// tileset had a slot of its own, so it keeps its name. Each maze tileset (Cave, Crypt) opens through the slot level of its table row in
+// maze/maze_tilesets.h, because a level has one LevelType and the tilesets need different ones.
 inline constexpr const char* MazeSlot = "Maze";
 // The levels.txt Name of the Maze slot's level, as tools\install.ps1 writes it; a Maze slot on any other level is refused.
 inline constexpr const char* MazeLevelName = "Cartographer Maze";
@@ -166,6 +168,15 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
 // and calls the game, so it runs only for a level it has seen to be in Act 5.
 auto OutdoorSlotRefusal(const Slot& slot) -> std::string;
 
+// True for a maze slot (a slot name in the maze tileset table: Maze, MazeCrypt), ignoring case.
+auto IsMazeSlotName(std::string_view slot) -> bool;
+
+// True when `slots` has a row for any maze tileset's slot, with a level id above zero.
+auto HasMazeSlot(const std::vector<Slot>& slots) -> bool;
+
+// The levels.txt Name a maze slot's level must have (the table's level name, e.g. "Cartographer Crypt"), or "" for another slot name.
+auto MazeSlotLevelName(std::string_view slot) -> std::string;
+
 // True for an outdoor slot (a slot name in the outdoor tileset table), ignoring case.
 auto IsOutdoorSlotName(std::string_view slot) -> bool;
 
@@ -186,7 +197,8 @@ auto OutdoorSlotProblem(const MapDef& map, const std::vector<Slot>& slots) -> st
 // True for a map built on an outdoor slot (Jungle, Snow): its tileset has an outdoor LevelType. Every other map is a maze map.
 auto MapIsOutdoor(const MapDef& map) -> bool;
 
-// The slot a map opens through: its tileset's slot in the outdoor table ("Outdoor" for Jungle, "OutdoorSnow" for Snow), otherwise "Maze".
+// The slot a map opens through: its tileset's slot in the maze table ("Maze" for Cave, "MazeCrypt" for Crypt) or the outdoor table ("Outdoor" for
+// Jungle, "OutdoorSnow" for Snow), otherwise "Maze".
 auto MapSlotName(const MapDef& map) -> const char*;
 
 // Empty, or why an outdoor `map` cannot be opened while a map of tileset `pendingTileset` (empty: none) is open and not yet built. The outdoor

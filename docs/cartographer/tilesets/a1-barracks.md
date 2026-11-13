@@ -2,7 +2,7 @@
 
 Research only, nothing run in a game. Sources: vanilla 3.3.0 `levels`, `lvltypes`, `lvlmaze`, `lvlprest` (read only); engine facts from `docs/reverse-engineering/cartographer/05-maze-slot.md` and the DRLG steering research in pd2-resurrected (`docs/research/drlg-steering.md`).
 
-One install-wide limit applies to every maze tileset: the installer adds one Maze level, and one Maze level serves one tileset (`install.ps1 -Tileset`, `slotTypeProblem`). More than Cave or Crypt needs a Maze slot per tileset (the outdoor tilesets already do this with `OutdoorTilesets`) or a documented one-tileset-per-install rule.
+One install-wide limit applies to every maze tileset: each maze tileset has a slot level of its own (a row of `MazeTilesets` in `src/maze/maze_tilesets.h`, installed by `install.ps1`; see `docs/cartographer/adding-a-tileset.md`), because a level's LevelType fixes its tileset.
 
 | | |
 |---|---|

@@ -26,10 +26,10 @@ plus `superuniques` and `monstats` for bosses (without them a boss spawns as a p
 
    ```
    levels.txt: added 'Cartographer Maze' as level N (Cave, copied from level N).
-   slots.txt: Maze is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
+   slots.txt: Maze is level N, MazeCrypt is level N, Outdoor is level N, OutdoorSnow is level N (other rows kept).
    ```
 
-   `-Tileset Crypt` makes the Maze level a Crypt. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
+   Cave and Crypt each get a level of their own. If the mod ships `.bin` tables, delete or rebuild the `.bin` of each
    edited table, or the game ignores the `.txt`.
 
 ## 2. Make the map item
