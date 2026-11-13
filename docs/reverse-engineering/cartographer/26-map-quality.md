@@ -42,4 +42,4 @@ pointer in `r9`, `0x442820` by value in `r9d`, so the hook passes `*level`.
 
 ### In game
 
-_Filled in below from the check record._
+Slot 6, build 93847, [2026-11-12-map-quality-check.md](../../cartographer/checks/2026-11-12-map-quality-check.md): of 148 natural map rolls the hook saw, 142 were normal (5 of them magic rolls made normal), 1 rare, 2 unique, 3 set and 0 magic; the 6 set, rare and unique rolls all failed their maker (the test mod has no `cmap` affix rows) and were sent to the normal fallback, and so were 3 forced rare spawns. Forced magic spawns stayed magic. A rare or unique map that succeeds was not seen.
