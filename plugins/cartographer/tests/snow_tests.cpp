@@ -53,12 +53,12 @@ bool goldenMode()
 }
 
 const std::string GOLDEN_HORIZONTAL =
-	"Fa aa ab bb ba aa ab bR\n"
-	"Fb ba ab bb bb bb bb bR\n"
-	"Fb ba aa ab ba aa ab bR\n"
-	"Fb bb ba aa ab bb ba aR\n"
-	"Fa ab ba aa ab bb ba aR\n";
-const uint64_t GOLDEN_HORIZONTAL_HASH = 11053312794566208748ull;
+	"aa ab bb ba aa ab ba ab\n"
+	"ba ab bb bb bb bb ba ab\n"
+	"ba aa ab ba aa ab ba aa\n"
+	"bb ba aa ab bb ba ab bb\n"
+	"ab ba aa ab bb ba aa aa\n";
+const uint64_t GOLDEN_HORIZONTAL_HASH = 209784989893178242ull;
 
 } // namespace
 
@@ -256,7 +256,7 @@ TEST_CASE("a Snow plan with a moved boss or event rectangle fails the check")
 	}
 }
 
-TEST_CASE("a fixed orientation is kept and every line starts and ends with a cap")
+TEST_CASE("a fixed orientation is kept and every line is run pieces only, no caps")
 {
 	for (uint64_t seed = 1; seed <= 200; ++seed) {
 		const SnowRequest rh = request(seed, 8, 5, Orientation::Horizontal);
@@ -264,18 +264,14 @@ TEST_CASE("a fixed orientation is kept and every line starts and ends with a cap
 		REQUIRE(ph.ok);
 		CHECK(ph.orientation == Orientation::Horizontal);
 		for (int y = 0; y < 5; ++y) {
-			CHECK(findPiece(ph.grid[static_cast<size_t>(y) * 8])->kind == Kind::CapWest);
-			CHECK(findPiece(ph.grid[static_cast<size_t>(y) * 8 + 7])->kind == Kind::CapEast);
-			for (int x = 1; x < 7; ++x) CHECK(findPiece(ph.grid[static_cast<size_t>(y) * 8 + x])->kind == Kind::RunH);
+			for (int x = 0; x < 8; ++x) CHECK(findPiece(ph.grid[static_cast<size_t>(y) * 8 + x])->kind == Kind::RunH);
 		}
 		const SnowRequest rv = request(seed, 5, 8, Orientation::Vertical);
 		const SnowPlan pv = planSnowMap(rv);
 		REQUIRE(pv.ok);
 		CHECK(pv.orientation == Orientation::Vertical);
 		for (int x = 0; x < 5; ++x) {
-			CHECK(findPiece(pv.grid[static_cast<size_t>(x)])->kind == Kind::CapNorth);
-			CHECK(findPiece(pv.grid[static_cast<size_t>(7) * 5 + x])->kind == Kind::CapSouth);
-			for (int y = 1; y < 7; ++y) CHECK(findPiece(pv.grid[static_cast<size_t>(y) * 5 + x])->kind == Kind::RunV);
+			for (int y = 0; y < 8; ++y) CHECK(findPiece(pv.grid[static_cast<size_t>(y) * 5 + x])->kind == Kind::RunV);
 		}
 	}
 }
@@ -296,8 +292,8 @@ TEST_CASE("the same request gives the same plan; seeds give different ones")
 		for (int id : p.grid) used.insert(id);
 	}
 	CHECK(hashes.size() > 290);
-	// All eight horizontal pieces show up: both caps pairs and all four runs.
-	CHECK(used.size() == 8);
+	// All four horizontal runs show up, and no cap.
+	CHECK(used.size() == 4);
 }
 
 TEST_CASE("pinned files stay inside each piece's file count, unpinned plans leave -1")

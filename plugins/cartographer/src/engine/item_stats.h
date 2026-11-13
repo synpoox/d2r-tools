@@ -17,7 +17,7 @@ namespace carto {
 auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool;
 
 // The stats on the base magic list of `item` (an item unit), in the list's order. Empty when a part is off, the item has no such list or
-// the list is empty; `note` then says why when there is something to say. At most 16 stats are read (the game's own copy limit).
+// the list is empty; `note` then says why when there is something to say. Every stat on the list is read (up to 512, the copy's own limit).
 // Game thread only.
 auto ReadMapItemStats(void* item, std::string* note) noexcept -> std::vector<cartographer::statplan::ItemStat>;
 

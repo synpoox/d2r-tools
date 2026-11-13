@@ -77,6 +77,9 @@ enum class OpenStart {
 // that this one replaces is reported to the player.
 auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> OpenStart;
 
+// 'cartographer where': the next tick of the local player logs its position (subtiles, level, plan cell). False when no game is running here.
+auto RequestWhere() -> bool;
+
 auto PortalLive() -> bool;
 
 // AutoCheck (issue #173, src/engine/auto_check.cpp). Game thread only, with the game and player pointers of the tick.

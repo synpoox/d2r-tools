@@ -153,4 +153,8 @@ inline constexpr const char* HudWarningsUpdate = "48 89 5C 24 18 48 89 74 24 20 
 inline constexpr const char* WidgetSize = "40 53 48 83 EC 30 80 79 52 00 48 8B DA 74 2A 48 8B 49 30 48 8D 54 24 20 E8 ?? ?? ?? ?? 33 C0 48 89 03 8B 44 24 28 89 43 08 8B 44 24 2C 89 43 0C 48 8B C3 48 83 C4 30 5B C3 0F 10 41";
 inline constexpr const char* WidgetMove = "48 89 5C 24 10 57 48 83 EC 20 80 79 52 00 48 8B FA 48 8B D9 74 14 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 07 89 43 70 48 C1";
 
+// The side panel shift setter (0xb9c20 in build 93847; better-automap.md): its `mov [rip+x], ecx` at +0xf writes the global that says which sides
+// an open panel shifts (1 right, 2 left, 3 both). Only read.
+inline constexpr const char* ScreenShiftSetter = "48 83 EC 38 44 8B 0D ?? ?? ?? ?? 41 8B C1 99 89 0D ?? ?? ?? ?? 83 E2 03 44 8D 14 02 41 C1 FA 02";
+
 }  // namespace carto::sig

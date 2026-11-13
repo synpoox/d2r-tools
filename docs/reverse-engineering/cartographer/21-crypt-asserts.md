@@ -1,7 +1,7 @@
 ## 21. `ptWarp` and `bPiece` asserts in a Crypt map (issue #263)
 
 Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Addresses are RVAs in the memory-layout dump. Both messages were seen in game 1 of the
-crypt check (`docs/cartographer/checks/2026-11-12-crypt-difficulty-check.md`) and reproduced here in game, slot 7, Hell test save, single player, a Crypt map
+crypt check (the Crypt difficulty check) and reproduced here in game, slot 7, Hell test save, single player, a Crypt map
 (`Monsters` = `zombie1`, a Boss and a Treasure event, Chance 100). Statically read from the dump unless marked "in game".
 
 ### 1. `BC_VERIFY: ptWarp` (`D2Common\src\Drlg\RoomTile.cpp:747`): harmless, same cause as #254

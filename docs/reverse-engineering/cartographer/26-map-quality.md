@@ -54,11 +54,11 @@ Limits: existing items get no stat; `compactsave` 1 on the `misc.txt` row keeps 
 
 ### In game
 
-Slot 6, build 93847, [2026-11-12-map-quality-check.md](../../cartographer/checks/2026-11-12-map-quality-check.md): of 148 natural map rolls the hook saw, 142 were normal (5 of them magic rolls made normal), 1 rare, 2 unique, 3 set and 0 magic; the 6 set, rare and unique rolls all failed their maker (the test mod has no `cmap` affix rows) and were sent to the normal fallback, and so were 3 forced rare spawns. Forced magic spawns stayed magic. A rare or unique map that succeeds was not seen.
+Slot 6, build 93847: of 148 natural map rolls the hook saw, 142 were normal (5 of them magic rolls made normal), 1 rare, 2 unique, 3 set and 0 magic; the 6 set, rare and unique rolls all failed their maker (the test mod has no `cmap` affix rows) and were sent to the normal fallback, and so were 3 forced rare spawns. Forced magic spawns stayed magic. A rare or unique map that succeeds was not seen.
 
 ### Coverage: why the log "saw half"
 
-Build 93847, D2RLoader 1.3.1-beta, 2026-11-13, [check record](../../cartographer/checks/2026-11-13-quality-hook-coverage.md). The creator `0x43ef10(game, Unit** item, request, flag)` calls the item maker `0x442d60` only when `flag != 0` and `request != null`. Callers:
+Build 93847, D2RLoader 1.3.1-beta, 2026-11-13, issue #383. The creator `0x43ef10(game, Unit** item, request, flag)` calls the item maker `0x442d60` only when `flag != 0` and `request != null`. Callers:
 
 | Caller | Flag, request | Used by | Reaches the roll |
 |---|---|---|---|

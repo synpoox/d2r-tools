@@ -1,6 +1,6 @@
 # Act 5 ice caves (issue #245)
 
-Built (issue #245) as the `Ice` row of `MazeTilesets`. Vanilla tables of build 3.3.0 were read, nothing copied. Game check: [2026-11-12-ice-caves-check](../checks/2026-11-12-ice-caves-check.md); builder case: [RE section 24](../../reverse-engineering/cartographer/24-ice-caves-builder.md).
+Built (issue #245) as the `Ice` row of `MazeTilesets`. Vanilla tables of build 3.3.0 were read, nothing copied. Game check: #245, summary in [testing.md](../testing.md); builder case: [RE section 24](../../reverse-engineering/cartographer/24-ice-caves-builder.md).
 
 | Item | Finding |
 |---|---|
