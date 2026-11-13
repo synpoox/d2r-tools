@@ -29,10 +29,14 @@ Readers: `0x419e80` picks the monster kind from `+0x10`, `+0x11` and `+0x14`; `0
 |---|---|---|
 | `Level` | row, six `MonLvl*` fields | the level, 1 to 255 |
 | `Density` | record `+0x2b8` | the record's value plus `Density` percent, rounded half up |
-| `Uniques` | record `+0x2bc`, `+0x2bd` | the record's value plus `Uniques` percent, each at most 255; no averaging |
+| `Uniques` | record `+0x2bd` only | MonUMax plus `Uniques` percent, at most 255; MonUMin (`+0x2bc`) is left alone (issue #317, below) |
 | `Monsters` | record `+0x10`, `+0x11`, `+0x12` and the first groups | counts = the number of ids, per entry the monstats row, its weight (monstats `+0x64`, from the SDK view) and 0 members; the sum is stored as a byte |
 
 `Champions` has no field: the champion roll is fixed in `0x419d20` (`0x419e12`..`0x419e2c`), so it is read and checked but not applied. This replaces the earlier sentence that one pair served all special packs and was averaged; `Uniques` now scales the pair alone. Written at map open, on the game thread, just before `OpenRedPortal`.
+
+### Why only MonUMax (issue #317, static; build 93847)
+
+`0x419d20(region, room)` picks the pack kind for a hit cell. Unique count `+0x2c8` (added once per non-minion unique unit in `0x49edb0` / `0x49eed0`): below MonUMin and with `+0xc` (room count of the level, set at the first populated room by `0x2efa20` -> `0x3269d0`) nonzero, a pack is unique when `rand % 100 < (+4 * 100) / +0xc`; else below MonUMax, `rand % 100 < 6` makes it unique; else champion or normal. Nothing in the dump writes region `+4` (no inc/add on it in `0x400000`..`0x600000`; `+8` is incremented at `0x50b161`), so it is either 0, or kept by D2RCore (the `0x3e2b44e` / `0x3e2b5c2` thunks go to the external DLL, not read). If it counts rooms done, the chance is the share of the level already done and a raised MonUMin is met early only if `+0xc` is small or `+4` is ahead of it; if it is stale-high the whole minimum is spent at the first rooms. So the plugin raises MonUMax only (flat 6 percent per pack, spread by pack count) and leaves MonUMin. **Inference, not seen in game:** the entrance bunching of the owner's report comes from the raised minimum. Needs game: log region `+4`, `+8`, `+0xc`, `+0x2c8` per populated room on a Uniques map, and the room of each unique pack.
 
 ### Guards (runtime, per part, fail open)
 

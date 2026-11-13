@@ -288,18 +288,18 @@ TEST_CASE("density scales the record's MonDen and leaves a zero alone") {
 	CHECK(PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, true, false)).empty());  // a base of 0 stays 0
 }
 
-TEST_CASE("uniques alone scale MonUMin and MonUMax, champions are not a request field") {
+TEST_CASE("uniques alone scale MonUMax and leave MonUMin, champions are not a request field") {
 	const Record rec = SampleRecord();  // MonUMin 2, MonUMax 15
 	Request r;
 	r.uniques = 100;  // +100%
 	const std::vector<Field> plan = PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true));
-	REQUIRE(plan.size() == 2);
-	CHECK(FindField(plan, RecUMinOffset)->value == 4);
+	REQUIRE(plan.size() == 1);
+	CHECK(FindField(plan, RecUMinOffset) == nullptr);  // a raised minimum is spent at the first rooms (issue #317)
 	CHECK(FindField(plan, RecUMaxOffset)->value == 30);
-	CHECK(FindField(plan, RecUMinOffset)->size == 1);
+	CHECK(FindField(plan, RecUMaxOffset)->size == 1);
 	r.uniques = 50;
 	const std::vector<Field> half = PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true));
-	CHECK(FindField(half, RecUMinOffset)->value == 3);   // 2 + 1
+	CHECK(FindField(half, RecUMinOffset) == nullptr);
 	CHECK(FindField(half, RecUMaxOffset)->value == 23);  // 15 + 7.5 -> 23
 	r.uniques = 0;
 	CHECK(PlanRecord(r, RecordSnapshotOf(rec.data()), RecordOnly(false, false, true)).empty());
