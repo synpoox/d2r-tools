@@ -121,6 +121,27 @@ TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape,
 	CHECK(text.find("This map is skipped.") != std::string::npos);
 }
 
+TEST_CASE("a blank Shape loads for Snow and Siege, which ignore it, and is still refused for the tilesets that build from it") {
+	Report report;
+	const auto maps = Load(
+		"A\tSnow\t\t\t\tt20\n"
+		"B\tSiege\t\tLarge\t\tt21\n"
+		"C\tSnow\tSprawl\t\t\tt22\n"
+		"D\tCave\t\t\t\tt23\n"
+		"E\tJungle\t\t\t\tt24\n",
+		report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].name == "A");
+	CHECK(maps[0].shape.empty());
+	CHECK(maps[1].name == "B");
+	CHECK(maps[1].shape.empty());
+	CHECK(maps[2].shape == "Sprawl");  // a Shape that is set keeps working
+	CHECK(report.Errors() == 2);
+	const std::string text = Joined(report);
+	CHECK(text.find("the Shape cell is empty: the Cave tileset needs one") != std::string::npos);
+	CHECK(text.find("shape '' is not known") == std::string::npos);
+}
+
 TEST_CASE("a Jungle map whose shapes.txt Open row has a MinPath the capped grid cannot reach is refused with a report line") {
 	Report report;
 	const auto shapes = LoadShapes("Name\tBase\tMinPath\tMaxPath\tWidth\tHeight\nLong\tOpen\t20\t60\t20\t20\nWide\tOpen\t\t\t20\t20\n", report);
@@ -1503,4 +1524,47 @@ TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in
 	Report none;
 	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
 	CHECK(none.problems.empty());
+}
+
+TEST_CASE("a skipped row is kept by its item, with the first reason") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "Good\tCave\tLoop\t\t\tt20\nBad\tNowhere\tLoop\t\t\tt21\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped[0].item == "t21");
+	CHECK(skipped[0].name == "Bad");
+	CHECK(skipped[0].line == 3);
+	CHECK(skipped[0].reason.find("Nowhere") != std::string::npos);
+	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
+	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
+	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: maps.txt row 3 was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
+}
+
+TEST_CASE("a skipped row with an empty Name is named by its item") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	LoadMaps(std::string(Header) + "\tCave\tLoop\t\t\tt22\n\tNowhere\tLoop\t\t\tt23\n", Names(), report, nullptr, nullptr, &skipped);
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name.empty());
+	}
+	const SkippedMap* bad = FindSkippedByItem(skipped, "t23");
+	REQUIRE(bad != nullptr);
+	CHECK(SkippedMapText(*bad) == "Map t23 is not set up: maps.txt row " + std::to_string(bad->line) + " was skipped (see cartographer-report.txt).");
+	CHECK(SkippedMapLog(*bad).find("('") == std::string::npos);
+}
+
+TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the code") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "First\tCave\tLoop\t\t\tt24\nSecond\tCave\tLoop\t\t\tt24\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	CHECK(FindMapByItem(maps, "t24") != nullptr);
+	CHECK(FindMapByItem(maps, "t24")->name == "First");
+	// The use hook tries FindMapByItem first, so the skipped duplicate never hides the working map.
+	for (const SkippedMap& s : skipped) {
+		CHECK(s.name == "Second");
+		CHECK(s.reason.find("t24") != std::string::npos);
+	}
 }

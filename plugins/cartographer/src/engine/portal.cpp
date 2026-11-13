@@ -402,6 +402,12 @@ auto SpellCheckHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept
 		Call<ClientMessageFn>(ClientMessage)(player, CantDoThat, player);
 		return 0;
 	};
+	if (map == nullptr && tables != nullptr) {
+		if (const SkippedMap* skipped = FindSkippedByItem(tables->skippedMaps, code)) {
+			plog::Warn("%s", SkippedMapLog(*skipped).c_str());
+			return refuse(SkippedMapText(*skipped));  // refused, so the item is not used up
+		}
+	}
 	if (map == nullptr) {
 		{
 			// Recorded, so the use goes to the game as well even if a map for this code is added in between.

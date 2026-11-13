@@ -184,7 +184,7 @@ void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
 
 }  // namespace
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses, std::vector<SkippedMap>* skipped) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -229,8 +229,12 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		MapDef map;
 		map.line = row.line;
 		bool ok = true;
+		std::string firstProblem;
 		const auto fail = [&](const std::string& message) {
 			report.Error(MapsFile, row.line, message + " This map is skipped.");
+			if (firstProblem.empty()) {
+				firstProblem = message;
+			}
 			ok = false;
 		};
 		// An optional whole-number column: blank keeps the default.
@@ -279,7 +283,19 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
-		if (const std::string* known = Canonical(Shapes, shape)) {
+		// Snow and Siege build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
+		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege);
+		if (shape.empty() && ignoresShape) {
+			map.shape.clear();
+		} else if (shape.empty()) {
+			// A refused tileset already has its own error; a second one about the blank Shape would only add noise.
+			if (!map.tileset.empty()) {
+				std::vector<std::string> all = Shapes;
+				all.insert(all.end(), customShapes.begin(), customShapes.end());
+				fail("the Shape cell is empty: the " + map.tileset + " tileset needs one. Use " + OneOf(all) + (customShapes.empty() ? "" : " (the last ones are from shapes.txt)") + ".");
+			}
+		} else if (const std::string* known = Canonical(Shapes, shape)) {
 			map.shape = *known;
 		} else if (const std::string* custom = Canonical(customShapes, shape)) {
 			map.shape = *custom;
@@ -407,6 +423,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 
 		if (ok) {
 			maps.push_back(std::move(map));
+		} else if (skipped != nullptr && !map.item.empty() && map.item.size() <= 4) {
+			skipped->push_back({row.line, map.name, map.item, firstProblem});
 		}
 	}
 	return maps;
@@ -1056,6 +1074,24 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 		}
 	}
 	return nullptr;
+}
+
+auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap* {
+	for (const SkippedMap& s : skipped) {
+		if (!s.item.empty() && EqualsNoCase(s.item, itemCode)) {
+			return &s;
+		}
+	}
+	return nullptr;
+}
+
+auto SkippedMapText(const SkippedMap& skipped) -> std::string {
+	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: maps.txt row " + std::to_string(skipped.line) + " was skipped (see cartographer-report.txt).";
+}
+
+auto SkippedMapLog(const SkippedMap& skipped) -> std::string {
+	return "the item '" + skipped.item + "' opens nothing: its maps.txt row " + std::to_string(skipped.line) + (skipped.name.empty() ? std::string() : " ('" + skipped.name + "')") +
+	       " was skipped at load: " + skipped.reason;
 }
 
 auto CheckGates(const MapDef& map, const GateState& state) -> Gate {
