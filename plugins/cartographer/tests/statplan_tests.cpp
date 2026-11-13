@@ -669,6 +669,56 @@ TEST_CASE("itemStatsToProperties: a layer, a zero value and a stat no pool row n
 	CHECK(drawMapStats(1, MapRow{}, s, pool, r.properties) == r.properties);
 }
 
+TEST_CASE("mapLevelFromItem: the item's stat is the map level, else the maps.txt Level")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");
+	const int ID = 1;
+	REQUIRE(ids.find(kMapLevelStat) == 1);
+	auto pick = mapLevelFromItem({{0, 0, 5}, {ID, 0, 92}}, ids, 85);
+	CHECK(pick.fromItem);
+	CHECK(pick.level == 92);
+	CHECK(pick.note.empty());
+	// No stat on the item (an item made before the stat existed): the fallback, with nothing to report.
+	pick = mapLevelFromItem({{0, 0, 5}}, ids, 85);
+	CHECK_FALSE(pick.fromItem);
+	CHECK(pick.level == 85);
+	CHECK(pick.note.empty());
+	CHECK(mapLevelFromItem({}, ids, 85).level == 85);
+	// The row is missing from itemstatcost.txt, or the table could not be read: the fallback.
+	CHECK(mapLevelFromItem({{ID, 0, 92}}, testIds(), 85).level == 85);
+	CHECK(mapLevelFromItem({{ID, 0, 92}}, StatIds{}, 85).level == 85);
+	// A stat with a layer is another stat.
+	CHECK(mapLevelFromItem({{ID, 3, 92}}, ids, 85).level == 85);
+}
+
+TEST_CASE("mapLevelFromItem: a value of 0 or less falls back, a value above 255 is cut, both with a note")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\ncartographer_map_level\t400\n");
+	const int ID = 0;
+	auto pick = mapLevelFromItem({{ID, 0, 0}}, ids, 70);
+	CHECK_FALSE(pick.fromItem);
+	CHECK(pick.level == 70);
+	CHECK_FALSE(pick.note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, -4}}, ids, 70).level == 70);
+	pick = mapLevelFromItem({{ID, 0, 300}}, ids, 70);
+	CHECK(pick.fromItem);
+	CHECK(pick.level == 255);
+	CHECK_FALSE(pick.note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, 255}}, ids, 70).note.empty());
+	CHECK(mapLevelFromItem({{ID, 0, 1}}, ids, 70).level == 1);
+}
+
+TEST_CASE("withoutMapLevel drops only the map-level stat")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_level\t400\n");
+	const int ID = 1;
+	const auto kept = withoutMapLevel({{0, 0, 5}, {ID, 0, 92}, {0, 0, 6}}, ids);
+	REQUIRE(kept.size() == 2);
+	CHECK(kept[0].value == 5);
+	CHECK(kept[1].value == 6);
+	CHECK(withoutMapLevel({{ID, 0, 92}}, StatIds{}).size() == 1);
+}
+
 TEST_CASE("isStaticState lists the fixed ids")
 {
 	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));
