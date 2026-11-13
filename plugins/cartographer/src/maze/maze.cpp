@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
+#include <set>
 
 #include "rng.h"
 
@@ -84,7 +86,16 @@ Capacity capacityAt(int roomTiles, int levelTilesX, int levelTilesY)
 	return c;
 }
 
-Capacity maxCapacity(const Tileset &ts) { return capacityAt(ts.roomTiles, ts.maxLevelTiles, ts.maxLevelTiles); }
+Capacity maxCapacity(const Tileset &ts)
+{
+	Capacity c = capacityAt(ts.roomTiles, ts.maxLevelTiles, ts.maxLevelTiles);
+	const int ring = std::max(ts.ringCells, 0); // the filler ring takes its cells on every side
+	c.left = std::max(c.left - ring, 0);
+	c.right = std::max(c.right - ring, 0);
+	c.up = std::max(c.up - ring, 0);
+	c.down = std::max(c.down - ring, 0);
+	return c;
+}
 
 int levelTilesFor(const Tileset &ts, int roomsPerSide)
 {
@@ -155,26 +166,33 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	Point root{-1, -1};
 	int levelX = 0, levelY = 0;
 	const int maxSteps = ts.maxLevelTiles / ts.roomTiles + 1;
+	const int ring = std::max(ts.ringCells, 0);
+	// The filler ring wants `ring` free cells around the layout. A layout that cannot have them in any level is planned in the largest
+	// level with no margin and its ring is cut to what fits (a gap of void at that one side beats the game's own unsteered maze).
+	const auto findRoot = [&](int lx, int ly, int margin) {
+		levelX = lx;
+		levelY = ly;
+		const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
+		int bestScore = 0;
+		for (int y = minY; y <= maxY; ++y)
+			for (int x = minX; x <= maxX; ++x) {
+				if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
+				if (x - minX + margin > cap.left || maxX - x + margin > cap.right || y - minY + margin > cap.up || maxY - y + margin > cap.down) continue;
+				const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
+				if (root.x < 0 || score < bestScore) {
+					root = Point{x, y};
+					bestScore = score;
+				}
+			}
+	};
 	bool searchedLargest = false;
 	for (int total = 0; total <= 2 * maxSteps && root.x < 0 && !searchedLargest; ++total)
 		for (int sx = 0; sx <= total && root.x < 0 && !searchedLargest; ++sx) {
-			levelX = levelTilesFor(ts, spanX / 2 + sx);
-			levelY = levelTilesFor(ts, spanY / 2 + (total - sx));
-			const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
-			int bestScore = 0;
-			for (int y = minY; y <= maxY; ++y)
-				for (int x = minX; x <= maxX; ++x) {
-					if (l.at(x, y).role == layout::Role::Empty || deferred(Point{x, y})) continue;
-					if (x - minX > cap.left || maxX - x > cap.right || y - minY > cap.up || maxY - y > cap.down) continue;
-					const int score = std::abs(2 * x - (minX + maxX)) + std::abs(2 * y - (minY + maxY));
-					if (root.x < 0 || score < bestScore) {
-						root = Point{x, y};
-						bestScore = score;
-					}
-				}
+			findRoot(levelTilesFor(ts, spanX / 2 + sx), levelTilesFor(ts, spanY / 2 + (total - sx)), ring);
 			// Both axes at the maximum is the largest level; every later step would repeat it.
 			if (root.x < 0 && levelX == ts.maxLevelTiles && levelY == ts.maxLevelTiles) searchedLargest = true;
 		}
+	if (root.x < 0 && ring > 0) findRoot(ts.maxLevelTiles, ts.maxLevelTiles, 0);
 	if (root.x < 0)
 		return fallbackPlan("No room of the layout can be the first room while the whole layout stays inside the largest level. Use a smaller size or a simpler shape.");
 
@@ -230,6 +248,34 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 			plan.links.push_back(LinkStep{static_cast<int>(a), b, d});
 		}
 
+	// The filler ring: closed cells around the layout, in the same breadth-first order (each parent is a room that already exists).
+	if (ring > 0) {
+		auto key = [](int dx, int dy) { return (static_cast<int64_t>(dx) << 32) ^ static_cast<uint32_t>(dy); };
+		std::set<int64_t> taken;
+		for (const Room &r : plan.rooms) taken.insert(key(r.dx, r.dy));
+		std::set<int64_t> want;
+		const Capacity box = capacityAt(ts.roomTiles, levelX, levelY); // only cells inside the level can be made
+		for (const Room &r : plan.rooms)
+			for (int oy = -ring; oy <= ring; ++oy)
+				for (int ox = -ring; ox <= ring; ++ox) {
+					const int fx = r.dx + ox, fy = r.dy + oy;
+					if (taken.count(key(fx, fy)) == 0 && fx >= -box.left && fx <= box.right && fy >= -box.up && fy <= box.down) want.insert(key(fx, fy));
+				}
+		std::vector<Point> at; // offset of every room made so far, plan rooms first
+		for (const Room &r : plan.rooms) at.push_back(Point{r.dx, r.dy});
+		for (size_t head = 0; head < at.size(); ++head)
+			for (int d = 0; d < 4; ++d) {
+				const Point n{at[head].x + kDx[d], at[head].y + kDy[d]};
+				const int64_t k = key(n.x, n.y);
+				if (want.count(k) == 0 || taken.count(k) != 0) continue;
+				taken.insert(k);
+				plan.fills.push_back(AddStep{static_cast<int>(head), static_cast<int>(at.size()), d});
+				plan.fillOffsets.push_back(n);
+				at.push_back(n);
+			}
+		if (plan.fills.size() != want.size()) return fallbackPlan("The filler ring around the layout could not be joined to it.");
+	}
+
 	// Pieces, reserved rooms and the special calls.
 	for (size_t i = 0; i < plan.rooms.size(); ++i) {
 		Room &r = plan.rooms[i];
@@ -256,7 +302,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 		}
 	}
 
-	plan.lvlMaze = LvlMazeRow{static_cast<int>(plan.rooms.size()), ts.roomTiles, ts.roomTiles, 0};
+	plan.lvlMaze = LvlMazeRow{static_cast<int>(plan.rooms.size() + plan.fills.size()), ts.roomTiles, ts.roomTiles, 0};
 	plan.ring.noOp = ts.callsRingGrower;
 	plan.ring.graphInRing = ts.callsRingGrower && !ts.walkFollowsRing;
 	plan.levelTilesX = levelX;
@@ -331,6 +377,7 @@ uint64_t planHash(const Plan &p)
 	}
 	for (const AddStep &a : p.adds) { mixi(a.parent); mixi(a.room); mixi(a.dir); }
 	for (const LinkStep &a : p.links) { mixi(a.a); mixi(a.b); mixi(a.dir); }
+	for (const AddStep &a : p.fills) { mixi(a.parent); mixi(a.room); mixi(a.dir); }
 	{ const SpecialCall &s = p.entrance; mixi(s.room); mixi(s.place ? 1 : 0); mixi(s.fromPiece); mixi(s.toPiece); }
 	mixi(p.ring.noOp ? 1 : 0); mixi(p.ring.graphInRing ? 1 : 0);
 	mixi(p.lvlMaze.rooms); mixi(p.lvlMaze.sizeX); mixi(p.lvlMaze.sizeY); mixi(p.lvlMaze.merge);

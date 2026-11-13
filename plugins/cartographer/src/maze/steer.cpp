@@ -26,6 +26,7 @@ bool builtinTileset(std::string_view name, Tileset &out)
 	t.roomTiles = row->roomTiles;
 	t.pieceBase = row->pieceBase;
 	t.callsRingGrower = row->callsRingGrower;
+	t.ringCells = row->ringCells;
 	t.prev.present = row->prevPiece[0] != 0;
 	for (int i = 0; i < 4; ++i) t.prev.piece[i] = row->prevPiece[i];  // Prev W, E, S, N
 	out = std::move(t);
@@ -198,9 +199,19 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	if (unit <= 0) return refuse("the plan cell size is unknown");
 	if (rects.empty()) return refuse("the level has no rooms");
 	int pMinX = plan.rooms[0].dx, pMinY = plan.rooms[0].dy;
+	int pMaxX = pMinX, pMaxY = pMinY;
 	for (const Room &r : plan.rooms) {
 		pMinX = std::min(pMinX, r.dx);
 		pMinY = std::min(pMinY, r.dy);
+		pMaxX = std::max(pMaxX, r.dx);
+		pMaxY = std::max(pMaxY, r.dy);
+	}
+	// The filler ring (a tileset with one) is built too, so the built box is the rooms' and the fillers' together.
+	for (const layout::Point &f : plan.fillOffsets) {
+		pMinX = std::min(pMinX, f.x);
+		pMinY = std::min(pMinY, f.y);
+		pMaxX = std::max(pMaxX, f.x);
+		pMaxY = std::max(pMaxY, f.y);
 	}
 	const Room &cell = plan.rooms[static_cast<size_t>(planRoom)];
 	out.cellX = cell.dx - pMinX;
@@ -226,7 +237,7 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
 	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
 	const int64_t w = maxX - minX, h = maxY - minY;
-	if (w != static_cast<int64_t>(plan.widthRooms) * unit || h != static_cast<int64_t>(plan.heightRooms) * unit) {
+	if (w != static_cast<int64_t>(pMaxX - pMinX + 1) * unit || h != static_cast<int64_t>(pMaxY - pMinY + 1) * unit) {
 		return refuse("the built rooms do not span the plan's box");
 	}
 	out.minX = static_cast<int32_t>(minX);

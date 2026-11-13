@@ -17,6 +17,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,7 @@ Tileset lavaTileset(int maxLevelTiles = kMaxLevelTiles)
 	t.levelType = 28;
 	t.roomTiles = 24;
 	t.pieceBase = 836;
+	t.ringCells = 1;  // the table's Lava row: one ring of filler rooms
 	t.maxLevelTiles = maxLevelTiles;
 	return t;
 }
@@ -221,7 +223,36 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 	if (l.eventIdx >= 0 && p.rooms[static_cast<size_t>(p.eventRoom)].cell != l.mainPath[static_cast<size_t>(l.eventIdx)]) return "event room index";
 	if (l.bossIdx >= 0 && p.rooms[static_cast<size_t>(p.bossRoom)].cell != l.mainPath[static_cast<size_t>(l.bossIdx)]) return "boss room index";
 	if (p.ring.noOp != ts.callsRingGrower || p.ring.graphInRing != (ts.callsRingGrower && !ts.walkFollowsRing)) return "ring plan";
-	if (p.lvlMaze.rooms != static_cast<int>(n) || p.lvlMaze.sizeX != ts.roomTiles || p.lvlMaze.sizeY != ts.roomTiles || p.lvlMaze.merge != 0) return "LvlMaze row";
+	{
+		// The filler ring: only for a tileset that asks for it; each filler is made next to its parent, on a free cell inside the level, and
+		// every free cell inside the level that touches a room (8 ways, ringCells deep) has one.
+		if (ts.ringCells == 0 && (!p.fills.empty() || !p.fillOffsets.empty())) return "fillers for a tileset with no ring";
+		if (p.fills.size() != p.fillOffsets.size()) return "fills and fill offsets differ";
+		const int ex[4] = {-1, 0, 1, 0}, ey[4] = {0, -1, 0, 1};
+		std::set<std::pair<int, int>> taken;
+		for (const Room &r : p.rooms) taken.insert({r.dx, r.dy});
+		const Capacity box = capacityAt(ts.roomTiles, p.levelTilesX, p.levelTilesY);
+		for (size_t k = 0; k < p.fills.size(); ++k) {
+			const AddStep &f = p.fills[k];
+			const Point o = p.fillOffsets[k];
+			if (f.room != static_cast<int>(n + k)) return "a filler's room index";
+			if (f.parent < 0 || f.parent >= f.room || f.dir < 0 || f.dir > 3) return "a filler's parent";
+			Point at{};
+			if (static_cast<size_t>(f.parent) < n) at = Point{p.rooms[static_cast<size_t>(f.parent)].dx, p.rooms[static_cast<size_t>(f.parent)].dy};
+			else at = p.fillOffsets[static_cast<size_t>(f.parent) - n];
+			if (at.x + ex[f.dir] != o.x || at.y + ey[f.dir] != o.y) return "a filler is not next to its parent in its direction";
+			if (!taken.insert({o.x, o.y}).second) return "a filler on an occupied cell";
+			if (o.x < -box.left || o.x > box.right || o.y < -box.up || o.y > box.down) return "a filler outside the level";
+		}
+		for (const Room &r : p.rooms)
+			for (int oy = -ts.ringCells; oy <= ts.ringCells; ++oy)
+				for (int ox = -ts.ringCells; ox <= ts.ringCells; ++ox) {
+					const int fx = r.dx + ox, fy = r.dy + oy;
+					if (fx < -box.left || fx > box.right || fy < -box.up || fy > box.down) continue;
+					if (taken.count({fx, fy}) == 0) return "a free cell beside a room has no filler";
+				}
+	}
+	if (p.lvlMaze.rooms != static_cast<int>(n + p.fills.size()) || p.lvlMaze.sizeX != ts.roomTiles || p.lvlMaze.sizeY != ts.roomTiles || p.lvlMaze.merge != 0) return "LvlMaze row";
 	return std::string();
 }
 
@@ -244,7 +275,8 @@ bool genuinelyDoesNotFit(const Tileset &ts, const Layout &l)
 				for (int x = 0; x < l.width && all; ++x) {
 					if (l.at(x, y).role == Role::Empty) continue;
 					const int tx = off + (x - rx) * room, ty = off + (y - ry) * room;
-					if (tx < 0 || ty < 0 || tx + room > level || ty + room > level) all = false;
+					const int m = ts.ringCells * room;  // the filler ring needs its cells inside the level too
+					if (tx - m < 0 || ty - m < 0 || tx + room + m > level || ty + room + m > level) all = false;
 				}
 			if (all) return false;
 		}
@@ -400,6 +432,44 @@ TEST_CASE("10k seeds per shape, every size: pieces, ends, reserved rooms, fallba
 				if (shape != layout::Shape::Loop && shape != layout::Shape::Sprawl && shape != layout::Shape::Open && cfg.ts.prev.present) CHECK(t.placedEntrance == t.steered);
 				if (!cfg.ts.prev.present) CHECK(t.placedEntrance == 0);  // Lava: the entrance is an ordinary room
 			}
+}
+
+TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one (issue #372)")
+{
+	// verify() checks each plan's ring cell by cell. Here: Cave makes none, and the ring is whole for nearly every Large Lava layout (a layout that fills the level is clipped, see the margin-0 fallback).
+	const Tileset cave = caveTileset(), lava = lavaTileset();
+	int cut = 0, total = 0, bareCells = 0;
+	for (int s = 0; s < layout::kShapeCount; ++s)
+		for (int i = 0; i < 200; ++i) {
+			const layout::Rules rules = layout::presetRules(static_cast<layout::Shape>(s), layout::Size::Large);
+			const uint64_t seed = layout::splitmix64(static_cast<uint64_t>(i) + 0x7000);
+			const SeedPlan c = planForSeed(cave, rules, seed);
+			if (c.plan.steer) CHECK(c.plan.fills.empty());
+			const SeedPlan l = planForSeed(lava, rules, seed);
+			if (!l.plan.steer) continue;
+			++total;
+			CHECK(!l.plan.fills.empty());
+			const Capacity box = capacityAt(lava.roomTiles, l.plan.levelTilesX, l.plan.levelTilesY);
+			// Ring cells (the 8 cells around every room) that fall outside the level: bare edge. Counted once per cell.
+			std::set<std::pair<int, int>> bare;
+			for (const Room &r : l.plan.rooms)
+				for (int oy = -1; oy <= 1; ++oy)
+					for (int ox = -1; ox <= 1; ++ox) {
+						const int fx = r.dx + ox, fy = r.dy + oy;
+						if (fx < -box.left || fx > box.right || fy < -box.up || fy > box.down) bare.insert({fx, fy});
+					}
+			bareCells += static_cast<int>(bare.size());
+			cut += bare.empty() ? 0 : 1;
+			const bool atMax = l.plan.levelTilesX == lava.maxLevelTiles && l.plan.levelTilesY == lava.maxLevelTiles;
+			CHECK((bare.empty() || atMax));
+			CHECK(l.plan.levelTilesX <= lava.maxLevelTiles);
+			CHECK(l.plan.levelTilesY <= lava.maxLevelTiles);
+		}
+	CHECK(total > 0);
+	MESSAGE("clipped ", cut, " of ", total, ", bare cells ", bareCells);
+	// Only layouts too big for a ring in the 360 x 360 level are clipped (110 of 1200 here, 740 bare cells; 1528 with a smaller margin-0 level).
+	CHECK(cut * 10 <= total);
+	CHECK(bareCells <= 800);
 }
 
 TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
