@@ -57,11 +57,6 @@ const Known *find(const std::string &stat)
 	return nullptr;
 }
 
-std::string bluePropertyLine(const Stat &stat)
-{
-	return std::string(kBlue) + statLine(stat);
-}
-
 } // namespace
 
 std::string formatGameText(const std::string &text, int value)
@@ -123,21 +118,27 @@ std::string statLine(const Stat &stat)
 	return out;
 }
 
-std::string panelText(int monsterLevel, const std::vector<Stat> &stats)
+PanelText panelText(int monsterLevel, const std::vector<Stat> &stats)
 {
-	std::string out;
-	const auto line = [&out](const std::string &text) {
-		if (!out.empty()) out += '\n';
-		out += text;
+	PanelText out;
+	bool any = false;
+	const auto line = [&out, &any](const std::string &header, const std::string &property) {
+		if (any) {
+			out.gold += '\n';
+			out.blue += '\n';
+		}
+		any = true;
+		out.gold += header;
+		out.blue += property;
 	};
-	if (monsterLevel > 0) line(std::string(kGold) + "Monster level " + std::to_string(monsterLevel));
+	if (monsterLevel > 0) line("Monster level " + std::to_string(monsterLevel), "");
 	for (const bool monsters : {true, false}) {
 		bool header = false;
 		for (const Stat &s : stats) {
 			if (s.monsters != monsters) continue;
-			if (!header) line(std::string(kGold) + (monsters ? "Monsters have" : "Players have"));
+			if (!header) line(monsters ? "Monsters have" : "Players have", "");
 			header = true;
-			line(bluePropertyLine(s));
+			line("", statLine(s));
 		}
 	}
 	return out;

@@ -567,7 +567,8 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	}
 	const int slot = SlotLevel(tables->slots, MapSlotName(map));
 	if (!g_monstersOn.load() && !g_playersOn.load()) {
-		MapPanelMapOpened(cartographer::mappanel::panelText(map.level, {}), slot);  // the level only, no properties
+		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {});  // the level only, no properties
+		MapPanelMapOpened(text.gold, text.blue, slot);
 		return;
 	}
 	const uint64_t seed = sp::mixSeed(GetTickCount64(), playerId, openings);  // names the open in the log
@@ -599,7 +600,8 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	for (const sp::Entry& e : plan->players) {
 		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name)), GameStatText(tables->statIds.descNegKey(e.name))});
 	}
-	MapPanelMapOpened(cartographer::mappanel::panelText(map.level, shown), slot);
+	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown);
+	MapPanelMapOpened(panel.gold, panel.blue, slot);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plan = std::move(plan);
 	g_slotLevel = slot;

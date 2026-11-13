@@ -16,9 +16,14 @@ struct Stat {
 	std::string gameTextNeg; // the game's text for a negative value (descstrneg), "" when none: gameText is used
 };
 
-// The game's colour code for item property blue and for gold (the panel's own colour), as UTF-8: U+00FF, 'c', digit.
-inline constexpr const char *kBlue = "\xC3\xBF" "c3";
-inline constexpr const char *kGold = "\xC3\xBF" "c4";
+// The panel text in two colours. The panel's text widget prints the game's colour codes ("ÿc3") as plain characters (seen in game,
+// build 93847, D2RLoader 1.3.1-beta), so the colour comes from two text boxes on top of each other: `gold` has the header lines
+// and `blue` the property lines, each with an empty line where the other has text, so every line lands in the same place.
+struct PanelText {
+	std::string gold;
+	std::string blue;
+	bool empty() const { return gold.empty() && blue.empty(); }
+};
 
 // A game string with the value put in: "%d" and "%i" are the number, "%+d" the number with its sign, "%%" a percent sign. A '+'
 // in front of "%d" is dropped for a negative value. "" when the text does not have exactly one number placeholder or has another
@@ -34,9 +39,9 @@ std::string statLabel(const std::string &stat);
 std::string statLine(const Stat &stat);
 
 // The whole panel text, lines joined by newlines: "Monster level N" (left out when level is 0 or below), then "Monsters have" and its
-// property lines, then "Players have" and its lines (a group with no property is left out). Property lines are blue. The map's
-// name is not in it: the game shows it above Difficulty. Empty when there is nothing to show.
-std::string panelText(int monsterLevel, const std::vector<Stat> &stats);
+// property lines, then "Players have" and its lines (a group with no property is left out). Header lines are in `gold`, property
+// lines in `blue`. The map's name is not in it: the game shows it above Difficulty. Both empty when there is nothing to show.
+PanelText panelText(int monsterLevel, const std::vector<Stat> &stats);
 
 // Blank lines to put in front of the panel text so it starts under the game's terror zone text: the text ends at `textBottom` (0 or less:
 // no zone text), the panel starts at `panelTop`, a line of the panel text is `lineUnits` high (all in layout units), at most `maxLines`.

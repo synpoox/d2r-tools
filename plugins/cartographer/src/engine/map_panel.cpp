@@ -18,13 +18,14 @@ namespace carto {
 
 namespace {
 
-// The panel: a layout the plugin ships as a resource, one TextBoxWidget under a Panel anchored to the top right. Layout units are
+// The panel: a layout the plugin ships as a resource, two TextBoxWidgets (gold headers, blue properties) under a Panel anchored to the top right. Layout units are
 // twice the 1080p pixels. The game's info text (area, difficulty, version, mod) ends 40 units from the right edge and takes about
 // 260 units from the top, so the panel starts under it.
 constexpr const char* PluginId = "cartographer";
 constexpr const char* LocalId = "map-panel";
 constexpr const char* PanelName = "cartographer/map-panel";
-constexpr const char* TextName = "Text";
+constexpr const char* TextName = "Text";          // the header lines, gold
+constexpr const char* BlueTextName = "TextBlue";  // the property lines, blue (item property blue), over the same area
 constexpr int PanelWidth = 760;
 constexpr int PanelHeight = 700;
 constexpr int PanelTop = 270;
@@ -75,7 +76,8 @@ std::atomic<bool> g_on{false};  // the parts and services are there, the panel i
 
 // The open map. Written on the game thread, read on the UI thread.
 std::mutex g_lock;
-std::string g_text;       // the panel text; empty: nothing to show
+std::string g_text;       // the panel header lines; both texts empty: nothing to show
+std::string g_textBlue;   // the panel property lines
 bool g_mapOpen = false;   // a map was opened and not left; independent of the text
 int g_slotLevel = -1;
 std::atomic<bool> g_inMap{false};
@@ -112,6 +114,7 @@ auto Call(PartId id) noexcept -> Fn {
 }
 
 enum class SetResult { Done, NoWidget, Fault };
+
 
 auto SetRaw(const std::string& text, const char* panelName = PanelName, const char* textName = TextName) noexcept -> SetResult {
 	__try {
@@ -190,9 +193,9 @@ void ClosePanel() noexcept {
 	}
 }
 
-void Apply(const std::string& text) noexcept {
+void Apply(const std::string& text, const std::string& blue) noexcept {
 	NoticeClosed();
-	if (text.empty()) {
+	if (text.empty() && blue.empty()) {
 		ClosePanel();
 		return;
 	}
@@ -217,13 +220,20 @@ void Apply(const std::string& text) noexcept {
 			plog::Info("map panel: the game's terror zone text ends at %d, %d blank line(s) in front of the panel text", bottom, lines);
 		}
 	}
-	const std::string want = std::string(static_cast<size_t>(g_padLines), '\n') + text;
-	if (want == g_shown && ++g_tasks % RefreshTasks != 0) {
+	const std::string pad(static_cast<size_t>(g_padLines), '\n');
+	const std::string want = pad + text;
+	const std::string wantBlue = pad + blue;
+	const std::string both = want + '\x01' + wantBlue;
+	if (both == g_shown && ++g_tasks % RefreshTasks != 0) {
 		return;
 	}
-	switch (SetRaw(want)) {
+	SetResult set = SetRaw(want);
+	if (set == SetResult::Done) {
+		set = SetRaw(wantBlue, PanelName, BlueTextName);
+	}
+	switch (set) {
 	case SetResult::Done:
-		g_shown = want;
+		g_shown = both;
 		g_notFoundLogged = false;
 		if (g_sets.fetch_add(1) < 3) {
 			plog::Info("map panel: text set (%zu character(s))", want.size());
@@ -334,11 +344,13 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 	try {
 		if (g_on.load()) {
 			std::string want;
+			std::string wantBlue;
 			if (g_inMap.load()) {
 				std::lock_guard<std::mutex> lock(g_lock);
 				want = g_text;
+				wantBlue = g_textBlue;
 			}
-			Apply(want);
+			Apply(want, wantBlue);
 		}
 		ApplyBanner();
 	} catch (...) {
@@ -371,14 +383,18 @@ void ReleaseResource() noexcept {
 }
 
 auto BuildLayout() -> std::string {
-	char buf[900];
+	char buf[1600];
 	std::snprintf(buf, sizeof(buf),
 	              "{\n\"type\": \"Panel\", \"name\": \"%s\",\n\"fields\": { \"rect\": { \"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d }, "
 	              "\"anchor\": { \"x\": 1, \"y\": 0 } },\n\"children\": [\n"
 	              "{ \"type\": \"TextBoxWidget\", \"name\": \"%s\", \"fields\": { \"text\": \"\", \"rect\": { \"x\": 0, \"y\": 0, \"width\": %d, "
 	              "\"height\": %d }, \"style\": { \"fontColor\": { \"r\": 220, \"g\": 195, \"b\": 118, \"a\": 255 }, \"pointSize\": %d, "
+	              "\"alignment\": { \"h\": \"right\", \"v\": \"top\" }, \"options\": { \"newlineHandling\": \"standard\" } } } },\n"
+	              "{ \"type\": \"TextBoxWidget\", \"name\": \"%s\", \"fields\": { \"text\": \"\", \"rect\": { \"x\": 0, \"y\": 0, \"width\": %d, "
+	              "\"height\": %d }, \"style\": { \"fontColor\": { \"r\": 105, \"g\": 105, \"b\": 255, \"a\": 255 }, \"pointSize\": %d, "
 	              "\"alignment\": { \"h\": \"right\", \"v\": \"top\" }, \"options\": { \"newlineHandling\": \"standard\" } } } }\n]\n}\n",
-	              PanelName, -(PanelWidth + PanelRight), PanelTop, PanelWidth, PanelHeight, TextName, PanelWidth, PanelHeight, PointSize);
+	              PanelName, -(PanelWidth + PanelRight), PanelTop, PanelWidth, PanelHeight, TextName, PanelWidth, PanelHeight, PointSize,
+	              BlueTextName, PanelWidth, PanelHeight, PointSize);
 	return buf;
 }
 
@@ -544,14 +560,16 @@ void MapPanelNoMap() {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = false;
 	g_text.clear();
+	g_textBlue.clear();
 	g_slotLevel = -1;
 	g_inMap = false;
 }
 
-void MapPanelMapOpened(const std::string& text, int slotLevel) {
+void MapPanelMapOpened(const std::string& gold, const std::string& blue, int slotLevel) {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = true;
-	g_text = text;
+	g_text = gold;
+	g_textBlue = blue;
 	g_slotLevel = slotLevel;
 	g_inMap = false;  // the player's tick says when it stands in the map
 }
@@ -575,6 +593,7 @@ void MapPanelGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = false;
 	g_text.clear();
+	g_textBlue.clear();
 	g_slotLevel = -1;
 	g_inMap = false;
 	g_bannerStartMs = 0;  // a banner still open is out of time: the next pass closes it (bannerVisible of the whole tick count is false)

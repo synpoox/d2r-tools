@@ -5,9 +5,6 @@
 
 using namespace cartographer::mappanel;
 
-static const std::string B = kBlue;
-static const std::string G = kGold;
-
 TEST_CASE("known stats read in the game's wording from the fallback table")
 {
 	CHECK(statLine({true, "item_maxhp_percent", 30}) == "+30% Life");
@@ -62,17 +59,29 @@ TEST_CASE("an unknown stat is tidied and shows the plain number")
 	CHECK(statLine({false, "weird", -5}) == "-5 Weird");
 }
 
-TEST_CASE("the panel text groups the lines under Monsters have and Players have, properties in blue")
+TEST_CASE("the panel text puts the headers in gold and the property lines in blue, line for line")
 {
 	const std::vector<Stat> stats = {{true, "damagepercent", 40}, {false, "coldresist", -10}, {true, "item_maxhp_percent", 30}};
-	CHECK(panelText(85, stats) == G + "Monster level 85\n" + G + "Monsters have\n" + B + "+40% Damage\n" + B + "+30% Life\n" + G + "Players have\n" + B + "-10% Cold Resistance");
+	const PanelText t = panelText(85, stats);
+	CHECK(t.gold == "Monster level 85\nMonsters have\n\n\nPlayers have\n");
+	CHECK(t.blue == "\n\n+40% Damage\n+30% Life\n\n-10% Cold Resistance");
+}
+
+TEST_CASE("the panel text has no colour codes (the text widget prints them)")
+{
+	const PanelText t = panelText(85, {{true, "damagepercent", 40}});
+	CHECK(t.gold.find("\xC3\xBF") == std::string::npos);
+	CHECK(t.blue.find("\xC3\xBF") == std::string::npos);
 }
 
 TEST_CASE("a group with no properties is left out and the map name is never shown")
 {
-	CHECK(panelText(85, {{false, "coldresist", -10}}) == G + "Monster level 85\n" + G + "Players have\n" + B + "-10% Cold Resistance");
-	CHECK(panelText(85, {}) == G + "Monster level 85");
-	CHECK(panelText(0, {{true, "damagepercent", 40}}) == G + "Monsters have\n" + B + "+40% Damage");
+	CHECK(panelText(85, {{false, "coldresist", -10}}).gold == "Monster level 85\nPlayers have\n");
+	CHECK(panelText(85, {{false, "coldresist", -10}}).blue == "\n\n-10% Cold Resistance");
+	CHECK(panelText(85, {}).gold == "Monster level 85");
+	CHECK(panelText(85, {}).blue.empty());
+	CHECK(panelText(0, {{true, "damagepercent", 40}}).gold == "Monsters have\n");
+	CHECK(panelText(0, {{true, "damagepercent", 40}}).blue == "\n+40% Damage");
 	CHECK(panelText(0, {}).empty());
 }
 
