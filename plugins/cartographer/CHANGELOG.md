@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Using a map item whose `maps.txt` row was skipped now says the map is not set up (the reason is in the log) and keeps the item.
 - The Lava map now fills most of its edges with lava and cliff, so no black void shows from the ground near the outer wall (a layout that fills the whole level can keep a bare side).
 - A second map item no longer turns the cursor into the identify cursor when a map is already open: set `spellicon` to -1 on the map rows in `misc.txt` (`cartographer check` points at rows that need it).
 - Unique packs are now paced over the whole map instead of all spawning in the first quarter (experimental; maps with `Uniques` 0 are unchanged).

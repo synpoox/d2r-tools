@@ -184,7 +184,7 @@ void ReportRepeatedColumns(const char* file, const Tsv& table, Report& report) {
 
 }  // namespace
 
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses) -> std::vector<MapDef> {
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes, const std::vector<BossDef>* bosses, std::vector<SkippedMap>* skipped) -> std::vector<MapDef> {
 	std::vector<MapDef> maps;
 	const Tsv table = ParseTsv(text);
 	if (table.header.empty()) {
@@ -229,8 +229,12 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		MapDef map;
 		map.line = row.line;
 		bool ok = true;
+		std::string firstProblem;
 		const auto fail = [&](const std::string& message) {
 			report.Error(MapsFile, row.line, message + " This map is skipped.");
+			if (firstProblem.empty()) {
+				firstProblem = message;
+			}
 			ok = false;
 		};
 		// An optional whole-number column: blank keeps the default.
@@ -407,6 +411,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 
 		if (ok) {
 			maps.push_back(std::move(map));
+		} else if (skipped != nullptr && !map.item.empty() && map.item.size() <= 4) {
+			skipped->push_back({row.line, map.name, map.item, firstProblem});
 		}
 	}
 	return maps;
@@ -1056,6 +1062,24 @@ auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -
 		}
 	}
 	return nullptr;
+}
+
+auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap* {
+	for (const SkippedMap& s : skipped) {
+		if (!s.item.empty() && EqualsNoCase(s.item, itemCode)) {
+			return &s;
+		}
+	}
+	return nullptr;
+}
+
+auto SkippedMapText(const SkippedMap& skipped) -> std::string {
+	return "Map " + (skipped.name.empty() ? skipped.item : skipped.name) + " is not set up: see the Cartographer log.";
+}
+
+auto SkippedMapLog(const SkippedMap& skipped) -> std::string {
+	return "the item '" + skipped.item + "' opens nothing: its maps.txt row " + std::to_string(skipped.line) + (skipped.name.empty() ? std::string() : " ('" + skipped.name + "')") +
+	       " was skipped at load: " + skipped.reason;
 }
 
 auto CheckGates(const MapDef& map, const GateState& state) -> Gate {

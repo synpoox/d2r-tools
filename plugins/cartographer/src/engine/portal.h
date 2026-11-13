@@ -18,6 +18,7 @@ namespace carto {
 
 struct Tables {
 	std::vector<MapDef> maps;
+	std::vector<SkippedMap> skippedMaps;  // maps.txt rows left out at load, so their items can say why they open nothing
 	Settings settings;
 	std::vector<Slot> slots;
 	// Optional tables. Shapes and events are loaded and checked only.

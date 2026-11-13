@@ -1497,3 +1497,19 @@ TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in
 	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
 	CHECK(none.problems.empty());
 }
+
+TEST_CASE("a skipped row is kept by its item, with the first reason") {
+	Report report;
+	std::vector<SkippedMap> skipped;
+	const auto maps = LoadMaps(std::string(Header) + "Good\tCave\tLoop\t\t\tt20\nBad\tNowhere\tLoop\t\t\tt21\n", Names(), report, nullptr, nullptr, &skipped);
+	REQUIRE(maps.size() == 1);
+	REQUIRE(skipped.size() == 1);
+	CHECK(skipped[0].item == "t21");
+	CHECK(skipped[0].name == "Bad");
+	CHECK(skipped[0].line == 3);
+	CHECK(skipped[0].reason.find("Nowhere") != std::string::npos);
+	CHECK(FindSkippedByItem(skipped, "T21") == &skipped[0]);
+	CHECK(FindSkippedByItem(skipped, "t20") == nullptr);
+	CHECK(SkippedMapText(skipped[0]) == "Map Bad is not set up: see the Cartographer log.");
+	CHECK(SkippedMapLog(skipped[0]).find("row 3") != std::string::npos);
+}

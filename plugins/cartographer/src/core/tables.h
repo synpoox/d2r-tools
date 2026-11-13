@@ -94,6 +94,14 @@ struct MapDef {
 	int density = 0, champions = 0, uniques = 0;
 };
 
+// A maps.txt row that was skipped at load, kept so using its item can say so instead of doing nothing.
+struct SkippedMap {
+	int line = 0;       // row in maps.txt
+	std::string name;   // the Name cell, may be empty
+	std::string item;   // the Item cell (up to 4 letters)
+	std::string reason; // the first thing wrong with the row, as reported at load
+};
+
 struct Settings {
 	int eventChance = DefaultEventChance;
 	int playerStats = 1;  // PlayerStats: 1 puts the map's player stats on the player while in the map (removed on leaving and on Save and Exit)
@@ -139,7 +147,8 @@ auto PickBossPath(bool rowFound, bool baseFound) -> BossPath;
 // maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
 // `bosses` (from LoadBosses) is what a Boss cell may name; null means none. A Boss that is not an entry is refused with a message but the map loads without it.
 // `shapes` (from LoadShapes) lets the Shape cell name a shapes.txt row as well as a built-in shape; null means built-ins only.
-auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr, const std::vector<BossDef>* bosses = nullptr) -> std::vector<MapDef>;
+auto LoadMaps(std::string_view text, const GameNames& names, Report& report, const cartographer::layout::ShapeTable* shapes = nullptr, const std::vector<BossDef>* bosses = nullptr,
+              std::vector<SkippedMap>* skipped = nullptr) -> std::vector<MapDef>;
 
 // shapes.txt (optional). A row that cannot be built is left out and described in `report`; the other rows load.
 auto LoadShapes(std::string_view text, Report& report) -> cartographer::layout::ShapeTable;
@@ -213,6 +222,13 @@ auto SlotLevel(const std::vector<Slot>& slots, std::string_view slot) -> int;
 
 // The map whose Item is `itemCode` (ignoring case), or nullptr: an item that opens no map is not a map item.
 auto FindMapByItem(const std::vector<MapDef>& maps, std::string_view itemCode) -> const MapDef*;
+
+// The skipped row whose Item is `itemCode` (ignoring case), or nullptr. Only for a code no loaded map uses (FindMapByItem is tried first).
+auto FindSkippedByItem(const std::vector<SkippedMap>& skipped, std::string_view itemCode) -> const SkippedMap*;
+
+// What the player sees when using the item of a skipped row (the reason goes to the log, see SkippedMapLog).
+auto SkippedMapText(const SkippedMap& skipped) -> std::string;
+auto SkippedMapLog(const SkippedMap& skipped) -> std::string;
 
 // The map called `name` (ignoring case), or nullptr.
 auto FindMap(const std::vector<MapDef>& maps, std::string_view name) -> const MapDef*;
