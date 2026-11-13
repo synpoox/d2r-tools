@@ -48,7 +48,7 @@ fails (fail open), and what has not been validated, as its recording format and
 
 ## Changelog and docs
 
-Add player-visible or compatibility changes as one line in a new file `plugins/<name>/changelog.d/<issue-or-topic>.md`, not in `CHANGELOG.md`, so parallel PRs do not conflict (CI checks each fragment is one line). Keep each entry to one short line in plain player wording. A plugin README has an intro, Features (the main 3 points), Requirements, Installation, Hotkeys if it has any, and Configuration. Leave out console commands and notes on loading or crashes. At release, `tools\changelog-fold.ps1` moves the fragments and any older `Unreleased` lines
+Add player-visible or compatibility changes as one line in a new file `plugins/<name>/changelog.d/<issue-or-topic>.md`, not in `CHANGELOG.md`, so parallel PRs do not conflict (CI checks each fragment is one line; an open PR that already edits `CHANGELOG.md` moves its line into a fragment at its next fix cycle or merge of main). Keep each entry to one short line in plain player wording. A plugin README has an intro, Features (the main 3 points), Requirements, Installation, Hotkeys if it has any, and Configuration. Leave out console commands and notes on loading or crashes. At release, `tools\changelog-fold.ps1` moves the fragments and any older `Unreleased` lines
 under `## X.Y.Z - YYYY-MM-DD` (release date), as in [docs/RELEASING.md](docs/RELEASING.md). The release notes quote that
 section, so write it for players. Update the root `README.md` plugin table (version, description) when either changes; it lists released plugins only.
 

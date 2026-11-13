@@ -1,8 +1,8 @@
 # Folds a plugin's changelog fragments into its CHANGELOG.md. Each PR adds one file plugins/<name>/changelog.d/<topic>.md
 # holding one changelog line, so parallel PRs never conflict on `## Unreleased`.
 #   tools\changelog-fold.ps1 -Plugin <name> -Version X.Y.Z [-Date YYYY-MM-DD]   # fragments + any `## Unreleased` lines -> `## X.Y.Z - date`, fragments deleted
-#   tools\changelog-fold.ps1 -Check                                              # every fragment is exactly one non-empty line (CI)
-# Fragments come first (sorted by file name), then the old Unreleased lines. The file's BOM and line endings are kept.
+#   tools\changelog-fold.ps1 -Check                                              # every fragment is one non-empty line, in a folder named changelog.d, and a .md file (CI)
+# Fragments come first (newest first: file name descending, so higher issue numbers on top), then the old Unreleased lines. The file's BOM and line endings are kept.
 param(
     [string]$Plugin = '',
     [string]$Version = '',
@@ -13,10 +13,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if (-not $Root) { $Root = Split-Path $PSScriptRoot -Parent }
 
-function Get-Fragments([string]$dir) {   # -> @{ Name; Line } per fragment, sorted by name; throws unless each is one line
+function Get-Fragments([string]$dir) {   # -> @{ Name; Line } per fragment, sorted by name descending; throws unless each is one line
     $d = Join-Path $dir 'changelog.d'
     if (-not (Test-Path $d)) { return @() }
-    foreach ($f in (Get-ChildItem $d -File -Filter *.md | Sort-Object Name)) {
+    $bad = @(Get-ChildItem $d | Where-Object { $_.PSIsContainer -or $_.Extension -ne '.md' })
+    if ($bad) { throw "${d}: only .md fragment files belong here, found $($bad[0].Name)" }
+    foreach ($f in (Get-ChildItem $d -File -Filter *.md | Sort-Object Name -Descending)) {
         $lines = @([IO.File]::ReadAllText($f.FullName).TrimStart([char]0xFEFF) -split '\r?\n' | Where-Object { $_.Trim() })
         if ($lines.Count -ne 1) { throw "$($f.FullName): a changelog fragment is exactly one line (found $($lines.Count))" }
         $line = $lines[0].Trim()
@@ -26,7 +28,11 @@ function Get-Fragments([string]$dir) {   # -> @{ Name; Line } per fragment, sort
 }
 
 if ($Check) {
-    foreach ($p in Get-ChildItem (Join-Path $Root 'plugins') -Directory) { Get-Fragments $p.FullName | Out-Null }
+    foreach ($p in Get-ChildItem (Join-Path $Root 'plugins') -Directory) {
+        $odd = @(Get-ChildItem $p.FullName -Directory | Where-Object { $_.Name -ne 'changelog.d' -and $_.Name -match '^changelogs?(\.d)?$|^changelog' })
+        if ($odd) { throw "$($odd[0].FullName): fragments belong in a folder named changelog.d" }
+        Get-Fragments $p.FullName | Out-Null
+    }
     Write-Host 'Changelog fragments OK'
     return
 }
@@ -34,7 +40,7 @@ if ($Check) {
 if (-not $Plugin -or $Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Usage: changelog-fold.ps1 -Plugin <name> -Version X.Y.Z [-Date YYYY-MM-DD]  |  -Check' }
 if (-not $Date) { $Date = Get-Date -Format 'yyyy-MM-dd' }
 if ($Date -notmatch '^\d{4}-\d{2}-\d{2}$') { throw "Date must be YYYY-MM-DD: $Date" }
-$dir = Join-Path $Root "plugins\$Plugin"
+$dir = Join-Path (Join-Path $Root 'plugins') $Plugin
 $file = Join-Path $dir 'CHANGELOG.md'
 if (-not (Test-Path $file)) { throw "No changelog: $file" }
 
