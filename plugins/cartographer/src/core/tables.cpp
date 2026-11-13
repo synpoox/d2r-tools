@@ -1021,8 +1021,15 @@ auto MapItemRefusal(const std::vector<MapDef>& maps, std::string_view itemCode, 
 	if (map == nullptr) {
 		return {};
 	}
-	const Gate gate = CheckGates(*map, state);
-	return gate == Gate::Open ? std::string() : RefusalText(gate, *map, state);
+	// Only the gates that cannot go stale the wrong way: the reading can be a few ticks old, and the difficulty is fixed for the game and
+	// the opening count never goes down. Character level, area and free spot change under the player and are left to the game's check.
+	if (state.difficulty != Hell) {
+		return RefusalText(Gate::Difficulty, *map, state);
+	}
+	if (state.openings > 0) {
+		return RefusalText(Gate::AlreadyOpen, *map, state);
+	}
+	return {};
 }
 
 }  // namespace carto
