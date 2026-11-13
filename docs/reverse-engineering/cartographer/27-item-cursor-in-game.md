@@ -54,14 +54,25 @@ Maps table names. A pSpell 16 row that no map names is left to the game's own ch
 and is never restored (not on leaving the game, not on unload), because the record table belongs to the process. A client item whose `unit+0x1bd` differs from the game's
 flag would read another bank; that is not handled. No code bytes are written. With the part off nothing changes and the old behaviour stays.
 
-### Blank spellicon cell (open)
+### Blank spellicon cell (settled: reads as 0)
 
-`0x315fd0` only builds the column table (`spellicon`, type 6, offset `0x144`); the cell parser that turns text into the byte is the generic table parser in `D2RCore.dll` (reached through the stub `0x3e2b544`), which is not in the dump. Whether a blank cell reads as 0 or leaves the record byte at its initial value is therefore not settled, and vanilla `misc.txt` has no blank `spellicon`. `cartographer check` stays silent on blank cells until that is read in `D2RCore.dll` or tried in game.
+`0x315fd0` only builds the column table (`spellicon`, type 6, offset `0x144`). The byte the game reads is whatever D2RLoader's compiler writes for the cell (notes 07 and 11: the game loads the compiled table, so the empty value depends on the column; D2RCore's parser is not involved). Vanilla `misc.txt` cannot show it: the only blank `spellicon` is the `Expansion` marker row, which the compiler drops (`misc.bin` has 169 records).
+
+Tried in game (D2R 3.3 build 93847, D2RLoader 1.3.1-beta, slot 11, test mod; the loader compiled the mod's `misc.txt` in memory at startup, "Compiled 188 tables from TXT", and wrote no `misc.bin`). Three map item rows with `pSpell` 16 and `spellicon` blank (`t20`), `0` (`t21`) and `-1` (`t22`). The record bytes were read from process memory (ReadProcessMemory, record found by its code at `+0x80`, `pSpell` `+0x94`) at the main menu, before any player tick, with no "spellicon set to -1" line in `cartographer.log` (so `ClearMapItemCursor` had not run):
+
+| Row | `spellicon` cell | Byte at `+0x144` |
+|---|---|---|
+| `t20` | blank | `0x00` |
+| `t21` | `0` | `0x00` |
+| `t22` | `-1` | `0xff` |
+
+A blank cell is therefore the same as 0 and shows the item cursor like it. `cartographer check` still notes only a literal 0 to 9; flagging blank cells too is a follow-up (the in-memory safety net already covers them: 0 is below 10).
 
 ### Verification levels
 
 - Static: the chain above, read in Ghidra and Capstone from the dump. Not run.
 - Unit tests and a clean build: see the PR.
+- In game (memory read, no play): a blank `spellicon` cell compiles to byte 0 (table above).
 - In game: the data fix (`spellicon` -1 in `misc.txt`) was confirmed by the owner with a real mouse. The runtime write is static only: not run in game.
 
 ### Reference
