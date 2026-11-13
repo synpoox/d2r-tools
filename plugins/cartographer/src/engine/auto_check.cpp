@@ -396,6 +396,11 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 	}
 	case Phase::WaitBoss: {
 		const int level = g_run.opened.level;
+		if (g_run.bossNoted) {
+			SettleBossFromNote();
+			Enter(Phase::Stats);
+			return;
+		}
 		// The Boss went to (or waits for) another room of the boss cell: put the player there too (once per room), which also brings the room up
 		// when it is not populated yet, and give the wait a new start.
 		if (g_run.moved && g_run.bossRoomWanted &&
@@ -425,14 +430,11 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 				return;
 			}
 			if (moved.kind != MoveKind::Moved) {
-				Line("AUTOCHECK boss: the player was not moved to the other room (" + moved.why + ")");
+				g_run.moved = false;  // the player must walk there: the manual wait
+				Line("AUTOCHECK boss: the player was not moved to the other room (" + moved.why + "), so the player must walk there; up to " +
+				     std::to_string(BossWaitManualMs / 1000) + " s");
 			}
 			Enter(Phase::WaitBoss);  // restarts the wait
-			return;
-		}
-		if (g_run.bossNoted) {
-			SettleBossFromNote();
-			Enter(Phase::Stats);
 			return;
 		}
 		if (PlayerLevelOf(unit) != level || GameDifficultyOf(game) != HellDifficulty) {
