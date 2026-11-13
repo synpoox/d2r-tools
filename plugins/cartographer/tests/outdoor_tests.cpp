@@ -1139,21 +1139,22 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 	REQUIRE_MESSAGE(plan.ok, plan.reason);
 	CHECK(plan.layout.cells.empty());
 	CHECK(plan.picks.cells.empty());
-	CHECK(plan.stamps.stamps.size() == 40);
-	CHECK(plan.stamps.tilesW == 128);
-	CHECK(plan.stamps.tilesH == 80);
+	CHECK(plan.stamps.stamps.size() == 70);  // 8 x 5 cells of fence and one cell of border pieces around them: 10 x 7
+	CHECK(plan.stamps.tilesW == 160);
+	CHECK(plan.stamps.tilesH == 112);
 	CHECK(plan.stamps.originX == 6000);
 	CHECK(plan.stamps.originY == 3600);
 	CHECK(plan.stamps.entrance.known);
 	for (const Stamp &st : plan.stamps.stamps) {
-		CHECK(st.lvlPrest >= 987);
+		CHECK(st.lvlPrest >= 957);  // the border pieces 957..982, then the fence pieces 987..1002
 		CHECK(st.lvlPrest <= 1002);
+		CHECK((st.lvlPrest <= 982 || st.lvlPrest >= 987));
 	}
 	GridSample g = gridOf(plan.stamps);
 	CHECK(compareGrid(plan.stamps, g).empty());
 	const LevelRect rect = levelRectOf(plan.stamps);
-	CHECK(rect.w == 128);
-	CHECK(rect.h == 80);
+	CHECK(rect.w == 160);
+	CHECK(rect.h == 112);
 
 	const MapPlan again = planOutdoorMap(r, cat);
 	CHECK(again.hash == plan.hash);
@@ -1162,11 +1163,11 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 	CHECK(planOutdoorMap(other, cat).hash != plan.hash);
 
 	MapRequest big = r;
-	big.size = "ExtraLarge";  // 160 x 112 tiles
+	big.size = "ExtraLarge";  // 192 x 144 tiles with the edge ring
 	big.options.maxTilesY = 100;
 	const MapPlan tooBig = planOutdoorMap(big, cat);
 	CHECK_FALSE(tooBig.ok);
-	CHECK(tooBig.reason.find("112") != std::string::npos);
+	CHECK(tooBig.reason.find("144") != std::string::npos);
 	big.options.maxTilesY = 192;
 	CHECK(planOutdoorMap(big, cat).ok);
 

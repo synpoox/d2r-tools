@@ -58,7 +58,7 @@ const std::string GOLDEN_HORIZONTAL =
 	"Fb ba aa ab ba aa ab bR\n"
 	"Fb bb ba aa ab bb ba aR\n"
 	"Fa ab ba aa ab bb ba aR\n";
-const uint64_t GOLDEN_HORIZONTAL_HASH = 5564385770962023109ull;
+const uint64_t GOLDEN_HORIZONTAL_HASH = 11053312794566208748ull;
 
 } // namespace
 
@@ -176,8 +176,8 @@ TEST_CASE("5000 seeds in both orientations plan, pass the check and chain their 
 		CHECK(checkSnowPlan(r, plan).empty());
 		(plan.orientation == Orientation::Horizontal ? horizontal : vertical)++;
 		CHECK(plan.hash == stampPlanHash(plan.stamps));
-		CHECK(plan.stamps.tilesW == r.cellsW * 16);
-		CHECK(plan.stamps.tilesH == r.cellsH * 16);
+		CHECK(plan.stamps.tilesW == (r.cellsW + 2 * kEdgeCells) * 16);
+		CHECK(plan.stamps.tilesH == (r.cellsH + 2 * kEdgeCells) * 16);
 		CHECK(plan.stamps.voidCells.empty());
 	}
 	CHECK(horizontal > 1500);
@@ -187,8 +187,8 @@ TEST_CASE("5000 seeds in both orientations plan, pass the check and chain their 
 TEST_CASE("entrance, boss and event rooms: three different run cells inside the layout, the same for a seed")
 {
 	const auto cellOf = [](const TileRect &r, const SnowRequest &q, int *cx, int *cy) {
-		*cx = (r.x - q.options.originX) / 16;
-		*cy = (r.y - q.options.originY) / 16;
+		*cx = (r.x - q.options.originX) / 16 - kEdgeCells;  // the rectangle's own cell, past the edge ring
+		*cy = (r.y - q.options.originY) / 16 - kEdgeCells;
 		return (r.x - q.options.originX) % 16 == 0 && (r.y - q.options.originY) % 16 == 0 && r.w == 16 && r.h == 16;
 	};
 	for (uint64_t seed = 0; seed < 3000; ++seed) {
@@ -310,6 +310,10 @@ TEST_CASE("pinned files stay inside each piece's file count, unpinned plans leav
 		REQUIRE(pinned.ok);
 		for (const Stamp &s : pinned.stamps.stamps) {
 			CHECK(s.file >= 0);
+			if (s.lvlPrest < kFirstLvlPrest) {  // the edge ring: one file
+				CHECK(s.file == 0);
+				continue;
+			}
 			CHECK(s.file < findPiece(s.lvlPrest)->files);
 			if (s.file == 1) {
 				sawSecond = true;
@@ -332,18 +336,18 @@ TEST_CASE("stamps sit on the 8-tile grid, row-major, and the entrance is a run c
 	r.options.originY = 1896;
 	const SnowPlan p = planSnowMap(r);
 	REQUIRE(p.ok);
-	CHECK(p.stamps.cellsW == 16);
-	CHECK(p.stamps.cellsH == 10);
+	CHECK(p.stamps.cellsW == 20);  // (8 + 2) cells of 2 grid cells
+	CHECK(p.stamps.cellsH == 14);  // (5 + 2)
 	CHECK(p.stamps.entrance.known);
-	CHECK(p.stamps.entrance.x == 2000 + 16);
-	CHECK(p.stamps.entrance.y == 1896 + 2 * 16);
+	CHECK(p.stamps.entrance.x == 2000 + 2 * 16);  // cell 1 of the rectangle, one edge cell in
+	CHECK(p.stamps.entrance.y == 1896 + 3 * 16);
 	CHECK(p.stamps.entrance.w == 16);
 	CHECK(p.stamps.entrance.h == 16);
 	int entrances = 0;
 	for (size_t i = 0; i < p.stamps.stamps.size(); ++i) {
 		const Stamp &s = p.stamps.stamps[i];
-		CHECK(s.cx == (static_cast<int>(i) % 8) * 2);
-		CHECK(s.cy == (static_cast<int>(i) / 8) * 2);
+		CHECK(s.cx == (static_cast<int>(i) % 10) * 2);
+		CHECK(s.cy == (static_cast<int>(i) / 10) * 2);
 		if (s.role == layout::Role::Entrance) {
 			++entrances;
 			CHECK(findPiece(s.lvlPrest)->kind == Kind::RunH);
@@ -354,8 +358,148 @@ TEST_CASE("stamps sit on the 8-tile grid, row-major, and the entrance is a run c
 	SnowRequest v = request(99, 5, 8, Orientation::Vertical);
 	const SnowPlan pv = planSnowMap(v);
 	REQUIRE(pv.ok);
-	CHECK(pv.stamps.entrance.x == 2 * 16);
-	CHECK(pv.stamps.entrance.y == 16);
+	CHECK(pv.stamps.entrance.x == 3 * 16);
+	CHECK(pv.stamps.entrance.y == 2 * 16);
+}
+
+TEST_CASE("the edge ring: every side of the rectangle has kEdgeCells cells of the edge piece, at every size and orientation (issue #395)")
+{
+	CHECK(kEdgeCells >= 1);
+	// Not fence pieces: the fence grammar never picks them.
+	for (const int id : {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw}) CHECK(findPiece(id) == nullptr);
+	const int sizes[4][2] = {{4, 3}, {6, 4}, {8, 5}, {10, 7}};  // Small, Medium, Large, ExtraLarge
+	for (const auto &size : sizes) {
+		for (const Orientation o : {Orientation::Horizontal, Orientation::Vertical}) {
+			const SnowRequest r = request(31, size[0], size[1], o);
+			const SnowPlan p = planSnowMap(r);
+			REQUIRE_MESSAGE(p.ok, p.reason);
+			const int TW = size[0] + 2 * kEdgeCells, TH = size[1] + 2 * kEdgeCells;
+			CHECK(p.stamps.tilesW == TW * kCellTiles);
+			CHECK(p.stamps.tilesH == TH * kCellTiles);
+			CHECK(p.stamps.macroMinX == -kEdgeCells);
+			CHECK(p.stamps.macroMinY == -kEdgeCells);
+			REQUIRE(p.stamps.stamps.size() == static_cast<size_t>(TW) * TH);
+			// Every stamp: outside the rectangle the edge piece, inside a Snow fence piece; the outermost cells of the level are always ring.
+			int ring = 0, inside = 0;
+			for (int y = 0; y < TH; ++y)
+				for (int x = 0; x < TW; ++x) {
+					const Stamp &s = p.stamps.stamps[static_cast<size_t>(y) * TW + x];
+					const bool rect = x >= kEdgeCells && y >= kEdgeCells && x < TW - kEdgeCells && y < TH - kEdgeCells;
+					if (rect) {
+						CHECK(s.lvlPrest >= 987);
+						CHECK(s.lvlPrest <= 1002);
+						++inside;
+					} else {
+						CHECK(s.lvlPrest == edgePieceAt(x - kEdgeCells, y - kEdgeCells, size[0], size[1]));
+						CHECK(s.file == -1);
+						++ring;
+					}
+				}
+			CHECK(inside == size[0] * size[1]);
+			CHECK(ring == TW * TH - size[0] * size[1]);
+			// The rectangle's own rooms are untouched: entrance, boss and event stay inside the rectangle, never on the ring.
+			const TileRect *rects[3] = {&p.stamps.entrance, &p.stamps.boss, &p.stamps.event};
+			for (const TileRect *t : rects) {
+				if (!t->known) continue;
+				CHECK(t->x >= kEdgeCells * kCellTiles);
+				CHECK(t->y >= kEdgeCells * kCellTiles);
+				CHECK(t->x + t->w <= (TW - kEdgeCells) * kCellTiles);
+				CHECK(t->y + t->h <= (TH - kEdgeCells) * kCellTiles);
+			}
+			// The ring is on the engine's 8-tile grid like every other stamp, so the level has no cell without a piece.
+			CHECK(p.stamps.cellsW == TW * 2);
+			CHECK(p.stamps.cellsH == TH * 2);
+			CHECK(p.stamps.voidCells.empty());
+		}
+	}
+}
+
+TEST_CASE("the edge ring has its own border piece on each side and each corner (issue #395)")
+{
+	// The ring cell west, north, east and south of a 6 x 4 rectangle, then its four corners.
+	CHECK(edgePieceAt(-1, 2, 6, 4) == kEdgePieces.west);
+	CHECK(edgePieceAt(3, -1, 6, 4) == kEdgePieces.north);
+	CHECK(edgePieceAt(6, 2, 6, 4) == kEdgePieces.east);
+	CHECK(edgePieceAt(3, 4, 6, 4) == kEdgePieces.south);
+	CHECK(edgePieceAt(-1, -1, 6, 4) == kEdgePieces.nw);
+	CHECK(edgePieceAt(6, -1, 6, 4) == kEdgePieces.ne);
+	CHECK(edgePieceAt(6, 4, 6, 4) == kEdgePieces.se);
+	CHECK(edgePieceAt(-1, 4, 6, 4) == kEdgePieces.sw);
+	CHECK(edgePieceAt(0, 0, 6, 4) == 0);
+	CHECK(edgePieceAt(5, 3, 6, 4) == 0);
+	// The literal ids: cliff on the north and west sides, ravine on the south and east sides, 981 and 982 join the two.
+	CHECK(edgePieceAt(-1, 2, 6, 4) == 958);
+	CHECK(edgePieceAt(3, -1, 6, 4) == 959);
+	CHECK(edgePieceAt(6, 2, 6, 4) == 972);
+	CHECK(edgePieceAt(3, 4, 6, 4) == 969);
+	CHECK(edgePieceAt(-1, -1, 6, 4) == 962);
+	CHECK(edgePieceAt(6, -1, 6, 4) == 982);
+	CHECK(edgePieceAt(6, 4, 6, 4) == 976);
+	CHECK(edgePieceAt(-1, 4, 6, 4) == 981);
+	// Eight different pieces, all rows of the game's own Act 5 Barricade border table (Cliff and Ravine Border 1 to 12 Snow, 957..982).
+	std::set<int> seen;
+	for (const int id : {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw}) {
+		CHECK(id >= 957);
+		CHECK(id <= 982);
+		seen.insert(id);
+	}
+	CHECK(seen.size() == 8);
+}
+
+TEST_CASE("the edge ring is checked: a missing or wrong ring cell fails the plan check")
+{
+	const SnowRequest r = request(7, 8, 5, Orientation::Horizontal);
+	const SnowPlan good = planSnowMap(r);
+	REQUIRE(good.ok);
+	const auto fails = [&](SnowPlan p) {
+		p.hash = stampPlanHash(p.stamps);
+		return !checkSnowPlan(r, p).empty();
+	};
+	{ // a corner of the ring holding a fence piece
+		SnowPlan p = good;
+		p.stamps.stamps.front().lvlPrest = 987;
+		CHECK(fails(p));
+	}
+	{ // the last ring cell holding nothing
+		SnowPlan p = good;
+		p.stamps.stamps.back().lvlPrest = 0;
+		CHECK(fails(p));
+	}
+	{ // a ring cell moved off its place
+		SnowPlan p = good;
+		p.stamps.stamps[3].cx += 2;
+		CHECK(fails(p));
+	}
+	{ // a level box without the ring
+		SnowPlan p = good;
+		p.stamps.tilesW -= 2 * kEdgeCells * kCellTiles;
+		CHECK(fails(p));
+	}
+	{ // the north side holding the piece of the west side
+		SnowPlan p = good;
+		p.stamps.stamps[1].lvlPrest = kEdgePieces.west;
+		CHECK(fails(p));
+	}
+	{ // the west and east sides swapped: the checker's own table catches it
+		SnowPlan p = good;
+		for (Stamp &st : p.stamps.stamps) {
+			if (st.lvlPrest == 958) st.lvlPrest = 972;
+			else if (st.lvlPrest == 972) st.lvlPrest = 958;
+		}
+		CHECK(fails(p));
+	}
+	{ // a pinned file on the ring of an unpinned plan
+		SnowPlan p = good;
+		p.stamps.stamps[1].file = 0;
+		CHECK(fails(p));
+	}
+	// A level limit counts the ring: 10 x 7 cells need 12 x 9 with it.
+	SnowRequest big = request(1, 10, 7, Orientation::Horizontal);
+	big.options.maxTilesX = 192;
+	big.options.maxTilesY = 144;
+	CHECK(planSnowMap(big).ok);
+	big.options.maxTilesY = 143;
+	CHECK_FALSE(planSnowMap(big).ok);
 }
 
 TEST_CASE("bad requests are refused with a plain reason")
@@ -370,16 +514,16 @@ TEST_CASE("bad requests are refused with a plain reason")
 	CHECK(planSnowMap(request(1, 12, 12, Orientation::Horizontal)).ok);
 
 	SnowRequest limited = request(1, 8, 5, Orientation::Horizontal);
-	limited.options.maxTilesX = 127;
+	limited.options.maxTilesX = 159;  // 8 x 5 cells and one edge cell around them: 160 x 112 tiles
 	const SnowPlan over = planSnowMap(limited);
 	CHECK_FALSE(over.ok);
-	CHECK(over.reason.find("128 x 80") != std::string::npos);
+	CHECK(over.reason.find("160 x 112") != std::string::npos);
 	CHECK(over.grid.empty());
 	CHECK(over.stamps.stamps.empty());
-	limited.options.maxTilesX = 128;
-	limited.options.maxTilesY = 80;
+	limited.options.maxTilesX = 160;
+	limited.options.maxTilesY = 112;
 	CHECK(planSnowMap(limited).ok);
-	limited.options.maxTilesY = 79;
+	limited.options.maxTilesY = 111;
 	CHECK_FALSE(planSnowMap(limited).ok);
 }
 
@@ -389,6 +533,8 @@ TEST_CASE("the independent check catches a broken plan")
 	const SnowPlan good = planSnowMap(r);
 	REQUIRE(good.ok);
 	REQUIRE(checkSnowPlan(r, good).empty());
+	// The stamp of the rectangle's cell (x, y): the stamps start at the edge ring.
+	const auto ix = [](int x, int y) { return static_cast<size_t>((y + kEdgeCells) * (8 + 2 * kEdgeCells) + x + kEdgeCells); };
 
 	{ // a run swapped for one whose start socket does not match
 		SnowPlan p = good;
@@ -396,39 +542,39 @@ TEST_CASE("the independent check catches a broken plan")
 		const snow::Piece *cur = findPiece(p.grid[at]);
 		const int wrong = cur->start == 'a' ? 988 : 987; // BB or AA
 		p.grid[at] = wrong;
-		p.stamps.stamps[at].lvlPrest = wrong;
+		p.stamps.stamps[ix(1, 0)].lvlPrest = wrong;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a cap where a run belongs
 		SnowPlan p = good;
 		p.grid[3] = 995;
-		p.stamps.stamps[3].lvlPrest = 995;
+		p.stamps.stamps[ix(3, 0)].lvlPrest = 995;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a jungle piece
 		SnowPlan p = good;
 		p.grid[2] = 530;
-		p.stamps.stamps[2].lvlPrest = 530;
+		p.stamps.stamps[ix(2, 0)].lvlPrest = 530;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a stamp that disagrees with the grid
 		SnowPlan p = good;
-		p.stamps.stamps[4].lvlPrest = p.stamps.stamps[4].lvlPrest == 987 ? 991 : 987;
+		p.stamps.stamps[ix(4, 0)].lvlPrest = p.stamps.stamps[ix(4, 0)].lvlPrest == 987 ? 991 : 987;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a stamp moved off the 16-tile grid
 		SnowPlan p = good;
-		p.stamps.stamps[5].cx += 1;
+		p.stamps.stamps[ix(5, 0)].cx += 1;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
 	{ // a file index on an unpinned plan, and one out of range
 		SnowPlan p = good;
-		p.stamps.stamps[5].file = 0;
+		p.stamps.stamps[ix(5, 0)].file = 0;
 		p.hash = stampPlanHash(p.stamps);  // so the hash does not hide what the case is about
 		CHECK_FALSE(checkSnowPlan(r, p).empty());
 	}
@@ -558,7 +704,7 @@ TEST_CASE("the boss cell is a farthest run cell from the entrance and the event 
 		if (!p.ok || !p.stamps.boss.known) continue;
 		const bool horizontal = p.orientation == Orientation::Horizontal;
 		const int along = horizontal ? r.cellsW : r.cellsH;
-		const auto cell = [](const TileRect &t, int *x, int *y) { *x = t.x / 16; *y = t.y / 16; };
+		const auto cell = [](const TileRect &t, int *x, int *y) { *x = t.x / 16 - kEdgeCells; *y = t.y / 16 - kEdgeCells; };
 		int ex, ey, bx, by, vx, vy;
 		cell(p.stamps.entrance, &ex, &ey);
 		cell(p.stamps.boss, &bx, &by);
