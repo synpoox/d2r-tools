@@ -9,7 +9,7 @@ Screenshots stay outside the repo.
 
 | # | Check | Result |
 |---|---|---|
-| a | Full text on a rare map with many properties | PASS: 20 lines (4 monster header and property lines with merged sums, 12 player lines) all show, none cut off at the bottom |
+| a | Full text on a rare map with many properties | PASS: 20 lines on the first map and 16 on the last (headers, merged monster and player sums) all show, none cut off at the bottom |
 | b | Panel takes no clicks | PASS: an inventory item inside the 760x1540 rect was picked up normally with the panel up |
 | b | Panel does not block movement | PASS: a click inside the rect moved the character |
 | b | Panel does not cover right-side HUD | PASS for input; with the inventory open the panel text draws over the top of the equipment area (text only, no input effect). No resize needed |
