@@ -3,8 +3,11 @@
 ## Unreleased
 
 - A second map item no longer turns the cursor into the identify cursor when a map is already open: set `spellicon` to -1 on the map rows in `misc.txt` (`cartographer check` points at rows that need it).
+- Unique packs are now paced over the whole map instead of all spawning in the first quarter (experimental; maps with `Uniques` 0 are unchanged).
+- A map's monster speed modifier is cut to -99, and `cartographer check` notes rows at -100 or lower.
 - A map the game rolls as magic now drops as normal.
 - New map `Tileset` `Lava` (River of Flame): rerun `tools\install.ps1` to add its level. Seen in game: opens and builds, but it draws no automap lines.
+- New map `Tileset` `Ice` (Act 5 Ice caves): rerun `tools\install.ps1` once to add its level.
 - A cube recipe with `map-level` raises a map's level, and each transmute adds again.
 - Map modifiers can add bonus Density (the `map-density` property, summed over the item) and magic find (`mag%`).
 - A fresh install now adds the map level stat on the first run.

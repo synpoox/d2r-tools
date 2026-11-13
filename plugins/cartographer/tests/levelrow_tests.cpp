@@ -613,3 +613,36 @@ TEST_CASE("Density and Uniques have no 1000 percent cap; only the game's field s
 	CHECK(FindField(PlanRecord(r, s, RecordOnly(false, true, false)), RecDensityOffset)->value == 0x7fffffffu);  // MonDen is a signed 32-bit value
 	CHECK(ScalePercent(0x7fffffff, 2147483647, 0x7fffffff) == 0x7fffffff);
 }
+
+TEST_CASE("the unique total is MonUMax scaled by Uniques, and 0 for Uniques 0, the part off or no MonUMax") {
+	RecordSnapshot rec;
+	rec.uMax = 8;
+	Request r;
+	CHECK(UniqueTotal(r, rec, true) == 0);  // Uniques 0: not paced
+	r.uniques = 100;
+	CHECK(UniqueTotal(r, rec, true) == 16);
+	r.uniques = 5000;
+	CHECK(UniqueTotal(r, rec, true) == 255);
+	CHECK(UniqueTotal(r, rec, false) == 0);
+	rec.uMax = 0;
+	CHECK(UniqueTotal(r, rec, true) == 0);
+}
+
+TEST_CASE("the pace gives the unique packs out with the rooms done, from the first room to the last") {
+	CHECK(PaceBudget(0, 10, 100) == 0);
+	CHECK(PaceBudget(16, 1, 0) == 1);  // the room count is not known before the first room is populated
+	CHECK(PaceBudget(16, 0, 558) == 1);
+	CHECK(PaceBudget(16, 1, 558) == 1);
+	CHECK(PaceBudget(16, 35, 558) == 2);  // 16 * 35 / 558 = 1.003, rounded up
+	CHECK(PaceBudget(16, 279, 558) == 8);
+	CHECK(PaceBudget(16, 558, 558) == 16);
+	CHECK(PaceBudget(16, 600, 558) == 16);
+	int last = 0;
+	for (int seen = 1; seen <= 558; ++seen) {
+		const int b = PaceBudget(16, seen, 558);
+		CHECK(b >= last);
+		CHECK(b <= 16);
+		last = b;
+	}
+	CHECK(PaceBudget(255, 400, 401) == 255);
+}

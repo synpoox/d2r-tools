@@ -307,7 +307,7 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	if (named && opened == 0) {
 		MapNamesOpenFailed(level);
 	}
-	if (shaped && opened == 0) {
+	if (opened == 0) {  // also when nothing was written (the unique pace is armed even then)
 		LevelRowOpenFailed(level);
 	}
 	if (maze && opened == 0) {

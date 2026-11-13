@@ -12,7 +12,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Red portal**: one map per game, in Harrogath, in Hell. A refused map stays in your inventory and you see "I can't use this yet."
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt`; the rest load.
-- **Cave, Crypt and Lava mazes**: every map is generated (Cave, Crypt or Lava) from the map's layout (`Corridor`, `Winding`,
+- **Cave, Crypt, Lava and Ice caves mazes**: every map is generated (Cave, Crypt, Lava or Ice) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the maze slots that `tools\install.ps1` adds (see below).
 - **Map items**: a map item is meant to be normal, rare or unique (a plugin hook makes a map the game rolls as magic normal; a map forced magic by a cheat or already existing stays magic, and the hook applies to any item with the map spell 16). A rare map is rolled by the game from the
   `magicprefix`, `magicsuffix`, `rareprefix` and `raresuffix` rows whose type is `cmap`; a unique map is a
@@ -20,7 +20,7 @@ an ambush, a shrine or a treasure). MIT licensed.
   monster modifiers (life, damage, speed, resistances) go on its monsters and the others on you; yours are removed when
   you leave the map and are not kept in your save (`PlayerStats=0` turns that off). A normal map has no modifiers.
 - **Map panel**: in a map, its name, monster level and properties show at the right of the screen, under the game's info text, and go away outside it. A TCP/IP client does not show it.
-- **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze.
+- **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
 - **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).
@@ -48,9 +48,9 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Outdoor, Snow and Siege levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Outdoor, Snow and Siege levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
-   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt and Lava maps (one map per game).
+   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava and Ice maps (one map per game).
    Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
@@ -66,7 +66,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
-   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Outdoor, Snow and Siege levels and their six slots,
+   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Outdoor, Snow and Siege levels and their seven slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
@@ -84,9 +84,9 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 
    | Name | Copy of | DrlgType | LevelType | Size | OffsetX, OffsetY |
    |---|---|---|---|---|---|
-   | `Cartographer Maze` | a plain game Cave maze row (DrlgType 1), such as level 9 | 1 | 3 (Cave) | 360 | 3500, 0 |
-   | `Cartographer Crypt` | a plain game Crypt maze row (DrlgType 1), such as level 18 | 1 | 4 (Crypt) | 360 | 3000, 0 |
+   | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Lava` | the game's River of Flame (level 107, DrlgType 1) | 1 | 28 (Lava) | 360 | 2500, 0 |
+   | `Cartographer Ice Caves` | a plain game Ice caves maze row (DrlgType 1), such as level 113 | 1 | 33 (Ice) | 360 | 2000, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
@@ -94,7 +94,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
    shows). Keep a maze level's offsets small: the game saves its map cells as 16-bit numbers when you leave it, so a maze level with
    OffsetX minus OffsetY above 3735 (or below -3736), or OffsetX plus OffsetY above 7471, loses its revealed map after a trip to town.
-2. **lvlmaze.txt**: copy the first row once for each maze level; set `Name` to `Cartographer Maze`, `Cartographer Crypt` or `Cartographer Lava`, `Level` to that
+2. **lvlmaze.txt**: copy the first row once for each maze level; set `Name` to `Cartographer Maze`, `Cartographer Crypt`, `Cartographer Lava` or `Cartographer Ice Caves`, `Level` to that
    row's `Id`, every `Rooms` column to 4, `SizeX` and `SizeY` to 24 and `Merge` to 500.
 3. **superuniques.txt**: for each `bosses.txt` entry copy the `Bishibosh` row and set `Superunique` to `cartoboss:` plus
    the `Name`, `Name` to `cartographer:boss_` plus the `Name`, `Class` to the entry's `Base`, `Mod1` to `Mod3` to its
@@ -105,7 +105,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -118,7 +118,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Cave`, `Crypt` or `Lava` (each opens through its own level); other tileset names are accepted but refused for now | required |
+| Tileset | `Cave`, `Crypt`, `Lava` or `Ice` (each opens through its own level); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks Large Open to about 7 x 7 rooms; on Jungle, Large Open uses the 9 x 9 Medium grid, since every block is stamped | required |
 | Size | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium |
 | Level | Monster level, 1 to 255 | 85 |
@@ -127,7 +127,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Monsters | Up to 10 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | EventChance | A number that overrides the global setting for this map | cartographer.txt |
-| Density, Uniques | `Density`: percent more monsters than the level's own, no upper limit except the game's own field size. `Uniques`: percent more unique packs a map may have. Past the level's minimum the game makes about 6 percent of packs unique, so the count stops rising at a point set by `Density` and map size (about 73 on a Large Cave at `Density` 100, reached near 800 percent); raise `Density` for more (experimental) | 0 |
+| Density, Uniques | `Density`: percent more monsters than the level's own, no upper limit except the game's own field size. `Uniques`: percent more unique packs over the whole map (the level's own count raised by that percent, at most 255). The plugin hands them out with the rooms you enter, so they keep appearing toward the far end (not tried while walking; a map with 0 is left to the game). The game itself makes about 6 percent of packs unique, so a count above that share of the map's packs is not reached; raise `Density` for more (experimental) | 0 |
 | Champions | Read and checked, never applied: the game has no setting for it | 0 |
 
 `cartographer.txt` has the columns `Setting` and `Value`:
@@ -211,7 +211,7 @@ Example row: `The Drowned King	Boss	Bishibosh	6			The water churns...	2`
 
 #### shapes.txt
 
-Your own maze shapes, for Cave, Crypt and Lava maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
+Your own maze shapes, for Cave, Crypt, Lava and Ice maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
 names cannot be reused. Every column except `Name` is optional, and a blank one keeps the value of the `Base` shape. A row
 that cannot be built is skipped.
 
@@ -233,13 +233,13 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 
 #### slots.txt
 
-Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `Outdoor` (Jungle), `OutdoorSnow` (Snow) and `OutdoorSiege` (Siege). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-and-lava)). A slot
-that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`, `MazeLava` needs `Cartographer Lava`), or a level another slot uses is
+Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `MazeIce` (Ice caves), `Outdoor` (Jungle), `OutdoorSnow` (Snow) and `OutdoorSiege` (Siege). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-lava-and-ice)). A slot
+that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`, `MazeLava` needs `Cartographer Lava`, `MazeIce` needs `Cartographer Ice Caves`), or a level another slot uses is
 left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `Outdoor`, `OutdoorSnow` or `OutdoorSiege` | required |
+| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `Outdoor`, `OutdoorSnow` or `OutdoorSiege` | required |
 | Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
@@ -254,16 +254,16 @@ rebuild. You will not normally need it. See [the reverse-engineering notes](../.
 
 A part found this way is checked before it is used; if the check fails the part stays off and the log says why.
 
-## Maze slot (Cave, Crypt and Lava)
+## Maze slot (Cave, Crypt, Lava and Ice caves)
 
 Every map is a generated maze, built on a maze level that `tools\install.ps1` adds. A level has one `LevelType`, which fixes
 its tileset, so each maze tileset has a level of its own: `Cartographer Maze` (Cave, slot `Maze`), `Cartographer Crypt`
-(Crypt, slot `MazeCrypt`) and `Cartographer Lava` (Lava, slot `MazeLava`). One install serves all, but the maze is built once per game, so a second map in the
+(Crypt, slot `MazeCrypt`), `Cartographer Lava` (Lava, slot `MazeLava`) and `Cartographer Ice Caves` (Ice caves, slot `MazeIce`). One install serves all, but the maze is built once per game, so a second map in the
 same game is refused. Without the tileset's level, its maps do not open.
 
-The installer adds, to the mod's tables, those levels copied from a plain game Cave level, a Crypt level and River of Flame, and
+The installer adds, to the mod's tables, those levels copied from a plain game Cave level, a Crypt level, River of Flame and a game Ice caves level, and
 set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with their `lvlmaze.txt` rows and the `Maze`,
-`MazeCrypt` and `MazeLava` rows of `slots.txt`. `-Tileset` is no longer needed. A Maze level made by an older install with `-Tileset Crypt` is set back to LevelType 3 when you rerun the installer (Crypt maps use the new level).
+`MazeCrypt`, `MazeLava` and `MazeIce` rows of `slots.txt`. `-Tileset` is no longer needed. A Maze level made by an older install with `-Tileset Crypt` is set back to LevelType 3 when you rerun the installer (Crypt maps use the new level).
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.
 
 ## Outdoor slot (Jungle)
@@ -291,7 +291,7 @@ Checked in single player, Hell: opening from the item, arriving in the entrance 
 Tested on D2R 3.3.0 build 93847 with D2RLoader 1.3.1-beta, on a test mod and test save, mostly in single player.
 
 - **Works in game**: the map item opening the red portal, the one-map-per-game and Hell refusals, `cartographer open`
-  in town, the plain-English table report, Cave and Crypt mazes built from the plan, a Lava map opening and building (no automap lines drawn, #366),
+  in town, the plain-English table report, Cave and Crypt mazes built from the plan, a Lava map opening and building (no automap lines drawn, #366), an Ice caves map opening, building and running an Ambush (the Boss was not placed in one cell, #364),
   Boss, Horde, Ambush and Shrine events, and `MapNames=1` (a map's own name seen on its portal, automap and banner in single player), arriving in the planned maze entrance room, `PlayerStats` in single player (one test character, kept out of the save), opening a map in Hell (a map's Boss from `bosses.txt` spawned in the boss room in 6 of 6 games) and its refusal in Normal and Nightmare, map items (own name on hover, not beltable, not sold by Malah, sold for gold, kept through Save and Exit).
 - **Outdoor maps (Jungle, Snow and Siege)**: opening from the item, arrival, Boss, events, map stats and the entry banner were seen in single player; the edges and void cells (#142), Snow corners and multiplayer were not checked; a Snow wall stopped the character and the Snow automap title was seen. Siege was checked in two games (opening, arrival, Boss and Treasure event); its north and south edges and how its pieces meet were not settled.
 - **Experimental or not verified in game**: what a Boss `Drop` roll drops beyond a rune in one kill and a Treasure chest's loot beyond a rune in one game (item quality was not compared), the event banner with long text or at other resolutions,

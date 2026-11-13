@@ -26,7 +26,7 @@ try {
         $c = @{ Name = $name; Id = "$id"; Act = "$act"; DrlgType = "$drlg"; LevelType = "$type"; Depend = '0'; OffsetX = '0'; OffsetY = '0'; Position = '0'; SizeX = '48'; SizeY = '48'; Quest = '0'; LevelGroup = 'Null'; LevelName = $name; LevelEntry = ''; LevelWarp = ''; SubType = '-1'; SubTheme = '-1'; Waypoint = '255' }
         , @($lh | ForEach-Object { if ($c.ContainsKey($_)) { $c[$_] } elseif ($_ -like 'Vis*') { '0' } elseif ($_ -like 'Warp*') { '-1' } else { '' } })
     }
-    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Last' 136 4 3 21))
+    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Icy Cellar' 119 4 1 33),(Level 'Last' 136 4 3 21))
     Write-Tsv 'lvlmaze.txt' @('Name', 'Level', 'Rooms', 'SizeX', 'SizeY', 'Merge') @(, @('Cave 1', '8', '3', '10', '10', '0'))
     $ih = @('ItemType', 'Code', 'Equiv1', 'Equiv2', 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2', 'Rare', 'Magic')
     Write-Tsv 'itemtypes.txt' $ih @(, @('Herb', 'herb', 'misc', '', '0', '0', '0', '0', '0', '0', '1', '1', '', '', '', '', '0', '0'))
@@ -39,6 +39,8 @@ try {
 
     $log1 = Run-Installer
     Check ($LASTEXITCODE -eq 0) 'first run succeeds'
+    $firstTypeRows = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' })
+    Check ($firstTypeRows.Count -eq 1) 'a fresh run writes one cmap item type row'
     if ($LASTEXITCODE -ne 0) { Write-Host $log1 }
     $names = @('cartographer_map_level', 'cartographer_mon_life', 'cartographer_mon_damage', 'cartographer_mon_fire_res', 'cartographer_mon_cold_res', 'cartographer_mon_light_res', 'cartographer_mon_poison_res', 'cartographer_mon_speed', 'cartographer_map_density')
     $rows = Read-Rows 'itemstatcost.txt'
@@ -94,6 +96,31 @@ try {
     $before = (Get-FileHash $statPath).Hash
     $log5 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $statPath).Hash -eq $before) 'a monster row and a density row with other widths are left alone'
+
+    # The Map item type (cmap): a fresh run writes it with Rare on and Magic and Normal off, a row from an older install (Magic 1, Rare 0) is repaired in place, and a run after that changes nothing.
+    function Get-MapType { $h = (Get-Content (Join-Path $dir 'itemtypes.txt') -TotalCount 1) -split "`t"; $r = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' }); @{ Header = $h; Row = $r } }
+    $mt = Get-MapType
+    $iRare = [array]::IndexOf($mt.Header, 'Rare'); $iMagic = [array]::IndexOf($mt.Header, 'Magic'); $iNormal = [array]::IndexOf($mt.Header, 'Normal')
+    Check ($iRare -ge 0 -and $iMagic -ge 0 -and $iNormal -ge 0) 'itemtypes.txt has the Rare, Magic and Normal columns'
+    if ($iRare -lt 0 -or $iMagic -lt 0 -or $iNormal -lt 0) { throw 'itemtypes.txt lacks a Rare, Magic or Normal column' }
+    Check ($mt.Row.Count -eq 1) 'the cmap item type row is still one row'
+    $cmap = $mt.Row[0]
+    Check ($cmap[$iRare] -eq '1' -and $cmap[$iMagic] -eq '0' -and $cmap[$iNormal] -eq '0') "the new cmap row has Rare 1, Magic 0, Normal 0 (got $($cmap[$iRare]) $($cmap[$iMagic]) $($cmap[$iNormal]))"
+    $typePath = Join-Path $dir 'itemtypes.txt'
+    $typeText = [System.IO.File]::ReadAllText($typePath)
+    $oldRow = ($cmap -join "`t"); $staleRow = $cmap.Clone(); $staleRow[$iRare] = '0'; $staleRow[$iMagic] = '1'; $staleRow[$iNormal] = ''
+    Check ($typeText.Contains($oldRow)) 'the cmap row is found in the table'
+    [System.IO.File]::WriteAllText($typePath, $typeText.Replace($oldRow, ($staleRow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $log6 = Run-Installer
+    Check ($LASTEXITCODE -eq 0) 'a run on an old cmap row succeeds'
+    $mt = Get-MapType
+    Check ($mt.Row.Count -eq 1) 'the repair adds no item type row'
+    $fixedType = $mt.Row[0]
+    Check ($fixedType[$iRare] -eq '1' -and $fixedType[$iMagic] -eq '0' -and $fixedType[$iNormal] -eq '0') "the old cmap row is repaired to Rare 1, Magic 0, Normal 0 (got $($fixedType[$iRare]) $($fixedType[$iMagic]) $($fixedType[$iNormal]))"
+    Check (($fixedType -join "`t") -eq $oldRow) 'the repair changes only those cells'
+    $before = (Get-FileHash $typePath).Hash
+    $log7 = Run-Installer
+    Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
 } finally {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }

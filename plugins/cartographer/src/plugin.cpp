@@ -165,27 +165,7 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 	if (!ReadFile(file, &text)) {
 		return false;
 	}
-	const carto::Tsv table = carto::ParseTsv(text);
-	const int cCode = table.Column("code"), cSpell = table.Column("pSpell"), cCompact = table.Column("compactsave"), cIcon = table.Column("spellicon");
-	if (cCode < 0 || cSpell < 0) {
-		return false;
-	}
-	for (const carto::TsvRow& row : table.rows) {
-		const std::string code = table.Cell(row, cCode);
-		if (!code.empty()) {
-			out->emplace_back(code, std::atoi(table.Cell(row, cSpell).c_str()));
-			if (cCompact >= 0 && table.Cell(row, cCompact) == "1") {
-				compact->push_back(code);
-			}
-			if (cIcon >= 0) {
-				const std::string icon = table.Cell(row, cIcon);
-				if (icon.size() == 1 && icon[0] >= '0' && icon[0] <= '9') {
-					cursor->push_back(code);
-				}
-			}
-		}
-	}
-	return true;
+	return carto::ParseItemSpells(text, out, compact, cursor);
 }
 
 // monstats.txt Ids whose boss column is 1. False when the table or either column is missing.
@@ -280,6 +260,15 @@ auto LoadAll() -> Loaded {
 		}
 		if (!missing.empty()) {
 			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
+		}
+	}
+	// A mon-speed of -100 or lower is cut by the plugin, so the item tables are checked for it.
+	if (!g_excelDir.empty()) {
+		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt", "setitems.txt", "cubemain.txt"}) {
+			text.clear();
+			if (ReadFile(g_excelDir + L"\\" + Widen(file), &text)) {
+				carto::CheckMonSpeedRows(text, file, loaded.report);
+			}
 		}
 	}
 	text.clear();

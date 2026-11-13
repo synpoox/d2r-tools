@@ -10,9 +10,9 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave or Crypt map opens the installed Maze level, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave, Crypt or Ice map opens the installed Maze level of its tileset, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
 | `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
-| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
+| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `MazeIce`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
@@ -43,7 +43,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave`, `Crypt` and `Lava` (River of Flame) are built (each opens through its own level, `Maze`, `MazeCrypt` and `MazeLava`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Ice`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
 | `Shape` | yes | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). | none | Corridor |
 | `Size` | no | `ExtraSmall`, `Small`, `Medium` or `Large` | Medium | Large |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
@@ -54,7 +54,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
 | `Champions` | no | Percent more champion packs, 0 and up (checked only; never applied, the game has no setting for it) | 0 | 50 |
-| `Uniques` | no | Percent more unique packs the map may have, 0 and up. Raises the level's `MonUMax` (stops at 255); `MonUMin` is left alone. Past the minimum the game makes about 6 percent of packs unique, so the count depends on `Density` and map size and a larger `Uniques` adds nothing once that is reached (about 73 on a Large Cave at `Density` 100, near 800 percent). Experimental; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
+| `Uniques` | no | Percent more unique packs over the whole map, 0 and up: the level's `MonUMax` raised by that percent (stops at 255) is the map's total, and the plugin gives it out with the rooms the game activates (MonUMin is 0 and MonUMax grows with the share of rooms done while a room is populated), so uniques keep spawning to the far end. The game makes about 6 percent of packs unique, so a total above that share of the map's packs (about 73 on a Large Cave at `Density` 100, measured without the pace) is not reached; `Density` raises it. Experimental; not paced when `Uniques` is 0; no effect on a level whose `MonUMax` is 0 | 0 | 25 |
 
 Smallest map: `Name`, `Tileset`, `Shape` and `Item` filled in.
 
@@ -132,7 +132,7 @@ Added by `tools\install.ps1` (an existing row is never changed, except the `cmap
 |---|---|---|
 | `mon-life` | `cartographer_mon_life` | `item_maxhp_percent` |
 | `mon-damage` | `cartographer_mon_damage` | `damagepercent` |
-| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: -100 or lower stops monsters) |
+| `mon-speed` | `cartographer_mon_speed` | `velocitypercent` (keep it above -100: the plugin cuts a map's own value to -99, because what -100 or lower does to monsters has not been checked in game, and other slows on a monster still stack; `cartographer check` notes a `magicprefix.txt`, `magicsuffix.txt`, `uniqueitems.txt`, `setitems.txt` or `cubemain.txt` row that reaches -100 or lower) |
 | `mon-fire-res`, `mon-cold-res`, `mon-light-res`, `mon-poison-res` | `cartographer_mon_fire_res` and so on | `fireresist`, `coldresist`, `lightresist`, `poisonresist` |
 | `map-density` | `cartographer_map_density` | not a monster stat: added to the map's `Density` (see below) |
 
