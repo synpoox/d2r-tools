@@ -1,5 +1,6 @@
 #include "outdoor_plan.h"
 
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -10,6 +11,8 @@
 namespace cartographer::outdoor {
 
 namespace {
+
+constexpr int kJungleOpenMaxCells = 9; // the Medium grid
 
 std::string joinErrors(const std::vector<std::string> &errors) {
 	std::string out = errors.empty() ? std::string("unknown problem") : errors.front();
@@ -113,6 +116,13 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	std::string error;
 	if (!layout::resolveRules(request.shapes != nullptr ? *request.shapes : none, request.shape.empty() ? std::string_view("Winding") : std::string_view(request.shape), *size, rules, error)) {
 		return fail("The shape '" + request.shape + "' cannot be used: " + error);
+	}
+	// An Open map stamps every block (no void), so a Large one is 144 blocks, 2304 rooms: 6 to 8 times the other Jungle maps. Cap it at
+	// the 9 x 9 grid of Medium (81 blocks, 1296 rooms).
+	if (rules.open) {
+		rules.width = std::min(rules.width, kJungleOpenMaxCells);
+		rules.height = std::min(rules.height, kJungleOpenMaxCells);
+		rules.pathMax = std::min(rules.pathMax, rules.width * rules.height);
 	}
 	out.layout = layout::generate(rules, request.seed);
 	out.picks = pickPieces(out.layout, catalogue, tileset->name, request.seed);
