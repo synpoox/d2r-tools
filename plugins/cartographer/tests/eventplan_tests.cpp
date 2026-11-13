@@ -435,6 +435,14 @@ TEST_CASE("bannerAlpha fades in, holds, fades out, then is 0") {
 	}
 }
 
+TEST_CASE("bannerVisible is true from the start until the banner's total time") {
+	CHECK_FALSE(bannerVisible(-1));
+	CHECK(bannerVisible(0));
+	CHECK(bannerVisible(kBannerTotalMs - 1));
+	CHECK_FALSE(bannerVisible(kBannerTotalMs));
+	CHECK_FALSE(bannerVisible(1'000'000));
+}
+
 TEST_CASE("eventSeed is stable and differs from the map seed") {
 	CHECK(eventSeed(1) == eventSeed(1));
 	CHECK(eventSeed(1) != eventSeed(2));

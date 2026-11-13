@@ -252,6 +252,8 @@ constexpr int kBannerHoldMs = 4500;
 constexpr int kBannerFadeOutMs = 1200;
 constexpr int kBannerTotalMs = kBannerFadeInMs + kBannerHoldMs + kBannerFadeOutMs;
 int bannerAlpha(int elapsedMs);
+// Whether the banner is still up this long (ms) after it started.
+bool bannerVisible(int64_t elapsedMs);
 
 // The event stream's seed from the map's seed (salted, so it never shares draws with the stats).
 uint64_t eventSeed(uint64_t mapSeed);

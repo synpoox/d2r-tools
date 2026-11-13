@@ -449,6 +449,10 @@ bool EntryTracker::update(bool inMap) {
 	return entered;
 }
 
+bool bannerVisible(int64_t elapsedMs) {
+	return elapsedMs >= 0 && elapsedMs < kBannerTotalMs;
+}
+
 int bannerAlpha(int elapsedMs) {
 	if (elapsedMs < 0 || elapsedMs >= kBannerTotalMs) {
 		return 0;
