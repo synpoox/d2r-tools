@@ -362,6 +362,12 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 		           job->name.c_str(), job->tileset.c_str(), job->shape.c_str(), job->size.c_str(), static_cast<unsigned long long>(job->seed), static_cast<int>(plan->stamps.stamps.size()),
 		           static_cast<int>(plan->stamps.voidCells.size()), plan->stamps.tilesW, plan->stamps.tilesH, plan->stamps.originX, plan->stamps.originY,
 		           static_cast<unsigned long long>(plan->hash));
+		if (g_probe.load()) { // stamp list for the game checks: LvlPrest id, DS1 file (-1 = the engine draws it), top-left tile
+			const int cell = plan->stamps.cellsW > 0 ? plan->stamps.tilesW / plan->stamps.cellsW : 0;
+			for (const co::Stamp& s : plan->stamps.stamps) {
+				plog::Info("[outdoor probe] stamp lvlprest %d file %d at tile (%d,%d)", s.lvlPrest, s.file, plan->stamps.originX + s.cx * cell, plan->stamps.originY + s.cy * cell);
+			}
+		}
 	}
 	return plan;
 }
