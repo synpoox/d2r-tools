@@ -107,7 +107,7 @@ inline uint32_t rotationAfter(uint32_t rot) { return (rot + 1u) & 3u; }
 // True when `toPiece` is a Prev group piece of the tileset.
 bool isPrevPiece(const Tileset &ts, int toPiece);
 
-// What the hook does with one call. Original: pass the call to the game unchanged (the plan does not apply). Redirect:
+// What the hook does with one call. Original: pass the call to the game unchanged (only for a level that is not a slot level). Redirect:
 // call the game with group[index] instead. Suppress: do not call the game; only advance the counter.
 struct SpecialAnswer {
 	enum class Kind : uint8_t { Original, Redirect, Suppress } kind = Kind::Original;

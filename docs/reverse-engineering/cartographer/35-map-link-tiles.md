@@ -34,7 +34,9 @@ Act 5 Lava 1053-1056 has a link tile too (10/33/0) but is not one of the four Ca
 
 - Outdoor: `Piece::usableDs1()` leaves out the DS1 files listed in `links`; a piece with none left is not picked; a clearing with a link variant pins the safe file (`PickedCell::linkSafe`, honoured even with `pinFiles` off).
 - Maze: no `MazeTilesets` row has a Prev family, so the entrance is an ordinary mask room (Lava's mechanism: arrival by `MarkArrival`).
-- Not changed: the game's own unsteered maze can still place Prev, Next and Down pieces. The plugin steers every slot call, so a Cartographer map does not reach that path; a map that falls back to the game's own builder would.
+- Fallbacks (#460): the plugin does not steer every slot call. A maze map whose plan does not steer (`fallbackPlan`) or that falls back mid-walk (`ctx->fellBack`) runs the game's own walk, and an outdoor map whose plan fails runs the game's own build. Both are now closed:
+  - Maze: `SpecialHook` suppresses every special-room call (Prev, Next, Down) of a slot level, steered or not (the call is skipped and the counter advanced as the game's epilogue would). `maze_hooks.cpp` keeps the build context for unsteered builds so the hook knows the level. **needs game**: that the walk accepts a missing Prev/Next/Down (Lava's builder places none).
+  - Outdoor: `PieceStamp` (`0x3ecfc0`, hooked, 15 bytes = three 5-byte moves, under the 61-byte max patch) swaps the file of a stamp on the slot level that is not ours (no build context) for a variant without a link: `linkSafeFile` in `outdoor.cpp`. **needs game**: that the game's own build calls it.
 
 - Removing the Prev rooms should also stop the warpDefs assert and the ptWarp verify of notes 20 and 21 (they run on the Prev stairs tile). **needs game**.
 

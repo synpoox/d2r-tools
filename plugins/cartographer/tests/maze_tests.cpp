@@ -987,10 +987,11 @@ TEST_CASE("a table that cannot be read or lacks the plan's entry places nothing 
 	SpecialState c;
 	CHECK(answerSpecial(cave, plan, c, &wrong, 0).kind == SpecialAnswer::Kind::Suppress);
 	CHECK(specialProblem(plan, c).find("no entry from piece") != std::string::npos);
-	// A plan that does not steer leaves every call to the game.
+	// A plan that does not steer (the forced fallback) still suppresses every call: no stairs of the game's own (#460).
 	Plan off;
 	SpecialState d;
-	CHECK(answerSpecial(cave, off, d, &group, 0).kind == SpecialAnswer::Kind::Original);
+	CHECK(answerSpecial(cave, off, d, &group, 0).kind == SpecialAnswer::Kind::Suppress);
+	CHECK(answerSpecial(cave, off, d, nullptr, 0).kind == SpecialAnswer::Kind::Suppress);
 }
 
 TEST_CASE("the private LvlMaze row and the piece every room has after the walk")

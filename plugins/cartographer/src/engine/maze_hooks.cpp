@@ -678,8 +678,15 @@ void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
 		return;
 	}
 	BuildCtx* ctx = t_ctx;
-	if (ctx == nullptr || !ctx->steer || ctx->fellBack || ctx->level != level) {
+	if (ctx == nullptr || ctx->level != level) {
 		g_specialOriginal(level, entry, rot);
+		return;
+	}
+	if (!ctx->steer || ctx->fellBack) {
+		// A map's only way in and out is its portal: the game's own Prev/Next/Down calls place nothing here either (#460).
+		if (rot != nullptr) {
+			*rot = cm::rotationAfter(*rot <= 3 ? *rot : 0);
+		}
 		return;
 	}
 	const cm::Plan& plan = ctx->prep.plan->seedPlan.plan;
@@ -702,7 +709,9 @@ void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
 		ctx->steer = false;
 		ctx->fellBack = true;
 		RestoreSlot(level, ctx->orig);
-		g_specialOriginal(level, entry, rot);
+		if (rot != nullptr) {
+			*rot = cm::rotationAfter(before <= 3 ? before : 0);  // suppressed, like every other call of a fallen-back build
+		}
 		return;
 	}
 	switch (answer.kind) {
@@ -870,7 +879,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		plog::Error("maze slot level %d: an exception while preparing the plan; building the game's own maze", id);
 	}
 	BuildCtx* previous = t_ctx;
-	t_ctx = ctx.steer ? &ctx : nullptr;
+	t_ctx = &ctx;  // also unsteered: the special-room hook still suppresses the game's stairs there
 	const uint64_t result = g_levelOriginal(dataFlag, level);
 	g_slotState.end(hadJob);
 	t_ctx = previous;

@@ -1347,6 +1347,35 @@ TEST_CASE("a piece whose every DS1 variant carries a link is never picked, and c
 	CHECK(!checkPicks(l, cat.catalogue, "T", bad).empty());
 }
 
+// Issue #460: the game's own build (a forced fallback) draws the file itself; the stamp hook swaps a linked or engine-drawn file for a safe one.
+TEST_CASE("linkSafeFile: the game's own draw never lands on a variant that carries a link")
+{
+	const std::string text =
+		"tileset\tlvlprest\tw\th\tedgeN\tedgeE\tedgeS\tedgeW\trole\tweight\tds1\tlinks\n"
+		"T\t1\t1\t1\tx\tp\tx\tx\tpath\t1\ta.ds1;b.ds1;c.ds1\ta.ds1\n"
+		"T\t2\t1\t1\tx\tp\tx\tp\tpath\t1\tc.ds1\tc.ds1\n"
+		"T\t3\t1\t1\tx\tp\tx\tp\tpath\t1\td.ds1;e.ds1\t\n";
+	const LoadResult cat = parseCatalogue(text);
+	REQUIRE(cat.ok());
+	CHECK(linkSafeFile(cat.catalogue, 1, -1) == 1); // the engine would draw: pin the first safe variant
+	CHECK(linkSafeFile(cat.catalogue, 1, 0) == 1);  // the linked variant is replaced
+	CHECK(linkSafeFile(cat.catalogue, 1, 2) == 2);  // a safe variant stays
+	CHECK(linkSafeFile(cat.catalogue, 2, -1) == -1); // no safe variant: nothing to pin
+	CHECK(linkSafeFile(cat.catalogue, 3, -1) == -1); // no link: left to the engine
+	CHECK(linkSafeFile(cat.catalogue, 99, 1) == 1);  // not in the catalogue
+	// Every linked Jungle clearing resolves to a variant that carries none, whatever the engine drew.
+	const LoadResult jungle = loadJungle();
+	REQUIRE(jungle.ok());
+	for (const Piece &p : jungle.catalogue.pieces) {
+		if (p.links.empty()) continue;
+		const std::vector<int> usable = p.usableDs1();
+		for (int f = -1; f < static_cast<int>(p.ds1.size()); ++f) {
+			const int out = linkSafeFile(jungle.catalogue, p.lvlPrest, f);
+			CHECK(std::find(usable.begin(), usable.end(), out) != usable.end());
+		}
+	}
+}
+
 TEST_CASE("a variants row that lists linked DS1 files is skipped with a warning")
 {
 	const std::string text =
