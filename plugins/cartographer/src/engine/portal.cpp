@@ -193,9 +193,9 @@ void Tell(const std::string& text) noexcept {
 
 // The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game,
-                   const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
+                   const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats);
+		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats, densityBonus);
 		if (tables != nullptr) {
 			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
 		}
@@ -548,9 +548,10 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
 	// Bonus Density: the sum over the item's affixes is added to the map's Density (uncapped), then the stat is taken out like the level.
-	if (const int bonus = cartographer::statplan::mapDensityBonus(itemStats, tables->statIds); bonus != 0) {
-		opening.density = cartographer::statplan::densityWithBonus(map->density, bonus);
-		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, bonus, opening.density);
+	const int densityBonus = cartographer::statplan::mapDensityBonus(itemStats, tables->statIds);
+	if (densityBonus != 0) {
+		opening.density = cartographer::statplan::densityWithBonus(map->density, densityBonus);
+		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
 	}
 	itemStats = cartographer::statplan::withoutMapDensity(itemStats, tables->statIds);
 	std::string refusal;
@@ -561,7 +562,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(opening, tables, game, itemStats);
+		StartMapStats(opening, tables, game, itemStats, densityBonus);
 		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}

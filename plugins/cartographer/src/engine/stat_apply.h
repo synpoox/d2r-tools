@@ -24,9 +24,10 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 // A map was opened (`openings` is how many maps this game has opened; it only numbers the open in the log). Draws the
 // map item's stats and starts applying them. Game thread. Does nothing when neither half is on.
 // `itemStats` are the map item's own stats (read before it is used up, without the map level): the monster-side ones apply to the map's
-// monsters, the rest to the player. A normal map has none.
+// monsters, the rest to the player. A normal map has none. `densityBonus` is the item's map-density bonus, shown on the panel
+// (the map's maps.txt Density is not).
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
-                        const std::vector<cartographer::statplan::ItemStat>& itemStats = {});
+                        const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0);
 
 // The PlayerStats setting of cartographer.txt (on by default). While off, nothing is ever attached to the player. While on, the
 // player's list sits on the unit until the next tick outside the map; the save writer was seen to write base stats only
