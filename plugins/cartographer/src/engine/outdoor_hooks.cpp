@@ -73,7 +73,7 @@ constexpr int OutdoorNeededParts = ArrivalFinderPart;  // the parts every build 
 Part g_parts[OutdoorPartCount] = {
 	{"OutdoorAct5Builder", sig::OutdoorAct5Builder, 16, true, nullptr, {}, {}},
 	{"OutdoorEntry", sig::OutdoorEntry, 0, true, nullptr, {}, {}},
-	{"PieceStamp", sig::PieceStamp, 15, true, nullptr, {}, {}},
+	{"PieceStamp", sig::PieceStamp, 0, true, nullptr, {}, {}},
 	{"VoidCell", sig::VoidCell, 0, true, nullptr, {}, {}},
 	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
@@ -82,7 +82,6 @@ Part g_parts[OutdoorPartCount] = {
 };
 
 EntryFn g_act5Original = nullptr;
-StampFn g_stampOriginal = nullptr;
 LevelBuildFn g_ownLevelOriginal = nullptr;
 bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the maze hook did not): written at load only
 
@@ -195,18 +194,6 @@ auto IsSlotLevel(const void* level) noexcept -> bool {
 		}
 	}
 	return false;
-}
-
-// 0x3ecfc0 for the slot level when the game's own build runs it (the plan failed, #460): the game draws a clearing's DS1 file itself, and three of
-// the Jungle files carry a waypoint or an exit. A stamp of ours (a build context names the level) already pins a safe file.
-void StampHook(uint8_t dataFlag, void* level, int32_t cx, int32_t cy, int32_t lvlPrest, int32_t file, char last) noexcept {
-	if (g_stampOriginal == nullptr) {
-		return;
-	}
-	if ((t_ctx == nullptr || t_ctx->level != level) && IsSlotLevel(level)) {
-		file = co::linkSafeFile(co::builtinJungleCatalogue(), lvlPrest, file);
-	}
-	g_stampOriginal(dataFlag, level, cx, cy, lvlPrest, file, last);
 }
 
 // --- The grids, read as the game's grid reader (0x3fa790) does: data[rows[y] + x] ---------------------------------------------
@@ -884,7 +871,6 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 	};
 	// The inner hook first; the level build, which switches the build on, last.
 	bool ok = install(Act5Builder, reinterpret_cast<void*>(&Act5Hook), reinterpret_cast<void**>(&g_act5Original));
-	ok = ok && install(StampPart, reinterpret_cast<void*>(&StampHook), reinterpret_cast<void**>(&g_stampOriginal));
 	if (ok && g_ownLevelBuild) {
 		ok = install(OwnLevelBuild, reinterpret_cast<void*>(&OwnLevelBuildHook), reinterpret_cast<void**>(&g_ownLevelOriginal));
 	}

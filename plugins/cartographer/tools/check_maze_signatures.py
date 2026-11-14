@@ -60,7 +60,7 @@ BOUNDARIES = {
     "VoidCell": [5, 10, 11, 15, 19, 22, 25, 33, 35, 39],
 }
 # name -> bytes the plugin's hook copies (the others are only called)
-HOOK_LENGTHS = {"LevelBuild": 14, "OutdoorAct5Builder": 16, "PieceStamp": 15}
+HOOK_LENGTHS = {"LevelBuild": 14, "OutdoorAct5Builder": 16}
 
 IMAGE_SCN_MEM_EXECUTE = 0x20000000
 

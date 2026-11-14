@@ -73,10 +73,6 @@ struct LoadResult {
 LoadResult parseCatalogue(std::string_view text, std::string_view fileName = "catalogue.tsv");
 LoadResult loadCatalogueFile(const std::string &path);
 
-// The DS1 file index to stamp for a LvlPrest the game's own build draws (#460): `file` when it carries no link (or the preset has no
-// linked variant), else the first variant that carries none. -1 (the engine draws) becomes that variant for a preset with a linked variant.
-int linkSafeFile(const Catalogue &catalogue, int lvlPrest, int file);
-
 // One placed cell of the output grid. lvlPrest is -1 for an empty cell.
 struct PickedCell {
 	int x = 0;

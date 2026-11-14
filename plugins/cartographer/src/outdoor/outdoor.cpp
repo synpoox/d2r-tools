@@ -130,18 +130,6 @@ std::vector<int> Piece::usableDs1() const
 	return out;
 }
 
-int linkSafeFile(const Catalogue &catalogue, int lvlPrest, int file)
-{
-	for (const Piece &p : catalogue.pieces) {
-		if (p.lvlPrest != lvlPrest || p.links.empty()) continue;
-		const std::vector<int> usable = p.usableDs1();
-		if (usable.empty()) return file; // nothing safe to pin: the piece is never picked by a plan either
-		if (file >= 0 && std::find(usable.begin(), usable.end(), file) != usable.end()) return file;
-		return usable.front();
-	}
-	return file;
-}
-
 namespace {
 
 bool pickable(const Piece &p, const std::string &tilesetLower)

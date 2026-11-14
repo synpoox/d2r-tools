@@ -11,7 +11,7 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 | `LevelBuild` | `0x3271c0` | 14 | 48 | `call 0x367110` | hooked once; shared with the maze hook (below) |
 | `OutdoorAct5Builder` | `0x3fe2e0` | 16 | 37 | `jne rel32` (`0F 85`) | hooked; stamps the plan |
 | `OutdoorEntry` | `0x3ee320` | not hooked (the spike hooked 19) | 90 | `call` | called |
-| `PieceStamp` | `0x3ecfc0` | 15 | 61 | `call` | called, once per stamp; hooked (#460) to pin a link-free DS1 file on the game's own slot build, note 35 |
+| `PieceStamp` | `0x3ecfc0` | not hooked | 61 | `call` | called, once per stamp |
 | `VoidCell` | `0x3ede00` | not hooked | 39 | `call 0x3faa50` | called, once per void cell |
 
 ### How it works
