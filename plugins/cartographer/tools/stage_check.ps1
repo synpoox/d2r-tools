@@ -274,7 +274,6 @@ if ($Restore) {
         Plan "python game_slots.py unlock $Slot $Owner"
         return
     }
-    $releaseRestored = $false
     $status = (& python -I (Join-Path $testing 'release_install.py') status --slot "$Slot" | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "release_install status failed for slot $Slot (exit $LASTEXITCODE): $status" }
     if ($status -match 'no release install') {
@@ -282,7 +281,6 @@ if ($Restore) {
     } else {
         $rc = Invoke-Toolkit 'release_install.py' @('restore', '--slot', "$Slot")
         if ($rc -ne 0) { throw "release_install restore failed for slot $Slot (exit $rc). The slot is still locked." }
-        $releaseRestored = $true
     }
     foreach ($f in @($man.files)) {
         if (-not (Test-Path -PathType Leaf $f.path)) { Say "  already gone: $($f.path)"; continue }
@@ -293,7 +291,7 @@ if ($Restore) {
     }
     foreach ($m in @($man.parked)) {
         # A copy of a file in the mod folder is a copy of the release mod's own file: the release restore put the original back, so drop the copy.
-        if (($releaseRestored -or $man.releaseInstall) -and (Test-Under $m.from $modDir)) {
+        if ($m.release -and (Test-Under $m.from $modDir)) {
             if (Test-Path -LiteralPath $m.to -PathType Leaf) { Remove-Item -LiteralPath $m.to -Force; Say "  dropped: $($m.to) (the release restore put back $($m.from))" }
             continue
         }
@@ -414,8 +412,8 @@ $jsonAdded = New-Object System.Collections.Generic.List[object]
 $defaultMod = $null
 # Plugins moved out of the slot's plugins folder (from, to).
 $parked = New-Object System.Collections.Generic.List[object]
-# Whether the slot holds a release install (its -Restore replaces the mod folder, so the parked copies made from the mod folder
-# are the release mod's own files). Recorded, so a -Restore run after an interrupted one still drops them.
+# Whether the slot holds a release install now. Each parked copy is tagged with it when made: -Restore drops only the tagged
+# copies of files that were in the mod folder (the release restore replaces that folder), never ones made without a release.
 $releaseAtStage = $false
 $relStatus = (& python -I (Join-Path $testing 'release_install.py') status --slot "$Slot" | Out-String)
 if ($LASTEXITCODE -eq 0 -and $relStatus -notmatch 'no release install') { $releaseAtStage = $true }
@@ -427,9 +425,8 @@ if (Test-Path -PathType Leaf $readManifestPath) {
             foreach ($f in @($old.files)) { $placed[$f.path] = $f.sha256 }
             foreach ($r in @($old.rows)) { $rowsWritten.Add(@{ file = $r.file; row = $r.row }) }
             foreach ($e in @($old.entries)) { $jsonAdded.Add(@{ file = $e.file; nl = $e.nl; text = $e.text }) }
-            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to }) } }
+            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to; release = [bool]$m.release }) } }
             if ($old.defaultMod) { $defaultMod = @{ file = $old.defaultMod.file; original = $old.defaultMod.original } }
-            if ($old.releaseInstall) { $releaseAtStage = $true }
         }
     } catch { Write-Warning "Ignoring an unreadable manifest at ${readManifestPath}: $($_.Exception.Message)" }
 }
@@ -438,7 +435,7 @@ function Save-Manifest {
     $files = @(foreach ($k in @($placed.Keys)) {
         if (Test-Path -PathType Leaf $k) { @{ path = $k; sha256 = (Get-Sha $k) } }
     })
-    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()); entries = @($jsonAdded.ToArray()); parked = @($parked.ToArray()); releaseInstall = $releaseAtStage }
+    $doc = [ordered]@{ owner = $Owner; slot = $Slot; files = $files; rows = @($rowsWritten.ToArray()); entries = @($jsonAdded.ToArray()); parked = @($parked.ToArray()) }
     if ($defaultMod) { $doc['defaultMod'] = $defaultMod }
     $null = New-Item -ItemType Directory -Force (Split-Path $manifestPath -Parent)
     [System.IO.File]::WriteAllText($manifestPath, ($doc | ConvertTo-Json -Depth 5))
@@ -457,7 +454,7 @@ function Set-Aside([string]$path) {
     $to = Join-Path $dir $leaf
     for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $dir "$leaf.$n" }
     Move-Item -LiteralPath $path -Destination $to
-    $parked.Add(@{ from = $path; to = $to })
+    $parked.Add(@{ from = $path; to = $to; release = $releaseAtStage })
     Save-Manifest
     Say "  set aside: $path -> $to (-Restore puts it back)"
 }
@@ -571,7 +568,7 @@ try {
             if ($WhatIf) { continue }
             $null = New-Item -ItemType Directory -Force $parkDir
             Move-Item -LiteralPath $f.FullName -Destination $to
-            $parked.Add(@{ from = $f.FullName; to = $to })
+            $parked.Add(@{ from = $f.FullName; to = $to; release = $releaseAtStage })
         }
         if ($stray.Count -gt 0) { Save-Manifest }
     }

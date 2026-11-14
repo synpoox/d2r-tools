@@ -159,6 +159,23 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     Check (-not (Test-Path (Join-Path $slot 'stage_check.json'))) 'rerun: manifest removed'
     Check (-not (Test-Path (Join-Path $Work 'runs\game.lock.10'))) 'rerun: slot 10 unlocked'
 
+    Write-Host '--- scenario: no release at staging, release installed later under the same lock, then -Restore ---'
+    $before3 = Snap
+    & $stage @stageArgs | Out-Host
+    # What release_install install does: the current mod folder becomes the kept copy, the release mod takes its place.
+    $null = New-Item -ItemType Directory -Force (Split-Path $kept -Parent)
+    if (Test-Path $kept) { Remove-Item -Recurse -Force $kept }
+    Move-Item -LiteralPath $mod -Destination $kept
+    Put (Join-Path $plugins 'release-only.dll') 'REL'
+    Put $relState '{}'
+    & $stage -Slot 10 -Owner t461 -Restore -Toolkit $Toolkit | Out-Host
+    $after3 = Snap
+    $diff3 = @($before3.Keys | Where-Object { $after3[$_] -ne $before3[$_] }) + @($after3.Keys | Where-Object { -not $before3.Contains($_) })
+    foreach ($k in $diff3) { Write-Host "  differs: $k (before: $($before3[$k]) after: $($after3[$k]))" }
+    Check ($diff3.Count -eq 0) 'release installed after staging: every pre-stage file matches its SHA-256 (the slot own originals are not dropped)'
+    Check (-not (Test-Path $relState)) 'release installed after staging: the state file is gone'
+    Check (-not (Test-Path (Join-Path $Work 'runs\game.lock.10'))) 'release installed after staging: slot 10 unlocked'
+
     Write-Host '--- slot 5 ---'
     $msg = ''
     try { & $stage -Slot 5 -Owner t461 -Dll (Join-Path $src 'cartographer.dll') -Toolkit $Toolkit *> $null } catch { $msg = $_.Exception.Message }
