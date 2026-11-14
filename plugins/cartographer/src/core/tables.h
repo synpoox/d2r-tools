@@ -108,6 +108,7 @@ struct Settings {
 	int playerStats = 1;  // PlayerStats: 1 puts the map's player stats on the player while in the map (removed on leaving and on Save and Exit)
 	int mapNames = 1;   // MapNames: 0 turns off a map's own Name on the portal tooltip, the automap title and the entry banner (on by default; seen in game in single player, multiplayer unverified)
 	int mazeProbe = 0;  // 1: the maze steering hooks log what the game does (level rect, rooms, rotation, arrival room)
+	int wovenProbe = 0;  // WovenProbe (issue #415, debug only): the lvlprest Def of the first of 15 Cave copies (mask 1 << 11 rows) a Lava map's straight-through rooms take; 0 off
 	int outdoorProbe = 0;  // 1: the outdoor hooks log what the game does (level rect, grid cells, rooms)
 	int autoCheck = 0;  // AutoCheck: 1 runs the issue #173 game check by itself in a Hell game (test slots only)
 	std::string autoCheckMap;  // AutoCheckMap: the map's Name in maps.txt that AutoCheck opens
