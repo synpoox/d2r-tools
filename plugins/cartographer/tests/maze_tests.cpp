@@ -472,6 +472,26 @@ TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one 
 	CHECK(bareCells <= 800);
 }
 
+TEST_CASE("any tileset with ringCells > 0 gets a filler ring whose closed piece (pieceBase) no plan room carries (the unique pace's filler test, issue #317)")
+{
+	// The plan side of the rule: any ringCells row gets fills and no plan room carries pieceBase; the runtime match is in maze_hooks.cpp
+	// (SteeredWalk / MazeRoomIsFiller) and is not unit tested. A synthetic row, not Lava, is used.
+	Tileset synth = caveTileset();
+	synth.name = "Synthetic";
+	synth.pieceBase = 2000;
+	synth.ringCells = 1;
+	synth.prev = {};
+	for (const Tileset &ts : {synth, lavaTileset()})
+		for (int s = 0; s < layout::kShapeCount; ++s)
+			for (int i = 0; i < 20; ++i) {
+				const layout::Rules rules = layout::presetRules(static_cast<layout::Shape>(s), layout::Size::Medium);
+				const SeedPlan sp = planForSeed(ts, rules, layout::splitmix64(static_cast<uint64_t>(i) + 0x317));
+				if (!sp.plan.steer) continue;
+				CHECK(!sp.plan.fills.empty());
+				for (const Room &r : sp.plan.rooms) CHECK(r.piece != ts.pieceBase);
+			}
+}
+
 TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
 {
 	struct Case { Tileset ts; layout::Shape shape; };
