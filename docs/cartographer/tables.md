@@ -210,7 +210,7 @@ Global settings, read when the game starts; `PlayerStats` is checked in game (si
 | `PlayerStats` | `1` puts the `Players` rows of a map on the player while in the map (see above for what was checked); `0` turns it off; `0` or `1` | 1 | 0 |
 | `MapNames` | `0` turns off a map's own name on its portal tooltip, the automap title and the game's own "Entering" text (experimental; seen in single player, multiplayer unverified); `0` or `1` | 1 | 1 |
 | `MazeProbe` | `1` logs what the game builds for a maze, for debugging; `0` or `1` | 0 | 0 |
-| `WovenProbe` | Debug only (issue #415): the `lvlprest.txt` `Def` of the first of 15 Cave copy rows; in a Lava map every straight-through room (exits W and E, or N and S) then uses the copy, and the room tile loader is hooked to log each room's DT1 list. `0` is off; 0 to 65535 | 0 | 1092 |
+| `WovenProbe` | Debug only (issue #415): the `lvlprest.txt` `Def` of the first of 15 Cave copy rows; in a Lava map every straight-through room (exits W and E, or N and S) then uses the copy, and the room tile loader is hooked to log which tile-list slots each room fills. A non-zero value needs the 15 hand-added `lvlprest.txt` copy rows (note 33 section 10); without them Lava rooms get piece ids past the table and the game will likely crash. `0` is off; 0 to 65535 | 0 | 1092 |
 | `Town` | The town the portal opens from. Only `Harrogath` works (maps are in Act 5, and a portal only reaches its own act) | Harrogath | Harrogath |
 | `OutdoorProbe` | `1` logs what the game builds for an outdoor map, for debugging; `0` or `1` | 0 | 0 |
 | `AutoCheck` | `1` runs a game check by itself in a Hell game, for test slots only; `0` or `1` | 0 | 0 |
