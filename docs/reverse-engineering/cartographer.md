@@ -37,3 +37,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [31. The `0x1255802` crash is `abort()` at process exit (issue #328)](cartographer/31-crash-1255802-abort.md)
 - [32. How D2R HD lights and colours a level (issue #380)](cartographer/32-level-lighting.md)
 - [33. One map from several tilesets woven together (issue #396)](cartographer/33-woven-tilesets.md)
+- [34. Guaranteeing the map Boss (issue #445)](cartographer/34-boss-guarantee.md)
