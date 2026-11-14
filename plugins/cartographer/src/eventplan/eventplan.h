@@ -203,7 +203,8 @@ private:
 //   2. Once the cell is spent, any other room of the level (`others`, `entry`, or one the list does not know: `adopt`) is tried the moment
 //      it populates, ordinary first.
 //   3. The last resort: a room outside the cell that refused the ordinary try is tried again at once with `forcing()` (the game's own spot
-//      test for collision skipped). That always has somewhere to put it; there is no give-up.
+//      test for collision skipped). So is the room populating now when a refusal leaves nothing to wait for (every other candidate has
+//      populated already: a room populates once), even a cell room. That always has somewhere to put it; there is no give-up.
 class BossRoomPicker {
 public:
 	enum class Tier { Cell, Other, Forced };
@@ -226,6 +227,9 @@ public:
 	// The cell room being waited for, when there is one.
 	const Rect *currentRoom() const { return !done_ && !forcing_ && current_ < cellCount_ ? &ranked_[current_] : nullptr; }
 	bool done() const { return done_; }
+	// True while some room can still populate and be tried (a cell room waited for, or a candidate that has not populated). False with the
+	// Boss not placed means the ladder is out of rooms: the engine logs a Warn.
+	bool pending() const;
 	size_t size() const { return ranked_.size(); }
 	size_t current() const { return current_; }
 	size_t cellSize() const { return cellCount_; }
@@ -234,6 +238,7 @@ public:
 private:
 	std::vector<Rect> ranked_;
 	std::vector<bool> refused_;
+	std::vector<bool> populated_;  // the game populated this room (a room populates once, so it cannot be waited for again)
 	size_t cellCount_ = 0;
 	size_t current_ = 0;
 	bool forcing_ = false;

@@ -652,18 +652,42 @@ TEST_CASE("BossRoomPicker: the boss room is tried first; a refusal moves on thro
 	CHECK(p.indexOf(rB) == 1);
 	CHECK(p.indexOf({40, 40, 8, 8}) == -1);
 	CHECK_FALSE(p.onPopulated({40, 40, 8, 8}));  // not a candidate
-	CHECK_FALSE(p.onPopulated(rB));               // a later cell room populated first: not tried
 	CHECK(p.onPopulated(rA));
 	CHECK(p.tier() == Tier::Cell);
 	CHECK(p.refused() == -1);  // rB is waited for: a room's record is only good while it populates
 	REQUIRE(p.currentRoom() != nullptr);
 	CHECK(p.currentRoom()->x == rB.x);
+	CHECK(p.pending());
 	CHECK(p.onPopulated(rB));
 	CHECK(p.refused() == -1);
 	REQUIRE(p.currentRoom() != nullptr);
 	CHECK(p.currentRoom()->y == rC.y);
 	CHECK_FALSE(p.done());
 	CHECK(p.onPopulated(rC));
+}
+
+TEST_CASE("BossRoomPicker: a cell room that populated before the boss room is skipped: it cannot populate again")
+{
+	BossRoomPicker p({rA, rB, rC});
+	CHECK_FALSE(p.onPopulated(rB));  // populated before the boss room: not tried, remembered
+	CHECK(p.onPopulated(rA));
+	CHECK(p.refused() == -1);  // rB is skipped, rC is waited for
+	REQUIRE(p.currentRoom() != nullptr);
+	CHECK(p.currentRoom()->y == rC.y);
+}
+
+TEST_CASE("BossRoomPicker: a cell room that populated first, and nothing left to populate: the room populating now is forced, even a cell room")
+{
+	BossRoomPicker p({rA, rB}, {rFar}, rEntry);
+	CHECK_FALSE(p.onPopulated(rB));
+	CHECK_FALSE(p.onPopulated(rEntry));
+	CHECK_FALSE(p.onPopulated(rFar));
+	CHECK(p.onPopulated(rA));
+	CHECK(p.refused() == 0);  // nothing else can populate: forced at once, in rA
+	CHECK(p.forcing());
+	CHECK(p.tier() == Tier::Forced);
+	CHECK(p.refused() == -1);
+	CHECK_FALSE(p.pending());
 }
 
 TEST_CASE("BossRoomPicker: a spent cell hands over to the next room to populate; it refuses once, then the same room is forced, and never gives up")
@@ -676,10 +700,11 @@ TEST_CASE("BossRoomPicker: a spent cell hands over to the next room to populate;
 	CHECK(p.onPopulated(rB));
 	CHECK(p.refused() == -1);  // the cell is spent: the next room to populate is tried
 	CHECK(p.currentRoom() == nullptr);
+	CHECK(p.pending());
 	CHECK_FALSE(p.onPopulated(rA));  // a cell room is not a late candidate
-	CHECK(p.onPopulated(rEntry));
+	CHECK(p.onPopulated(rMid));
 	CHECK(p.tier() == Tier::Other);
-	CHECK(p.refused() == 5);  // refused: the forced try, in the room that is populating now
+	CHECK(p.refused() == 3);  // refused: the forced try, in the room that is populating now
 	CHECK(p.tier() == Tier::Forced);
 	CHECK(p.forcing());
 	CHECK(p.refused() == -1);  // spent: later rooms are tried as they populate
@@ -751,27 +776,21 @@ TEST_CASE("driveBoss: placed in the boss room at the first try")
 	CHECK(run.tries.size() == 1);
 }
 
-TEST_CASE("driveBoss: the boss room refuses, the next room of the cell takes it, waiting for each to populate")
+TEST_CASE("driveBoss: the boss room refuses, the next room of the cell takes it, waiting for it to populate")
 {
 	Run run(BossRoomPicker({rA, rB, rC}, {rFar}, rEntry));
-	run.accepts = {2};  // only rC
+	run.accepts = {1};  // only rB
 	run.populate(rEntry);
 	run.populate(rA);  // refused; rB not populated: wait for it
 	CHECK(run.waiting);
 	REQUIRE(run.waitRoom.has_value());
 	CHECK(run.waitRoom->x == rB.x);
-	run.populate(rC);  // rC is not the current candidate: not tried
-	CHECK(run.placedIn == -1);
-	run.populate(rB);  // refused; rC is waited for in its turn
-	REQUIRE(run.waitRoom.has_value());
-	CHECK(run.waitRoom->y == rC.y);
-	run.populate(rC);
-	CHECK(run.placedIn == 2);
+	run.populate(rB);
+	CHECK(run.placedIn == 1);
 	CHECK(run.placedTier == Tier::Cell);
-	REQUIRE(run.tries.size() == 3);
+	REQUIRE(run.tries.size() == 2);
 	CHECK(run.tries[0].first == 0);
 	CHECK(run.tries[1].first == 1);
-	CHECK(run.tries[2].first == 2);
 }
 
 TEST_CASE("driveBoss: every room of the cell refuses, the next room of the level to populate takes it")
@@ -782,26 +801,26 @@ TEST_CASE("driveBoss: every room of the cell refuses, the next room of the level
 	run.populate(rNear);  // the cell still has the say: not tried
 	run.populate(rA);     // refused
 	CHECK(run.waiting);
-	run.populate(rB);     // refused: the cell is spent; nothing is ready, so the next room to populate is tried
+	run.populate(rB);     // refused: the cell is spent; rFar and rMid have not populated: the next of them is tried
 	CHECK(run.waiting);
 	CHECK_FALSE(run.waitRoom.has_value());
 	CHECK(run.placedIn == -1);
-	run.populate(rNear);
-	CHECK(run.placedIn == 4);
+	run.populate(rMid);
+	CHECK(run.placedIn == 3);
 	CHECK(run.placedTier == Tier::Other);
 	REQUIRE(run.tries.size() == 3);
 	CHECK(run.tries[2].second == Tier::Other);
 }
 
-TEST_CASE("driveBoss: the cell refuses, the entry room populates again and takes it, there is no give-up")
+TEST_CASE("driveBoss: the cell refuses, a room that has not populated yet takes it")
 {
 	Run run(BossRoomPicker({rA}, {rFar, rMid}, rEntry));
-	run.accepts = {3};  // only the entry room
+	run.accepts = {2};  // only rMid
 	run.populate(rEntry);
 	run.populate(rA);
 	CHECK(run.placedIn == -1);
-	run.populate(rEntry);
-	CHECK(run.placedIn == 3);
+	run.populate(rMid);
+	CHECK(run.placedIn == 2);
 	CHECK(run.placedTier == Tier::Other);
 	CHECK(run.picker.done());
 }
@@ -809,18 +828,50 @@ TEST_CASE("driveBoss: the cell refuses, the entry room populates again and takes
 TEST_CASE("driveBoss: every ordinary try refuses, the forced try in the room populating now places it")
 {
 	Run run(BossRoomPicker({rA, rB}, {rFar, rMid}, rEntry));
-	run.acceptsForced = {4};  // the entry room, forced only
+	run.acceptsForced = {2};  // rFar, forced only
 	run.populate(rEntry);
 	run.populate(rMid);  // not the cell: not tried
 	run.populate(rA);
-	run.populate(rB);  // the cell is spent
-	run.populate(rEntry);  // ordinary refused, then forced in the same room
+	run.populate(rB);  // the cell is spent; rFar can still populate
+	run.populate(rFar);  // ordinary refused, then forced in the same room
 	REQUIRE(run.tries.size() == 4);
-	CHECK(run.tries[2].first == 4);
+	CHECK(run.tries[2].first == 2);
 	CHECK(run.tries[2].second == Tier::Other);
-	CHECK(run.tries[3].first == 4);
+	CHECK(run.tries[3].first == 2);
 	CHECK(run.tries[3].second == Tier::Forced);
-	CHECK(run.placedIn == 4);
+	CHECK(run.placedIn == 2);
+	CHECK(run.placedTier == Tier::Forced);
+	CHECK(run.picker.done());
+}
+
+TEST_CASE("driveBoss: a cell room populated before the boss room and never again: the Boss is still placed")
+{
+	Run run(BossRoomPicker({rA, rB}, {rFar}, rEntry));
+	run.acceptsForced = {0};
+	run.populate(rB);  // populated first, never again
+	run.populate(rFar);
+	run.populate(rEntry);
+	run.populate(rA);  // refused; nothing can populate any more: forced in rA at once
+	REQUIRE(run.tries.size() == 2);
+	CHECK(run.tries[1].first == 0);
+	CHECK(run.tries[1].second == Tier::Forced);
+	CHECK(run.placedIn == 0);
+	CHECK(run.placedTier == Tier::Forced);
+	CHECK(run.picker.done());
+}
+
+TEST_CASE("driveBoss: the whole level populated before the cell is spent: the Boss is still placed")
+{
+	Run run(BossRoomPicker({rA, rB}, {rFar, rMid}, rEntry));
+	run.acceptsForced = {1};
+	run.populate(rEntry);
+	run.populate(rFar);
+	run.populate(rMid);
+	run.populate(rA);  // refused; rB is waited for
+	CHECK(run.waiting);
+	CHECK(run.placedIn == -1);
+	run.populate(rB);  // refused; nothing is left to populate: forced in rB at once
+	CHECK(run.placedIn == 1);
 	CHECK(run.placedTier == Tier::Forced);
 	CHECK(run.picker.done());
 }
@@ -829,17 +880,18 @@ TEST_CASE("driveBoss: even the forced try refuses: nothing gives up, the next ro
 {
 	Run run(BossRoomPicker({rA}, {rFar}, rEntry));
 	run.populate(rEntry);
-	run.populate(rA);      // refused
-	run.populate(rEntry);  // refused, then forced and refused
+	run.populate(rA);    // refused; rFar can still populate
+	run.populate(rFar);  // refused, then forced and refused
 	REQUIRE(run.tries.size() == 3);
 	CHECK(run.tries[2].second == Tier::Forced);
 	CHECK(run.placedIn == -1);
 	CHECK_FALSE(run.picker.done());
 	CHECK(run.waiting);
 	CHECK_FALSE(run.waitRoom.has_value());
-	run.accepts = {1};
-	run.populate(rFar);
-	CHECK(run.placedIn == 1);
+	CHECK_FALSE(run.picker.pending());  // the engine warns: nothing is left to populate
+	run.accepts = {3};
+	run.populate({100, 100, 8, 8});  // a room the list did not know
+	CHECK(run.placedIn == 3);
 	CHECK(run.placedTier == Tier::Other);
 	CHECK(run.picker.done());
 }

@@ -223,6 +223,7 @@ BossRoomPicker::BossRoomPicker(std::vector<Rect> cell, std::vector<Rect> others,
 		ranked_.push_back(*entry);
 	}
 	refused_.assign(ranked_.size(), false);
+	populated_.assign(ranked_.size(), false);
 }
 
 int BossRoomPicker::indexOf(const Rect &room) const {
@@ -241,11 +242,13 @@ int BossRoomPicker::adopt(const Rect &room) {
 	}
 	ranked_.push_back(room);
 	refused_.push_back(false);
+	populated_.push_back(false);
 	return static_cast<int>(ranked_.size() - 1);
 }
 
 // A room is tried only while the game populates it: the game frees a room's record once the player has walked on, so a pointer kept from an
-// earlier populate can be stale (a game check read freed memory through one).
+// earlier populate can be stale (a game check read freed memory through one). The game also populates a room once, so `populated_` says
+// which candidates can still come.
 bool BossRoomPicker::onPopulated(const Rect &room) {
 	if (done_) {
 		return false;
@@ -255,6 +258,7 @@ bool BossRoomPicker::onPopulated(const Rect &room) {
 		return false;
 	}
 	const size_t at = static_cast<size_t>(i);
+	populated_[at] = true;
 	if (!forcing_ && current_ < cellCount_) {
 		return at == current_;  // still in the cell: only the room being waited for
 	}
@@ -266,23 +270,46 @@ bool BossRoomPicker::onPopulated(const Rect &room) {
 	return true;
 }
 
+bool BossRoomPicker::pending() const {
+	if (done_) {
+		return false;
+	}
+	if (current_ < cellCount_) {
+		return true;  // a cell room is waited for
+	}
+	for (size_t i = cellCount_; i < ranked_.size(); ++i) {
+		if (!populated_[i]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 int BossRoomPicker::refused() {
 	if (done_ || current_ >= ranked_.size()) {
 		return -1;
 	}
 	if (forcing_) {
-		forcing_ = false;  // the forced try is spent; the next room to populate is tried as it does
+		forcing_ = false;  // the forced try is spent; a room that populates later is tried as it does
 		current_ = ranked_.size();
 		return -1;
 	}
 	const size_t was = current_;
 	refused_[was] = true;
 	if (was < cellCount_) {
-		++current_;  // the next cell room, waited for until it populates; past the last, the next room of the level to populate
-		return -1;
+		// The next cell room that has not populated yet is waited for (one that has cannot come again); with none left the cell is spent.
+		current_ = was + 1;
+		while (current_ < cellCount_ && populated_[current_]) {
+			++current_;
+		}
+		if (pending()) {
+			return -1;
+		}
+		// Nothing is left to wait for: the last resort now, in this room (it is populating now, even though it is a cell room).
 	}
-	// A room outside the cell refused the ordinary try: the last resort in this same room, the one that is populating now.
+	// A room outside the cell refused the ordinary try (or nothing else can populate): the last resort in this same room.
 	forcing_ = true;
+	current_ = was;
 	return static_cast<int>(was);
 }
 

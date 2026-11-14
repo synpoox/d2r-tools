@@ -118,7 +118,6 @@ struct State {
 	std::optional<ep::BossRoomPicker> bossPicker;  // made with the event tracker, at the first populated room
 	int probes = 0;
 	int bossTestRefuse = 0;  // CARTOGRAPHER_TEST_BOSS_REFUSE: the first N ordinary Boss tries are refused, to reach the fallbacks in a game check
-	int bossTries = 0;
 };
 std::mutex g_lock;
 std::shared_ptr<State> g_state;
@@ -537,7 +536,7 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 // Made, or Refused: no spot in this room took it, and the caller tries another room (there is no give-up). A plan problem counts as a refusal too:
 // the Boss's name is checked when the map opens (ArmMapBoss), so what is left is a room too small to place anything. The check record is told of a
 // placed Boss; a refusal is the caller's to report.
-// `force` is the last resort (the entrance room, every other room refused): the spot test's collision check is skipped (flag 0x80), as a plain monster,
+// `force` is the last resort (the room populating now, after the ordinary try refused it, or when no other room can still populate): the spot test's collision check is skipped (flag 0x80), as a plain monster,
 // because the superunique spawn takes no flags.
 ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& rects, bool force) noexcept {
 	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
@@ -592,14 +591,15 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 			if (attempt(plain, force ? "as a plain monster, collision test skipped" : "as a plain monster")) break;
 		}
 	}
-	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // the game gave no unit for the row: its base id was spawned instead
+	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // a plain monster of its base id was spawned instead of the superunique
+	const char* const plainWhy = force ? "forced, collision test skipped" : "the superunique spawn returned null or was used already";
 	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
-	           asSuper ? "as a superunique" : (fellBack ? "as a plain monster of its base id: the superunique spawn returned null or was used already" : "as a plain monster"));
+	           asSuper ? "as a superunique" : (fellBack ? (std::string("as a plain monster of its base id: ") + plainWhy).c_str() : "as a plain monster"));
 	if (!made) {
 		return ep::BossTry::Refused;
 	}
 	AutoCheckNoteBoss(state.bossName, true, asSuper,
-	                  fellBack ? std::string("spawned as a plain monster of its base id: the superunique spawn returned null or was used already") : std::string());
+	                  fellBack ? std::string("spawned as a plain monster of its base id: ") + plainWhy : std::string());
 	return ep::BossTry::Made;
 }
 
@@ -773,8 +773,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 			if (drive.waitRoom) {
 				plog::Info("map Boss '%s': refused in this room; waiting for the next room of the boss cell %s to be populated", state->bossName.c_str(), Describe(*drive.waitRoom).c_str());
 				noteRoom(*drive.waitRoom);  // the auto check goes there, which brings the room up
-			} else {
+			} else if (state->bossPicker->pending()) {
 				plog::Info("map Boss '%s': every populated room refused it; it goes in the next room to be populated", state->bossName.c_str());
+			} else {
+				plog::Warn("map Boss '%s': refused in every room that populated, and no room is left to populate; the Boss is not placed yet", state->bossName.c_str());
 			}
 		}
 	}
