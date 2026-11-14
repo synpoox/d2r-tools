@@ -35,7 +35,10 @@ function Sha([string]$path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256
 function Snap {
     $h = [ordered]@{}
     foreach ($dir in @((Join-Path $Work 'slots'), (Join-Path $Work 'sg'))) {
-        foreach ($f in Get-ChildItem -LiteralPath $dir -Recurse -File) { $h[$f.FullName.Substring($Work.Length)] = Sha $f.FullName }
+        foreach ($f in Get-ChildItem -LiteralPath $dir -Recurse -File) {
+            if ($f.FullName -match '\.release-backup\\') { continue }  # the release install's own copy, not the slot's files
+            $h[$f.FullName.Substring($Work.Length)] = Sha $f.FullName
+        }
     }
     return $h
 }
@@ -99,6 +102,14 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     $env:MODKIT_SLOTS_FILE = $slotsFile
     $env:MODKIT_PROJECT = 'd2r-tools-test'
 
+    # A fake release install: its state file, and a kept copy of the mod folder in <slot>.release-backup. Its -Restore
+    # replaces the whole mod folder with that copy, so the copy must match the mod folder before staging.
+    $relState = Join-Path $Work 'runs\release-install-s10\release-install.json'
+    Put $relState '{}'
+    $kept = Join-Path $Work 'slots\Slot10.release-backup\D2RToolsTest'
+    $null = New-Item -ItemType Directory -Force $kept
+    Copy-Item -LiteralPath (Join-Path $mod '*') -Destination $kept -Recurse -Force
+
     $before = Snap
     $stageArgs = @{
         Slot = 10; Owner = 't461'; Dll = (Join-Path $src 'cartographer.dll'); Tables = (Join-Path $src 'tables')
@@ -107,7 +118,7 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
 
     Write-Host '--- stage 1 (slot 10) ---'
     & $stage @stageArgs | Out-Host
-    $backup = Join-Path $mod 'stage_check-backup'
+    $backup = Join-Path $slot 'stage_check-backup'
     Check ((Sha (Join-Path $carto 'maps.txt')) -eq (Sha (Join-Path $src 'tables\maps.txt'))) 'stage: slot maps.txt replaced by the check table'
     Check ((Sha (Join-Path $saveDir 'Own.d2s')) -eq (Sha (Join-Path $src 'saves\Own.d2s'))) 'stage: slot save replaced by the test save'
     # Set aside: maps.txt, shapes.txt, cartographer.dll and Own.d2s (the toml is edited by line, other.dll is parked elsewhere).
@@ -125,6 +136,8 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     $diff = @($before.Keys | Where-Object { $after[$_] -ne $before[$_] }) + @($after.Keys | Where-Object { -not $before.Contains($_) })
     foreach ($k in $diff) { Write-Host "  differs: $k (before: $($before[$k]) after: $($after[$k]))" }
     Check ($diff.Count -eq 0) "restore: every file under the slot and save folder matches its SHA-256 from before staging ($($before.Count) files)"
+    Check (-not (Test-Path $relState)) 'restore: the fake release install was restored (its state file is gone)'
+    Check (-not (Test-Path (Join-Path $Work 'slots\stage_check-backup'))) 'restore: empty stage_check-backup folder removed'
     Check (-not (Test-Path (Join-Path $mod 'stage_check.json'))) 'restore: manifest removed'
     Check (-not (Test-Path (Join-Path $Work 'runs\game.lock.10'))) 'restore: slot 10 unlocked'
 

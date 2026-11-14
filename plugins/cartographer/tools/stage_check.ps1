@@ -27,7 +27,7 @@
 
     A manifest (stage_check.json in the slot's test-mod folder) records each file placed (path and SHA-256) and the
     cartographer.txt rows written. A file the slot already had that this script would overwrite (a table, a save, the DLL)
-    is moved first to stage_check-backup\ in the test-mod folder and recorded as set aside; -Restore moves it back
+    is moved first to stage_check-backup\ in the slot folder and recorded as set aside; -Restore moves it back
     byte-identical after removing the staged copy.
 
     -Restore first checks that -Owner holds the slot's lock and refuses otherwise, before it touches anything; with no
@@ -288,8 +288,11 @@ if ($Restore) {
     foreach ($m in @($man.parked)) {
         if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  already gone: $($m.to)"; continue }
         if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) set aside: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
+        $null = New-Item -ItemType Directory -Force (Split-Path $m.from -Parent)
         Move-Item -LiteralPath $m.to -Destination $m.from; Say "  put back: $($m.from)"
     }
+    $setAsideDir = Join-Path $slotDir 'stage_check-backup'
+    if ((Test-Path -LiteralPath $setAsideDir) -and -not (Get-ChildItem -LiteralPath $setAsideDir -Force)) { Remove-Item -LiteralPath $setAsideDir -Force }
     foreach ($file in @($man.rows | ForEach-Object { $_.file } | Select-Object -Unique)) {
         if (-not (Test-Path -PathType Leaf $file)) { continue }
         $mine = @($man.rows | Where-Object { $_.file -eq $file } | ForEach-Object { $_.row })
@@ -333,7 +336,8 @@ if ($Restore) {
             Write-Warning "default_mod in $($man.defaultMod.file) is now `"$($tm.Groups[2].Value)`", not the test mod $modName; left as it is (it was `"$($man.defaultMod.original)`" before staging)."
         }
     }
-    Remove-Item -LiteralPath $manifestPath -Force
+    # A release install's restore already removed the manifest with the mod folder (the copy in memory is what counted).
+    if (Test-Path -LiteralPath $manifestPath) { Remove-Item -LiteralPath $manifestPath -Force }
     $rc = Invoke-Toolkit 'game_slots.py' @('unlock', "$Slot", $Owner)
     if ($rc -ne 0) { throw "Could not unlock slot $Slot (exit $rc). It is not forced; check 'game_slots.py status'." }
     Say "Slot $Slot is unlocked."
@@ -428,13 +432,13 @@ function Clear-ReadOnly([string]$path) {
 }
 # A file the slot already had, about to be overwritten: moved into stage_check-backup (first free name) and recorded
 # in $parked, so -Restore moves it back. Saved at once, so an interrupted run still restores it.
+# The backup folder is in the slot folder, not the test mod: a release install's -Restore replaces the whole mod folder.
 function Set-Aside([string]$path) {
-    $dir = Join-Path $modDir 'stage_check-backup'
+    $dir = Join-Path $slotDir 'stage_check-backup'
     $null = New-Item -ItemType Directory -Force $dir
     $leaf = Split-Path $path -Leaf
     $to = Join-Path $dir $leaf
     for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $dir "$leaf.$n" }
-    Clear-ReadOnly $path
     Move-Item -LiteralPath $path -Destination $to
     $parked.Add(@{ from = $path; to = $to })
     Save-Manifest
@@ -540,7 +544,8 @@ try {
         $ours = @((Split-Path $Dll -Leaf), 'test-harness.dll')
         # Never park a file this script placed (an earlier staging under another -Dll name); -Restore removes those.
         $stray = @(Get-ChildItem -LiteralPath $p.plugins -File -Filter '*.dll' | Where-Object { $full = $_.FullName; $ours -notcontains $_.Name -and -not @($placed.Keys | Where-Object { $_ -ieq $full }) })
-        $parkDir = Join-Path (Split-Path $p.plugins -Parent) "plugins-off\staged-$Owner"
+        # In the slot folder, not the mod folder: a release install's -Restore replaces the mod folder.
+        $parkDir = Join-Path $slotDir "plugins-off\staged-$Owner"
         foreach ($f in $stray) {
             # Never delete anything: take the first free name (<name>, <name>.1, ...) so an earlier parked copy survives.
             $to = Join-Path $parkDir $f.Name
