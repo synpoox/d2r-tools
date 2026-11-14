@@ -14,6 +14,7 @@
 #include "engine/event_apply.h"
 #include "engine/game_memory.h"
 #include "engine/map_names.h"
+#include "engine/map_lighting.h"
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
 #include "engine/auto_check.h"
@@ -191,10 +192,13 @@ void Tell(const std::string& text) noexcept {
 }
 
 // The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
-void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player,
+void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), itemStats);
+		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats);
+		if (tables != nullptr) {
+			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
+		}
 	} catch (...) {
 		plog::Error("drawing the map's stats failed; '%s' opens without them", map.name.c_str());
 	}
@@ -557,7 +561,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
-		StartMapStats(opening, tables, game, player, itemStats);
+		StartMapStats(opening, tables, game, itemStats);
 		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}
@@ -603,7 +607,7 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 		out.why = "the game would not open a portal for " + map->name;
 		return out;
 	}
-	StartMapStats(*map, tables, game, player);
+	StartMapStats(*map, tables, game);
 	StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
 	NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	if (mapOut != nullptr) {
@@ -757,6 +761,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	StatApplyPlayerTick(game, unit);
 	if (known != NoPlayer && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == 0 && At<uint32_t>(unit, UnitIdOffset) == known) {
 		MapPanelPlayerTick(unit);
+		MapLightingPlayerTick(PlayerLevelOf(unit));
 		ServeWhere(unit);
 		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
@@ -784,10 +789,14 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		g_firstLogged = false;
 		MapSyncGameEntered();
 		AutoCheckGameEntered();
+	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::LevelChanged) {
+		// the player's level for the automap skip where there is no server tick (a TCP/IP client)
+		AutomapResetPlayerTick(event->currentValue);
 	} else if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		AutomapResetDisarm();
 		StatApplyGameLeft();
 		MapPanelGameLeft();
+		MapLightingGameLeft();
 		EventsGameLeft();
 		MapNamesRestore();
 		LevelRowRestore();
@@ -834,6 +843,10 @@ void InstallConsolePath(const D2RL::PluginContext* context) noexcept {
 	D2RL::Lifecycle::ListenerHandle leftHandle = D2RL::Lifecycle::InvalidHandle;
 	if (!listen(D2RL::Lifecycle::GameplayEventKind::GameLeft, &leftHandle)) {
 		plog::Warn("D2RLoader refused the GameLeft listener: the check-to-use state is not reset on leaving a game");
+	}
+	D2RL::Lifecycle::ListenerHandle levelHandle = D2RL::Lifecycle::InvalidHandle;
+	if (!listen(D2RL::Lifecycle::GameplayEventKind::LevelChanged, &levelHandle)) {
+		plog::Warn("D2RLoader refused the LevelChanged listener: the automap skip needs the server tick to know the player's level");
 	}
 	if (part.address == nullptr) {
 		return;

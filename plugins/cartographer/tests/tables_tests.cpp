@@ -1075,7 +1075,18 @@ TEST_CASE("retired: the Properties column of maps.txt and the Properties and Ite
 	CHECK(settings.Errors() == 0);
 	REQUIRE(settings.problems.size() == 2);
 	CHECK(settings.problems[0].severity == Severity::Note);
+	CHECK(settings.problems[0].text.find("'Properties' is no longer used") != std::string::npos);
 	CHECK(settings.problems[1].text.find("'ItemStats' is no longer used") != std::string::npos);
+}
+
+TEST_CASE("a leftover mapstats.txt is noted as retired, not an error") {
+	Report report;
+	NoteRetiredMapStats(report);
+	CHECK(report.Errors() == 0);
+	REQUIRE(report.problems.size() == 1);
+	CHECK(report.problems[0].severity == Severity::Note);
+	CHECK(report.problems[0].file == "mapstats.txt");
+	CHECK(report.problems[0].text.find("no longer used") != std::string::npos);
 }
 
 TEST_CASE("repeated header columns are reported in maps and mapevents") {
@@ -1512,33 +1523,6 @@ TEST_CASE("ParseItemSpells reads code, pSpell and compactsave from misc.txt text
 	CHECK(text.find("Item 't20' has compactsave") == std::string::npos);
 }
 
-TEST_CASE("CheckMonSpeedRows notes a mon-speed mod that reaches -100 or lower in an affix or unique row") {
-	Report report;
-	CheckMonSpeedRows("Name\tmod1code\tmod1min\tmod1max\tmod2code\tmod2min\tmod2max\r\nSlow\tmon-speed\t-100\t-50\t\t\t\r\nOk\tmon-speed\t-99\t-10\t\t\t\r\nLate\tmon-life\t10\t20\tmon-speed\t-300\t-200\r\nOther\tmon-life\t-500\t0\t\t\t\r\n",
-	                  "magicprefix.txt", report);
-	const std::string text = Joined(report);
-	CHECK(report.problems.size() == 2);
-	CHECK(report.Errors() == 0);
-	CHECK(text.find("magicprefix.txt row 2: mon-speed goes down to -100") != std::string::npos);
-	CHECK(text.find("row 4: mon-speed goes down to -300") != std::string::npos);
-	Report unique;
-	CheckMonSpeedRows("index\tprop1\tpar1\tmin1\tmax1\tprop2\tpar2\tmin2\tmax2\r\nU\tmon-life\t\t5\t5\tmon-speed\t\t-120\t-120\r\n", "uniqueitems.txt", unique);
-	REQUIRE(unique.problems.size() == 1);
-	CHECK(Joined(unique).find("mon-speed goes down to -120") != std::string::npos);
-	Report reversed;  // max below min: the lower one counts; a capitalised code matches; cubemain.txt and setitems.txt columns are read
-	CheckMonSpeedRows("Name\tmod1code\tmod1min\tmod1max\r\nR\tmon-speed\t-50\t-150\r\n", "magicsuffix.txt", reversed);
-	CHECK(reversed.problems.size() == 1);
-	Report cube;
-	CheckMonSpeedRows("description\tmod 1\tmod 1 min\tmod 1 max\tb mod 2\tb mod 2 min\tb mod 2 max\r\nup\tMon-Speed\t-100\t-100\tmon-speed\t-20\t-130\r\nok\tmon-speed\t-20\t-20\t\t\t\r\n", "cubemain.txt", cube);
-	CHECK(cube.problems.size() == 2);
-	Report set;
-	CheckMonSpeedRows("index\tprop1\tmin1\tmax1\taprop1a\tamin1a\tamax1a\r\nS\tmon-life\t1\t1\tmon-speed\t-200\t-200\r\n", "setitems.txt", set);
-	CHECK(set.problems.size() == 1);
-	Report none;
-	CheckMonSpeedRows("Name\tmod1code\r\nx\tmon-speed\r\n", "magicsuffix.txt", none);  // no min or max column: nothing to read
-	CHECK(none.problems.empty());
-}
-
 TEST_CASE("a skipped row is kept by its item, with the first reason") {
 	Report report;
 	std::vector<SkippedMap> skipped;
@@ -1581,4 +1565,21 @@ TEST_CASE("a row skipped for a duplicate Item leaves the loaded map owning the c
 		CHECK(s.name == "Second");
 		CHECK(s.reason.find("t24") != std::string::npos);
 	}
+}
+
+TEST_CASE("the look columns load, blank keeps the tileset's own look and a bad cell is ignored with a message") {
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tItem\tBrightness\tWarmth\n"
+		"A\tCave\tCorridor\tt20\t150\t200\n"
+		"B\tCave\tCorridor\tt21\t\t\n"
+		"C\tCave\tCorridor\tt22\t5\t401\n",
+		Names(), report);
+	REQUIRE(maps.size() == 3);
+	CHECK(maps[0].look.brightness == 150);
+	CHECK(maps[0].look.warmth == 200);
+	CHECK_FALSE(maps[1].look.any());
+	CHECK_FALSE(maps[2].look.any());
+	CHECK(Joined(report).find("Brightness '5' is not a whole number") != std::string::npos);
+	CHECK(Joined(report).find("Warmth '401'") != std::string::npos);
 }

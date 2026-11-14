@@ -17,6 +17,7 @@
 #include "engine/item_stats.h"
 #include "engine/map_quality.h"
 #include "engine/level_row.h"
+#include "engine/map_lighting.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
 #include "engine/map_sync.h"
@@ -242,7 +243,7 @@ auto LoadAll() -> Loaded {
 	}
 	text.clear();
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapStatsFile), carto::MapStatsFile, &text, loaded.report)) {
-		loaded.report.Note(carto::MapStatsFile, 0, "the file is no longer used: a map's properties are stats on its item (rare and unique maps). It is ignored.");
+		carto::NoteRetiredMapStats(loaded.report);
 	}
 	// itemstatcost.txt gives the ids the game is asked for, and the names of the stats on a map item.
 	text.clear();
@@ -260,15 +261,6 @@ auto LoadAll() -> Loaded {
 		}
 		if (!missing.empty()) {
 			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
-		}
-	}
-	// A mon-speed of -100 or lower is cut by the plugin, so the item tables are checked for it.
-	if (!g_excelDir.empty()) {
-		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt", "setitems.txt", "cubemain.txt"}) {
-			text.clear();
-			if (ReadFile(g_excelDir + L"\\" + Widen(file), &text)) {
-				carto::CheckMonSpeedRows(text, file, loaded.report);
-			}
 		}
 	}
 	text.clear();
@@ -470,6 +462,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			Say(command, "Cartographer " + carto::MapStatTextSummary() + ".");
 			Say(command, "Cartographer " + carto::LevelRowSummary() + ".");
 			Say(command, "Cartographer " + carto::MapQualitySummary() + ".");
+			Say(command, "Cartographer " + carto::MapLightingSummary() + ".");
 			Say(command, "Cartographer " + carto::MapSyncSummary() + ".");
 			Say(command, "Report: " + Narrow(g_reportPath));
 			return D2RL::ConsoleCommandResult::Handled;
@@ -578,6 +571,8 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallMapNames(context, g_overrides, &nameParts);
 		std::vector<carto::PartStatus> panelParts;
 		(void)carto::InstallMapPanel(context, g_overrides, &panelParts);
+		std::vector<carto::PartStatus> lightParts;
+		(void)carto::InstallMapLighting(context, g_overrides, &lightParts);
 		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;

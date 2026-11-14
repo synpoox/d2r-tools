@@ -70,10 +70,15 @@ Nothing here is wired as a plugin part.
   log lines "read of layer N kept"; the waypoint trip is log only, the reveal of that area was not looked at; repeated in slot 7 with a waypoint object from `cheat ospawn 429`, see the automap follow-up check); slot 7 reported layer 10 for the Cave map because its `levels.txt` row 138 (Cartographer Maze) there has Layer 10, not 2; entering skipped the read of layer 2 (Cave) with the player in level 138 and layer 84
   (Snow) in level 140, in two games in a row; a town trip after the skip and the return showed the map's own reveal
   again, no second skip.
-- Order (issue #354): the skip assumes the player's tick reports the slot level before the layer is read back. A skip that
+- Order (issue #354): the skip assumes the player's level feed (the server tick, or on a TCP/IP client the `LevelChanged`
+  gameplay event, UI thread) reports the slot level before the layer is read back. A skip that
   was missed because the read came first would otherwise stay armed and drop the map's own reveal on the next return
   from town. So the skip is dropped once the tick has reported the slot level and then reports any other level
   (`src/engine/automap_skip.h`, unit tested in `automap_skip_tests`).
+  A TCP/IP client has no server tick: its level stayed -1 and the skip never fired ("read of layer 2 kept (the player is in
+  level -1"), so `LevelChanged` also feeds `AutomapResetPlayerTick`; on a host both feeds report the local player's level
+  under one mutex. Live (LAN, slot 5 host and slot 6 Direct Join client on one PC, Hell, Shorelines, two games in the same
+  processes): the skip fired once on each side in both games, none on a host town trip and re-entry.
 - Cost: the skipped read also drops the stock level's reveal on that layer for that seed (Cave Level 1 shares Layer 2,
   the Crypt template Layer 10, Barricade Snow Layer 84): the leave writes only the new map's cells. A follow-up could let
   the read run and then drop only the cells inside the slot's rectangle.

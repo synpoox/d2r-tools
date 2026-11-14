@@ -71,7 +71,6 @@ struct Plan {
 	std::vector<Entry> monsters;
 	std::vector<Entry> players;
 	std::vector<Skipped> skipped;
-	std::vector<std::string> notes; // a value that was cut to a safe one, in plain English
 	bool empty() const { return monsters.empty() && players.empty(); }
 };
 
@@ -83,11 +82,6 @@ struct Plan {
 // monster setup. Matched by name or by the engine's fixed id (4, 5, 6, 8, 10, 12 to 15), so a renamed row is still
 // caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
 std::string refusedReason(Target target, std::string_view stat, int id);
-
-// The lowest value a map gives monsters for velocitypercent. The stat is read as a percent added to 100% speed, so -100 would be no movement and
-// lower would walk backwards, and the monster stat allows -512; this is unverified (not checked against the game binary or in game). buildPlan cuts
-// a monster velocitypercent to this and notes it in Plan::notes. Only the map's own value is cut: other slows on the monster still stack.
-constexpr int kMinMonsterSpeed = -99;
 
 // Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
 // refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property

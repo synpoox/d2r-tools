@@ -18,7 +18,7 @@ function Write-Tsv([string]$name, [string[]]$header, $rows) {
     [System.IO.File]::WriteAllText((Join-Path $dir $name), (($lines -join "`r`n") + "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
 }
 function Read-Rows([string]$name) { @(Get-Content (Join-Path $dir $name) | Select-Object -Skip 1 | Where-Object { $_ -ne '' } | ForEach-Object { , ($_ -split "`t") }) }
-function Run-Installer { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -ExcelDir $dir 2>&1 | Out-String }
+function Run-Installer { $ErrorActionPreference = 'Continue'; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -ExcelDir $dir 2>&1 | Out-String }
 try {
     $lh = @('Name', 'Id', 'Act', 'DrlgType', 'LevelType', 'Depend', 'OffsetX', 'OffsetY', 'Position', 'SizeX', 'SizeY', 'Quest', 'LevelGroup', 'LevelName', 'LevelEntry', 'LevelWarp', 'SubType', 'SubTheme', 'Waypoint') +
         (0..7 | ForEach-Object { "Vis$_" }) + (0..7 | ForEach-Object { "Warp$_" })
@@ -121,8 +121,32 @@ try {
     $before = (Get-FileHash $typePath).Hash
     $log7 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
-} finally {
+
+    # A table with no room for a new stat id (511 rows: an item save cannot hold id 511) stops the run, and nothing is written, not even the
+    # earlier itemtypes.txt repair (every table is written at the end). A scratch copy of the installed folder, with the stat rows replaced and
+    # the cmap row made stale, so the run would have changed itemtypes.txt before it reached the stat table.
+    $full = $dir
+    $dir = $dir + '-full'
+    New-Item -ItemType Directory -Path $dir | Out-Null
+    Get-ChildItem -LiteralPath $full -File | Where-Object { $_.Name -notlike '*.bak' } | Copy-Item -Destination $dir
+    $fullStats = @(0..510 | ForEach-Object { if ($_ -eq 76) { , @('item_maxhp_percent', '76', '', '9', '9', '', '', '', '', '9', '') } else { , @("vanilla_stat_$_", "$_", '', '9', '9', '', '', '', '', '9', '') } })
+    Write-Tsv 'itemstatcost.txt' $sh $fullStats
+    $fullTypePath = Join-Path $dir 'itemtypes.txt'
+    $fullText = [System.IO.File]::ReadAllText($fullTypePath)
+    Check ($fullText.Contains($oldRow)) 'the full-table folder has the cmap row'
+    [System.IO.File]::WriteAllText($fullTypePath, $fullText.Replace($oldRow, ($staleRow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $beforeFull = (Get-ChildItem -LiteralPath $dir -File | Sort-Object Name | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName).Hash)" }) -join ','
+    $logFull = Run-Installer
+    Check ($LASTEXITCODE -ne 0) 'a run on a stat table with 511 rows fails'
+    Check ($logFull.Contains('511')) 'the failure names the 511 limit'
+    $afterFull = (Get-ChildItem -LiteralPath $dir -File | Sort-Object Name | ForEach-Object { "$($_.Name)=$((Get-FileHash $_.FullName).Hash)" }) -join ','
+    Check ($beforeFull -eq $afterFull) 'the failed run wrote no table and made no backup'
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+    $dir = $full
+} finally {
+    # A throw can leave $dir on the -full copy: remove both folders.
+    Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+    if ($full) { Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue }
 }
 if ($failed -gt 0) { Write-Host "$failed check(s) failed."; exit 1 }
 Write-Host 'All install stat checks passed.'

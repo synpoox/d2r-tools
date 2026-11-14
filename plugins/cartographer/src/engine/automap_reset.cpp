@@ -21,11 +21,11 @@ Part g_part = {"AutomapRestore", sig::AutomapRestore, 17, false, nullptr, {}, {}
 RestoreFn g_original = nullptr;
 const uint8_t* g_currentObject = nullptr;   // the game's "current layer object" global, decoded from the part's own `cmp qword ptr [rip+x], 0`
 std::atomic<bool> g_hooked{false};
-std::mutex g_mutex;                         // the build (any thread), the player's tick and the read (game thread) share the skip state
+std::mutex g_mutex;                         // the build (any thread), the player's level feed (server tick, or LevelChanged on the UI thread) and the read (game thread) share the skip state
 std::vector<int> g_keptLogged;              // layers whose kept read was already logged for the armed skip (a waypoint load reads dozens)
 SkipState g_skip;                           // armed / the layer left / the slot level / the player seen in it (automap_skip.h)
 std::atomic<uint64_t> g_lastMap{0};         // the map built last in this game (0: none); building the same map again (the return from a town trip) keeps its cells
-int g_playerLevel = -1;                     // the local player's level id, from the player's tick (-1 unknown)
+int g_playerLevel = -1;                     // the local player's level id, from the player's server tick or, on a TCP/IP client (no server tick), the LevelChanged event (-1 unknown)
 
 // The layer object's key (levels.txt Layer) is its first dword; -1 when no object is current.
 auto CurrentKey() noexcept -> int {
