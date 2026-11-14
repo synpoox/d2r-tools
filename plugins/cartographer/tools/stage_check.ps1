@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     Developer tool for the game checks in docs/cartographer/testing.md. It only ever works in the slots the owner approved
-    for Cartographer checks (5, 6, 7 and 11), never slot 1 (the owner's own game) and never another project's slot, and it
+    for Cartographer checks (10 and 11, this project's slots), never slot 1 (the owner's own game) and never another project's slot, and it
     never writes to a real save folder. Use the same -Owner only for one lane at a time: the lock is "already ours" for a
     second run with the same owner, so two lanes with one owner can stage over each other.
 
@@ -26,7 +26,9 @@
     never touched). A levels.txt row past the vanilla rows that is not a Cartographer row gets a warning naming it.
 
     A manifest (stage_check.json in the slot's test-mod folder) records each file placed (path and SHA-256) and the
-    cartographer.txt rows written.
+    cartographer.txt rows written. A file the slot already had that this script would overwrite (a table, a save, the DLL)
+    is moved first to stage_check-backup\ in the slot folder and recorded as set aside; -Restore moves it back
+    byte-identical after removing the staged copy.
 
     -Restore first checks that -Owner holds the slot's lock and refuses otherwise, before it touches anything; with no
     manifest it refuses too. It then runs the toolkit's release_install.py restore when the slot holds a release install,
@@ -48,7 +50,7 @@
     The game is never launched; the launch command and the log path are printed.
 
 .PARAMETER Slot
-    Slot number: 5, 6, 7 or 11 (the slots approved for Cartographer checks). Any other slot is refused.
+    Slot number: 10 or 11 (this project's slots, D2RToolsTest). Any other slot is refused.
 .PARAMETER Owner
     Lock owner and run id (MODKIT_RUN), for example the name of your lane.
 .PARAMETER Dll
@@ -125,8 +127,8 @@ $self = $MyInvocation.MyCommand.Path
 $installer = Join-Path $here 'install.ps1'
 $latin1 = [System.Text.Encoding]::GetEncoding(28591)
 
-# Slots the owner approved for Cartographer checks. The config says D2RToolsTest owns Slot11; 5, 6 and 7 are approved too.
-$AllowedSlots = @(5, 6, 7, 11)
+# Slots this project owns (modkit-testing.toml: D2RToolsTest owns Slot10-11). Other slots belong to other projects.
+$AllowedSlots = @(10, 11)
 # Tables install.ps1 needs in the test mod's excel folder (the first two are required, the rest only matter for bosses).
 # itemstatcost.txt is for the map stats on monsters (without it in the mod they are skipped with a WARN).
 $SeedTables = @('levels.txt', 'lvlmaze.txt', 'itemtypes.txt', 'superuniques.txt', 'monstats.txt', 'monumod.txt', 'itemstatcost.txt', 'properties.txt', 'cubemain.txt')
@@ -284,10 +286,13 @@ if ($Restore) {
         } else { Write-Warning "Kept $($f.path): changed since staging (SHA-256 differs from the manifest)." }
     }
     foreach ($m in @($man.parked)) {
-        if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  parked plugin already gone: $($m.to)"; continue }
-        if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) parked: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
-        Move-Item -LiteralPath $m.to -Destination $m.from; Say "  plugin put back: $($m.from)"
+        if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  already gone: $($m.to)"; continue }
+        if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) set aside: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
+        $null = New-Item -ItemType Directory -Force (Split-Path $m.from -Parent)
+        Move-Item -LiteralPath $m.to -Destination $m.from; Say "  put back: $($m.from)"
     }
+    $setAsideDir = Join-Path $slotDir 'stage_check-backup'
+    if ((Test-Path -LiteralPath $setAsideDir) -and -not (Get-ChildItem -LiteralPath $setAsideDir -Force)) { Remove-Item -LiteralPath $setAsideDir -Force }
     foreach ($file in @($man.rows | ForEach-Object { $_.file } | Select-Object -Unique)) {
         if (-not (Test-Path -PathType Leaf $file)) { continue }
         $mine = @($man.rows | Where-Object { $_.file -eq $file } | ForEach-Object { $_.row })
@@ -331,7 +336,8 @@ if ($Restore) {
             Write-Warning "default_mod in $($man.defaultMod.file) is now `"$($tm.Groups[2].Value)`", not the test mod $modName; left as it is (it was `"$($man.defaultMod.original)`" before staging)."
         }
     }
-    Remove-Item -LiteralPath $manifestPath -Force
+    # A release install's restore already removed the manifest with the mod folder (the copy in memory is what counted).
+    if (Test-Path -LiteralPath $manifestPath) { Remove-Item -LiteralPath $manifestPath -Force }
     $rc = Invoke-Toolkit 'game_slots.py' @('unlock', "$Slot", $Owner)
     if ($rc -ne 0) { throw "Could not unlock slot $Slot (exit $rc). It is not forced; check 'game_slots.py status'." }
     Say "Slot $Slot is unlocked."
@@ -424,6 +430,20 @@ function Save-Manifest {
 function Clear-ReadOnly([string]$path) {
     if (Test-Path -PathType Leaf $path) { Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $false }
 }
+# A file the slot already had, about to be overwritten: moved into stage_check-backup (first free name) and recorded
+# in $parked, so -Restore moves it back. Saved at once, so an interrupted run still restores it.
+# The backup folder is in the slot folder, not the test mod: a release install's -Restore replaces the whole mod folder.
+function Set-Aside([string]$path) {
+    $dir = Join-Path $slotDir 'stage_check-backup'
+    $null = New-Item -ItemType Directory -Force $dir
+    $leaf = Split-Path $path -Leaf
+    $to = Join-Path $dir $leaf
+    for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $dir "$leaf.$n" }
+    Move-Item -LiteralPath $path -Destination $to
+    $parked.Add(@{ from = $path; to = $to })
+    Save-Manifest
+    Say "  set aside: $path -> $to (-Restore puts it back)"
+}
 
 # 2. Copy a file only when its SHA-256 differs from the one in the slot.
 function Copy-IfChanged([string]$from, [string]$to, [byte[]]$bytes, [switch]$noManifest) {
@@ -438,6 +458,8 @@ function Copy-IfChanged([string]$from, [string]$to, [byte[]]$bytes, [switch]$noM
     Plan "  copy: $leaf -> $to"
     if (-not $WhatIf) {
         $null = New-Item -ItemType Directory -Force (Split-Path $to -Parent)
+        # Only files this script places are tracked: an existing file that is not ours (and not an edited row file) is set aside first.
+        if (-not $noManifest -and -not $placed.Contains($to) -and (Test-Path -PathType Leaf $to)) { Set-Aside $to }
         Clear-ReadOnly $to
         [System.IO.File]::WriteAllBytes($to, $new)
         Clear-ReadOnly $to
@@ -522,7 +544,8 @@ try {
         $ours = @((Split-Path $Dll -Leaf), 'test-harness.dll')
         # Never park a file this script placed (an earlier staging under another -Dll name); -Restore removes those.
         $stray = @(Get-ChildItem -LiteralPath $p.plugins -File -Filter '*.dll' | Where-Object { $full = $_.FullName; $ours -notcontains $_.Name -and -not @($placed.Keys | Where-Object { $_ -ieq $full }) })
-        $parkDir = Join-Path (Split-Path $p.plugins -Parent) "plugins-off\staged-$Owner"
+        # In the slot folder, not the mod folder: a release install's -Restore replaces the mod folder.
+        $parkDir = Join-Path $slotDir "plugins-off\staged-$Owner"
         foreach ($f in $stray) {
             # Never delete anything: take the first free name (<name>, <name>.1, ...) so an earlier parked copy survives.
             $to = Join-Path $parkDir $f.Name

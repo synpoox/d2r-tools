@@ -247,7 +247,7 @@ Setup traps for the next check:
 ## Staging a game check (`stage_check.ps1`)
 
 `plugins\cartographer\tools\stage_check.ps1 -Slot N -Owner <lane> -Dll <cartographer.dll> [-Tables <dir>] [-Saves <dir>] [-AutoCheckMap <name>] [-MapItems]`
-sets up one test slot for a check. Only slots 5, 6, 7 and 11 are accepted (the ones approved for Cartographer checks); slot 1 and every other slot are refused.
+sets up one test slot for a check. Only slots 10 and 11 are accepted (this project's slots, `D2RToolsTest`); slot 1 and every other slot are refused.
 Before it locks anything it checks the inputs, `install.ps1`, the vanilla tables, that no game runs in the slot, that every write target is outside the owner's own install,
 and that `-Saves` is not inside the owner's real save folders (the vanilla `Saved Games\Diablo II Resurrected` root and every mod folder under it, junctions resolved): use a scratch folder of test saves.
 Then it locks the slot (d2rAI-toolkit `game_slots.py lock`, never `--force`), checks again that no game runs, writes the slot's test mod `modinfo.json` (with the slot's own `savepath`) and seeds its excel folder
@@ -259,10 +259,10 @@ The slot's `d2rloader\config\d2rloader.toml` may say `default_mod = "PD2Resurrec
 A seeded `levels.txt` is vanilla; one that is already in the slot may not be: Slot11's has an extra row, `Act 5 - Cartographer Spike` (id 138, from #168), so the Maze level gets id 139 there.
 The script warns, naming the row, when `levels.txt` has a row past the vanilla rows that is not a Cartographer row.
 If a step fails after the lock, the error is printed with the exact `-Restore` command (the script's absolute path) and a note that the slot is still locked.
-Every other `.dll` in the slot's `d2rloader\plugins` (all but the staged DLL and `test-harness.dll`) is moved to `plugins-off\staged-<owner>\` and put back by `-Restore`; `-KeepPlugins` skips it. A leftover PD2 `core-rules`/`core-maps`/`core-ui` makes every character save fail (`encoding-error=yes`, after `BC_ASSERT nStat` at load); see "Game check notes" below. `test-harness.dll` (the game_ctl click and console commands) is copied from `-HarnessDll` (default `..\d2r-test-harness\build\Release\test-harness.dll`) when the slot has none, recorded in the manifest and removed by `-Restore`; a slot's own copy is left alone.
+Every other `.dll` in the slot's `d2rloader\plugins` (all but the staged DLL and `test-harness.dll`) is moved to `plugins-off\staged-<owner>\` in the slot folder and put back by `-Restore`; `-KeepPlugins` skips it. A leftover PD2 `core-rules`/`core-maps`/`core-ui` makes every character save fail (`encoding-error=yes`, after `BC_ASSERT nStat` at load); see "Game check notes" below. `test-harness.dll` (the game_ctl click and console commands) is copied from `-HarnessDll` (default `..\d2r-test-harness\build\Release\test-harness.dll`) when the slot has none, recorded in the manifest and removed by `-Restore`; a slot's own copy is left alone.
 It prints the launch command and the log path (`<slot>\d2rloader\logs\cartographer.log`) and never starts the game. `-WhatIf` prints every action and changes nothing.
 `-Restore` first checks that `-Owner` holds the slot's lock and refuses otherwise (and with no manifest), before it touches anything. Then it runs the toolkit's `release_install.py restore` when the slot holds a release install,
-removes only the files whose SHA-256 still matches the manifest (a changed file stays, with a warning) and only the `AutoCheck` rows it wrote, deletes the manifest and unlocks the slot.
+removes only the files whose SHA-256 still matches the manifest (a changed file stays, with a warning) and only the `AutoCheck` rows it wrote, then moves back each file it set aside (a slot file it overwrote, such as a table or save; byte-identical, from `stage_check-backup\` in the slot folder; it is left in the backup with a warning when the staged copy is still there), deletes the manifest and unlocks the slot.
 Changes `install.ps1` made inside a table that was already in the slot (not seeded by this script) stay.
 It reads paths from the toolkit config (`MODKIT_TESTING_CONFIG`, default `C:\D2RTestSlots\modkit-testing.toml`). Use a different `-Owner` per lane: a second run with the same owner counts as "already ours".
 
