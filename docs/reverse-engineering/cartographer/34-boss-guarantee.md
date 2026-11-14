@@ -8,8 +8,8 @@ Build 93847 (stamp `0x6ab3782c`), D2RLoader 1.3.1-beta. Static analysis of the d
 
 1. the plan's boss room, centre first (as before);
 2. the other rooms of the plan's boss cell, in order;
-3. every other room of the level, farthest from the entry room first (Chebyshev distance of the centres);
-4. the entry room, with the collision test skipped (flag `0x80`, below), as a plain monster.
+3. every other room of the level, each the moment the game populates it (the entry room and the rooms farthest from it are listed first, but the game decides when a room populates);
+4. the same room again, with the collision test skipped (flag `0x80`, below), as a plain monster. A room is only tried while it populates: the game frees a server room's record once the player walks on, and a game check crashed reading a pointer kept from earlier.
 
 Rungs 1 to 3 are the existing fallbacks plus the wider set of rooms; rung 4 is the only one that always has somewhere to put it. The picker and the loop are pure and unit tested (`BossRoomPicker`, `roomsFarthestFirst`, `driveBoss` in `plugins/cartographer/src/eventplan/`).
 
@@ -25,7 +25,7 @@ Rungs 1 to 3 are the existing fallbacks plus the wider set of rooms; rung 4 is t
 
 ### 3. Why a void room cannot be forced
 
-A room the plan marks as the boss room can still be an engine room with no floor (a quadrant with only walls, or an outdoor corner clearing). The ring search only ever visits subtiles of that room's rect, and `0x364d50` refuses every one of them. Flag `0x80` would take one anyway, but that puts the monster inside rock where nobody can reach it, so the intended room is not "forced"; the Boss is moved to another room instead (rungs 2 to 4), and only the last rung uses the flag, in the entry room the player is standing in. Choosing the sub-room by "has floor" needs the same collision read the spawn already does, so the refusal itself is the signal.
+A room the plan marks as the boss room can still be an engine room with no floor (a quadrant with only walls, or an outdoor corner clearing). The ring search only ever visits subtiles of that room's rect, and `0x364d50` refuses every one of them. Flag `0x80` would take one anyway, but that puts the monster inside rock where nobody can reach it, so the intended room is not "forced"; the Boss is moved to another room instead (rungs 2 to 4), and only the last rung uses the flag, in the room the player is standing in. Choosing the sub-room by "has floor" needs the same collision read the spawn already does, so the refusal itself is the signal.
 
 ### 4. Not verified
 

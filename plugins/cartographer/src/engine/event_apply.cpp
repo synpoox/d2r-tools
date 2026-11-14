@@ -116,7 +116,6 @@ struct State {
 	ep::Resolved bossSpawn;
 	bool bossArmed = false;  // the name resolves and the spawn parts are on
 	std::optional<ep::BossRoomPicker> bossPicker;  // made with the event tracker, at the first populated room
-	std::vector<void*> bossRooms;                  // the game's room of each picker candidate, once populated (the level's rooms outlive the map's game)
 	int probes = 0;
 	int bossTestRefuse = 0;  // CARTOGRAPHER_TEST_BOSS_REFUSE: the first N ordinary Boss tries are refused, to reach the fallbacks in a game check
 	int bossTries = 0;
@@ -684,7 +683,6 @@ void OnPopulated(Game* game, void* room) noexcept {
 					}
 				}
 				state->bossPicker.emplace(bossRanked, others, rects.drlg);
-				state->bossRooms.assign(state->bossPicker->size(), nullptr);
 			}
 			if (!plan) {
 				// No plan event room: this is the first populated room, the entry room. The distance is capped at the farthest room of the
@@ -707,9 +705,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
 		if (state->bossPicker) {
-			const int at = state->bossPicker->adopt(rects.drlg);  // a room the level's list did not hold becomes the last candidate
-			state->bossRooms.resize(state->bossPicker->size(), nullptr);
-			state->bossRooms[static_cast<size_t>(at)] = room;
+			state->bossPicker->adopt(rects.drlg);  // a room the level's list did not hold becomes the last candidate
 			fireBoss = state->bossPicker->onPopulated(rects.drlg);
 		}
 	}
@@ -736,7 +732,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	if (fireBoss) {
 		plog::Info("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
 		// The picker decides (pure, tested with this loop as `driveBoss`): the plan's boss room, then the rest of its cell, then the other rooms
-		// farthest first, then the entrance room with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
+		// farthest first as each populates, then the same room again with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
 		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };
 		size_t first = 0;
 		{
@@ -745,8 +741,8 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		bool firstTry = true;
 		const ep::BossDrive drive = ep::driveBoss(*state->bossPicker, first, [&](size_t index, ep::BossRoomPicker::Tier tier) -> ep::BossTry {
-			void* bossRoom = room;
-			RoomRects bossRects = rects;
+			void* const bossRoom = room;  // always the room populating now: the game frees a room's record once the player walks on
+			const RoomRects& bossRects = rects;
 			ep::Rect planRect{};
 			{
 				std::lock_guard<std::mutex> lock(g_lock);
@@ -754,14 +750,10 @@ void OnPopulated(Game* game, void* room) noexcept {
 					return ep::BossTry::Stop;  // the game was left, or another map opened, in between
 				}
 				planRect = state->bossPicker->room(index);
-				if (!firstTry) {
-					bossRoom = state->bossRooms[index];
-					bossRects = ReadRects(bossRoom);
-				}
 			}
 			const char* where = tier == ep::BossRoomPicker::Tier::Cell ? (index == 0 ? "the plan's boss room" : "another room of the boss cell")
 			                    : tier == ep::BossRoomPicker::Tier::Other ? "another room of the level, farthest from the entry first"
-			                                                              : "the entry room with the collision test skipped (the last resort)";
+			                                                              : "the room populating now, with the collision test skipped (the last resort)";
 			if (!firstTry) {
 				plog::Warn("map Boss '%s': falling back to %s, DRLG %s", state->bossName.c_str(), where, Describe(planRect).c_str());
 			}

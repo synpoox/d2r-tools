@@ -219,16 +219,9 @@ BossRoomPicker::BossRoomPicker(std::vector<Rect> cell, std::vector<Rect> others,
 	for (const Rect &r : others) {
 		ranked_.push_back(r);
 	}
-	if (entry) {
-		const int at = indexOf(*entry);
-		if (at < 0) {
-			ranked_.push_back(*entry);
-			entry_ = ranked_.size() - 1;
-		} else if (static_cast<size_t>(at) >= cellCount_) {
-			entry_ = static_cast<size_t>(at);
-		}  // an entrance room inside the cell is tried there; it is not the forced room
+	if (entry && indexOf(*entry) < 0) {
+		ranked_.push_back(*entry);
 	}
-	populated_.assign(ranked_.size(), false);
 	refused_.assign(ranked_.size(), false);
 }
 
@@ -247,11 +240,12 @@ int BossRoomPicker::adopt(const Rect &room) {
 		return at;
 	}
 	ranked_.push_back(room);
-	populated_.push_back(true);
 	refused_.push_back(false);
 	return static_cast<int>(ranked_.size() - 1);
 }
 
+// A room is tried only while the game populates it: the game frees a room's record once the player has walked on, so a pointer kept from an
+// earlier populate can be stale (a game check read freed memory through one).
 bool BossRoomPicker::onPopulated(const Rect &room) {
 	if (done_) {
 		return false;
@@ -261,7 +255,6 @@ bool BossRoomPicker::onPopulated(const Rect &room) {
 		return false;
 	}
 	const size_t at = static_cast<size_t>(i);
-	populated_[at] = true;
 	if (!forcing_ && current_ < cellCount_) {
 		return at == current_;  // still in the cell: only the room being waited for
 	}
@@ -273,40 +266,24 @@ bool BossRoomPicker::onPopulated(const Rect &room) {
 	return true;
 }
 
-int BossRoomPicker::nextUntried() {
-	for (size_t i = cellCount_; i < ranked_.size(); ++i) {
-		if (populated_[i] && !refused_[i]) {
-			current_ = i;
-			forcing_ = false;
-			return static_cast<int>(i);
-		}
-	}
-	// Every populated room refused: the entrance room again, with the collision test skipped; once only.
-	if (entry_ && populated_[*entry_] && refused_[*entry_] && !forced_) {
-		forced_ = true;
-		current_ = *entry_;
-		forcing_ = true;
-		return static_cast<int>(*entry_);
-	}
-	return -1;
-}
-
 int BossRoomPicker::refused() {
 	if (done_ || current_ >= ranked_.size()) {
 		return -1;
 	}
 	if (forcing_) {
-		forcing_ = false;  // the forced try is spent; rooms that populate later are tried as they do
-		return nextUntried();
+		forcing_ = false;  // the forced try is spent; the next room to populate is tried as it does
+		current_ = ranked_.size();
+		return -1;
 	}
-	refused_[current_] = true;
-	if (current_ < cellCount_) {
-		++current_;
-		if (current_ < cellCount_) {
-			return populated_[current_] ? static_cast<int>(current_) : -1;
-		}
+	const size_t was = current_;
+	refused_[was] = true;
+	if (was < cellCount_) {
+		++current_;  // the next cell room, waited for until it populates; past the last, the next room of the level to populate
+		return -1;
 	}
-	return nextUntried();
+	// A room outside the cell refused the ordinary try: the last resort in this same room, the one that is populating now.
+	forcing_ = true;
+	return static_cast<int>(was);
 }
 
 std::vector<Rect> roomsFarthestFirst(const Rect &entry, const std::vector<Rect> &rooms, const std::vector<Rect> &exclude) {
