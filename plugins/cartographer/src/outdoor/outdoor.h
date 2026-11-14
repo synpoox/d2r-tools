@@ -49,6 +49,9 @@ struct Piece {
 	std::string tags;
 	std::string check; // the catalogue's check column, lower case: ok, n/a, variants or empty (other values are skipped)
 	std::vector<std::string> ds1; // DS1 variants of the preset, as listed in the catalogue
+	std::vector<std::string> links; // the ds1 entries that carry a waypoint or a level entrance or exit: never drawn (docs/reverse-engineering/cartographer/34-map-link-tiles.md)
+	// The indexes into ds1 a map may draw: every variant that carries no link. Empty when ds1 is empty or every variant carries one.
+	std::vector<int> usableDs1() const;
 	uint8_t openMask = 0; // layout::kWest..kNorth bits of the 'p' sockets; only meaningful for a 1 x 1 piece
 };
 
@@ -76,6 +79,7 @@ struct PickedCell {
 	int y = 0;
 	int lvlPrest = -1;   // the LvlPrest id to stamp
 	int ds1Variant = -1; // index into the piece's ds1 list, or -1 when the piece lists none
+	bool linkSafe = false; // the piece has variants that carry a link and this is not one: the stamp pins it even when pinFiles is off
 	int piece = -1;      // index into Catalogue::pieces, or -1
 };
 

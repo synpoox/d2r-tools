@@ -59,7 +59,7 @@ from typing import NamedTuple
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from d2r_readers import Layout, Tiles, header_dt1s, layout, load  # noqa: E402
+from d2r_readers import Layout, Tiles, ds1_links, header_dt1s, layout, load  # noqa: E402
 
 BUILD = "93847"
 
@@ -69,7 +69,7 @@ class CatalogueError(Exception):
 
 
 COLUMNS = ["tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgeN", "edgeE", "edgeS", "edgeW",
-           "role", "weight", "tags", "source", "check", "ds1", "hd"]
+           "role", "weight", "tags", "source", "check", "ds1", "links", "hd"]
 TILESET_COLUMNS = ["tileset", "builder", "leveltype", "group", "cell", "pieces", "ready"]
 BITS = {"W": 1, "E": 2, "S": 4, "N": 8}
 MASK_RE = "(?P<mask>(?:N?S?E?W?))"  # the letters in D2's order; checked for non-empty below
@@ -230,6 +230,13 @@ class Reader:
     def __init__(self, data: Path):
         self.tiles_root = data / "global" / "tiles"
         self.dt1 = Tiles(self.tiles_root)
+        pre = load(data, "objpreset")
+        self.waypoints = {(int(r[1]), int(r[0])) for r in pre.rows if r[1].isdigit() and "waypoint" in r[2].lower()}
+
+    def links(self, ds1: str) -> list[str]:
+        """What the DS1 carries that links its map to another area (d2r_readers.ds1_links); [] for a missing file."""
+        f = self.tiles_root / ds1
+        return ds1_links(f.read_bytes(), self.waypoints) if f.is_file() else []
 
     def layout(self, ds1: str) -> Layout | None:
         f = self.tiles_root / ds1
@@ -371,6 +378,8 @@ def make_row(spec: Spec, p: Piece, m: re.Match, letters: str, role: str, extra: 
     row.update(edgeN=edges["N"], edgeE=edges["E"], edgeS=edges["S"], edgeW=edges["W"])
     row["tags"] = ",".join(tags)
     row["ds1"] = ";".join(p.ds1)
+    # the DS1 files (as in `ds1`) that carry a waypoint, a level entrance or exit: a map never draws these variants
+    row["links"] = ";".join(f for f in p.ds1 if reader is not None and reader.links(f)) if spec.builder == "outdoor" else ""
     row["hd"] = ";".join(hd_path(f) if hd_exists(hd_path(f)) else "MISSING:" + hd_path(f) for f in p.ds1)
     return row
 

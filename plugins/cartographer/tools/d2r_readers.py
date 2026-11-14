@@ -88,6 +88,30 @@ def header_dt1s(data: bytes) -> list[str]:
     return out
 
 
+def ds1_links(data: bytes, waypoint_objects: set[tuple[int, int]]) -> list[str]:
+    """What a DS1 carries that links its map to another area: a waypoint object (type 2, `waypoint_objects` holds
+    its (act 1-5, objpreset index) pairs), and every wall tile of orientation 10 or 11, the engine's special tiles
+    that a level's Warp0..7 and Vis links come from (docs/reverse-engineering/cartographer/34-map-link-tiles.md)."""
+    version = struct.unpack_from("<i", data)[0]
+    if version < 4:
+        raise ValueError(f"DS1 version {version}: only 4 and up keep the tile layers in the order ds1_links reads")
+    version, w, h, act, tag, o, walls, floors = ds1_header(data)
+    n = w * h
+    out = []
+    for k in range(walls):
+        cells = struct.unpack_from(f"<{n}I", data, o + 2 * k * n * 4)
+        orient = struct.unpack_from(f"<{n}I", data, o + (2 * k + 1) * n * 4)
+        out += [f"tile {orient[i] & 0xFF}/{cells[i] >> 20 & 0x3F}/{cells[i] >> 8 & 0xFF}"
+                for i in range(n) if cells[i] and orient[i] & 0xFF in (10, 11)]
+    o += (2 * walls + floors + 1 + (tag in (1, 2))) * n * 4  # walls, floors, shadow, tags
+    count = struct.unpack_from("<i", data, o)[0]
+    for i in range(count):
+        kind, ident = struct.unpack_from("<2i", data, o + 4 + i * (20 if version > 5 else 16))
+        if kind == 2 and (act + 1, ident) in waypoint_objects:
+            out.append(f"waypoint object {act + 1}/{ident}")
+    return sorted(set(out))
+
+
 class Tiles(dict):
     """DT1 path -> dt1_tiles, read from D2R's tiles on first use (an absent file holds nothing)."""
     def __init__(self, root: Path):

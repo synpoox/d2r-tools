@@ -30,22 +30,22 @@ namespace {
 constexpr int kSeeds = 10000;
 // Goldens: run with CARTOGRAPHER_GOLDEN=1 to print the current values when a change is meant to move them.
 const std::string GOLDEN_SHORELINES =
-	"2,0=535/0 3,0=530/0 2,1=541/0 2,2=541/2 2,3=541/2 2,4=541/3 8,4=598/0 2,5=543/0 3,5=530/0 8,5=541/4 2,6=541/3 8,6=541/1 "
-	"2,7=583/1 3,7=532/0 4,7=532/0 5,7=532/1 6,7=532/1 7,7=532/0 8,7=538/1 ";
+	"2,0=535/0 3,0=530/0 2,1=541/0 2,2=541/2 2,3=541/2 2,4=541/3 8,4=598/2 2,5=543/0 3,5=530/0 8,5=541/4 2,6=541/3 8,6=541/1 "
+	"2,7=583/2 3,7=532/0 4,7=532/0 5,7=532/1 6,7=532/1 7,7=532/0 8,7=538/1 ";
 const std::string GOLDEN_HASHES =
-	"907cf8217d7b7829 64ece3af063ed751 fd3e0fc0f6d54272 26b1a6ce1f6541c2 ee21102abe478a95 68068c76a2578772 ce4981cb9a1e643a "
-	"2c762be1dbd7e208 606db446a5eb7047 c79697c5b4021c65 1215a7942077a2ae 19fecd3b91d093a6 5c0b71422478a02a 2c520c8edae359ff "
-	"a5e29bd842850fc3 901fab347c753ae8 49c9cba06771a0c0 763e37c95d92c752 08e5bbf643a10c8c 74b3fce4810fad1e "
-	"36bb32f5285e6d5f 3766511a9a24892c ef66469bffdeeff7 00f38885818a84b6 ";
+	"1ca465a5884087b9 8118914ca27a1d7a e54e1a9bea8e77a0 09b7bdd6f458b837 2c169e3cd4261ed7 cc4814c9a18c3cd0 ed4448d4a50dae5b "
+	"2c762be1dbd7e208 0decae62e59ebc7a 6f664ca5f8c3133e a3d849d3868d6655 f08b4600a31b25e2 916aef5704751993 407d4ff66fd71fba "
+	"d345cf8a5f10fcea 5be507acb1c520a0 aa43a2e09295cd2d 12538a4f3ccc2dbd 828df493ebd55e29 20565f4fdb26519c 1ecb3dd01c17a28d "
+	"3766511a9a24892c ef66469bffdeeff7 46c54f4d0272be1c ";
 
 const std::string GOLDEN_STAMP_LINE =
 	"224x256 0,0=535 4,0=530 0,4=541 0,8=541 0,12=541 0,16=541 24,16=598 0,20=543 4,20=530 24,20=541 0,24=541 24,24=541 0,28=583 4,28=532 "
 	"8,28=532 12,28=532 16,28=532 20,28=532 24,28=538 ";
 const std::string GOLDEN_STAMP_HASHES =
-	"bbc9e79c79924f3f 1a4771abad5cde3d 2c9bfd4b0c19b20c 0ea6ab53f22982a7 151c08742a7209c8 da62d59a94796e97 5575e6746fb2e8b8 "
-	"8f2979a836716794 7d42d055239584b1 485a1e0bb7e9ba70 26c18868df38eaa1 51585abd796d49ea a42cec83cc16fdf4 f65c9d35dda89b61 "
-	"c77ebfdc7deca837 eddf55fdbabafa69 e45b406a6be50916 9225d7578be89530 1e448733c0b64cff 87eb091d4f761c90 "
-	"06c76a6eddf1c7c3 2cb9cb858214889e 5c05387d54e3dfd8 8ae65ae4e7d7937a ";
+	"35214bf084167bc7 c7641ee5c2be8fc6 09ed151db703f0f4 0c1d18f76fc3f240 b8aae337ca113788 7f79c5267e6c23a7 "
+	"80d7371bf1a61eb3 52a00052f649a5b4 16f6897846419e8e a6d16846fcc27013 31b58ea36104cec2 e13c9aa088a7692a "
+	"94c87d1be9512dec 257334a57f787571 25c2d3426b67e5a7 51351c7d35fc0f39 0a4f86f0cea273be 2fbf30abcfb32bbf "
+	"c9868f813aa390b7 1802ff2b04f68400 b9466102c79899f3 0431dc6fecbe3ea4 2bf79b9be02fdcd2 80290d32d9fed1e0 ";
 
 // The fixtures sit beside this file, so the test needs no build-time path or working directory.
 std::string fixturePath(const char *name)
@@ -385,7 +385,8 @@ TEST_CASE("the S1 line becomes five stamps 4 grid cells apart, a 160 x 32 level,
 	for (int i = 0; i < 5; ++i) {
 		CHECK(p.stamps[i].cx == i * 4);
 		CHECK(p.stamps[i].cy == 0);
-		CHECK(p.stamps[i].file == -1); // the engine draws it, as in the S1 spike
+		// the engine draws it, as in the S1 spike; a clearing with a link variant is pinned to its safe file (#455)
+		CHECK(p.stamps[i].file == (r.at(p.stamps[i].macroX, p.stamps[i].macroY).linkSafe ? r.at(p.stamps[i].macroX, p.stamps[i].macroY).ds1Variant : -1));
 	}
 	CHECK(p.stamps[0].lvlPrest == 531);
 	CHECK(p.voidCells.empty());
@@ -1274,4 +1275,74 @@ TEST_CASE("pickFarthestCell with no anchors or no candidates picks nothing and d
 	// With an anchor the farthest cell wins.
 	CHECK(pickFarthestCell(cells, {{0, 0}}, rng, out));
 	CHECK(out == GridCell{2, 0});
+}
+
+// Issue #455: a map never draws a DS1 variant that carries a waypoint or a level entrance or exit
+// (docs/reverse-engineering/cartographer/34-map-link-tiles.md).
+TEST_CASE("Jungle: the clearing variants that carry a waypoint or a level exit are never usable, and the stamp pins the safe file")
+{
+	const LoadResult cat = loadJungle();
+	REQUIRE(cat.ok());
+	int linked = 0;
+	for (const Piece &p : cat.catalogue.pieces) {
+		const std::vector<int> usable = p.usableDs1();
+		if (p.links.empty()) {
+			CHECK(usable.size() == p.ds1.size());
+			continue;
+		}
+		++linked;
+		REQUIRE(!usable.empty());
+		for (int v : usable)
+			CHECK(std::find(p.links.begin(), p.links.end(), p.ds1[static_cast<size_t>(v)]) == p.links.end());
+		if (p.lvlPrest >= 585 && p.lvlPrest <= 594) CHECK(usable == std::vector<int>{1, 2}); // Boggy: only File1 has a waypoint
+		else CHECK(usable == std::vector<int>{2});                                           // Webby, Pygmy: File3 is the clean one
+	}
+	CHECK(linked == 30);
+
+	int stamped = 0;
+	for (uint64_t seed = 1; seed <= 300; ++seed) {
+		const Layout l = layout::generate(layout::Shape::Corridor, layout::Size::Large, seed);
+		const PickResult r = pickPieces(l, cat.catalogue, "Jungle", seed);
+		if (!r.ok()) continue;
+		CHECK(checkPicks(l, cat.catalogue, "Jungle", r).empty());
+		const StampPlan sp = planStamps(l, r, StampOptions{}); // pinFiles is off, as in production
+		REQUIRE(sp.ok());
+		for (const Stamp &st : sp.stamps) {
+			const PickedCell &c = r.at(st.macroX, st.macroY);
+			const Piece &p = cat.catalogue.pieces[static_cast<size_t>(c.piece)];
+			if (p.links.empty()) {
+				CHECK(st.file == -1);
+				continue;
+			}
+			++stamped;
+			REQUIRE(c.ds1Variant >= 0);
+			CHECK(c.linkSafe);
+			CHECK(st.file == c.ds1Variant);
+		}
+	}
+	CHECK(stamped > 50);
+}
+
+TEST_CASE("a piece whose every DS1 variant carries a link is never picked, and checkPicks flags a linked variant")
+{
+	const std::string text =
+		"tileset\tlvlprest\tw\th\tedgeN\tedgeE\tedgeS\tedgeW\trole\tweight\tds1\tlinks\n"
+		"T\t1\t1\t1\tx\tp\tx\tx\tpath\t1\ta.ds1;b.ds1\ta.ds1\n"
+		"T\t2\t1\t1\tx\tp\tx\tp\tpath\t1\tc.ds1\tc.ds1\n"
+		"T\t3\t1\t1\tx\tp\tx\tp\tpath\t1\td.ds1\t\n"
+		"T\t4\t1\t1\tx\tx\tx\tp\tpath\t1\n";
+	const LoadResult cat = parseCatalogue(text);
+	REQUIRE(cat.ok());
+	const Layout l = s1Line();
+	for (uint64_t seed = 1; seed <= 50; ++seed) {
+		const PickResult r = pickPieces(l, cat.catalogue, "T", seed);
+		REQUIRE(r.ok());
+		CHECK(r.at(0, 0).lvlPrest == 1);
+		CHECK(r.at(0, 0).ds1Variant == 1);
+		CHECK(r.at(0, 0).linkSafe);
+		for (int x = 1; x <= 3; ++x) CHECK(r.at(x, 0).lvlPrest == 3); // piece 2 has only a linked variant
+	}
+	PickResult bad = pickPieces(l, cat.catalogue, "T", 1);
+	bad.cells[0].ds1Variant = 0; // the linked variant
+	CHECK(!checkPicks(l, cat.catalogue, "T", bad).empty());
 }

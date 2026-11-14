@@ -120,7 +120,8 @@ StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, cons
 				fail(cellName(x, y) + " has piece 529, the Act 3 town, which must never be stamped.");
 				continue;
 			}
-			if (o.pinFiles && pick.ds1Variant > 15) {
+			const bool pin = (o.pinFiles || pick.linkSafe) && pick.ds1Variant >= 0;
+			if (pin && pick.ds1Variant > 15) {
 				fail(cellName(x, y) + " has DS1 variant " + std::to_string(pick.ds1Variant) + ", which the 4-bit file index cannot hold.");
 				continue;
 			}
@@ -132,7 +133,7 @@ StampPlan planStamps(const layout::Layout &layout, const PickResult &picks, cons
 			s.cx = (x - minX) * per;
 			s.cy = (y - minY) * per;
 			s.lvlPrest = pick.lvlPrest;
-			s.file = (o.pinFiles && pick.ds1Variant >= 0) ? pick.ds1Variant : -1;
+			s.file = pin ? pick.ds1Variant : -1;
 			s.macroX = x;
 			s.macroY = y;
 			s.mask = cell.mask;
