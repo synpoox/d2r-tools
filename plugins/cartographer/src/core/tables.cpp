@@ -743,7 +743,7 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		report.Error(SettingsFile, 1, "the header row needs the columns 'Setting' and 'Value'. The defaults are used.");
 		return settings;
 	}
-	const std::vector<std::string> known = {"EventChance", "PlayerStats", "MapNames", "Town", "MazeProbe", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
+	const std::vector<std::string> known = {"EventChance", "PlayerStats", "MapNames", "Town", "MazeProbe", "WovenProbe", "OutdoorProbe", "AutoCheck", "AutoCheckMap"};
 	bool retiredNoted = false;
 	for (const TsvRow& row : table.rows) {
 		const std::string key = table.Cell(row, cSetting), value = table.Cell(row, cValue);
@@ -791,6 +791,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings {
 		} else if (*name == "MazeProbe") {
 			hi = 1;
 			target = &settings.mazeProbe;
+		} else if (*name == "WovenProbe") {
+			hi = 65535;
+			target = &settings.wovenProbe;
 		} else if (*name == "OutdoorProbe") {
 			hi = 1;
 			target = &settings.outdoorProbe;
