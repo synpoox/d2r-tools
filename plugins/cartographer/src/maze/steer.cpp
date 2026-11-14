@@ -131,8 +131,8 @@ bool isPrevPiece(const Tileset &ts, int toPiece)
 SpecialAnswer answerSpecial(const Tileset &ts, const Plan &plan, SpecialState &state, const Group *group, uint32_t rot)
 {
 	SpecialAnswer a;
-	if (!plan.steer) return a; // Original
-	a.kind = SpecialAnswer::Kind::Suppress;
+	a.kind = SpecialAnswer::Kind::Suppress; // an unsteered plan too: a map has no stairs of the game's own (#460)
+	if (!plan.steer) return a;
 	if (group == nullptr || rot > 3) {
 		// The called entry cannot be read, so it cannot be told from the entrance's: place nothing.
 		if (state.fault.empty()) state.fault = "a special-room call came with a rotation outside 0..3, so its table could not be read";
