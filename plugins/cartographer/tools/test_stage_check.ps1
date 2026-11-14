@@ -105,10 +105,10 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     # A fake release install: its state file, and a kept copy of the mod folder in <slot>.release-backup. Its -Restore
     # replaces the whole mod folder with that copy, so the copy must match the mod folder before staging.
     $relState = Join-Path $Work 'runs\release-install-s10\release-install.json'
-    Put $relState '{}'
     $kept = Join-Path $Work 'slots\Slot10.release-backup\D2RToolsTest'
-    $null = New-Item -ItemType Directory -Force $kept
-    Copy-Item -LiteralPath (Join-Path $mod '*') -Destination $kept -Recurse -Force
+    # Made again before each staging: release_install's restore moves the kept copy back into the mod folder.
+    $makeRelease = { Put $relState '{}'; $null = New-Item -ItemType Directory -Force $kept; Copy-Item -Path (Join-Path $mod '*') -Destination $kept -Recurse -Force }
+    & $makeRelease
 
     $before = Snap
     $stageArgs = @{
@@ -123,13 +123,15 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     Check ((Sha (Join-Path $saveDir 'Own.d2s')) -eq (Sha (Join-Path $src 'saves\Own.d2s'))) 'stage: slot save replaced by the test save'
     # Set aside: maps.txt, shapes.txt, cartographer.dll and Own.d2s (the toml is edited by line, other.dll is parked elsewhere).
     Check (@(Get-ChildItem -LiteralPath $backup -File -ErrorAction SilentlyContinue).Count -eq 4) 'stage: 4 overwritten slot files set aside in stage_check-backup'
+    Check (Test-Path -LiteralPath (Join-Path $slot 'stage_check.json')) 'stage: manifest kept in the slot folder'
     Check (Test-Path (Join-Path $Work 'runs\game.lock.10')) 'stage: slot 10 locked by the owner'
 
     Write-Host '--- stage 2 (same owner, same inputs) ---'
     & $stage @stageArgs | Out-Host
     Check (@(Get-ChildItem -LiteralPath $backup -File -ErrorAction SilentlyContinue).Count -eq 4) 'stage 2: nothing set aside again (our own copies are not backed up)'
 
-    Write-Host '--- restore ---'
+    Write-Host '--- restore (manifest moved to the test-mod folder, where older runs kept it) ---'
+    Move-Item -LiteralPath (Join-Path $slot 'stage_check.json') -Destination (Join-Path $mod 'stage_check.json')
     & $stage -Slot 10 -Owner t461 -Restore -Toolkit $Toolkit | Out-Host
 
     $after = Snap
@@ -137,9 +139,25 @@ dir = "$(& $fwd (Join-Path $Work 'runs'))"
     foreach ($k in $diff) { Write-Host "  differs: $k (before: $($before[$k]) after: $($after[$k]))" }
     Check ($diff.Count -eq 0) "restore: every file under the slot and save folder matches its SHA-256 from before staging ($($before.Count) files)"
     Check (-not (Test-Path $relState)) 'restore: the fake release install was restored (its state file is gone)'
-    Check (-not (Test-Path (Join-Path $Work 'slots\stage_check-backup'))) 'restore: empty stage_check-backup folder removed'
-    Check (-not (Test-Path (Join-Path $mod 'stage_check.json'))) 'restore: manifest removed'
+    Check (-not (Test-Path (Join-Path $slot 'stage_check-backup'))) 'restore: empty stage_check-backup folder removed'
+    Check (-not (Test-Path (Join-Path $slot 'stage_check.json'))) 'restore: manifest removed'
     Check (-not (Test-Path (Join-Path $Work 'runs\game.lock.10'))) 'restore: slot 10 unlocked'
+
+    Write-Host '--- interrupted restore: the release restore ran, then -Restore again ---'
+    & $makeRelease
+    $before2 = Snap
+    & $stage @stageArgs | Out-Host
+    & python -I (Join-Path $Toolkit 'testing\release_install.py') restore --slot 10 | Out-Host
+    Check ($LASTEXITCODE -eq 0 -and -not (Test-Path $relState)) 'interrupted: release restore ran (state file gone)'
+    $rerunErr = ''
+    try { & $stage -Slot 10 -Owner t461 -Restore -Toolkit $Toolkit *>&1 | Out-Host } catch { $rerunErr = $_.Exception.Message }
+    $after2 = Snap
+    $diff2 = @($before2.Keys | Where-Object { $after2[$_] -ne $before2[$_] }) + @($after2.Keys | Where-Object { -not $before2.Contains($_) })
+    foreach ($k in $diff2) { Write-Host "  differs: $k" }
+    Check ($rerunErr -eq '') "rerun after an interrupted restore completes: $rerunErr"
+    Check ($diff2.Count -eq 0) 'rerun after an interrupted restore: every file matches its SHA-256 from before staging'
+    Check (-not (Test-Path (Join-Path $slot 'stage_check.json'))) 'rerun: manifest removed'
+    Check (-not (Test-Path (Join-Path $Work 'runs\game.lock.10'))) 'rerun: slot 10 unlocked'
 
     Write-Host '--- slot 5 ---'
     $msg = ''
