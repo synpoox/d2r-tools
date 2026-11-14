@@ -741,8 +741,7 @@ void RingHook(void* level, int32_t n) noexcept {
 	g_ringOriginal(level, n);
 }
 
-// WovenProbe: after the game's room tile loader (RE note 33 section 2) has run, log the room's piece id, its DT1 mask and the file names on its tile list (room +0xb0: 32
-// slots, each a pointer to the interned name). One line per distinct (piece, mask, list); counts at the end of the game. Reads only.
+// WovenProbe: after the game's room tile loader (RE note 33 section 2) has run, log the room's piece id, its DT1 mask and which of the 32 slots of its tile list (room +0xb0) hold data (the slots are tile data, not file names: how they map to the DT1 files is not decoded). One line per distinct (piece, mask, list); counts at the end of the game. Reads only.
 std::mutex g_tileLock;
 std::map<std::string, int> g_tileLists;
 
@@ -757,17 +756,12 @@ void RoomTileLoaderHook(uint8_t dataFlag, void* room) noexcept {
 			return;
 		}
 		const void* piece = Read<const void*>(room, RoomPiece);
-		std::string list;
+		std::string list = "slots";
 		for (int i = 0; i < 32; ++i) {
-			const char* name = Read<const char*>(room, 0xb0 + i * 8);
-			if (name == nullptr || !Readable(name, 1)) {
-				continue;
+			// Each non-null entry is the tile data of one DT1 file (the first game run showed it is not a file name); how a slot maps to a DT1 file is not decoded.
+			if (Read<const void*>(room, 0xb0 + i * 8) != nullptr) {
+				list += " " + std::to_string(i);
 			}
-			char text[96] = {};
-			for (int k = 0; k < 95 && Readable(name + k, 1) && name[k] != '\0'; ++k) {
-				text[k] = name[k];
-			}
-			list += (list.empty() ? "" : ", ") + std::string(text);
 		}
 		char head[160];
 		std::snprintf(head, sizeof(head), "piece %d, mask 0x%x: ", piece != nullptr ? Read<int32_t>(piece, PieceId) : -1, Read<uint32_t>(room, 0x80));
