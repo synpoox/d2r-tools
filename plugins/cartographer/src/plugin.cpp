@@ -243,7 +243,7 @@ auto LoadAll() -> Loaded {
 	}
 	text.clear();
 	if (ReadTable(g_tableDir + L"\\" + Widen(carto::MapStatsFile), carto::MapStatsFile, &text, loaded.report)) {
-		loaded.report.Note(carto::MapStatsFile, 0, "the file is no longer used: a map's properties are stats on its item (rare and unique maps). It is ignored.");
+		carto::NoteRetiredMapStats(loaded.report);
 	}
 	// itemstatcost.txt gives the ids the game is asked for, and the names of the stats on a map item.
 	text.clear();
@@ -261,15 +261,6 @@ auto LoadAll() -> Loaded {
 		}
 		if (!missing.empty()) {
 			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
-		}
-	}
-	// A mon-speed of -100 or lower is cut by the plugin, so the item tables are checked for it.
-	if (!g_excelDir.empty()) {
-		for (const char* file : {"magicprefix.txt", "magicsuffix.txt", "uniqueitems.txt", "setitems.txt", "cubemain.txt"}) {
-			text.clear();
-			if (ReadFile(g_excelDir + L"\\" + Widen(file), &text)) {
-				carto::CheckMonSpeedRows(text, file, loaded.report);
-			}
 		}
 	}
 	text.clear();

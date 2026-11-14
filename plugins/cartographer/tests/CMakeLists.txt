@@ -47,6 +47,12 @@ else()
 	message(STATUS "Python not found: skipping catalogue tool tests")
 endif()
 
+# The installer, run twice on a scratch copy of small stand-in tables (fresh write, repair of an old cmap row, second run, a full stat table).
+if(WIN32)
+	add_test(NAME install_stats_script
+		COMMAND powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${CMAKE_CURRENT_SOURCE_DIR}/../tools/test_install_stats.ps1)
+endif()
+
 # Host tests for the table loader, the gates and the signature scanner.
 add_executable(tables_tests tables_tests.cpp ../src/core/tables.cpp)
 target_link_libraries(tables_tests PRIVATE cartographer_events cartographer_outdoor cartographer_maze cartographer_maplight)  # the example pack is run through their real checks; outdoor and maze are the tileset tables

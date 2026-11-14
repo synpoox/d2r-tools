@@ -474,48 +474,8 @@ auto ParseItemSpells(std::string_view text, std::vector<std::pair<std::string, i
 	return true;
 }
 
-void CheckMonSpeedRows(std::string_view text, const std::string& file, Report& report) {
-	const Tsv table = ParseTsv(text);
-	// The mod columns of the tables a map item's mods come from: affixes (modNcode, modNmin, modNmax), uniqueitems.txt and setitems.txt (propN, minN,
-	// maxN; setitems.txt also apropNa, aminNa, amaxNa) and cubemain.txt ("mod N", "mod N min", "mod N max"; "b mod N" and "c mod N" for the other outputs).
-	struct Cols {
-		int code, min, max;
-	};
-	std::vector<Cols> cols;
-	const auto add = [&](const std::string& code, const std::string& min, const std::string& max) {
-		const int c = table.Column(code), lo = table.Column(min), hi = table.Column(max);
-		if (c >= 0 && (lo >= 0 || hi >= 0)) {
-			cols.push_back({c, lo, hi});
-		}
-	};
-	for (int n = 1; n <= 12; ++n) {
-		const std::string i = std::to_string(n);
-		add("mod" + i + "code", "mod" + i + "min", "mod" + i + "max");
-		add("prop" + i, "min" + i, "max" + i);
-		for (const char* suffix : {"a", "b"}) {
-			add(std::string("aprop") + i + suffix, std::string("amin") + i + suffix, std::string("amax") + i + suffix);
-		}
-		for (const char* prefix : {"", "b ", "c "}) {
-			add(std::string(prefix) + "mod " + i, std::string(prefix) + "mod " + i + " min", std::string(prefix) + "mod " + i + " max");
-		}
-	}
-	for (const TsvRow& row : table.rows) {
-		for (const Cols& c : cols) {
-			if (!EqualsNoCase(table.Cell(row, c.code), "mon-speed")) {
-				continue;
-			}
-			int lo = 0, hi = 0, low = 0;
-			const bool haveLo = c.min >= 0 && ParseInt(table.Cell(row, c.min), -1000000, 1000000, &lo);
-			const bool haveHi = c.max >= 0 && ParseInt(table.Cell(row, c.max), -1000000, 1000000, &hi);
-			if (!haveLo && !haveHi) {
-				continue;
-			}
-			low = haveLo && haveHi ? std::min(lo, hi) : (haveLo ? lo : hi);
-			if (low <= -100) {
-				report.Note(file, row.line, "mon-speed goes down to " + std::to_string(low) + ". The plugin cuts a map's monster speed to -99, because what -100 or lower does to monsters has not been checked in game. Keep it above -100.");
-			}
-		}
-	}
+void NoteRetiredMapStats(Report& report) {
+	report.Note(MapStatsFile, 0, "the file is no longer used: a map's properties are stats on its item (rare and unique maps). It is ignored.");
 }
 
 auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, const GameNames& names, std::string* problem) -> const BossDef* {

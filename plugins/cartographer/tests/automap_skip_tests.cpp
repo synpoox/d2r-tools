@@ -76,3 +76,15 @@ TEST_CASE("an unknown player level never drops the skip") {
 	CHECK(s.armed);
 	CHECK(SkipOnRead(s, kCave, kSlotLevel) == SkipVerdict::Skip);
 }
+
+TEST_CASE("two level feeds reporting the same level (host: tick and event) behave as one") {
+	SkipState s = Armed();
+	SkipTick(s, kSlotLevel);
+	SkipTick(s, kSlotLevel);
+	CHECK(s.entered);
+	CHECK(SkipOnRead(s, kCave, kSlotLevel) == SkipVerdict::Skip);
+	SkipTick(s, kSlotLevel);
+	SkipTick(s, 109);
+	SkipTick(s, 109);
+	CHECK_FALSE(s.armed);
+}
