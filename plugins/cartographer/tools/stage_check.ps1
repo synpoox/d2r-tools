@@ -25,7 +25,7 @@
     Every file copied into the slot has its read-only attribute cleared (the vanilla tables are read-only; the source is
     never touched). A levels.txt row past the vanilla rows that is not a Cartographer row gets a warning naming it.
 
-    A manifest (stage_check.json in the slot's test-mod folder) records each file placed (path and SHA-256) and the
+    A manifest (stage_check.json in the slot folder) records each file placed (path and SHA-256) and the
     cartographer.txt rows written. A file the slot already had that this script would overwrite (a table, a save, the DLL)
     is moved first to stage_check-backup\ in the slot folder and recorded as set aside; -Restore moves it back
     byte-identical after removing the staged copy.
@@ -205,7 +205,11 @@ $cartoTables = Join-Path $excel 'd2rloader\cartographer'
 $slotDir = $p.slotDir
 $cartoLog = Join-Path $slotDir 'd2rloader\logs\cartographer.log'
 $rerun = "& '$self' -Slot $Slot -Owner $Owner -Restore"
-$manifestPath = Join-Path $modDir 'stage_check.json'
+# In the slot folder, not the test-mod folder: a release install's -Restore replaces the mod folder, and an interrupted
+# -Restore must still find the manifest. A manifest an older run left in the mod folder is still read (and then removed).
+$manifestPath = Join-Path $slotDir 'stage_check.json'
+$legacyManifestPath = Join-Path $modDir 'stage_check.json'
+$readManifestPath = if (Test-Path -PathType Leaf $manifestPath) { $manifestPath } else { $legacyManifestPath }
 
 # Guards (read only; all before the lock). Every place this script writes must be outside the owner's own install,
 # and the slot's save folder must not be the owner's own.
@@ -256,9 +260,9 @@ if ($Restore) {
     $holder = Get-LockOwner
     if (-not $holder) { throw "Slot $Slot is not locked, so there is nothing of ours to restore. Refused." }
     if ($holder -ne $Owner) { throw "Slot $Slot is locked by '$holder', not by '$Owner'. Refused: nothing was touched." }
-    if (-not (Test-Path -PathType Leaf $manifestPath)) { throw "No manifest at ${manifestPath}: this script did not stage the slot, so it will not remove anything. Refused." }
-    $man = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
-    if ("$($man.owner)" -ne $Owner -or [int]$man.slot -ne $Slot) { throw "The manifest at ${manifestPath} belongs to owner '$($man.owner)', slot $($man.slot). Refused." }
+    if (-not (Test-Path -PathType Leaf $readManifestPath)) { throw "No manifest at ${manifestPath}: this script did not stage the slot, so it will not remove anything. Refused." }
+    $man = Get-Content -Raw -LiteralPath $readManifestPath | ConvertFrom-Json
+    if ("$($man.owner)" -ne $Owner -or [int]$man.slot -ne $Slot) { throw "The manifest at ${readManifestPath} belongs to owner '$($man.owner)', slot $($man.slot). Refused." }
     if ($WhatIf) {
         Plan "python release_install.py status --slot $Slot, then restore when the slot holds a release install"
         foreach ($f in @($man.files)) { Plan "remove $($f.path) when its SHA-256 is still $($f.sha256)" }
@@ -286,6 +290,11 @@ if ($Restore) {
         } else { Write-Warning "Kept $($f.path): changed since staging (SHA-256 differs from the manifest)." }
     }
     foreach ($m in @($man.parked)) {
+        # A copy of a file in the mod folder is a copy of the release mod's own file: the release restore put the original back, so drop the copy.
+        if ($m.release -and (Test-Under $m.from $modDir)) {
+            if (Test-Path -LiteralPath $m.to -PathType Leaf) { Remove-Item -LiteralPath $m.to -Force; Say "  dropped: $($m.to) (the release restore put back $($m.from))" }
+            continue
+        }
         if (-not (Test-Path -LiteralPath $m.to -PathType Leaf)) { Say "  already gone: $($m.to)"; continue }
         if (Test-Path -LiteralPath $m.from -PathType Leaf) { Write-Warning "Left $($m.to) set aside: $($m.from) exists again. It is no longer tracked; move it back by hand if wanted."; continue }
         $null = New-Item -ItemType Directory -Force (Split-Path $m.from -Parent)
@@ -336,8 +345,7 @@ if ($Restore) {
             Write-Warning "default_mod in $($man.defaultMod.file) is now `"$($tm.Groups[2].Value)`", not the test mod $modName; left as it is (it was `"$($man.defaultMod.original)`" before staging)."
         }
     }
-    # A release install's restore already removed the manifest with the mod folder (the copy in memory is what counted).
-    if (Test-Path -LiteralPath $manifestPath) { Remove-Item -LiteralPath $manifestPath -Force }
+    foreach ($mp in @($manifestPath, $legacyManifestPath)) { if (Test-Path -LiteralPath $mp) { Remove-Item -LiteralPath $mp -Force } }
     $rc = Invoke-Toolkit 'game_slots.py' @('unlock', "$Slot", $Owner)
     if ($rc -ne 0) { throw "Could not unlock slot $Slot (exit $rc). It is not forced; check 'game_slots.py status'." }
     Say "Slot $Slot is unlocked."
@@ -404,18 +412,23 @@ $jsonAdded = New-Object System.Collections.Generic.List[object]
 $defaultMod = $null
 # Plugins moved out of the slot's plugins folder (from, to).
 $parked = New-Object System.Collections.Generic.List[object]
+# Whether the slot holds a release install now. Each parked copy is tagged with it when made: -Restore drops only the tagged
+# copies of files that were in the mod folder (the release restore replaces that folder), never ones made without a release.
+$releaseAtStage = $false
+$relStatus = (& python -I (Join-Path $testing 'release_install.py') status --slot "$Slot" | Out-String)
+if ($LASTEXITCODE -eq 0 -and $relStatus -notmatch 'no release install') { $releaseAtStage = $true }
 # Read-only, so -WhatIf loads it too and plans the same replace a real run would make.
-if (Test-Path -PathType Leaf $manifestPath) {
+if (Test-Path -PathType Leaf $readManifestPath) {
     try {
-        $old = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+        $old = Get-Content -Raw -LiteralPath $readManifestPath | ConvertFrom-Json
         if ("$($old.owner)" -eq $Owner -and [int]$old.slot -eq $Slot) {
             foreach ($f in @($old.files)) { $placed[$f.path] = $f.sha256 }
             foreach ($r in @($old.rows)) { $rowsWritten.Add(@{ file = $r.file; row = $r.row }) }
             foreach ($e in @($old.entries)) { $jsonAdded.Add(@{ file = $e.file; nl = $e.nl; text = $e.text }) }
-            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to }) } }
+            foreach ($m in @($old.parked)) { if (-not @($parked | Where-Object { $_.to -ieq $m.to })) { $parked.Add(@{ from = $m.from; to = $m.to; release = [bool]$m.release }) } }
             if ($old.defaultMod) { $defaultMod = @{ file = $old.defaultMod.file; original = $old.defaultMod.original } }
         }
-    } catch { Write-Warning "Ignoring an unreadable manifest at ${manifestPath}: $($_.Exception.Message)" }
+    } catch { Write-Warning "Ignoring an unreadable manifest at ${readManifestPath}: $($_.Exception.Message)" }
 }
 function Save-Manifest {
     if ($WhatIf) { return }
@@ -426,6 +439,7 @@ function Save-Manifest {
     if ($defaultMod) { $doc['defaultMod'] = $defaultMod }
     $null = New-Item -ItemType Directory -Force (Split-Path $manifestPath -Parent)
     [System.IO.File]::WriteAllText($manifestPath, ($doc | ConvertTo-Json -Depth 5))
+    if (Test-Path -LiteralPath $legacyManifestPath) { Remove-Item -LiteralPath $legacyManifestPath -Force }
 }
 function Clear-ReadOnly([string]$path) {
     if (Test-Path -PathType Leaf $path) { Set-ItemProperty -LiteralPath $path -Name IsReadOnly -Value $false }
@@ -440,7 +454,7 @@ function Set-Aside([string]$path) {
     $to = Join-Path $dir $leaf
     for ($n = 1; (Test-Path -LiteralPath $to); $n++) { $to = Join-Path $dir "$leaf.$n" }
     Move-Item -LiteralPath $path -Destination $to
-    $parked.Add(@{ from = $path; to = $to })
+    $parked.Add(@{ from = $path; to = $to; release = $releaseAtStage })
     Save-Manifest
     Say "  set aside: $path -> $to (-Restore puts it back)"
 }
@@ -554,7 +568,7 @@ try {
             if ($WhatIf) { continue }
             $null = New-Item -ItemType Directory -Force $parkDir
             Move-Item -LiteralPath $f.FullName -Destination $to
-            $parked.Add(@{ from = $f.FullName; to = $to })
+            $parked.Add(@{ from = $f.FullName; to = $to; release = $releaseAtStage })
         }
         if ($stray.Count -gt 0) { Save-Manifest }
     }
