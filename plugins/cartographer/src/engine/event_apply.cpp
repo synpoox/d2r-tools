@@ -656,7 +656,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			}
 			int distance = ep::minEventDistance(rects.levelW, rects.levelH);
 			// The map's own Boss goes in the plan's boss room (the maze's far cell), apart from the event room. When the plan has none, or every room of
-			// its cell refuses, the other rooms of the level are tried, farthest from this entry room first (BossRoomPicker): there is no map without one.
+			// its cell refuses, the other rooms of the level are tried as each populates (BossRoomPicker): there is no map without one.
 			std::vector<ep::Rect> all;
 			const bool haveAll = LevelRoomRects(rects.level, &all);
 			if (state->bossArmed) {
@@ -675,7 +675,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell and %zu other(s) in the level to fall back on)", state->bossName.c_str(),
 					           Describe(bossRanked.front()).c_str(), bossRanked.size() - 1, others.size());
 				} else {
-					plog::Warn("the map Boss '%s' has no plan boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan): it goes in the room farthest from the entry (%zu room(s) known)",
+					plog::Warn("the map Boss '%s' has no plan boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan): it goes in the room farthest from the entry, then any other room as it populates (%zu room(s) known)",
 					           state->bossName.c_str(), others.size());
 					if (!others.empty()) {
 						bossRanked.push_back(others.front());
@@ -732,7 +732,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	if (fireBoss) {
 		plog::Info("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
 		// The picker decides (pure, tested with this loop as `driveBoss`): the plan's boss room, then the rest of its cell, then the other rooms
-		// farthest first as each populates, then the same room again with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
+		// as each populates, then the same room again with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
 		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };
 		size_t first = 0;
 		{
@@ -752,7 +752,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				planRect = state->bossPicker->room(index);
 			}
 			const char* where = tier == ep::BossRoomPicker::Tier::Cell ? (index == 0 ? "the plan's boss room" : "another room of the boss cell")
-			                    : tier == ep::BossRoomPicker::Tier::Other ? "another room of the level, farthest from the entry first"
+			                    : tier == ep::BossRoomPicker::Tier::Other ? "another room of the level, as it populates"
 			                                                              : "the room populating now, with the collision test skipped (the last resort)";
 			if (!firstTry) {
 				plog::Warn("map Boss '%s': falling back to %s, DRLG %s", state->bossName.c_str(), where, Describe(planRect).c_str());
