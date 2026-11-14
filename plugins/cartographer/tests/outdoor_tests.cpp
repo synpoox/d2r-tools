@@ -5,6 +5,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -1357,4 +1358,30 @@ TEST_CASE("a variants row that lists linked DS1 files is skipped with a warning"
 	REQUIRE(cat.catalogue.pieces.size() == 1);
 	CHECK(cat.catalogue.pieces[0].lvlPrest == 2);
 	CHECK(!cat.warnings.empty());
+}
+
+TEST_CASE("arrival candidates: entrance-cell rooms first, nearest the centre first, every room once, the cell's own pick leads (issue #456)")
+{
+	for (uint64_t seed = 1; seed <= 100; ++seed) {
+		const MapPlan plan = planOutdoorMap(jungleRequest(seed), builtinJungleCatalogue());
+		if (!plan.ok) continue;
+		CAPTURE(seed);
+		const std::vector<BuiltRoom> rooms = roomsOf(plan.stamps);
+		const TileRect &c = plan.stamps.entrance;
+		const std::vector<int> got = arrivalCandidates(c, rooms);
+		REQUIRE(got.size() == rooms.size());
+		CHECK(got == arrivalCandidates(c, rooms));
+		CHECK(got.front() == chooseCellRoom(c, rooms));
+		std::vector<int> sorted = got;
+		std::sort(sorted.begin(), sorted.end());
+		for (size_t i = 0; i < sorted.size(); ++i) CHECK(sorted[i] == static_cast<int>(i));
+		bool leftCell = false;
+		for (const int i : got) {
+			const BuiltRoom &r = rooms[static_cast<size_t>(i)];
+			const bool inside = r.x >= c.x && r.y >= c.y && r.x + r.w <= c.x + c.w && r.y + r.h <= c.y + c.h;
+			if (!inside) leftCell = true;
+			CHECK((!leftCell || !inside));  // no room of the cell after one outside it
+		}
+	}
+	CHECK(arrivalCandidates(TileRect{}, {BuiltRoom{0, 0, 8, 8, 0}}).empty());
 }

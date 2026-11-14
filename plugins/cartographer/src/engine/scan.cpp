@@ -152,6 +152,7 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 static const char* HookConsequence(const char* name) noexcept {
 	const std::string_view n(name);
 	if (n == "LevelBuild") return "EVERY level build is skipped (not only the maze), so no level will load";
+	if (n == "ArrivalSpot") return "the game's own arrival step is skipped for EVERY level change";
 	if (n == "OutdoorAct5Builder") return "the game's Act 5 outdoor builder is skipped";
 	if (n == "DeathDrop") return "the game's own monster drop is skipped for EVERY monster";
 	if (n == "ChestOperate") return "the game's chest use is skipped for EVERY chest";

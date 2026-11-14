@@ -339,4 +339,32 @@ ArrivalMark planArrival(const StampPlan &plan, const std::vector<BuiltRoom> &roo
 	return out;
 }
 
+std::vector<int> arrivalCandidates(const TileRect &cell, const std::vector<BuiltRoom> &rooms) {
+	struct Key {
+		bool outside;
+		int64_t dist;
+		int y, x, index;
+	};
+	std::vector<Key> keys;
+	if (!cell.known || cell.w <= 0 || cell.h <= 0) return {};
+	const int64_t cx = 2 * static_cast<int64_t>(cell.x) + cell.w, cy = 2 * static_cast<int64_t>(cell.y) + cell.h;
+	for (size_t i = 0; i < rooms.size(); ++i) {
+		const BuiltRoom &r = rooms[i];
+		if (r.w <= 0 || r.h <= 0) continue;
+		const bool inside = r.x >= cell.x && r.y >= cell.y && r.x + r.w <= cell.x + cell.w && r.y + r.h <= cell.y + cell.h;
+		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - cx, dy = 2 * static_cast<int64_t>(r.y) + r.h - cy;
+		keys.push_back({!inside, dx * dx + dy * dy, r.y, r.x, static_cast<int>(i)});
+	}
+	std::sort(keys.begin(), keys.end(), [](const Key &a, const Key &b) {
+		if (a.outside != b.outside) return !a.outside;
+		if (a.dist != b.dist) return a.dist < b.dist;
+		if (a.y != b.y) return a.y < b.y;
+		if (a.x != b.x) return a.x < b.x;
+		return a.index < b.index;
+	});
+	std::vector<int> out;
+	for (const Key &k : keys) out.push_back(k.index);
+	return out;
+}
+
 } // namespace cartographer::outdoor

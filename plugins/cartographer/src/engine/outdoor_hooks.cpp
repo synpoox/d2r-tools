@@ -67,7 +67,7 @@ using VoidFn = void (*)(void* level, int32_t x, int32_t y) noexcept;            
 
 // The three arrival parts are only checked (never called or hooked), as in the maze steering; a missing one leaves the arrival to the game and
 // does not turn the outdoor build off.
-enum OutdoorPartId { Act5Builder, EntryPart, StampPart, VoidPart, ArrivalFinderPart, ArrivalRoomFinderPart, ArrivalFlagTestPart, OwnLevelBuild, OutdoorPartCount };
+enum OutdoorPartId { Act5Builder, EntryPart, StampPart, VoidPart, ArrivalFinderPart, ArrivalRoomFinderPart, ArrivalFlagTestPart, ArrivalSpotPart, LevelLookupPart, RoomDataLoadPart, FreeSpotSearchPart, OwnLevelBuild, OutdoorPartCount };
 constexpr int OutdoorNeededParts = ArrivalFinderPart;  // the parts every build needs; LevelBuild is added only when the maze hook did not take it
 
 Part g_parts[OutdoorPartCount] = {
@@ -78,10 +78,23 @@ Part g_parts[OutdoorPartCount] = {
 	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
+	{"ArrivalSpot", sig::ArrivalSpot, 15, false, nullptr, {}, {}},
+	{"LevelLookup", sig::LevelLookup, 0, false, nullptr, {}, {}},
+	{"RoomDataLoad", sig::RoomDataLoad, 0, false, nullptr, {}, {}},
+	{"FreeSpotSearch", sig::FreeSpotSearch, 0, false, nullptr, {}, {}},
 	{"LevelBuild", sig::LevelBuild, 14, true, nullptr, {}, {}},
 };
 
+// 0x2ef8b0: puts a unit on a level after a portal (cl, game, level id, exit index, &x, &y, size); only its first and last arguments matter here.
+using ArrivalSpotFn = uint64_t (*)(uint64_t cl, void* game, uint64_t levelId, uint64_t exit, int32_t* outX, int32_t* outY, uint32_t size) noexcept;
+using LevelLookupFn = void* (*)(uint64_t cl, void* game, uint64_t levelId) noexcept;           // 0x3267c0
+using RoomDataLoadFn = void* (*)(uint64_t cl, void* room) noexcept;                            // 0x3289a0: the engine room of a DRLG room
+using FreeSpotSearchFn = void* (*)(void* engineRoom, int32_t* xy, uint32_t size, uint32_t mask, uint64_t zero) noexcept;  // 0x362f90
+using ArrivalFinderFn = void* (*)(uint64_t cl, void* gameData, uint64_t levelId, uint64_t exit, int32_t* x, int32_t* y) noexcept;  // 0x3da650
+constexpr uint32_t ArrivalSpotMask = 0x1c09;  // the collision mask 0x2ef8b0 asks the search for
+
 EntryFn g_act5Original = nullptr;
+ArrivalSpotFn g_spotOriginal = nullptr;
 LevelBuildFn g_ownLevelOriginal = nullptr;
 bool g_ownLevelBuild = false;  // this plugin hooked the level build itself (the maze hook did not): written at load only
 
@@ -434,6 +447,90 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	}
 	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
+}
+
+// Before the game places a unit on the slot level (0x2ef8b0): when the room marked as the level entry has no free spot (the game would log
+// "Unable to find spawn location for act start" and the portal could not be entered, issue #456), move the mark to the first room of
+// co::arrivalCandidates that has one, using the game's own search with the game's own arguments. Not noexcept: it allocates; the caller catches.
+void MoveArrivalToFreeSpot(uint64_t cl, void* game, uint64_t levelId, uint64_t exit, uint32_t size) {
+	if (game == nullptr || !Readable(game, 0x78)) {
+		return;
+	}
+	// 0x2ef8b0 hands the finder and the level lookup the pointer at +0x70 of its second argument (0x2ef8b6).
+	void* const gameData = Read<void*>(game, 0x70);
+	void* const level = Call<LevelLookupFn>(LevelLookupPart)(cl, gameData, levelId);
+	if (!IsSlotLevel(level)) {
+		return;
+	}
+	// The game builds the level inside its own room finder (0x3da650), after this hook and before the free-spot search: run the finder
+	// here first (it builds the level, which marks the arrival room), so the rooms and the mark exist when the check runs.
+	if (Read<void*>(level, LvlFirstRoom) == nullptr) {
+		int32_t x = 0, y = 0;
+		Call<ArrivalFinderFn>(ArrivalFinderPart)(cl, gameData, levelId, exit, &x, &y);
+	}
+	ArrivalFact fact;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		fact = g_arrival;
+	}
+	if (!fact.known || fact.levelId != static_cast<int32_t>(levelId)) {
+		return;
+	}
+	std::vector<void*> rooms;
+	std::vector<co::BuiltRoom> rects;
+	for (void* room = Read<void*>(level, LvlFirstRoom); room != nullptr && rooms.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98); room = Read<void*>(room, RoomNext)) {
+		rooms.push_back(room);
+		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH), Read<uint32_t>(room, RoomFlags)});
+	}
+	int marked = -1;
+	for (size_t i = 0; i < rects.size() && marked < 0; ++i) {
+		if ((rects[i].flags & co::kArrivalFlags) != 0) marked = static_cast<int>(i);
+	}
+	if (marked < 0) {
+		return;  // no mark of ours (the game keeps its own arrival)
+	}
+	co::TileRect cell;
+	cell.known = true;
+	cell.x = fact.cellX;
+	cell.y = fact.cellY;
+	cell.w = fact.cellW;
+	cell.h = fact.cellH;
+	const auto load = Call<RoomDataLoadFn>(RoomDataLoadPart);
+	const auto search = Call<FreeSpotSearchFn>(FreeSpotSearchPart);
+	for (const int i : co::arrivalCandidates(cell, rects)) {
+		void* const engineRoom = load(cl, rooms[static_cast<size_t>(i)]);
+		if (engineRoom == nullptr) {
+			continue;
+		}
+		const co::BuiltRoom& r = rects[static_cast<size_t>(i)];
+		// The spot the game starts from: the room's centre tile, in subtiles, and 3 in (0x2ef8b0 does x = tile * 5 + 3).
+		int32_t xy[2] = {(r.x + r.w / 2) * 5 + 3, (r.y + r.h / 2) * 5 + 3};
+		if (search(engineRoom, xy, size, ArrivalSpotMask, 0) == nullptr) {
+			continue;
+		}
+		if (i != marked) {
+			Write<uint32_t>(rooms[static_cast<size_t>(marked)], RoomFlags, Read<uint32_t>(rooms[static_cast<size_t>(marked)], RoomFlags) & ~co::kArrivalFlags);
+			Write<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags, Read<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags) | co::kArrivalFlags);
+			static std::atomic<int> moved{0};
+			plog::Info("outdoor arrival: no free spot in room %d (%d,%d); moved to room %d (%d,%d), free spot at subtile (%d,%d) (move %d)", marked, rects[static_cast<size_t>(marked)].x,
+			           rects[static_cast<size_t>(marked)].y, i, r.x, r.y, xy[0], xy[1], ++moved);
+		}
+		plog::Info("outdoor arrival: room %d (%d,%d) has a free spot at subtile (%d,%d) (size %u); kept", i, r.x, r.y, xy[0], xy[1], size);
+		return;
+	}
+	plog::Warn("outdoor arrival: no room of the level has a free spot; the game will refuse the arrival");
+}
+
+auto ArrivalSpotHook(uint64_t cl, void* game, uint64_t levelId, uint64_t exit, int32_t* outX, int32_t* outY, uint32_t size) noexcept -> uint64_t {
+	if (g_spotOriginal == nullptr) {
+		return 0;  // the loader gave no way back (logged at install)
+	}
+	try {
+		MoveArrivalToFreeSpot(cl, game, levelId, exit, size);
+	} catch (...) {
+		plog::Warn("outdoor arrival: the free-spot check failed; the game's own arrival runs");
+	}
+	return g_spotOriginal(cl, game, levelId, exit, outX, outY, size);
 }
 
 // --- The hooks -------------------------------------------------------------------------------------------------------
@@ -879,6 +976,14 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 		return;
 	}
 	g_live = true;
+	// The arrival spot hook is optional: without it (a part missing, or the hook refused) the game's own arrival runs as before.
+	bool spotParts = true;
+	for (int i = ArrivalFinderPart; i <= FreeSpotSearchPart; ++i) {
+		spotParts = spotParts && g_parts[i].status.on;
+	}
+	if (spotParts && !install(ArrivalSpotPart, reinterpret_cast<void*>(&ArrivalSpotHook), reinterpret_cast<void**>(&g_spotOriginal))) {
+		plog::Warn("the arrival spot check is off: its hook was refused (see 'cartographer check')");
+	}
 	plog::Info("the outdoor build hooks are in%s", g_ownLevelBuild ? " (with their own level build hook)" : " (behind the maze steering's level build hook)");
 }
 
