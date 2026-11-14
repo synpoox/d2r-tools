@@ -23,6 +23,18 @@ before changing anything. Build, test and review steps are in [CONTRIBUTING.md](
 - `d2rAI-toolkit` is a separate repository (templates, game-slot testing). Do not copy it in; reference it.
 - Outward-facing steps (pushing, tagging, releases, issues, comments) happen only when the owner asks.
 
+## Issue tracker
+
+Issues and specs live in GitHub Issues. Before tracker operations, read `docs/agents/issue-tracker.md`.
+
+## Triage labels
+
+Use the five default triage labels. Before triaging, read `docs/agents/triage-labels.md`.
+
+## Domain docs
+
+Single-context layout. Before exploring the codebase, read `docs/agents/domain.md`.
+
 ## Working
 
 - Read the relevant parts of `d2rAI-toolkit` (`knowledge/`, `plugin-template/`, `third_party/PluginSDK`) before beginning
