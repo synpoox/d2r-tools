@@ -42,7 +42,7 @@ constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
 inline constexpr MazeTileset MazeTilesets[] = {
 	// No row has a Prev family: its entrance rooms (Cave 83-86, Crypt 139-142, Ice 1018-1021) carry the level's Up stairs, a level exit tile, and a
-	// map's only way in and out is its portal (docs/reverse-engineering/cartographer/34-map-link-tiles.md, issue #455). The entrance is an ordinary room.
+	// map's only way in and out is its portal (docs/reverse-engineering/cartographer/35-map-link-tiles.md, issue #455). The entrance is an ordinary room.
 	// Offsets: y 0 and x 3500, 3000, 2500, 2000 (Cave, Crypt, Lava, Ice; 500 apart), so every level fits the automap range and sits above the first Act 5 level (y 1000).
 	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {0, 0, 0, 0}, false, 3500, 0, 0},
 	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {0, 0, 0, 0}, false, 3000, 0, 0},

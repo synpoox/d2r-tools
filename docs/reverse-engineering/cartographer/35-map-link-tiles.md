@@ -1,4 +1,4 @@
-## 34. Pieces that carry a waypoint or an area link (issue #455)
+## 35. Pieces that carry a waypoint or an area link (issue #455)
 
 Build 93847. Desk work on the game's own DS1 files (read with the repo's readers, nothing committed from the game). Evidence labels: **static** (file or table read), **inference**, **needs game** (not yet seen live).
 
@@ -7,7 +7,7 @@ Build 93847. Desk work on the game's own DS1 files (read with the repo's readers
 `plugins/cartographer/tools/d2r_readers.py: ds1_links(ds1, waypoint_objects)` reads every DS1 a catalogue piece can draw and reports two things:
 
 - **A waypoint object**: an object of type 2 whose (act, id) is an `objpreset.txt` row with ObjectClass `WaypointAct3`, `WaypointWilderness` or `WaypointIceCave`. **static**.
-- **A link tile**: a wall tile of orientation 10 or 11 (the engine's special tiles). A level's `Warp0..7` and `Vis0..7` links come from these; the tile's main index picks the warp slot (Prev 0, Next 1, Down 4). **inference**: orientation 10/11 as "link tile" fits every vanilla stairs and exit piece below and nothing else, but the engine code that reads it was not traced.
+- **A link tile**: a wall tile of orientation 10 or 11 (the engine's special tiles). The tile switch `0x3f332c` sends orientation 10 and 11 to the stairs handler `0x3f4670`, which looks the warp up in the level's `lvlwarp` row with k = (tile >> 20) & 0x3f (the main index: Prev 0, Next 1, Down 4); note 20 (`20-warpdefs-assert.md`) traced it and note 21 shows the same path behind the Crypt ptWarp verify from the Prev stairs. **static**.
 
 `catalogue.py` writes the DS1 files that have either into the new `links` column of `catalogue.tsv` (outdoor rows). Maze pieces are whole rooms, so they were scanned by piece instead (scratch script, same reader).
 
@@ -35,6 +35,8 @@ Act 5 Lava 1053-1056 has a link tile too (10/33/0) but is not one of the four Ca
 - Outdoor: `Piece::usableDs1()` leaves out the DS1 files listed in `links`; a piece with none left is not picked; a clearing with a link variant pins the safe file (`PickedCell::linkSafe`, honoured even with `pinFiles` off).
 - Maze: no `MazeTilesets` row has a Prev family, so the entrance is an ordinary mask room (Lava's mechanism: arrival by `MarkArrival`).
 - Not changed: the game's own unsteered maze can still place Prev, Next and Down pieces. The plugin steers every slot call, so a Cartographer map does not reach that path; a map that falls back to the game's own builder would.
+
+- Removing the Prev rooms should also stop the warpDefs assert and the ptWarp verify of notes 20 and 21 (they run on the Prev stairs tile). **needs game**.
 
 ### 5. Open
 

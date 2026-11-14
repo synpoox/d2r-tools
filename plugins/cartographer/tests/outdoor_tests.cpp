@@ -1278,7 +1278,7 @@ TEST_CASE("pickFarthestCell with no anchors or no candidates picks nothing and d
 }
 
 // Issue #455: a map never draws a DS1 variant that carries a waypoint or a level entrance or exit
-// (docs/reverse-engineering/cartographer/34-map-link-tiles.md).
+// (docs/reverse-engineering/cartographer/35-map-link-tiles.md).
 TEST_CASE("Jungle: the clearing variants that carry a waypoint or a level exit are never usable, and the stamp pins the safe file")
 {
 	const LoadResult cat = loadJungle();
@@ -1345,4 +1345,16 @@ TEST_CASE("a piece whose every DS1 variant carries a link is never picked, and c
 	PickResult bad = pickPieces(l, cat.catalogue, "T", 1);
 	bad.cells[0].ds1Variant = 0; // the linked variant
 	CHECK(!checkPicks(l, cat.catalogue, "T", bad).empty());
+}
+
+TEST_CASE("a variants row that lists linked DS1 files is skipped with a warning")
+{
+	const std::string text =
+		"tileset\tlvlprest\tw\th\tedgeN\tedgeE\tedgeS\tedgeW\trole\tweight\tcheck\tds1\tlinks\n"
+		"T\t1\t1\t1\tx\tp\tx\tx\tpath\t1\tvariants\ta.ds1;b.ds1\ta.ds1\n"
+		"T\t2\t1\t1\tx\tp\tx\tx\tpath\t1\tvariants\tc.ds1\t\n";
+	const LoadResult cat = parseCatalogue(text);
+	REQUIRE(cat.catalogue.pieces.size() == 1);
+	CHECK(cat.catalogue.pieces[0].lvlPrest == 2);
+	CHECK(!cat.warnings.empty());
 }

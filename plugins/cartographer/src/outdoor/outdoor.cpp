@@ -294,6 +294,10 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 			for (const std::string &f : split(cellAt(row, col[Links]), ';'))
 				if (!trim(f).empty()) p.links.push_back(trim(f));
 		if (p.check == "variants") p.ds1.clear(); // the variants differ in shape: no DS1 variant is drawn for this piece
+		if (p.check == "variants" && !p.links.empty()) { // the engine would draw any of its files, one of them linked
+			warn(lineNo, who + " has linked DS1 files and variants of differing shape; the row is skipped");
+			continue;
+		}
 		res.catalogue.pieces.push_back(std::move(p));
 	}
 	if (!haveHeader) res.warnings.push_back(file + " is empty; it has no header row");

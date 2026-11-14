@@ -1578,7 +1578,7 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 }
 
 // Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021) each carry
-// the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/34-map-link-tiles.md), so no table row has a family and no plan places one.
+// the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/35-map-link-tiles.md), so no table row has a family and no plan places one.
 TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordinary room, and every Prev call is suppressed")
 {
 	const int prevGroups[3][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}};

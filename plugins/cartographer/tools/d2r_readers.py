@@ -91,7 +91,7 @@ def header_dt1s(data: bytes) -> list[str]:
 def ds1_links(data: bytes, waypoint_objects: set[tuple[int, int]]) -> list[str]:
     """What a DS1 carries that links its map to another area: a waypoint object (type 2, `waypoint_objects` holds
     its (act 1-5, objpreset index) pairs), and every wall tile of orientation 10 or 11, the engine's special tiles
-    that a level's Warp0..7 and Vis links come from (docs/reverse-engineering/cartographer/34-map-link-tiles.md)."""
+    that a level's Warp0..7 and Vis links come from (docs/reverse-engineering/cartographer/35-map-link-tiles.md)."""
     version = struct.unpack_from("<i", data)[0]
     if version < 4:
         raise ValueError(f"DS1 version {version}: only 4 and up keep the tile layers in the order ds1_links reads")
