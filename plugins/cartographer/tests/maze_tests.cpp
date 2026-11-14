@@ -802,7 +802,7 @@ TEST_CASE("built-in tilesets are Cave, Crypt and Lava, found ignoring case")
 	REQUIRE(builtinTileset("cave", t));
 	CHECK(t.roomTiles == 24);
 	CHECK(t.pieceBase == 52);
-	CHECK(t.prev.piece[3] == 86);
+	CHECK(!t.prev.present);  // #455: the Prev rooms carry the level's Up stairs, so no table row places one
 	REQUIRE(builtinTileset("CRYPT", t));
 	CHECK(t.roomTiles == 8);
 	REQUIRE(builtinTileset("lava", t));
@@ -920,7 +920,7 @@ TEST_CASE("the rotation counter stays in 0..3 whatever the call did")
 TEST_CASE("the entrance call is redirected to the plan's table entry and every other call is suppressed")
 {
 	Tileset cave;
-	REQUIRE(builtinTileset("Cave", cave));
+	cave = caveTileset();
 	const Plan plan = steeringCavePlan(cave);
 	REQUIRE(plan.steer);
 	REQUIRE(plan.entrance.place);
@@ -952,7 +952,7 @@ TEST_CASE("the entrance call is redirected to the plan's table entry and every o
 TEST_CASE("a table that cannot be read or lacks the plan's entry places nothing and says why")
 {
 	Tileset cave;
-	REQUIRE(builtinTileset("Cave", cave));
+	cave = caveTileset();
 	const Plan plan = steeringCavePlan(cave);
 	REQUIRE(plan.entrance.place);
 	const Group group = caveGroup();
@@ -976,7 +976,7 @@ TEST_CASE("a table that cannot be read or lacks the plan's entry places nothing 
 TEST_CASE("the private LvlMaze row and the piece every room has after the walk")
 {
 	Tileset cave;
-	REQUIRE(builtinTileset("Cave", cave));
+	cave = caveTileset();
 	const Plan plan = steeringCavePlan(cave);
 	REQUIRE(plan.steer);
 	const auto row = lvlMazeRow(138, plan);
@@ -1079,8 +1079,6 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(std::string(MazeTilesets[0].levelName) == "Cartographer Maze");
 	CHECK(MazeTilesets[0].roomTiles == 24);
 	CHECK(MazeTilesets[0].pieceBase == 52);
-	CHECK(MazeTilesets[0].prevPiece[0] == 83);
-	CHECK(MazeTilesets[0].prevPiece[3] == 86);
 	CHECK_FALSE(MazeTilesets[0].callsRingGrower);
 	CHECK(std::string(MazeTilesets[1].name) == "Crypt");
 	CHECK(MazeTilesets[1].levelType == 4);
@@ -1088,8 +1086,6 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(std::string(MazeTilesets[1].levelName) == "Cartographer Crypt");
 	CHECK(MazeTilesets[1].roomTiles == 8);
 	CHECK(MazeTilesets[1].pieceBase == 108);
-	CHECK(MazeTilesets[1].prevPiece[0] == 139);
-	CHECK(MazeTilesets[1].prevPiece[3] == 142);
 	CHECK_FALSE(MazeTilesets[1].callsRingGrower);
 	// Lava: River of Flame's LevelType 28, 24-tile rooms, pieces 836 + mask, and no entrance family (its builder case places none).
 	CHECK(std::string(MazeTilesets[2].name) == "Lava");
@@ -1215,7 +1211,7 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 		}
 }
 
-TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev family 1018-1021, the ring grower called first")
+TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, no Prev family, the ring grower called first")
 {
 	const MazeTileset *row = findMazeTileset("ice");
 	REQUIRE(row != nullptr);
@@ -1226,10 +1222,6 @@ TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev 
 	CHECK(row->roomTiles == 16);
 	CHECK(row->pieceBase == 1002);  // base + mask: W 1003, E 1004, S 1006, N 1010 ... SEW+N 1017
 	CHECK(row->pieceBase + 15 == 1017);
-	CHECK(row->prevPiece[0] == 1018);
-	CHECK(row->prevPiece[1] == 1019);
-	CHECK(row->prevPiece[2] == 1020);
-	CHECK(row->prevPiece[3] == 1021);
 	CHECK(row->callsRingGrower);  // docs/reverse-engineering/cartographer/24-ice-caves-builder.md
 	CHECK(findMazeTilesetBySlot("mazeice") == row);
 	Tileset t;
@@ -1237,7 +1229,7 @@ TEST_CASE("the Ice row: 16-tile rooms, mask pieces from 1003, the one-exit Prev 
 	CHECK(t.walkFollowsRing);  // the walk 0x3e96d0 runs after the ring grower in the case, so the graph is built in the walk
 }
 
-TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece, Next and Down are suppressed, the ring grower is skipped")
+TEST_CASE("Ice plans: every shape and size builds, the entrance is an ordinary room, Next and Down are suppressed, the ring grower is skipped")
 {
 	Tileset ts;
 	REQUIRE(builtinTileset("Ice", ts));
@@ -1256,16 +1248,12 @@ TEST_CASE("Ice plans: every shape and size builds, the entrance is a Prev piece,
 				CHECK_FALSE(sp.plan.ring.graphInRing);
 				CHECK(sp.plan.lvlMaze.sizeX == 16);
 				CHECK(sp.plan.levelTilesX <= 360);
-				if (sp.plan.entrance.place) {
-					CHECK(sp.plan.entrance.toPiece >= 1018);
-					CHECK(sp.plan.entrance.toPiece <= 1021);
-					CHECK(steerSpecial(ts, sp.plan, sp.plan.entrance.toPiece).action == SpecialSteer::Action::Redirect);
-				}
+				CHECK_FALSE(sp.plan.entrance.place);
 			}
 	CHECK(steered > 200);
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
-	for (int to = 1022; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
+	for (int to = 1018; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
 	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
 	CHECK(maxCapacity(ts).across() >= 21);
 }
@@ -1587,4 +1575,28 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	CHECK(before[1] * 20 > total[1]);  // the problem is real: over a twentieth of ExtraLarge Lava layouts (all six shapes) were clipped
 	CHECK(after[0] == 0);
 	CHECK(after[1] == 0);
+}
+
+// Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021) each carry
+// the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/35-map-link-tiles.md), so no table row has a family and no plan places one.
+TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordinary room, and every Prev call is suppressed")
+{
+	const int prevGroups[3][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}};
+	for (size_t i = 0; i < MazeTilesetCount; ++i) {
+		const MazeTileset &row = MazeTilesets[i];
+		for (int piece : row.prevPiece) CHECK_MESSAGE(piece == 0, row.name << " has a Prev piece");
+		Tileset ts;
+		REQUIRE(builtinTileset(row.name, ts));
+		CHECK_FALSE(ts.prev.present);
+		for (uint64_t seed = 1; seed <= 20; ++seed) {
+			const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Medium), seed);
+			if (!sp.plan.steer) continue;
+			CHECK_FALSE(sp.plan.entrance.place);
+			for (const Room &room : sp.plan.rooms)
+				for (const auto &g : prevGroups)
+					for (int piece : g) CHECK(room.piece != piece);
+			for (const auto &g : prevGroups)
+				for (int piece : g) CHECK(steerSpecial(ts, sp.plan, piece).action == SpecialSteer::Action::Suppress);
+		}
+	}
 }

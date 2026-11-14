@@ -120,8 +120,21 @@ const char *roomName(layout::Role r)
 	}
 }
 
+} // namespace
+
+std::vector<int> Piece::usableDs1() const
+{
+	std::vector<int> out;
+	for (size_t i = 0; i < ds1.size(); ++i)
+		if (std::find(links.begin(), links.end(), ds1[i]) == links.end()) out.push_back(static_cast<int>(i));
+	return out;
+}
+
+namespace {
+
 bool pickable(const Piece &p, const std::string &tilesetLower)
 {
+	if (!p.ds1.empty() && p.usableDs1().empty()) return false; // every variant carries a waypoint or a level exit
 	const bool checked = p.check.empty() || p.check == "ok" || p.check == "n/a" || p.check == "variants";
 	return checked && p.w == 1 && p.h == 1 && p.weight > 0 && p.role != PieceRole::Border && p.role != PieceRole::Filler &&
 		lowerAscii(p.tileset) == tilesetLower;
@@ -176,11 +189,11 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		res.warnings.push_back(file + " line " + std::to_string(line) + ": " + msg);
 	};
 
-	enum { Tileset, Builder, LevelType, LvlPrest, Name, W, H, EdgeN, EdgeE, EdgeS, EdgeW, Role, Weight, Tags, Ds1, Check, kCols };
+	enum { Tileset, Builder, LevelType, LvlPrest, Name, W, H, EdgeN, EdgeE, EdgeS, EdgeW, Role, Weight, Tags, Ds1, Check, Links, kCols };
 	static const char *colNames[kCols] = {"tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgen", "edgee",
-		"edges", "edgew", "role", "weight", "tags", "ds1", "check"};
+		"edges", "edgew", "role", "weight", "tags", "ds1", "check", "links"};
 	static const char *colShown[kCols] = {"tileset", "builder", "leveltype", "lvlprest", "name", "w", "h", "edgeN", "edgeE",
-		"edgeS", "edgeW", "role", "weight", "tags", "ds1", "check"};
+		"edgeS", "edgeW", "role", "weight", "tags", "ds1", "check", "links"};
 	int col[kCols];
 	for (int &c : col) c = -1;
 
@@ -277,7 +290,14 @@ LoadResult parseCatalogue(std::string_view text, std::string_view fileName)
 		if (col[Ds1] >= 0)
 			for (const std::string &f : split(cellAt(row, col[Ds1]), ';'))
 				if (!trim(f).empty()) p.ds1.push_back(trim(f));
+		if (col[Links] >= 0)
+			for (const std::string &f : split(cellAt(row, col[Links]), ';'))
+				if (!trim(f).empty()) p.links.push_back(trim(f));
 		if (p.check == "variants") p.ds1.clear(); // the variants differ in shape: no DS1 variant is drawn for this piece
+		if (p.check == "variants" && !p.links.empty()) { // the engine would draw any of its files, one of them linked
+			warn(lineNo, who + " has linked DS1 files and variants of differing shape; the row is skipped");
+			continue;
+		}
 		res.catalogue.pieces.push_back(std::move(p));
 	}
 	if (!haveHeader) res.warnings.push_back(file + " is empty; it has no header row");
@@ -388,7 +408,9 @@ PickResult pickPieces(const layout::Layout &layout, const Catalogue &catalogue, 
 			const Piece &p = catalogue.pieces[static_cast<size_t>(chosen)];
 			out.piece = chosen;
 			out.lvlPrest = p.lvlPrest;
-			out.ds1Variant = p.ds1.empty() ? -1 : static_cast<int>(rng.below(static_cast<uint32_t>(p.ds1.size())));
+			const std::vector<int> usable = p.usableDs1();
+			out.linkSafe = usable.size() != p.ds1.size();
+			out.ds1Variant = usable.empty() ? -1 : usable[rng.below(static_cast<uint32_t>(usable.size()))];
 		}
 	return res;
 }
@@ -427,6 +449,8 @@ std::vector<std::string> checkPicks(const layout::Layout &layout, const Catalogu
 			if (p.openMask == 0) bad.push_back("mask 0 piece" + where);
 			if (c.ds1Variant < -1 || c.ds1Variant >= static_cast<int>(p.ds1.size()) || (c.ds1Variant < 0 && !p.ds1.empty()))
 				bad.push_back("ds1 variant out of range" + where);
+			else if (c.ds1Variant >= 0 && std::find(p.links.begin(), p.links.end(), p.ds1[static_cast<size_t>(c.ds1Variant)]) != p.links.end())
+				bad.push_back("ds1 variant carries a waypoint or a level exit" + where);
 			for (int d = 0; d < 4; ++d) {
 				const bool exit = (layout.at(x, y).mask & kEdgeBit[d]) != 0;
 				if (p.edge[d][0] != (exit ? 'p' : 'x')) bad.push_back(std::string("sockets differ from the facing bits on the ") + "NESW"[d] + " side" + where);

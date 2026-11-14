@@ -67,6 +67,19 @@ class Readers(unittest.TestCase):
         self.assertEqual(t[(0, 1, 0)], OPEN)
         self.assertEqual(t[(0, 2, 0)], BLOCKED)
 
+    def test_ds1_links_finds_the_exit_tile_and_the_waypoint_object(self):
+        w = h = 2
+        base = bytearray(ds1(w, h, {}))
+        o = rd.ds1_header(bytes(base))[5]
+        struct.pack_into("<I", base, o, 1 << 20 | 21 << 8)       # the wall layer: main 1, sub 21 at the first cell
+        struct.pack_into("<I", base, o + w * h * 4, 10)          # its orientation: special tile
+        tail = bytes(w * h * 4) + struct.pack("<i", 2) + struct.pack("<5i", 2, 119, 0, 0, 1) + struct.pack("<5i", 1, 5, 0, 0, 1)
+        data = bytes(base) + tail                                  # shadow layer, then two objects: a waypoint and a plain one
+        self.assertEqual(rd.ds1_links(data, {(4, 119)}), ["tile 10/1/21", "waypoint object 4/119"])
+        self.assertEqual(rd.ds1_links(data, {(3, 119)}), ["tile 10/1/21"])  # another act's waypoint id is no match
+        with self.assertRaises(ValueError):
+            rd.ds1_links(struct.pack("<3i", 3, 0, 0), set())
+
     def test_ds1_header_and_dt1_names(self):
         data = ds1(4, 3, {})
         v, w, h, act, _tag, _o, walls, floors = rd.ds1_header(data)
@@ -86,7 +99,10 @@ class BadInput(unittest.TestCase):
     def tmp(self) -> Path:
         d = tempfile.TemporaryDirectory()
         self.addCleanup(d.cleanup)
-        return Path(d.name)
+        root = Path(d.name)
+        (root / "global" / "excel").mkdir(parents=True)
+        (root / "global" / "excel" / "objpreset.txt").write_text("index\tact\tObjectClass\n119\t3\tWaypointAct3\n", "latin-1")
+        return root
 
     def test_a_corrupt_dt1_is_named(self):
         d = self.tmp()
@@ -126,6 +142,14 @@ class BadInput(unittest.TestCase):
         with contextlib.redirect_stderr(err):
             self.assertEqual(cat.main(["--check", "--data", str(d)]), 2)
         self.assertIn("nowhere", err.getvalue())
+
+    def test_the_waypoint_objects_come_from_objpreset(self):
+        root = self.tmp()
+        tiles = root / "global" / "tiles"
+        tiles.mkdir(parents=True)
+        r = cat.Reader(root)
+        self.assertEqual(r.waypoints, {(3, 119)})
+        self.assertEqual(r.links("missing.ds1"), [])
 
     def test_corrupt_ds1_names_the_file(self):
         root = self.tmp()
@@ -214,6 +238,8 @@ class Classifier(unittest.TestCase):
 
     def test_variants_survive_when_the_sockets_come_from_the_ds1(self):
         class Two:  # two DS1 files whose north side differs
+            def links(self, f):
+                return []
             def layout(self, f):
                 blocked = {(x, 0) for x in range(3, 6)} if f.endswith("b.ds1") else set()
                 floor = {(x, y): FLOOR_BLOCKED if (x, y) in blocked else FLOOR_OPEN
@@ -229,6 +255,8 @@ class Classifier(unittest.TestCase):
 
     def test_variants_win_over_ds1_in_a_named_piece(self):
         class Two:  # two DS1 files; the first has every side open, the second blocks the north side
+            def links(self, f):
+                return []
             def layout(self, f):
                 blocked = {(x, 0) for x in range(3)} if f.endswith("b.ds1") else set()
                 floor = {(x, y): FLOOR_BLOCKED if (x, y) in blocked else FLOOR_OPEN
@@ -254,6 +282,8 @@ class Classifier(unittest.TestCase):
 
     def test_transition_name_is_checked_against_the_ds1(self):
         class One:  # every side open
+            def links(self, f):
+                return []
             def layout(self, f):
                 return rd.layout(ds1(3, 3, {(x, y): FLOOR_OPEN for x in range(3) for y in range(3)}),
                                  {"x.dt1": {(0, 1, 0): OPEN}})

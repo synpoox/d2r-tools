@@ -38,3 +38,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [32. How D2R HD lights and colours a level (issue #380)](cartographer/32-level-lighting.md)
 - [33. One map from several tilesets woven together (issue #396)](cartographer/33-woven-tilesets.md)
 - [34. Guaranteeing the map Boss (issue #445)](cartographer/34-boss-guarantee.md)
+- [35. Pieces that carry a waypoint or an area link (issue #455)](cartographer/35-map-link-tiles.md)

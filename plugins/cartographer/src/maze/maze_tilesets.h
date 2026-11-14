@@ -21,7 +21,7 @@ struct MazeTileset {
 	const char *levelName;  // the levels.txt Name tools\install.ps1 gives that level
 	int roomTiles;          // LvlMaze SizeX = SizeY: a room is roomTiles x roomTiles tiles
 	int pieceBase;          // a room's piece is pieceBase + exit mask
-	int prevPiece[4];       // the entrance family ("Prev" group) by side W, E, S, N; all 0: no entrance family, the entrance is an ordinary room
+	int prevPiece[4];       // the entrance family ("Prev" group) by side W, E, S, N; all 0: no entrance family, the entrance is an ordinary room (every row, #455: a Prev piece holds a level exit tile)
 	bool callsRingGrower;   // the tileset's case in the maze builder 0x3e69e0 calls the ring grower 0x3e9820 first
 	int offsetX;            // the levels.txt OffsetX tools\install.ps1 gives the slot level (its -<Param>OffsetX default)
 	int offsetY;            // the levels.txt OffsetY (its -<Param>OffsetY default)
@@ -41,15 +41,17 @@ constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
 
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
 inline constexpr MazeTileset MazeTilesets[] = {
+	// No row has a Prev family: its entrance rooms (Cave 83-86, Crypt 139-142, Ice 1018-1021) carry the level's Up stairs, a level exit tile, and a
+	// map's only way in and out is its portal (docs/reverse-engineering/cartographer/35-map-link-tiles.md, issue #455). The entrance is an ordinary room.
 	// Offsets: y 0 and x 3500, 3000, 2500, 2000 (Cave, Crypt, Lava, Ice; 500 apart), so every level fits the automap range and sits above the first Act 5 level (y 1000).
-	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {83, 84, 85, 86}, false, 3500, 0, 0},
-	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {139, 140, 141, 142}, false, 3000, 0, 0},
+	{"Cave", 3, "Maze", "Cartographer Maze", 24, 52, {0, 0, 0, 0}, false, 3500, 0, 0},
+	{"Crypt", 4, "MazeCrypt", "Cartographer Crypt", 8, 108, {0, 0, 0, 0}, false, 3000, 0, 0},
 	// Lava (River of Flame, LevelType 28): 24-tile rooms, "Lava W" is Def 837 (base 836, 837..851). Its case in 0x3e69e0 neither calls the ring grower
 	// nor places an entrance or exit (no 0x3eb850 call), so there is no Prev family: the entrance is an ordinary room. The pieces close their own sides with a few tiles of lava and the engine
 	// draws nothing past the rooms, so one ring of filler rooms goes around the layout (ringCells, issue #372). docs/reverse-engineering/cartographer/23-maze-lava.md.
 	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0, 1},
 	// Ice: its case in the builder calls the ring grower first (docs/reverse-engineering/cartographer/24-ice-caves-builder.md).
-	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {1018, 1019, 1020, 1021}, true, 2000, 0, 0},
+	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {0, 0, 0, 0}, true, 2000, 0, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
