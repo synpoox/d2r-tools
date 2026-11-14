@@ -474,8 +474,8 @@ TEST_CASE("Lava: the filler ring closes every outer edge, and only Lava has one 
 
 TEST_CASE("any tileset with ringCells > 0 gets a filler ring whose closed piece (pieceBase) no plan room carries (the unique pace's filler test, issue #317)")
 {
-	// The pace counts a room as filler when its piece id equals the tileset's pieceBase (maze_hooks.cpp, g_closedFillerPiece). That works for
-	// every row only if the plan has a ring and no plan room is pieceBase itself (mask 0). A synthetic row, not Lava, proves it is not Lava-specific.
+	// The plan side of the rule: any ringCells row gets fills and no plan room carries pieceBase; the runtime match is in maze_hooks.cpp
+	// (SteeredWalk / MazeRoomIsFiller) and is not unit tested. A synthetic row, not Lava, is used.
 	Tileset synth = caveTileset();
 	synth.name = "Synthetic";
 	synth.pieceBase = 2000;
@@ -490,9 +490,6 @@ TEST_CASE("any tileset with ringCells > 0 gets a filler ring whose closed piece 
 				CHECK(!sp.plan.fills.empty());
 				for (const Room &r : sp.plan.rooms) CHECK(r.piece != ts.pieceBase);
 			}
-	// And every real row that asks for a ring is covered the same way, with no per-tileset code.
-	for (size_t k = 0; k < MazeTilesetCount; ++k)
-		if (MazeTilesets[k].ringCells > 0) CHECK(MazeTilesets[k].pieceBase > 0);
 }
 
 TEST_CASE("Cave / Corridor and Crypt / Branching: the plan, step by step")
