@@ -161,4 +161,9 @@ struct ArrivalMark {
 // entrance, a room lies outside the plan's level rectangle (the build is not the plan) or the entrance cell holds no room.
 ArrivalMark planArrival(const StampPlan &plan, const std::vector<BuiltRoom> &rooms);
 
+// The rooms to try as the level entry, best first, when a room has no spot the game can place a player on (issue #456): the rooms wholly inside
+// the entrance cell, then every other room, each group nearest the cell's centre first (then smaller y, then smaller x). Every room is listed
+// once; empty when the cell is not known. The first entry is chooseCellRoom's pick when the cell holds a room.
+std::vector<int> arrivalCandidates(const TileRect &cell, const std::vector<BuiltRoom> &rooms);
+
 } // namespace cartographer::outdoor

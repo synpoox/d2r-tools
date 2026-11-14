@@ -61,6 +61,14 @@ inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57
 inline constexpr const char* ArrivalFinder = "48 89 5C 24 08 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 83 EC 30 48 8B FA 41 8B F1 41 8B D0 41 8B D8 44 0F B6 E1 E8 ?? ?? ?? ?? 4C 8B AC 24 80 00 00 00 44 8B C3 4C 8B B4 24 88 00 00 00 48 8B D7 41 0F B6 CC 48 8B E8 41 C7 45 00 FF FF FF FF 41 C7 06 FF FF FF FF E8 ?? ?? ?? ?? 4C 8B F8 48 83 78 10 00 75 0C 48 8B D0 41 0F B6 CC E8 ?? ?? ?? ?? 83 BD 90 00 00 00 00 49 8B D7 41 0F B6 CC 74 ?? 83 FE 0D 75 0D 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ?? EB 10 4D 8B CD 4C 89 74 24 20 44 8B C6 E8 ?? ?? ?? ?? 48 8B D0 41 0F B6 CC 48 8B D8 E8 ?? ?? ?? ?? 48 8B 43 58 E9 ?? ?? ?? ?? 4D 8B CE 4D 8B C5 E8 ?? ?? ?? ??";
 inline constexpr const char* ArrivalRoomFinder = "48 89 6C 24 18 57 41 56 41 57 48 83 EC 20 48 8B 7A 10 4D 8B F1 4D 8B F8 0F B6 E9 48 85 FF 74 15 48 8B CF E8 ?? ?? ?? ?? 85 C0 75 1A 48 8B 7F 48";
 inline constexpr const char* ArrivalFlagTest = "8B 41 50 25 00 00 03 00 C3";
+// The arrival spot (RE note 08, Q6, "No free spot at the arrival"): 0x2ef8b0 puts a unit on a level after a portal. Hooked (15 bytes, whole
+// instructions) to move the level-entry mark to a room with a free spot before the game asserts "Unable to find spawn location for act start".
+// The other three are only called: the level lookup (cl, game, level id), the room-data loader (cl, drlg room) and the free-spot search
+// (room, xy, size, mask, 0).
+inline constexpr const char* ArrivalSpot = "40 53 48 83 EC 40 48 8B 52 70 48 8D 44 24 34 48 89 44 24 28 48 8D 44 24 30 48 89 44 24 20";
+inline constexpr const char* LevelLookup = "48 89 6C 24 10 48 89 74 24 18 57 48 81 EC 80 02 00 00 48 8B 82 68 08 00 00 41 8B F8 48 8B F2 0F B6 E9";
+inline constexpr const char* RoomDataLoad = "48 89 5C 24 08 57 48 83 EC 20 8B 42 50 48 8B DA 0F B6 F9 0F BA E0 18";
+inline constexpr const char* FreeSpotSearch = "48 83 EC 58 8B 84 24 80 00 00 00 C7 44 24 40 01 00 00 00 C7 44 24 38 32 00 00 00 89 44 24 30 44 89 4C 24 28 44 89 4C 24 20 45 8B C8 45 33 C0 E8 ?? ?? ?? ??";
 
 // The room tile loader (RE note 33, section 2): (dataFlag, room) appends the level type's DT1 names its mask selects to the room's tile list. Hooked
 // (15 bytes, whole instructions) only when WovenProbe is on, to log which files a room loads; never otherwise.
