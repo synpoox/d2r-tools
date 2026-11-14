@@ -102,4 +102,11 @@ auto MazeBossRoom() -> MazeEventRect;
 // sanity bound). Game thread.
 auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool;
 
+// The piece id of a DRLG room (room +0x40, piece +0), -1 when the room has no readable piece.
+auto MazeRoomPieceId(const void* drlgRoom) noexcept -> int;
+
+// True when `drlgRoom` carries the closed piece the slot build gave the filler ring (Lava). False for a plan room, for a room of a
+// level with no ring, and when the piece cannot be read. Game thread.
+auto MazeRoomIsFiller(const void* drlgRoom) noexcept -> bool;
+
 }  // namespace carto
