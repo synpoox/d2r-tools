@@ -52,6 +52,9 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0, 1},
 	// Ice: its case in the builder calls the ring grower first (docs/reverse-engineering/cartographer/24-ice-caves-builder.md).
 	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {0, 0, 0, 0}, true, 2000, 0, 0},
+	// Durance (Act 3 Mephisto 1 and 2, LevelType 22): 12-tile rooms, "Mephisto W" is Def 754 (base 753, 754..768). Offset x 1000, y 0: the next free
+	// slot in the band, 500 below Snow's x 1500. docs/cartographer/tilesets/a3-durance-of-hate.md.
+	{"Durance", 22, "MazeDurance", "Cartographer Durance", 12, 753, {0, 0, 0, 0}, true, 1000, 0, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
