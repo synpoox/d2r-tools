@@ -4,8 +4,8 @@
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice) and "Cartographer Durance" (Durance of Hate; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice) or 22 (Durance),
-                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), no warps; copied from a plain (non-quest) game maze level of that type,
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate) and "Cartographer Arcane Sanctuary" (Arcane Sanctuary; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance) or 19 (Arcane),
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
@@ -24,14 +24,15 @@
     levels.txt    a fifth new level (the fourth outdoor one), "Cartographer Mesa", for Mesa (Act 4 plains) maps: LevelType 27 (Act 4 - Mesa), SizeX 128 and SizeY 112 (14 x 12 fill cells of
                   8 tiles plus a one-cell frame), at OffsetX 6000, OffsetY 4200, copied from level 111 or the first plain Act 5 outdoor row, with the same Quest, LevelGroup, SubType, Vis
                   and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, Outdoor, OutdoorSnow, OutdoorSiege and OutdoorMesa rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, Outdoor, OutdoorSnow, OutdoorSiege and OutdoorMesa rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     The Ice level ("Cartographer Ice Caves", slot MazeIce) is a fourth maze level of the same kind with LevelType 33 (Act 5 ice caves), copied from a plain game ice cave level.
     The Durance level ("Cartographer Durance", slot MazeDurance) is a fifth maze level of the same kind with LevelType 22 (Act 3 Durance of Hate), copied from a plain game Durance level.
-    Cave, Crypt, Lava, Ice and Durance maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
+    The Arcane level ("Cartographer Arcane Sanctuary", slot MazeArcane) is a sixth maze level with LevelType 19 (Act 2 Arcane Sanctuary), offset 500, copied by id from the game's Arcane Sanctuary (level 74, a quest level whose quest fields are cleared).
+    Cave, Crypt, Lava, Ice, Durance and Arcane maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
@@ -431,7 +432,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
     $mazeId
 }
 
-# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance) -------------------------------------------------------------
+# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance, Arcane) -------------------------------------------------------------
 $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
