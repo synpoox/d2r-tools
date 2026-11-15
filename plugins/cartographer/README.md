@@ -260,10 +260,10 @@ A part found this way is checked before it is used; if the check fails the part 
 
 Every map is a generated maze, built on a maze level that `tools\install.ps1` adds. A level has one `LevelType`, which fixes
 its tileset, so each maze tileset has a level of its own: `Cartographer Maze` (Cave, slot `Maze`), `Cartographer Crypt`
-(Crypt, slot `MazeCrypt`), `Cartographer Lava` (Lava, slot `MazeLava`) and `Cartographer Ice Caves` (Ice caves, slot `MazeIce`) and `Cartographer Durance` (Durance of Hate, slot `MazeDurance`). One install serves all, but the maze is built once per game, so a second map in the
+(Crypt, slot `MazeCrypt`), `Cartographer Lava` (Lava, slot `MazeLava`), `Cartographer Ice Caves` (Ice caves, slot `MazeIce`) and `Cartographer Durance` (Durance of Hate, slot `MazeDurance`). One install serves all, but the maze is built once per game, so a second map in the
 same game is refused. Without the tileset's level, its maps do not open.
 
-The installer adds, to the mod's tables, those levels copied from a plain game Cave level, a Crypt level, River of Flame and a game Ice caves level, and
+The installer adds, to the mod's tables, those levels copied from a plain game Cave level, a Crypt level, River of Flame, a game Ice caves level and a game Mephisto level (Durance of Hate), and
 set apart from the game's levels (no quest, no level group, `Vis0`..`Vis7` set to 0), with their `lvlmaze.txt` rows and the `Maze`,
 `MazeCrypt`, `MazeLava`, `MazeIce` and `MazeDurance` rows of `slots.txt`. `-Tileset` is no longer needed. A Maze level made by an older install with `-Tileset Crypt` is set back to LevelType 3 when you rerun the installer (Crypt maps use the new level).
 Restart the game afterwards. If the plan cannot be built, the game builds its own maze and the log says why.

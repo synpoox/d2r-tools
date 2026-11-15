@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame) and "Cartographer Ice Caves" (Ice) and "Cartographer Durance" (Durance of Hate; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice) or 22 (Durance),
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice) and "Cartographer Durance" (Durance of Hate; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice) or 22 (Durance),
                     360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), no warps; copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
@@ -98,7 +98,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava and Ice are all added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice and Durance are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -331,6 +331,8 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
             Write-Host "levels.txt: level $mazeId had LevelType $haveType, not $type ($tilesetName): set it back to $type."
         }
         Set-CellIf $levels $cells 'Quest' '0'
+        Set-CellIf $levels $cells 'QuestFlag' '0'  # the Durance template (level 100) carries flag 18
+        Set-CellIf $levels $cells 'QuestFlagEx' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
         Set-CellIf $levels $cells 'LevelEntry' ''
         Set-CellIf $levels $cells 'LevelWarp' ''
@@ -404,6 +406,8 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
             Set-Cell $levels $cells 'Waypoint' '255'
             # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
             Set-CellIf $levels $cells 'Quest' '0'
+            Set-CellIf $levels $cells 'QuestFlag' '0'  # the Durance template (level 100) carries flag 18
+            Set-CellIf $levels $cells 'QuestFlagEx' '0'
             Set-CellIf $levels $cells 'LevelGroup' $NoGroup
             Set-CellIf $levels $cells 'LevelEntry' ''
             Set-CellIf $levels $cells 'LevelWarp' ''
