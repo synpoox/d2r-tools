@@ -1671,3 +1671,24 @@ TEST_CASE("after a refused steered step Arcane's grower never runs on a partial 
 	CHECK(mayRunOriginalStep(false, 0));
 	CHECK(mayRunOriginalStep(false, 20));  // the random walk grows from the rooms that exist
 }
+
+TEST_CASE("Arcane file variants: (index / 15 + rot) & 3, and the start rotation is the game's seed draw")
+{
+	CHECK(arcaneFileVariant(0, 0) == 0);
+	CHECK(arcaneFileVariant(14, 0) == 0);
+	CHECK(arcaneFileVariant(15, 0) == 1);
+	CHECK(arcaneFileVariant(45, 0) == 3);
+	CHECK(arcaneFileVariant(60, 0) == 0);  // wraps at 4 groups
+	CHECK(arcaneFileVariant(15, 3) == 0);
+	CHECK(arcaneFileVariant(0, 2) == 2);
+	uint32_t lo = 1, hi = 0;
+	CHECK(arcaneDrawRotation(&lo, &hi) == (0x6ac690c5u & 3));
+	CHECK(lo == 0x6ac690c5u);
+	CHECK(hi == 0);
+	lo = 0xffffffffu;
+	hi = 7;
+	const uint64_t want = 0xffffffffull * 0x6ac690c5ull + 7;
+	CHECK(arcaneDrawRotation(&lo, &hi) == (static_cast<uint32_t>(want) & 3));
+	CHECK(lo == static_cast<uint32_t>(want));
+	CHECK(hi == static_cast<uint32_t>(want >> 32));
+}

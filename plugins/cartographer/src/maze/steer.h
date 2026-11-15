@@ -145,6 +145,12 @@ int pieceAfterWalk(const Plan &plan, int roomIndex);
 // added (roomsMade counts the rooms beyond the first).
 bool mayRunOriginalStep(bool ownGrower, size_t roomsMade);
 
+// Arcane's grower (0x3e7a80) draws its start rotation from the level seed {lo, hi} (state = lo * 0x6ac690c5 + hi, as 64 bits; the new
+// lo is the low half and the new hi the high half; rot = new lo & 3) and then gives room `index` of its spiral the file variant
+// (index / 15 + rot) & 3 (piece + 4). Both are the game's own arithmetic; `*lo` and `*hi` are advanced.
+uint32_t arcaneDrawRotation(uint32_t *lo, uint32_t *hi);
+int32_t arcaneFileVariant(int index, uint32_t rot);
+
 // A reserved room is fixed after the walk (Room::Fix::AfterWalk); the placed entrance is not (ByPlacer).
 bool fixAfterWalk(const Plan &plan, int roomIndex);
 
