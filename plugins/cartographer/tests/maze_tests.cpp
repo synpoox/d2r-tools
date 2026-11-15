@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava or Ice");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice or Arcane");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava or Ice.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice or Arcane.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1277,6 +1277,47 @@ TEST_CASE("Ice plans: every shape and size builds, the entrance is an ordinary r
 	for (int to = 1018; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
 	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
 	CHECK(maxCapacity(ts).across() >= 21);
+}
+
+TEST_CASE("the Arcane row: 12-tile rooms, mask pieces from 510, no closed piece and no ring, its own grower")
+{
+	const MazeTileset *row = findMazeTileset("arcane");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 19);
+	CHECK(std::string(row->slot) == "MazeArcane");
+	CHECK(std::string(row->levelName) == "Cartographer Arcane Sanctuary");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase == 509);  // 510..524; the Summoner pieces 525..528 are never placed
+	CHECK(row->ringCells == 0);
+	CHECK(row->ownGrower);
+	CHECK_FALSE(row->callsRingGrower);
+	CHECK(findMazeTilesetBySlot("mazearcane") == row);
+	for (size_t i = 0; i < MazeTilesetCount; ++i) CHECK((MazeTilesets[i].ownGrower == (&MazeTilesets[i] == row)));
+}
+
+TEST_CASE("Arcane plans: every shape and size builds, the Summoner rooms are suppressed")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Arcane", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 10; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+			}
+	CHECK(steered > 80);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 525; to <= 528; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")

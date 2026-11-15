@@ -69,6 +69,8 @@ enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAd
                   // Only checked, never called or hooked: the level-entry finder, its first-room-with-flags helper and the flag test. They gate
                   // MarkArrival alone; a missing one leaves the arrival to the game and does not turn the steering off.
                   ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest,
+                  // Arcane Sanctuary's own room grower (RE note 37): hooked only when found; a missing one refuses Arcane maps and leaves the other maze tilesets on.
+                  ArcaneGrower,
                   // Hooked only with WovenProbe on (issue #415): the room tile loader, to log which DT1 files a room loads. Never needed for steering.
                   RoomTileLoader, MazePartCount };
 constexpr int MazeSteerParts = ArrivalFinder;  // the parts the steering needs
@@ -84,12 +86,15 @@ Part g_parts[MazePartCount] = {
 	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
+	{"ArcaneGrower", sig::MazeArcaneGrower, 15, false, nullptr, {}, {}},
 	{"RoomTileLoader", sig::RoomTileLoader, 15, false, nullptr, {}, {}},
 };
 
 LevelBuildFn g_levelOriginal = nullptr;
 std::atomic<bool> g_levelBuildTried{false};  // InstallMazeHooks reached the level build hook (it may still have been refused)
 WalkFn g_walkOriginal = nullptr;
+WalkFn g_growerOriginal = nullptr;  // Arcane's grower 0x3e7a80, same shape as the walk: (level)
+std::atomic<bool> g_growerHooked{false};
 SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
 
@@ -648,13 +653,12 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	return true;
 }
 
-void WalkHook(void* level) noexcept {
-	if (g_walkOriginal == nullptr) {
-		return;  // unreachable unless the loader gave no way back; there is nothing to call
-	}
+// The steered walk in place of a build step that has the walk's shape (level): the game's walk 0x3e96d0, or Arcane's own grower 0x3e7a80. `original` is that
+// step's own function, run when the build is not steered or the engine refused a step.
+void SteeredStep(void* level, WalkFn original) noexcept {
 	BuildCtx* ctx = t_ctx;
 	if (ctx == nullptr || !ctx->steer || ctx->fellBack || ctx->level != level) {
-		g_walkOriginal(level);
+		original(level);
 		return;
 	}
 	std::string why;
@@ -669,7 +673,19 @@ void WalkHook(void* level) noexcept {
 	}
 	if (!done) {
 		Fallback(*ctx, why);
-		g_walkOriginal(level);  // the game grows the rest of the maze from the rooms that exist
+		original(level);  // the game grows the rest of the maze from the rooms that exist
+	}
+}
+
+void WalkHook(void* level) noexcept {
+	if (g_walkOriginal != nullptr) {  // else unreachable unless the loader gave no way back; there is nothing to call
+		SteeredStep(level, g_walkOriginal);
+	}
+}
+
+void ArcaneGrowerHook(void* level) noexcept {
+	if (g_growerOriginal != nullptr) {
+		SteeredStep(level, g_growerOriginal);
 	}
 }
 
@@ -853,6 +869,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else if (Read<int32_t>(level, LvlTileType) != prep->plan->tileset.levelType) {
 				why = std::string("the ") + cm::MazeTilesets[slotIndex].slot + " slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
 				      std::to_string(prep->plan->tileset.levelType) + " (levels.txt LevelType)";
+			} else if (cm::MazeTilesets[slotIndex].ownGrower && !g_growerHooked.load()) {
+				why = std::string("the ") + prep->plan->tileset.name + " room grower was not found or not hooked (see 'cartographer check')";
 			} else {
 				ctx.steer = true;
 			}
@@ -1109,6 +1127,10 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string 
 	if (!cm::builtinTileset(map.tileset, ts)) {
 		return {};
 	}
+	const cm::MazeTileset* row = cm::findMazeTileset(map.tileset);
+	if (row != nullptr && row->ownGrower && g_live.load() && !g_growerHooked.load()) {
+		return "Cartographer: the " + ts.name + " room grower was not found in this game build or its hook was refused, so " + ts.name + " map '" + map.name + "' is not opened (see 'cartographer check').";
+	}
 	for (const Slot& slot : tables.slots) {
 		if (EqualsNoCase(slot.name, MapSlotName(map))) {
 			return cm::slotTypeProblem(ts, slot.levelType, map.name);
@@ -1184,6 +1206,10 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	bool ok = install(MazeRingGrower, reinterpret_cast<void*>(&RingHook), reinterpret_cast<void**>(&g_ringOriginal));
 	ok = ok && install(MazeEntranceExit, reinterpret_cast<void*>(&SpecialHook), reinterpret_cast<void**>(&g_specialOriginal));
 	ok = ok && install(MazeWalk, reinterpret_cast<void*>(&WalkHook), reinterpret_cast<void**>(&g_walkOriginal));
+	if (ok && g_parts[ArcaneGrower].status.on) {
+		// Optional: only Arcane maps need it. A refusal leaves the part off, and Arcane maps are refused (MazeTilesetProblem, LevelBuildHook).
+		g_growerHooked = install(ArcaneGrower, reinterpret_cast<void*>(&ArcaneGrowerHook), reinterpret_cast<void**>(&g_growerOriginal));
+	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {
 		plog::Warn("maze steering is off: a hook was refused (see 'cartographer check'); the hooks that went in pass straight through");

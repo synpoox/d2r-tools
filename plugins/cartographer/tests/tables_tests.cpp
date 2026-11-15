@@ -1382,13 +1382,13 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 17);
-	CHECK(all[13] == "Temple");
-	CHECK(all[14] == "Jungle");  // the outdoor rows come last, in table order
-	CHECK(all[15] == "Snow");
-	CHECK(all[16] == "Siege");
+	REQUIRE(all.size() == 18);
+	CHECK(all[14] == "Temple");
+	CHECK(all[15] == "Jungle");  // the outdoor rows come last, in table order
+	CHECK(all[16] == "Snow");
+	CHECK(all[17] == "Siege");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Jungle", "Snow", "Siege"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Arcane", "Jungle", "Snow", "Siege"};
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
@@ -1470,6 +1470,8 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(MazeSlotLevelName("MazeCrypt") == "Cartographer Crypt");
 	CHECK(IsMazeSlotName("MazeIce"));
 	CHECK(MazeSlotLevelName("MazeIce") == "Cartographer Ice Caves");
+	CHECK(IsMazeSlotName("MazeArcane"));
+	CHECK(MazeSlotLevelName("MazeArcane") == "Cartographer Arcane Sanctuary");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
 

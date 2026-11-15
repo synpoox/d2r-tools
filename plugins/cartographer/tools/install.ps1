@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice) and Outdoor levels (Jungle, Snow, Siege) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Arcane) and Outdoor levels (Jungle, Snow, Siege) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -58,7 +58,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -ArcaneOffsetX and -ArcaneOffsetY (1000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -90,12 +90,14 @@ param(
     [int]$LavaOffsetY = 0,
     [int]$IceOffsetX = 2000,
     [int]$IceOffsetY = 0,
+    [int]$ArcaneOffsetX = 1000,
+    [int]$ArcaneOffsetY = 0,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava and Ice are all added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice and Arcane are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -113,7 +115,9 @@ $MazeTilesets = @(
     # Lava (River of Flame): x 2500..2860, y 0..360. Copied from level 107 (DrlgType 1, LevelType 28).
     @{ Tileset = 'Lava'; Slot = 'MazeLava'; LevelName = 'Cartographer Lava'; LevelType = '28'; Size = '360'; Param = 'Lava' },
     # Ice: x 2000..2360, y 0..360 (the spot reserved for it above).
-    @{ Tileset = 'Ice';   Slot = 'MazeIce';   LevelName = 'Cartographer Ice Caves'; LevelType = '33'; Size = '360'; Param = 'Ice' }
+    @{ Tileset = 'Ice';   Slot = 'MazeIce';   LevelName = 'Cartographer Ice Caves'; LevelType = '33'; Size = '360'; Param = 'Ice' },
+    # Arcane Sanctuary: x 1000..1360, y 0..360, clear of Snow (x 1500..1692). Level 74 is the only level of LevelType 19 and a quest level, so it is copied by id (Template; its quest fields are cleared like any copy's); its rooms are 12 tiles (RoomTiles, the lvlmaze.txt SizeX and SizeY).
+    @{ Tileset = 'Arcane'; Slot = 'MazeArcane'; LevelName = 'Cartographer Arcane Sanctuary'; LevelType = '19'; Size = '360'; Param = 'Arcane'; Template = 74; RoomTiles = '12' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
@@ -308,7 +312,7 @@ $levels = Read-Table (Join-Path $ExcelDir 'levels.txt')
 $idCol = Column $levels 'Id'
 $typeCol = Column $levels 'LevelType'
 # One new maze level (Act 5, DrlgType 1) copied from a plain game maze level of the tileset's LevelType; an existing row of that name is only repaired. Returns the level id.
-function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [string]$tilesetName, [string]$param) {
+function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [string]$tilesetName, [string]$param, [int]$wantTemplate = 0) {
     $existing = Find-Row $levels 'Name' $name
     if ($existing -ge 0) {
         $mazeId = [int](($levels.Lines[$existing] -split "`t")[$idCol])
@@ -326,6 +330,8 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
             Write-Host "levels.txt: level $mazeId had LevelType $haveType, not $type ($tilesetName): set it back to $type."
         }
         Set-CellIf $levels $cells 'Quest' '0'
+        Set-CellIf $levels $cells 'QuestFlag' '0'
+        Set-CellIf $levels $cells 'QuestFlagEx' '0'
         Set-CellIf $levels $cells 'LevelGroup' $NoGroup
         Set-CellIf $levels $cells 'LevelEntry' ''
         Set-CellIf $levels $cells 'LevelWarp' ''
@@ -361,8 +367,8 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
             $cells = $levels.Lines[$i] -split "`t"
             $parsed = 0
             if ($cells.Count -gt $widest -and $cells[$drlgCol] -eq '1' -and $cells[$typeCol] -eq $type -and
-                ($questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
-                [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137) { $templateRow = $i; break }
+                ($wantTemplate -gt 0 -or $questCol -lt 0 -or $cells[$questCol] -in '', '0') -and
+                [int]::TryParse($cells[$idCol], [ref]$parsed) -and $parsed -le 137 -and ($wantTemplate -le 0 -or $parsed -eq $wantTemplate)) { $templateRow = $i; break }
         }
         if ($templateRow -lt 0) { throw "levels.txt has no maze level with DrlgType 1 and LevelType $type ($tilesetName) to copy." }
         $mazeId = $null
@@ -399,6 +405,8 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
             Set-Cell $levels $cells 'Waypoint' '255'
             # Not a quest level, in no vanilla level group (level 0's group), and no entry or warp text of the copied level.
             Set-CellIf $levels $cells 'Quest' '0'
+            Set-CellIf $levels $cells 'QuestFlag' '0'
+            Set-CellIf $levels $cells 'QuestFlagEx' '0'
             Set-CellIf $levels $cells 'LevelGroup' $NoGroup
             Set-CellIf $levels $cells 'LevelEntry' ''
             Set-CellIf $levels $cells 'LevelWarp' ''
@@ -416,7 +424,7 @@ $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
     $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
-    $mazeIds[$t.Slot] = Ensure-MazeLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Tileset $t.Param
+    $mazeIds[$t.Slot] = Ensure-MazeLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Tileset $t.Param ([int]$t.Template)
 }
 if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
     Write-Host "levels.txt: note: an older install's '$OldLevelName' level is still there. Nothing uses it now; it and its lvlprest.txt row can be deleted."
@@ -746,7 +754,7 @@ foreach ($t in $MazeTilesets) {
         Set-Cell $mazes $cells 'Level' "$mazeId"
         foreach ($h in $mazes.Header) {
             if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
-            elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h '24' }
+            elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h $(if ($t.RoomTiles) { $t.RoomTiles } else { '24' }) }
             elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
         }
         $mazes.Lines.Add($cells -join "`t")

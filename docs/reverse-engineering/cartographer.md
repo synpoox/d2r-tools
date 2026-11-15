@@ -40,3 +40,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [34. Guaranteeing the map Boss (issue #445)](cartographer/34-boss-guarantee.md)
 - [35. Pieces that carry a waypoint or an area link (issue #455)](cartographer/35-map-link-tiles.md)
 - [36. Blending two woven tilesets at their seam (issue #458)](cartographer/36-woven-seam-blending.md)
+- [37. The Arcane Sanctuary room grower (issue #280)](cartographer/37-arcane-grower.md)
