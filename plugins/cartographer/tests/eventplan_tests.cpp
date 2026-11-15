@@ -977,3 +977,29 @@ TEST_CASE("no room left: the Boss is not placed by the ladder, and the picker sa
 	CHECK_FALSE(run.picker.pending());
 	CHECK_FALSE(run.picker.done());  // the tick's try (finish() on success) is still to come
 }
+
+TEST_CASE("strandedFlags: the player's floor first without the collision skip, then with it") {
+	const std::vector<uint16_t> f = strandedFlags();
+	REQUIRE(f.size() == 2);
+	CHECK(f[0] == 0);
+	CHECK(f[1] == kSpawnFlagNoCollision);
+}
+
+TEST_CASE("StrandedRetry: tries at once, on a room change, and every interval; never gives up") {
+	StrandedRetry r;
+	const Rect a{10, 10, 8, 8}, b{18, 10, 8, 8};
+	CHECK(r.due(a));  // the first tick
+	for (int i = 1; i < kStrandedRetryTicks; ++i) {
+		CHECK_FALSE(r.due(a));
+	}
+	CHECK(r.due(a));  // the interval elapsed in the same room
+	CHECK_FALSE(r.due(a));
+	CHECK(r.due(b));  // the player moved to another room
+	CHECK(r.tries() == 3);
+	for (int n = 0; n < 5; ++n) {  // it keeps coming due for as long as it is asked
+		for (int i = 1; i < kStrandedRetryTicks; ++i) {
+			CHECK_FALSE(r.due(b));
+		}
+		CHECK(r.due(b));
+	}
+}

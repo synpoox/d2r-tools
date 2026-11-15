@@ -378,6 +378,21 @@ BossCall bossCall(bool unique, bool forced) {
 	return {unique, forced ? kSpawnFlagNoCollision : static_cast<uint16_t>(0)};
 }
 
+std::vector<uint16_t> strandedFlags() {
+	return {0, kSpawnFlagNoCollision};
+}
+
+bool StrandedRetry::due(const Rect &room) {
+	const bool changed = !last_ || last_->x != room.x || last_->y != room.y || last_->w != room.w || last_->h != room.h;
+	if (!changed && ++sinceTry_ < kStrandedRetryTicks) {
+		return false;
+	}
+	last_ = room;
+	sinceTry_ = 0;
+	++tries_;
+	return true;
+}
+
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
 	if (event.kind == events::Kind::Shrine) {

@@ -174,7 +174,7 @@ rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row.
 keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row
 (the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. Otherwise
 every map gets its real boss, with its name, mods, minions and drops, in the last resort too: when no room takes it,
-it is placed in your own room with the collision test skipped.
+it is placed where you stand.
 
 Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
 

@@ -276,6 +276,24 @@ struct BossCall {
 };
 BossCall bossCall(bool unique, bool forced);
 
+// The Boss's tries from the player tick once the ladder has no room left to populate. Pure: the engine does the spawning.
+// A try runs at the player's own spot (floor), first without the collision skip and then with it (`strandedFlags`); a try that fails is repeated
+// when the player's room changes, or every `kStrandedRetryTicks` player ticks, until the Boss is placed or the map closes.
+constexpr int kStrandedRetryTicks = 100;
+std::vector<uint16_t> strandedFlags();
+class StrandedRetry {
+public:
+	// Once per player tick while stranded: true when a try should run now (the first tick, a different room than the last try, or the tick interval elapsed).
+	bool due(const Rect &room);
+	// Tries started so far, for the log.
+	int tries() const { return tries_; }
+
+private:
+	std::optional<Rect> last_;
+	int sinceTry_ = 0;
+	int tries_ = 0;
+};
+
 // --- What is spawned -----------------------------------------------------------------------------------------------
 
 struct Spawn {

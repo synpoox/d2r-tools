@@ -165,7 +165,7 @@ The bosses a map's `Boss` can name. A boss is always an entry of its own here, n
 - `Base` must be a monstats `Id` whose `boss` column is not 1 (a vanilla boss such as `andariel` is refused); `Mods` has up to 3 ids that exist in `monumod.txt`; `Minions` is 0 to 10. At most 16 entries are used; the rest are reported and skipped.
 - `tools\install.ps1` runs the same checks, writes only the entries that pass, and rebuilds its `cartoboss:` rows each run (a renamed or removed entry loses its old row).
 - A `Boss` in `maps.txt` that names a vanilla boss or monster, a `cartoboss:` key, or is not an entry here, is an error in the report; the map still loads and opens without a Boss.
-- If the game has no `superuniques.txt` row for the entry (the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. A boss with a row is always spawned as that superunique, in every room it falls back to and, if no room is left, in the player's own room.
+- If the game has no `superuniques.txt` row for the entry (the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. A boss with a row is always spawned as that superunique, in every room it falls back to and, if no room is left, at the player's own spot.
 
 ## mapevents.txt (optional)
 
