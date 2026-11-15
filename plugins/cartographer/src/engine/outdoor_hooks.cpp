@@ -348,10 +348,11 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 		*why = "the " + std::string(SlotNameOf(job->tileset)) + " slot level's LevelType is " + std::to_string(have) + " but a " + job->tileset + " map needs " + std::to_string(want) + " (levels.txt LevelType)";
 		return nullptr;
 	}
-	return PlanForJob(*job, geometry, level, why);
+	std::shared_ptr<const co::MapPlan> plan = PlanForJob(*job, geometry, level, why);
+	return plan;
 }
 
-// The plan for `job` on the slot geometry (cached by request). Null, with a reason, when the plan failed. `level` is only for the log line. May throw.
+// The plan for `job` on the slot geometry (cached by request), or its default map when the request failed. Null, with a reason, when both failed. `level` is only for the log line. May throw.
 auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	const Job* job = &jobRef;
 	co::MapRequest request;
@@ -365,10 +366,16 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 	request.options.maxTilesX = geometry.sizeX;
 	request.options.maxTilesY = geometry.sizeY;
 	bool built = false;
-	std::shared_ptr<const co::MapPlan> plan = g_cache.get(request, co::builtinJungleCatalogue(), &built);
+	bool usedDefault = false;
+	// A failed request plans the tileset's default map (Winding, Large, built-in shapes) on the same seed instead, so the slot level is still built by this plugin: the
+	// game's own build of it draws Act 5 pieces and its exits are not ours to place (issue #471). The portal check uses the same call, so it opens that map too.
+	std::shared_ptr<const co::MapPlan> plan = co::planOrDefault(g_cache, request, co::builtinJungleCatalogue(), &usedDefault, &built);
 	if (!plan->ok) {
 		*why = plan->reason;
 		return nullptr;
+	}
+	if (usedDefault) {
+		plog::Warn("outdoor slot level %d: the plan for '%s' failed; building the default %s map instead", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(), job->name.c_str(), job->tileset.c_str());
 	}
 	if (built) {
 		plog::Info("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(),
@@ -698,6 +705,26 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 	}
 	g_slotState.begin();
 	const bool ours = BuildSlotLevel(dataFlag, level, original, result);
+	if (!ours && t_ctx == nullptr && Read<int32_t>(level, LvlType) == OutdoorType && Read<void*>(level, LvlFirstRoom) == nullptr) {
+		// The game builds the level itself. Its rectangle is 0 now and must hold the map border, or the game exits (issue #471): give it the slot row's.
+		SlotGeometry geometry;
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			for (int i = 0; i < SlotCount; ++i) {
+				if (g_slotLevels[i].load() == Read<int32_t>(level, LvlId)) {
+					geometry = g_geometry[i];
+				}
+			}
+		}
+		if (geometry.known) {
+			const co::LevelRect rect = co::fallbackRectOf(geometry.offsetX, geometry.offsetY, geometry.sizeX, geometry.sizeY);
+			Write<int32_t>(level, LvlOriginX, rect.x);
+			Write<int32_t>(level, LvlOriginY, rect.y);
+			Write<int32_t>(level, LvlSizeX, rect.w);
+			Write<int32_t>(level, LvlSizeY, rect.h);
+			plog::Warn("outdoor slot level %d: the game builds its own level in %d x %d tiles at (%d,%d); it has no entry marked, so the portal may not take the player in (issue #471)", Read<int32_t>(level, LvlId), rect.w, rect.h, rect.x, rect.y);
+		}
+	}
 	g_slotState.end(hadJob);
 	return ours;
 }

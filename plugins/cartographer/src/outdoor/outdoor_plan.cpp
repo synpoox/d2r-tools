@@ -367,4 +367,23 @@ std::vector<int> arrivalCandidates(const TileRect &cell, const std::vector<Built
 	return out;
 }
 
+std::shared_ptr<const MapPlan> planOrDefault(PlanCache &cache, const MapRequest &request, const Catalogue &catalogue, bool *usedDefault, bool *built) {
+	if (usedDefault != nullptr) *usedDefault = false;
+	bool b = false;
+	std::shared_ptr<const MapPlan> plan = cache.get(request, catalogue, &b);
+	if (built != nullptr) *built = b;
+	if (plan->ok) return plan;
+	MapRequest def = request;
+	def.shape.clear();
+	def.size.clear();
+	const layout::ShapeTable none;
+	def.shapes = &none;
+	bool b2 = false;
+	std::shared_ptr<const MapPlan> fallback = cache.get(def, catalogue, &b2);
+	if (!fallback->ok) return plan;
+	if (usedDefault != nullptr) *usedDefault = true;
+	if (built != nullptr) *built = b2;
+	return fallback;
+}
+
 } // namespace cartographer::outdoor
