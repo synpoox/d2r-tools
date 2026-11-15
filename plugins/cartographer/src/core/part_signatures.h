@@ -172,4 +172,12 @@ inline constexpr const char* WidgetMove = "48 89 5C 24 10 57 48 83 EC 20 80 79 5
 // an open panel shifts (1 right, 2 left, 3 both). Only read.
 inline constexpr const char* ScreenShiftSetter = "48 83 EC 38 44 8B 0D ?? ?? ?? ?? 41 8B C1 99 89 0D ?? ?? ?? ?? 83 E2 03 44 8D 14 02 41 C1 FA 02";
 
+// Call sites whose return address tells two callers of one hooked function apart (issue #473). Each starts at the `E8 rel32` of the call and
+// the return address is the match + 5. The call target is masked (a call's offset moves with the build); the bytes after the call keep it unique,
+// and the other callers of the same function do not match (RE notes 32 and 26). Must match exactly once, else the part that needs it stays off.
+// InstanceCall: VisualDataSystem::Update's call of VisualApply with the current instance's component (0xf5d837, returns 0xf5d83c); the call at 0xf5d9b2 has other bytes after it.
+inline constexpr const char* InstanceCall = "E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 0F 28 05 ?? ?? ?? ?? 48 8D 85 28 02 00 00";
+// MainRollCall: the item maker's own call of the item quality roll (0x442e7b, returns 0x442e80); the affix fallbacks' calls are followed by other code.
+inline constexpr const char* MainRollCall = "E8 ?? ?? ?? ?? 8B D0 BF 02 00 00 00 8B 45 40 85 C0 0F 45 D0";
+
 }  // namespace carto::sig

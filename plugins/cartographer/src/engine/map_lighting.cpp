@@ -21,15 +21,16 @@ namespace {
 namespace ml = cartographer::maplight;
 
 constexpr size_t ComponentSize = 0x1e8;  // VisualDataComponent, the pool stride of get<VisualDataComponent> (0xf56690)
-// Return address of the call in VisualDataSystem::Update that passes the current instance's component (call at 0xf5d837). The other
-// call (0xf5d9b2, no instance: a component built on the stack) is not a level's look and is left alone.
-constexpr uint64_t InstanceReturnRva = 0xf5d83c;
+// The call in VisualDataSystem::Update that passes the current instance's component (call at 0xf5d837, returns 0xf5d83c) is found by the
+// InstanceCall signature; the other call (0xf5d9b2, no instance: a component built on the stack) is not a level's look and is left alone.
 constexpr size_t ExposureOffset = 0x00;     // component float: the exposure value (a higher value is a darker picture)
 constexpr size_t TemperatureOffset = 0x40;  // component float: the colour temperature (the apply function copies it to a global)
 
 using ApplyFn = uint64_t (*)(void* system, void* registry, uint8_t* component, uint8_t* frame) noexcept;
 
 Part g_part = {"VisualApply", sig::VisualApply, 19, false, nullptr, {}, {}};
+Part g_callPart = {"InstanceCall", sig::InstanceCall, 0, false, nullptr, {}, {}};
+uint64_t g_instanceReturnRva = 0;
 ApplyFn g_original = nullptr;
 uint64_t g_base = 0;
 std::atomic<bool> g_live{false};
@@ -44,7 +45,7 @@ std::atomic<bool> g_active{false};  // the local player stands in the map's slot
 std::atomic<uint32_t> g_instanceCalls{0}, g_changed{0};
 
 auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame) noexcept -> uint64_t {
-	const bool instance = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_base == InstanceReturnRva;
+	const bool instance = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_base == g_instanceReturnRva;
 	try {
 		if (instance && component != nullptr && frame != nullptr) {
 			g_instanceCalls.fetch_add(1, std::memory_order_relaxed);
@@ -85,23 +86,31 @@ auto InstallMapLighting(const D2RL::PluginContext* context, const std::vector<Si
 	const int count = CodeRanges(context->exeBase, ranges, 8);
 	g_base = context->exeBase;
 	ResolvePart(context, overrides, ranges, count, g_part);
+	ResolveCallSite(context, overrides, ranges, count, g_callPart, &g_instanceReturnRva);
+	if (g_part.status.on && g_instanceReturnRva == 0) {
+		// Never hooked without its caller check: it would run and never match.
+		g_part.status.on = false;
+		g_part.status.detail = "off: not hooked, because the part InstanceCall was not found";
+	}
 	if (g_part.address != nullptr && g_part.status.on) {
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(g_part.address) - context->exeBase);
 		const bool hooked = context->InstallInlineHook(rva, g_part.guard, g_part.hookSize, reinterpret_cast<void*>(&ApplyHook), reinterpret_cast<void**>(&g_original));
 		g_live = HookOutcome(g_part, hooked, g_original != nullptr);
 	}
+	plog::Info("part %s: %s", g_callPart.name, g_callPart.status.detail.c_str());
 	plog::Info("part %s: %s", g_part.name, g_part.status.detail.c_str());
 	if (!g_live.load()) {
 		plog::Warn("map looks (Brightness, Warmth) are off: the visual data apply part is not hooked");
 	}
 	if (parts != nullptr) {
+		parts->push_back(g_callPart.status);
 		parts->push_back(g_part.status);
 	}
 	return g_live.load();
 }
 
 auto MapLightingPartStatuses() -> std::vector<PartStatus> {
-	return {g_part.status};
+	return {g_callPart.status, g_part.status};
 }
 
 void MapLightingMapOpened(const MapDef& map, int slotLevel) {

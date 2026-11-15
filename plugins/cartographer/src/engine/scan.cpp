@@ -148,6 +148,21 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 	}
 }
 
+auto ResolveCallSite(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count, Part& part, uint64_t* returnRva) -> bool {
+	*returnRva = 0;
+	ResolvePart(context, overrides, ranges, count, part);
+	if (part.address == nullptr || !part.status.on) {
+		return false;
+	}
+	const uint8_t* after = ReturnAfterCall(part.address);
+	if (after == nullptr) {
+		part.status = {part.name, false, "off: the signature does not start at a call (E8)"};
+		return false;
+	}
+	*returnRva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(after) - context->exeBase);
+	return true;
+}
+
 // What a hook that cannot be undone costs the player, by part, for the log.
 static const char* HookConsequence(const char* name) noexcept {
 	const std::string_view n(name);

@@ -25,8 +25,8 @@ constexpr int RecordCodeOffset = 0x80;     // uint32: the item code, four letter
 constexpr int32_t MapSpell = 16;           // the map item's spell: what makes an item a map for this plugin
 constexpr int RequestForcedOffset = 0x40;  // int32 on the item request: a nonzero quality forced by the caller (cheat spawn typ m)
 constexpr int RequestLevelOffset = 0x18;   // int32 on the item request: the item level the caller asked for (game thread; the client copy of an item reads 1)
-// Return address of the item maker's own quality roll (call at 0x442e7b); the rolls inside the fallbacks are not counted.
-constexpr uint64_t MainRollReturnRva = 0x442e80;
+// The item maker's own quality roll (call at 0x442e7b, returns 0x442e80) is found by the MainRollCall signature; the rolls inside the fallbacks are not counted.
+uint64_t g_mainRollReturnRva = 0;
 
 // The item quality roll (item, request) -> quality 1..8. 19 bytes of whole instructions, then the first call; the hook cuts the
 // first 16 (five whole instructions). Unique in the executable sections. The affix fallbacks call it too and ignore the result.
@@ -46,7 +46,7 @@ using FallbackNormalFn = uint64_t (*)(void* a, void* request, Unit** item, int32
 using ItemRecordFn = const uint8_t* (*)(uint32_t dataFlag, int32_t row) noexcept;
 using UnitClassFn = int32_t (*)(Unit*, const char* file, int32_t line) noexcept;
 
-enum PartId { QualityRoll, MagicFallback, NormalFallback, ItemRecord, UnitClassOf, PartCount };
+enum PartId { QualityRoll, MagicFallback, NormalFallback, ItemRecord, UnitClassOf, MainRollCall, PartCount };
 
 Part g_parts[PartCount] = {
 	{"ItemQualityRoll", qsig::ItemQualityRoll, 16, false, nullptr, {}, {}},
@@ -54,6 +54,7 @@ Part g_parts[PartCount] = {
 	{"NormalFallback", qsig::NormalFallback, 0, false, nullptr, {}, {}},
 	{"ItemRecord", sig::ItemRecord, 0, false, nullptr, {}, {}},
 	{"UnitClassOf", sig::UnitClassOf, 0, false, nullptr, {}, {}},
+	{"MainRollCall", sig::MainRollCall, 0, false, nullptr, {}, {}},
 };
 
 QualityRollFn g_original = nullptr;
@@ -159,7 +160,7 @@ void StampMapLevel(Unit* item, bool fromMaker) noexcept {
 auto QualityRollHook(Unit* item, void* request) noexcept -> uint64_t {
 	const uint64_t caller = reinterpret_cast<uint64_t>(_ReturnAddress());
 	const uint64_t rolled = g_original(item, request);
-	if (caller - g_base != MainRollReturnRva) {
+	if (caller - g_base != g_mainRollReturnRva) {
 		return rolled;  // a roll inside a fallback: the game throws its result away
 	}
 	if (!IsMapItem(item)) {
@@ -247,11 +248,15 @@ auto InstallMapQuality(const D2RL::PluginContext* context, const std::vector<Sig
 	const int count = CodeRanges(context->exeBase, ranges, 8);
 	g_base = context->exeBase;
 	for (Part& part : g_parts) {
-		ResolvePart(context, overrides, ranges, count, part);
+		if (&part == &g_parts[MainRollCall]) {
+			ResolveCallSite(context, overrides, ranges, count, part, &g_mainRollReturnRva);
+		} else {
+			ResolvePart(context, overrides, ranges, count, part);
+		}
 	}
 	// Never installed half-on: each hook needs the lookups it calls. Without them the game rolls magic maps as before.
 	const bool lookups = On(ItemRecord) && On(UnitClassOf);
-	if (On(QualityRoll) && lookups) {
+	if (On(QualityRoll) && lookups && On(MainRollCall)) {  // the roll hook is never installed without its caller check
 		g_rollLive = Hook(context, QualityRoll, reinterpret_cast<void*>(&QualityRollHook), reinterpret_cast<void**>(&g_original));
 	} else if (On(QualityRoll)) {
 		g_parts[QualityRoll].status.on = false;

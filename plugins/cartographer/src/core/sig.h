@@ -80,4 +80,10 @@ inline auto FindPattern(const uint8_t* data, size_t size, const Pattern& pat, si
 	return count;
 }
 
+// A call-site signature starts at the `E8 rel32` of the call it names: the call's return address is the match + 5. Null when the match
+// does not start with E8 (a signatures.txt override that points elsewhere), so the part stays off instead of counting a wrong address.
+inline auto ReturnAfterCall(const uint8_t* match) noexcept -> const uint8_t* {
+	return match != nullptr && match[0] == 0xE8 ? match + 5 : nullptr;
+}
+
 }  // namespace carto

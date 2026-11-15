@@ -31,6 +31,12 @@ A runtime path looks feasible and independent of mod files: hook the apply funct
 - How the plugin learns that the player is in a slot level and which `maps.txt` row it is (the existing level hooks carry this), the `maps.txt` columns, tables.md, CHANGELOG, tests.
 - In-game check on two maps sharing a tileset.
 
+### The instance call by signature (issue #473, build 93847)
+
+The two callers are told apart by return address, so the plugin finds that address at install, not as a fixed `0xf5d83c`. Part `InstanceCall` (`core/part_signatures.h`) starts at the `E8` of the call at `0xf5d837`; the call target is masked, the bytes after it are kept: `E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 0F 28 05 ?? ?? ?? ?? 48 8D 85 28 02 00 00` (a `jmp`, a RIP-relative `movaps xmm0`, then `lea rax,[rbp+0x228]`). It matches once in the executable sections, at `0xf5d837`; the call at `0xf5d9b2` is followed by `48 8B 8D E0 02 00 00`, so it does not match. The return address is the match + 5. If the part is not found exactly once (or a `signatures.txt` override does not start at an `E8`), `VisualApply` is not hooked and both parts are logged off, so the hook never runs without its caller check. `signatures.txt` can replace `InstanceCall` like any part.
+
+Evidence: `python -I plugins/cartographer/tools/check_map_lighting_signature.py <image>` on the build 93847 image (stamp `0x6ab3782c`): `InstanceCall: signature matches ['0xf5d837'], resolves to ['0xf5d83c']`, `OK`. Unit test: `tables_tests` (call-site signatures).
+
 ### Live results (build 93847, in game)
 
 - The hook on `0xf5dad0` (signature above, guard matched) sees the instance call (return RVA `0xf5d83c`) every frame with the level's component; the other call (`0xf5d9b2`) is skipped. The component is rebuilt by TransitionInstance each frame, so scaling a field before the original needs no restore: leaving the map (the plugin stops scaling) gives the stock look on the next frame (town after a map looked stock).
