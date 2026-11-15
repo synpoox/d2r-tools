@@ -267,6 +267,15 @@ struct BossDrive {
 };
 BossDrive driveBoss(BossRoomPicker &picker, size_t first, const std::function<BossTry(size_t index, BossRoomPicker::Tier tier)> &tryRoom);
 
+// How the engine spawns the map Boss at one try. `super`: as its superuniques row (a Boss that has one is never spawned as its base monster, on any rung);
+// `flags`: the spawn flags word, `kSpawnFlagNoCollision` on the last resort (the spot test's collision check skipped; the superunique spawn passes the word on, note 34).
+constexpr uint16_t kSpawnFlagNoCollision = 0x80;
+struct BossCall {
+	bool super = false;
+	uint16_t flags = 0;
+};
+BossCall bossCall(bool unique, bool forced);
+
 // --- What is spawned -----------------------------------------------------------------------------------------------
 
 struct Spawn {

@@ -171,10 +171,10 @@ keyed `cartoboss:` plus the Name (non-letters and digits written as `_` and a he
 (the `Base` must be an ordinary monster in `monstats.txt`, never a vanilla boss such as `andariel`; each `Mods` id must
 be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
 rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
-keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row, or
-the game returns no unit for it, the boss is spawned as a plain monster of its `Base` instead (without mods or
-minions) and the log says which path was taken. The same happens for a second spawn of the same entry in one game
-(two maps with that boss, or the same map opened twice): the game allows each boss once per game.
+keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row
+(the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. Otherwise
+every map gets its real boss, with its name, mods, minions and drops, in the last resort too: when no room takes it,
+it is placed in your own room with the collision test skipped.
 
 Save `bosses.txt` (and the other tables) as UTF-8. A file that is not valid UTF-8, such as an "ANSI" save, is read as Latin-1 and converted, by the plugin and by the installer alike, so `Gérard Östberg` gives the same name and key (`cartoboss:G_C3_A9rard_20_C3_96stberg`) either way; characters outside Latin-1 need UTF-8.
 

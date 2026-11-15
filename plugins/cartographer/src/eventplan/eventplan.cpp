@@ -374,6 +374,10 @@ BossDrive driveBoss(BossRoomPicker &picker, size_t first, const std::function<Bo
 	}
 }
 
+BossCall bossCall(bool unique, bool forced) {
+	return {unique, forced ? kSpawnFlagNoCollision : static_cast<uint16_t>(0)};
+}
+
 SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rect &room, uint64_t seed, int scale) {
 	SpawnPlan plan;
 	if (event.kind == events::Kind::Shrine) {
