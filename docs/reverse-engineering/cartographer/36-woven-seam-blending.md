@@ -4,13 +4,13 @@ Game files: build 93847 (`d2rAI-toolkit/d2r-data/93847`, `dataversionbuild.txt` 
 
 ### 1. Answer
 
-**Yes, in HD, with data only: give the guest piece's seam tiles the host's HD biome.** What the player sees at a woven seam is not DT1 art but the two rooms' HD presets: each DS1 has its own preset JSON with its own terrain and its own biome (`act1_caves` for Cave pieces, `act4_lava` for Lava pieces), so the HD terrain changes biome exactly at the room edge. Vanilla softens its own tileset borders the same way it can be done here: a preset lists `perTileBiomeOverrides` (tile x, tile y, biome), and the border tiles take the neighbour's biome; stamps and decals can paint another biome's terrain layers; a `VisualDataBox` switches the lighting inside a volume. The DT1 routes (transition tiles, seam rooms, tile picking) only change legacy (G key) graphics and have no Cave-to-Lava art to use.
+**Likely yes (needs game check, section 6 step 1), in HD, with data only: give the guest piece's seam tiles the host's HD biome.** What the player sees at a woven seam is not DT1 art but the two rooms' HD presets: each DS1 has its own preset JSON with its own terrain and its own biome (`act1_caves` for Cave pieces, `act4_lava` for Lava pieces), so the HD terrain changes biome exactly at the room edge. Vanilla softens its own tileset borders the same way it can be done here: a preset lists `perTileBiomeOverrides` (tile x, tile y, biome), and the border tiles take the neighbour's biome; stamps and decals can paint another biome's terrain layers; a `VisualDataBox` switches the lighting inside a volume. The DT1 routes (transition tiles, seam rooms, tile picking) only change legacy (G key) graphics and have no Cave-to-Lava art to use.
 
 | Route | Verdict | Cost |
 |---|---|---|
 | 1. DT1 transition tiles | **No.** No vanilla DT1 bridges Cave and Lava; vanilla tileset changes are authored DS1 art or a warp, and DT1 art is not drawn in HD anyway | New DT1 art, legacy mode only |
 | 2. Seam room / ring of seam tiles (lvlprest + DS1) | **Possible, not worth it alone.** A room may load both tilesets' files (mask over the widened row), but the room still needs new DS1 art and its own HD preset, and it adds a cell to the layout | High: new DS1 + preset per seam piece |
-| 3. HD rendering (biomes, stamps, lights) | **Yes (recommended).** HD terrain is a layered, height and noise blended terrain; per-tile biome overrides, cross-biome stamps and vis boxes are vanilla data used at vanilla borders | Medium, data only: seam copies of guest DS1s with edited presets; no hook |
+| 3. HD rendering (biomes, stamps, lights) | **Likely yes (needs game check, section 6 step 1; recommended).** HD terrain is a layered, height and noise blended terrain; per-tile biome overrides, cross-biome stamps and vis boxes are vanilla data used at vanilla borders | Medium, data only: seam copies of guest DS1s with edited presets; no hook |
 | 4. Orientation and tile picking | **No engine rule** inside a maze room; seam direction only decides which preset edge (x or y) gets the override. The neighbour rule belongs in Cartographer's own plan (the piece-id write it already does) | Low, part of route 3 |
 
 ### 2. Route 1: transition tiles in vanilla DT1s
@@ -54,7 +54,7 @@ What the HD side is (**static**, the presets and biomes under `data/hd/env`, 210
 
 | Preset (own biome) | Override biome | Tiles |
 |---|---|---|
-| `expansion/town/townwest` (expansion_town) | expansion_siege | 14: x 0..1, y 15..21, a 2-tile strip on the west edge (Harrogath's gate to the Bloody Foothills) |
+| `expansion/town/townwest` (expansion_town) | expansion_siege | 14: x 0..1, y 15..21, a 2-tile strip on the west edge (inference from the name: Harrogath's west side) |
 | `expansion/siege/stripseigebar` (expansion_siege) | expansion_ruins | 26: x 0..1, y 14..26, a 2-tile strip on the west edge |
 | `act3/jungle/transl`, `transu` (act3_jungle) | act3_docktown | 7 each: x 27..29, y 29..31 |
 | `act3/docktown/docktown3` (act3_docktown) | act3_jungle | 17: x 41..46, y 30..33 |
@@ -70,7 +70,7 @@ What the HD side is (**static**, the presets and biomes under `data/hd/env`, 210
 
 What is not known: whether a biome change between two tiles of one terrain is drawn soft (the layers' height and noise blend) or as a hard tile edge, and whether two rooms' terrains blend across the room edge at all. Vanilla always moves the biome change inside one preset (the 2-tile strips), which fits "inside one terrain it looks right" but proves neither. **needs game**.
 
-Verdict: yes, data only. Cost: medium (route in section 6).
+Verdict: likely yes (needs game check, section 6 step 1), data only. Cost: medium (route in section 6).
 
 ### 5. Route 4: orientation and tile picking
 
@@ -87,7 +87,7 @@ Mechanism: guest pieces are already copies (lvlprest rows 1092..1106 in P1). Giv
 
 Follow-up steps:
 
-1. **Game check of the mechanism (one issue, test slot, test mod only).** On the P1 setup (note 33 section 10), add in the test mod a copy of `preset/act1/caves/caveew.json` with a 2-tile override strip with `act4_lava` on its W and E edges, next to a copy of `caveew.ds1` under a new name that the copy row 1094 points to. Screenshots of both seams with and without the strip, plus a vanilla control (Harrogath's west gate, `townwest`). Settles: does the override draw in a woven room, is the change soft or a tile edge, does it cross the room edge. If the edge stays hard, try a host stamp (an `act4_lava` `TerrainStampDefinitionComponent` along the strip) and a `VisualDataBox`.
+1. **Game check of the mechanism (one issue, test slot, test mod only).** On the P1 setup (note 33 section 10), add in the test mod a copy of `preset/act1/caves/caveew.json` with a 2-tile override strip with `act4_lava` on its W and E edges, next to a copy of `caveew.ds1` under a new name that the copy row 1094 points to. Screenshots of both seams with and without the strip, plus a vanilla control (the west edge of `townwest`). Settles: does the override draw in a woven room, is the change soft or a tile edge, does it cross the room edge. If the edge stays hard, try a host stamp (an `act4_lava` `TerrainStampDefinitionComponent` along the strip) and a `VisualDataBox`.
 2. **Variant set.** One seam variant per guest exit mask and host-facing subset of its open sides (Cave: 15 masks, 65 non-empty subsets, times the 2 DS1 files per row), or fewer: start with the straight-through masks 3 and 12 P1 uses. Each variant is a lvlprest copy row (same `Dt1Mask`, `File1..2` pointing at the renamed DS1s).
 3. **Generation, not committed assets.** A tool (catalogue style) writes the renamed DS1 copies and the edited preset JSON from the player's own game files at install time (or the plugin serves them through D2RLoader's ResourceService, which Cartographer already uses); vanilla-derived files never go into the repository.
 4. **Plan rule.** In the woven piece-id write, choose the variant whose seam sides are exactly the cell's host-facing sides; a guest-guest side gets no strip.
