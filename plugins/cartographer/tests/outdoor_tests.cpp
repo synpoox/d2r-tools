@@ -1385,3 +1385,14 @@ TEST_CASE("arrival candidates: entrance-cell rooms first, nearest the centre fir
 	}
 	CHECK(arrivalCandidates(TileRect{}, {BuiltRoom{0, 0, 8, 8, 0}}).empty());
 }
+
+TEST_CASE("fallback rectangle: a slot row of size 0 gets a size the game's own build can border, the row's offset and a large size are kept (#471)") {
+	const LevelRect zero = fallbackRectOf(6000, 3000, 0, 0);
+	CHECK(zero.x == 6000);
+	CHECK(zero.y == 3000);
+	CHECK(zero.w == kFallbackLevelTiles);
+	CHECK(zero.h == kFallbackLevelTiles);
+	const LevelRect big = fallbackRectOf(10, 20, 512, kFallbackLevelTiles - 1);
+	CHECK(big.w == 512);
+	CHECK(big.h == kFallbackLevelTiles);
+}

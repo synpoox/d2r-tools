@@ -99,6 +99,14 @@ struct LevelRect {
 };
 LevelRect levelRectOf(const StampPlan &plan);
 
+// The rectangle the slot level needs for the game's own outdoor build, when no plan is built (issue #471). The level's origin and size are 0 when the build
+// starts (act start-up writes them for the game's own outdoor levels, not for a slot), so the game's build has no room for its map border and exits. The slot
+// row's own offset and size are used; a row size that is missing or too small gets kFallbackLevelTiles.
+constexpr int kFallbackLevelTiles = 384;
+inline LevelRect fallbackRectOf(int offsetX, int offsetY, int sizeX, int sizeY) {
+	return {offsetX, offsetY, sizeX < kFallbackLevelTiles ? kFallbackLevelTiles : sizeX, sizeY < kFallbackLevelTiles ? kFallbackLevelTiles : sizeY};
+}
+
 // What the grid probe counts in the built level's flag grid: cells with a piece, covered cells (0x200) and void cells (0x100).
 struct GridCounts {
 	int cells = 0;

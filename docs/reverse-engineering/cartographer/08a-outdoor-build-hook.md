@@ -24,6 +24,10 @@ Method: disassemble the part's entry with capstone from the 93847 dump. A patch 
 - The plan is cached by (seed, tileset, shape, size, origin, limits, options), four entries, so the host's and a client's builds of one map share one computation. Failed plans are cached.
 - `OutdoorProbe = 1` logs `[outdoor probe]` lines: the level before and after, the grid as characters, the differences, and the rooms with their pieces. It defaults to 0.
 
+### A failed plan (issue #471)
+
+`PrepareSlot` plans the default map of the tileset (blank shape and size, built-in shapes, same seed) when the requested plan fails, and builds that. The game's own build of the slot level is the last resort (a refused slot row, Act or LevelType, or no opened map): `OutdoorLevelBuild` first writes the slot row's origin and size (`fallbackRectOf`; both are 0 when the build starts, and the game then exits with "outdoor dimensions are too small to contain the map border"). That build has no marked entry and its Act 5 pieces are not usable (evidence: `35-map-link-tiles.md`, section 4).
+
 ### After our build, and what is not hooked without an Outdoor slot
 
 - **Second reseed.** The original's prologue (`0x3271e2..0x3271f0`) reseeds the level RNG again after our build returns control to it, so the level RNG ends at the fresh seed, not where a generator left it. The tail does not read it (section 8 Q5); the last fallback of `0x3da650` does. It is the same on the host and on a client.
