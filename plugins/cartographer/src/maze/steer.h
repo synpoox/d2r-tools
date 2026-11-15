@@ -140,6 +140,20 @@ std::array<int32_t, 7> lvlMazeRow(int levelId, const Plan &plan);
 // piece then; 0x3eb850 turns it into the special one.
 int pieceAfterWalk(const Plan &plan, int roomIndex);
 
+// After a refused steered step the game's own step may run only when it is safe on the rooms that exist. The random walk grows from whatever
+// exists; Arcane's grower (ownGrower) lays a fixed spiral from the newest room and crashes on a refused add, so it runs only with no plan room
+// added (roomsMade counts the rooms beyond the first).
+bool mayRunOriginalStep(bool ownGrower, size_t roomsMade);
+
+// Arcane's grower (0x3e7a80) draws its start rotation from the level seed {lo, hi} (state = lo * 0x6ac690c5 + hi, as 64 bits; the new
+// lo is the low half and the new hi the high half; rot = new lo & 3) and then gives room `index` of its spiral the file variant
+// (index / 15 + rot) & 3 (piece + 4). Both are the game's own arithmetic; `*lo` and `*hi` are advanced.
+uint32_t arcaneDrawRotation(uint32_t *lo, uint32_t *hi);
+// A one-exit piece (mask 1, 2, 4, 8 = pieces 510, 511, 513, 517) is only ever a Summoner room in the game's own build, never an ordinary
+// room, and some have fewer DS1 files than the variant (a variant past the file count crashes the room load, seen in game): -1 there leaves
+// the engine's own pick (file -1). `mask` is the piece id minus the base.
+int32_t arcaneFileVariant(int index, uint32_t rot, int mask);
+
 // A reserved room is fixed after the walk (Room::Fix::AfterWalk); the placed entrance is not (ByPlacer).
 bool fixAfterWalk(const Plan &plan, int roomIndex);
 

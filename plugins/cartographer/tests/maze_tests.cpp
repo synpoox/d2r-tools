@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice or Durance");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance or Arcane");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice or Durance.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance or Arcane.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1277,6 +1277,47 @@ TEST_CASE("Ice plans: every shape and size builds, the entrance is an ordinary r
 	for (int to = 1018; to <= 1033; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Next, Down, Theme: never placed
 	// A 21 by 21 rooms level fits the 360-tile slot (22 rooms of 16 tiles across with the first room centred).
 	CHECK(maxCapacity(ts).across() >= 21);
+}
+
+TEST_CASE("the Arcane row: 12-tile rooms, mask pieces from 510, no closed piece and no ring, its own grower")
+{
+	const MazeTileset *row = findMazeTileset("arcane");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 19);
+	CHECK(std::string(row->slot) == "MazeArcane");
+	CHECK(std::string(row->levelName) == "Cartographer Arcane Sanctuary");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase == 509);  // 510..524; the Summoner pieces 525..528 are never placed
+	CHECK(row->ringCells == 0);
+	CHECK(row->ownGrower);
+	CHECK_FALSE(row->callsRingGrower);
+	CHECK(findMazeTilesetBySlot("mazearcane") == row);
+	for (size_t i = 0; i < MazeTilesetCount; ++i) CHECK((MazeTilesets[i].ownGrower == (&MazeTilesets[i] == row)));
+}
+
+TEST_CASE("Arcane plans: every shape and size builds, the Summoner rooms are suppressed")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Arcane", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 10; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+			}
+	CHECK(steered > 80);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 525; to <= 528; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
@@ -1656,4 +1697,36 @@ TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordin
 				for (int piece : g) CHECK(steerSpecial(ts, sp.plan, piece).action == SpecialSteer::Action::Suppress);
 		}
 	}
+}
+
+TEST_CASE("after a refused steered step Arcane's grower never runs on a partial build (it crashes on a refused add)")
+{
+	CHECK(mayRunOriginalStep(true, 0));
+	CHECK_FALSE(mayRunOriginalStep(true, 1));
+	CHECK_FALSE(mayRunOriginalStep(true, 20));
+	CHECK(mayRunOriginalStep(false, 0));
+	CHECK(mayRunOriginalStep(false, 20));  // the random walk grows from the rooms that exist
+}
+
+TEST_CASE("Arcane file variants: (index / 15 + rot) & 3, and the start rotation is the game's seed draw")
+{
+	CHECK(arcaneFileVariant(0, 0, 3) == 0);
+	CHECK(arcaneFileVariant(14, 0, 3) == 0);
+	CHECK(arcaneFileVariant(15, 0, 3) == 1);
+	CHECK(arcaneFileVariant(45, 0, 3) == 3);
+	CHECK(arcaneFileVariant(60, 0, 3) == 0);  // wraps at 4 groups
+	CHECK(arcaneFileVariant(15, 3, 3) == 0);
+	CHECK(arcaneFileVariant(0, 2, 3) == 2);
+	for (int mask : {1, 2, 4, 8}) CHECK(arcaneFileVariant(0, 1, mask) == -1);  // one-exit pieces keep the engine pick
+	for (int mask = 0; mask <= 16; ++mask) CHECK((arcaneFileVariant(20, 1, mask) >= 0) == (mask >= 1 && mask <= 15 && mask != 1 && mask != 2 && mask != 4 && mask != 8));
+	uint32_t lo = 1, hi = 0;
+	CHECK(arcaneDrawRotation(&lo, &hi) == (0x6ac690c5u & 3));
+	CHECK(lo == 0x6ac690c5u);
+	CHECK(hi == 0);
+	lo = 0xffffffffu;
+	hi = 7;
+	const uint64_t want = 0xffffffffull * 0x6ac690c5ull + 7;
+	CHECK(arcaneDrawRotation(&lo, &hi) == (static_cast<uint32_t>(want) & 3));
+	CHECK(lo == static_cast<uint32_t>(want));
+	CHECK(hi == static_cast<uint32_t>(want >> 32));
 }
