@@ -2,7 +2,7 @@
 
 **Verdict: generate as maze.** Effort **S to M**: the tileset is already catalogued and the ring-grower hook exists; what remains is the data row, a no-op check and a game check.
 
-**Status: Built (#283).** The Durance row is in `MazeTilesets`; game-checked in Hell on Small and ExtraLarge (PR #482).
+**Status: Built (#283).** The Durance row is in `MazeTilesets`; game-checked in Hell on Small, Medium, Large and ExtraLarge (PR #482).
 
 Research note, 2026-11-12, vanilla build 3.3.0 tables read-only. No game run.
 
