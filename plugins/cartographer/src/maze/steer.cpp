@@ -181,6 +181,11 @@ int pieceAfterWalk(const Plan &plan, int roomIndex)
 	return r.special >= 0 && r.fix == Room::Fix::ByPlacer ? plan.entrance.fromPiece : r.piece;
 }
 
+bool mayRunOriginalStep(bool ownGrower, size_t roomsMade)
+{
+	return !ownGrower || roomsMade == 0;
+}
+
 bool fixAfterWalk(const Plan &plan, int roomIndex)
 {
 	if (roomIndex < 0 || roomIndex >= static_cast<int>(plan.rooms.size())) return false;

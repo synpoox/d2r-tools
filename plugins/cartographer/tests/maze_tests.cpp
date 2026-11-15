@@ -1662,3 +1662,12 @@ TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordin
 		}
 	}
 }
+
+TEST_CASE("after a refused steered step Arcane's grower never runs on a partial build (it crashes on a refused add)")
+{
+	CHECK(mayRunOriginalStep(true, 0));
+	CHECK_FALSE(mayRunOriginalStep(true, 1));
+	CHECK_FALSE(mayRunOriginalStep(true, 20));
+	CHECK(mayRunOriginalStep(false, 0));
+	CHECK(mayRunOriginalStep(false, 20));  // the random walk grows from the rooms that exist
+}

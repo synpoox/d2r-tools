@@ -6,7 +6,7 @@ Build 93847 (D2R 3.3, image stamp 0x6ab3782c, D2RLoader 1.3.1). Addresses are RV
 
 The maze builder `0x3e69e0` dispatches on `LevelType - 3` through the jump table at `0x3e76d8` (33 dwords). LevelType 19 (Arcane Sanctuary, level 74 in vanilla) goes to `0x3e6e7e`. That case calls neither the walk `0x3e96d0` nor the ring grower `0x3e9820`: it calls its own grower `0x3e7a80(level)` (**static**).
 
-The grower lays a fixed spiral of about 64 rooms through add-room `0x3e77a0` and the picker `0x3eb960`, giving each room a file variant of `(index / 17 + rot) & 3`. It returns to `0x3e860e`. After it, the case makes one special-room call to `0x3eb850` with the table at `0x1d0f730`: (517 to 528, 3), (511 to 526, 0), (513 to 527, 1), (510 to 525, 2), the four Summoner pieces. Then the common tail `0x3e75bc` runs.
+The grower lays a fixed spiral of about 64 rooms through add-room `0x3e77a0` and the picker `0x3eb960`, drawing one random start rotation (`rng & 3`, at `0x3e7ab1..0x3e7aea`) and adding every room in a direction derived from it (`(rot + 1) & 3`, `rot & 3`, and so on; **static**). No per-room file variant is written in the grower itself; the grower passes only directions and the picker flag, so the steered walk, which calls the same add-room and picker, loses nothing a variant rule could have set. It returns to `0x3e860e`. After it, the case makes one special-room call to `0x3eb850` with the table at `0x1d0f730`: (517 to 528, 3), (511 to 526, 0), (513 to 527, 1), (510 to 525, 2), the four Summoner pieces. Then the common tail `0x3e75bc` runs.
 
 The picker for LevelType 19 adds 509, so a room's piece is 509 + exit mask (W 1, E 2, S 4, N 8) = 510 to 524. Piece 509 is a Lair row, so there is no closed filler piece. The Summoner pieces 525 to 528 are placed only by the special-room call.
 
@@ -18,7 +18,7 @@ The picker for LevelType 19 adds 509, so a room's piece is 509 + exit mask (W 1,
 | Hook cut | 15 bytes (whole instructions) |
 | Max patch (`check_maze_signatures.py`) | 999: byte 31 is a RIP-relative load, not a branch, so the branch check does not apply |
 
-`ArcaneGrowerHook` runs the same steered step as the walk hook (`SteeredStep`): on a steered build it replaces the grower with the plan's adds (`0x3e77a0`), links (`0x360bb0`) and the picker on every room; unsteered, or after a fallback, it calls the original grower, so a vanilla Arcane Sanctuary still builds. The special-room hook already suppresses the Summoner pieces: the row has no Prev family, so `answerSpecial` has nothing to place.
+`ArcaneGrowerHook` runs the same steered step as the walk hook (`SteeredStep`): on a steered build it replaces the grower with the plan's adds (`0x3e77a0`), links (`0x360bb0`) and the picker on every room; unsteered, or after a fallback with no plan room made, it calls the original grower, so a vanilla Arcane Sanctuary still builds. After a refusal that follows some plan rooms, the original is **not** called: the spiral passes the result of each add-room as the next parent without a null check (`0x3e7b2b` tests it, but `0x3e7b5e` passes it on; add-room reads `[rcx + 0x90]` at `0x3e77b2`), so a refused add would crash. The hook keeps the rooms made, runs the picker on them and logs a warning (`mayRunOriginalStep`). The special-room hook already suppresses the Summoner pieces: the row has no Prev family, so `answerSpecial` has nothing to place.
 
 Failure mode: if the signature is not found or the hook does not install, the `Arcane` row is refused with a console and log message (`MazeTilesetProblem`, and in `LevelBuildHook` for a map already open); nothing is shown on screen. Other tilesets are unaffected.
 
@@ -28,4 +28,4 @@ No filler ring (`ringCells` 0): no closed piece exists, and the dark space aroun
 
 ### 4. Installer
 
-Level 74 is the only level of LevelType 19 and a quest level, so `tools/install.ps1` copies it by id (`Template = 74`), clears `Quest`, `QuestFlag` and `QuestFlagEx`, and writes the `lvlmaze.txt` row with 12-tile rooms. Offset x 1000, y 0: in automap range (int16 cells), clear of Snow (1500 to 1692) and above the first Act 5 level (y 1000).
+Level 74 is the only level of LevelType 19 and a quest level, so `tools/install.ps1` copies it by id (`Template = 74`), clears `Quest`, `QuestFlag` and `QuestFlagEx`, and writes the `lvlmaze.txt` row with 12-tile rooms. Offset x 500, y 0 (the Durance row takes x 1000): in automap range (int16 cells), clear of Snow (1500 to 1692) and above the first Act 5 level (y 1000).

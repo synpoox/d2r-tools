@@ -140,6 +140,11 @@ std::array<int32_t, 7> lvlMazeRow(int levelId, const Plan &plan);
 // piece then; 0x3eb850 turns it into the special one.
 int pieceAfterWalk(const Plan &plan, int roomIndex);
 
+// After a refused steered step the game's own step may run only when it is safe on the rooms that exist. The random walk grows from whatever
+// exists; Arcane's grower (ownGrower) lays a fixed spiral from the newest room and crashes on a refused add, so it runs only with no plan room
+// added (roomsMade counts the rooms beyond the first).
+bool mayRunOriginalStep(bool ownGrower, size_t roomsMade);
+
 // A reserved room is fixed after the walk (Room::Fix::AfterWalk); the placed entrance is not (ByPlacer).
 bool fixAfterWalk(const Plan &plan, int roomIndex);
 

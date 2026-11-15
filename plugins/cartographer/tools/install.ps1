@@ -58,7 +58,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -ArcaneOffsetX and -ArcaneOffsetY (1000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -90,7 +90,7 @@ param(
     [int]$LavaOffsetY = 0,
     [int]$IceOffsetX = 2000,
     [int]$IceOffsetY = 0,
-    [int]$ArcaneOffsetX = 1000,
+    [int]$ArcaneOffsetX = 500,
     [int]$ArcaneOffsetY = 0,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900
@@ -116,7 +116,7 @@ $MazeTilesets = @(
     @{ Tileset = 'Lava'; Slot = 'MazeLava'; LevelName = 'Cartographer Lava'; LevelType = '28'; Size = '360'; Param = 'Lava' },
     # Ice: x 2000..2360, y 0..360 (the spot reserved for it above).
     @{ Tileset = 'Ice';   Slot = 'MazeIce';   LevelName = 'Cartographer Ice Caves'; LevelType = '33'; Size = '360'; Param = 'Ice' },
-    # Arcane Sanctuary: x 1000..1360, y 0..360, clear of Snow (x 1500..1692). Level 74 is the only level of LevelType 19 and a quest level, so it is copied by id (Template; its quest fields are cleared like any copy's); its rooms are 12 tiles (RoomTiles, the lvlmaze.txt SizeX and SizeY).
+    # Arcane Sanctuary: x 500..860, y 0..360, clear of the Durance row (x 1000) and Snow (x 1500..1692). Level 74 is the only level of LevelType 19 and a quest level, so it is copied by id (Template; its quest fields are cleared like any copy's); its rooms are 12 tiles (RoomTiles, the lvlmaze.txt SizeX and SizeY).
     @{ Tileset = 'Arcane'; Slot = 'MazeArcane'; LevelName = 'Cartographer Arcane Sanctuary'; LevelType = '19'; Size = '360'; Param = 'Arcane'; Template = 74; RoomTiles = '12' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);

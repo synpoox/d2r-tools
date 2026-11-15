@@ -51,7 +51,7 @@ in [`examples/first-map/`](examples/first-map/).
 3. From the folder you unzipped, run
    `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Arcane, Outdoor, Snow and Siege levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
-   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava and Ice maps (one map per game).
+   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava, Ice and Arcane maps (one map per game).
    Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
@@ -88,7 +88,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Maze` | a plain game maze row (DrlgType 1) of the wanted type, such as level 9 for a Cave or 18 for a Crypt | 1 | 3 (Cave) or 4 (Crypt) | 360 | 3500, 0 |
    | `Cartographer Lava` | the game's River of Flame (level 107, DrlgType 1) | 1 | 28 (Lava) | 360 | 2500, 0 |
    | `Cartographer Ice Caves` | a plain game Ice caves maze row (DrlgType 1), such as level 113 | 1 | 33 (Ice) | 360 | 2000, 0 |
-   | `Cartographer Arcane Sanctuary` | the game's Arcane Sanctuary (level 74, DrlgType 1); clear `Quest`, `QuestFlag` and `QuestFlagEx` | 1 | 19 (Arcane) | 360 | 1000, 0 |
+   | `Cartographer Arcane Sanctuary` | the game's Arcane Sanctuary (level 74, DrlgType 1); clear `Quest`, `QuestFlag` and `QuestFlagEx` | 1 | 19 (Arcane) | 360 | 500, 0 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
@@ -213,7 +213,7 @@ Example row: `The Drowned King	Boss	Bishibosh	6			The water churns...	2`
 
 #### shapes.txt
 
-Your own maze shapes, for Cave, Crypt, Lava and Ice maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
+Your own maze shapes, for Cave, Crypt, Lava, Ice and Arcane maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
 names cannot be reused. Every column except `Name` is optional, and a blank one keeps the value of the `Base` shape. A row
 that cannot be built is skipped.
 
@@ -256,7 +256,7 @@ rebuild. You will not normally need it. See [the reverse-engineering notes](../.
 
 A part found this way is checked before it is used; if the check fails the part stays off and the log says why.
 
-## Maze slot (Cave, Crypt, Lava and Ice caves)
+## Maze slot (Cave, Crypt, Lava, Ice caves and Arcane)
 
 Every map is a generated maze, built on a maze level that `tools\install.ps1` adds. A level has one `LevelType`, which fixes
 its tileset, so each maze tileset has a level of its own: `Cartographer Maze` (Cave, slot `Maze`), `Cartographer Crypt`

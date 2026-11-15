@@ -55,8 +55,8 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {0, 0, 0, 0}, true, 2000, 0, 0},
 	// Arcane Sanctuary (LevelType 19, #280): 12-tile rooms, pieces 509 + mask (510..524; 509 itself is a Lair row, so there is no closed piece and no filler ring: the void
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
-	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 1000: the next free spot, clear of Snow (1500..1692).
-	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 1000, 0, 0, true},
+	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
+	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

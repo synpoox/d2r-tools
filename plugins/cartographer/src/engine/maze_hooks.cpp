@@ -655,7 +655,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 
 // The steered walk in place of a build step that has the walk's shape (level): the game's walk 0x3e96d0, or Arcane's own grower 0x3e7a80. `original` is that
 // step's own function, run when the build is not steered or the engine refused a step.
-void SteeredStep(void* level, WalkFn original) noexcept {
+void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
 	BuildCtx* ctx = t_ctx;
 	if (ctx == nullptr || !ctx->steer || ctx->fellBack || ctx->level != level) {
 		original(level);
@@ -673,19 +673,34 @@ void SteeredStep(void* level, WalkFn original) noexcept {
 	}
 	if (!done) {
 		Fallback(*ctx, why);
-		original(level);  // the game grows the rest of the maze from the rooms that exist
+		size_t made = 0;
+		for (size_t i = 1; i < ctx->rooms.size(); ++i) {
+			made += ctx->rooms[i] != nullptr ? 1 : 0;
+		}
+		if (cm::mayRunOriginalStep(ownGrower, made)) {
+			original(level);  // the game grows the rest of the maze from the rooms that exist
+			return;
+		}
+		// Arcane's spiral would pass a refused (null) room on as the next parent and crash: keep the rooms made, with their pieces, and stop.
+		plog::Warn("maze: the steered build stopped after %d plan rooms and the game's grower is not run (it cannot continue from a partial build); the map is incomplete", static_cast<int>(made));
+		const auto pick = Call<PickFn>(MazePiecePicker);
+		for (void* room : ctx->rooms) {
+			if (room != nullptr) {
+				(void)pick(room, 1);
+			}
+		}
 	}
 }
 
 void WalkHook(void* level) noexcept {
 	if (g_walkOriginal != nullptr) {  // else unreachable unless the loader gave no way back; there is nothing to call
-		SteeredStep(level, g_walkOriginal);
+		SteeredStep(level, g_walkOriginal, false);
 	}
 }
 
 void ArcaneGrowerHook(void* level) noexcept {
 	if (g_growerOriginal != nullptr) {
-		SteeredStep(level, g_growerOriginal);
+		SteeredStep(level, g_growerOriginal, true);
 	}
 }
 
