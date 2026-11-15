@@ -53,6 +53,9 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	{"Lava", 28, "MazeLava", "Cartographer Lava", 24, 836, {0, 0, 0, 0}, false, 2500, 0, 1},
 	// Ice: its case in the builder calls the ring grower first (docs/reverse-engineering/cartographer/24-ice-caves-builder.md).
 	{"Ice", 33, "MazeIce", "Cartographer Ice Caves", 16, 1002, {0, 0, 0, 0}, true, 2000, 0, 0},
+	// Durance (Act 3 Mephisto 1 and 2, LevelType 22): 12-tile rooms, "Mephisto W" is Def 754 (base 753, 754..768). Offset x 1000, y 0: the next free
+	// slot in the band, 500 below Snow's x 1500. docs/cartographer/tilesets/a3-durance-of-hate.md.
+	{"Durance", 22, "MazeDurance", "Cartographer Durance", 12, 753, {0, 0, 0, 0}, true, 1000, 0, 0},
 	// Arcane Sanctuary (LevelType 19, #280): 12-tile rooms, pieces 509 + mask (510..524; 509 itself is a Lair row, so there is no closed piece and no filler ring: the void
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).

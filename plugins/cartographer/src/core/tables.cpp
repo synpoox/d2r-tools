@@ -22,13 +22,13 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava and Ice) are buildable through the maze
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice and Durance) are buildable through the maze
 // steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Barracks", false}, {"Jail", false},
-	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Harem", false},
+	{"Lair", false},   {"Dungeon", false}, {"Sewer", false},    {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 
@@ -285,9 +285,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
-		// Snow and Siege build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
+		// Snow, Siege and Mesa build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
-		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::Mesa);
 		if (shape.empty() && ignoresShape) {
 			map.shape.clear();
 		} else if (shape.empty()) {
