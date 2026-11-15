@@ -1396,3 +1396,25 @@ TEST_CASE("fallback rectangle: a slot row of size 0 gets a size the game's own b
 	CHECK(big.w == 512);
 	CHECK(big.h == kFallbackLevelTiles);
 }
+
+TEST_CASE("planOrDefault: a request that plans is returned as it is, one that fails plans the default map on the same seed (#471)") {
+	const Catalogue &cat = builtinJungleCatalogue();
+	PlanCache cache(4);
+	bool usedDefault = true;
+	const auto good = planOrDefault(cache, jungleRequest(5), cat, &usedDefault);
+	CHECK(good->ok);
+	CHECK(!usedDefault);
+	CHECK(good == cache.get(jungleRequest(5), cat));  // the very plan the request alone gives
+
+	MapRequest bad = jungleRequest(5);
+	bad.shape = "NoSuchShape";
+	CHECK(!cache.get(bad, cat)->ok);
+	const auto fell = planOrDefault(cache, bad, cat, &usedDefault);
+	CHECK(fell->ok);
+	CHECK(usedDefault);
+	MapRequest def = jungleRequest(5);
+	def.shape.clear();
+	def.size.clear();
+	CHECK(fell == cache.get(def, cat));
+	CHECK(fell->stamps.originX == bad.options.originX);
+}

@@ -88,6 +88,11 @@ private:
 	std::vector<std::string> order_; // oldest first
 };
 
+// The requested plan, else (when it failed) the plan of the same tileset, seed and origin with the shape and size left blank and no shapes.txt (the default map).
+// `usedDefault` says which one came back; `built` is set when a plan was computed, not cached. When both fail the requested plan is returned (its reason is the one to
+// show). Issue #471.
+std::shared_ptr<const MapPlan> planOrDefault(PlanCache &cache, const MapRequest &request, const Catalogue &catalogue, bool *usedDefault = nullptr, bool *built = nullptr);
+
 // --- Pure helpers the hook uses ---------------------------------------------------------------------------------------
 
 // The level rectangle to write before the build: origin (the slot row's) and the plan's size in tiles.
