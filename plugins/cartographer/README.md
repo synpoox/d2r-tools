@@ -22,7 +22,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Map look (HD)**: `Brightness` and `Warmth` columns in `maps.txt` give a map its own brightness and colour warmth while you are in it, even when other maps share its tileset; outside the map the game's look is back. Only the host (or a single-player game) sees the look; a TCP/IP client does not. Hue, saturation and tint are not available yet. The legacy (G key) look is not changed.
 - **Map panel**: in a map, its monster level and properties (under "Monsters have" and "Players have", in blue like item properties), the bonus Density from the map's modifiers (not its maps.txt `Density`) and the total Magic Find of its modifiers show at the right of the screen in the game's own terror zone text field, in one colour, in the place of the zone lines (with a terror zone on or off), and go away outside it; outside a map a terror zone shows as usual. If the game's text cannot be hooked, or does not show it, the panel sits under the game's info text instead. A TCP/IP client does not show it.
 - **Map boss**: a map's `Boss` stands in the far room of a Cave, Crypt or Lava maze (Ice caves: not always yet, #364).
-- **Outdoor map rooms** (Jungle, Snow and Siege, always on; checked in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
+- **Outdoor map rooms** (Jungle, Snow, Siege and Mesa, always on; Mesa is not checked in game yet, the others in single player, see Status): you arrive in the planned entrance clearing, the Boss stands in the boss clearing.
 - **Map events**: Boss, Horde, Ambush, Shrine and Treasure events, with a banner on entry. A Treasure chest is always placed unlocked
   (its loot is not confirmed in game yet).
 - **Map names** (experimental): a map's own name shows on its portal, automap and the game's "Entering" text; `MapNames=0` turns it off.
@@ -49,7 +49,7 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Durance, Outdoor, Snow and Siege levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Durance, Outdoor, Snow, Siege and Mesa levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
    no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava, Ice and Durance maps (one map per game).
    Running it again is safe. If the mod ships its own
@@ -67,7 +67,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
-   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Outdoor, Snow and Siege levels and their eight slots,
+   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Outdoor, Snow, Siege and Mesa levels and their eight slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
@@ -78,7 +78,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\excel\`; column detail is in
 [docs/cartographer/tables.md](../../docs/cartographer/tables.md).
 
-1. **levels.txt**: add six rows at the end, each a copy of a game row with these cells changed. Give each the next free
+1. **levels.txt**: add seven rows at the end, each a copy of a game row with these cells changed. Give each the next free
    `Id`, `Act` 4 (Act 5), `Depend` 0, `Position` 0, `Vis0` to `Vis7` 0, `Warp0` to `Warp7` -1, `Waypoint` 255, `Quest` 0,
    `LevelGroup` Null, and empty `LevelEntry` and `LevelWarp`. Set `SizeX`, `SizeY` and the same two in every difficulty
    column to the size below. Pick an `OffsetX`/`OffsetY` no other Act 5 level uses.
@@ -92,6 +92,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
+   | `Cartographer Mesa` | level 111 | 3 | 27 | 128 x 112 | 6000, 4200 |
 
    The two outdoor rows also get `SubType` and `SubTheme` -1. Leave `LevelName` as copied (it is the string the portal
    shows). Keep a maze level's offsets small: the game saves its map cells as 16-bit numbers when you leave it, so a maze level with
@@ -107,7 +108,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `Outdoor`, `OutdoorSnow` and `OutdoorSiege`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege` and `OutdoorMesa`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -121,7 +122,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 |---|---|---|
 | Name | Unique name | required |
 | Tileset | `Cave`, `Crypt`, `Lava`, `Ice` or `Durance` (each opens through its own level); other tileset names are accepted but refused for now | required |
-| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow` and `Siege` ignore Shape: leave the cell blank there | required (blank is fine for Snow and Siege) |
+| Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow`, `Siege` and `Mesa` ignore Shape: leave the cell blank there | required (blank is fine for Snow, Siege and Mesa) |
 | Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map (unique, item spell 16) | required |
@@ -235,13 +236,13 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 
 #### slots.txt
 
-Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `MazeIce` (Ice caves), `MazeDurance` (Durance), `Outdoor` (Jungle), `OutdoorSnow` (Snow) and `OutdoorSiege` (Siege). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-lava-and-ice)). A slot
+Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `MazeIce` (Ice caves), `MazeDurance` (Durance), `Outdoor` (Jungle), `OutdoorSnow` (Snow), `OutdoorSiege` (Siege) and `OutdoorMesa` (Mesa). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-lava-and-ice)). A slot
 that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`, `MazeLava` needs `Cartographer Lava`, `MazeIce` needs `Cartographer Ice Caves`, `MazeDurance` needs `Cartographer Durance`), or a level another slot uses is
 left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `Outdoor`, `OutdoorSnow` or `OutdoorSiege` | required |
+| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege` or `OutdoorMesa` | required |
 | Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
@@ -285,6 +286,7 @@ A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through th
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0)); a Snow map's Shape is ignored and its Size
 is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
 A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
+A map with Tileset `Mesa` (Act 4 plains) opens through the `OutdoorMesa` slot. The installer adds that fourth outdoor level ("Cartographer Mesa", LevelType 27, 128 x 112 tiles at (6000, 4200)); a Mesa map is a field of 8 to 14 by 6 to 12 cells of 8 tiles (Small, Medium, Large or ExtraLarge) inside a frame of cliff pieces, filled with one of three piece styles. You arrive in a corner of the field, the Boss stands in the far part and the event in a third. Its Shape is ignored. Not checked in game yet.
 
 Checked in single player, Hell: opening from the item, arriving in the entrance clearing, the Boss, Horde and Treasure events, map stats, the entry banner and the Jungle automap title. Snow edges: a cliff and ravine border ring seen on all four sides and corners; no black void at the line ends, and the border strip was walked to on all four sides in a horizontal and a vertical Medium map (issue #395). Not checked: Jungle edges and void cells (issue #142), and multiplayer, where (TCP/IP, experimental) the host sends the outdoor layout to clients.
 

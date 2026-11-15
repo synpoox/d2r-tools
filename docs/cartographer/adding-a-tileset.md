@@ -1,6 +1,6 @@
 # Adding an outdoor tileset to Cartographer
 
-For developers. Jungle and Snow share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`).
+For developers. Jungle, Snow, Siege and Mesa share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`). Mesa (`mesa_plan.*`) is the model for a frame of border pieces around a packed fill.
 
 ## Every touch point
 
@@ -23,7 +23,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 
 - The ready list and the tileset names the loader accepts (`TilesetNames`, `ReadyTilesetNames` in `core/tables.cpp`).
 - `OutdoorLevelType`, `MapIsOutdoor`, `MapSlotName`, `IsOutdoorSlotName`, `OutdoorSlotLevelName` and `HasOutdoorSlot`; `ValidateSlots` takes the required level name from the row, and `OutdoorSlotRefusal` and `OutdoorSlotProblem` work on any outdoor slot.
-- `outdoorTilesetKnown` and the "Use Jungle or Snow." message.
+- `outdoorTilesetKnown` and the "Use Jungle, Snow, Siege or Mesa." message.
 - In `engine/outdoor_hooks.cpp`, `SlotCount`, `SlotIndexFor`, `SlotNameOf` and the per-slot arrays (level, geometry, refusal).
 
 ## What a tileset gets for free

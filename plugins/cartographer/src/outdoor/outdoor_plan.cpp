@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "outdoor_tilesets.h"
+#include "mesa_plan.h"
 #include "siege_plan.h"
 #include "snow_plan.h"
 
@@ -122,6 +123,27 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 			return fail("Cartographer could not plan the Siege map: " + siegePlan.reason);
 		}
 		out.stamps = std::move(siegePlan.stamps);
+		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
+		out.ok = true;
+		return out;
+	}
+	if (tileset->planner == Planner::Mesa) {
+		// Mesa is a ring of border pieces round a packed fill: only the stamps reach the hook and the grid comparison, as for Snow.
+		mesa::MesaRequest mesaRequest;
+		if (!mesa::mesaSizeCells(request.size, &mesaRequest.cellsW, &mesaRequest.cellsH)) {
+			return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
+		}
+		mesaRequest.seed = request.seed;
+		mesaRequest.options.originX = request.options.originX;
+		mesaRequest.options.originY = request.options.originY;
+		mesaRequest.options.maxTilesX = request.options.maxTilesX;
+		mesaRequest.options.maxTilesY = request.options.maxTilesY;
+		mesaRequest.options.pinFiles = request.options.pinFiles;
+		mesa::MesaPlan mesaPlan = mesa::planMesaMap(mesaRequest);
+		if (!mesaPlan.ok) {
+			return fail("Cartographer could not plan the Mesa map: " + mesaPlan.reason);
+		}
+		out.stamps = std::move(mesaPlan.stamps);
 		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
 		out.ok = true;
 		return out;

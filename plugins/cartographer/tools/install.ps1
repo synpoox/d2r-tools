@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance) and Outdoor levels (Jungle, Snow, Siege) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance) and Outdoor levels (Jungle, Snow, Siege, Mesa) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -21,7 +21,10 @@
     levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
                   16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, Outdoor, OutdoorSnow and OutdoorSiege rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    levels.txt    a fifth new level (the fourth outdoor one), "Cartographer Mesa", for Mesa (Act 4 plains) maps: LevelType 27 (Act 4 - Mesa), SizeX 128 and SizeY 112 (14 x 12 fill cells of
+                  8 tiles plus a one-cell frame), at OffsetX 6000, OffsetY 4200, copied from level 111 or the first plain Act 5 outdoor row, with the same Quest, LevelGroup, SubType, Vis
+                  and Waypoint values as the Outdoor level.
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, Outdoor, OutdoorSnow, OutdoorSiege and OutdoorMesa rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -59,7 +62,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900) and -MesaOffsetX and -MesaOffsetY (6000, 4200). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -94,7 +97,9 @@ param(
     [int]$DuranceOffsetX = 1000,
     [int]$DuranceOffsetY = 0,
     [int]$SiegeOffsetX = 6000,
-    [int]$SiegeOffsetY = 3900
+    [int]$SiegeOffsetY = 3900,
+    [int]$MesaOffsetX = 6000,
+    [int]$MesaOffsetY = 4200
 )
 
 $ErrorActionPreference = 'Stop'
@@ -129,7 +134,9 @@ $OutdoorTilesets = @(
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; x 1500..1692, y 0..192 is clear of the Maze level (x 3500..3860) and inside the automap range (an older install had it at 6000,3600, out of range). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117; Range = $true },
     # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. Its layer is the town's 79 (like Jungle), so its map is never swapped out and its offset needs no automap range. Template 110 is Act 5 - Siege 1.
-    @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 }
+    @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 },
+    # Mesa: LevelType 27 is Act 4 - Mesa (the Act 4 plains). The widest plan is 14 x 12 fill cells of 8 tiles plus the one-cell frame: 128 x 112 tiles. Its layer is the town's 79 (like Jungle), so its offset needs no automap range. Template 111 is Act 5 - Barricade 1 (the Jungle level's template: the template must be an Act 5 row).
+    @{ Tileset = 'Mesa';   Slot = 'OutdoorMesa';  LevelName = 'Cartographer Mesa';    LevelType = '27'; Size = '128'; SizeY = '112'; Param = 'Mesa';    Template = 111 }
 )
 # Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).
 # A level whose layer is not the town's 79 (the Maze level, Snow) is swapped out on a town trip and its revealed map is saved as 16-bit cells
