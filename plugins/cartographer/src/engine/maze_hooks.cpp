@@ -609,7 +609,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 	for (size_t i = 0; i < n; ++i) {
 		(void)pick(ctx.rooms[i], 1);
 	}
-	// Arcane's grower gives each room of its spiral a DS1 file variant, (index / 15 + rot) & 3, after the spiral (0x3e7edb..), with rot the start
+	// Arcane's grower gives each room of its spiral a DS1 file variant, (index / 15 + rot) & 3 (not to a one-exit piece: see arcaneFileVariant), after the spiral (0x3e7edb..), with rot the start
 	// rotation it draws from the level seed (the same draw, so the seed moves on as in the game's build). The steered build writes the same
 	// variants: plan room k is the game's room k-1 (its array does not hold the first room), and the first room is left as the picker made it.
 	if (ownGrower && Readable(static_cast<uint8_t*>(level) + LvlSeed, 8)) {
@@ -617,12 +617,20 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 		const uint32_t rot = cm::arcaneDrawRotation(&lo, &hi);
 		Write<uint32_t>(level, LvlSeed, lo);
 		Write<uint32_t>(level, LvlSeed + 4, hi);
+		int perVariant[4] = {0, 0, 0, 0}, left = 0;
 		for (size_t i = 1; i < n; ++i) {
 			uint8_t* piece = Read<uint8_t*>(ctx.rooms[i], RoomPiece);
-			if (piece != nullptr && Readable(piece + PieceFile, 4)) {
-				Write<int32_t>(piece, PieceFile, cm::arcaneFileVariant(static_cast<int>(i - 1), rot));
+			if (piece != nullptr && Readable(piece + PieceFile, 4) && Readable(piece + PieceId, 4)) {
+				const int32_t variant = cm::arcaneFileVariant(static_cast<int>(i - 1), rot, Read<int32_t>(piece, PieceId) - ctx.prep.plan->tileset.pieceBase);
+				if (variant >= 0) {
+					Write<int32_t>(piece, PieceFile, variant);
+					++perVariant[variant & 3];
+				} else {
+					++left;
+				}
 			}
 		}
+		plog::Info("maze Arcane file variants: start rotation %u; rooms per variant 0/1/2/3 = %d/%d/%d/%d, %d one-exit rooms left to the engine", rot, perVariant[0], perVariant[1], perVariant[2], perVariant[3], left);
 	}
 	// The filler ring (Lava): cells around the layout so no void shows past its edges. Made after the plan rooms have their pieces, so
 	// a plan room's piece never counts the link to the filler beside it. The picker gives a filler 836 + the mask of its link to its parent (a

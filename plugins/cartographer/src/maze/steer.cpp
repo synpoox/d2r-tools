@@ -189,8 +189,9 @@ uint32_t arcaneDrawRotation(uint32_t *lo, uint32_t *hi)
 	return *lo & 3;
 }
 
-int32_t arcaneFileVariant(int index, uint32_t rot)
+int32_t arcaneFileVariant(int index, uint32_t rot, int mask)
 {
+	if (mask <= 0 || mask > 15 || (mask & (mask - 1)) == 0) return -1;
 	return static_cast<int32_t>((static_cast<uint32_t>(index / 15) + rot) & 3);
 }
 

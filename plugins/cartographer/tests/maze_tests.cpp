@@ -1674,13 +1674,15 @@ TEST_CASE("after a refused steered step Arcane's grower never runs on a partial 
 
 TEST_CASE("Arcane file variants: (index / 15 + rot) & 3, and the start rotation is the game's seed draw")
 {
-	CHECK(arcaneFileVariant(0, 0) == 0);
-	CHECK(arcaneFileVariant(14, 0) == 0);
-	CHECK(arcaneFileVariant(15, 0) == 1);
-	CHECK(arcaneFileVariant(45, 0) == 3);
-	CHECK(arcaneFileVariant(60, 0) == 0);  // wraps at 4 groups
-	CHECK(arcaneFileVariant(15, 3) == 0);
-	CHECK(arcaneFileVariant(0, 2) == 2);
+	CHECK(arcaneFileVariant(0, 0, 3) == 0);
+	CHECK(arcaneFileVariant(14, 0, 3) == 0);
+	CHECK(arcaneFileVariant(15, 0, 3) == 1);
+	CHECK(arcaneFileVariant(45, 0, 3) == 3);
+	CHECK(arcaneFileVariant(60, 0, 3) == 0);  // wraps at 4 groups
+	CHECK(arcaneFileVariant(15, 3, 3) == 0);
+	CHECK(arcaneFileVariant(0, 2, 3) == 2);
+	for (int mask : {1, 2, 4, 8}) CHECK(arcaneFileVariant(0, 1, mask) == -1);  // one-exit pieces keep the engine pick
+	for (int mask = 0; mask <= 16; ++mask) CHECK((arcaneFileVariant(20, 1, mask) >= 0) == (mask >= 1 && mask <= 15 && mask != 1 && mask != 2 && mask != 4 && mask != 8));
 	uint32_t lo = 1, hi = 0;
 	CHECK(arcaneDrawRotation(&lo, &hi) == (0x6ac690c5u & 3));
 	CHECK(lo == 0x6ac690c5u);
