@@ -861,6 +861,30 @@ TEST_CASE("signatures: parse, wildcards, and a unique match") {
 	CHECK(FindPattern(data, sizeof(data), none, &at) == 0);
 }
 
+TEST_CASE("call-site signatures: the return address is the match + 5, only for one match that starts at a call") {
+	Pattern p{};
+	REQUIRE(ParsePattern(sig::MainRollCall, &p));
+	const uint8_t call[] = {0x90, 0xE8, 0x80, 0x13, 0x00, 0x00, 0x8B, 0xD0, 0xBF, 0x02, 0x00, 0x00, 0x00, 0x8B, 0x45, 0x40, 0x85, 0xC0, 0x0F, 0x45, 0xD0, 0x90};
+	size_t at = 0;
+	REQUIRE(FindPattern(call, sizeof(call), p, &at) == 1);
+	CHECK(at == 1);
+	CHECK(ReturnAfterCall(call + at) == call + 6);  // 0x442e7b -> 0x442e80 on build 93847
+	uint8_t twice[2 * sizeof(call)];
+	std::memcpy(twice, call, sizeof(call));
+	std::memcpy(twice + sizeof(call), call, sizeof(call));
+	CHECK(FindPattern(twice, sizeof(twice), p, &at) == 2);  // not unique: the part stays off
+	uint8_t other[sizeof(call)];
+	std::memcpy(other, call, sizeof(call));
+	other[17] = 0xC1;  // a caller followed by other code
+	CHECK(FindPattern(other, sizeof(other), p, &at) == 0);  // not found: the part stays off
+	CHECK(ReturnAfterCall(call) == nullptr);  // an override that does not start at an E8
+	CHECK(ReturnAfterCall(nullptr) == nullptr);
+	Pattern lit{};
+	REQUIRE(ParsePattern(sig::InstanceCall, &lit));
+	CHECK(lit.bytes[0] == 0xE8);  // both built-in call-site signatures start at the call
+	CHECK(p.bytes[0] == 0xE8);
+}
+
 TEST_CASE("signatures: every recorded part signature parses and has at least 24 bytes") {
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,

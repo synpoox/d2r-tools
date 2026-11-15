@@ -42,6 +42,10 @@ struct Part {
 	uint32_t guardExact = 0;  // leading bytes of guard the signature pinned with no wildcard (hookSize once resolved, else 0)
 };
 
+// Finds a call-site part (a signature that starts at an `E8 rel32`, hookSize 0) like ResolvePart and sets *returnRva to the call's return address
+// (match + 5, minus the exe base). A part that is not found once, or whose match is not a call, is off and *returnRva is 0.
+auto ResolveCallSite(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count, Part& part, uint64_t* returnRva) -> bool;
+
 // What to do with the result of InstallInlineHook for `part`: true only when the hook is installed and the loader returned the
 // original. An installed hook with no original is taken out again by writing the guard's exact original bytes back (only when
 // they are all known; see hookguard::canRestoreHook), so the game's own function runs; the part is then off. Sets the part's

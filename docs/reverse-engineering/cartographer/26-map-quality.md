@@ -16,6 +16,12 @@ this: `Magic` 1 means always magic, 0 only means "not forced".
 | Failure mode | Fail open: if a part a hook needs is missing, or its guard does not match, that hook is not installed and the game does what it did before; `cartographer check` then says the block is partial or off |
 | Evidence | See "In game" below |
 
+### The main roll call by signature (issue #473, build 93847)
+
+The hook counts only the item maker's own roll by return address, so the plugin finds it at install, not as a fixed `0x442e80`. Part `MainRollCall` (`core/part_signatures.h`) starts at the `E8` of the call at `0x442e7b`; the call target is masked, the bytes after it are kept: `E8 ?? ?? ?? ?? 8B D0 BF 02 00 00 00 8B 45 40 85 C0 0F 45 D0` (`mov edx,eax`, `mov edi,2`, `mov eax,[rbp+0x40]`, `test eax,eax`, `cmovne edx,eax`). It matches once in the executable sections; the rolls inside the fallbacks are followed by other code. The return address is the match + 5. If the part is not found exactly once (or a `signatures.txt` override does not start at an `E8`), the roll hook is not installed and the part is logged off, so it never runs without its caller check. `signatures.txt` can replace `MainRollCall` like any part.
+
+Evidence: `tools/check_map_quality_signature.py <image>` on the build 93847 image: `MainRollCall: signature matches ['0x442e7b'], resolves to ['0x442e80']`, `OK`. Unit test: `tables_tests` (call-site signatures).
+
 ### The fallback chain
 
 The item maker `0x442d60` calls the roll at `0x442e7b` and acts on the result (a nonzero `request+0x40` wins over it, via `cmovne`

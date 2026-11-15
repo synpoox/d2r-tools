@@ -5,7 +5,8 @@ Usage: python -I plugins/cartographer/tools/check_map_quality_signature.py <imag
 <image> is the running game image in memory layout (section file offset == RVA), as made by d2rAI-toolkit's
 tools/dump_image.py. The signatures are read from src/engine/map_quality.cpp (the ones the plugin compiles in). Each must match
 exactly once in the executable sections, at its recorded RVA; the bytes a hook cuts must be whole instructions (the guard
-below); the item maker's own roll call (0x442e7b) must target the roll and end at 0x442e80, the return address the plugin counts.
+below); the item maker's own roll call (MainRollCall, src/core/part_signatures.h) must match once, at 0x442e7b, target the roll and
+resolve (match + 5) to 0x442e80, the return address the plugin counts; the call sites in the fallbacks must not match it.
 Notes: docs/reverse-engineering/cartographer/26-map-quality.md. Exit status 0 only if every check passes.
 """
 import argparse
@@ -23,7 +24,9 @@ PARTS = {
     "NormalFallback": (0x442820, 0, b""),
 }
 MAIN_ROLL_CALL = 0x442E7B
+MAIN_ROLL_RETURN = 0x442E80
 SOURCE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "engine", "map_quality.cpp")
+SIGNATURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "core", "part_signatures.h")
 IMAGE_SCN_MEM_EXECUTE = 0x20000000
 
 
@@ -71,6 +74,13 @@ def main():
     good = call[0] == 0xE8 and target == roll
     print("item maker roll call at 0x%x targets 0x%x: %s" % (MAIN_ROLL_CALL, target, "ok" if good else "MISMATCH"))
     ok &= good
+    with open(SIGNATURES, encoding="utf-8") as f:
+        sig = re.search(r'MainRollCall = "([^"]+)"', f.read()).group(1)
+    pat = re.compile(b"".join(b"." if t == "??" else re.escape(bytes([int(t, 16)])) for t in sig.split()), re.S)
+    hits = [va + m.start() for va, vsize in sections for m in pat.finditer(img[va:va + vsize])]
+    print("MainRollCall: signature matches %s, resolves to %s (expected [%s] -> %s)" % (
+        [hex(h) for h in hits], [hex(h + 5) for h in hits], hex(MAIN_ROLL_CALL), hex(MAIN_ROLL_RETURN)))
+    ok &= hits == [MAIN_ROLL_CALL] and hits[0] + 5 == MAIN_ROLL_RETURN
     print("OK" if ok else "FAILED")
     sys.exit(0 if ok else 1)
 
