@@ -39,8 +39,10 @@ Once-per-game bit (`game + 0x1d8`, tested at `0x499c6d`..`0x499c87`): a second s
 
 No-room path: `OnPopulated` sets `bossStranded` when the picker is out of rooms; `EventsPlayerTick` then calls `PlaceStrandedBoss` with the room the player stands in (a live room on the map's level, so its record is not stale) and the player's own subtile (the dynamic path at `unit + 0x38`, x and y as uint16 at `+0x2` and `+0x6`, as `cartographer where` reads it). The player stands on floor, so the first try has no flag (an ordinary spot test, which moves to a free spot nearby); only if the game refuses that does it pass `0x80`. Flag `0x80` alone takes the first blocked spot at once, which can be rock. A refused pair of tries is repeated when the player's room changes and every 100 player ticks (`StrandedRetry`), with a Warn per try; the Error is logged only when the map closes (`LogBossNeverPlaced`).
 
-Needs game: that flag `0x80` takes effect on the superunique path (name shown, minions, drops at a spot the collision test refuses).
+Game check (PR for #463, slot 11, `CARTOGRAPHER_TEST_BOSS_REFUSE=20`): after the 20 refusals the Boss spawned through the forced rung (flag `0x80`) on Cave, Ice, Snow and Lava, and the log shows "spawned ... as a superunique, collision test skipped". On Cave and Ice a hover showed the Boss's real name with its mod affixes. On Snow and Lava the name was not found on screen within the time budget; the log lines are the evidence there.
 
 ### 5. Not verified
 
-The ladder and flag `0x80` ran in game in the checks of the PR for #445 (results in that PR); how often each rung is reached in play is not known. The test knob `CARTOGRAPHER_TEST_BOSS_REFUSE=N` (environment variable, a game check only) refuses the first N ordinary tries so rungs 2 to 4 can be reached; it does nothing when unset.
+The ladder and flag `0x80` ran in game in the checks of the PR for #445 (results in that PR); how often each rung is reached in play is not known. The test knob `CARTOGRAPHER_TEST_BOSS_REFUSE=N` (environment variable, a game check only) refuses the first N ordinary tries so rungs 2 and 3 can be reached; it does nothing when unset.
+
+The player-tick last resort (rung 5) was not reached in game; it is covered by unit tests of its retry decision only.
