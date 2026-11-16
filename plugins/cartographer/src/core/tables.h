@@ -22,6 +22,7 @@ inline constexpr const char* MapsFile = "maps.txt";
 inline constexpr const char* SettingsFile = "cartographer.txt";
 inline constexpr const char* SlotsFile = "slots.txt";
 inline constexpr const char* ShapesFile = "shapes.txt";
+inline constexpr const char* ArenasFile = "arenas.txt";
 inline constexpr const char* MapStatsFile = "mapstats.txt";  // retired: only noted when it exists
 inline constexpr const char* MapEventsFile = "mapevents.txt";
 inline constexpr const char* BossesFile = "bosses.txt";
@@ -128,6 +129,18 @@ struct Slot {
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 
+// arenas.txt (optional): a fixed, square, enclosed arena built from stock Mesa pieces in the mod's own levels.txt row (issue #486).
+struct ArenaDef {
+	int line = 0;           // row in arenas.txt
+	std::string name;
+	int level = 0;          // levels.txt Id
+	int width = 2, height = 2;   // the interior in 8-tile grid cells, without the ring
+	int fill = 2;           // fill set index: 0 Mesa1, 1 Mesa2, 2 Mesa3
+	int entryX = 1, entryY = 1;  // the interior cell whose piece is the arrival
+	// levels.txt OffsetX, OffsetY, SizeX and SizeY of the level, in tiles (read at load: the level record's rectangle is still zero when the build starts).
+	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
+};
+
 // The last level of the original game (3.3, Colossal Summit); a slot must be a level above it.
 inline constexpr int LastOriginalLevel = 137;
 
@@ -163,6 +176,11 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
+
+// arenas.txt (Name, Level, Tileset, Width, Height, Fill, Entry). `levelsText` is the mod's levels.txt, `slots` the validated slots. A bad row is left out and described in `report`:
+// an unknown level, a level that is not Act 5, DrlgType 3 and LevelType 27, a slot level, two rows on one level, a size outside the limits or bigger than the level's SizeX / SizeY,
+// an unknown tileset or fill set, or an entry outside the interior.
+auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef>;
 
 // Drops every slot that could aim a hook at a level that is not the installer's own: a level of the original game
 // (id 137 or below, 3.3), a town, a level with no levels.txt row (or no readable levels.txt), a repeated level or name.

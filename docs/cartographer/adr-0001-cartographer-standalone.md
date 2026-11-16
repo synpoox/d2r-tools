@@ -2,7 +2,7 @@
 
 Cartographer is a D2RLoader plugin for procedurally laid-out maps (plan: [`plans/cartographer-plugin.md`](plans/cartographer-plugin.md), epic [d2r-tools#19](https://github.com/synpoox/d2r-tools/issues/19)). It is a separate product from `core-maps`, the map plugin that lives in the PD2-Resurrected repository, and any D2R mod can drop it in.
 
-- **Fully standalone.** It carries no PD2 content and has no content interface for other plugins. It does not link `pd2_engine.h`. PD2-Resurrected's content does not move onto it; `core-maps` keeps its own map code.
+- **Fully standalone.** It carries no PD2 content and does not link another plugin's code. Its only interface for other plugins is the content services in the amendment below. It does not link `pd2_engine.h`. PD2-Resurrected's content does not move onto it; `core-maps` keeps its own map code.
 - **Owner exception to the global-plugin rule (2026-11-11).** AGENTS.md says plugins are global by default and do not depend on the active mod's files. Cartographer may read the mod's `maps.txt` and other tables, and its installer (if one ships) may add rows to the mod's `levels.txt` and `misc.txt`. No other mod file is changed; the slot row's monster columns are written in memory when the map opens, not on disk. Research found no D2RLoader row injection for vanilla tables, so the installer is the current plan (plan section 3.4).
 - **Never loaded together with `core-maps`.** Both hook item spell 16 and the same spawn functions. A mod ships one or the other.
 - **One map per game.** A map item used in Harrogath opens a red portal into the map. Once a map is open, any further map is refused for the rest of the game.
@@ -19,3 +19,7 @@ Cartographer is a D2RLoader plugin for procedurally laid-out maps (plan: [`plans
 - Two map systems live in the repo. A fix to a shared idea is made twice.
 - Events are limited to five generic kinds driven by data. Scripted events stay in `core-maps`.
 - Release is blocked until the novice test passes, even if every feature works.
+
+## Amendment (2026-11-15): content services for other plugins
+
+Cartographer may publish content services that other plugins call: `cartographer.arena.v1` (a fixed arena level declared in `arenas.txt`: its level, size, entry and named spots) and `cartographer.room-populate.v1` (a callback when a room of a Cartographer-built level is populated). They are versioned, read-only for the caller and optional: a mod that never loads another plugin, or a plugin that never asks, sees no change, and Cartographer still loads, hooks and builds without any consumer. What stays: no PD2 content or `pd2_engine.h` in Cartographer, no plugin code shared across plugins, and a drop-in mod still needs only `maps.txt`. This narrows only the "no content interface" line; the one-map-per-game, never-with-`core-maps` and simplicity rules are unchanged. The first user is a fixed Mesa arena (d2r-tools#486, which adds `arenas.txt`); the services themselves follow in #487 and #488.

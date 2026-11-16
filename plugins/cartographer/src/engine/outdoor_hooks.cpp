@@ -142,7 +142,39 @@ struct ArrivalFact {
 	int32_t levelId = 0;
 	int32_t cellX = 0, cellY = 0, cellW = 0, cellH = 0;  // the entrance cell
 };
-ArrivalFact g_arrival;
+std::vector<ArrivalFact> g_arrivals;  // one per level id: an arena's entry must not replace a map's (guarded by g_lock)
+auto ArrivalOf(int32_t levelId) -> ArrivalFact {  // g_lock held
+	for (const ArrivalFact& f : g_arrivals) {
+		if (f.levelId == levelId) {
+			return f;
+		}
+	}
+	return {};
+}
+void SetArrival(const ArrivalFact& fact) {  // g_lock held
+	for (ArrivalFact& f : g_arrivals) {
+		if (f.levelId == fact.levelId) {
+			f = fact;
+			return;
+		}
+	}
+	g_arrivals.push_back(fact);
+}
+// A fixed arena (arenas.txt, issue #486): a level row of the mod's own, built from a plan made when the tables load. It is not a map open: it never touches g_job or g_slotState.
+struct ArenaEntry {
+	ArenaDef def;
+	std::shared_ptr<const co::MapPlan> plan;
+};
+std::vector<std::shared_ptr<const ArenaEntry>> g_arenas;  // guarded by g_lock
+auto ArenaOf(int32_t levelId) -> std::shared_ptr<const ArenaEntry> {
+	std::lock_guard<std::mutex> lock(g_lock);
+	for (const std::shared_ptr<const ArenaEntry>& a : g_arenas) {
+		if (a->def.level == levelId) {
+			return a;
+		}
+	}
+	return nullptr;
+}
 // The box of the last slot build, for `cartographer where` (guarded by g_lock): the level id, its origin in tiles, the macro cell size in tiles and the macro grid.
 struct WhereBox {
 	bool known = false;
@@ -206,7 +238,7 @@ auto IsSlotLevel(const void* level) noexcept -> bool {
 			return true;
 		}
 	}
-	return false;
+	return ArenaOf(id) != nullptr;
 }
 
 // --- The grids, read as the game's grid reader (0x3fa790) does: data[rows[y] + x] ---------------------------------------------
@@ -352,6 +384,20 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 	return plan;
 }
 
+// The plan of an arena, made when the tables loaded. Null, with a reason, when the game must build the level itself.
+auto PrepareArena(const void* level, const ArenaEntry& arena, std::string* why) -> std::shared_ptr<const co::MapPlan> {
+	const int have = Read<int32_t>(level, LvlTileType);
+	if (have != co::mesa::kLevelType) {
+		*why = "arena '" + arena.def.name + "': the level's LevelType is " + std::to_string(have) + " but a Mesa arena needs " + std::to_string(co::mesa::kLevelType) + " (levels.txt LevelType)";
+		return nullptr;
+	}
+	if (arena.plan == nullptr || !arena.plan->ok) {
+		*why = arena.plan != nullptr ? arena.plan->reason : std::string("the arena has no plan");
+		return nullptr;
+	}
+	return arena.plan;
+}
+
 // The plan for `job` on the slot geometry (cached by request), or its default map when the request failed. Null, with a reason, when both failed. `level` is only for the log line. May throw.
 auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	const Job* job = &jobRef;
@@ -446,11 +492,14 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	for (const int i : mark.clear) {
 		Write<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags, flagsOf(i) & ~co::kArrivalFlags);
 	}
+	const bool arena = ArenaOf(id) != nullptr;  // an arena build must not reset the probe state of an open map (g_probe is per game, one map)
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_arrival = {true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h};
-		g_arrivalLogged = false;
-		g_arrivalResult = 0;
+		SetArrival({true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h});
+		if (!arena) {
+			g_arrivalLogged = false;
+			g_arrivalResult = 0;
+		}
 	}
 	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
@@ -478,9 +527,9 @@ void MoveArrivalToFreeSpot(uint64_t cl, void* game, uint64_t levelId, uint64_t e
 	ArrivalFact fact;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		fact = g_arrival;
+		fact = ArrivalOf(static_cast<int32_t>(levelId));
 	}
-	if (!fact.known || fact.levelId != static_cast<int32_t>(levelId)) {
+	if (!fact.known) {
 		return;
 	}
 	std::vector<void*> rooms;
@@ -569,11 +618,11 @@ void Act5Hook(uint8_t dataFlag, void* level) noexcept {
 
 // The slot level's whole build, from the level build hook: rectangle, seed, the entry function (which reaches Act5Hook and then makes the
 // rooms), then the level build's native tail. No allocation and nothing that throws past the logging, which is wrapped.
-auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::MapPlan& plan) noexcept -> uint64_t {
+auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::MapPlan& plan, bool arena) noexcept -> uint64_t {
 	const int id = Read<int32_t>(level, LvlId);
 	const co::LevelRect rect = co::levelRectOf(plan.stamps);
 	ProbeLevel(level, "before the slot build");
-	{
+	if (!arena) {  // an arena must not replace the open map's box for `cartographer where`
 		std::lock_guard<std::mutex> lock(g_lock);
 		const co::StampPlan& sp = plan.stamps;
 		g_whereBox = {true, id, rect.x, rect.y, rect.w, rect.h, sp.macroW > 0 ? sp.tilesW / sp.macroW : 0, sp.macroMinX, sp.macroMinY, sp.macroW, sp.macroH};
@@ -617,8 +666,8 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 			co::GridCounts counts;
 			const std::vector<std::string> problems = co::compareGrid(plan.stamps, grid, &counts);
 			if (ctx.fired && problems.empty()) {
-				plog::Info("outdoor slot level %d: built as planned (%d stamps, %d void cells; grid %d cells: %d pieces, %d covered, %d void, %d neither), %d rooms", id, ctx.stamped, ctx.voided,
-				           counts.cells, counts.pieces, counts.covered, counts.voided, counts.other, Read<int32_t>(level, LvlRoomCount));
+				plog::Info("outdoor slot level %d: built as planned (%d stamps, %d void cells; grid %d cells: %d pieces, %d covered, %d void, %d neither), %d rooms, plan %016llx%s", id, ctx.stamped, ctx.voided,
+				           counts.cells, counts.pieces, counts.covered, counts.voided, counts.other, Read<int32_t>(level, LvlRoomCount), static_cast<unsigned long long>(plan.hash), arena ? " (arena)" : "");
 			} else if (!problems.empty()) {
 				plog::Warn("outdoor slot level %d: the built grid is not the plan: %s%s", id, problems.front().c_str(), problems.size() > 1 ? " (and more; turn OutdoorProbe on)" : "");
 				for (size_t i = 1; i < problems.size() && g_probe.load(); ++i) {
@@ -643,7 +692,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 }
 
 // Whether to build the slot level ourselves, and if so, do it. See the header.
-auto BuildSlotLevel(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result) noexcept -> bool {
+auto BuildSlotLevel(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result, const ArenaEntry* arena) noexcept -> bool {
 	const int id = Read<int32_t>(level, LvlId);
 	if (Read<int32_t>(level, LvlType) != OutdoorType) {
 		plog::Warn("outdoor slot level %d: not an outdoor level (levels.txt DrlgType must be 3); building the game's own level", id);
@@ -665,7 +714,7 @@ auto BuildSlotLevel(uint8_t dataFlag, void* level, LevelBuildFn original, uint64
 	std::shared_ptr<const co::MapPlan> plan;
 	std::string why;
 	try {
-		plan = PrepareSlot(level, &why);
+		plan = arena != nullptr ? PrepareArena(level, *arena, &why) : PrepareSlot(level, &why);
 	} catch (...) {
 		plog::Error("outdoor slot level %d: an exception while preparing the plan; building the game's own level", id);
 		return false;
@@ -677,7 +726,7 @@ auto BuildSlotLevel(uint8_t dataFlag, void* level, LevelBuildFn original, uint64
 		}
 		return false;
 	}
-	*result = RunBuild(dataFlag, level, original, *plan);  // from here the level is ours; `plan` keeps the cached plan alive for the build
+	*result = RunBuild(dataFlag, level, original, *plan, arena != nullptr);  // from here the level is ours; `plan` keeps the cached plan alive for the build
 	return true;
 }
 
@@ -698,13 +747,26 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 	if (!g_live.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
 		return false;  // every other level runs the game's own build, untouched
 	}
+	if (const std::shared_ptr<const ArenaEntry> arena = ArenaOf(Read<int32_t>(level, LvlId)); arena != nullptr) {
+		// An arena is not a map open: no map record, no slot state (the one-map-per-game gates stay as they are).
+		const bool built = BuildSlotLevel(dataFlag, level, original, result, arena.get());
+		if (!built && t_ctx == nullptr && Read<int32_t>(level, LvlType) == OutdoorType && Read<void*>(level, LvlFirstRoom) == nullptr) {
+			const co::LevelRect rect = co::fallbackRectOf(arena->def.offsetX, arena->def.offsetY, arena->def.sizeX, arena->def.sizeY);  // issue #471
+			Write<int32_t>(level, LvlOriginX, rect.x);
+			Write<int32_t>(level, LvlOriginY, rect.y);
+			Write<int32_t>(level, LvlSizeX, rect.w);
+			Write<int32_t>(level, LvlSizeY, rect.h);
+			plog::Warn("arena '%s' (level %d): the game builds its own level in %d x %d tiles at (%d,%d)", arena->def.name.c_str(), arena->def.level, rect.w, rect.h, rect.x, rect.y);
+		}
+		return built;
+	}
 	bool hadJob = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		hadJob = g_job != nullptr;
 	}
 	g_slotState.begin();
-	const bool ours = BuildSlotLevel(dataFlag, level, original, result);
+	const bool ours = BuildSlotLevel(dataFlag, level, original, result, nullptr);
 	if (!ours && t_ctx == nullptr && Read<int32_t>(level, LvlType) == OutdoorType && Read<void*>(level, LvlFirstRoom) == nullptr) {
 		// The game builds the level itself. Its rectangle is 0 now and must hold the map border, or the game exits (issue #471): give it the slot row's.
 		SlotGeometry geometry;
@@ -822,7 +884,7 @@ void OutdoorProbeArrival(void* room, int32_t levelId) {
 	ArrivalFact fact;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		fact = g_arrival;
+		fact = ArrivalOf(levelId);
 	}
 	const void* drlg = Read<const void*>(room, ServerRoomDrlg);
 	if (drlg == nullptr) {
@@ -886,6 +948,36 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 			g_slotLevels[i] = slot != nullptr ? slot->level : -1;
 		}
 	}
+	std::vector<std::shared_ptr<const ArenaEntry>> arenas;
+	if (tables != nullptr) {
+		for (const ArenaDef& def : tables->arenas) {
+			auto entry = std::make_shared<ArenaEntry>();
+			entry->def = def;
+			co::mesa::MesaRequest request;
+			request.cellsW = def.width;
+			request.cellsH = def.height;
+			request.arenaFill = def.fill;
+			request.entryX = def.entryX;
+			request.entryY = def.entryY;
+			request.options.originX = def.offsetX;
+			request.options.originY = def.offsetY;
+			request.options.maxTilesX = def.sizeX;
+			request.options.maxTilesY = def.sizeY;
+			entry->plan = std::make_shared<const co::MapPlan>(co::planArenaMap(request));
+			if (entry->plan->ok) {
+				plog::Info("arena '%s' (level %d): planned %d x %d cells, %d stamps, level %d x %d tiles at (%d,%d), plan %016llx", def.name.c_str(), def.level, def.width, def.height,
+				           static_cast<int>(entry->plan->stamps.stamps.size()), entry->plan->stamps.tilesW, entry->plan->stamps.tilesH, entry->plan->stamps.originX, entry->plan->stamps.originY,
+				           static_cast<unsigned long long>(entry->plan->hash));
+			} else {
+				plog::Warn("arena '%s' (level %d): %s; the game builds that level itself", def.name.c_str(), def.level, entry->plan->reason.c_str());
+			}
+			arenas.push_back(std::move(entry));
+		}
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_arenas = std::move(arenas);
+	}
 	g_cache.clear();
 	int firstLevel = -1;  // the first slot in table order that has a row
 	for (int i = 0; i < SlotCount && firstLevel < 0; ++i) {
@@ -929,7 +1021,7 @@ void OutdoorGameLeft() {
 		g_job.reset();
 		g_eventRoom = {};
 		g_bossRoom = {};
-		g_arrival = {};
+		g_arrivals.clear();
 		g_arrivalLogged = false;
 		g_arrivalResult = 0;
 	}
@@ -943,14 +1035,19 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 	for (int i = 0; i < OwnLevelBuild; ++i) {
 		ResolvePart(context, overrides, ranges, count, g_parts[i]);
 	}
-	if (g_slotLevel.load() <= 0) {
+	bool anyArena = false;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		anyArena = !g_arenas.empty();
+	}
+	if (g_slotLevel.load() <= 0 && !anyArena) {
 		for (Part& part : g_parts) {
 			if (part.status.on) {
 				part.status.on = false;
 				part.status.detail = "found, not hooked: no Outdoor slot";
 			}
 		}
-		plog::Info("no Outdoor slot (slots.txt); no outdoor hook installed");
+		plog::Info("no Outdoor slot (slots.txt) and no arena (arenas.txt); no outdoor hook installed");
 		return;
 	}
 	bool allOn = true;

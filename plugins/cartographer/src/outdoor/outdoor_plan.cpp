@@ -188,6 +188,21 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	return out;
 }
 
+MapPlan planArenaMap(const mesa::MesaRequest &request) {
+	MapPlan out;
+	mesa::MesaPlan plan = mesa::planMesaArena(request);
+	if (!plan.ok) {
+		out.reason = "Cartographer could not plan the arena: " + plan.reason;
+		return out;
+	}
+	out.stamps = std::move(plan.stamps);
+	// The stamp hash leaves out the entrance rectangle, so the entry cell is mixed in: two arenas that differ only in their entry are two plans.
+	const TileRect &e = out.stamps.entrance;
+	out.hash = mix(mix(mix(mix(mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps)), static_cast<uint64_t>(e.x)), static_cast<uint64_t>(e.y)), static_cast<uint64_t>(e.w)), static_cast<uint64_t>(e.h));
+	out.ok = true;
+	return out;
+}
+
 std::shared_ptr<const MapPlan> PlanCache::get(const MapRequest &request, const Catalogue &catalogue, bool *built) {
 	const std::string key = planCacheKey(request);
 	{

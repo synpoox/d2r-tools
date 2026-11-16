@@ -379,3 +379,150 @@ TEST_CASE("planOutdoorMap plans Mesa through the tileset table and the grid comp
 	CHECK_FALSE(tight.ok);
 	CHECK(tight.reason.find("Mesa") != std::string::npos);
 }
+
+namespace {
+
+MesaRequest arenaRequest(int w, int h, int fill, int ex, int ey)
+{
+	MesaRequest r;
+	r.cellsW = w;
+	r.cellsH = h;
+	r.arena = true;
+	r.arenaFill = fill;
+	r.entryX = ex;
+	r.entryY = ey;
+	return r;
+}
+
+} // namespace
+
+TEST_CASE("an arena is a closed square: ring of eight border pieces, fill covered once, exactly one entry")
+{
+	for (int fill = 0; fill < kFillSets; ++fill) {
+		for (int w = 1; w <= 4; ++w) {
+			for (int h = 1; h <= 4; ++h) {
+				const MesaRequest r = arenaRequest(w, h, fill, w / 2, h - 1);
+				const MesaPlan plan = planMesaArena(r);
+				INFO("fill " << fill << " size " << w << " x " << h << ": " << plan.reason);
+				REQUIRE(plan.ok);
+				CHECK(joined(checkMesaPlan(r, plan)).empty());
+				for (int c : coverage(plan.stamps)) CHECK(c == 1);
+				CHECK(plan.stamps.cellsW == w + 2);
+				CHECK(plan.stamps.cellsH == h + 2);
+				int entrances = 0, ring = 0;
+				for (const Stamp &s : plan.stamps.stamps) {
+					entrances += s.role == layout::Role::Entrance ? 1 : 0;
+					ring += s.lvlPrest >= 799 && s.lvlPrest <= 806 ? 1 : 0;
+					const int ix = s.cx - 1, iy = s.cy - 1;
+					const bool onRing = ix < 0 || iy < 0 || ix >= w || iy >= h;
+					CHECK((s.lvlPrest >= 799 && s.lvlPrest <= 806) == onRing);
+					if (onRing) CHECK(s.lvlPrest == edgePieceAt(ix, iy, w, h));
+					CHECK(s.file == -1);
+				}
+				CHECK(entrances == 1);
+				CHECK(ring == 2 * (w + h) + 4);
+				CHECK_FALSE(plan.stamps.boss.known);
+				CHECK_FALSE(plan.stamps.event.known);
+				CHECK(plan.stamps.entrance.known);
+			}
+		}
+	}
+}
+
+TEST_CASE("a 2 x 2 arena is one 16 x 16 fill; the entry piece is the arrival")
+{
+	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const MesaPlan plan = planMesaArena(r);
+	REQUIRE(plan.ok);
+	CHECK(plan.stamps.stamps.size() == 13);
+	CHECK(plan.fillSet == 2);
+	int fills = 0;
+	for (const Stamp &s : plan.stamps.stamps)
+		if (s.lvlPrest == 824) {
+			++fills;
+			CHECK(s.role == layout::Role::Entrance);
+		}
+	CHECK(fills == 1);
+	CHECK(plan.stamps.entrance.w == 16);
+	CHECK(plan.stamps.entrance.h == 16);
+	CHECK(plan.stamps.entrance.x == 8);
+	CHECK(plan.stamps.entrance.y == 8);
+	// Fill sets Mesa1 and Mesa2 use their own 16 x 16 piece.
+	CHECK(planMesaArena(arenaRequest(2, 2, 0, 0, 0)).stamps.stamps[5].lvlPrest == 813);
+	CHECK(planMesaArena(arenaRequest(2, 2, 1, 0, 0)).stamps.stamps[5].lvlPrest == 818);
+}
+
+TEST_CASE("an arena plan is pure and deterministic, with a golden hash per size and fill set")
+{
+	const MesaRequest a = arenaRequest(2, 2, 2, 1, 1);
+	CHECK(planMesaArena(a).hash == planMesaArena(a).hash);
+	CHECK(planMesaArena(a).hash != planMesaArena(arenaRequest(2, 2, 1, 1, 1)).hash);
+	CHECK(planMesaArena(a).hash != planMesaArena(arenaRequest(3, 2, 2, 1, 1)).hash);
+	CHECK(planArenaMap(arenaRequest(4, 2, 2, 0, 0)).hash != planArenaMap(arenaRequest(4, 2, 2, 3, 0)).hash);  // another entry piece
+	CHECK(planArenaMap(a).hash == planArenaMap(arenaRequest(2, 2, 2, 0, 0)).hash);                              // the same piece holds every cell of a 2 x 2
+	CHECK(planMesaArena(arenaRequest(2, 2, 0, 1, 1)).hash == 0xb31b010e0778dd1bull);
+	CHECK(planMesaArena(arenaRequest(2, 2, 1, 1, 1)).hash == 0x8ebba961b71eb424ull);
+	CHECK(planMesaArena(arenaRequest(2, 2, 2, 1, 1)).hash == 0x638b0d408c12a83eull);
+	CHECK(planMesaArena(arenaRequest(4, 3, 2, 2, 2)).hash == 0x89ad224bd82d41d1ull);
+	CHECK(planMesaArena(arenaRequest(1, 1, 2, 0, 0)).hash == 0xc99dd2772e4db9e1ull);
+}
+
+TEST_CASE("an arena packs largest piece first with no RNG")
+{
+	const MesaPlan plan = planMesaArena(arenaRequest(5, 3, 2, 0, 0));
+	REQUIRE(plan.ok);
+	// 5 x 3 cells: a 24 x 24 at (0,0), then a 16 x 16 cannot fit beside it (2 cells left, 3 high): 16 x 16 at (3,0), then 16 x 8 below it at (3,2), and so on, never random.
+	CHECK(mesaPlanAscii(plan) == mesaPlanAscii(planMesaArena(arenaRequest(5, 3, 2, 0, 0))));
+	std::vector<int> fillIds;
+	for (const Stamp &s : plan.stamps.stamps)
+		if (s.lvlPrest >= 823) fillIds.push_back(s.lvlPrest);
+	CHECK(fillIds.front() == 823);
+	CHECK(fillIds[1] == 824);
+}
+
+TEST_CASE("an arena refuses bad sizes, fill sets and entries with a reason")
+{
+	CHECK_FALSE(planMesaArena(arenaRequest(0, 2, 2, 0, 0)).ok);
+	CHECK_FALSE(planMesaArena(arenaRequest(kMaxCellsW + 1, 2, 2, 0, 0)).ok);
+	CHECK_FALSE(planMesaArena(arenaRequest(2, kMaxCellsH + 1, 2, 0, 0)).ok);
+	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 3, 0, 0)).ok);
+	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 2, 2, 0)).ok);
+	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 2, 0, -1)).ok);
+	MesaRequest tight = arenaRequest(4, 4, 2, 0, 0);
+	tight.options.maxTilesX = 16;
+	const MesaPlan plan = planMesaArena(tight);
+	CHECK_FALSE(plan.ok);
+	CHECK_FALSE(plan.reason.empty());
+	CHECK(planMesaArena(arenaRequest(kMaxCellsW, kMaxCellsH, 0, 3, 3)).ok);
+}
+
+TEST_CASE("the checker catches a broken arena ring and a second entrance")
+{
+	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const MesaPlan good = planMesaArena(r);
+	REQUIRE(good.ok);
+	MesaPlan bad = good;
+	bad.stamps.stamps[0].lvlPrest = 800;  // a north-west corner holding the west piece
+	bad.hash = stampPlanHash(bad.stamps);
+	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+	bad = good;
+	bad.stamps.stamps[0].role = layout::Role::Entrance;
+	bad.hash = stampPlanHash(bad.stamps);
+	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+	bad = good;
+	bad.stamps.boss = bad.stamps.entrance;
+	bad.hash = stampPlanHash(bad.stamps);
+	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+}
+
+TEST_CASE("planArenaMap hands the hook the same stamps with the plan hash, and no seed is read")
+{
+	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const MapPlan plan = planArenaMap(r);
+	REQUIRE(plan.ok);
+	CHECK(plan.hash != 0);
+	CHECK(plan.stamps.stamps.size() == 13);
+	CHECK(plan.stamps.voidCells.empty());
+	CHECK(plan.hash == planArenaMap(r).hash);
+	CHECK_FALSE(planArenaMap(arenaRequest(0, 0, 2, 0, 0)).ok);
+}

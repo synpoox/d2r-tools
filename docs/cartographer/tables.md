@@ -226,6 +226,21 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 | `Base` | The built-in tileset it copies | none (required) | Cave |
 | `First` | The `Def` value of the "W" piece in the game's room piece table (`LvlPrest`); the other 14 follow it | none (required) | 1200 (illustrative) |
 
+## arenas.txt (optional)
+
+Declares fixed arena levels: a square, enclosed arena stamped from whole stock Mesa pieces inside the border ring Blizzard made for them, the same in every game, with no exit but the portal or entry. It builds in a row of the mod's own `levels.txt` (no installer slot row), which must be Act 5 (`Act` 4), `DrlgType` 3 and `LevelType` 27, and must not also be a `slots.txt` level. The level's `OffsetX`, `OffsetY`, `SizeX` and `SizeY` are read from that row; `SizeX` x `SizeY` must hold the interior plus the one-cell ring (8 tiles on each side). An arena is not a map: no portal item, no map event, Boss or stat, and it does not count as the game's one open map. A row that cannot be used is skipped with a line in `cartographer-report.txt` and the game builds that level itself. Other plugins read the arena through the content services in [ADR 0001](adr-0001-cartographer-standalone.md) (`cartographer.arena.v1`; later work).
+
+| Column | What to put | Default | Example |
+|---|---|---|---|
+| `Name` | The arena's name, for the log and messages | none (required) | Uber Mephisto |
+| `Level` | The mod's own `levels.txt` `Id` | none (required) | 150 |
+| `Tileset` | `Mesa` (the only one so far) | Mesa | Mesa |
+| `Width`, `Height` | The interior in 8-tile grid cells, without the ring: 1 to 14 wide, 1 to 12 high. 2 x 2 is 16 x 16 tiles of floor | 2, 2 | 4, 3 |
+| `Fill` | The fill set: `Mesa1`, `Mesa2` or `Mesa3` | Mesa3 | Mesa1 |
+| `Entry` | The interior cell (`x,y`, counted from 0 at the top left) whose piece is the arrival | the bottom-centre cell | 1,1 |
+
+The interior is packed largest piece first from the fill set (a 2 x 2 interior is one 16 x 16 piece) with no random draw; the engine picks each piece's DS1 variant from a level seed taken from the plan, so the layout is the same in every game and on every client. The arrival is the room of the piece that holds the `Entry` cell.
+
 ## shapes.txt (optional, advanced)
 
 Adds a new shape defined with numbers. A row based on `Open` keeps the open room grid: `Width`, `Height`, `BossRoom`, `MinPath`/`MaxPath` and `MinTurns`/`MaxTurns` (checked against the shortest path from the entrance to the boss room) still apply, as does the event position; `Straight` and the side room and loop columns do nothing, and a row that asks for side rooms (`MaxBranches`), extra loops (`MaxLoops`) or a `Loop` ring is refused. Use its name in the `Shape` column of `maps.txt` (ignoring case). Built-in shape names cannot be reused. Column names ignore case; an unknown or repeated column is an error. Cells are whole numbers, except `Loop` and `BossRoom`, which take `1` or `0` (or `yes` or `no`).

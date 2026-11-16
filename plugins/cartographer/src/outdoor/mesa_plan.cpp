@@ -33,18 +33,27 @@ const Fill *findFill(int lvlPrest, int *set) {
 	return nullptr;
 }
 
-TileRect roomRect(const MesaOptions &o, int ax, int ay) {
+TileRect pieceRect(const MesaOptions &o, int ax, int ay, int cw, int ch) {
 	TileRect r;
 	r.known = true;
 	r.x = o.originX + (ax + kRingCells) * kGridTiles;
 	r.y = o.originY + (ay + kRingCells) * kGridTiles;
-	r.w = r.h = kRoomCells * kGridTiles;
+	r.w = cw * kGridTiles;
+	r.h = ch * kGridTiles;
 	return r;
 }
 
+TileRect roomRect(const MesaOptions &o, int ax, int ay) { return pieceRect(o, ax, ay, kRoomCells, kRoomCells); }
+
 // Size problems, shared by the planner and the checker. Empty means the size is acceptable.
 std::string sizeProblem(const MesaRequest &r) {
-	if (r.cellsW < kMinCells || r.cellsH < kMinCells || r.cellsW > kMaxCellsW || r.cellsH > kMaxCellsH)
+	if (r.arena) {
+		if (r.cellsW < 1 || r.cellsH < 1 || r.cellsW > kMaxCellsW || r.cellsH > kMaxCellsH)
+			return "a Mesa arena is 1 to " + std::to_string(kMaxCellsW) + " by 1 to " + std::to_string(kMaxCellsH) + " cells of 8 tiles, not " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + ".";
+		if (r.arenaFill < 0 || r.arenaFill >= kFillSets) return "the arena's fill set is not Mesa1, Mesa2 or Mesa3.";
+		if (r.entryX < 0 || r.entryY < 0 || r.entryX >= r.cellsW || r.entryY >= r.cellsH)
+			return "the arena's entry cell (" + std::to_string(r.entryX) + "," + std::to_string(r.entryY) + ") is outside its " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + " interior.";
+	} else if (r.cellsW < kMinCells || r.cellsH < kMinCells || r.cellsW > kMaxCellsW || r.cellsH > kMaxCellsH)
 		return "a Mesa map is " + std::to_string(kMinCells) + " to " + std::to_string(kMaxCellsW) + " by " + std::to_string(kMinCells) + " to " + std::to_string(kMaxCellsH) +
 			" cells of 8 tiles, not " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + ".";
 	const int tilesW = (r.cellsW + 2 * kRingCells) * kGridTiles, tilesH = (r.cellsH + 2 * kRingCells) * kGridTiles;
@@ -58,7 +67,8 @@ std::string sizeProblem(const MesaRequest &r) {
 
 // Packs the interior: the first free cell in row-major order takes a piece drawn from those that fit there (inside the interior, on free cells).
 // The 8 x 8 piece always fits, so every cell ends up covered; the check at the end of the plan proves it again.
-std::vector<Placed> pack(int w, int h, const FillSet &set, layout::Pcg32 &rng) {
+// With a null rng the largest piece that fits is taken (an arena).
+std::vector<Placed> pack(int w, int h, const FillSet &set, layout::Pcg32 *rng) {
 	std::vector<Placed> out;
 	std::vector<char> used(static_cast<size_t>(w) * h, 0);
 	for (int y = 0; y < h; ++y) {
@@ -75,9 +85,9 @@ std::vector<Placed> pack(int w, int h, const FillSet &set, layout::Pcg32 &rng) {
 				fits[count++] = i;
 				total += f.weight;
 			}
-			int roll = static_cast<int>(rng.below(static_cast<uint32_t>(total)));  // total >= 1: the 8 x 8 piece always fits
-			int pick = fits[count - 1];
-			for (int k = 0; k < count; ++k) {
+			int roll = rng != nullptr ? static_cast<int>(rng->below(static_cast<uint32_t>(total))) : 0;  // total >= 1: the 8 x 8 piece always fits
+			int pick = rng != nullptr ? fits[count - 1] : fits[0];
+			for (int k = 0; k < count && rng != nullptr; ++k) {
 				roll -= set.fills[fits[k]].weight;
 				if (roll < 0) {
 					pick = fits[k];
@@ -153,6 +163,11 @@ bool mesaSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	return true;
 }
 
+MesaPlan planMesaArena(MesaRequest request) {
+	request.arena = true;
+	return planMesaMap(request);
+}
+
 MesaPlan planMesaMap(const MesaRequest &request) {
 	MesaPlan out;
 	const auto fail = [&out](std::string why) {
@@ -168,9 +183,9 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 	out.cellsW = w;
 	out.cellsH = h;
 	layout::Pcg32 rng(layout::splitmix64(request.seed + 0x4D455341ull + 1));
-	out.fillSet = static_cast<int>(rng.below(kFillSets));
+	out.fillSet = request.arena ? request.arenaFill : static_cast<int>(rng.below(kFillSets));
 	const FillSet &set = kSets[out.fillSet];
-	const std::vector<Placed> placed = pack(w, h, set, rng);
+	const std::vector<Placed> placed = pack(w, h, set, request.arena ? nullptr : &rng);
 
 	StampPlan &plan = out.stamps;
 	plan.originX = request.options.originX;
@@ -183,7 +198,7 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 	plan.macroMinY = 0;
 	plan.macroW = plan.cellsW;
 	plan.macroH = plan.cellsH;
-	const RoomCells rooms = chooseRoomCells(request);
+	const RoomCells rooms = request.arena ? RoomCells{true, {request.entryX, request.entryY}, {}, {}} : chooseRoomCells(request);
 	if (!rooms.known) return fail("internal: no entrance, boss and event cells fit a " + std::to_string(w) + " x " + std::to_string(h) + " map.");
 
 	// The ring first, then the fill; sorted row-major by the piece's top-left grid cell so the order does not depend on how the pieces were made.
@@ -218,9 +233,18 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 		const int files = f != nullptr ? f->files : kBorderFiles;
 		s.file = request.options.pinFiles ? static_cast<int>(fileRng.below(static_cast<uint32_t>(files))) : -1;
 	}
-	plan.entrance = roomRect(request.options, rooms.entrance.x, rooms.entrance.y);
-	plan.boss = roomRect(request.options, rooms.boss.x, rooms.boss.y);
-	plan.event = roomRect(request.options, rooms.event.x, rooms.event.y);
+	if (request.arena) {
+		// The arrival is the piece that holds the entry cell: the engine builds a piece as its own rooms, so no smaller rectangle is safe to promise.
+		for (const Placed &p : placed) {
+			const Fill &f = set.fills[p.fill];
+			if (rooms.entrance.x >= p.x && rooms.entrance.x < p.x + f.w && rooms.entrance.y >= p.y && rooms.entrance.y < p.y + f.h)
+				plan.entrance = pieceRect(request.options, p.x, p.y, f.w, f.h);
+		}
+	} else {
+		plan.entrance = roomRect(request.options, rooms.entrance.x, rooms.entrance.y);
+		plan.boss = roomRect(request.options, rooms.boss.x, rooms.boss.y);
+		plan.event = roomRect(request.options, rooms.event.x, rooms.event.y);
+	}
 
 	out.ok = true;
 	out.hash = stampPlanHash(plan);
@@ -272,6 +296,7 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 		bad.push_back("the plan's fill set is not 0, 1 or 2");
 		return bad;
 	}
+	if (request.arena && plan.fillSet != request.arenaFill) bad.push_back("the plan's fill set is not the arena's");
 	// Every grid cell of the level is covered by exactly one stamp.
 	std::vector<int> cover(static_cast<size_t>(lw) * lh, 0);
 	int prevY = -1, prevX = -1;
@@ -316,6 +341,24 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 	if (uncovered > 0) bad.push_back(std::to_string(uncovered) + " grid cell(s) of the level are covered by no piece");
 	if (doubled > 0) bad.push_back(std::to_string(doubled) + " grid cell(s) of the level are covered by more than one piece");
 
+	if (request.arena) {
+		// The arena has the ring (checked above), one entrance stamp that holds the entry cell, and no boss or event rectangle.
+		int entranceStamps = 0;
+		for (const Stamp &s : sp.stamps) {
+			if (s.role != layout::Role::Entrance) continue;
+			++entranceStamps;
+			int set = 0, pw = 1, ph = 1;
+			const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;
+			if (!checkFillSize(s.lvlPrest, &set, &pw, &ph) || request.entryX < ix || request.entryX >= ix + pw || request.entryY < iy || request.entryY >= iy + ph)
+				bad.push_back("the entrance stamp does not hold the entry cell");
+			else if (sp.entrance.x != sp.originX + s.cx * kGridTiles || sp.entrance.y != sp.originY + s.cy * kGridTiles || sp.entrance.w != pw * kGridTiles ||
+			         sp.entrance.h != ph * kGridTiles || !sp.entrance.known)
+				bad.push_back("the entrance rectangle is not the entry piece");
+		}
+		if (entranceStamps != 1) bad.push_back("the arena has " + std::to_string(entranceStamps) + " entrance stamps, not one");
+		if (sp.boss.known || sp.event.known) bad.push_back("an arena plans no boss or event rectangle");
+		return bad;
+	}
 	// The rooms.
 	const RoomCells rooms = chooseRoomCells(request);
 	const auto same = [](const TileRect &a, const TileRect &b) { return a.known == b.known && a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };

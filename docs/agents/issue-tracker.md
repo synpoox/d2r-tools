@@ -28,3 +28,7 @@ Open a PR body with the issue it solves: `Closes #<n>` when merging finishes the
 ## When a skill says "publish to the issue tracker"
 
 Create a GitHub issue. "Fetch the relevant ticket" means **Read an issue** above.
+
+## Issue images
+
+Game-check screenshots live on the orphan branch `issue-assets`, in one `<issue>/` folder per issue (for example `486/`). Link them from the PR body or issue with raw.githubusercontent.com URLs. Never delete that branch: PR bodies and issues point at it.
