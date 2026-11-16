@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <map>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -102,10 +103,10 @@ OperateFn g_operateOriginal = nullptr;
 bool g_populatorOn = false;            // the room populator hook (event_apply.cpp) is in; set once at load
 bool g_deathListener = false;          // the SDK monster death listener is registered (the Ambush needs it to count kills)
 std::atomic<bool> g_dropHook{false};   // the death hook is installed and every part it calls was found
-std::atomic<bool> g_dropArmed{false};  // a Boss or Treasure monster event with a resolved Drop is armed (read on every monster death: lock only when set)
+std::atomic<bool> g_dropArmed{false};  // a Boss or Treasure monster event with a resolved Drop is armed on some map (read on every monster death: lock only when set)
 std::atomic<bool> g_chestHook{false};  // the operate hook is installed and every part the chest roll calls was found
-std::atomic<bool> g_chestArmed{false}; // a Treasure chest with a resolved Drop is armed (read on every object use: lock only when set)
-std::atomic<bool> g_ambushActive{false};  // an Ambush is armed and not finished (read on every tick and monster death)
+std::atomic<bool> g_chestArmed{false}; // a Treasure chest with a resolved Drop is armed on some map (read on every object use: lock only when set)
+std::atomic<bool> g_ambushActive{false};  // an Ambush is armed and not finished on some map (read on every tick and monster death)
 std::atomic<uint64_t> g_epoch{0};      // bumped at every map open and game left: an Ambush wave spawned across one is dropped
 
 template <typename Fn>
@@ -142,6 +143,7 @@ struct State {
 	bool chestRolled = false;
 	// Ambush
 	bool ambushArmed = false;
+	bool ambushActive = false;   // armed and not finished: the tick and the death listener step it
 	bool firstWaveDone = false;  // the first wave made a unit (the event is announced then)
 	cartographer::event6b::WaveTracker waves;
 	ep::Rect ambushRect;         // the event room's server rect: the player's room is matched by it (a room pointer could be freed or reused between ticks)
@@ -150,7 +152,41 @@ struct State {
 	int untrackedProbes = 0;
 };
 std::mutex g_lock;
-State g_state;
+// One state per map, keyed by its slot level: a map opened later leaves the earlier maps' Drop, Shrine, Treasure and Ambush alone.
+// Guarded by g_lock.
+std::map<int, State> g_states;
+
+// The fast-path flags are the OR over every map's state. Caller holds g_lock.
+void RecomputeFlagsLocked() noexcept {
+	bool drop = false, chest = false, ambush = false;
+	for (const auto& entry : g_states) {
+		drop = drop || entry.second.dropArmed;
+		chest = chest || entry.second.chestArmed;
+		ambush = ambush || entry.second.ambushActive;
+	}
+	g_dropArmed = drop;
+	g_chestArmed = chest;
+	g_ambushActive = ambush;
+}
+
+// The map whose tracked boss (or chest) has unit id `id`; null when no map tracks it. Caller holds g_lock.
+auto FindTrackedBoss(uint32_t id) noexcept -> State* {
+	for (auto& entry : g_states) {
+		if (entry.second.bossTracked && entry.second.bossId == id) {
+			return &entry.second;
+		}
+	}
+	return nullptr;
+}
+
+auto FindTrackedChest(uint32_t id) noexcept -> State* {
+	for (auto& entry : g_states) {
+		if (entry.second.chestTracked && entry.second.chestId == id) {
+			return &entry.second;
+		}
+	}
+	return nullptr;
+}
 
 // The data tables base for a data flag, or null (with `why`).
 auto TablesBase(uint32_t dataFlag, std::string* why) noexcept -> const uint8_t* {
@@ -182,18 +218,21 @@ void OnDeath(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
 	std::string name;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		in.armed = g_state.dropArmed;
-		in.tracked = g_state.bossTracked && g_state.bossId == id;
+		State* tracked = FindTrackedBoss(id);
+		in.armed = tracked != nullptr && tracked->dropArmed;
+		in.tracked = tracked != nullptr;
 		in.monster = type == UnitTypeMonster;
-		in.dropped = g_state.dropped;
+		in.dropped = tracked != nullptr && tracked->dropped;
 		in.hasKiller = info != nullptr;
 		decision = e6::decideDrop(in);
-		if (decision.action == e6::DropAction::Roll) {
-			g_state.dropped = true;  // set before the call: a roll that re-enters this hook cannot roll twice
+		if (tracked != nullptr) {
+			if (decision.action == e6::DropAction::Roll) {
+				tracked->dropped = true;  // set before the call: a roll that re-enters this hook cannot roll twice
+			}
+			tc = tracked->dropClass;
+			level = tracked->dropLevel;
+			name = tracked->dropName;
 		}
-		tc = g_state.dropClass;
-		level = g_state.dropLevel;
-		name = g_state.dropName;
 	}
 	if (in.tracked) {
 		plog::Info("eventprobe: boss drop: the tracked boss (unit %p, id %u, type %d) died: %s", static_cast<void*>(victim), id, type, e6::dropReasonName(decision.reason));
@@ -263,19 +302,22 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 	std::string name;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		in.armed = g_state.chestArmed;
-		in.tracked = g_state.chestTracked && g_state.chestId == At<uint32_t>(object, UnitIdOffset);
+		State* tracked = FindTrackedChest(At<uint32_t>(object, UnitIdOffset));
+		in.armed = tracked != nullptr && tracked->chestArmed;
+		in.tracked = tracked != nullptr;
 		in.object = At<int32_t>(object, UnitTypeOffset) == ObjectUnitType;
-		in.rolled = g_state.chestRolled;
+		in.rolled = tracked != nullptr && tracked->chestRolled;
 		in.modeBefore = modeBefore;
 		in.modeAfter = modeAfter;
 		reason = e6::decideChest(in);
-		if (reason == e6::ChestReason::Rolled) {
-			g_state.chestRolled = true;  // set before the call: a roll that re-enters the hook cannot roll twice
+		if (tracked != nullptr) {
+			if (reason == e6::ChestReason::Rolled) {
+				tracked->chestRolled = true;  // set before the call: a roll that re-enters the hook cannot roll twice
+			}
+			tc = tracked->chestClass;
+			level = tracked->dropLevel;
+			name = tracked->chestDropName;
 		}
-		tc = g_state.chestClass;
-		level = g_state.dropLevel;
-		name = g_state.chestDropName;
 	}
 	plog::Info("eventprobe: treasure chest: the operate call on the tracked chest (unit %p, activator %p) returned %d, mode %d -> %d: %s", static_cast<void*>(object), static_cast<void*>(activator), result, modeBefore, modeAfter,
 	           e6::chestReasonName(reason));
@@ -320,7 +362,8 @@ auto OperateHook(OperateContext* ctx) noexcept -> int32_t {
 	try {
 		const uint32_t id = At<uint32_t>(object, UnitIdOffset);
 		std::lock_guard<std::mutex> lock(g_lock);
-		candidate = g_state.chestTracked && !g_state.chestRolled && g_state.chestId == id && At<int32_t>(object, UnitTypeOffset) == ObjectUnitType;
+		const State* tracked = FindTrackedChest(id);
+		candidate = tracked != nullptr && !tracked->chestRolled && At<int32_t>(object, UnitTypeOffset) == ObjectUnitType;
 		if (candidate) {
 			before = At<int32_t>(object, UnitModeOffset);
 		}
@@ -347,11 +390,20 @@ void __cdecl OnMonsterDeath(const D2RL::PluginContext*, const D2RL::Lifecycle::M
 	try {
 		std::lock_guard<std::mutex> lock(g_lock);
 		const uint32_t id = event->monster.id;
-		if (g_state.waves.onDeath(id)) {
-			plog::Info("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, g_state.waves.wavesStarted(), g_state.waves.remaining());
-		} else if (g_state.waves.phase() == e6::WaveTracker::Phase::Fighting && g_state.untrackedProbes < MaxUntrackedDeathProbes) {
-			++g_state.untrackedProbes;
-			plog::Info("eventprobe: ambush: a death during wave %d was not one of its units (unit id %u, class %u)", g_state.waves.wavesStarted(), id, event->monster.classId);
+		for (auto& entry : g_states) {
+			State& s = entry.second;
+			if (s.waves.onDeath(id)) {
+				plog::Info("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, s.waves.wavesStarted(), s.waves.remaining());
+				return;
+			}
+		}
+		for (auto& entry : g_states) {
+			State& s = entry.second;
+			if (s.waves.phase() == e6::WaveTracker::Phase::Fighting && s.untrackedProbes < MaxUntrackedDeathProbes) {
+				++s.untrackedProbes;
+				plog::Info("eventprobe: ambush: a death during wave %d was not one of its units (unit id %u, class %u)", s.waves.wavesStarted(), id, event->monster.classId);
+				return;
+			}
 		}
 	} catch (...) {
 		plog::Error("ambush: handling a monster death failed");
@@ -513,7 +565,7 @@ auto Event6bSummary() -> std::string {
 	return "phase 6b: " + SummaryNow(g_populatorOn);
 }
 
-auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool {
+auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
 	if (!On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
 		*why = "a Shrine part is off (FreeSpot, CreateObject or DataTablesBase; see the parts above)";
 		return false;
@@ -537,24 +589,22 @@ auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>
 		return false;
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_state.shrineReady = true;
-	g_state.shrinePlaced = false;
-	g_state.shrineRow = lookup.row;
-	g_state.shrineSpawn = event.spawn;
+	State& s = g_states[level];
+	s.shrineReady = true;
+	s.shrinePlaced = false;
+	s.shrineRow = lookup.row;
+	s.shrineSpawn = event.spawn;
 	return true;
 }
 
-void Event6bMapOpened() noexcept {
+void Event6bMapOpened(int level) noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_state = State{};
-	g_dropArmed = false;
-	g_chestArmed = false;
-	g_ambushActive = false;
+	g_states.erase(level);
+	RecomputeFlagsLocked();
 	++g_epoch;
 }
 
 void Event6bArmBossDrop(const ev::Event& event, int level, void* player) {
-	Event6bMapOpened();
 	if ((event.kind != ev::Kind::Boss && event.kind != ev::Kind::Treasure) || event.drop.empty()) {
 		return;
 	}
@@ -567,11 +617,12 @@ void Event6bArmBossDrop(const ev::Event& event, int level, void* player) {
 		return;
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_state.dropArmed = true;
-	g_state.dropName = event.drop;
-	g_state.dropClass = tc;
-	g_state.dropLevel = level;
-	g_dropArmed = true;
+	State& s = g_states[level];
+	s.dropArmed = true;
+	s.dropName = event.drop;
+	s.dropClass = tc;
+	s.dropLevel = level;
+	RecomputeFlagsLocked();
 }
 
 auto Event6bPlacesObject(const ev::Event& event, ev::NameKind spawnKind) noexcept -> bool {
@@ -580,13 +631,13 @@ auto Event6bPlacesObject(const ev::Event& event, ev::NameKind spawnKind) noexcep
 }
 
 auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool {
-	if (!Event6bPrepareShrine(event, objectClasses, objectNames, player, why)) {
+	if (!Event6bPrepareShrine(event, objectClasses, objectNames, level, player, why)) {
 		return false;
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_state.objectIsChest = true;
-		g_state.dropLevel = level;
+		g_states[level].objectIsChest = true;
+		g_states[level].dropLevel = level;
 	}
 	if (event.drop.empty()) {
 		plog::Info("treasure chest '%s' has no Drop: it is placed as the game's own object", event.name.c_str());
@@ -597,15 +648,16 @@ auto Event6bPrepareChest(const ev::Event& event, const std::vector<std::string>&
 		plog::Warn("Drop '%s' of event '%s' is not applied: the object operate hook is off (see the parts above); the chest is still placed", event.drop.c_str(), event.name.c_str());
 	} else if (ResolveDropClass(event, player, "treasure chest", &tc)) {
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_state.chestArmed = true;
-		g_state.chestDropName = event.drop;
-		g_state.chestClass = tc;
-		g_chestArmed = true;
+		State& s = g_states[level];
+		s.chestArmed = true;
+		s.chestDropName = event.drop;
+		s.chestClass = tc;
+		RecomputeFlagsLocked();
 	}
 	return true;
 }
 
-void Event6bBossSpawned(void* unit) noexcept {
+void Event6bBossSpawned(int level, void* unit) noexcept {
 	if (!g_dropArmed.load() || unit == nullptr) {
 		return;
 	}
@@ -613,41 +665,45 @@ void Event6bBossSpawned(void* unit) noexcept {
 		const uint32_t id = At<uint32_t>(unit, UnitIdOffset);
 		const int32_t type = At<int32_t>(unit, UnitTypeOffset);
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (!g_state.dropArmed) {
+		const auto it = g_states.find(level);
+		if (it == g_states.end() || !it->second.dropArmed) {
 			return;
 		}
-		g_state.bossTracked = type == UnitTypeMonster;
-		g_state.bossId = id;
-		g_state.dropped = false;
-		plog::Info("eventprobe: boss drop: tracking unit %p (type %d, id %u)%s", unit, type, id, g_state.bossTracked ? "" : "; not a monster, so no extra drop");
+		State& s = it->second;
+		s.bossTracked = type == UnitTypeMonster;
+		s.bossId = id;
+		s.dropped = false;
+		plog::Info("eventprobe: boss drop: tracking unit %p (type %d, id %u)%s", unit, type, id, s.bossTracked ? "" : "; not a monster, so no extra drop");
 	} catch (...) {
 		plog::Error("boss drop: tracking the boss failed");
 	}
 }
 
-void Event6bFirstSpawned(void* /*game*/, ev::Kind kind, void* unit) noexcept {
+void Event6bFirstSpawned(void* /*game*/, int level, ev::Kind kind, void* unit) noexcept {
 	if (unit == nullptr) {
 		return;
 	}
 	if (kind == ev::Kind::Boss) {
-		Event6bBossSpawned(unit);
+		Event6bBossSpawned(level, unit);
 	} else if (kind == ev::Kind::Treasure) {
-		Event6bBossSpawned(unit);  // rolls the Drop on its death (the same death hook as a Boss)
+		Event6bBossSpawned(level, unit);  // rolls the Drop on its death (the same death hook as a Boss)
 	}
 }
 
-void Event6bArmAmbush(const ev::Event& event, const std::vector<ep::Spawn>& spawns, const ep::Rect& serverRect, void* room) noexcept {
+void Event6bArmAmbush(int level, const ev::Event& event, const std::vector<ep::Spawn>& spawns, const ep::Rect& serverRect, void* room) noexcept {
 	try {
 		std::lock_guard<std::mutex> lock(g_lock);
 		const int waves = g_deathListener ? (std::max)(1, event.waves) : 1;
-		g_state.waves.arm(waves);
-		g_state.ambushArmed = true;
-		g_state.waveSpawns = spawns;
-		g_state.ambushRect = serverRect;
-		g_state.firstWaveDone = false;
-		g_state.ambushName = event.name;
-		g_state.untrackedProbes = 0;
-		g_ambushActive = true;
+		State& s = g_states[level];
+		s.waves.arm(waves);
+		s.ambushArmed = true;
+		s.ambushActive = true;
+		s.waveSpawns = spawns;
+		s.ambushRect = serverRect;
+		s.firstWaveDone = false;
+		s.ambushName = event.name;
+		s.untrackedProbes = 0;
+		RecomputeFlagsLocked();
 		plog::Info("eventprobe: ambush '%s': armed %d wave(s) of %zu in room %p; the first comes when a player is in that room%s (time-out %llu ms, gap %llu ms)", event.name.c_str(), waves, spawns.size(), room,
 		           g_deathListener ? "" : " (no death listener: this is the only wave)", static_cast<unsigned long long>(e6::kWaveTimeoutMs), static_cast<unsigned long long>(e6::kWaveGapMs));
 	} catch (...) {
@@ -655,75 +711,102 @@ void Event6bArmAmbush(const ev::Event& event, const std::vector<ep::Spawn>& spaw
 	}
 }
 
-bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept {
+bool Event6bAmbushTick(void* game, int playerLevel, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept {
 	if (!g_ambushActive.load(std::memory_order_relaxed) || spawn == nullptr || roomRect == nullptr || game == nullptr) {
 		return false;
 	}
-	try {
+	// One wave to spawn: its map's level, its units, and the epoch it was planned in.
+	struct Wave {
+		int level;
 		std::vector<ep::Spawn> spawns;
-		uint64_t epoch = 0;
-		int waveNumber = 0;
+		uint64_t epoch;
+		int number;
+	};
+	try {
+		std::vector<Wave> waves;
 		ep::Rect playerRect;
 		const bool rectOk = playerRoom != nullptr && roomRect(playerRoom, &playerRect);  // read before the lock: the engine's room, not ours
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			const ep::Rect& want = g_state.ambushRect;
-			const bool inRoom = rectOk && playerRect.x == want.x && playerRect.y == want.y && playerRect.w == want.w && playerRect.h == want.h;
-			const auto before = g_state.waves.phase();
-			const e6::WaveTracker::Step step = g_state.waves.step(inRoom, GetTickCount64());
-			if (before == e6::WaveTracker::Phase::Fighting && g_state.waves.phase() != e6::WaveTracker::Phase::Fighting) {
-				plog::Info("eventprobe: ambush '%s': wave %d of %d ended: %s", g_state.ambushName.c_str(), g_state.waves.wavesStarted(), g_state.waves.wavesTotal(), e6::waveEndName(g_state.waves.lastEnd()));
+			const uint64_t now = GetTickCount64();
+			for (auto& entry : g_states) {
+				State& s = entry.second;
+				if (!s.ambushActive) {
+					continue;
+				}
+				// Only the Ambush of the map the player is on can see the player in its event room.
+				const ep::Rect& want = s.ambushRect;
+				const bool inRoom = entry.first == playerLevel && rectOk && playerRect.x == want.x && playerRect.y == want.y && playerRect.w == want.w && playerRect.h == want.h;
+				const auto before = s.waves.phase();
+				const e6::WaveTracker::Step step = s.waves.step(inRoom, now);
+				if (before == e6::WaveTracker::Phase::Fighting && s.waves.phase() != e6::WaveTracker::Phase::Fighting) {
+					plog::Info("eventprobe: ambush '%s': wave %d of %d ended: %s", s.ambushName.c_str(), s.waves.wavesStarted(), s.waves.wavesTotal(), e6::waveEndName(s.waves.lastEnd()));
+				}
+				if (step == e6::WaveTracker::Step::Finished) {
+					plog::Info("ambush '%s': finished after %d wave(s)", s.ambushName.c_str(), s.waves.wavesStarted());
+					s.ambushActive = false;
+					continue;
+				}
+				if (step == e6::WaveTracker::Step::SpawnWave) {
+					waves.push_back(Wave{entry.first, s.waveSpawns, g_epoch.load(), s.waves.wavesStarted()});
+				}
 			}
-			if (step == e6::WaveTracker::Step::Finished) {
-				plog::Info("ambush '%s': finished after %d wave(s)", g_state.ambushName.c_str(), g_state.waves.wavesStarted());
-				g_ambushActive = false;
-				return false;
+			RecomputeFlagsLocked();
+		}
+		bool started = false;
+		for (const Wave& wave : waves) {
+			// A wave only starts while the player is in its room (the step above), so `playerRoom` is that room.
+			std::vector<uint32_t> ids;
+			for (const ep::Spawn& s : wave.spawns) {
+				void* unit = nullptr;
+				if (spawn(game, playerRoom, s, &unit) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == UnitTypeMonster) {
+					ids.push_back(At<uint32_t>(unit, UnitIdOffset));
+				}
 			}
-			if (step != e6::WaveTracker::Step::SpawnWave) {
-				return false;
+			std::lock_guard<std::mutex> lock(g_lock);
+			const auto it = g_states.find(wave.level);
+			if (wave.epoch != g_epoch.load() || it == g_states.end()) {
+				continue;  // the map changed or the game was left while spawning; the state was reset
 			}
-			spawns = g_state.waveSpawns;
-			epoch = g_epoch.load();
-			waveNumber = g_state.waves.wavesStarted();
-		}
-		std::vector<uint32_t> ids;
-		for (const ep::Spawn& s : spawns) {
-			void* unit = nullptr;
-			if (spawn(game, playerRoom, s, &unit) && unit != nullptr && At<int32_t>(unit, UnitTypeOffset) == UnitTypeMonster) {
-				ids.push_back(At<uint32_t>(unit, UnitIdOffset));
+			State& s = it->second;
+			s.waves.waveSpawned(ids, GetTickCount64());
+			plog::Info("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in the event room %p (game %p)", s.ambushName.c_str(), wave.number, s.waves.wavesTotal(), ids.size(), wave.spawns.size(), playerRoom, game);
+			if (!s.waves.active()) {
+				plog::Warn("ambush '%s' abandoned: %s", s.ambushName.c_str(), e6::waveEndName(s.waves.lastEnd()));
+				s.ambushActive = false;
+			}
+			if (!ids.empty() && !s.firstWaveDone) {
+				s.firstWaveDone = true;
+				started = started || wave.level == playerLevel;  // the first wave spawned: the event counts as placed (announced by the caller)
 			}
 		}
-		std::lock_guard<std::mutex> lock(g_lock);
-		if (epoch != g_epoch.load()) {
-			return false;  // the map changed or the game was left while spawning; the state was reset
+		if (!waves.empty()) {
+			std::lock_guard<std::mutex> lock(g_lock);
+			RecomputeFlagsLocked();
 		}
-		g_state.waves.waveSpawned(ids, GetTickCount64());
-		plog::Info("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in the event room %p (game %p)", g_state.ambushName.c_str(), waveNumber, g_state.waves.wavesTotal(), ids.size(), spawns.size(), playerRoom, game);
-		if (!g_state.waves.active()) {
-			plog::Warn("ambush '%s' abandoned: %s", g_state.ambushName.c_str(), e6::waveEndName(g_state.waves.lastEnd()));
-			g_ambushActive = false;
-		}
-		if (!ids.empty() && !g_state.firstWaveDone) {
-			g_state.firstWaveDone = true;
-			return true;  // the first wave spawned: the event counts as placed (announced by the caller)
-		}
+		return started;
 	} catch (...) {
 		plog::Error("ambush: spawning a wave failed");
-		g_ambushActive = false;
+		std::lock_guard<std::mutex> lock(g_lock);
+		for (auto& entry : g_states) {
+			entry.second.ambushActive = false;  // a failed spawn stops every Ambush: the state it came from is not known here
+		}
+		RecomputeFlagsLocked();
 	}
 	return false;
 }
 
-bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) noexcept {
+bool Event6bPlaceShrine(void* rawGame, int level, void* room, const ep::Rect& serverRect) noexcept {
 	try {
 		int row = -1;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (!g_state.shrineReady || g_state.shrinePlaced) {
+			const auto it = g_states.find(level);
+			if (it == g_states.end() || !it->second.shrineReady || it->second.shrinePlaced) {
 				return false;
 			}
-			g_state.shrinePlaced = true;
-			row = g_state.shrineRow;
+			it->second.shrinePlaced = true;
+			row = it->second.shrineRow;
 		}
 		auto* game = static_cast<Game*>(rawGame);
 		if (game == nullptr || room == nullptr || !On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
@@ -774,14 +857,16 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) n
 		}
 		plog::Info("eventprobe: shrine: created objects row %d: unit %p (type %d, id %u) at (%d,%d)", row, unit, At<int32_t>(unit, UnitTypeOffset), At<uint32_t>(unit, UnitIdOffset), xy[0], xy[1]);
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (g_state.objectIsChest) {  // a Treasure chest: remember it for the Drop roll when it is opened
-			g_state.chestTracked = At<int32_t>(unit, UnitTypeOffset) == ObjectUnitType;
-			g_state.chestId = At<uint32_t>(unit, UnitIdOffset);
-			g_state.chestRolled = false;
-			if (g_state.chestTracked) {
+		const auto it = g_states.find(level);
+		if (it != g_states.end() && it->second.objectIsChest) {  // a Treasure chest: remember it for the Drop roll when it is opened
+			State& s = it->second;
+			s.chestTracked = At<int32_t>(unit, UnitTypeOffset) == ObjectUnitType;
+			s.chestId = At<uint32_t>(unit, UnitIdOffset);
+			s.chestRolled = false;
+			if (s.chestTracked) {
 				UnlockPlacedChest(static_cast<Unit*>(unit));
 			}
-			plog::Info("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, g_state.chestId, At<int32_t>(unit, UnitModeOffset), g_state.chestArmed ? "" : "; no armed Drop");
+			plog::Info("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, s.chestId, At<int32_t>(unit, UnitModeOffset), s.chestArmed ? "" : "; no armed Drop");
 		}
 		return true;
 	} catch (...) {
@@ -839,10 +924,8 @@ bool Event6bPlaceObjectAt(void* rawGame, void* room, const ep::Rect& serverRect,
 
 void Event6bGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_state = State{};
-	g_dropArmed = false;
-	g_chestArmed = false;
-	g_ambushActive = false;
+	g_states.clear();
+	RecomputeFlagsLocked();
 	++g_epoch;
 }
 

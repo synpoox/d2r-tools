@@ -30,8 +30,9 @@ namespace carto {
 // event_apply.cpp already resolved (shared, not scanned for twice); `populatorOn` is whether its room populator hook is in.
 void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const Part& dataTables, const Part& nameToRow, bool populatorOn);
 
-// A map was opened: forget the previous map's Boss Drop, Shrine, Treasure and Ambush, whatever the new map's event is. Game thread.
-void Event6bMapOpened() noexcept;
+// A map was opened in slot `level`: forget that level's earlier Boss Drop, Shrine, Treasure and Ambush, whatever the new map's event is.
+// Other maps open in this game keep theirs. Game thread.
+void Event6bMapOpened(int level) noexcept;
 
 auto Event6bPartStatuses() -> std::vector<PartStatus>;
 
@@ -40,7 +41,7 @@ auto Event6bSummary() -> std::string;
 
 // A Shrine was decided: resolve its Spawn to an objects row. False (with `why`) when the event cannot be placed, so it is neither
 // announced nor waited for. `player` is the player unit (its data flag picks the game's tables). Game thread, at map open.
-auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, void* player, std::string* why) -> bool;
+auto Event6bPrepareShrine(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool;
 
 // A Boss event or a Treasure monster was accepted: resolve its Drop treasure class and arm the death hook. Does nothing without a Drop.
 // Game thread, at map open.
@@ -61,11 +62,11 @@ auto Event6bPlacesObject(const cartographer::events::Event& event, cartographer:
 auto Event6bPrepareChest(const cartographer::events::Event& event, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, int level, void* player, std::string* why) -> bool;
 
 // The first spawn of a Boss or Treasure event (`unit`, the spawn's return value): track it for the Drop.
-void Event6bFirstSpawned(void* game, cartographer::events::Kind kind, void* unit) noexcept;
+void Event6bFirstSpawned(void* game, int level, cartographer::events::Kind kind, void* unit) noexcept;
 
 // An Ambush event room was populated: remember one wave's spawns (`spawns`, planned for the room) and the room's server rect, by which the
 // player's room is recognised later (no room pointer is kept; `room` is only logged). Spawns nothing yet.
-void Event6bArmAmbush(const cartographer::events::Event& event, const std::vector<cartographer::eventplan::Spawn>& spawns, const cartographer::eventplan::Rect& serverRect, void* room) noexcept;
+void Event6bArmAmbush(int level, const cartographer::events::Event& event, const std::vector<cartographer::eventplan::Spawn>& spawns, const cartographer::eventplan::Rect& serverRect, void* room) noexcept;
 
 // Spawns one wave unit: true when the game gave a unit (returned in `unit`). Supplied by event_apply.cpp, which owns the spawn calls.
 using AmbushSpawnFn = bool (*)(void* game, void* room, const cartographer::eventplan::Spawn& spawn, void** unit) noexcept;
@@ -73,13 +74,14 @@ using AmbushSpawnFn = bool (*)(void* game, void* room, const cartographer::event
 // Reads a room's server rect; false when it cannot be read. Supplied by event_apply.cpp.
 using AmbushRectFn = bool (*)(void* room, cartographer::eventplan::Rect* serverRect) noexcept;
 
-// Each player tick: starts the next wave when the player (in `playerRoom`) is in the event room (matched by its server rect), and ends the
-// Ambush when its waves are done. Does nothing without a game. True once, when the first wave made a unit: the Ambush has then happened.
-bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept;
+// Each player tick, for every armed Ambush: starts the next wave when the player (on `playerLevel`, in `playerRoom`) is in that Ambush's event room
+// (matched by its server rect), and ends the Ambush when its waves are done. Does nothing without a game. True once, when the first wave of the
+// Ambush on `playerLevel` made a unit: that Ambush has then happened.
+bool Event6bAmbushTick(void* game, int playerLevel, void* playerRoom, AmbushRectFn roomRect, AmbushSpawnFn spawn) noexcept;
 
 // The event room was populated: place the prepared Shrine object near the centre of the server rect. `game` and `room` are the
 // populator's arguments. True only when the game created the object, so a Shrine that was not placed is never announced. Game thread.
-bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect) noexcept;
+bool Event6bPlaceShrine(void* game, int level, void* room, const cartographer::eventplan::Rect& serverRect) noexcept;
 
 // An arena spot's object (issue #488): resolve `spec` (an objects.txt Class, Name or row number) and create it at the free spot nearest (x, y), in `serverRect`'s units, inside that room.
 // True only when the game created it; the spot it took is returned. Game thread, from the populator.
@@ -87,9 +89,9 @@ bool Event6bPlaceObjectAt(void* game, void* room, const cartographer::eventplan:
                           int x, int y, int* placedX, int* placedY) noexcept;
 
 // The Boss event spawned its boss (`unit`, the spawn's return value): remember it for the Drop.
-void Event6bBossSpawned(void* unit) noexcept;
+void Event6bBossSpawned(int level, void* unit) noexcept;
 
-// The game was left: forget the shrine, the tracked boss, chest and Ambush. Touches no game memory.
+// The game was left: forget every map's shrine, tracked boss, chest and Ambush. Touches no game memory.
 void Event6bGameLeft() noexcept;
 
 }  // namespace carto
