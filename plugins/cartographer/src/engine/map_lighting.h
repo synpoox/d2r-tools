@@ -4,7 +4,8 @@
 // function (D2Render visual_data_system.cpp), which copies it into the frame settings. That function is hooked (found by byte
 // signature, guarded); while the local player stands in the map's slot level the hook changes the component before the game
 // copies it. Nothing is restored on leaving: the game rebuilds the component every frame, so the next frame is the tileset's own
-// look again. A part that is missing or whose guard fails leaves the hook out. Notes: docs/reverse-engineering/cartographer/32-level-lighting.md.
+// look again. A part that is missing or whose guard fails leaves the hook out. An arena's own look (arenas.txt) is applied the same way
+// while the player stands in its level, from the arena tables (no map open). Notes: docs/reverse-engineering/cartographer/32-level-lighting.md.
 #pragma once
 
 #include "core/tables.h"
@@ -23,6 +24,7 @@ auto MapLightingPartStatuses() -> std::vector<PartStatus>;
 
 // A map was opened through slot level `slotLevel`: its look is applied while the local player is in that level. A map with no look
 // columns set changes nothing. Any thread.
+// Arenas are not maps: MapLightingPlayerTick takes an arena's look from its arenas.txt row when no map is open on its level.
 void MapLightingMapOpened(const MapDef& map, int slotLevel);
 
 // Called from the player tick with the local player's level (game thread).
