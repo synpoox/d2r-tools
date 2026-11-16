@@ -1634,6 +1634,21 @@ auto Arenas(const std::string& rows, Report& report) -> std::vector<ArenaDef> {
 }
 }  // namespace
 
+TEST_CASE("arenas.txt: an offset that puts the arena past 6553 tiles is refused (HD draws no floor there, issue #491)") {
+	Report report;
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
+	    "Far\t210\t4\t3\t27\t6560\t6000\t64\t64\n"
+	    "Near\t211\t4\t3\t27\t6000\t6530\t64\t64\n"
+	    "Ok\t212\t4\t3\t27\t6400\t6400\t64\t64\n"
+	    "Slot\t205\t4\t3\t27\t0\t0\t128\t112\n";
+	Report slotReport;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t205\n", slotReport);
+	const auto arenas = LoadArenas(std::string(ArenaHeader) + "A\t210\t\t\t\t\t\nB\t211\t\t\t\t\t\nC\t212\t\t\t\t\t\n", levels, slots, report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(arenas[0].level == 212);
+}
+
 TEST_CASE("arenas.txt: blank means a 2 x 2 Mesa3 arena entered at the bottom centre, geometry from levels.txt") {
 	Report report;
 	const auto arenas = Arenas("Lava\t200\t\t\t\t\t\n", report);

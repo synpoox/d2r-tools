@@ -1037,6 +1037,14 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 			     std::to_string(def.sizeX) + " x " + std::to_string(def.sizeY) + ").");
 			continue;
 		}
+		// HD scene coordinates are signed 16-bit in subtiles (5 per tile): a level whose world position passes 32767 / 5 = 6553 tiles draws no floor in HD
+		// (game check, issue #491: origin 6520 drew, 6560 did not; X the same). The far edge is held under it so the margin is safe.
+		constexpr int kHdWorldTiles = 6553;
+		if (def.offsetX + tilesW > kHdWorldTiles || def.offsetY + tilesH > kHdWorldTiles) {
+			fail(who + "the level's OffsetX / OffsetY plus the arena's " + std::to_string(tilesW) + " x " + std::to_string(tilesH) + " tiles pass " + std::to_string(kHdWorldTiles) +
+			     " in levels.txt (" + std::to_string(def.offsetX) + ", " + std::to_string(def.offsetY) + "); HD draws no floor past it. Lower the offset.");
+			continue;
+		}
 		out.push_back(std::move(def));
 	}
 	return out;
