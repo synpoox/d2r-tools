@@ -238,8 +238,12 @@ Declares fixed arena levels: a square, enclosed arena stamped from whole stock M
 | `Width`, `Height` | The interior in 8-tile grid cells, without the ring: 1 to 14 wide, 1 to 12 high. 2 x 2 is 16 x 16 tiles of floor | 2, 2 | 4, 3 |
 | `Fill` | The fill set: `Mesa1`, `Mesa2` or `Mesa3` | Mesa3 | Mesa1 |
 | `Entry` | The interior cell (`x,y`, counted from 0 at the top left) whose piece is the arrival | the bottom-centre cell | 1,1 |
+| `Brightness` | Percent, 10 to 400 (HD only): lower is darker, higher is brighter, 100 is the tileset's look. The look applies while the player is in the arena's level, and it is the same as a map's `Brightness` (see [maps.txt](#mapstxt-required)). A value outside the range or not a whole number is reported and treated as blank | tileset's own | 150 |
+| `Warmth` | Percent, 25 to 400 (HD only): above 100 is warmer (more orange), below 100 cooler (more blue), 100 is the tileset's look. The look applies while the player is in the arena's level, and it is the same as a map's `Warmth`. A value outside the range or not a whole number is reported and treated as blank | tileset's own | 60 |
 
 The interior is packed largest piece first from the fill set (a 2 x 2 interior is one 16 x 16 piece) with no random draw; the engine picks each piece's DS1 variant from a level seed taken from the plan, so the layout is the same in every game and on every client. The arrival is the room of the piece that holds the `Entry` cell.
+
+A Boss is not a column here: put it in `arenaspots.txt` as a `Monster` (a `bosses.txt` Name), so it spawns once per game at its named spot. Monsters, density, monster level and unique packs are not set here either: the arena builds in its own `levels.txt` row, so set `mon1..`, `MonDen`, `MonLvl` / `MonLvlEx` and `MonUMin` / `MonUMax` there. `Tileset` is still Mesa only.
 
 ## arenaspots.txt (optional)
 

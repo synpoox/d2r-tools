@@ -159,7 +159,7 @@ writes it; the others can be left out. A bad row is skipped and named in `cartog
 
 #### arenas.txt
 
-Fixed, square, enclosed arena levels built from stock Mesa pieces in a `levels.txt` row of the mod's own (Act 5, `DrlgType` 3, `LevelType` 27): `Name`, `Level`, `Tileset`, `Width`, `Height`, `Fill`, `Entry`. See [tables.md](../../docs/cartographer/tables.md#arenastxt-optional).
+Fixed, square, enclosed arena levels built from stock Mesa pieces in a `levels.txt` row of the mod's own (Act 5, `DrlgType` 3, `LevelType` 27): `Name`, `Level`, `Tileset`, `Width`, `Height`, `Fill`, `Entry`, `Brightness`, `Warmth` (the last two set the HD look, as for maps). A Boss goes in `arenaspots.txt`. See [tables.md](../../docs/cartographer/tables.md#arenastxt-optional).
 
 #### arenaspots.txt
 
