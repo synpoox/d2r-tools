@@ -14,7 +14,7 @@ const FrameFillTileset kMesa = {
 	"Mesa",
 	27,  // lvltypes.txt "Act 4 - Mesa"
 	{800, 801, 802, 799, 804, 805, 806, 803},
-	3,
+	{3, 3, 3, 3, 3, 3, 3, 3},
 	3,
 	{
 		{"Mesa1", 5, {{812, 3, 3, 5, 4}, {813, 2, 2, 5, 3}, {814, 2, 1, 5, 2}, {815, 1, 2, 5, 2}, {816, 1, 1, 5, 1}}},
@@ -32,7 +32,7 @@ const FrameFillTileset kDesert = {
 	"Desert",
 	16,  // lvltypes.txt "Act 2 - Desert"
 	{365, 366, 367, 364, 369, 370, 371, 368},
-	1,
+	{1, 1, 1, 1, 1, 1, 1, 1},
 	1,
 	{
 		{"Desert", 10, {{404, 1, 1, 5, 4}, {405, 1, 1, 5, 4}, {406, 1, 1, 4, 3}, {407, 1, 1, 3, 3}, {399, 1, 1, 1, 1}, {400, 1, 1, 1, 1}, {401, 1, 1, 1, 1}, {402, 1, 1, 1, 1}, {403, 1, 1, 1, 1}, {398, 1, 1, 1, 1}}},
@@ -41,7 +41,26 @@ const FrameFillTileset kDesert = {
 	12,
 };
 
-const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert};
+// Wilderness: lvlprest.txt 4..7 (Bord1..4, 3 files each) are the straight pieces and 8..11 (Bord5..8, 1 file) the convex corners; each has floor on one side only (DS1 walk
+// flags, checked with plugins/cartographer/tools/catalogue.py's reader): Bord1 floor north, so it rings the south; Bord2 east, so west; Bord3 south, so north; Bord4 west,
+// so east; Bord5 floor north-east, so the south-west corner; Bord6 south-east (north-west corner); Bord7 south-west (north-east); Bord8 north-west (south-east). Pieces 12..15
+// (Bord9..12) are concave corners and stay out. Fills: 38 swamp 8 x 8, 39 swamp 16 x 16, 40 trees 16 x 16, each with one DS1 file in the Files column. The Tree set borrows
+// the 8 x 8 swamp piece to fill the cells a 16 x 16 cannot. Stone, corral, fence and ruin pieces are left out: they are light, fenced or have a building.
+const FrameFillTileset kWilderness = {
+	"Wilderness",
+	2,  // lvltypes.txt "Act 1 - Wilderness"
+	{5, 6, 7, 4, 9, 10, 11, 8},
+	{3, 3, 3, 3, 1, 1, 1, 1},
+	2,
+	{
+		{"Swamp", 2, {{39, 2, 2, 1, 4}, {38, 1, 1, 1, 1}}},
+		{"Tree", 2, {{40, 2, 2, 1, 4}, {38, 1, 1, 1, 1}}},
+	},
+	14,
+	12,
+};
+
+const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert, &kWilderness};
 const int kFrameFillTilesetCount = static_cast<int>(sizeof(kFrameFillTilesets) / sizeof(kFrameFillTilesets[0]));
 
 const FrameFillTileset *findFrameFillTileset(std::string_view name) {
@@ -87,6 +106,16 @@ struct Placed {
 	int x, y;     // interior grid cell of the piece's top-left
 	int fill;     // index into the set
 };
+
+// DS1 files of a ring piece (0 for an id that is not one).
+int ringFiles(const FrameFillTileset &t, int lvlPrest) {
+	const EdgePieces &p = t.edge, &f = t.edgeFiles;
+	const int ids[8] = {p.west, p.north, p.east, p.south, p.nw, p.ne, p.se, p.sw};
+	const int files[8] = {f.west, f.north, f.east, f.south, f.nw, f.ne, f.se, f.sw};
+	for (int i = 0; i < 8; ++i)
+		if (ids[i] == lvlPrest) return files[i];
+	return 0;
+}
 
 const Fill *findFill(const FrameFillTileset &t, int lvlPrest, int *set) {
 	for (int s = 0; s < t.setCount; ++s)
@@ -288,11 +317,11 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 		plan.stamps.push_back(s);
 	}
 	std::sort(plan.stamps.begin(), plan.stamps.end(), [](const Stamp &a, const Stamp &b) { return a.cy != b.cy ? a.cy < b.cy : a.cx < b.cx; });
-	// The file draws have their own stream, so pinning files does not move the layout. The entrance cell's piece is marked above; a ring piece has borderFiles files.
+	// The file draws have their own stream, so pinning files does not move the layout. The entrance cell's piece is marked above; a ring piece has its own file count (edgeFiles).
 	layout::Pcg32 fileRng(layout::splitmix64(request.seed + 0x46494C45ull));
 	for (Stamp &s : plan.stamps) {
 		const Fill *f = findFill(tileset, s.lvlPrest, nullptr);
-		const int files = f != nullptr ? f->files : tileset.borderFiles;
+		const int files = f != nullptr ? f->files : ringFiles(tileset, s.lvlPrest);
 		s.file = request.options.pinFiles ? static_cast<int>(fileRng.below(static_cast<uint32_t>(files))) : -1;
 	}
 	if (request.arena) {
@@ -327,9 +356,11 @@ int checkEdgePiece(const EdgePieces &e, int x, int y, int w, int h) {
 }
 
 // The fill piece's size and set from its id alone, scanning the row.
-bool checkFillSize(const FrameFillTileset &t, int lvlPrest, int *set, int *w, int *h) {
+bool checkFillSize(const FrameFillTileset &t, int lvlPrest, int *set, int *w, int *h, int preferSet = -1) {
+	// a piece two sets share (Wilderness's 8 x 8) counts for the set the plan uses
 	for (int s = 0; s < t.setCount; ++s)
-		for (int i = 0; i < t.sets[s].count; ++i)
+		if (preferSet < 0 || s == preferSet)
+			for (int i = 0; i < t.sets[s].count; ++i)
 			if (t.sets[s].fills[i].lvlPrest == lvlPrest) {
 				*set = s;
 				*w = t.sets[s].fills[i].w;
@@ -370,7 +401,7 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 		prevY = s.cy;
 		prevX = s.cx;
 		if (s.macroX != s.cx || s.macroY != s.cy || s.mask != 0) bad.push_back(where + " has the wrong macro cell or mask");
-		int pw = 1, ph = 1, files = tileset.borderFiles;
+		int pw = 1, ph = 1, files = 0;
 		const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;  // interior coordinates
 		const bool ring = ix < 0 || iy < 0 || ix >= w || iy >= h;
 		if (ring) {
@@ -378,10 +409,11 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 				bad.push_back(where + " is outside the level");
 				continue;
 			}
+			files = ringFiles(tileset, checkEdgePiece(tileset.edge, ix, iy, w, h));
 			if (s.lvlPrest != checkEdgePiece(tileset.edge, ix, iy, w, h)) bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", not the ring piece for that side");
 		} else {
 			int set = 0;
-			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph)) {
+			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph, plan.fillSet) && !checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph)) {
 				bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", which is not a " + name + " fill piece");
 				continue;
 			}

@@ -27,3 +27,13 @@ Neither Jungle (exit-mask picker, 32 x 32 cells) nor Snow (stamp lines of Wang p
 - Risk: medium. The fill packing and ring are new code; the unknown fill mode and decoration under the hook are the real risks.
 - Effort: L. The most pieces of the six, plus the river question.
 - Game checks: fill mode of LevelType 2 on an unstamped cell; whether DS1-embedded waypoints and cave entrances spawn in the slot level (Waypoint 255); whether the plan's own border really replaces the skipped border pass; corner piece choice by file index; the ring against the 80 x 80 size.
+
+## Answers (issue #506)
+
+Built as a `FrameFillTileset` row (`kWilderness`), OutdoorTilesets index 4, LevelType 2, Planner::FrameFill. The game check result is in `docs/cartographer/checks/wilderness.md`.
+
+- **Ring pieces.** One 8 x 8 piece per side and corner: west 5, north 6, east 7, south 4, corners 9, 10, 11, 8. Each is the piece whose DS1 walk flags have floor on the side facing the interior (the piece with floor on the north rings the south, and so on). Straight pieces have 3 DS1 files, corners 1 (the `Files` column, not the number of listed files). Mesa's ring is unchanged (3 files everywhere).
+- **Fill mode.** Moot for these plans: every cell is stamped and no void cells are listed. Whether LevelType 2 void-marks an unstamped cell stays unknown.
+- **Fill sets.** Swamp (39 is 16 x 16, 38 is the 8 x 8 filler) and Tree (40 is 16 x 16, 38 filler). Both are dark, open and walkable, with no waypoint or exit link in their DS1s. Stone, corral, fence and ruin pieces were rejected as light, fenced or holding a building. The shared 8 x 8 piece 38 counts for whichever set the plan uses.
+- **Route B.** The plan stamps the ring itself; the engine border pass is not used.
+- **Table index.** The row sits at index 4 (the table stays dense; row order is only the slot index), not the old reserved index 5.
