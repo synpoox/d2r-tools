@@ -526,3 +526,49 @@ TEST_CASE("planArenaMap hands the hook the same stamps with the plan hash, and n
 	CHECK(plan.hash == planArenaMap(r).hash);
 	CHECK_FALSE(planArenaMap(arenaRequest(0, 0, 2, 0, 0)).ok);
 }
+
+TEST_CASE("pinned Mesa plans: map and arena stamp hashes never change (issue #504)")
+{
+	// The rooms' rectangles are not in the stamp hash, so they are folded into a second pin.
+	const auto rects = [](const StampPlan &sp) {
+		uint64_t h = 1469598103934665603ull;
+		for (const TileRect *r : {&sp.entrance, &sp.boss, &sp.event})
+			for (const int v : {r->known ? 1 : 0, r->x, r->y, r->w, r->h}) h = (h ^ static_cast<uint64_t>(static_cast<int64_t>(v))) * 1099511628211ull;
+		return h;
+	};
+	struct Case { uint64_t seed; int w, h; bool pin; uint64_t hash; uint64_t rects; };
+	const Case maps[] = {
+		{0, 8, 6, false, 11309794357939188667ull, 2972327143189534596ull}, {1, 10, 8, false, 9680878637351944713ull, 11157239327043583572ull}, {7, 12, 10, false, 2480569522390064504ull, 10701298169011675732ull},
+		{12345, 14, 12, false, 17309034836200614739ull, 4133875070216860340ull}, {0xdeadbeefull, 12, 10, false, 350371001122108394ull, 16748606125036444020ull},
+		{3, 8, 6, true, 17088085640357226514ull, 18244796806012473460ull}, {99, 14, 12, true, 13388626746254824109ull, 15510784724848022196ull}, {2024, 10, 8, true, 9211379286592582870ull, 12635793343761802708ull},
+	};
+	for (const Case &c : maps) {
+		MesaRequest r = request(c.seed, c.w, c.h);
+		r.options.pinFiles = c.pin;
+		r.options.originX = 40;
+		r.options.originY = 24;
+		const MesaPlan p = planMesaMap(r);
+		INFO("seed ", c.seed, " ", c.w, "x", c.h, " pin ", c.pin, " rects ", rects(p.stamps));
+		REQUIRE(p.ok);
+		CHECK(p.hash == c.hash);
+		CHECK(rects(p.stamps) == c.rects);
+	}
+	struct ArenaCase { int w, h, fill, ex, ey; uint64_t hash, mapHash, rects; };
+	const ArenaCase arenas[] = {
+		{2, 2, 2, 1, 1, 7172841402396747838ull, 890818891542045124ull, 11803801630925321014ull}, {5, 3, 0, 0, 0, 10753847982556927501ull, 12278997251122810421ull, 16090467914555255238ull},
+		{14, 12, 1, 7, 11, 3443233890636676205ull, 1044867744197298487ull, 4318535806991575678ull}, {1, 1, 2, 0, 0, 14527999382286875105ull, 15977882700010687251ull, 2877498710334526502ull},
+		{7, 7, 2, 3, 6, 10945763162673362570ull, 2530999045441691007ull, 14186996979458424926ull},
+	};
+	for (const ArenaCase &c : arenas) {
+		MesaRequest r = arenaRequest(c.w, c.h, c.fill, c.ex, c.ey);
+		r.options.originX = 6000;
+		r.options.originY = 4000;
+		const MesaPlan p = planMesaArena(r);
+		const MapPlan m = planArenaMap(r);
+		INFO("arena ", c.w, "x", c.h, " fill ", c.fill, " rects ", rects(p.stamps));
+		REQUIRE(p.ok);
+		CHECK(p.hash == c.hash);
+		CHECK(m.hash == c.mapHash);
+		CHECK(rects(p.stamps) == c.rects);
+	}
+}
