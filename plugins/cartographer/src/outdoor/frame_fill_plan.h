@@ -28,7 +28,7 @@ constexpr int kRingCells = 1;     // the frame is one grid cell deep
 constexpr int kRoomCells = 2;     // the entrance, boss and event rectangles are 2 x 2 grid cells (16 x 16 tiles, four rooms)
 constexpr int kMinCells = 6;      // the smallest interior either way, in grid cells (Small is 8 x 6)
 constexpr int kMaxFillSets = 4;   // the most fill sets and pieces per set a tileset row holds
-constexpr int kMaxFillsPerSet = 8;
+constexpr int kMaxFillsPerSet = 10;
 
 // One fill piece: a lvlprest.txt row with a size in grid cells and the number of DS1 files the plan may draw.
 struct Fill {
@@ -62,6 +62,8 @@ struct FrameFillTileset {
 
 // Mesa (Act 4 plains, LevelType 27): ring 799..806 (3 files each), sets Mesa1 812..816, Mesa2 817..821, Mesa3 823..827.
 extern const FrameFillTileset kMesa;
+// Desert (Act 2 sand, LevelType 16): ring 364..371 (1 file each), one set Desert of the ten 8 x 8 fills 398..407.
+extern const FrameFillTileset kDesert;
 // Every frame-plus-fill tileset, in table order. A new tileset is one row here.
 extern const FrameFillTileset *const kFrameFillTilesets[];
 extern const int kFrameFillTilesetCount;
