@@ -25,7 +25,7 @@ const char* const Header = "Name\tTileset\tShape\tSize\tLevel\tItem\tBoss\tMonst
 auto Names() -> GameNames {
 	GameNames n;
 	n.haveMonsters = n.haveSuperUniques = n.haveItems = true;
-	n.monsters = {"zombie1", "skeleton1", "Diablo", "andariel", "leoricMapBoss"};
+	n.monsters = {"zombie1", "skeleton1", "Diablo", "andariel", "colossal1", "leoricMapBoss"};
 	n.haveMods = true;
 	for (int i = 0; i <= 44; ++i) {
 		n.monsterMods.push_back(i);
@@ -273,10 +273,11 @@ TEST_CASE("a bosses.txt entry named like a vanilla boss or monster, or with a ba
 
 TEST_CASE("a bosses.txt Base that is a vanilla boss, a Mods id outside monumod.txt, or a 17th entry is skipped") {
 	Report report;
-	std::string body = "Name\tBase\tMods\nA\tandariel\nB\tzombie1\t200\nC\tzombie1\t44\nD\tleoricMapBoss\n";
+	std::string body = "Name\tBase\tMods\nA\tandariel\nB\tzombie1\t200\nC\tzombie1\t44\nD\tleoricMapBoss\nE\tcolossal1\n";
 	CHECK(LoadBosses(body, Names(), report).size() == 2);
-	CHECK(report.Errors() == 2);
+	CHECK(report.Errors() == 3);
 	const std::string text = Joined(report);
+	CHECK(text.find("Base 'colossal1' is a vanilla boss") != std::string::npos);
 	CHECK(text.find("Base 'andariel' is a vanilla boss") != std::string::npos);
 	CHECK(text.find("not an id in monumod.txt") != std::string::npos);
 	Report many;

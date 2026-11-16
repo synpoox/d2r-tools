@@ -865,7 +865,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)  # holds Get-AsciiLower ids
         # The base game's own boss=1 monstats Ids (D2R's table, not the mod's). Twin: VanillaBossIds in src/core/tables.h.
-        $bossIds = [System.Collections.Generic.HashSet[string]]::new([string[]]@('andariel', 'duriel', 'radament', 'mephisto', 'diablo', 'summoner', 'izual', 'bloodraven', 'diabloclone', 'griswold', 'nihlathakboss', 'baalcrab', 'putriddefiler1', 'putriddefiler2', 'putriddefiler3', 'putriddefiler4', 'putriddefiler5', 'baalcrabstairs', 'baalclone', 'ubermephisto', 'uberdiablo', 'uberizual', 'uberandariel', 'uberduriel', 'uberbaal'), [StringComparer]::Ordinal)
+        $bossIds = [System.Collections.Generic.HashSet[string]]::new([string[]]@('andariel', 'duriel', 'radament', 'mephisto', 'diablo', 'summoner', 'izual', 'bloodraven', 'diabloclone', 'griswold', 'nihlathakboss', 'baalcrab', 'putriddefiler1', 'putriddefiler2', 'putriddefiler3', 'putriddefiler4', 'putriddefiler5', 'baalcrabstairs', 'baalclone', 'ubermephisto', 'uberdiablo', 'uberizual', 'uberandariel', 'uberduriel', 'uberbaal', 'colossal1', 'colossal2', 'colossal3'), [StringComparer]::Ordinal)
         $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
         $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
         for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {

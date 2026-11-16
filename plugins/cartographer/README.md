@@ -187,8 +187,8 @@ these own entries, never a vanilla boss: a `Boss` that names a vanilla superuniq
 monster, or a name that is not in this file, is refused at load (the report and the log say so) and that map opens
 without a Boss. Without this file no map has a Boss. `tools\install.ps1` writes one `superuniques.txt` row per entry,
 keyed `cartoboss:` plus the Name (non-letters and digits written as `_` and a hex code, like the text key), so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
-(the `Base` must be an ordinary monster in `monstats.txt`, never one of the base game's own bosses such as `andariel` (a mod's own boss-flagged monster is fine); each `Mods` id must
-be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
+(the `Base` must be an Id in `monstats.txt`, never one of the base game's own bosses such as `andariel`
+(a mod's own boss-flagged monster is fine); each `Mods` id must be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
 rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
 keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row
 (the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. Otherwise
