@@ -1813,6 +1813,15 @@ TEST_CASE("arenaspots.txt: unchecked names pass when the game's tables could not
 	CHECK(arenas[0].spots.size() == 2);
 }
 
+TEST_CASE("arenaspots.txt: an object row number is bounded by the row count, not the joined name lists") {
+	Report arenaReport;
+	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);
+	Report report;
+	LoadArenaSpots(std::string(SpotHeader) + "A\ta\t1\t1\t\t1\nA\tb\t2\t2\t\t2\n", arenas, {}, GameNames{}, {"X", "Y", "NameX", "NameY"}, report, 2);
+	CHECK(report.Errors() == 1);
+	CHECK(arenas[0].spots.size() == 1);
+}
+
 TEST_CASE("arenaspots.txt: missing columns are one error each and nothing loads") {
 	Report arenaReport;
 	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);

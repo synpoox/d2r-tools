@@ -85,6 +85,7 @@ add_library(cartographer SHARED
 	src/log.cpp
 	src/cartographer.rc
 )
+target_include_directories(cartographer PRIVATE include)
 target_compile_features(cartographer PRIVATE cxx_std_20)
 target_link_libraries(cartographer PRIVATE cartographer_core ${CARTOGRAPHER_CORES} D2RLPlugin::D2RLPlugin user32)
 set_target_properties(cartographer PROPERTIES OUTPUT_NAME "cartographer")

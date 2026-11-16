@@ -198,7 +198,7 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 
 // arenaspots.txt (Arena, Spot, X, Y, Monster, Object; optional): fills each arena's `spots`. A bad row is left out and described in `report`: an unknown arena, a repeated spot name, a spot
 // outside the interior, an arena whose origin is unknown, an unknown Monster or Object. `bosses`, `names` and the objects.txt `objects` (Class and Name cells; empty: not checked) are what Monster and Object may name.
-void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report);
+void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report, int objectRows = -1);
 
 // The spot called `name` (ignoring case) of the arena on `level`, or nullptr. `arena` (if given) is the arena.
 auto FindArenaSpot(const std::vector<ArenaDef>& arenas, int level, std::string_view name, const ArenaDef** arena = nullptr) -> const ArenaSpotDef*;

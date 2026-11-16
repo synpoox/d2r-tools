@@ -253,7 +253,7 @@ Named spots in the fixed arenas of `arenas.txt`, one row per spot, the same in e
 | `Monster` | A `bosses.txt` entry, a `superuniques.txt` row or a `monstats.txt` Id, spawned at the spot | none | Lucion |
 | `Object` | An `objects.txt` `Class` or `Name`, or a row number, created at the spot | none | Chest3 |
 
-The spot is the centre of its tile. If the game refuses the exact spot (it is taken), the monster is spawned with the collision test skipped and the object at the nearest free spot of the same room; the plugin log says where each unit went (`arena '<Name>' spot '<spot>'`). A superunique the game already spawned this game is spawned as its class instead (once per game, the game's rule).
+The spot is the centre of its tile. If the game refuses the exact spot (it is taken), the monster is spawned with the collision test skipped and the object at the nearest free spot of the same room (the free-spot search is asked for the spot itself first); an object given by name (`Class` or `Name`) needs the mod's own `objects.txt` in its excel folder, without it only a row number works; a spot is marked done before it spawns, so a spawn the game refused is not retried in that game; a spot is spawned only when Cartographer built the level from its plan (when the game builds the level itself the spot would land on its coordinates, so nothing spawns); the plugin log says where each unit went (`arena '<Name>' spot '<spot>'`). A superunique the game already spawned this game is spawned as its class instead (once per game, the game's rule).
 
 ## shapes.txt (optional, advanced)
 

@@ -812,7 +812,7 @@ bool Event6bPlaceObjectAt(void* rawGame, void* room, const ep::Rect& serverRect,
 		// The spot first, then the engine's free-spot search with a growing footprint; a result in another room is refused (the neighbour may not be populated yet).
 		const e6::SpotBox box{serverRect.x, serverRect.y, serverRect.w, serverRect.h};
 		for (const int radius : {1, 3, FreeSpotRadius}) {
-			int32_t xy[2] = {x, y};
+			int32_t xy[2] = {x + 1, y + 1};  // the engine's free-spot search (0x402f50) starts at (-1,-1) from this, so it tries the spot itself first
 			void* landed = nullptr;
 			Call<FreeSpotFn>(FreeSpot)(room, xy, radius, FreeSpotMask, &landed);
 			const bool inside = landed == room && e6::spotInBox(box, xy[0], xy[1]);

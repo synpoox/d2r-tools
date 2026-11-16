@@ -325,7 +325,7 @@ auto LoadAll() -> Loaded {
 		if (!loaded.tables->arenas.empty() && ReadTable(g_tableDir + L"\\" + Widen(carto::ArenaSpotsFile), carto::ArenaSpotsFile, &spotText, loaded.report)) {
 			std::vector<std::string> objects = loaded.tables->objectClasses;
 			objects.insert(objects.end(), loaded.tables->objectNames.begin(), loaded.tables->objectNames.end());
-			carto::LoadArenaSpots(spotText, loaded.tables->arenas, loaded.tables->bosses, names, objects, loaded.report);
+			carto::LoadArenaSpots(spotText, loaded.tables->arenas, loaded.tables->bosses, names, objects, loaded.report, static_cast<int>(loaded.tables->objectClasses.size()));
 		}
 	}
 	// A maze slot is one LevelType (3 Cave, 4 Crypt, one slot each): name each maze map its slot cannot build. An Outdoor slot's origin, declared size and

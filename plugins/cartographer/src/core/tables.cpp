@@ -1050,7 +1050,7 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 	return out;
 }
 
-void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report) {
+void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report, int objectRows) {
 	namespace mesa = cartographer::outdoor::mesa;
 	const Tsv table = ParseTsv(text);
 	if (NoteIfEmpty(ArenaSpotsFile, table, report) || !RequireColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y"}, report)) {
@@ -1112,7 +1112,7 @@ void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const 
 		}
 		if (!spot.object.empty() && !objects.empty()) {
 			int rowNumber = 0;
-			if (!ContainsNoCase(objects, spot.object) && !(ParseInt(spot.object, 0, 100000, &rowNumber) && rowNumber < static_cast<int>(objects.size()))) {
+			if (!ContainsNoCase(objects, spot.object) && !(ParseInt(spot.object, 0, 100000, &rowNumber) && rowNumber < (objectRows >= 0 ? objectRows : static_cast<int>(objects.size())))) {
 				fail(who + "Object '" + spot.object + "' is not a Class or Name in objects.txt, nor a row number.");
 				continue;
 			}

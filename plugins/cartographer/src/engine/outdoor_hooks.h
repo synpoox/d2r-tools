@@ -30,6 +30,10 @@ void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<S
 // The outdoor parts and what became of them (for 'cartographer check').
 auto OutdoorPartStatuses() -> std::vector<PartStatus>;
 
+// True when the arena of `levelId` (arenas.txt) is built by our plan: the plan is ok, the outdoor hooks are live and its last build was not left to the game.
+// Otherwise the game builds that level itself and an arena spot could be wall (issue #488). Any thread.
+auto ArenaBuilt(int32_t levelId) -> bool;
+
 // True when every outdoor part is on and the hooks are in.
 auto OutdoorBuildLive() -> bool;
 

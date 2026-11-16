@@ -868,8 +868,8 @@ void OnArenaPopulated(Game* game, void* room) {
 			arena = &a;
 		}
 	}
-	if (arena == nullptr) {
-		return;
+	if (arena == nullptr || !ArenaBuilt(level)) {
+		return;  // not built by our plan: the game's own level has no spot to name
 	}
 	const RoomRects rects = ReadRects(room);
 	if (!rects.ok) {

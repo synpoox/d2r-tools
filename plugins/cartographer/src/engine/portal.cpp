@@ -1,6 +1,5 @@
 #include "portal.h"
 
-#include "arena_service.h"
 
 #include "map_sync.h"
 #include "maze_hooks.h"

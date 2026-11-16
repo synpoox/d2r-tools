@@ -1,5 +1,6 @@
 #include "engine/arena_service.h"
 
+#include "engine/outdoor_hooks.h"
 #include "log.h"
 
 #include <D2RLPlugin/plugin_communication.h>
@@ -19,6 +20,9 @@ auto __cdecl IsArena(int32_t levelId) noexcept -> bool {
 		if (tables == nullptr) {
 			return false;
 		}
+		if (!ArenaBuilt(levelId)) {
+			return false;  // the game builds that level itself: it is no arena
+		}
 		for (const ArenaDef& a : tables->arenas) {
 			if (a.level == levelId) {
 				return true;
@@ -35,7 +39,7 @@ auto __cdecl FindSpot(int32_t levelId, const char* name, ArenaSpotV1* out) noexc
 			return false;
 		}
 		const std::shared_ptr<const Tables> tables = ArenaServiceTables();
-		const ArenaSpotDef* spot = tables != nullptr ? FindArenaSpot(tables->arenas, levelId, name) : nullptr;
+		const ArenaSpotDef* spot = tables != nullptr && ArenaBuilt(levelId) ? FindArenaSpot(tables->arenas, levelId, name) : nullptr;
 		if (spot == nullptr) {
 			return false;
 		}
@@ -51,7 +55,7 @@ auto __cdecl FindSpot(int32_t levelId, const char* name, ArenaSpotV1* out) noexc
 	}
 }
 
-const ArenaServiceV1 g_service = {sizeof(ArenaServiceV1), 1, &IsArena, &FindSpot};
+const ArenaServiceV1 g_service = {sizeof(ArenaServiceV1), ArenaServiceVersion, &IsArena, &FindSpot};
 
 }  // namespace
 
@@ -67,6 +71,10 @@ auto ArenaServiceTables() -> std::shared_ptr<const Tables> {
 
 void PublishArenaService(const D2RL::PluginContext* context) noexcept {
 	try {
+		const std::shared_ptr<const Tables> tables = ArenaServiceTables();
+		if (tables == nullptr || tables->arenas.empty()) {
+			return;  // no arena row: nothing to ask about, so nothing is offered (a consumer finds no service)
+		}
 		const D2RL::PluginCommunicationService* communication = nullptr;
 		if (context == nullptr || context->QueryService(&communication) != D2RL::ServiceQueryResult::Success ||
 		    !D2RL::HasPluginCommunicationServiceField(communication, D2RL::PluginCommunicationServiceRequiredSize)) {
@@ -75,8 +83,8 @@ void PublishArenaService(const D2RL::PluginContext* context) noexcept {
 		}
 		const D2RL::PluginCommunication::PublishServiceRequest request{
 		    .structSize = D2RL::PluginCommunication::PublishServiceRequestSize,
-		    .name = "cartographer.arena.v1",
-		    .serviceVersion = 1,
+		    .name = ArenaServiceName,
+		    .serviceVersion = ArenaServiceVersion,
 		    .tableSize = sizeof(g_service),
 		    .table = &g_service,
 		};
