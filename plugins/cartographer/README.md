@@ -169,6 +169,8 @@ Named spots in an arena: `Arena`, `Spot`, `X`, `Y` (tiles from the interior's to
 
 Cartographer publishes `cartographer.arena.v1` through the loader's plugin communication service: `isArena(levelId)` and `findSpot(levelId, name, out)`, which gives a spot's absolute subtile position and its room. Read-only, any thread; a plugin that finds no service or no spot refuses its own fight, because Cartographer never guesses a spot. Fields, threads and versions: [arena-service.md](../../docs/cartographer/arena-service.md).
 
+Cartographer also publishes `cartographer.open-extra.v1` (game thread only): `openExtra(game, player, nearUnit, sourceLevel, out)` opens a second map beside a unit, at the source map's monster level, while the first map stays open. Fields, refusals and limits: [open-extra-service.md](../../docs/cartographer/open-extra-service.md).
+
 #### Map item modifiers
 
 There is no `mapstats.txt`. Rarity and modifiers are the game's own: add `magicprefix.txt`, `magicsuffix.txt`, `rareprefix.txt`,

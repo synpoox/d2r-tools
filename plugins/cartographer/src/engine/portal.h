@@ -81,6 +81,14 @@ auto RequestOpen(const std::string& name, std::string* mapName = nullptr) -> Ope
 // 'cartographer where': the next tick of the local player logs its position (subtiles, level, plan cell). False when no game is running here.
 auto RequestWhere() -> bool;
 
+// 'cartographer open-extra': the next tick of the local player opens a second map beside it (ServeOpenExtra). False when no game is running here.
+auto RequestOpenExtra() -> bool;
+
+struct OpenExtraResultV1;  // cartographer_open_extra_v1.h
+// cartographer.open-extra.v1 (issue #485): opens a second map beside `nearUnit` from `sourceLevel`, a slot level with a map open in this game.
+// Game thread only. Refusals are written to out->why and logged. Once a portal has opened from `sourceLevel`, the same destination is returned, with no new map.
+auto OpenExtraMap(void* game, void* player, void* nearUnit, int32_t sourceLevel, OpenExtraResultV1* out) -> bool;
+
 auto PortalLive() -> bool;
 
 // AutoCheck (issue #173, src/engine/auto_check.cpp). Game thread only, with the game and player pointers of the tick.
