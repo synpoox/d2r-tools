@@ -1,6 +1,6 @@
 # Act 4 plains: Mesa (issue #240)
 
-Status: built as the `Mesa` outdoor tileset (`src/outdoor/mesa_plan.*`, LevelType 27). Not yet checked in game.
+Status: built as the `Mesa` outdoor tileset (`src/outdoor/frame_fill_plan.*`, row `kMesa`, LevelType 27). Not yet checked in game.
 
 Vanilla tables of build 3.3.0 were read, nothing copied.
 

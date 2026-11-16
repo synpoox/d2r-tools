@@ -12,18 +12,18 @@
 #include "outdoor.h"
 #include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
-#include "mesa_plan.h"
+#include "frame_fill_plan.h"
 #include "stamp.h"
 
 using namespace cartographer;
 using namespace cartographer::outdoor;
-using namespace cartographer::outdoor::mesa;
+using namespace cartographer::outdoor::framefill;
 
 namespace {
 
-MesaRequest request(uint64_t seed, int w, int h)
+FrameFillRequest request(uint64_t seed, int w, int h)
 {
-	MesaRequest r;
+	FrameFillRequest r;
 	r.seed = seed;
 	r.cellsW = w;
 	r.cellsH = h;
@@ -76,12 +76,12 @@ const char *const kSizes[] = {"Small", "Medium", "Large", "ExtraLarge"};
 
 TEST_CASE("the tables: three fill sets of five pieces each, eight ring pieces, and the slot level fits the largest map")
 {
-	REQUIRE(kFillSets == 3);
+	REQUIRE(kMesa.setCount == 3);
 	const int base[3] = {812, 817, 823};
 	const int wide[5] = {3, 2, 2, 1, 1}, tall[5] = {3, 2, 1, 2, 1};
-	for (int s = 0; s < kFillSets; ++s) {
-		const FillSet &set = fillSet(s);
-		for (int i = 0; i < kFillsPerSet; ++i) {
+	for (int s = 0; s < kMesa.setCount; ++s) {
+		const FillSet &set = kMesa.sets[s];
+		for (int i = 0; i < kMesa.sets[0].count; ++i) {
 			CHECK(set.fills[i].lvlPrest == base[s] + i);
 			CHECK(set.fills[i].w == wide[i]);
 			CHECK(set.fills[i].h == tall[i]);
@@ -89,45 +89,45 @@ TEST_CASE("the tables: three fill sets of five pieces each, eight ring pieces, a
 			CHECK(set.fills[i].files <= 5);
 			CHECK(set.fills[i].weight >= 1);
 		}
-		CHECK(set.fills[kFillsPerSet - 1].w == 1);  // the 8 x 8 piece is what makes every cell fillable
-		CHECK(set.fills[kFillsPerSet - 1].h == 1);
+		CHECK(set.fills[kMesa.sets[0].count - 1].w == 1);  // the 8 x 8 piece is what makes every cell fillable
+		CHECK(set.fills[kMesa.sets[0].count - 1].h == 1);
 	}
 	// Izual's spot (822), the warp (811) and the Fortress transition (798) are never used.
-	for (int s = 0; s < kFillSets; ++s)
-		for (const Fill &f : fillSet(s).fills) CHECK((f.lvlPrest != 822 && f.lvlPrest != 811 && f.lvlPrest != 798));
-	std::set<int> ring = {kEdgePieces.west, kEdgePieces.north, kEdgePieces.east, kEdgePieces.south, kEdgePieces.nw, kEdgePieces.ne, kEdgePieces.se, kEdgePieces.sw};
+	for (int s = 0; s < kMesa.setCount; ++s)
+		for (const Fill &f : kMesa.sets[s].fills) CHECK((f.lvlPrest != 822 && f.lvlPrest != 811 && f.lvlPrest != 798));
+	std::set<int> ring = {kMesa.edge.west, kMesa.edge.north, kMesa.edge.east, kMesa.edge.south, kMesa.edge.nw, kMesa.edge.ne, kMesa.edge.se, kMesa.edge.sw};
 	CHECK(ring == std::set<int>{799, 800, 801, 802, 803, 804, 805, 806});
-	CHECK(edgePieceAt(0, 0, 4, 4) == 0);
-	CHECK(edgePieceAt(3, 3, 4, 4) == 0);
-	CHECK(edgePieceAt(-1, 1, 4, 4) == 800);
-	CHECK(edgePieceAt(1, -1, 4, 4) == 801);
-	CHECK(edgePieceAt(4, 1, 4, 4) == 802);
-	CHECK(edgePieceAt(1, 4, 4, 4) == 799);
-	CHECK(edgePieceAt(-1, -1, 4, 4) == 804);
-	CHECK(edgePieceAt(4, -1, 4, 4) == 805);
-	CHECK(edgePieceAt(4, 4, 4, 4) == 806);
-	CHECK(edgePieceAt(-1, 4, 4, 4) == 803);
+	CHECK(edgePieceAt(kMesa.edge, 0, 0, 4, 4) == 0);
+	CHECK(edgePieceAt(kMesa.edge, 3, 3, 4, 4) == 0);
+	CHECK(edgePieceAt(kMesa.edge, -1, 1, 4, 4) == 800);
+	CHECK(edgePieceAt(kMesa.edge, 1, -1, 4, 4) == 801);
+	CHECK(edgePieceAt(kMesa.edge, 4, 1, 4, 4) == 802);
+	CHECK(edgePieceAt(kMesa.edge, 1, 4, 4, 4) == 799);
+	CHECK(edgePieceAt(kMesa.edge, -1, -1, 4, 4) == 804);
+	CHECK(edgePieceAt(kMesa.edge, 4, -1, 4, 4) == 805);
+	CHECK(edgePieceAt(kMesa.edge, 4, 4, 4, 4) == 806);
+	CHECK(edgePieceAt(kMesa.edge, -1, 4, 4, 4) == 803);
 	int w = 0, h = 0;
-	CHECK(mesaSizeCells("ExtraLarge", &w, &h));
-	CHECK(kLevelTilesX == (w + 2) * 8);
-	CHECK(kLevelTilesY == (h + 2) * 8);
+	CHECK(frameFillSizeCells("ExtraLarge", &w, &h));
+	CHECK(((kMesa.maxCellsW + 2) * kGridTiles) == (w + 2) * 8);
+	CHECK(((kMesa.maxCellsH + 2) * kGridTiles) == (h + 2) * 8);
 }
 
 TEST_CASE("size names map to 8 x 6, 10 x 8, 12 x 10 and 14 x 12 cells")
 {
 	int w = 0, h = 0;
-	CHECK(mesaSizeCells("", &w, &h));
+	CHECK(frameFillSizeCells("", &w, &h));
 	CHECK((w == 12 && h == 10));
-	CHECK(mesaSizeCells("SMALL", &w, &h));
+	CHECK(frameFillSizeCells("SMALL", &w, &h));
 	CHECK((w == 8 && h == 6));
-	CHECK(mesaSizeCells("medium", &w, &h));
+	CHECK(frameFillSizeCells("medium", &w, &h));
 	CHECK((w == 10 && h == 8));
-	CHECK(mesaSizeCells("Large", &w, &h));
+	CHECK(frameFillSizeCells("Large", &w, &h));
 	CHECK((w == 12 && h == 10));
-	CHECK(mesaSizeCells("ExtraLarge", &w, &h));
+	CHECK(frameFillSizeCells("ExtraLarge", &w, &h));
 	CHECK((w == 14 && h == 12));
 	w = 99;
-	CHECK_FALSE(mesaSizeCells("Huge", &w, &h));
+	CHECK_FALSE(frameFillSizeCells("Huge", &w, &h));
 	CHECK(w == 99);
 }
 
@@ -135,15 +135,15 @@ TEST_CASE("every cell is filled, once: every Size, every fill set, many seeds")
 {
 	for (const char *name : kSizes) {
 		int w = 0, h = 0;
-		REQUIRE(mesaSizeCells(name, &w, &h));
+		REQUIRE(frameFillSizeCells(name, &w, &h));
 		std::set<int> sets;
 		std::set<int> sizesSeen;
 		for (uint64_t seed = 0; seed < 300; ++seed) {
-			const MesaRequest r = request(seed, w, h);
-			const MesaPlan p = planMesaMap(r);
+			const FrameFillRequest r = request(seed, w, h);
+			const FrameFillPlan p = planFrameFillMap(kMesa, r);
 			INFO(name, " seed ", seed, ": ", p.reason);
 			REQUIRE(p.ok);
-			CHECK(joined(checkMesaPlan(r, p)).empty());
+			CHECK(joined(checkFrameFillPlan(kMesa, r, p)).empty());
 			sets.insert(p.fillSet);
 			const std::vector<int> cover = coverage(p.stamps);
 			bool every = true;
@@ -171,12 +171,12 @@ TEST_CASE("every cell is filled, once: every Size, every fill set, many seeds")
 
 TEST_CASE("every interior size from the minimum to the maximum packs completely with every fill set")
 {
-	for (int w = kMinCells; w <= kMaxCellsW; ++w) {
-		for (int h = kMinCells; h <= kMaxCellsH; ++h) {
+	for (int w = kMinCells; w <= kMesa.maxCellsW; ++w) {
+		for (int h = kMinCells; h <= kMesa.maxCellsH; ++h) {
 			std::set<int> sets;
 			for (uint64_t seed = 0; seed < 40; ++seed) {
-				const MesaRequest r = request(seed, w, h);
-				const MesaPlan p = planMesaMap(r);
+				const FrameFillRequest r = request(seed, w, h);
+				const FrameFillPlan p = planFrameFillMap(kMesa, r);
 				INFO(w, " x ", h, " seed ", seed, ": ", p.reason);
 				REQUIRE(p.ok);
 				sets.insert(p.fillSet);
@@ -189,8 +189,8 @@ TEST_CASE("every interior size from the minimum to the maximum packs completely 
 
 TEST_CASE("the frame is one border piece per side and corner, round the whole interior")
 {
-	const MesaRequest r = request(7, 10, 8);
-	const MesaPlan p = planMesaMap(r);
+	const FrameFillRequest r = request(7, 10, 8);
+	const FrameFillPlan p = planFrameFillMap(kMesa, r);
 	REQUIRE(p.ok);
 	// Worked out here: the ring is the level's outermost grid cells, the interior is the rest.
 	int ring = 0;
@@ -218,13 +218,13 @@ TEST_CASE("the entrance, boss and event rectangles are separate and inside the i
 {
 	for (const char *name : kSizes) {
 		int w = 0, h = 0;
-		REQUIRE(mesaSizeCells(name, &w, &h));
+		REQUIRE(frameFillSizeCells(name, &w, &h));
 		std::set<std::pair<int, int>> entrances;
 		for (uint64_t seed = 0; seed < 200; ++seed) {
-			MesaRequest r = request(seed, w, h);
+			FrameFillRequest r = request(seed, w, h);
 			r.options.originX = 6000;
 			r.options.originY = 4200;
-			const MesaPlan p = planMesaMap(r);
+			const FrameFillPlan p = planFrameFillMap(kMesa, r);
 			REQUIRE(p.ok);
 			const TileRect *rects[3] = {&p.stamps.entrance, &p.stamps.boss, &p.stamps.event};
 			for (int i = 0; i < 3; ++i) {
@@ -252,10 +252,10 @@ TEST_CASE("the entrance, boss and event rectangles are separate and inside the i
 
 TEST_CASE("pinned files stay in range and do not move the layout")
 {
-	const MesaRequest free = request(11, 12, 10);
-	MesaRequest pinned = free;
+	const FrameFillRequest free = request(11, 12, 10);
+	FrameFillRequest pinned = free;
 	pinned.options.pinFiles = true;
-	const MesaPlan a = planMesaMap(free), b = planMesaMap(pinned);
+	const FrameFillPlan a = planFrameFillMap(kMesa, free), b = planFrameFillMap(kMesa, pinned);
 	REQUIRE(a.ok);
 	REQUIRE(b.ok);
 	REQUIRE(a.stamps.stamps.size() == b.stamps.stamps.size());
@@ -267,80 +267,80 @@ TEST_CASE("pinned files stay in range and do not move the layout")
 		CHECK(a.stamps.stamps[i].file == -1);
 		const int file = b.stamps.stamps[i].file;
 		int set = 0, w = 1, h = 1;
-		const int limit = fillSize(b.stamps.stamps[i].lvlPrest, &set, &w, &h) ? fillSet(set).fills[b.stamps.stamps[i].lvlPrest - (set == 0 ? 812 : (set == 1 ? 817 : 823))].files : 3;
+		const int limit = fillSize(b.stamps.stamps[i].lvlPrest, &set, &w, &h) ? kMesa.sets[set].fills[b.stamps.stamps[i].lvlPrest - (set == 0 ? 812 : (set == 1 ? 817 : 823))].files : 3;
 		CHECK(file >= 0);
 		CHECK(file < limit);
 		anyFile = anyFile || file > 0;
 	}
 	CHECK(anyFile);
-	CHECK(joined(checkMesaPlan(pinned, b)).empty());
+	CHECK(joined(checkFrameFillPlan(kMesa, pinned, b)).empty());
 }
 
 TEST_CASE("a plan is the same for the same seed and differs between seeds")
 {
-	const MesaPlan a = planMesaMap(request(5, 12, 10)), b = planMesaMap(request(5, 12, 10));
+	const FrameFillPlan a = planFrameFillMap(kMesa, request(5, 12, 10)), b = planFrameFillMap(kMesa, request(5, 12, 10));
 	REQUIRE(a.ok);
 	CHECK(a.hash == b.hash);
-	CHECK(mesaPlanAscii(a) == mesaPlanAscii(b));
+	CHECK(frameFillPlanAscii(kMesa, a) == frameFillPlanAscii(kMesa, b));
 	std::set<uint64_t> hashes;
-	for (uint64_t seed = 0; seed < 50; ++seed) hashes.insert(planMesaMap(request(seed, 12, 10)).hash);
+	for (uint64_t seed = 0; seed < 50; ++seed) hashes.insert(planFrameFillMap(kMesa, request(seed, 12, 10)).hash);
 	CHECK(hashes.size() > 40);
 }
 
 TEST_CASE("bad sizes and tight limits fail with a reason, never a half plan")
 {
-	for (const MesaRequest &r : {request(1, kMinCells - 1, 8), request(1, 8, kMinCells - 1), request(1, kMaxCellsW + 1, 8), request(1, 8, kMaxCellsH + 1)}) {
-		const MesaPlan p = planMesaMap(r);
+	for (const FrameFillRequest &r : {request(1, kMinCells - 1, 8), request(1, 8, kMinCells - 1), request(1, kMesa.maxCellsW + 1, 8), request(1, 8, kMesa.maxCellsH + 1)}) {
+		const FrameFillPlan p = planFrameFillMap(kMesa, r);
 		CHECK_FALSE(p.ok);
 		CHECK_FALSE(p.reason.empty());
 		CHECK(p.stamps.stamps.empty());
-		CHECK_FALSE(checkMesaPlan(r, p).empty());
+		CHECK_FALSE(checkFrameFillPlan(kMesa, r, p).empty());
 	}
-	MesaRequest tight = request(1, 14, 12);
+	FrameFillRequest tight = request(1, 14, 12);
 	tight.options.maxTilesX = 120;
-	const MesaPlan p = planMesaMap(tight);
+	const FrameFillPlan p = planFrameFillMap(kMesa, tight);
 	CHECK_FALSE(p.ok);
 	CHECK(p.reason.find("128 x 112") != std::string::npos);
-	tight.options.maxTilesX = kLevelTilesX;
-	tight.options.maxTilesY = kLevelTilesY;
-	CHECK(planMesaMap(tight).ok);
+	tight.options.maxTilesX = ((kMesa.maxCellsW + 2) * kGridTiles);
+	tight.options.maxTilesY = ((kMesa.maxCellsH + 2) * kGridTiles);
+	CHECK(planFrameFillMap(kMesa, tight).ok);
 }
 
 TEST_CASE("the checker catches a hole, a double cover, a wrong ring piece and a moved room")
 {
-	const MesaRequest r = request(3, 10, 8);
-	const MesaPlan good = planMesaMap(r);
+	const FrameFillRequest r = request(3, 10, 8);
+	const FrameFillPlan good = planFrameFillMap(kMesa, r);
 	REQUIRE(good.ok);
-	REQUIRE(joined(checkMesaPlan(r, good)).empty());
+	REQUIRE(joined(checkFrameFillPlan(kMesa, r, good)).empty());
 
-	MesaPlan hole = good;
+	FrameFillPlan hole = good;
 	for (size_t i = 0; i < hole.stamps.stamps.size(); ++i)
 		if (hole.stamps.stamps[i].cx > 0 && hole.stamps.stamps[i].cy > 0 && hole.stamps.stamps[i].cx < 11 && hole.stamps.stamps[i].cy < 9) {
 			hole.stamps.stamps.erase(hole.stamps.stamps.begin() + static_cast<std::ptrdiff_t>(i));
 			break;
 		}
 	hole.hash = stampPlanHash(hole.stamps);
-	CHECK_FALSE(checkMesaPlan(r, hole).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, hole).empty());
 
-	MesaPlan twice = good;
+	FrameFillPlan twice = good;
 	for (Stamp &s : twice.stamps.stamps)
 		if (s.cx == 1 && s.cy == 1) {
-			s.lvlPrest = fillSet(twice.fillSet).fills[0].lvlPrest;  // a 24 x 24 piece over its neighbours
+			s.lvlPrest = kMesa.sets[twice.fillSet].fills[0].lvlPrest;  // a 24 x 24 piece over its neighbours
 			break;
 		}
 	twice.hash = stampPlanHash(twice.stamps);
-	CHECK_FALSE(checkMesaPlan(r, twice).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, twice).empty());
 
-	MesaPlan swapped = good;
+	FrameFillPlan swapped = good;
 	for (Stamp &s : swapped.stamps.stamps)
 		if (s.cx == 0 && s.cy == 4) s.lvlPrest = 802;  // the east piece on the west side
 	swapped.hash = stampPlanHash(swapped.stamps);
-	CHECK_FALSE(checkMesaPlan(r, swapped).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, swapped).empty());
 
-	MesaPlan moved = good;
+	FrameFillPlan moved = good;
 	moved.stamps.boss.x += 8;
 	moved.hash = stampPlanHash(moved.stamps);
-	CHECK_FALSE(checkMesaPlan(r, moved).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, moved).empty());
 }
 
 TEST_CASE("planOutdoorMap plans Mesa through the tileset table and the grid comparison agrees")
@@ -351,8 +351,8 @@ TEST_CASE("planOutdoorMap plans Mesa through the tileset table and the grid comp
 	m.seed = 42;
 	m.options.originX = 6000;
 	m.options.originY = 4200;
-	m.options.maxTilesX = kLevelTilesX;
-	m.options.maxTilesY = kLevelTilesY;
+	m.options.maxTilesX = ((kMesa.maxCellsW + 2) * kGridTiles);
+	m.options.maxTilesY = ((kMesa.maxCellsH + 2) * kGridTiles);
 	const MapPlan plan = planOutdoorMap(m, builtinJungleCatalogue());
 	INFO(plan.reason);
 	REQUIRE(plan.ok);
@@ -382,9 +382,9 @@ TEST_CASE("planOutdoorMap plans Mesa through the tileset table and the grid comp
 
 namespace {
 
-MesaRequest arenaRequest(int w, int h, int fill, int ex, int ey)
+FrameFillRequest arenaRequest(int w, int h, int fill, int ex, int ey)
 {
-	MesaRequest r;
+	FrameFillRequest r;
 	r.cellsW = w;
 	r.cellsH = h;
 	r.arena = true;
@@ -398,14 +398,14 @@ MesaRequest arenaRequest(int w, int h, int fill, int ex, int ey)
 
 TEST_CASE("an arena is a closed square: ring of eight border pieces, fill covered once, exactly one entry")
 {
-	for (int fill = 0; fill < kFillSets; ++fill) {
+	for (int fill = 0; fill < kMesa.setCount; ++fill) {
 		for (int w = 1; w <= 4; ++w) {
 			for (int h = 1; h <= 4; ++h) {
-				const MesaRequest r = arenaRequest(w, h, fill, w / 2, h - 1);
-				const MesaPlan plan = planMesaArena(r);
+				const FrameFillRequest r = arenaRequest(w, h, fill, w / 2, h - 1);
+				const FrameFillPlan plan = planFrameFillArena(kMesa, r);
 				INFO("fill " << fill << " size " << w << " x " << h << ": " << plan.reason);
 				REQUIRE(plan.ok);
-				CHECK(joined(checkMesaPlan(r, plan)).empty());
+				CHECK(joined(checkFrameFillPlan(kMesa, r, plan)).empty());
 				for (int c : coverage(plan.stamps)) CHECK(c == 1);
 				CHECK(plan.stamps.cellsW == w + 2);
 				CHECK(plan.stamps.cellsH == h + 2);
@@ -416,7 +416,7 @@ TEST_CASE("an arena is a closed square: ring of eight border pieces, fill covere
 					const int ix = s.cx - 1, iy = s.cy - 1;
 					const bool onRing = ix < 0 || iy < 0 || ix >= w || iy >= h;
 					CHECK((s.lvlPrest >= 799 && s.lvlPrest <= 806) == onRing);
-					if (onRing) CHECK(s.lvlPrest == edgePieceAt(ix, iy, w, h));
+					if (onRing) CHECK(s.lvlPrest == edgePieceAt(kMesa.edge, ix, iy, w, h));
 					CHECK(s.file == -1);
 				}
 				CHECK(entrances == 1);
@@ -431,8 +431,8 @@ TEST_CASE("an arena is a closed square: ring of eight border pieces, fill covere
 
 TEST_CASE("a 2 x 2 arena is one 16 x 16 fill; the entry piece is the arrival")
 {
-	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
-	const MesaPlan plan = planMesaArena(r);
+	const FrameFillRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const FrameFillPlan plan = planFrameFillArena(kMesa, r);
 	REQUIRE(plan.ok);
 	CHECK(plan.stamps.stamps.size() == 13);
 	CHECK(plan.fillSet == 2);
@@ -448,31 +448,31 @@ TEST_CASE("a 2 x 2 arena is one 16 x 16 fill; the entry piece is the arrival")
 	CHECK(plan.stamps.entrance.x == 8);
 	CHECK(plan.stamps.entrance.y == 8);
 	// Fill sets Mesa1 and Mesa2 use their own 16 x 16 piece.
-	CHECK(planMesaArena(arenaRequest(2, 2, 0, 0, 0)).stamps.stamps[5].lvlPrest == 813);
-	CHECK(planMesaArena(arenaRequest(2, 2, 1, 0, 0)).stamps.stamps[5].lvlPrest == 818);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(2, 2, 0, 0, 0)).stamps.stamps[5].lvlPrest == 813);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(2, 2, 1, 0, 0)).stamps.stamps[5].lvlPrest == 818);
 }
 
 TEST_CASE("an arena plan is pure and deterministic, with a golden hash per size and fill set")
 {
-	const MesaRequest a = arenaRequest(2, 2, 2, 1, 1);
-	CHECK(planMesaArena(a).hash == planMesaArena(a).hash);
-	CHECK(planMesaArena(a).hash != planMesaArena(arenaRequest(2, 2, 1, 1, 1)).hash);
-	CHECK(planMesaArena(a).hash != planMesaArena(arenaRequest(3, 2, 2, 1, 1)).hash);
-	CHECK(planArenaMap(arenaRequest(4, 2, 2, 0, 0)).hash != planArenaMap(arenaRequest(4, 2, 2, 3, 0)).hash);  // another entry piece
-	CHECK(planArenaMap(a).hash == planArenaMap(arenaRequest(2, 2, 2, 0, 0)).hash);                              // the same piece holds every cell of a 2 x 2
-	CHECK(planMesaArena(arenaRequest(2, 2, 0, 1, 1)).hash == 0xb31b010e0778dd1bull);
-	CHECK(planMesaArena(arenaRequest(2, 2, 1, 1, 1)).hash == 0x8ebba961b71eb424ull);
-	CHECK(planMesaArena(arenaRequest(2, 2, 2, 1, 1)).hash == 0x638b0d408c12a83eull);
-	CHECK(planMesaArena(arenaRequest(4, 3, 2, 2, 2)).hash == 0x89ad224bd82d41d1ull);
-	CHECK(planMesaArena(arenaRequest(1, 1, 2, 0, 0)).hash == 0xc99dd2772e4db9e1ull);
+	const FrameFillRequest a = arenaRequest(2, 2, 2, 1, 1);
+	CHECK(planFrameFillArena(kMesa, a).hash == planFrameFillArena(kMesa, a).hash);
+	CHECK(planFrameFillArena(kMesa, a).hash != planFrameFillArena(kMesa, arenaRequest(2, 2, 1, 1, 1)).hash);
+	CHECK(planFrameFillArena(kMesa, a).hash != planFrameFillArena(kMesa, arenaRequest(3, 2, 2, 1, 1)).hash);
+	CHECK(planArenaMap(kMesa, arenaRequest(4, 2, 2, 0, 0)).hash != planArenaMap(kMesa, arenaRequest(4, 2, 2, 3, 0)).hash);  // another entry piece
+	CHECK(planArenaMap(kMesa, a).hash == planArenaMap(kMesa, arenaRequest(2, 2, 2, 0, 0)).hash);                              // the same piece holds every cell of a 2 x 2
+	CHECK(planFrameFillArena(kMesa, arenaRequest(2, 2, 0, 1, 1)).hash == 0xb31b010e0778dd1bull);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(2, 2, 1, 1, 1)).hash == 0x8ebba961b71eb424ull);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(2, 2, 2, 1, 1)).hash == 0x638b0d408c12a83eull);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(4, 3, 2, 2, 2)).hash == 0x89ad224bd82d41d1ull);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(1, 1, 2, 0, 0)).hash == 0xc99dd2772e4db9e1ull);
 }
 
 TEST_CASE("an arena packs largest piece first with no RNG")
 {
-	const MesaPlan plan = planMesaArena(arenaRequest(5, 3, 2, 0, 0));
+	const FrameFillPlan plan = planFrameFillArena(kMesa, arenaRequest(5, 3, 2, 0, 0));
 	REQUIRE(plan.ok);
 	// 5 x 3 cells: a 24 x 24 at (0,0), then a 16 x 16 cannot fit beside it (2 cells left, 3 high): 16 x 16 at (3,0), then 16 x 8 below it at (3,2), and so on, never random.
-	CHECK(mesaPlanAscii(plan) == mesaPlanAscii(planMesaArena(arenaRequest(5, 3, 2, 0, 0))));
+	CHECK(frameFillPlanAscii(kMesa, plan) == frameFillPlanAscii(kMesa, planFrameFillArena(kMesa, arenaRequest(5, 3, 2, 0, 0))));
 	std::vector<int> fillIds;
 	for (const Stamp &s : plan.stamps.stamps)
 		if (s.lvlPrest >= 823) fillIds.push_back(s.lvlPrest);
@@ -482,47 +482,104 @@ TEST_CASE("an arena packs largest piece first with no RNG")
 
 TEST_CASE("an arena refuses bad sizes, fill sets and entries with a reason")
 {
-	CHECK_FALSE(planMesaArena(arenaRequest(0, 2, 2, 0, 0)).ok);
-	CHECK_FALSE(planMesaArena(arenaRequest(kMaxCellsW + 1, 2, 2, 0, 0)).ok);
-	CHECK_FALSE(planMesaArena(arenaRequest(2, kMaxCellsH + 1, 2, 0, 0)).ok);
-	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 3, 0, 0)).ok);
-	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 2, 2, 0)).ok);
-	CHECK_FALSE(planMesaArena(arenaRequest(2, 2, 2, 0, -1)).ok);
-	MesaRequest tight = arenaRequest(4, 4, 2, 0, 0);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(0, 2, 2, 0, 0)).ok);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(kMesa.maxCellsW + 1, 2, 2, 0, 0)).ok);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(2, kMesa.maxCellsH + 1, 2, 0, 0)).ok);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(2, 2, 3, 0, 0)).ok);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(2, 2, 2, 2, 0)).ok);
+	CHECK_FALSE(planFrameFillArena(kMesa, arenaRequest(2, 2, 2, 0, -1)).ok);
+	FrameFillRequest tight = arenaRequest(4, 4, 2, 0, 0);
 	tight.options.maxTilesX = 16;
-	const MesaPlan plan = planMesaArena(tight);
+	const FrameFillPlan plan = planFrameFillArena(kMesa, tight);
 	CHECK_FALSE(plan.ok);
 	CHECK_FALSE(plan.reason.empty());
-	CHECK(planMesaArena(arenaRequest(kMaxCellsW, kMaxCellsH, 0, 3, 3)).ok);
+	CHECK(planFrameFillArena(kMesa, arenaRequest(kMesa.maxCellsW, kMesa.maxCellsH, 0, 3, 3)).ok);
 }
 
 TEST_CASE("the checker catches a broken arena ring and a second entrance")
 {
-	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
-	const MesaPlan good = planMesaArena(r);
+	const FrameFillRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const FrameFillPlan good = planFrameFillArena(kMesa, r);
 	REQUIRE(good.ok);
-	MesaPlan bad = good;
+	FrameFillPlan bad = good;
 	bad.stamps.stamps[0].lvlPrest = 800;  // a north-west corner holding the west piece
 	bad.hash = stampPlanHash(bad.stamps);
-	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, bad).empty());
 	bad = good;
 	bad.stamps.stamps[0].role = layout::Role::Entrance;
 	bad.hash = stampPlanHash(bad.stamps);
-	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, bad).empty());
 	bad = good;
 	bad.stamps.boss = bad.stamps.entrance;
 	bad.hash = stampPlanHash(bad.stamps);
-	CHECK_FALSE(checkMesaPlan(r, bad).empty());
+	CHECK_FALSE(checkFrameFillPlan(kMesa, r, bad).empty());
 }
 
 TEST_CASE("planArenaMap hands the hook the same stamps with the plan hash, and no seed is read")
 {
-	const MesaRequest r = arenaRequest(2, 2, 2, 1, 1);
-	const MapPlan plan = planArenaMap(r);
+	const FrameFillRequest r = arenaRequest(2, 2, 2, 1, 1);
+	const MapPlan plan = planArenaMap(kMesa, r);
 	REQUIRE(plan.ok);
 	CHECK(plan.hash != 0);
 	CHECK(plan.stamps.stamps.size() == 13);
 	CHECK(plan.stamps.voidCells.empty());
-	CHECK(plan.hash == planArenaMap(r).hash);
-	CHECK_FALSE(planArenaMap(arenaRequest(0, 0, 2, 0, 0)).ok);
+	CHECK(plan.hash == planArenaMap(kMesa, r).hash);
+	CHECK_FALSE(planArenaMap(kMesa, arenaRequest(0, 0, 2, 0, 0)).ok);
+}
+
+TEST_CASE("pinned Mesa plans: map and arena stamp hashes never change (issue #504)")
+{
+	// The rooms' rectangles are not in the stamp hash, so they are folded into a second pin.
+	const auto rects = [](const StampPlan &sp) {
+		uint64_t h = 1469598103934665603ull;
+		for (const TileRect *r : {&sp.entrance, &sp.boss, &sp.event})
+			for (const int v : {r->known ? 1 : 0, r->x, r->y, r->w, r->h}) h = (h ^ static_cast<uint64_t>(static_cast<int64_t>(v))) * 1099511628211ull;
+		return h;
+	};
+	struct Case { uint64_t seed; int w, h; bool pin; uint64_t hash; uint64_t rects; };
+	const Case maps[] = {
+		{0, 8, 6, false, 11309794357939188667ull, 2972327143189534596ull}, {1, 10, 8, false, 9680878637351944713ull, 11157239327043583572ull}, {7, 12, 10, false, 2480569522390064504ull, 10701298169011675732ull},
+		{12345, 14, 12, false, 17309034836200614739ull, 4133875070216860340ull}, {0xdeadbeefull, 12, 10, false, 350371001122108394ull, 16748606125036444020ull},
+		{3, 8, 6, true, 17088085640357226514ull, 18244796806012473460ull}, {99, 14, 12, true, 13388626746254824109ull, 15510784724848022196ull}, {2024, 10, 8, true, 9211379286592582870ull, 12635793343761802708ull},
+	};
+	for (const Case &c : maps) {
+		FrameFillRequest r = request(c.seed, c.w, c.h);
+		r.options.pinFiles = c.pin;
+		r.options.originX = 40;
+		r.options.originY = 24;
+		const FrameFillPlan p = planFrameFillMap(kMesa, r);
+		INFO("seed ", c.seed, " ", c.w, "x", c.h, " pin ", c.pin, " rects ", rects(p.stamps));
+		REQUIRE(p.ok);
+		CHECK(p.hash == c.hash);
+		CHECK(rects(p.stamps) == c.rects);
+	}
+	struct ArenaCase { int w, h, fill, ex, ey; uint64_t hash, mapHash, rects; };
+	const ArenaCase arenas[] = {
+		{2, 2, 2, 1, 1, 7172841402396747838ull, 890818891542045124ull, 11803801630925321014ull}, {5, 3, 0, 0, 0, 10753847982556927501ull, 12278997251122810421ull, 16090467914555255238ull},
+		{14, 12, 1, 7, 11, 3443233890636676205ull, 1044867744197298487ull, 4318535806991575678ull}, {1, 1, 2, 0, 0, 14527999382286875105ull, 15977882700010687251ull, 2877498710334526502ull},
+		{7, 7, 2, 3, 6, 10945763162673362570ull, 2530999045441691007ull, 14186996979458424926ull},
+	};
+	for (const ArenaCase &c : arenas) {
+		FrameFillRequest r = arenaRequest(c.w, c.h, c.fill, c.ex, c.ey);
+		r.options.originX = 6000;
+		r.options.originY = 4000;
+		const FrameFillPlan p = planFrameFillArena(kMesa, r);
+		const MapPlan m = planArenaMap(kMesa, r);
+		INFO("arena ", c.w, "x", c.h, " fill ", c.fill, " rects ", rects(p.stamps));
+		REQUIRE(p.ok);
+		CHECK(p.hash == c.hash);
+		CHECK(m.hash == c.mapHash);
+		CHECK(rects(p.stamps) == c.rects);
+	}
+}
+
+TEST_CASE("the frame-fill table: Mesa is a row, found by name, with its fill set names")
+{
+	CHECK(findFrameFillTileset("mesa") == &kMesa);
+	CHECK(findFrameFillTileset("Jungle") == nullptr);
+	CHECK(kMesa.levelType == 27);
+	CHECK(frameFillTilesetNames() == "Mesa");
+	CHECK(fillSetNames(kMesa) == "Mesa1, Mesa2 or Mesa3");
+	CHECK(findFillSet(kMesa, "MESA2") == 1);
+	CHECK(findFillSet(kMesa, "Mesa4") == -1);
 }

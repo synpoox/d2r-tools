@@ -1746,7 +1746,7 @@ TEST_CASE("arenas.txt: each bad row gives one plain-English line and is skipped"
 	    {"A\t200\t\t0\t2\t\t\n", "Width '0'"},
 	    {"A\t200\t\t2\t15\t\t\n", "Height '15'"},
 	    {"A\t200\t\t15\t2\t\t\n", "Width '15'"},
-	    {"A\t200\tJungle\t\t\t\t\n", "Only Mesa is"},
+	    {"A\t200\tJungle\t\t\t\t\n", "Use Mesa."},
 	    {"A\t200\t\t\t\tMesa4\t\n", "Mesa1, Mesa2 or Mesa3"},
 	    {"A\t200\t\t2\t2\t\t2,0\n", "outside the 2 x 2 interior"},
 	    {"A\t200\t\t2\t2\t\t0\n", "two whole numbers"},
