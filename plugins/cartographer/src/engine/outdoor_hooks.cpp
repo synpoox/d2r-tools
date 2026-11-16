@@ -492,11 +492,14 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	for (const int i : mark.clear) {
 		Write<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags, flagsOf(i) & ~co::kArrivalFlags);
 	}
+	const bool arena = ArenaOf(id) != nullptr;  // an arena build must not reset the probe state of an open map (g_probe is per game, one map)
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		SetArrival({true, id, plan.entrance.x, plan.entrance.y, plan.entrance.w, plan.entrance.h});
-		g_arrivalLogged = false;
-		g_arrivalResult = 0;
+		if (!arena) {
+			g_arrivalLogged = false;
+			g_arrivalResult = 0;
+		}
 	}
 	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
