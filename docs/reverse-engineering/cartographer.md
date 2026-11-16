@@ -41,3 +41,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [35. Pieces that carry a waypoint or an area link (issue #455)](cartographer/35-map-link-tiles.md)
 - [36. Blending two woven tilesets at their seam (issue #458)](cartographer/36-woven-seam-blending.md)
 - [37. The Arcane Sanctuary room grower (issue #280)](cartographer/37-arcane-grower.md)
+- [38. A red portal beside a unit, and a second map in a game (issue #485)](cartographer/38-open-extra-portal.md)

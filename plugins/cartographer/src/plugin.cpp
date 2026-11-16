@@ -22,6 +22,7 @@
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
 #include "engine/map_sync.h"
+#include "engine/open_extra_service.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
 #include "engine/stat_apply.h"
@@ -487,6 +488,13 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 			}
 			return D2RL::ConsoleCommandResult::Handled;  // the answer comes from the game thread, in the console and the log
 		}
+		if (carto::EqualsNoCase(verb, "open-extra")) {
+			if (!carto::RequestOpenExtra()) {
+				Say(command, "Cartographer: join a game you host first.");
+				return D2RL::ConsoleCommandResult::Failed;
+			}
+			return D2RL::ConsoleCommandResult::Handled;  // the answer comes from the game thread, in the console and the log
+		}
 		if (carto::EqualsNoCase(verb, "open")) {
 			if (rest.empty()) {
 				Say(command, "Usage: cartographer open <Name>");
@@ -516,7 +524,7 @@ auto Command(D2R::Game::Client* client, const D2RL::ConsoleCommandContext* comma
 		plog::Error("the cartographer command failed");
 		return D2RL::ConsoleCommandResult::Failed;
 	}
-	Say(command, "Usage: cartographer check | cartographer open <Name> | cartographer where");
+	Say(command, "Usage: cartographer check | cartographer open <Name> | cartographer open-extra | cartographer where");
 	return D2RL::ConsoleCommandResult::InvalidArguments;
 }
 
@@ -587,6 +595,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		std::vector<carto::PartStatus> lightParts;
 		(void)carto::InstallMapLighting(context, g_overrides, &lightParts);
 		carto::PublishArenaService(context);
+		carto::PublishOpenExtraService(context);
 		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;

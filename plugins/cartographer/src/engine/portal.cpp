@@ -6,10 +6,12 @@
 #include "outdoor_hooks.h"
 #include "scan.h"
 
+#include "cartographer_open_extra_v1.h"
 #include "core/part_signatures.h"
 #include "core/request.h"
 #include "core/sig.h"
 #include "core/text.h"
+#include "openextra/openextra.h"
 #include "engine/stat_apply.h"
 #include "engine/item_stats.h"
 #include "engine/event_apply.h"
@@ -29,6 +31,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <map>
 #include <mutex>
 
 namespace carto {
@@ -46,6 +49,12 @@ constexpr int32_t MapSpell = 16;             // free in vanilla D2R
 constexpr int RecordSpellIconOffset = 0x144; // int8: misc.txt spellicon; the client starts its item cursor for 0 to 9 (docs/reverse-engineering/cartographer/27-item-cursor-in-game.md)
 constexpr int32_t RecordScanCap = 16384;     // upper bound for the item record walk
 constexpr uint32_t OpenKey = 0x4d415053;     // 'MAPS': the game counter that allows one opening per game
+constexpr uint32_t ExtraKey = 0x4d415058;    // 'MAPX': maps opened by cartographer.open-extra.v1 (the plugin bumps it; the engine never checks it)
+// The CreatePortal and SetPortalDest calls inside OpenRedPortal, with the entry bytes Part 0 recorded (docs/reverse-engineering/cartographer/38-open-extra-portal.md).
+constexpr uint32_t CreatePortalCallOffset = 0xf8;
+constexpr uint32_t SetPortalDestCallOffset = 0x12a;
+constexpr uint8_t CreatePortalEntry[] = {0x48, 0x8B, 0xC4, 0x48, 0x89, 0x68, 0x20, 0x56, 0x57, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xEC, 0x50};
+constexpr uint8_t SetPortalDestEntry[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x0F, 0xB6, 0xFA, 0x48, 0x8B, 0xD9};
 constexpr int32_t StatLevel = 12;
 constexpr int32_t HarrogathId = 109;
 constexpr int32_t CantDoThat = 0x15;
@@ -70,6 +79,8 @@ using UnitStatFn = int32_t (*)(Unit*, int32_t stat, int32_t index) noexcept;
 using UnitCoordsFn = void (*)(Unit*, int32_t* xy) noexcept;
 using FindFreeSpotFn = void (*)(Game*, void* room, int32_t* xy, uint32_t, uint32_t, void** found, uint64_t, int32_t) noexcept;
 using PlayerTickFn = uint64_t (*)(Game*, Unit*) noexcept;
+using CreatePortalFn = int32_t (*)(Game*, Unit* player, void* room, int32_t x, int32_t y, int32_t level, Unit** object, int32_t objectId, int32_t, int32_t) noexcept;
+using SetPortalDestFn = void (*)(Unit* object, int32_t levelByte) noexcept;
 
 enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PlayerTick, PartCount };
 
@@ -110,6 +121,12 @@ UseFn g_useOriginal = nullptr;
 PlayerTickFn g_tickOriginal = nullptr;
 OpenRequest g_request;                     // the console's request; guarded by g_lock
 std::atomic<bool> g_whereRequested{false};  // `cartographer where`: the next tick of the local player logs its position
+std::atomic<bool> g_extraRequested{false};  // `cartographer open-extra`: the next tick of the local player opens a second map beside it
+const uint8_t* g_createPortal = nullptr;    // OpenRedPortal's CreatePortal call (derived, ResolveExtraCalls); null when not found
+const uint8_t* g_setPortalDest = nullptr;   // OpenRedPortal's SetPortalDest call (derived, ResolveExtraCalls)
+// Guarded by g_lock: the slot levels with a map open in this game (level -> its monster level), and each source level's extra destination.
+std::map<int, int> g_openedLevels;
+std::map<int, int> g_extraFrom;
 std::atomic<bool> g_requested{false};      // g_request has something to serve: the per-frame hook reads only this
 std::atomic<bool> g_consoleLive{false};    // the tick hook and the game events are in
 std::atomic<uint32_t> g_localPlayer{NoPlayer};  // unit id of the local player (LocalPlayerReady), else NoPlayer
@@ -152,10 +169,58 @@ auto PlayerLevelId(Unit* player) noexcept -> int32_t {
 	return room != nullptr ? Call<RoomLevelFn>(RoomLevelId)(room) : -1;
 }
 
-auto Openings(Game* game) noexcept -> int32_t {
-	uint32_t key = OpenKey;
+auto Counter(Game* game, uint32_t key) noexcept -> int32_t {
 	const int32_t* counter = Call<GameCounterFn>(GameCounter)(reinterpret_cast<uint8_t*>(game) + GameCountersOffset, &key);
 	return counter != nullptr ? *counter : 0;
+}
+
+auto Openings(Game* game) noexcept -> int32_t {
+	return Counter(game, OpenKey);
+}
+
+// Every map open in this game: the item and console opens ('MAPS') and the extra opens ('MAPX'). Numbers each map's opening.
+auto AllOpenings(Game* game) noexcept -> int32_t {
+	return Counter(game, OpenKey) + Counter(game, ExtraKey);
+}
+
+// True when [p, p + size) lies inside one of the executable sections (`ranges`, from CodeRanges). Checked before any byte of a
+// derived target is read, so a body that moved on another build cannot make the load read unmapped memory.
+auto InCode(const uint8_t* p, size_t size, const CodeRange* ranges, int count) noexcept -> bool {
+	const uintptr_t start = reinterpret_cast<uintptr_t>(p);
+	for (int i = 0; i < count; ++i) {
+		const uintptr_t base = reinterpret_cast<uintptr_t>(ranges[i].start);
+		if (start >= base && start + size <= base + ranges[i].size) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The target of the call at `fn + offset` (an E8 rel32), or null unless the call and its target lie in the executable sections and
+// the target starts with the `entry` bytes. A derived address: found from OpenRedPortal's own code, never a fixed RVA (owner rule: signatures only).
+auto CallTarget(const uint8_t* fn, uint32_t offset, const uint8_t* entry, size_t size, const CodeRange* ranges, int count) noexcept -> const uint8_t* {
+	if (fn == nullptr || !InCode(fn + offset, 5, ranges, count)) {
+		return nullptr;
+	}
+	if (fn[offset] != 0xE8) {
+		return nullptr;
+	}
+	int32_t rel = 0;
+	std::memcpy(&rel, fn + offset + 1, sizeof(rel));
+	const uint8_t* target = fn + offset + 5 + rel;
+	if (!InCode(target, size, ranges, count)) {
+		return nullptr;
+	}
+	return std::memcmp(target, entry, size) == 0 ? target : nullptr;
+}
+
+// Sets g_createPortal and g_setPortalDest from OpenRedPortal's code. Called at install and at RescanPortal; logs each result.
+void ResolveExtraCalls(const CodeRange* ranges, int count) noexcept {
+	const uint8_t* open = g_parts[OpenRedPortal].address;
+	g_createPortal = CallTarget(open, CreatePortalCallOffset, CreatePortalEntry, sizeof(CreatePortalEntry), ranges, count);
+	g_setPortalDest = CallTarget(open, SetPortalDestCallOffset, SetPortalDestEntry, sizeof(SetPortalDestEntry), ranges, count);
+	plog::Info("part CreatePortal (derived from OpenRedPortal): %s", g_createPortal != nullptr ? "found" : "off: the call does not match its recorded bytes");
+	plog::Info("part SetPortalDest (derived from OpenRedPortal): %s", g_setPortalDest != nullptr ? "found" : "off: the call does not match its recorded bytes");
 }
 
 // OpenRedPortal's own spot search, so a refusal does not use the map up. Without the two helpers, assume a spot.
@@ -172,6 +237,34 @@ auto SpotFree(Game* game, Unit* player) noexcept -> bool {
 	void* found = nullptr;
 	Call<FindFreeSpotFn>(FindFreeSpot)(game, room, xy, 3, 0x400, &found, 5, 100);
 	return found != nullptr;
+}
+
+// The red portal to `level`, placed beside `nearUnit` (any unit: its room and position are read). What OpenRedPortal does after its
+// town and counter checks, without them: OpenRedPortal only opens in town. Counts the open in ExtraKey, so AllOpenings numbers it. Game thread only.
+auto OpenPortalBeside(Game* game, Unit* player, Unit* nearUnit, int level) noexcept -> int32_t {
+	if (g_createPortal == nullptr || g_setPortalDest == nullptr || g_parts[UnitCoords].address == nullptr || g_parts[FindFreeSpot].address == nullptr ||
+	    level < 1 || level > 255) {
+		return 0;
+	}
+	void* room = Call<UnitRoomFn>(UnitRoom)(nearUnit);
+	if (room == nullptr) {
+		return 0;
+	}
+	int32_t xy[2] = {};
+	Call<UnitCoordsFn>(UnitCoords)(nearUnit, xy);
+	void* found = nullptr;
+	Call<FindFreeSpotFn>(FindFreeSpot)(game, room, xy, 3, 0x400, &found, 5, 100);
+	if (found == nullptr) {
+		return 0;
+	}
+	Unit* object = nullptr;
+	if (reinterpret_cast<CreatePortalFn>(const_cast<uint8_t*>(g_createPortal))(game, player, found, xy[0], xy[1], level, &object, 0x3c, 0, 1) == 0 || object == nullptr) {
+		return 0;
+	}
+	reinterpret_cast<SetPortalDestFn>(const_cast<uint8_t*>(g_setPortalDest))(object, level & 0xff);
+	uint32_t key = ExtraKey;
+	++*Call<GameCounterFn>(GameCounter)(reinterpret_cast<uint8_t*>(game) + GameCountersOffset, &key);
+	return 1;
 }
 
 // What the gates look at, read from the game for this player. Game thread only.
@@ -197,7 +290,7 @@ void Tell(const std::string& text) noexcept {
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game,
                    const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, static_cast<uint32_t>(Openings(game)), itemStats, densityBonus);
+		StatApplyMapOpened(map, tables, static_cast<uint32_t>(AllOpenings(game)), itemStats, densityBonus);
 		if (tables != nullptr) {
 			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
 		}
@@ -209,7 +302,7 @@ void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& table
 // The map is open: decides its event and arms the entry message (event_apply.cpp). Never lets a failure reach the game.
 void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game, Unit* player, int level, bool maze) noexcept {
 	try {
-		EventsMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(Openings(game)), level, maze, player);
+		EventsMapOpened(map, tables, At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(AllOpenings(game)), level, maze, player);
 	} catch (...) {
 		plog::Error("deciding the map's event failed; '%s' opens without one", map.name.c_str());
 	}
@@ -219,7 +312,7 @@ void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tabl
 void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game, int level, bool maze) noexcept {
 	try {
 		const bool outdoor = MapIsOutdoor(map);
-		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed(level) : outdoor ? OutdoorOpenSeed(level) : 0, outdoor);
+		MapSyncMapOpened(map, tables, level, AllOpenings(game), maze, maze ? MazeOpenSeed(level) : outdoor ? OutdoorOpenSeed(level) : 0, outdoor);
 	} catch (...) {
 		plog::Error("telling the clients about '%s' failed", map.name.c_str());
 	}
@@ -287,7 +380,9 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 
 // Opens `map` through its slot. A maze map hands its plan to the maze hooks first; if the game then opens no portal, the plan is dropped.
 // `refusal` is set, with the portal not opened, when an outdoor map's plan cannot be made.
-auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level, std::string* refusal, bool* shapedOut = nullptr) noexcept -> int32_t {
+// `nearUnit` (optional, the extra open): the portal is placed beside that unit by OpenPortalBeside, not by OpenRedPortal (town only, counted in 'MAPS').
+auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& tables, int level, std::string* refusal, bool* shapedOut = nullptr,
+                   Unit* nearUnit = nullptr) noexcept -> int32_t {
 	const bool maze = IsMazeMap(map);
 	const bool outdoor = IsOutdoorMap(map);
 	if (maze) {
@@ -307,7 +402,7 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	// The map's monster columns go into the same row and the level's region record, for the same reason. The slot level is looked up
 	// again from the slots table, so the writer checks it against the level it was given.
 	const bool shaped = LevelRowBeforeOpen(map, level, SlotLevel(tables.slots, SlotNameFor(map)), game, At<uint8_t>(game, GameDataFlagOffset));
-	const int32_t opened = Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
+	const int32_t opened = nearUnit != nullptr ? OpenPortalBeside(game, player, nearUnit, level) : Call<OpenRedPortalFn>(OpenRedPortal)(game, player, OpenKey, level, 1);
 	if (shapedOut != nullptr) {
 		*shapedOut = shaped && opened != 0;
 	}
@@ -564,6 +659,10 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	Tell(opened != 0 ? "Cartographer: " + map->name + " is open." : "Cartographer: the game would not open a portal for " + map->name + ".");
 	if (opened != 0) {
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			g_openedLevels[level] = opening.level;  // cartographer.open-extra.v1 reads the monster level of the source from here
+		}
 		StartMapStats(opening, tables, game, itemStats, densityBonus);
 		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
@@ -609,6 +708,10 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 	if (!out.opened) {
 		out.why = "the game would not open a portal for " + map->name;
 		return out;
+	}
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_openedLevels[level] = map->level;
 	}
 	StartMapStats(*map, tables, game);
 	StartMapEvents(*map, tables, game, player, level, IsMazeMap(*map));
@@ -736,6 +839,20 @@ void ServeWhere(Unit* unit) noexcept {
 	Tell("Cartographer where: level " + std::to_string(level) + ", subtile (" + std::to_string(x) + "," + std::to_string(y) + "), " + OutdoorWhereText(level, x, y));
 }
 
+// `cartographer open-extra`, on the game thread: opens a second map beside the local player from the level it stands in (the same open as the service).
+void ServeOpenExtra(Game* game, Unit* unit) noexcept {
+	if (!g_extraRequested.exchange(false)) {
+		return;
+	}
+	OpenExtraResultV1 out{};
+	out.structSize = sizeof(out);
+	if (OpenExtraMap(game, unit, unit, PlayerLevelOf(unit), &out)) {
+		Tell("Cartographer: open-extra: level " + std::to_string(out.level) + ", monster level " + std::to_string(out.monsterLevel) + ".");
+	} else {
+		Tell(std::string("Cartographer: open-extra refused: ") + out.why);
+	}
+}
+
 auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 	if (g_tickOriginal == nullptr) {
 		// Reachable: the loader can patch the tick and still return no original (the install then logs an error and marks
@@ -766,6 +883,7 @@ auto PlayerTickHook(Game* game, Unit* unit) noexcept -> uint64_t {
 		MapPanelPlayerTick(unit);
 		MapLightingPlayerTick(PlayerLevelOf(unit));
 		ServeWhere(unit);
+		ServeOpenExtra(game, unit);
 		AutomapResetPlayerTick(PlayerLevelOf(unit));
 	}
 	if (known != NoPlayer) {
@@ -807,11 +925,14 @@ void __cdecl OnGameplayEvent(const D2RL::PluginContext*, const D2RL::Lifecycle::
 		AutoCheckGameLeft();
 		g_localPlayer = NoPlayer;
 		g_whereRequested = false;
+		g_extraRequested = false;
 		g_tickSeen = false;
 		g_firstLogged = false;
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_request.Clear();
 		g_requested = false;
+		g_openedLevels.clear();
+		g_extraFrom.clear();
 		ClearPending();
 	}
 	if (event->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
@@ -887,6 +1008,108 @@ auto RequestWhere() -> bool {
 		return false;
 	}
 	g_whereRequested = true;
+	return true;
+}
+
+auto RequestOpenExtra() -> bool {
+	if (!g_consoleLive.load() || g_localPlayer.load() == NoPlayer || !g_tickSeen.load()) {
+		return false;
+	}
+	g_extraRequested = true;
+	return true;
+}
+
+// cartographer.open-extra.v1 (issue #485). The source level must hold a map opened in this game. The second map takes the source's
+// monster level and a slot no other map in the game has, and leaves the first map's state alone (per-level state, Parts 1a and 1b).
+auto OpenExtraMap(void* gamePtr, void* playerPtr, void* nearPtr, int32_t sourceLevel, OpenExtraResultV1* out) -> bool {
+	if (out == nullptr) {
+		return false;
+	}
+	out->level = -1;
+	out->monsterLevel = 0;
+	out->why[0] = '\0';
+	const auto refuse = [&](const std::string& text) {
+		std::snprintf(out->why, sizeof(out->why), "%s", text.c_str());
+		plog::Warn("open-extra refused: %s", text.c_str());
+		return false;
+	};
+	Game* game = static_cast<Game*>(gamePtr);
+	Unit* player = static_cast<Unit*>(playerPtr);
+	Unit* nearUnit = static_cast<Unit*>(nearPtr);
+	std::shared_ptr<const Tables> tables;
+	std::map<int, int> openedLevels;
+	std::map<int, int> extraFrom;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		tables = g_tables;
+		openedLevels = g_openedLevels;
+		extraFrom = g_extraFrom;
+	}
+	if (!g_live.load() || game == nullptr || player == nullptr || nearUnit == nullptr || tables == nullptr) {
+		return refuse("the portal is off, or no game is running");
+	}
+	if (g_createPortal == nullptr || g_setPortalDest == nullptr) {
+		return refuse("CreatePortal/SetPortalDest are off, see the log");
+	}
+	const auto source = openedLevels.find(sourceLevel);
+	if (source == openedLevels.end()) {
+		return refuse("no map was opened through level " + std::to_string(sourceLevel) + " in this game");
+	}
+	const int monsterLevel = source->second;
+	if (const auto done = extraFrom.find(sourceLevel); done != extraFrom.end()) {
+		// One destination per source: the same map again, opening nothing.
+		const auto dest = openedLevels.find(done->second);
+		out->level = done->second;
+		out->monsterLevel = dest != openedLevels.end() ? dest->second : monsterLevel;
+		return true;
+	}
+	if (PlayerLevelOf(nearUnit) != sourceLevel) {
+		return refuse("the unit is not in level " + std::to_string(sourceLevel));
+	}
+	std::vector<cartographer::openextra::Candidate> candidates;
+	std::vector<int> taken;
+	for (const auto& entry : openedLevels) {
+		taken.push_back(entry.first);
+	}
+	for (const MapDef& row : tables->maps) {
+		cartographer::openextra::Candidate candidate;
+		candidate.slotLevel = SlotLevel(tables->slots, SlotNameFor(row));
+		candidate.minCharLevel = row.minCharLevel;
+		candidate.usable = candidate.slotLevel > 0 && SlotProblem(row, *tables, candidate.slotLevel).empty();
+		candidates.push_back(candidate);
+		if (candidate.slotLevel > 0 && (MazeSlotBuilt(candidate.slotLevel) || OutdoorSlotBuilt(candidate.slotLevel))) {
+			taken.push_back(candidate.slotLevel);
+		}
+	}
+	const uint64_t seed = cartographer::statplan::mixSeed(GetTickCount64(), At<uint32_t>(player, UnitIdOffset), static_cast<uint32_t>(AllOpenings(game) + 1));
+	const int index = cartographer::openextra::pickExtraMap(candidates, taken, sourceLevel, Call<UnitStatFn>(UnitStat)(player, StatLevel, 0), seed);
+	if (index < 0) {
+		return refuse("no eligible map is left: every other map slot is built or taken");
+	}
+	const MapDef& row = tables->maps[static_cast<size_t>(index)];
+	const int destination = candidates[static_cast<size_t>(index)].slotLevel;
+	MapDef opening = row;
+	opening.level = monsterLevel;  // the source map's monster level, as the item's level stat gave it
+	std::string refusal;
+	const int32_t opened = OpenMapPortal(game, player, opening, *tables, destination, &refusal, nullptr, nearUnit);
+	if (!refusal.empty()) {
+		return refuse(refusal);
+	}
+	if (opened == 0) {
+		return refuse("the game would not open a portal for " + row.name);
+	}
+	const bool maze = IsMazeMap(row);
+	StartMapStats(opening, tables, game);
+	StartMapEvents(opening, tables, game, player, destination, maze);
+	NoteMapOpenedForClients(row, *tables, game, destination, maze);  // the table row, not the copy: map sync finds its index by the pointer
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_openedLevels[destination] = monsterLevel;
+		g_extraFrom[sourceLevel] = destination;
+	}
+	out->level = destination;
+	out->monsterLevel = monsterLevel;
+	plog::Info("open-extra: '%s' (level %d, monster level %d) from level %d", row.name.c_str(), destination, monsterLevel, sourceLevel);
 	return true;
 }
 
@@ -975,6 +1198,7 @@ auto RescanPortal() -> bool {
 			ResolvePart(g_context, g_overrides, ranges, count, part);
 		}
 	}
+	ResolveExtraCalls(ranges, count);
 	g_live = RequiredPartsOn();
 	for (const Part& part : g_parts) {
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
@@ -1037,6 +1261,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 			check.status.detail = "off: not hooked, because the ItemSpellUse hook did not go in";
 		}
 	}
+	ResolveExtraCalls(ranges, count);  // after the parts: the calls are read from OpenRedPortal's code
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt
