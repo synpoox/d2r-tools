@@ -939,7 +939,7 @@ void OnArenaPopulated(Game* game, void* room) {
 		void* unit = nullptr;
 		bool made = SpawnOne(game, room, spawn, &asSuper, &unit);
 		if (!made) {  // a taken spot: the spawn core takes the nearest ring spot when the collision test is skipped
-			made = SpawnOne(game, room, spawn, &asSuper, &unit, SpawnFlagNoCollision);
+			made = SpawnOne(game, room, spawn, &asSuper, &unit, ep::kSpawnFlagNoCollision);
 		}
 		plog::Info("arena '%s' spot '%s': monster '%s'%s %s at the spot (%d,%d)%s", arena->name.c_str(), spot.name.c_str(), spot.monster.c_str(), note.c_str(), made ? (asSuper ? "spawned as a superunique" : "spawned as a plain monster") : "REFUSED by the game", x, y, made ? "" : "; not retried");
 	}
