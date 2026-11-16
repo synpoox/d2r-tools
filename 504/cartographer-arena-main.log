@@ -1,0 +1,159 @@
+﻿[2026-11-16 11:05:44.348] [INFO] [Plugin:cartographer] cartographer: 0.1.0 loaded (mod PD2Resurrected, D2R 3.3.0, image 0x6ab3782c)
+[2026-11-16 11:05:44.357] [INFO] [Plugin:cartographer] cartographer: mod folder C:\D2RTestSlots\Slot3\mods\PD2Resurrected\PD2Resurrected.mpq, tables read from C:\D2RTestSlots\Slot3\mods\PD2Resurrected\PD2Resurrected.mpq\data\global\excel\d2rloader\cartographer
+[2026-11-16 11:05:44.437] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' (level 209): planned 3 x 3 cells, 17 stamps, level 40 x 40 tiles at (6000,6300), plan a9fc4ff117baa8d9
+[2026-11-16 11:05:44.445] [INFO] [Plugin:cartographer] cartographer: arena 'Lucion' (level 213): planned 3 x 3 cells, 17 stamps, level 40 x 40 tiles at (6000,5400), plan cb8c4d29eeb83cfe
+[2026-11-16 11:05:44.452] [INFO] [Plugin:cartographer] cartographer: arena 'Temple of the Triune' (level 214): planned 2 x 2 cells, 13 stamps, level 32 x 32 tiles at (6000,5700), plan 4d4bdaa24e10c803
+[2026-11-16 11:05:44.461] [INFO] [Plugin:cartographer] cartographer: arena 'Bitter Depths' (level 215): planned 8 x 8 cells, 47 stamps, level 80 x 80 tiles at (6000,6000), plan adf4e511aca828b9
+[2026-11-16 11:05:44.471] [INFO] [Plugin:cartographer] cartographer: cube map level: property id 374, stat row 564 (the hook status is in the part lines)
+[2026-11-16 11:05:44.479] [INFO] [Plugin:cartographer] cartographer: 6 map(s), 0 problem(s); report at C:\D2RTestSlots\Slot3\d2rloader\logs\cartographer-report.txt
+[2026-11-16 11:05:44.489] [INFO] [Plugin:cartographer] cartographer: map stat text: registered the map level text
+[2026-11-16 11:05:44.726] [INFO] [Plugin:cartographer] cartographer: part CreatePortal (derived from OpenRedPortal): found
+[2026-11-16 11:05:44.733] [INFO] [Plugin:cartographer] cartographer: part SetPortalDest (derived from OpenRedPortal): found
+[2026-11-16 11:05:45.280] [INFO] [Plugin:cartographer] cartographer: the outdoor build hooks are in (behind the maze steering's level build hook)
+[2026-11-16 11:05:45.317] [INFO] [Plugin:cartographer] cartographer: part ItemSpellCheck: found by signature, hooked
+[2026-11-16 11:05:45.323] [INFO] [Plugin:cartographer] cartographer: part ItemSpellUse: found by signature, hooked
+[2026-11-16 11:05:45.330] [INFO] [Plugin:cartographer] cartographer: part ItemRecord: found by signature
+[2026-11-16 11:05:45.336] [INFO] [Plugin:cartographer] cartographer: part UnitClassOf: found by signature
+[2026-11-16 11:05:45.343] [INFO] [Plugin:cartographer] cartographer: part UnitRoom: found by signature
+[2026-11-16 11:05:45.350] [INFO] [Plugin:cartographer] cartographer: part RoomLevelId: found by signature
+[2026-11-16 11:05:45.357] [INFO] [Plugin:cartographer] cartographer: part ClientMessage: found by signature
+[2026-11-16 11:05:45.363] [INFO] [Plugin:cartographer] cartographer: part OpenRedPortal: found by signature
+[2026-11-16 11:05:45.369] [INFO] [Plugin:cartographer] cartographer: part GameCounter: found by signature
+[2026-11-16 11:05:45.376] [INFO] [Plugin:cartographer] cartographer: part UnitStat: found by signature
+[2026-11-16 11:05:45.382] [INFO] [Plugin:cartographer] cartographer: part UnitCoords: found by signature
+[2026-11-16 11:05:45.387] [INFO] [Plugin:cartographer] cartographer: part FindFreeSpot: found by signature
+[2026-11-16 11:05:45.394] [INFO] [Plugin:cartographer] cartographer: part PlayerTick: found by signature, hooked
+[2026-11-16 11:05:45.399] [INFO] [Plugin:cartographer] cartographer: part LevelBuild: found by signature, hooked
+[2026-11-16 11:05:45.404] [INFO] [Plugin:cartographer] cartographer: part MazeWalk: found by signature, hooked
+[2026-11-16 11:05:45.410] [INFO] [Plugin:cartographer] cartographer: part MazeEntranceExit: found by signature, hooked
+[2026-11-16 11:05:45.416] [INFO] [Plugin:cartographer] cartographer: part MazeRingGrower: found by signature, hooked
+[2026-11-16 11:05:45.424] [INFO] [Plugin:cartographer] cartographer: part MazeAddRoom: found by signature
+[2026-11-16 11:05:45.430] [INFO] [Plugin:cartographer] cartographer: part MazeLinkRooms: found by signature
+[2026-11-16 11:05:45.437] [INFO] [Plugin:cartographer] cartographer: part MazePiecePicker: found by signature
+[2026-11-16 11:05:45.443] [INFO] [Plugin:cartographer] cartographer: part ArrivalFinder: found by signature
+[2026-11-16 11:05:45.449] [INFO] [Plugin:cartographer] cartographer: part ArrivalRoomFinder: found by signature
+[2026-11-16 11:05:45.456] [INFO] [Plugin:cartographer] cartographer: part ArrivalFlagTest: found by signature
+[2026-11-16 11:05:45.462] [INFO] [Plugin:cartographer] cartographer: part ArcaneGrower: found by signature, hooked
+[2026-11-16 11:05:45.468] [INFO] [Plugin:cartographer] cartographer: part RoomTileLoader: found by signature
+[2026-11-16 11:05:45.474] [INFO] [Plugin:cartographer] cartographer: part AutomapRestore: found by signature, hooked
+[2026-11-16 11:05:45.480] [INFO] [Plugin:cartographer] cartographer: part OutdoorAct5Builder: found by signature, hooked
+[2026-11-16 11:05:45.486] [INFO] [Plugin:cartographer] cartographer: part OutdoorEntry: found by signature
+[2026-11-16 11:05:45.491] [INFO] [Plugin:cartographer] cartographer: part PieceStamp: found by signature
+[2026-11-16 11:05:45.497] [INFO] [Plugin:cartographer] cartographer: part VoidCell: found by signature
+[2026-11-16 11:05:45.504] [INFO] [Plugin:cartographer] cartographer: part ArrivalSpot: found by signature, hooked
+[2026-11-16 11:05:45.510] [INFO] [Plugin:cartographer] cartographer: part LevelLookup: found by signature
+[2026-11-16 11:05:45.517] [INFO] [Plugin:cartographer] cartographer: part RoomDataLoad: found by signature
+[2026-11-16 11:05:45.524] [INFO] [Plugin:cartographer] cartographer: part FreeSpotSearch: found by signature
+[2026-11-16 11:05:45.719] [INFO] [Plugin:cartographer] cartographer: map stats: monster stats on, player stats on (monsters checked in game on cheat-spawned monsters; the player half only with Save and Exit)
+[2026-11-16 11:05:45.729] [INFO] [Plugin:cartographer] cartographer: part NewStatList: found by signature
+[2026-11-16 11:05:45.736] [INFO] [Plugin:cartographer] cartographer: part SetListStat: found by signature
+[2026-11-16 11:05:45.744] [INFO] [Plugin:cartographer] cartographer: part AttachStatList: found by signature
+[2026-11-16 11:05:45.750] [INFO] [Plugin:cartographer] cartographer: part DetachStatList: found by signature
+[2026-11-16 11:05:45.756] [INFO] [Plugin:cartographer] cartographer: part FreeStatList: found by signature
+[2026-11-16 11:05:45.763] [INFO] [Plugin:cartographer] cartographer: part MonsterSetup: found by signature, hooked
+[2026-11-16 11:05:45.771] [INFO] [Plugin:cartographer] cartographer: part StatUnitRoom: found by signature
+[2026-11-16 11:05:45.777] [INFO] [Plugin:cartographer] cartographer: part StatRoomLevelId: found by signature
+[2026-11-16 11:05:45.784] [INFO] [Plugin:cartographer] cartographer: part StatUnitStat: found by signature
+[2026-11-16 11:05:45.790] [INFO] [Plugin:cartographer] cartographer: part SetListState: found by signature
+[2026-11-16 11:05:45.796] [INFO] [Plugin:cartographer] cartographer: part SetStateBit: found by signature
+[2026-11-16 11:05:45.801] [INFO] [Plugin:cartographer] cartographer: part StateOn: found by signature
+[2026-11-16 11:05:45.807] [INFO] [Plugin:cartographer] cartographer: part FindStateList: found by signature
+[2026-11-16 11:05:45.812] [INFO] [Plugin:cartographer] cartographer: part StatDataTablesBase: found by signature
+[2026-11-16 11:05:45.828] [INFO] [Plugin:cartographer] cartographer: part ItemListFind: found by signature
+[2026-11-16 11:05:45.836] [INFO] [Plugin:cartographer] cartographer: part ItemListCopy: found by signature
+[2026-11-16 11:05:45.852] [INFO] [Plugin:cartographer] cartographer: part ItemListMake: found by signature
+[2026-11-16 11:05:45.860] [INFO] [Plugin:cartographer] cartographer: part ItemSetListStat: found by signature
+[2026-11-16 11:05:45.875] [INFO] [Plugin:cartographer] cartographer: part ItemPropApply: found by signature
+[2026-11-16 11:05:45.882] [INFO] [Plugin:cartographer] cartographer: part CubeExec: off: the signature matches nowhere in this game's code
+[2026-11-16 11:05:45.898] [INFO] [Plugin:cartographer] cartographer: part UnitInventory: found by signature
+[2026-11-16 11:05:45.903] [INFO] [Plugin:cartographer] cartographer: part InventoryFirst: found by signature
+[2026-11-16 11:05:45.911] [INFO] [Plugin:cartographer] cartographer: part InventoryNext: found by signature
+[2026-11-16 11:05:45.945] [INFO] [Plugin:cartographer] cartographer: part ItemPropApply: found by signature, hooked; part CubeExec: off: the signature matches nowhere in this game's code
+[2026-11-16 11:05:46.082] [INFO] [Plugin:cartographer] cartographer: magic maps are blocked (maps forced magic by a cheat, and maps that already exist, stay magic): 0 map rolls: 0 low, 0 normal (0 of them rolled magic), 0 superior, 0 magic, 0 set, 0 rare, 0 unique, 0 crafted; 0 maps whose set, rare or unique maker failed were made normal, not magic so far
+[2026-11-16 11:05:46.089] [INFO] [Plugin:cartographer] cartographer: part ItemQualityRoll: found by signature, hooked
+[2026-11-16 11:05:46.095] [INFO] [Plugin:cartographer] cartographer: part MagicFallback: found by signature, hooked
+[2026-11-16 11:05:46.102] [INFO] [Plugin:cartographer] cartographer: part NormalFallback: found by signature
+[2026-11-16 11:05:46.107] [INFO] [Plugin:cartographer] cartographer: part ItemRecord: found by signature
+[2026-11-16 11:05:46.113] [INFO] [Plugin:cartographer] cartographer: part UnitClassOf: found by signature
+[2026-11-16 11:05:46.119] [INFO] [Plugin:cartographer] cartographer: part MainRollCall: found by signature
+[2026-11-16 11:05:46.359] [INFO] [Plugin:cartographer] cartographer: phase 6b: Shrine events on, Boss Drop on, Ambush on, Treasure chest Drop on (written, not verified in game)
+[2026-11-16 11:05:46.368] [INFO] [Plugin:cartographer] cartographer: part DeathDrop: found by signature, hooked
+[2026-11-16 11:05:46.374] [INFO] [Plugin:cartographer] cartographer: part DropRoller: found by signature
+[2026-11-16 11:05:46.381] [INFO] [Plugin:cartographer] cartographer: part DropLevel: found by signature
+[2026-11-16 11:05:46.387] [INFO] [Plugin:cartographer] cartographer: part SpawnObject: found by signature
+[2026-11-16 11:05:46.395] [INFO] [Plugin:cartographer] cartographer: part FreeSpot: found as the call target inside SpawnObject
+[2026-11-16 11:05:46.401] [INFO] [Plugin:cartographer] cartographer: part CreateObject: found by signature
+[2026-11-16 11:05:46.408] [INFO] [Plugin:cartographer] cartographer: part ChestOperate: found by signature, hooked
+[2026-11-16 11:05:46.414] [INFO] [Plugin:cartographer] cartographer: part ObjectFlagsGet: found by signature
+[2026-11-16 11:05:46.420] [INFO] [Plugin:cartographer] cartographer: part ObjectFlagsSet: found by signature
+[2026-11-16 11:05:46.427] [INFO] [Plugin:cartographer] cartographer: part TcLookup: found by signature
+[2026-11-16 11:05:46.433] [INFO] [Plugin:cartographer] cartographer: part TcRoller: found by signature
+[2026-11-16 11:05:46.439] [INFO] [Plugin:cartographer] cartographer: map events: map Boss, Boss and Horde events on, entry message on the console (not yet verified in game)
+[2026-11-16 11:05:46.447] [INFO] [Plugin:cartographer] cartographer: part PopulateRoom: found by signature, hooked
+[2026-11-16 11:05:46.454] [INFO] [Plugin:cartographer] cartographer: part SpawnMonster: found by signature
+[2026-11-16 11:05:46.459] [INFO] [Plugin:cartographer] cartographer: part SpawnSuperUnique: found by signature
+[2026-11-16 11:05:46.466] [INFO] [Plugin:cartographer] cartographer: part EventUnitRoom: found by signature
+[2026-11-16 11:05:46.472] [INFO] [Plugin:cartographer] cartographer: part EventRoomLevelId: found by signature
+[2026-11-16 11:05:46.477] [INFO] [Plugin:cartographer] cartographer: part DataTablesBase: found by signature
+[2026-11-16 11:05:46.484] [INFO] [Plugin:cartographer] cartographer: part NameToRow: found by signature
+[2026-11-16 11:05:46.500] [INFO] [Plugin:cartographer] cartographer: part LevelsRow: found by signature
+[2026-11-16 11:05:46.507] [INFO] [Plugin:cartographer] cartographer: map names: registered 6 map name(s) as strings
+[2026-11-16 11:05:46.526] [INFO] [Plugin:cartographer] cartographer: part UiFindPanel: found by signature
+[2026-11-16 11:05:46.541] [INFO] [Plugin:cartographer] cartographer: part UiFindChild: found by signature
+[2026-11-16 11:05:46.548] [INFO] [Plugin:cartographer] cartographer: part UiSetText: found by signature
+[2026-11-16 11:05:46.564] [INFO] [Plugin:cartographer] cartographer: part HudWarningsUpdate: found by signature
+[2026-11-16 11:05:46.571] [INFO] [Plugin:cartographer] cartographer: part WidgetSize: found by signature
+[2026-11-16 11:05:46.586] [INFO] [Plugin:cartographer] cartographer: part WidgetMove: found by signature
+[2026-11-16 11:05:46.620] [INFO] [Plugin:cartographer] cartographer: map panel: the game's terror zone text shows the map text in a map
+[2026-11-16 11:05:46.635] [INFO] [Plugin:cartographer] cartographer: part ScreenShift: found by signature
+[2026-11-16 11:05:46.641] [INFO] [Plugin:cartographer] cartographer: entry banner: panel registered
+[2026-11-16 11:05:46.693] [INFO] [Plugin:cartographer] cartographer: part InstanceCall: found by signature
+[2026-11-16 11:05:46.702] [INFO] [Plugin:cartographer] cartographer: part VisualApply: found by signature, hooked
+[2026-11-16 11:05:46.711] [INFO] [Plugin:cartographer] cartographer: arena service: cartographer.arena.v1 published
+[2026-11-16 11:05:46.718] [INFO] [Plugin:cartographer] cartographer: room-populate service: cartographer.room-populate.v1 published
+[2026-11-16 11:05:46.726] [INFO] [Plugin:cartographer] cartographer: open-extra service: cartographer.open-extra.v1 published
+[2026-11-16 11:05:46.735] [INFO] [Plugin:cartographer] cartographer: map sync: channel registered (wire version 2)
+[2026-11-16 11:06:27.690] [INFO] [Plugin:cartographer] cartographer: map items: spellicon set to -1 on 0 map item row(s) of 826 in data bank 3 (0 write(s) failed)
+[2026-11-16 11:06:27.702] [INFO] [Plugin:cartographer] cartographer: statprobe: first player unit 1 of this game holds 4 stat lists (owner list 0000000107F5E050, heads +0x90 = 0000000107F83A50, +0x98 = 0000000000000000)
+[2026-11-16 11:06:27.726] [INFO] [Plugin:cartographer] cartographer: local player ready (unit id 1)
+[2026-11-16 11:06:27.737] [INFO] [Plugin:cartographer] cartographer: first player unit seen by the tick: id 1 (LocalPlayerReady playerId 1)
+[2026-11-16 11:06:27.745] [INFO] [Plugin:cartographer] cartographer: map sync: this process has the server, so it does not connect to a host
+[2026-11-16 11:06:56.164] [INFO] [Plugin:cartographer] cartographer: outdoor slot level 209: built as planned (17 stamps, 0 void cells; grid 25 cells: 17 pieces, 25 covered, 0 void, 0 neither), 25 rooms, plan a9fc4ff117baa8d9 (arena)
+[2026-11-16 11:06:56.176] [INFO] [Plugin:cartographer] cartographer: outdoor slot level 209: entrance cell at tile (6008,6308) 24 x 24; event none; boss none
+[2026-11-16 11:06:56.186] [INFO] [Plugin:cartographer] cartographer: eventprobe: outdoor event room not known, boss room not known (the rooms at the centre of the planned cells)
+[2026-11-16 11:06:56.196] [INFO] [Plugin:cartographer] cartographer: outdoor arrival: room 14 of 25 (at 6016,6316) marked as the level entry, in the entrance cell (6008,6308); 0 other room(s) lost the mark
+[2026-11-16 11:06:56.205] [INFO] [Plugin:cartographer] cartographer: outdoor arrival: room 14 (6016,6316) has a free spot at subtile (30103,31603) (size 2); kept
+[2026-11-16 11:06:56.216] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6016,6316) 8 x 8 populated, server (30080,31580) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.227] [INFO] [Plugin:cartographer] cartographer: spawn names: data flag 3, table revision 1: monstats from the game's table on (SDK bank Rotw), superuniques by the game's name map on
+[2026-11-16 11:06:56.237] [INFO] [Plugin:cartographer] cartographer: spawn 'uberdiablonew': monstats row 806 from the game's table
+[2026-11-16 11:06:56.247] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'centre': monster 'uberdiablonew' spawned as a plain monster at the spot (30102,31602)
+[2026-11-16 11:06:56.256] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul1': monstats row 807 from the game's table
+[2026-11-16 11:06:56.265] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul1': monster 'ubertrappedsoul1' spawned as a plain monster at the spot (30117,31592)
+[2026-11-16 11:06:56.276] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul2': monstats row 808 from the game's table
+[2026-11-16 11:06:56.286] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul2a': monster 'ubertrappedsoul2' spawned as a plain monster at the spot (30092,31617)
+[2026-11-16 11:06:56.296] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul3': monstats row 809 from the game's table
+[2026-11-16 11:06:56.306] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul3': monster 'ubertrappedsoul3' spawned as a plain monster at the spot (30097,31587)
+[2026-11-16 11:06:56.316] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul4': monstats row 810 from the game's table
+[2026-11-16 11:06:56.326] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul4': monster 'ubertrappedsoul4' spawned as a plain monster at the spot (30117,31617)
+[2026-11-16 11:06:56.335] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul5': monstats row 811 from the game's table
+[2026-11-16 11:06:56.345] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul5': monster 'ubertrappedsoul5' spawned as a plain monster at the spot (30087,31602)
+[2026-11-16 11:06:56.363] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6024,6324) 8 x 8 populated, server (30120,31620) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.370] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul2': monstats row 808 from the game's table
+[2026-11-16 11:06:56.378] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul2e': monster 'ubertrappedsoul2' spawned as a plain monster at the spot (30132,31632)
+[2026-11-16 11:06:56.385] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6016,6324) 8 x 8 populated, server (30080,31620) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.393] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul2': monstats row 808 from the game's table
+[2026-11-16 11:06:56.401] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul2d': monster 'ubertrappedsoul2' spawned as a plain monster at the spot (30082,31632)
+[2026-11-16 11:06:56.408] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6024,6316) 8 x 8 populated, server (30120,31580) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.415] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6008,6324) 8 x 8 populated, server (30040,31620) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.422] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6024,6308) 8 x 8 populated, server (30120,31540) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.430] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul2': monstats row 808 from the game's table
+[2026-11-16 11:06:56.438] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul2c': monster 'ubertrappedsoul2' spawned as a plain monster at the spot (30132,31572)
+[2026-11-16 11:06:56.445] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6016,6308) 8 x 8 populated, server (30080,31540) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.451] [INFO] [Plugin:cartographer] cartographer: spawn 'ubertrappedsoul2': monstats row 808 from the game's table
+[2026-11-16 11:06:56.459] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone' spot 'soul2b': monster 'ubertrappedsoul2' spawned as a plain monster at the spot (30082,31577)
+[2026-11-16 11:06:56.467] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6008,6316) 8 x 8 populated, server (30040,31580) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.475] [INFO] [Plugin:cartographer] cartographer: arena 'Diablo Clone': room DRLG (6008,6308) 8 x 8 populated, server (30040,31540) 40 x 40 (5 server unit(s) per tile)
+[2026-11-16 11:06:56.484] [INFO] [Plugin:cartographer] cartographer: outdoor slot level 209: built as planned (17 stamps, 0 void cells; grid 25 cells: 17 pieces, 25 covered, 0 void, 0 neither), 25 rooms, plan a9fc4ff117baa8d9 (arena)
+[2026-11-16 11:06:56.491] [INFO] [Plugin:cartographer] cartographer: outdoor slot level 209: entrance cell at tile (6008,6308) 24 x 24; event none; boss none
+[2026-11-16 11:06:56.499] [INFO] [Plugin:cartographer] cartographer: eventprobe: outdoor event room not known, boss room not known (the rooms at the centre of the planned cells)
+[2026-11-16 11:06:56.506] [INFO] [Plugin:cartographer] cartographer: outdoor arrival: room 14 of 25 (at 6016,6316) marked as the level entry, in the entrance cell (6008,6308); 0 other room(s) lost the mark
