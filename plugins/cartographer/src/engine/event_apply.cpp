@@ -124,6 +124,7 @@ struct State {
 	int bossTestRefuseForced = 0;
 	// CARTOGRAPHER_TEST_BOSS_STRAND: the Boss is stranded from map open, so no room is tried and the player tick places it (a game check only).
 	bool bossStranded = false;  // every room refused the Boss and none is left to populate: the player tick places it at the player's own spot (the last resort)
+	bool bossTestStrand = false;  // CARTOGRAPHER_TEST_BOSS_STRAND is set: no room is tried at all (a game check only; bossStranded is also set from map open)
 	ep::StrandedRetry strandedRetry;  // when the player tick tries again
 };
 std::mutex g_lock;
@@ -735,7 +736,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
 		if (state->bossPicker) {
 			state->bossPicker->adopt(rects.drlg);  // a room the level's list did not hold becomes the last candidate
-			fireBoss = !state->bossStranded && state->bossPicker->onPopulated(rects.drlg);
+			fireBoss = !state->bossTestStrand && state->bossPicker->onPopulated(rects.drlg);
 		}
 	}
 	if (number <= MaxPopulateProbes) {
@@ -1008,6 +1009,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 	}
 	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_STRAND", knob, sizeof(knob)) > 0) {
 		state.bossStranded = true;
+		state.bossTestStrand = true;
 		plog::Warn("map Boss '%s': no room is tried, stranded from map open on purpose (CARTOGRAPHER_TEST_BOSS_STRAND is set; a game check only)", map.boss.c_str());
 	}
 	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
