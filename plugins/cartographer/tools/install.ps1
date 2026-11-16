@@ -38,7 +38,8 @@
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
                     this type as normal or rare and gives a rare one affixes from magicprefix/magicsuffix/rareprefix/raresuffix rows whose itype is cmap. Maps are meant to be normal, rare or unique; a map the game rolls as magic is made normal by the plugin (Magic 1 would mean always magic, so no column can do it). The one row the installer changes
                     after it is added is this type's Magic, Rare and Normal cells: a row from an older install is updated to this. The game names an item of type scro or book after its item spell, not its
-                    namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap that is not this one stops the installer
+                    namestr, so a map item (item spell 16) needs a type of its own. A row with code cmap named "Map" or "CartographerMap" (the
+                    name pd2-resurrected's merge gives Cartographer's own row) is this type and is left as it is; any other row with code cmap stops the installer
                     before anything is written. Existing rows are never changed (except the Map type's quality cells, above).
       itemstatcost.txt one new stat, "cartographer_map_level", appended (a copy of item_maxhp_percent, 9 bits, shown on the item as "Area Level: N"): a map item's level.
                     The plugin registers the tooltip text itself. A mod without itemstatcost.txt is left out (maps then open at their maps.txt Level).
@@ -196,13 +197,26 @@ function Read-Table([string]$path) {
 # Queues the table; nothing is written until every table has been read and checked.
 function Save-Table($t) { if (-not $pending.Contains($t)) { $pending.Add($t) } }
 
-function Write-Pending {
+# Writes every queued table and the slots file, or none of them: each new text is first written beside its file as <name>.new (a failure
+# there removes them all and leaves every file as it was), then each is moved over its file, after its original is kept once as <name>.bak.
+function Write-Files($slotFile) {
+    $files = @()
     foreach ($t in $pending) {
-        $bak = "$($t.Path).bak"
-        if (-not (Test-Path $bak)) { Copy-Item $t.Path $bak }  # the original, once
         $text = ($t.Lines -join $t.Eol)
         if ($t.FinalEol) { $text += $t.Eol }
-        [System.IO.File]::WriteAllBytes($t.Path, $bytes.GetBytes($text))
+        $files += [pscustomobject]@{ Path = $t.Path; Bytes = $bytes.GetBytes($text); Backup = $true }
+    }
+    if ($slotFile) { $files += $slotFile }
+    $made = @()
+    try {
+        foreach ($f in $files) { [System.IO.File]::WriteAllBytes("$($f.Path).new", $f.Bytes); $made += "$($f.Path).new" }
+    } catch {
+        foreach ($m in $made) { Remove-Item -LiteralPath $m -Force -ErrorAction SilentlyContinue }
+        throw
+    }
+    foreach ($f in $files) {
+        if ($f.Backup -and -not (Test-Path "$($f.Path).bak")) { Copy-Item -LiteralPath $f.Path "$($f.Path).bak" }
+        Move-Item -LiteralPath "$($f.Path).new" -Destination $f.Path -Force
     }
 }
 
@@ -541,18 +555,20 @@ foreach ($t in $OutdoorTilesets) {
 # does not name it after its item spell), not 'ques' and not a potion type (no belt). Existing rows are never changed (except the Map type's quality cells, repaired below).
 $MapTypeCode = 'cmap'
 $MapTypeName = 'Map'
+# The name pd2-resurrected's merge gives Cartographer's own row: that row is this type too, so it counts as installed (and is left as it is).
+$MapTypeNames = @($MapTypeName, 'CartographerMap')
 $itemTypes = Read-Table (Join-Path $ExcelDir 'itemtypes.txt')
 $itCode = Column $itemTypes 'Code'; $itName = Column $itemTypes 'ItemType'
 $mapTypeRow = -1
 for ($i = 1; $i -lt $itemTypes.Lines.Count; $i++) {
     $c = $itemTypes.Lines[$i] -split "`t"
     if ($c.Count -gt $itCode -and $c[$itCode] -ieq $MapTypeCode) {
-        if ($c.Count -gt $itName -and $c[$itName] -ceq $MapTypeName) { $mapTypeRow = $i; break }
+        if ($c.Count -gt $itName -and $MapTypeNames -ccontains $c[$itName]) { $mapTypeRow = $i; break }
         throw "itemtypes.txt: the code '$MapTypeCode' is already used by another item type ('$($c[$itName])', row $i). Cartographer's map items need the type '$MapTypeCode'. Nothing was changed; rename or remove that row, or use a mod without it."
     }
 }
 if ($mapTypeRow -ge 0) {
-    Write-Host "itemtypes.txt: '$MapTypeName' ($MapTypeCode) is already there."
+    Write-Host "itemtypes.txt: '$((Cells $itemTypes $itemTypes.Lines[$mapTypeRow])[$itName])' ($MapTypeCode) is already there."
 } else {
     $herbRow = Find-Row $itemTypes 'Code' 'herb'
     if ($herbRow -lt 0) { throw "itemtypes.txt has no 'herb' row to copy for the '$MapTypeName' type." }
@@ -570,8 +586,8 @@ if ($mapTypeRow -ge 0) {
     Save-Table $itemTypes
     Write-Host "itemtypes.txt: added the item type '$MapTypeName' ($MapTypeCode, copied from herb): plain miscellaneous, Rare on, not throwable, not beltable, no auto-stack, StorePage misc as herb."
 }
-# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can roll rare.
-if ($mapTypeRow -ge 0) {
+# The plugin's own row: bring a row from an older install (Magic and Rare empty) up to date, so maps can roll rare. A 'CartographerMap' row is left as it is.
+if ($mapTypeRow -ge 0 -and (Cells $itemTypes $itemTypes.Lines[$mapTypeRow])[$itName] -ceq $MapTypeName) {
     $cells = Cells $itemTypes $itemTypes.Lines[$mapTypeRow]
     $before = $cells -join "`t"
     Set-CellIf $itemTypes $cells 'Rare' '1'
@@ -958,18 +974,9 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
     Write-Host 'bosses.txt: this mod has no superuniques.txt, so the bosses will be spawned as plain monsters of their Base.'
 }
 
-# --- write ------------------------------------------------------------------------------------------------------------
-# Copied game tables are often Read-only: refuse before anything is written (and before any .bak is made).
-$locked = @($pending | ForEach-Object { $_.Path })
-$lockedSlots = Join-Path $ExcelDir 'd2rloader\cartographer\slots.txt'
-if (Test-Path $lockedSlots) { $locked += $lockedSlots }
-$locked = @($locked | Where-Object { (Get-Item -LiteralPath $_).IsReadOnly })
-if ($locked.Count -gt 0) { throw ('Nothing was written. Clear the Read-only attribute on these files, then run the installer again:' + [Environment]::NewLine + (($locked | ForEach-Object { "  $_" }) -join [Environment]::NewLine)) }
-Write-Pending
-
 # --- slots.txt --------------------------------------------------------------------------------------------------------
+# Built here, with every other check, and written with the tables below (nothing is written before every step has passed).
 $slotDir = Join-Path $ExcelDir 'd2rloader\cartographer'
-New-Item -ItemType Directory -Force $slotDir | Out-Null
 $slotPath = Join-Path $slotDir 'slots.txt'
 # Existing rows are kept (an older install's Preset row, for one): only one row per maze tileset (`$MazeTilesets) and one per outdoor tileset (`$OutdoorTilesets) are added or updated.
 $slotLines = [System.Collections.Generic.List[string]]::new()
@@ -1000,8 +1007,21 @@ if (($slotLines | Where-Object { ($_ -split "`t")[0] -eq 'Preset' }).Count -gt 0
     Write-Host 'slots.txt: note: the Preset row is not used any more (the plugin ignores it); it can be deleted.'
 }
 $slotText = ($slotLines -join "`r`n") + "`r`n"
-if (-not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText) {
-    [System.IO.File]::WriteAllText($slotPath, $slotText, $utf8)
+$slotChanged = -not (Test-Path $slotPath) -or [System.IO.File]::ReadAllText($slotPath, $utf8) -ne $slotText
+
+# --- write ------------------------------------------------------------------------------------------------------------
+# Copied game tables are often Read-only: refuse before anything is written (and before any .bak is made).
+$locked = @($pending | ForEach-Object { $_.Path })
+if (Test-Path $slotPath) { $locked += $slotPath }
+$locked = @($locked | Where-Object { (Get-Item -LiteralPath $_).IsReadOnly })
+if ($locked.Count -gt 0) { throw ('Nothing was written. Clear the Read-only attribute on these files, then run the installer again:' + [Environment]::NewLine + (($locked | ForEach-Object { "  $_" }) -join [Environment]::NewLine)) }
+$slotFile = $null
+if ($slotChanged) {
+    New-Item -ItemType Directory -Force $slotDir | Out-Null
+    $slotFile = [pscustomobject]@{ Path = $slotPath; Bytes = $utf8.GetBytes($slotText); Backup = $false }
+}
+Write-Files $slotFile
+if ($slotChanged) {
     $shown = { param($id) if ($null -ne $id) { "is level $id" } else { 'not added' } }
     Write-Host ("slots.txt: " + (($MazeTilesets | ForEach-Object { "$($_.Slot) $(& $shown $mazeIds[$_.Slot])" }) -join ', ') + ', ' + (($OutdoorTilesets | ForEach-Object { "$($_.Slot) $(& $shown $outdoorIds[$_.Slot])" }) -join ', ') + ' (other rows kept).')
 } else {

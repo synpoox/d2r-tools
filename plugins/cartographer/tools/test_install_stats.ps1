@@ -124,6 +124,45 @@ try {
     $log7 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
 
+    # Cartographer's own row from pd2-resurrected's merge is named CartographerMap (code cmap). Identical to the installer's row, it counts as installed:
+    # the run passes and changes nothing. The same code under another item type name is refused, and the refused run writes nothing: no table, no
+    # slots file, no .bak and no .new. Each case runs on a copy of the installed folder (without its .bak files).
+    function Copy-Installed([string]$to) {
+        New-Item -ItemType Directory -Path $to | Out-Null
+        Copy-Item -Path (Join-Path $dir '*') -Destination $to -Recurse
+        Get-ChildItem -LiteralPath $to -Recurse -Filter '*.bak' | Remove-Item -Force
+    }
+    function Get-Snapshot([string]$root) {
+        (Get-ChildItem -LiteralPath $root -Recurse -File | Sort-Object FullName | ForEach-Object { "$($_.FullName.Substring($root.Length))=$((Get-FileHash -LiteralPath $_.FullName).Hash)" }) -join ','
+    }
+    function Run-InstallerIn([string]$folder) { $ErrorActionPreference = 'Continue'; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -ExcelDir $folder 2>&1 | Out-String }
+    $cmDir = $dir + '-cmname'
+    $otherDir = $dir + '-other'
+    $cmRow = $fixedType.Clone(); $cmRow[0] = 'CartographerMap'
+    Copy-Installed $cmDir
+    $cmTypePath = Join-Path $cmDir 'itemtypes.txt'
+    $cmText = [System.IO.File]::ReadAllText($cmTypePath)
+    Check ($cmText.Contains($oldRow)) 'the copy has the cmap row'
+    [System.IO.File]::WriteAllText($cmTypePath, $cmText.Replace($oldRow, ($cmRow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $beforeCm = Get-Snapshot $cmDir
+    $logCm = Run-InstallerIn $cmDir
+    Check ($LASTEXITCODE -eq 0) 'a run on a CartographerMap cmap row passes'
+    Check ($logCm.Contains('CartographerMap') -and $logCm.Contains('already there')) 'the run says the CartographerMap row is already there'
+    Check ((Get-Snapshot $cmDir) -eq $beforeCm) 'a run on an identical CartographerMap row changes no file'
+
+    Copy-Installed $otherDir
+    $otherType = Join-Path $otherDir 'itemtypes.txt'
+    $otherRow = $fixedType.Clone(); $otherRow[0] = 'Other Type'
+    $otherText = [System.IO.File]::ReadAllText($otherType)
+    Check ($otherText.Contains($oldRow)) 'the other-type copy has the cmap row'
+    [System.IO.File]::WriteAllText($otherType, $otherText.Replace($oldRow, ($otherRow -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $beforeOther = Get-Snapshot $otherDir
+    $logOther = Run-InstallerIn $otherDir
+    Check ($LASTEXITCODE -ne 0) 'a cmap row of another item type is refused'
+    Check ($logOther.Contains("'cmap'") -and $logOther.Contains('Other Type')) 'the refusal names the cmap code and the other item type'
+    Check ((Get-Snapshot $otherDir) -eq $beforeOther) 'the refused run writes no file, backup or staged file'
+    Remove-Item -LiteralPath $cmDir, $otherDir -Recurse -Force -ErrorAction SilentlyContinue
+
     # A table with no room for a new stat id (511 rows: an item save cannot hold id 511) stops the run, and nothing is written, not even the
     # earlier itemtypes.txt repair (every table is written at the end). A scratch copy of the installed folder, with the stat rows replaced and
     # the cmap row made stale, so the run would have changed itemtypes.txt before it reached the stat table.
@@ -149,6 +188,7 @@ try {
     # A throw can leave $dir on the -full copy: remove both folders.
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
     if ($full) { Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction SilentlyContinue }
+    foreach ($copy in @($dir + '-cmname', $dir + '-other')) { Remove-Item -LiteralPath $copy -Recurse -Force -ErrorAction SilentlyContinue }
 }
 if ($failed -gt 0) { Write-Host "$failed check(s) failed."; exit 1 }
 Write-Host 'All install stat checks passed.'
