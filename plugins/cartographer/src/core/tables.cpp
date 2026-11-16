@@ -928,12 +928,13 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 		return out;
 	}
 	ReportRepeatedColumns(ArenasFile, table, report);
-	NoteUnusedColumns(ArenasFile, table, {"Name", "Level", "Tileset", "Width", "Height", "Fill", "Entry"}, report);
+	NoteUnusedColumns(ArenasFile, table, {"Name", "Level", "Tileset", "Width", "Height", "Fill", "Entry", "Brightness", "Warmth"}, report);
 	const Tsv levels = ParseTsv(levelsText);
 	const int lId = levels.Column("Id"), lAct = levels.Column("Act"), lDrlg = levels.Column("DrlgType"), lType = levels.Column("LevelType");
 	const int lOffX = levels.Column("OffsetX"), lOffY = levels.Column("OffsetY"), lSizeX = levels.Column("SizeX"), lSizeY = levels.Column("SizeY");
 	const int cName = table.Column("Name"), cLevel = table.Column("Level"), cTileset = table.Column("Tileset"), cWidth = table.Column("Width"), cHeight = table.Column("Height");
 	const int cFill = table.Column("Fill"), cEntry = table.Column("Entry");
+	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
 	static const std::vector<std::string> fills = {"Mesa1", "Mesa2", "Mesa3"};
 	for (const TsvRow& row : table.rows) {
 		ArenaDef def;
@@ -1027,6 +1028,16 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 			def.entryX = x;
 			def.entryY = y;
 		}
+		// The look columns are cosmetic, as in maps.txt: a bad cell keeps the tileset's own look for that column and the arena still loads.
+		namespace ml = cartographer::maplight;
+		const auto look = [&](int column, const char* label, int lo, int hi, int* out) {
+			const std::string cell = table.Cell(row, column);
+			if (!cell.empty() && !ParseInt(cell, lo, hi, out)) {
+				report.Error(ArenasFile, row.line, who + std::string(label) + " '" + cell + "' is not a whole number " + Range(lo, hi) + ". The tileset's own look is kept for this column.");
+			}
+		};
+		look(cBrightness, "Brightness", ml::MinBrightness, ml::MaxBrightness, &def.look.brightness);
+		look(cWarmth, "Warmth", ml::MinWarmth, ml::MaxWarmth, &def.look.warmth);
 		def.offsetX = cellOf(lOffX);
 		def.offsetY = cellOf(lOffY);
 		def.sizeX = cellOf(lSizeX);

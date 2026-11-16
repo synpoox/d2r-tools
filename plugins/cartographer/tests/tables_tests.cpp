@@ -1677,6 +1677,61 @@ TEST_CASE("arenas.txt: every cell is read ignoring case") {
 	CHECK(report.Errors() == 0);
 }
 
+TEST_CASE("arenas.txt: Brightness and Warmth load; blank keeps the tileset's look") {
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
+	    "A\t220\t4\t3\t27\t0\t0\t128\t112\n"
+	    "B\t221\t4\t3\t27\t0\t0\t128\t112\n"
+	    "C\t222\t4\t3\t27\t0\t0\t128\t112\n"
+	    "D\t223\t4\t3\t27\t0\t0\t128\t112\n";
+	Report report;
+	const auto arenas = LoadArenas(
+	    "Name\tLevel\tTileset\tWidth\tHeight\tFill\tEntry\tBrightness\tWarmth\n"
+	    "Lit\t220\t\t\t\t\t\t150\t60\n"
+	    "Blank\t221\t\t\t\t\t\t\t\t\n"
+	    "Low\t222\t\t\t\t\t\t10\t25\n"
+	    "High\t223\t\t\t\t\t\t400\t400\n",
+	    levels, {}, report);
+	REQUIRE(arenas.size() == 4);
+	CHECK(report.Errors() == 0);
+	CHECK(arenas[0].look.brightness == 150);
+	CHECK(arenas[0].look.warmth == 60);
+	CHECK(arenas[1].look.brightness == 100);
+	CHECK(arenas[1].look.warmth == 100);
+	CHECK_FALSE(arenas[1].look.any());
+	CHECK(arenas[2].look.brightness == 10);
+	CHECK(arenas[2].look.warmth == 25);
+	CHECK(arenas[3].look.brightness == 400);
+	CHECK(arenas[3].look.warmth == 400);
+}
+
+TEST_CASE("arenas.txt: a bad Brightness or Warmth gives one line and the arena still loads") {
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
+	    "A\t220\t4\t3\t27\t0\t0\t128\t112\n";
+	const struct {
+		const char* row;
+		const char* text;
+	} bad[] = {
+	    {"A\t220\t\t\t\t\t\t9\t\n", "Brightness '9'"},
+	    {"A\t220\t\t\t\t\t\t401\t\n", "Brightness '401'"},
+	    {"A\t220\t\t\t\t\t\tabc\t\n", "Brightness 'abc'"},
+	    {"A\t220\t\t\t\t\t\t1.5\t\n", "Brightness '1.5'"},
+	    {"A\t220\t\t\t\t\t\t\t24\n", "Warmth '24'"},
+	    {"A\t220\t\t\t\t\t\t\t401\n", "Warmth '401'"},
+	};
+	for (const auto& b : bad) {
+		Report report;
+		const auto arenas = LoadArenas("Name\tLevel\tTileset\tWidth\tHeight\tFill\tEntry\tBrightness\tWarmth\n" + std::string(b.row), levels, {}, report);
+		INFO(b.row);
+		REQUIRE(arenas.size() == 1);
+		CHECK(report.Errors() == 1);
+		CHECK(Joined(report).find(b.text) != std::string::npos);
+		CHECK(arenas[0].look.brightness == 100);
+		CHECK(arenas[0].look.warmth == 100);
+	}
+}
+
 TEST_CASE("arenas.txt: each bad row gives one plain-English line and is skipped") {
 	const struct {
 		const char* row;

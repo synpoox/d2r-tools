@@ -1,6 +1,7 @@
 #include "engine/map_lighting.h"
 
 #include "core/part_signatures.h"
+#include "engine/arena_service.h"
 #include "engine/game_memory.h"
 #include "engine/scan.h"
 #include "log.h"
@@ -134,15 +135,32 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 	if (!g_live.load(std::memory_order_relaxed)) {
 		return;
 	}
+	// An arena is not a map open, so its look comes from its arenas.txt row. Read before g_lock: the arena tables have their own lock.
+	ml::Look arenaLook;
+	bool arenaHasLook = false;
+	try {
+		const std::shared_ptr<const Tables> tables = ArenaServiceTables();
+		if (tables != nullptr) {
+			for (const ArenaDef& a : tables->arenas) {
+				if (a.level == playerLevel && a.look.any()) {
+					arenaLook = a.look;
+					arenaHasLook = true;
+					break;
+				}
+			}
+		}
+	} catch (...) {
+	}
 	bool active = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		const auto look = g_looks.find(playerLevel);
-		active = look != g_looks.end();
+		const auto found = g_looks.find(playerLevel);
+		const ml::Look* look = found != g_looks.end() ? &found->second : arenaHasLook ? &arenaLook : nullptr;
+		active = look != nullptr;
 		if (active) {
-			g_exposure = ml::exposureScale(look->second);
-			g_temperature = ml::temperatureScale(look->second);
-			g_changesTemperature = ml::changesTemperature(look->second);
+			g_exposure = ml::exposureScale(*look);
+			g_temperature = ml::temperatureScale(*look);
+			g_changesTemperature = ml::changesTemperature(*look);
 		}
 	}
 	if (g_active.exchange(active) != active) {

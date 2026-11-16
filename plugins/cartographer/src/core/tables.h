@@ -150,6 +150,7 @@ struct ArenaDef {
 	int width = 2, height = 2;   // the interior in 8-tile grid cells, without the ring
 	int fill = 2;           // fill set index: 0 Mesa1, 1 Mesa2, 2 Mesa3
 	int entryX = 1, entryY = 1;  // the interior cell whose piece is the arrival
+	cartographer::maplight::Look look;  // Brightness, Warmth: the arena's own look (blank: the tileset's)
 	// levels.txt OffsetX, OffsetY, SizeX and SizeY of the level, in tiles (read at load: the level record's rectangle is still zero when the build starts).
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 	std::vector<ArenaSpotDef> spots;  // arenaspots.txt, filled by LoadArenaSpots
@@ -191,9 +192,9 @@ auto LoadSettings(std::string_view text, Report& report) -> Settings;
 // slots.txt (Slot, Level), written by the installer.
 auto LoadSlots(std::string_view text, Report& report) -> std::vector<Slot>;
 
-// arenas.txt (Name, Level, Tileset, Width, Height, Fill, Entry). `levelsText` is the mod's levels.txt, `slots` the validated slots. A bad row is left out and described in `report`:
+// arenas.txt (Name, Level, Tileset, Width, Height, Fill, Entry, Brightness, Warmth). `levelsText` is the mod's levels.txt, `slots` the validated slots. A bad row is left out and described in `report`:
 // an unknown level, a level that is not Act 5, DrlgType 3 and LevelType 27, a slot level, two rows on one level, a size outside the limits or bigger than the level's SizeX / SizeY,
-// an unknown tileset or fill set, or an entry outside the interior.
+// an unknown tileset or fill set, or an entry outside the interior. A bad Brightness or Warmth cell is only reported: that column keeps the tileset's look and the arena still loads.
 auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef>;
 
 // arenaspots.txt (Arena, Spot, X, Y, Monster, Object; optional): fills each arena's `spots`. A bad row is left out and described in `report`: an unknown arena, a repeated spot name, a spot
