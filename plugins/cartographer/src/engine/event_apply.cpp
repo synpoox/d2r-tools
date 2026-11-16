@@ -120,7 +120,9 @@ struct State {
 	std::optional<ep::BossRoomPicker> bossPicker;  // made with the event tracker, at the first populated room
 	int probes = 0;
 	int bossTestRefuse = 0;  // CARTOGRAPHER_TEST_BOSS_REFUSE: the first N ordinary Boss tries are refused, to reach the fallbacks in a game check
-	int bossTestRefuseForced = 0;  // CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED: the first N forced tries in a room are refused too, to reach the player-tick last resort
+	// CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED: the first N forced (collision-skipped) room tries are refused too; a forced try follows only an ordinary refusal, so pair it with CARTOGRAPHER_TEST_BOSS_REFUSE. It never refuses the player-tick spot (CARTOGRAPHER_TEST_BOSS_STRAND reaches that).
+	int bossTestRefuseForced = 0;
+	// CARTOGRAPHER_TEST_BOSS_STRAND: the Boss is stranded from map open, so no room is tried and the player tick places it (a game check only).
 	bool bossStranded = false;  // every room refused the Boss and none is left to populate: the player tick places it at the player's own spot (the last resort)
 	ep::StrandedRetry strandedRetry;  // when the player tick tries again
 };
@@ -733,7 +735,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
 		if (state->bossPicker) {
 			state->bossPicker->adopt(rects.drlg);  // a room the level's list did not hold becomes the last candidate
-			fireBoss = state->bossPicker->onPopulated(rects.drlg);
+			fireBoss = !state->bossStranded && state->bossPicker->onPopulated(rects.drlg);
 		}
 	}
 	if (number <= MaxPopulateProbes) {
@@ -1003,6 +1005,10 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED", knob, sizeof(knob)) > 0) {
 		state.bossTestRefuseForced = std::atoi(knob) > 0 ? std::atoi(knob) : 0;
 		plog::Warn("map Boss '%s': the first %d forced try(ies) are refused on purpose (CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED is set; a game check only)", map.boss.c_str(), state.bossTestRefuseForced);
+	}
+	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_STRAND", knob, sizeof(knob)) > 0) {
+		state.bossStranded = true;
+		plog::Warn("map Boss '%s': no room is tried, stranded from map open on purpose (CARTOGRAPHER_TEST_BOSS_STRAND is set; a game check only)", map.boss.c_str());
 	}
 	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }

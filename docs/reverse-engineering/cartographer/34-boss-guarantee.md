@@ -43,6 +43,6 @@ Game check (PR for #463, slot 11, `CARTOGRAPHER_TEST_BOSS_REFUSE=20`): after the
 
 ### 5. Not verified
 
-The ladder and flag `0x80` ran in game in the checks of the PR for #445 (results in that PR); how often each rung is reached in play is not known. The test knob `CARTOGRAPHER_TEST_BOSS_REFUSE=N` (environment variable, a game check only) refuses the first N ordinary tries so rungs 2 and 3 can be reached; it does nothing when unset.
+The ladder and flag `0x80` ran in game in the checks of the PR for #445 (results in that PR); how often each rung is reached in play is not known. The test knob `CARTOGRAPHER_TEST_BOSS_REFUSE=N` (environment variable, a game check only) refuses the first N ordinary tries so rungs 2 and 3 can be reached; it does nothing when unset. `CARTOGRAPHER_TEST_BOSS_STRAND=1` (a game check only) strands the Boss from map open, so the player tick places it at the player's spot (rung 5).
 
 The player-tick last resort (rung 5) was not reached in game; it is covered by unit tests of its retry decision only.
