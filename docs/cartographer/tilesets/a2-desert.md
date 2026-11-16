@@ -26,3 +26,17 @@ The same family as Wilderness: border ring plus open fills. Desert has the large
 - Risk: medium-low. The same new code as Wilderness, fewer pieces and no river.
 - Effort: M-L; M if built after Wilderness on the shared planner.
 - Game checks: fill mode of LevelType 16; whether the 8 x 8 border files meet cleanly at corners when picked by file index; whether DS1-embedded Valley and Lost City props spawn in the slot level; the void edge against an Act 2 palette.
+
+
+## As built (#505)
+
+Built on the frame-plus-fill planner: slot `OutdoorDesert`, LevelType 16, 128 x 112 tiles (14 x 12 fill cells plus the one-cell ring), ring files 364-371 (S, W, N, E, SW, NW, NE, SE) and one `Desert` fill set of the ten 8 x 8 pieces 398-407. Cliffs, tomb and lair mouths are left out.
+
+Game check, Hell, level 99 Barbarian, PD2 Resurrected slot 3 (HD):
+
+- Fill mode of LevelType 16: unstamped cells are not an issue; the plan covers every cell (`120 stamps, 0 void cells`, grid 120 of 120 covered, 0 void, 0 neither) and no black cell showed.
+- Ring: the ring files meet at all four corners and along all four sides with no gap (rock walls closed on every side in a map and in an arena).
+- Act 2 palette in an Act 5 level: right in HD (sand, Act 2 monsters spawn). Legacy graphics (`g`) show the Act 5 palette over the Act 2 tiles, red and green noise: HD only for now.
+- Not checked: DS1-embedded Valley and Lost City props.
+- Map plan `6674b179b8a1562b` (seed 7598453245661758433). Arena `Desert Test`, 3 x 3, 25 stamps, plan `e4e02db7a382dfea`.
+- The installer's default Desert spot (6000, 4400) overlaps pd2-resurrected's Rathma stage 1 (6000, 4500), so the installer skips the level there; pass `-DesertOffsetY` (the check used 4350).
