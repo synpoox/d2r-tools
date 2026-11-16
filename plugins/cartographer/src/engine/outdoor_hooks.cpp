@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "outdoor_hooks.h"
 
 #include "core/part_signatures.h"
@@ -166,6 +167,7 @@ struct ArenaEntry {
 	std::shared_ptr<const co::MapPlan> plan;
 };
 std::vector<std::shared_ptr<const ArenaEntry>> g_arenas;  // guarded by g_lock
+std::vector<int32_t> g_arenaFellBack;  // arena levels whose last build was left to the game (guarded by g_lock)
 auto ArenaOf(int32_t levelId) -> std::shared_ptr<const ArenaEntry> {
 	std::lock_guard<std::mutex> lock(g_lock);
 	for (const std::shared_ptr<const ArenaEntry>& a : g_arenas) {
@@ -743,6 +745,18 @@ auto OwnLevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 
 }  // namespace
 
+auto ArenaBuilt(int32_t levelId) -> bool {
+	if (!g_live.load(std::memory_order_relaxed)) {
+		return false;
+	}
+	const std::shared_ptr<const ArenaEntry> arena = ArenaOf(levelId);
+	if (arena == nullptr || arena->plan == nullptr || !arena->plan->ok) {
+		return false;
+	}
+	std::lock_guard<std::mutex> lock(g_lock);
+	return std::find(g_arenaFellBack.begin(), g_arenaFellBack.end(), levelId) == g_arenaFellBack.end();
+}
+
 auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uint64_t* result) noexcept -> bool {
 	if (!g_live.load(std::memory_order_relaxed) || original == nullptr || result == nullptr || !IsSlotLevel(level)) {
 		return false;  // every other level runs the game's own build, untouched
@@ -750,6 +764,14 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 	if (const std::shared_ptr<const ArenaEntry> arena = ArenaOf(Read<int32_t>(level, LvlId)); arena != nullptr) {
 		// An arena is not a map open: no map record, no slot state (the one-map-per-game gates stay as they are).
 		const bool built = BuildSlotLevel(dataFlag, level, original, result, arena.get());
+		{
+			std::lock_guard<std::mutex> lock(g_lock);
+			const int32_t id = arena->def.level;
+			g_arenaFellBack.erase(std::remove(g_arenaFellBack.begin(), g_arenaFellBack.end(), id), g_arenaFellBack.end());
+			if (!built) {
+				g_arenaFellBack.push_back(id);
+			}
+		}
 		if (!built && t_ctx == nullptr && Read<int32_t>(level, LvlType) == OutdoorType && Read<void*>(level, LvlFirstRoom) == nullptr) {
 			const co::LevelRect rect = co::fallbackRectOf(arena->def.offsetX, arena->def.offsetY, arena->def.sizeX, arena->def.sizeY);  // issue #471
 			Write<int32_t>(level, LvlOriginX, rect.x);
@@ -977,6 +999,7 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_arenas = std::move(arenas);
+		g_arenaFellBack.clear();
 	}
 	g_cache.clear();
 	int firstLevel = -1;  // the first slot in table order that has a row

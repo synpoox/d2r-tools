@@ -161,6 +161,14 @@ writes it; the others can be left out. A bad row is skipped and named in `cartog
 
 Fixed, square, enclosed arena levels built from stock Mesa pieces in a `levels.txt` row of the mod's own (Act 5, `DrlgType` 3, `LevelType` 27): `Name`, `Level`, `Tileset`, `Width`, `Height`, `Fill`, `Entry`. See [tables.md](../../docs/cartographer/tables.md#arenastxt-optional).
 
+#### arenaspots.txt
+
+Named spots in an arena: `Arena`, `Spot`, `X`, `Y` (tiles from the interior's top-left corner), and an optional `Monster` (a `bosses.txt` entry, a superunique or a monstats Id) or `Object` (an `objects.txt` Class or Name) that is spawned there once per game when its room populates. See [tables.md](../../docs/cartographer/tables.md#arenaspotstxt-optional).
+
+#### Arena service for other plugins
+
+Cartographer publishes `cartographer.arena.v1` through the loader's plugin communication service: `isArena(levelId)` and `findSpot(levelId, name, out)`, which gives a spot's absolute subtile position and its room. Read-only, any thread; a plugin that finds no service or no spot refuses its own fight, because Cartographer never guesses a spot. Fields, threads and versions: [arena-service.md](../../docs/cartographer/arena-service.md).
+
 #### Map item modifiers
 
 There is no `mapstats.txt`. Rarity and modifiers are the game's own: add `magicprefix.txt`, `magicsuffix.txt`, `rareprefix.txt`,

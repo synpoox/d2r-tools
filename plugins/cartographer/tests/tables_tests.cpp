@@ -1722,3 +1722,123 @@ TEST_CASE("arenas.txt: two rows on one level keep the first; a missing column or
 	CHECK(LoadArenas(std::string(ArenaHeader) + "A\t200\t\t\t\t\t\n", "", {}, noLevels).empty());
 	CHECK(Joined(noLevels).find("levels.txt could not be read") != std::string::npos);
 }
+
+namespace {
+const char* const SpotHeader = "Arena\tSpot\tX\tY\tMonster\tObject\n";
+
+// Arena A is 2 x 2 cells (a 16 x 16 tile interior) at origin 6000,4000: the interior starts at tile 6008,4008.
+auto Spots(const std::string& rows, Report& report, std::vector<ArenaDef>* arenasOut = nullptr) -> std::vector<ArenaDef> {
+	Report arenaReport;
+	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);
+	GameNames names;
+	names.haveMonsters = names.haveSuperUniques = true;
+	names.monsters = {"andariel", "zombie1"};
+	names.superUniques = {"Bonebreaker"};
+	BossDef boss;
+	boss.name = "Lucion";
+	LoadArenaSpots(std::string(SpotHeader) + rows, arenas, {boss}, names, {"Chest3", "ShrineHealth", "Altar"}, report);
+	if (arenasOut != nullptr) {
+		*arenasOut = arenas;
+	}
+	return arenas;
+}
+}  // namespace
+
+TEST_CASE("arenaspots.txt: golden absolute positions for a fixed arena row and origin") {
+	Report report;
+	const auto arenas = Spots("A\tcentre\t7\t7\t\t\nA\tboss\t8\t9\tLucion\t\nA\tchest\t0\t15\t\tChest3\n", report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(report.Errors() == 0);
+	REQUIRE(arenas[0].spots.size() == 3);
+	const ArenaSpotDef& centre = arenas[0].spots[0];
+	CHECK(centre.tileX == 6015);
+	CHECK(centre.tileY == 4015);
+	CHECK(centre.subX == 30077);  // 6015 * 5 + 2
+	CHECK(centre.subY == 20077);
+	CHECK(centre.roomX == 6008);
+	CHECK(centre.roomY == 4008);
+	CHECK(centre.roomW == 8);
+	const ArenaSpotDef& boss = arenas[0].spots[1];
+	CHECK(boss.subX == 30082);  // tile 6016
+	CHECK(boss.subY == 20087);  // tile 4017
+	CHECK(boss.roomX == 6016);
+	CHECK(boss.roomY == 4016);
+	CHECK(boss.monster == "Lucion");
+	const ArenaSpotDef& chest = arenas[0].spots[2];
+	CHECK(chest.subX == 30042);  // tile 6008
+	CHECK(chest.subY == 20117);  // tile 4023
+	CHECK(chest.roomY == 4016);
+	CHECK(chest.object == "Chest3");
+}
+
+TEST_CASE("arenaspots.txt: a bad row gets one line and is skipped, the others load") {
+	Report report;
+	const auto arenas = Spots(
+	    "Nowhere\ta\t1\t1\t\t\n"          // unknown arena
+	    "A\tcentre\t7\t7\t\t\n"           // ok
+	    "A\tCENTRE\t3\t3\t\t\n"           // duplicate name, ignoring case
+	    "A\tout\t16\t0\t\t\n"             // X outside the 16 tile interior
+	    "A\tneg\t0\t-1\t\t\n"             // Y below 0
+	    "A\tword\tx\t0\t\t\n"             // not a number
+	    "A\t\t1\t1\t\t\n"                 // no name
+	    "A\tmob\t1\t1\tNoSuchMonster\t\n" // unknown monster
+	    "A\tobj\t1\t1\t\tNoSuchObject\n"  // unknown object
+	    "A\tboth\t1\t1\tzombie1\tChest3\n"  // both set
+	    "A\tmonstats\t1\t2\tzombie1\t\n"
+	    "A\tsuper\t2\t2\tBonebreaker\t\n"
+	    "A\tboss\t3\t3\tLucion\t\n"
+	    "A\trownum\t4\t4\t\t2\n",
+	    report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(report.Errors() == 9);
+	std::vector<std::string> names;
+	for (const ArenaSpotDef& s : arenas[0].spots) {
+		names.push_back(s.name);
+	}
+	CHECK(names == std::vector<std::string>{"centre", "monstats", "super", "boss", "rownum"});
+	const std::string text = Joined(report);
+	CHECK(text.find("Arena 'Nowhere'") != std::string::npos);
+	CHECK(text.find("another spot of this arena has that name") != std::string::npos);
+	CHECK(text.find("NoSuchMonster") != std::string::npos);
+	CHECK(text.find("NoSuchObject") != std::string::npos);
+	CHECK(text.find("This spot is skipped.") != std::string::npos);
+}
+
+TEST_CASE("arenaspots.txt: unchecked names pass when the game's tables could not be read") {
+	Report arenaReport;
+	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);
+	Report report;
+	LoadArenaSpots(std::string(SpotHeader) + "A\tm\t1\t1\tAnything\t\nA\to\t2\t2\t\tAnything\n", arenas, {}, GameNames{}, {}, report);
+	CHECK(report.Errors() == 0);
+	CHECK(arenas[0].spots.size() == 2);
+}
+
+TEST_CASE("arenaspots.txt: an object row number is bounded by the row count, not the joined name lists") {
+	Report arenaReport;
+	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);
+	Report report;
+	LoadArenaSpots(std::string(SpotHeader) + "A\ta\t1\t1\t\t1\nA\tb\t2\t2\t\t2\n", arenas, {}, GameNames{}, {"X", "Y", "NameX", "NameY"}, report, 2);
+	CHECK(report.Errors() == 1);
+	CHECK(arenas[0].spots.size() == 1);
+}
+
+TEST_CASE("arenaspots.txt: missing columns are one error each and nothing loads") {
+	Report arenaReport;
+	auto arenas = Arenas("A\t200\t\t\t\t\t\n", arenaReport);
+	Report report;
+	LoadArenaSpots("Arena\tSpot\nA\tx\n", arenas, {}, GameNames{}, {}, report);
+	CHECK(report.Errors() == 2);  // X and Y
+	CHECK(arenas[0].spots.empty());
+}
+
+TEST_CASE("findSpot: by level and name, ignoring case; unknown level or name gives nothing") {
+	Report report;
+	const auto arenas = Spots("A\tcentre\t7\t7\t\t\n", report);
+	const ArenaDef* arena = nullptr;
+	const ArenaSpotDef* spot = FindArenaSpot(arenas, 200, "Centre", &arena);
+	REQUIRE(spot != nullptr);
+	CHECK(spot->subX == 30077);
+	CHECK(arena == &arenas[0]);
+	CHECK(FindArenaSpot(arenas, 201, "centre") == nullptr);
+	CHECK(FindArenaSpot(arenas, 200, "portal1") == nullptr);
+}

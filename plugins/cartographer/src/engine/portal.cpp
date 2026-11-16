@@ -1,5 +1,6 @@
 #include "portal.h"
 
+
 #include "map_sync.h"
 #include "maze_hooks.h"
 #include "outdoor_hooks.h"
@@ -17,6 +18,7 @@
 #include "engine/map_lighting.h"
 #include "engine/map_panel.h"
 #include "engine/level_row.h"
+#include "engine/arena_service.h"
 #include "engine/auto_check.h"
 #include "engine/automap_reset.h"
 #include "log.h"
@@ -932,6 +934,7 @@ void SetTables(std::shared_ptr<const Tables> tables) {
 	AutoCheckSetTables(tables);
 	MapNamesSetTables(tables);
 	MapSyncSetTables(tables);
+	ArenaServiceSetTables(tables);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_tables = std::move(tables);
 }
