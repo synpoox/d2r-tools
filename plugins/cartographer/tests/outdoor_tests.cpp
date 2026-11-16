@@ -1193,10 +1193,10 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 
 // --- The tileset table (outdoor_tilesets.h) ----------------------------------------------------------------------------------
 
-TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege, Mesa, Desert then Wilderness, with the values the hooks and the installer rely on")
+TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege, Mesa, Desert, Wilderness then Kurast, with the values the hooks and the installer rely on")
 {
 	// Pinned: these are the slot rows, levels.txt names and LevelTypes of shipped installs. A change here is a compatibility change.
-	REQUIRE(OutdoorTilesetCount == 6);
+	REQUIRE(OutdoorTilesetCount == 7);
 	CHECK(std::string(OutdoorTilesets[0].name) == "Jungle");
 	CHECK(OutdoorTilesets[0].levelType == 21);
 	CHECK(std::string(OutdoorTilesets[0].slot) == "Outdoor");
@@ -1226,6 +1226,11 @@ TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege, Mesa, Desert the
 	CHECK(std::string(OutdoorTilesets[5].slot) == "OutdoorWilderness");
 	CHECK(std::string(OutdoorTilesets[5].levelName) == "Cartographer Wilderness");
 	CHECK(OutdoorTilesets[5].planner == Planner::FrameFill);
+	CHECK(std::string(OutdoorTilesets[6].name) == "Kurast");
+	CHECK(OutdoorTilesets[6].levelType == 22);
+	CHECK(std::string(OutdoorTilesets[6].slot) == "OutdoorKurast");
+	CHECK(std::string(OutdoorTilesets[6].levelName) == "Cartographer Kurast");
+	CHECK(OutdoorTilesets[6].planner == Planner::FrameFill);
 	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
 	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);
@@ -1239,12 +1244,12 @@ TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege, Mesa, Desert the
 	CHECK(outdoorTilesetIndex("desert") == 4);
 	CHECK(outdoorTilesetIndex("Jungle") == 0);
 	CHECK(outdoorTilesetIndex("Lava") == 0);
-	CHECK(outdoorTilesetNames() == "Jungle, Snow, Siege, Mesa, Desert or Wilderness");
+	CHECK(outdoorTilesetNames() == "Jungle, Snow, Siege, Mesa, Desert, Wilderness or Kurast");
 	MapRequest r;
 	r.tileset = "Lava";
 	const MapPlan refused = planOutdoorMap(r, builtinJungleCatalogue());
 	CHECK_FALSE(refused.ok);
-	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow, Siege, Mesa, Desert or Wilderness.");
+	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow, Siege, Mesa, Desert, Wilderness or Kurast.");
 }
 
 TEST_CASE("every outdoor row that uses the frame-plus-fill planner has a FrameFillTileset row of the same name and LevelType")

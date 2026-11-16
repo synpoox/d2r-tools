@@ -27,3 +27,15 @@ Kurast is "bordered districts": each district is an edged rectangle (8 x 8 frame
 - Risk: medium. The unknown fill mode for LevelType 22 (an entry exists in the lookup) and whether gates line up when districts sit next to each other.
 - Effort: M for Kurast districts; S for Travincal alone; Durance belongs to the maze notes.
 - Game checks: fill mode of LevelType 22; north gate against south gate alignment; temple and sewer entrances spawning in the slot level; the bridge between two districts on the 8-tile grid.
+
+## As built (issues #507, #281)
+
+One district, the Burbs, as a `FrameFillTileset` row (`kKurast`, LevelType 22, `OutdoorKurast` slot, offset 6000, 3660, 128 x 112): a ring of Burbs border pieces (W 622, N 619, E 621, S 620, corners 624, 623, 625, 626) round one fill set `Burbs` (632 8 x 8, 633 8 x 16, 634 16 x 8, 635 16 x 16). Maps and arenas (`Tileset` Kurast, `Fill` Burbs) both use it. No gates, bridge, sewer, temple, waypoint, Slums or Metro.
+
+Answers to the open checks, read from the DS1/DT1 walk flags offline:
+
+- **Fill mode of LevelType 22:** not reached. The plan stamps every cell with a piece, so no fill pass runs.
+- **Gates and bridge:** not used. One district needs neither.
+- **Sewer and temple:** left out.
+- **Ring:** the eight Burbs border pieces form a closed ring with floor on the inner side and no void tiles.
+- **Risk:** some Burbs fill files carry link-like wall tiles (main 8, 12, 16); the planner cannot exclude files. Vanilla uses them. Game check result: [checks/kurast.md](../checks/kurast.md).

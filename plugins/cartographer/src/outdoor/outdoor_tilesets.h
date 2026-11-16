@@ -24,9 +24,8 @@ struct OutdoorTileset {
 	Planner planner;
 };
 
-// The row order is the slot index in the outdoor hooks: Jungle is 0 (the default for an unknown tileset), Snow is 1, Siege is 2, Mesa is 3, Desert is 4, Wilderness is 5.
-// Slot index 6 is reserved for the frame-plus-fill tileset Kurast
-// (slot OutdoorKurast), so it can be added in parallel: no row yet. A FrameFill row needs a FrameFillTileset row of the same name
+// The row order is the slot index in the outdoor hooks: Jungle is 0 (the default for an unknown tileset), Snow is 1, Siege is 2, Mesa is 3, Desert is 4, Wilderness is 5, Kurast is 6.
+// A FrameFill row needs a FrameFillTileset row of the same name
 // (frame_fill_plan.cpp) and a $OutdoorTilesets row in tools/install.ps1.
 inline constexpr OutdoorTileset OutdoorTilesets[] = {
 	{"Jungle", 21, "Outdoor", "Cartographer Outdoor", Planner::Jungle},
@@ -35,6 +34,7 @@ inline constexpr OutdoorTileset OutdoorTilesets[] = {
 	{"Mesa", 27, "OutdoorMesa", "Cartographer Mesa", Planner::FrameFill},
 	{"Desert", 16, "OutdoorDesert", "Cartographer Desert", Planner::FrameFill},
 	{"Wilderness", 2, "OutdoorWilderness", "Cartographer Wilderness", Planner::FrameFill},
+	{"Kurast", 22, "OutdoorKurast", "Cartographer Kurast", Planner::FrameFill},
 };
 inline constexpr size_t OutdoorTilesetCount = sizeof(OutdoorTilesets) / sizeof(OutdoorTilesets[0]);
 
