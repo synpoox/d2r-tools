@@ -48,6 +48,9 @@ void EventsGameLeft() noexcept;
 
 auto EventPartStatuses() -> std::vector<PartStatus>;
 
+// Whether PopulateHook is live (the PopulateRoom part is hooked and the spawn parts are on). The room-populate service is offered only then.
+auto PopulateHookLive() -> bool;
+
 // For 'cartographer check': one line saying what is applied.
 auto EventsSummary() -> std::string;
 

@@ -9,6 +9,7 @@
 #include "engine/map_panel.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"
+#include "engine/room_populate_service.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "hookguard.h"
@@ -829,7 +830,21 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 		} catch (...) {
 		}
 	}
-	const uint64_t result = g_original(game, room);
+	// cartographer.room-populate.v1 (issue #487): other plugins may skip the game's own populate of this room. Cartographer's own
+	// work below still runs in a skipped room.
+	uint32_t skip = 0;
+	int32_t roomLevel = -1;
+	const bool subscribed = game != nullptr && room != nullptr && On(EvRoomLevelId) && RoomPopulateHasSubscribers();
+	if (subscribed) {
+		try {
+			roomLevel = Call<RoomLevelFn>(EvRoomLevelId)(room);
+			skip = RoomPopulateBefore(game, room, roomLevel);
+		} catch (...) {
+			skip = 0;
+		}
+	}
+	const bool skipNative = (skip & RoomPopulateSkipNative) != 0;
+	const uint64_t result = skipNative ? 0 : g_original(game, room);
 	if (paced) {
 		UniquePaceEnd();
 	}
@@ -846,6 +861,9 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 		} catch (...) {
 			plog::Error("map events: handling a populated room failed");
 		}
+	}
+	if (subscribed) {
+		RoomPopulateAfter(game, room, roomLevel, skipNative);
 	}
 	return result;
 }
@@ -1135,6 +1153,10 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 	for (const Part& part : g_parts) {
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
 	}
+	return g_spawnOn.load();
+}
+
+auto PopulateHookLive() -> bool {
 	return g_spawnOn.load();
 }
 
