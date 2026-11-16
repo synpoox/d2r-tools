@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include <map>
 #include <mutex>
 #include <string>
 
@@ -88,8 +89,10 @@ Part g_parts[PartCount] = {
 };
 
 std::mutex g_lock;
-std::shared_ptr<const sp::Plan> g_plan;  // the active map's plan; null: no map
-int g_slotLevel = -1;
+// The armed maps' plans, keyed by slot level: a map opened later leaves the earlier maps' stats alone. Guarded by g_lock.
+std::map<int, std::shared_ptr<const sp::Plan>> g_plans;
+int g_lastSlot = -1;                     // the slot level of the newest map opened (its plan is the one the counts show); guarded by g_lock
+std::map<uint32_t, int> g_listLevels;    // the slot level each player's list was made for; guarded by g_lock
 sp::PlayerLists g_lists;                 // lists put on players; guarded by g_lock
 std::atomic<bool> g_busy{false};         // a plan is active or a list is out: the hooks look at nothing else when false
 std::atomic<bool> g_monstersOn{false};   // the monster hook is in
@@ -131,7 +134,13 @@ auto On(PartId id) noexcept -> bool {
 }
 
 void UpdateBusy() noexcept {  // g_lock must be held
-	g_busy = g_plan != nullptr || !g_lists.empty();
+	g_busy = !g_plans.empty() || !g_lists.empty();
+}
+
+// The plan of the map in slot `level`, or null. g_lock must be held.
+auto PlanAt(int level) noexcept -> std::shared_ptr<const sp::Plan> {
+	const auto it = g_plans.find(level);
+	return it != g_plans.end() ? it->second : nullptr;
 }
 
 // --- The game's own stat lists ----------------------------------------------------------------------------------------
@@ -219,19 +228,20 @@ auto Stat(Unit* unit, int32_t stat) noexcept -> int32_t {
 // --- Monsters -----------------------------------------------------------------------------------------------------------
 
 void ApplyToMonster(void* params, Unit* monster) noexcept {
-	std::shared_ptr<const sp::Plan> plan;
-	int slot = -1;
-	{
-		std::lock_guard<std::mutex> lock(g_lock);
-		plan = g_plan;
-		slot = g_slotLevel;
-	}
-	if (plan == nullptr || plan->monsters.empty() || monster == nullptr || params == nullptr || At<int32_t>(monster, UnitTypeOffset) != UnitMonster) {
+	if (params == nullptr || monster == nullptr || At<int32_t>(monster, UnitTypeOffset) != UnitMonster) {
 		return;
 	}
 	void* room = At<void*>(params, SpawnRoomOffset);
 	const int32_t levelId = room != nullptr ? Call<RoomLevelFn>(RoomLevelId)(room) : -1;
-	if (!sp::monsterGetsStats(true, levelId, slot)) {
+	std::shared_ptr<const sp::Plan> plan;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		plan = PlanAt(levelId);  // the map of the room the monster spawns in
+	}
+	if (plan == nullptr || plan->monsters.empty()) {
+		return;
+	}
+	if (!sp::monsterGetsStats(true, levelId, levelId)) {
 		return;
 	}
 	const int number = g_monsterCount.load() + g_monsterFailed.load();
@@ -373,6 +383,7 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	const auto forget = [&]() noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_lists.remove(id);
+		g_listLevels.erase(id);
 		UpdateBusy();
 	};
 	if (list == 0) {
@@ -426,7 +437,7 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 	plog::Info("statprobe: player %u left the map: list removed (chain %d -> %d lists)", id, before, after);
 }
 
-void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t generation) noexcept {
+void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, int level, uint64_t generation) noexcept {
 	if (g_stateRefused.load()) {
 		return;
 	}
@@ -466,6 +477,9 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, uint64_t gener
 		std::lock_guard<std::mutex> lock(g_lock);
 		stale = generation != g_generation;
 		ok = !stale && g_lists.add(id, reinterpret_cast<uintptr_t>(list), state, listFlags, listState);
+		if (ok) {
+			g_listLevels[id] = level;  // the map this list belongs to: a player who walks to another map loses it first
+		}
 		UpdateBusy();
 	}
 	if (stale) {
@@ -599,8 +613,8 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus);
 	MapPanelMapOpened(panel.gold, panel.blue, slot);
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_plan = std::move(plan);
-	g_slotLevel = slot;
+	g_plans[slot] = std::move(plan);
+	g_lastSlot = slot;
 	g_monsterCount = 0;
 	g_monsterFailed = 0;
 	g_playerCount = 0;
@@ -634,20 +648,25 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 		}
 		const uint32_t id = At<uint32_t>(unit, UnitIdOffset);
 		std::shared_ptr<const sp::Plan> plan;
-		int slot = -1;
+		const int level = UnitLevelId(unit);
 		bool hasList = false;
 		uint64_t generation = 0;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
 			generation = g_generation;
-			plan = g_plan;
-			slot = g_slotLevel;
+			plan = PlanAt(level);  // the plan of the map the player stands in
 			hasList = g_lists.find(id) != 0;
 		}
-		const bool inMap = plan != nullptr && slot > 0 && UnitLevelId(unit) == slot;
+		// A list made for another map is taken off first (inMap false), then this map's list is applied on a later tick.
+		bool inMap = plan != nullptr;
+		if (hasList) {
+			std::lock_guard<std::mutex> lock(g_lock);
+			const auto listed = g_listLevels.find(id);
+			inMap = inMap && listed != g_listLevels.end() && listed->second == level;
+		}
 		switch (sp::decidePlayer(plan != nullptr && !plan->players.empty(), inMap, hasList, g_playerSetting.load())) {
 		case sp::PlayerAction::Apply:
-			ApplyToPlayer(unit, id, *plan, generation);
+			ApplyToPlayer(unit, id, *plan, level, generation);
 			break;
 		case sp::PlayerAction::Remove:
 			RemoveFromPlayer(unit, id);
@@ -666,10 +685,11 @@ void StatApplyGameLeft() noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		monsters = g_monsterCount.load();
 		players = g_playerCount.load();
-		const bool had = g_plan != nullptr;
+		const bool had = !g_plans.empty();
 		++g_generation;
-		g_plan.reset();
-		g_slotLevel = -1;
+		g_plans.clear();
+		g_lastSlot = -1;
+		g_listLevels.clear();
 		g_lists.clear();  // the game frees the units and their lists; nothing is touched here
 		UpdateBusy();
 		if (had) {
@@ -696,7 +716,7 @@ auto StatApplyCountsNow() -> StatApplyCounts {
 	std::shared_ptr<const sp::Plan> plan;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		plan = g_plan;
+		plan = PlanAt(g_lastSlot);
 	}
 	if (plan != nullptr) {
 		out.drawnMonster = static_cast<int>(plan->monsters.size());

@@ -19,6 +19,7 @@
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -124,13 +125,20 @@ struct State {
 	ep::StrandedRetry strandedRetry;  // when the player tick tries again
 };
 std::mutex g_lock;
-std::shared_ptr<State> g_state;
+// One armed map per slot level: a map opened later leaves the earlier maps' events, bosses and banners alone. Guarded by g_lock.
+std::map<int, std::shared_ptr<State>> g_states;
 uint64_t g_generation = 0;
 // Said when the map closes with the Boss still not placed (a Warn per try is logged as they happen).
 void LogBossNeverPlaced(const std::shared_ptr<State>& state) noexcept {
 	if (state && state->bossStranded && state->bossPicker && !state->bossPicker->done()) {
 		plog::Error("map Boss '%s': the map closed with the Boss not placed (%d try(ies) from the player tick, all refused)", state->bossName.c_str(), state->strandedRetry.tries());
 	}
+}
+
+// True while `state` is still the armed map of its level. Caller holds g_lock.
+auto IsArmed(const std::shared_ptr<State>& state) -> bool {
+	const auto it = g_states.find(state->level);
+	return it != g_states.end() && it->second == state;
 }
 
 // --- Banner ---------------------------------------------------------------------------------------------------------------
@@ -501,7 +509,7 @@ auto SpawnAmbushUnit(void* game, void* room, const ep::Spawn& s, void** unit) no
 // True when something was placed, so the banner may announce the event. An Ambush is only armed here: it announces itself when its first wave spawns.
 auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rects, uint64_t seed) noexcept -> bool {
 	if (Event6bPlacesObject(*state.event, state.spawn.kind)) {
-		return Event6bPlaceShrine(game, room, rects.server);  // phase 6b: a Shrine, or a Treasure chest
+		return Event6bPlaceShrine(game, state.level, room, rects.server);  // phase 6b: a Shrine, or a Treasure chest
 	}
 	// Spots come from the server room's rect (its units are the spawn code's), spaced by tiles through the rect-to-tile scale.
 	const ep::SpawnPlan plan = ep::planEvent(*state.event, state.spawn, rects.server, seed, ep::spotScale(rects.server, rects.drlg));
@@ -518,7 +526,7 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 			plog::Warn("event '%s' (Ambush) not armed: the PlayerTick or room parts are off, so no wave could start", state.event->name.c_str());
 			return false;
 		}
-		Event6bArmAmbush(*state.event, plan.spawns, rects.server, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
+		Event6bArmAmbush(state.level, *state.event, plan.spawns, rects.server, room);  // phase 6b: the waves are spawned from the player tick, when a player is in this room
 		plog::Info("event '%s' (%s): armed in the event room %s: %zu per wave", state.event->name.c_str(), ev::kindName(state.event->kind), Describe(rects.server).c_str(), plan.spawns.size());
 		return false;  // not announced yet: the first wave that spawns announces it
 	}
@@ -528,7 +536,7 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 		void* unit = nullptr;
 		if (SpawnOne(game, room, s, &asSuper, &unit)) {
 			if (&s == &plan.spawns.front()) {
-				Event6bFirstSpawned(game, state.event->kind, unit);  // phase 6b: the Boss or Treasure monster is the first spawn; its death rolls the Drop
+				Event6bFirstSpawned(game, state.level, state.event->kind, unit);  // phase 6b: the Boss or Treasure monster is the first spawn; its death rolls the Drop
 			}
 			++made;
 			supers += asSuper ? 1 : 0;
@@ -620,17 +628,20 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 }
 
 void OnPopulated(Game* game, void* room) noexcept {
+	if (room == nullptr || !On(EvRoomLevelId)) {
+		return;
+	}
+	// The room's own map: a room of a level with no armed map is ignored.
+	const int roomLevel = Call<RoomLevelFn>(EvRoomLevelId)(room);
 	std::shared_ptr<State> state;
 	uint64_t generation = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		state = g_state;
+		const auto it = g_states.find(roomLevel);
+		state = it != g_states.end() ? it->second : nullptr;
 		generation = g_generation;
 	}
-	if (state == nullptr || state->level <= 0 || room == nullptr || !On(EvRoomLevelId)) {
-		return;
-	}
-	if (Call<RoomLevelFn>(EvRoomLevelId)(room) != state->level) {
+	if (state == nullptr || state->level <= 0) {
 		return;
 	}
 	const RoomRects rects = ReadRects(room);
@@ -644,7 +655,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 	int number = 0;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (generation != g_generation || g_state != state) {
+		if (generation != g_generation || !IsArmed(state)) {
 			return;  // the game was left, or another map opened, in between
 		}
 		number = ++state->probes;
@@ -736,7 +747,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		std::vector<std::string> lines;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (generation == g_generation && g_state == state) {
+			if (generation == g_generation && IsArmed(state)) {
 				state->announced = true;
 				if (state->entry.inside()) {
 					lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // the game's own Entering text showed the map name on entry
@@ -762,7 +773,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			ep::Rect planRect{};
 			{
 				std::lock_guard<std::mutex> lock(g_lock);
-				if (generation != g_generation || g_state != state) {
+				if (generation != g_generation || !IsArmed(state)) {
 					return ep::BossTry::Stop;  // the game was left, or another map opened, in between
 				}
 				planRect = state->bossPicker->room(index);
@@ -1120,7 +1131,7 @@ auto InstallEventApply(const D2RL::PluginContext* context, const std::vector<Sig
 }
 
 void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player) {
-	Event6bMapOpened();  // phase 6b: the previous map's boss Drop and Shrine end here
+	Event6bMapOpened(level);  // phase 6b: this slot's previous map's boss Drop and Shrine end here; the other maps keep theirs
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
 	}
@@ -1153,7 +1164,7 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 			// Phase 6b: a Shrine's Spawn (or a Treasure chest's) is an objects row, not a monster; it is announced only when it resolves to exactly one row.
 			if (!g_spawnOn.load()) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: the spawn parts are off", event->name.c_str());
-			} else if (!(event->kind == ev::Kind::Shrine ? Event6bPrepareShrine(*event, tables->objectClasses, tables->objectNames, player, &shrineWhy) : Event6bPrepareChest(*event, tables->objectClasses, tables->objectNames, level, player, &shrineWhy))) {
+			} else if (!(event->kind == ev::Kind::Shrine ? Event6bPrepareShrine(*event, tables->objectClasses, tables->objectNames, level, player, &shrineWhy) : Event6bPrepareChest(*event, tables->objectClasses, tables->objectNames, level, player, &shrineWhy))) {
 				plog::Warn("event '%s' is decided but will not be spawned or announced: %s", event->name.c_str(), shrineWhy.c_str());
 			} else {
 				state->event = std::move(event);
@@ -1174,8 +1185,10 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		ArmMapBoss(*state, map, *tables, player);
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	LogBossNeverPlaced(g_state);
-	g_state = std::move(state);
+	// The map this level held before is replaced: its unplaced Boss is logged before it goes.
+	auto& slot = g_states[level];
+	LogBossNeverPlaced(slot);
+	slot = std::move(state);
 	g_busy = true;
 }
 
@@ -1186,7 +1199,7 @@ void PlaceStrandedBoss(Game* game, Unit* unit, void* room, const std::shared_ptr
 	const RoomRects rects = ReadRects(room);
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (g_state != state || !state->bossStranded || !state->bossPicker || state->bossPicker->done()) {
+		if (!IsArmed(state) || !state->bossStranded || !state->bossPicker || state->bossPicker->done()) {
 			return;
 		}
 		if (!rects.ok || !state->strandedRetry.due(rects.drlg)) {
@@ -1219,43 +1232,54 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 		return;
 	}
 	try {
-		std::shared_ptr<State> state;
+		std::vector<std::shared_ptr<State>> states;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			state = g_state;
+			for (const auto& entry : g_states) {
+				states.push_back(entry.second);
+			}
 		}
-		if (state == nullptr || state->level <= 0) {
+		if (states.empty()) {
 			return;
 		}
 		void* room = Call<UnitRoomFn>(EvUnitRoom)(unit);
-		// Phase 6b: starts the next Ambush wave when the player is in the event room. True once, when the first wave spawned: the Ambush counts as placed then.
-		// The room must also be on the event's level: the level id is checked as well as the server rect.
-		const bool inMap = room != nullptr && Call<RoomLevelFn>(EvRoomLevelId)(room) == state->level;
-		const bool ambushStarted = Event6bAmbushTick(rawGame, inMap ? room : nullptr, &ReadServerRect, &SpawnAmbushUnit);
-		if (inMap) {
-			PlaceStrandedBoss(static_cast<Game*>(rawGame), unit, room, state);
+		// The player's map is the one whose level holds the player's room. Phase 6b: starts the next Ambush wave of that map when the player is in
+		// its event room. True once, when the first wave of that map's Ambush spawned: the Ambush counts as placed then.
+		// The room must be on the map's level: the level id is checked as well as the server rect (in the Ambush tick).
+		const int roomLevel = room != nullptr ? Call<RoomLevelFn>(EvRoomLevelId)(room) : -1;
+		const bool ambushStarted = Event6bAmbushTick(rawGame, roomLevel, room, &ReadServerRect, &SpawnAmbushUnit);
+		// The stranded Boss is placed from the player tick, in the room of its own map (PlaceStrandedBoss takes g_lock itself).
+		if (room != nullptr) {
+			for (const std::shared_ptr<State>& state : states) {
+				if (state->level == roomLevel) {
+					PlaceStrandedBoss(static_cast<Game*>(rawGame), unit, room, state);
+				}
+			}
 		}
-		std::vector<std::string> lines;
+		std::vector<std::vector<std::string>> messages;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			if (g_state != state) {
-				return;
-			}
-			const bool late = ambushStarted && state->event;
-			if (late) {
-				state->announced = true;
-			}
-			const bool wasInside = state->entry.inside();
-			const bool entered = state->entry.update(inMap);
-			if (entered) {
-				lines = ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false);
-			} else if (late && wasInside) {
-				lines = ep::bannerLines(state->mapName, &*state->event, true, true);  // late banner: the game's own Entering text showed the map name on entry
-			} else {
-				return;
+			for (const std::shared_ptr<State>& state : states) {
+				if (!IsArmed(state)) {
+					continue;
+				}
+				const bool inMap = state->level == roomLevel;
+				const bool late = ambushStarted && inMap && state->event;
+				if (late) {
+					state->announced = true;
+				}
+				const bool wasInside = state->entry.inside();
+				const bool entered = state->entry.update(inMap);
+				if (entered) {
+					messages.push_back(ep::bannerLines(state->mapName, state->event ? &*state->event : nullptr, state->announced, false));
+				} else if (late && wasInside) {
+					messages.push_back(ep::bannerLines(state->mapName, &*state->event, true, true));  // late banner: the game's own Entering text showed the map name on entry
+				}
 			}
 		}
-		ShowEntryMessage(lines);
+		for (const std::vector<std::string>& lines : messages) {
+			ShowEntryMessage(lines);
+		}
 	} catch (...) {
 		plog::Error("map events: the entry message failed");
 	}
@@ -1269,9 +1293,11 @@ void EventsGameLeft() noexcept {
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		LogBossNeverPlaced(g_state);
+		for (const auto& entry : g_states) {
+			LogBossNeverPlaced(entry.second);
+		}
 		++g_generation;
-		g_state.reset();
+		g_states.clear();
 		g_busy = false;
 	}
 }

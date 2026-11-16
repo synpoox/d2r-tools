@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <mutex>
 
 namespace carto {
@@ -91,7 +92,11 @@ std::string g_text;       // the panel header lines; both texts empty: nothing t
 std::string g_textBlue;   // the panel property lines
 std::string g_textHud;    // both in one text, for the game's terror zone field (one colour)
 bool g_mapOpen = false;   // a map was opened and not left; independent of the text
-int g_slotLevel = -1;
+// Each open map's texts, by slot level: the player's own level picks the text the panel shows (a second map keeps the first's text).
+struct LevelText {
+	std::string gold, blue, hud;
+};
+std::map<int, LevelText> g_byLevel;
 std::atomic<bool> g_inMap{false};
 std::atomic<bool> g_bannerOn{false};  // the banner panel is registered: ShowEntryBanner can show
 std::vector<std::string> g_bannerLines;
@@ -740,20 +745,20 @@ void UnloadMapPanel() noexcept {
 void MapPanelNoMap() {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = false;
+	g_byLevel.clear();
 	g_text.clear();
 	g_textBlue.clear();
 	g_textHud.clear();
-	g_slotLevel = -1;
 	g_inMap = false;
 }
 
 void MapPanelMapOpened(const std::string& gold, const std::string& blue, int slotLevel) {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = true;
+	g_byLevel[slotLevel] = LevelText{gold, blue, cartographer::mappanel::mergeLines(gold, blue)};
 	g_text = gold;
 	g_textBlue = blue;
 	g_textHud = cartographer::mappanel::mergeLines(gold, blue);
-	g_slotLevel = slotLevel;
 	g_inMap = false;  // the player's tick says when it stands in the map
 }
 
@@ -765,16 +770,23 @@ void MapPanelPlayerTick(void* player) noexcept {
 	if (!g_mapOpen) {
 		return;
 	}
-	g_inMap = g_slotLevel > 0 && PlayerLevelOf(player) == g_slotLevel;
+	// The text of the map the player stands in; none when the player is in a level with no open map.
+	const auto it = g_byLevel.find(PlayerLevelOf(player));
+	g_inMap = it != g_byLevel.end() && it->first > 0;
+	if (g_inMap) {
+		g_text = it->second.gold;
+		g_textBlue = it->second.blue;
+		g_textHud = it->second.hud;
+	}
 }
 
 void MapPanelGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_mapOpen = false;
+	g_byLevel.clear();
 	g_text.clear();
 	g_textBlue.clear();
 	g_textHud.clear();
-	g_slotLevel = -1;
 	g_inMap = false;
 	g_bannerStartMs = 0;  // a banner still open is out of time: the next pass closes it (bannerVisible of the whole tick count is false)
 }
