@@ -25,7 +25,23 @@ const FrameFillTileset kMesa = {
 	12,
 };
 
-const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa};
+// Desert: ring 364..371 of lvlprest.txt (edge1..edge8.ds1, 1 file each; 372..375 are the inner corners, not used), in the same order as Mesa's 799..806: south, west, north, east,
+// then the corners SW, NW, NE, SE. One fill set of the ten 8 x 8 pieces 398..407: the open dune and berm ground is common, the props (head, bones, wagon, mesa) are rare.
+// The arena packs the first piece everywhere, so the dunes come first. Notes in docs/cartographer/tilesets/a2-desert.md.
+const FrameFillTileset kDesert = {
+	"Desert",
+	16,  // lvltypes.txt "Act 2 - Desert"
+	{365, 366, 367, 364, 369, 370, 371, 368},
+	1,
+	1,
+	{
+		{"Desert", 10, {{404, 1, 1, 5, 4}, {405, 1, 1, 5, 4}, {406, 1, 1, 4, 3}, {407, 1, 1, 3, 3}, {399, 1, 1, 1, 1}, {400, 1, 1, 1, 1}, {401, 1, 1, 1, 1}, {402, 1, 1, 1, 1}, {403, 1, 1, 1, 1}, {398, 1, 1, 1, 1}}},
+	},
+	14,
+	12,
+};
+
+const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert};
 const int kFrameFillTilesetCount = static_cast<int>(sizeof(kFrameFillTilesets) / sizeof(kFrameFillTilesets[0]));
 
 const FrameFillTileset *findFrameFillTileset(std::string_view name) {

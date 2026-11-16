@@ -17,6 +17,7 @@
 #include "layout.h"
 #include "outdoor.h"
 #include "outdoor_plan.h"
+#include "frame_fill_plan.h"
 #include "outdoor_tilesets.h"
 #include "rng.h"
 #include "stamp.h"
@@ -1192,10 +1193,10 @@ TEST_CASE("a Snow map plans through the same entry point: stamps only, on the 16
 
 // --- The tileset table (outdoor_tilesets.h) ----------------------------------------------------------------------------------
 
-TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege then Mesa, with the values the hooks and the installer rely on")
+TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege, Mesa then Desert, with the values the hooks and the installer rely on")
 {
 	// Pinned: these are the slot rows, levels.txt names and LevelTypes of shipped installs. A change here is a compatibility change.
-	REQUIRE(OutdoorTilesetCount == 4);
+	REQUIRE(OutdoorTilesetCount == 5);
 	CHECK(std::string(OutdoorTilesets[0].name) == "Jungle");
 	CHECK(OutdoorTilesets[0].levelType == 21);
 	CHECK(std::string(OutdoorTilesets[0].slot) == "Outdoor");
@@ -1216,6 +1217,11 @@ TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege then Mesa, with t
 	CHECK(std::string(OutdoorTilesets[3].slot) == "OutdoorMesa");
 	CHECK(std::string(OutdoorTilesets[3].levelName) == "Cartographer Mesa");
 	CHECK(OutdoorTilesets[3].planner == Planner::FrameFill);
+	CHECK(std::string(OutdoorTilesets[4].name) == "Desert");
+	CHECK(OutdoorTilesets[4].levelType == 16);
+	CHECK(std::string(OutdoorTilesets[4].slot) == "OutdoorDesert");
+	CHECK(std::string(OutdoorTilesets[4].levelName) == "Cartographer Desert");
+	CHECK(OutdoorTilesets[4].planner == Planner::FrameFill);
 	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
 	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);
@@ -1226,14 +1232,30 @@ TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege then Mesa, with t
 	CHECK(outdoorTilesetIndex("snow") == 1);
 	CHECK(outdoorTilesetIndex("Siege") == 2);
 	CHECK(outdoorTilesetIndex("MESA") == 3);
+	CHECK(outdoorTilesetIndex("desert") == 4);
 	CHECK(outdoorTilesetIndex("Jungle") == 0);
 	CHECK(outdoorTilesetIndex("Lava") == 0);
-	CHECK(outdoorTilesetNames() == "Jungle, Snow, Siege or Mesa");
+	CHECK(outdoorTilesetNames() == "Jungle, Snow, Siege, Mesa or Desert");
 	MapRequest r;
 	r.tileset = "Lava";
 	const MapPlan refused = planOutdoorMap(r, builtinJungleCatalogue());
 	CHECK_FALSE(refused.ok);
-	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow, Siege or Mesa.");
+	CHECK(refused.reason == "Cartographer has no outdoor pieces for the tileset 'Lava'. Use Jungle, Snow, Siege, Mesa or Desert.");
+}
+
+TEST_CASE("every outdoor row that uses the frame-plus-fill planner has a FrameFillTileset row of the same name and LevelType")
+{
+	size_t frameFill = 0;
+	for (const OutdoorTileset &t : OutdoorTilesets) {
+		if (t.planner != Planner::FrameFill) continue;
+		++frameFill;
+		const framefill::FrameFillTileset *row = framefill::findFrameFillTileset(t.name);
+		INFO(t.name);
+		REQUIRE(row != nullptr);
+		CHECK(std::string(row->name) == t.name);
+		CHECK(row->levelType == t.levelType);
+	}
+	CHECK(frameFill == static_cast<size_t>(framefill::kFrameFillTilesetCount));  // and no frame-plus-fill row lacks an outdoor row
 }
 
 TEST_CASE("tools/install.ps1 lists the same outdoor tilesets as the table, in the same order")

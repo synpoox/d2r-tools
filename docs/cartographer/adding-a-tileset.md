@@ -1,6 +1,6 @@
 # Adding an outdoor tileset to Cartographer
 
-For developers. Jungle, Snow, Siege and Mesa share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`). Mesa (`frame_fill_plan.*`) is the model for a frame of border pieces around a packed fill.
+For developers. Jungle, Snow, Siege, Mesa and Desert share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`). Mesa (`frame_fill_plan.*`) is the model for a frame of border pieces around a packed fill, and Desert (the second `FrameFillTileset` row) shows how little a new row needs.
 
 ## Every touch point
 
@@ -23,7 +23,7 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 
 - The ready list and the tileset names the loader accepts (`TilesetNames`, `ReadyTilesetNames` in `core/tables.cpp`).
 - `OutdoorLevelType`, `MapIsOutdoor`, `MapSlotName`, `IsOutdoorSlotName`, `OutdoorSlotLevelName` and `HasOutdoorSlot`; `ValidateSlots` takes the required level name from the row, and `OutdoorSlotRefusal` and `OutdoorSlotProblem` work on any outdoor slot.
-- `outdoorTilesetKnown` and the "Use Jungle, Snow, Siege or Mesa." message.
+- `outdoorTilesetKnown` and the "Use Jungle, Snow, Siege, Mesa or Desert." message.
 - In `engine/outdoor_hooks.cpp`, `SlotCount`, `SlotIndexFor`, `SlotNameOf` and the per-slot arrays (level, geometry, refusal).
 
 ## What a tileset gets for free
@@ -39,7 +39,7 @@ The way it fills a grid of cells with pieces (a layout plus a picker, or lines o
 
 ## Adding a frame-plus-fill tileset (maps and arenas)
 
-A tileset that is a ring of border pieces round open fill pieces needs no new planner. Its pieces are one `FrameFillTileset` row in `src/outdoor/frame_fill_plan.cpp` (the model is `kMesa`): the name, the `levels.txt` LevelType, the eight ring pieces and their file count, the fill sets (each piece with its LvlPrest id, size in 8-tile cells, file count and weight, the 8 x 8 piece last) and the largest interior. Add the row to `kFrameFillTilesets`, then one `OutdoorTilesets` row with `Planner::FrameFill` (the next free slot index; Desert is 4, Wilderness 5 and Kurast 6, reserved in `outdoor_tilesets.h`) and one `$OutdoorTilesets` row in `tools/install.ps1`. The same row serves `arenas.txt`: its `Tileset` then accepts the name, `Fill` takes one of the row's set names, and the arena's level must have the row's LevelType. Pin the new row's plans with golden hashes like the Mesa ones in `tests/mesa_tests.cpp`.
+A tileset that is a ring of border pieces round open fill pieces needs no new planner. Its pieces are one `FrameFillTileset` row in `src/outdoor/frame_fill_plan.cpp` (the model is `kMesa`): the name, the `levels.txt` LevelType, the eight ring pieces and their file count, the fill sets (each piece with its LvlPrest id, size in 8-tile cells, file count and weight, the 8 x 8 piece last; at most `kMaxFillsPerSet` pieces per set, 10) and the largest interior. Read the ring order off the DS1 walk flags as `a4-mesa.md` and `a2-desert.md` did: the straight pieces floor the inner side and their `lvlprest` order is south, west, north, east, then the corners SW, NW, NE, SE. Add the row to `kFrameFillTilesets`, then one `OutdoorTilesets` row with `Planner::FrameFill` (the next free slot index: Desert is 4, Wilderness 5 and Kurast 6, reserved in `outdoor_tilesets.h`) and one `$OutdoorTilesets` row in `tools/install.ps1`. The same row serves `arenas.txt`: its `Tileset` then accepts the name, `Fill` takes one of the row's set names, and the arena's level must have the row's LevelType. Pin the new row's plans with golden hashes like the Mesa ones in `tests/mesa_tests.cpp` (a new test file goes in the `foreach` of `tests/CMakeLists.txt`; `tests/desert_tests.cpp` is the short model). A test in `tests/outdoor_tests.cpp` fails when an `OutdoorTilesets` row with `Planner::FrameFill` has no `FrameFillTileset` row of the same name and LevelType.
 
 ## Adding a maze tileset
 
