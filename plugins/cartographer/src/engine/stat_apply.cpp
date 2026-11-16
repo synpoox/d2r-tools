@@ -228,6 +228,9 @@ auto Stat(Unit* unit, int32_t stat) noexcept -> int32_t {
 // --- Monsters -----------------------------------------------------------------------------------------------------------
 
 void ApplyToMonster(void* params, Unit* monster) noexcept {
+	if (params == nullptr || monster == nullptr || At<int32_t>(monster, UnitTypeOffset) != UnitMonster) {
+		return;
+	}
 	void* room = At<void*>(params, SpawnRoomOffset);
 	const int32_t levelId = room != nullptr ? Call<RoomLevelFn>(RoomLevelId)(room) : -1;
 	std::shared_ptr<const sp::Plan> plan;
@@ -235,7 +238,7 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		plan = PlanAt(levelId);  // the map of the room the monster spawns in
 	}
-	if (plan == nullptr || plan->monsters.empty() || monster == nullptr || params == nullptr || At<int32_t>(monster, UnitTypeOffset) != UnitMonster) {
+	if (plan == nullptr || plan->monsters.empty()) {
 		return;
 	}
 	if (!sp::monsterGetsStats(true, levelId, levelId)) {
