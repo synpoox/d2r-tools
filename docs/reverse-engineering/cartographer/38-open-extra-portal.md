@@ -1,6 +1,6 @@
 ## 38. A red portal beside a unit, and a second map in a game (issue #485)
 
-Build 93847 (D2R 3.3, image stamp 0x6ab3782c). Evidence: **static** (bytes and decompile of the memory dump, Part 0 of #485), and the game check of the open-extra service (PR for #485).
+Build 93847 (D2R 3.3, image stamp 0x6ab3782c). Evidence: **static** (bytes and decompile of the memory dump, Part 0 of #485). Game check: **Pending** (issue #500; not run yet).
 
 ### 1. What OpenRedPortal does
 

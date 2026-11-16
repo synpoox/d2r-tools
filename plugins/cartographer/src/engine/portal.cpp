@@ -183,23 +183,42 @@ auto AllOpenings(Game* game) noexcept -> int32_t {
 	return Counter(game, OpenKey) + Counter(game, ExtraKey);
 }
 
-// The target of the call at `fn + offset` (an E8 rel32), or null unless that target starts with the `entry` bytes. A derived
-// address: found from OpenRedPortal's own code, never a fixed RVA (owner rule: signatures only).
-auto CallTarget(const uint8_t* fn, uint32_t offset, const uint8_t* entry, size_t size) noexcept -> const uint8_t* {
-	if (fn == nullptr || fn[offset] != 0xE8) {
+// True when [p, p + size) lies inside one of the executable sections (`ranges`, from CodeRanges). Checked before any byte of a
+// derived target is read, so a body that moved on another build cannot make the load read unmapped memory.
+auto InCode(const uint8_t* p, size_t size, const CodeRange* ranges, int count) noexcept -> bool {
+	const uintptr_t start = reinterpret_cast<uintptr_t>(p);
+	for (int i = 0; i < count; ++i) {
+		const uintptr_t base = reinterpret_cast<uintptr_t>(ranges[i].start);
+		if (start >= base && start + size <= base + ranges[i].size) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The target of the call at `fn + offset` (an E8 rel32), or null unless the call and its target lie in the executable sections and
+// the target starts with the `entry` bytes. A derived address: found from OpenRedPortal's own code, never a fixed RVA (owner rule: signatures only).
+auto CallTarget(const uint8_t* fn, uint32_t offset, const uint8_t* entry, size_t size, const CodeRange* ranges, int count) noexcept -> const uint8_t* {
+	if (fn == nullptr || !InCode(fn + offset, 5, ranges, count)) {
+		return nullptr;
+	}
+	if (fn[offset] != 0xE8) {
 		return nullptr;
 	}
 	int32_t rel = 0;
 	std::memcpy(&rel, fn + offset + 1, sizeof(rel));
 	const uint8_t* target = fn + offset + 5 + rel;
+	if (!InCode(target, size, ranges, count)) {
+		return nullptr;
+	}
 	return std::memcmp(target, entry, size) == 0 ? target : nullptr;
 }
 
 // Sets g_createPortal and g_setPortalDest from OpenRedPortal's code. Called at install and at RescanPortal; logs each result.
-void ResolveExtraCalls() noexcept {
+void ResolveExtraCalls(const CodeRange* ranges, int count) noexcept {
 	const uint8_t* open = g_parts[OpenRedPortal].address;
-	g_createPortal = CallTarget(open, CreatePortalCallOffset, CreatePortalEntry, sizeof(CreatePortalEntry));
-	g_setPortalDest = CallTarget(open, SetPortalDestCallOffset, SetPortalDestEntry, sizeof(SetPortalDestEntry));
+	g_createPortal = CallTarget(open, CreatePortalCallOffset, CreatePortalEntry, sizeof(CreatePortalEntry), ranges, count);
+	g_setPortalDest = CallTarget(open, SetPortalDestCallOffset, SetPortalDestEntry, sizeof(SetPortalDestEntry), ranges, count);
 	plog::Info("part CreatePortal (derived from OpenRedPortal): %s", g_createPortal != nullptr ? "found" : "off: the call does not match its recorded bytes");
 	plog::Info("part SetPortalDest (derived from OpenRedPortal): %s", g_setPortalDest != nullptr ? "found" : "off: the call does not match its recorded bytes");
 }
@@ -1029,6 +1048,9 @@ auto OpenExtraMap(void* gamePtr, void* playerPtr, void* nearPtr, int32_t sourceL
 	if (!g_live.load() || game == nullptr || player == nullptr || nearUnit == nullptr || tables == nullptr) {
 		return refuse("the portal is off, or no game is running");
 	}
+	if (g_createPortal == nullptr || g_setPortalDest == nullptr) {
+		return refuse("CreatePortal/SetPortalDest are off, see the log");
+	}
 	const auto source = openedLevels.find(sourceLevel);
 	if (source == openedLevels.end()) {
 		return refuse("no map was opened through level " + std::to_string(sourceLevel) + " in this game");
@@ -1176,7 +1198,7 @@ auto RescanPortal() -> bool {
 			ResolvePart(g_context, g_overrides, ranges, count, part);
 		}
 	}
-	ResolveExtraCalls();
+	ResolveExtraCalls(ranges, count);
 	g_live = RequiredPartsOn();
 	for (const Part& part : g_parts) {
 		plog::Info("part %s: %s", part.name, part.status.detail.c_str());
@@ -1239,7 +1261,7 @@ auto InstallPortal(const D2RL::PluginContext* context, const std::vector<Signatu
 			check.status.detail = "off: not hooked, because the ItemSpellUse hook did not go in";
 		}
 	}
-	ResolveExtraCalls();  // after the parts: the calls are read from OpenRedPortal's code
+	ResolveExtraCalls(ranges, count);  // after the parts: the calls are read from OpenRedPortal's code
 	g_live = g_hooksIn && RequiredPartsOn();
 	InstallConsolePath(context);
 	InstallMazeHooks(context, overrides, ranges, count);  // after the portal's: a maze part that is missing turns off only Cave and Crypt

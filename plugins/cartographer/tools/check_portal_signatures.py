@@ -13,7 +13,8 @@ where the signature says: the byte there starts the first relative branch, call 
 hooked parts it also checks that the hook size (bytes copied for the inline hook) fits in the max patch length. The
 max patch length of a part that is only called is informational (never patched) and printed as n/a. Finally it checks
 that OpenRedPortal contains calls (E8) to the matched GameCounter, which ties GameCounter's one unmasked displacement to
-the right copy. Exit status
+the right copy. It also checks the two calls the extra open repeats (CreatePortal at +0xf8, SetPortalDest at +0x12a): each
+is an E8 whose target lies in code and starts with the plugin's entry bytes. Exit status
 0 only if every row passes. On a new build, a row that prints "no match", "N matches" or another RVA needs its signature
 or RVA re-derived and the recording updated (docs/reverse-engineering/RVA-AND-INTERCEPTION-WORKFLOW.md). The sibling
 check_maze_signatures.py (maze parts) works the same way.
@@ -103,6 +104,14 @@ FREE_SPOT_SITE = 0xFF
 FREE_SPOT_CONTEXT = bytes.fromhex("41B9013E000041B80500000048894424" "20")
 FREE_SPOT_PREFIX = bytes.fromhex("405355565741544155415641574881EC98000000")
 
+# The two calls OpenRedPortal makes that the extra open (cartographer.open-extra.v1, issue #485) repeats: CreatePortal at +0xf8 and
+# SetPortalDest at +0x12a. No RVA is recorded: each call's E8 is found at its offset in OpenRedPortal, and its target is accepted only
+# when it starts with the entry bytes the plugin checks too (portal.cpp CreatePortalEntry, SetPortalDestEntry).
+EXTRA_CALLS = [
+    ("CreatePortal", 0xF8, bytes((0x48, 0x8B, 0xC4, 0x48, 0x89, 0x68, 0x20, 0x56, 0x57, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57, 0x48, 0x83, 0xEC, 0x50))),
+    ("SetPortalDest", 0x12A, bytes((0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20, 0x0F, 0xB6, 0xFA, 0x48, 0x8B, 0xD9))),
+]
+
 IMAGE_SCN_MEM_EXECUTE = 0x20000000
 HEADER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "core", "part_signatures.h")
 
@@ -180,6 +189,30 @@ def check_free_spot(img, found, code):
     return 1 if problems else 0
 
 
+def check_extra_calls(img, found, code):
+    """OpenRedPortal + 0xf8 (CreatePortal) and + 0x12a (SetPortalDest) are E8 calls whose targets lie in code and start with the entry bytes."""
+    portal = found.get("OpenRedPortal")
+    if portal is None:
+        print("OpenRedPortal extra calls: not checked (OpenRedPortal did not resolve)")
+        return 1
+    bad = 0
+    for name, off, entry in EXTRA_CALLS:
+        site = portal + off
+        problems = []
+        target = None
+        if img[site] != 0xE8:
+            problems.append(f"no E8 at OpenRedPortal+0x{off:x}")
+        else:
+            target = site + 5 + struct.unpack_from("<i", img, site + 1)[0]
+            if not any(va <= target and target + len(entry) <= va + sz for _, va, sz in code):
+                problems.append("the target is outside the executable sections")
+            elif img[target:target + len(entry)] != entry:
+                problems.append("the target's first bytes differ from the plugin's entry bytes")
+        print(f"{name:15} 0x{(target or 0):06x}  call at OpenRedPortal+0x{off:x}: {'ok' if not problems else '; '.join(problems)}")
+        bad += 1 if problems else 0
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("image")
@@ -235,6 +268,7 @@ def main():
               + (f" ({', '.join(hex(h) for h in hits[:4])})" if hits and status != "ok" else ""))
     bad += check_counter_calls(img, found)
     bad += check_free_spot(img, found, code)
+    bad += check_extra_calls(img, found, code)
     print("all signatures ok" if not bad else f"{bad} signature(s) failed")
     return 1 if bad else 0
 
