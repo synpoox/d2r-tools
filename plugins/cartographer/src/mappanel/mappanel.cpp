@@ -23,7 +23,7 @@ const Known kKnown[] = {
 	{"magicresist", "%+d%% Magic Resistance"},
 	{"hpregen", "%+d%% Life Regeneration"},
 	{"toblock", "%+d%% Chance to Block"},
-	{"velocitypercent", "%+d%% Movement Speed"},
+	{"velocitypercent", "%+d%% Monster Speed"},
 	{"item_fastermovevelocity", "%+d%% Faster Run/Walk"},
 	{"item_fasterattackrate", "%+d%% Increased Attack Speed"},
 	{"item_fastercastrate", "%+d%% Faster Cast Rate"},
