@@ -48,7 +48,6 @@ constexpr int GameSuperBitmapOffset = 0x1d8;  // the game's once-per-game superu
 constexpr int32_t SpawnMode = 1;            // what the superunique code passes to the monster spawn
 constexpr int32_t SpawnParam = 0xa;         // the same caller's seventh argument
 constexpr uint16_t SpawnFlags = 0;          // 0: the game's normal path, so the map's stats reach event monsters too
-constexpr uint16_t SpawnFlagNoCollision = 0x80;  // the spawn core takes a ring spot the collision test refused (static, 0x4941ef; only the last-resort Boss uses it)
 constexpr int MaxPopulateProbes = 12;       // rooms of the map level logged in full
 // Spawn names from the game's tables (section 11). `dt` is the data tables base for the unit's data flag.
 constexpr int UnitDataFlagOffset = 0x1bd;   // uint8 on a unit (the same byte stat_apply.cpp reads)
@@ -121,11 +120,23 @@ struct State {
 	std::optional<ep::BossRoomPicker> bossPicker;  // made with the event tracker, at the first populated room
 	int probes = 0;
 	int bossTestRefuse = 0;  // CARTOGRAPHER_TEST_BOSS_REFUSE: the first N ordinary Boss tries are refused, to reach the fallbacks in a game check
+	// CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED: the first N forced (collision-skipped) room tries are refused too; a forced try follows only an ordinary refusal, so pair it with CARTOGRAPHER_TEST_BOSS_REFUSE. It never refuses the player-tick spot (CARTOGRAPHER_TEST_BOSS_STRAND reaches that).
+	int bossTestRefuseForced = 0;
+	// CARTOGRAPHER_TEST_BOSS_STRAND: the Boss is stranded from map open, so no room is tried and the player tick places it (a game check only).
+	bool bossStranded = false;  // every room refused the Boss and none is left to populate: the player tick places it at the player's own spot (the last resort)
+	bool bossTestStrand = false;  // CARTOGRAPHER_TEST_BOSS_STRAND is set: no room is tried at all (a game check only; bossStranded is also set from map open)
+	ep::StrandedRetry strandedRetry;  // when the player tick tries again
 };
 std::mutex g_lock;
 // One armed map per slot level: a map opened later leaves the earlier maps' events, bosses and banners alone. Guarded by g_lock.
 std::map<int, std::shared_ptr<State>> g_states;
 uint64_t g_generation = 0;
+// Said when the map closes with the Boss still not placed (a Warn per try is logged as they happen).
+void LogBossNeverPlaced(const std::shared_ptr<State>& state) noexcept {
+	if (state && state->bossStranded && state->bossPicker && !state->bossPicker->done()) {
+		plog::Error("map Boss '%s': the map closed with the Boss not placed (%d try(ies) from the player tick, all refused)", state->bossName.c_str(), state->strandedRetry.tries());
+	}
+}
 
 // True while `state` is still the armed map of its level. Caller holds g_lock.
 auto IsArmed(const std::shared_ptr<State>& state) -> bool {
@@ -461,7 +472,7 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 	if (s.superUnique && On(SpawnSuperUnique)) {
 		const uint8_t* bitmap = reinterpret_cast<const uint8_t*>(game) + GameSuperBitmapOffset;
 		if (!ep::superSeen(bitmap, s.row)) {
-			void* unit = Call<SpawnSuperFn>(SpawnSuperUnique)(game, room, x, y, s.row, 0);
+			void* unit = Call<SpawnSuperFn>(SpawnSuperUnique)(game, room, x, y, s.row, flags);
 			const bool setNow = ep::superSeen(bitmap, s.row);
 			plog::Info("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
 			if (unit != nullptr) {
@@ -546,10 +557,17 @@ auto SpawnEvent(Game* game, void* room, const State& state, const RoomRects& rec
 // Made, or Refused: no spot in this room took it, and the caller tries another room (there is no give-up). A plan problem counts as a refusal too:
 // the Boss's name is checked when the map opens (ArmMapBoss), so what is left is a room too small to place anything. The check record is told of a
 // placed Boss; a refusal is the caller's to report.
-// `force` is the last resort (the room populating now, after the ordinary try refused it, or when no other room can still populate): the spot test's collision check is skipped (flag 0x80), as a plain monster,
-// because the superunique spawn takes no flags.
-ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& rects, bool force) noexcept {
-	const ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
+// `force` is the last resort (the room populating now, after the ordinary try refused it, or when no other room can still populate, or the player's own spot
+// when no room is left): the spot test's collision check is skipped (flag 0x80). The superunique spawn takes the flags word as its sixth argument and hands
+// it to the spawn core (0x499ba0 -> 0x49e980 -> 0x492cf0, with 0x140 or-ed in; note 34), so the Boss is still the superunique in the last resort.
+// A superunique Boss is never spawned as its base class: it is the superunique at some spot or it is refused (the caller tries on).
+// `at`: the one spot to try (the player's own), instead of the room's centre and the spots around it.
+ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& rects, bool force, const ep::Spot* at = nullptr) noexcept {
+	ep::SpawnPlan plan = ep::planMapBoss(state.bossName, state.bossSpawn, rects.server, ep::spotScale(rects.server, rects.drlg));
+	if (plan.problem.empty() && at != nullptr) {
+		plan.spawns.resize(1);
+		plan.spawns.front().spot = *at;
+	}
 	if (!plan.problem.empty()) {
 		plog::Warn("map Boss '%s' not spawned in room %s: %s", state.bossName.c_str(), Describe(rects.drlg).c_str(), plan.problem.c_str());
 		return ep::BossTry::Refused;
@@ -559,57 +577,56 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		plog::Info("map Boss '%s': refused on purpose in room %s (CARTOGRAPHER_TEST_BOSS_REFUSE, a game check)", state.bossName.c_str(), Describe(rects.drlg).c_str());
 		return ep::BossTry::Refused;
 	}
+	if (force && at == nullptr && state.bossTestRefuseForced > 0) {
+		--state.bossTestRefuseForced;
+		plog::Info("map Boss '%s': the forced try in room %s refused on purpose (CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED, a game check)", state.bossName.c_str(), Describe(rects.drlg).c_str());
+		return ep::BossTry::Refused;
+	}
+	const bool unique = state.bossSpawn.kind == ev::NameKind::Unique;
+	if (unique && !On(SpawnSuperUnique)) {
+		plog::Warn("map Boss '%s': the superunique spawn is off in this build, so the Boss cannot be placed", state.bossName.c_str());
+		return ep::BossTry::Refused;
+	}
+	const ep::BossCall call = ep::bossCall(unique, force);
+	const int row = plan.spawns.front().row;
+	uint8_t* const bitmap = reinterpret_cast<uint8_t*>(game) + GameSuperBitmapOffset;
+	if (unique && ep::superSeen(bitmap, row)) {
+		// The game spawns a superunique once per game and refuses a second one; the map's Boss is placed anyway, so the once-per-game bit is cleared first.
+		bitmap[row >> 3] = static_cast<uint8_t>(bitmap[row >> 3] & ~(1u << (row & 7)));
+		plog::Info("map Boss '%s': its superunique row %d was spawned earlier this game; the once-per-game bit is cleared so it spawns again", state.bossName.c_str(), row);
+	}
 	// The game's own free-spot search (p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from the start, so a refusal means no free subtile
 	// on any of those rings (about the whole room for a ~40 x 40 maze room; an outdoor clearing may be larger; section 9, "Plan rooms and
-	// the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the ring grid onto subtiles the first start skipped. The superunique is tried at every spot before the first plain spawn, so the Boss
-	// keeps its own row (and minions) whenever any spot takes it.
+	// the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the ring grid onto subtiles the first start skipped.
 	bool asSuper = false;
 	void* unit = nullptr;
-	bool made = false;
 	const size_t total = plan.spawns.size();
 	size_t tried = 0;
-	const uint16_t flags = force ? SpawnFlagNoCollision : SpawnFlags;
-	const auto attempt = [&](const ep::Spawn& spawn, const char* how) {
+	const char* const how = call.super ? (call.flags != 0 ? "as a superunique, collision test skipped" : "as a superunique") : (call.flags != 0 ? "collision test skipped" : "as its monster");
+	bool made = false;
+	for (const ep::Spawn& spawn : plan.spawns) {
 		++tried;
-		const size_t inPass = (tried - 1) % total + 1;
-		made = SpawnOne(game, room, spawn, &asSuper, &unit, flags);
+		ep::Spawn one = spawn;
+		if (call.super) {
+			one.classRow = -1;  // SpawnOne then makes no plain spawn
+		} else {
+			one.superUnique = false;
+			one.row = spawn.classRow;
+		}
+		made = SpawnOne(game, room, one, &asSuper, &unit, call.flags);
 		if (made) {
 			if (tried > 1) {
-				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, inPass, total, how);
+				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, total, how);
 			}
-		} else {
-			plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, inPass, total);
+			break;
 		}
-		return made;
-	};
-	if (force) {
-		// no superunique pass: its spawn takes no flags, and the ordinary tries in this room (and every other) have refused it already
-	} else if (state.bossSpawn.kind == ev::NameKind::Unique && !On(SpawnSuperUnique)) {
-		plog::Info("map Boss '%s': the superunique spawn is off in this build, so it is spawned as a plain monster", state.bossName.c_str());
-	} else if (state.bossSpawn.kind == ev::NameKind::Unique) {
-		for (const ep::Spawn& spawn : plan.spawns) {
-			ep::Spawn superOnly = spawn;
-			superOnly.classRow = -1;  // SpawnOne then makes no plain spawn
-			if (attempt(superOnly, "as a superunique")) break;
-		}
+		plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, tried, total);
 	}
-	if (!made) {
-		for (const ep::Spawn& spawn : plan.spawns) {
-			ep::Spawn plain = spawn;
-			plain.superUnique = false;
-			plain.row = spawn.classRow;
-			if (attempt(plain, force ? "as a plain monster, collision test skipped" : "as a plain monster")) break;
-		}
-	}
-	const bool fellBack = made && !asSuper && state.bossSpawn.kind == ev::NameKind::Unique;  // a plain monster of its base id was spawned instead of the superunique
-	const char* const plainWhy = force ? "forced, collision test skipped" : "the superunique spawn returned null or was used already";
-	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(),
-	           asSuper ? "as a superunique" : (fellBack ? (std::string("as a plain monster of its base id: ") + plainWhy).c_str() : "as a plain monster"));
+	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
 	if (!made) {
 		return ep::BossTry::Refused;
 	}
-	AutoCheckNoteBoss(state.bossName, true, asSuper,
-	                  fellBack ? std::string("spawned as a plain monster of its base id: ") + plainWhy : std::string());
+	AutoCheckNoteBoss(state.bossName, true, asSuper, std::string());
 	return ep::BossTry::Made;
 }
 
@@ -719,7 +736,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		// The map Boss's own room, separate from the event room. Fires once; the first populated room is its entry room too.
 		if (state->bossPicker) {
 			state->bossPicker->adopt(rects.drlg);  // a room the level's list did not hold becomes the last candidate
-			fireBoss = state->bossPicker->onPopulated(rects.drlg);
+			fireBoss = !state->bossTestStrand && state->bossPicker->onPopulated(rects.drlg);
 		}
 	}
 	if (number <= MaxPopulateProbes) {
@@ -789,7 +806,9 @@ void OnPopulated(Game* game, void* room) noexcept {
 			} else if (state->bossPicker->pending()) {
 				plog::Info("map Boss '%s': every populated room refused it; it goes in the next room to be populated", state->bossName.c_str());
 			} else {
-				plog::Warn("map Boss '%s': refused in every room that populated, and no room is left to populate; the Boss is not placed yet", state->bossName.c_str());
+				plog::Warn("map Boss '%s': refused in every room that populated, and no room is left to populate; it is placed from the player tick, at the player's own spot (ordinary try first, then with the collision test skipped)", state->bossName.c_str());
+				std::lock_guard<std::mutex> lock(g_lock);
+				state->bossStranded = true;
 			}
 		}
 	}
@@ -934,7 +953,7 @@ void OnArenaPopulated(Game* game, void* room) {
 		void* unit = nullptr;
 		bool made = SpawnOne(game, room, spawn, &asSuper, &unit);
 		if (!made) {  // a taken spot: the spawn core takes the nearest ring spot when the collision test is skipped
-			made = SpawnOne(game, room, spawn, &asSuper, &unit, SpawnFlagNoCollision);
+			made = SpawnOne(game, room, spawn, &asSuper, &unit, ep::kSpawnFlagNoCollision);
 		}
 		plog::Info("arena '%s' spot '%s': monster '%s'%s %s at the spot (%d,%d)%s", arena->name.c_str(), spot.name.c_str(), spot.monster.c_str(), note.c_str(), made ? (asSuper ? "spawned as a superunique" : "spawned as a plain monster") : "REFUSED by the game", x, y, made ? "" : "; not retried");
 	}
@@ -971,7 +990,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		return;
 	}
 	if (path == BossPath::PlainMonster) {
-		plog::Warn("map Boss '%s': no superuniques row '%s' (run tools\\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
+		plog::Error("map Boss '%s': installer not run: no superuniques row '%s' (run tools\\install.ps1 and restart); spawning its base monster '%s' plain", map.boss.c_str(), key.c_str(), entry->base.c_str());
 	}
 	const ep::SpawnPlan check = ep::planMapBoss(map.boss, state.bossSpawn, ep::Rect{0, 0, 24, 24});  // a stand-in room
 	if (!check.problem.empty()) {
@@ -983,6 +1002,15 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_REFUSE", knob, sizeof(knob)) > 0) {
 		state.bossTestRefuse = std::atoi(knob) > 0 ? std::atoi(knob) : 0;
 		plog::Warn("map Boss '%s': the first %d try(ies) are refused on purpose (CARTOGRAPHER_TEST_BOSS_REFUSE is set; a game check only)", map.boss.c_str(), state.bossTestRefuse);
+	}
+	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED", knob, sizeof(knob)) > 0) {
+		state.bossTestRefuseForced = std::atoi(knob) > 0 ? std::atoi(knob) : 0;
+		plog::Warn("map Boss '%s': the first %d forced try(ies) are refused on purpose (CARTOGRAPHER_TEST_BOSS_REFUSE_FORCED is set; a game check only)", map.boss.c_str(), state.bossTestRefuseForced);
+	}
+	if (GetEnvironmentVariableA("CARTOGRAPHER_TEST_BOSS_STRAND", knob, sizeof(knob)) > 0) {
+		state.bossStranded = true;
+		state.bossTestStrand = true;
+		plog::Warn("map Boss '%s': no room is tried, stranded from map open on purpose (CARTOGRAPHER_TEST_BOSS_STRAND is set; a game check only)", map.boss.c_str());
 	}
 	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }
@@ -1165,8 +1193,45 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 		ArmMapBoss(*state, map, *tables, player);
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_states[level] = std::move(state);
+	// The map this level held before is replaced: its unplaced Boss is logged before it goes.
+	auto& slot = g_states[level];
+	LogBossNeverPlaced(slot);
+	slot = std::move(state);
 	g_busy = true;
+}
+
+// The Boss's last rung when no room is left to populate (every room refused it): from the player tick, at the player's own spot (the player stands on floor),
+// first with the game's collision test and then without it (as the Ambush spawns its waves, event_6b.cpp). A try that fails is repeated when the player's room
+// changes and every few ticks (ep::StrandedRetry) until the Boss is placed or the map closes; never a plain monster.
+void PlaceStrandedBoss(Game* game, Unit* unit, void* room, const std::shared_ptr<State>& state) noexcept {
+	const RoomRects rects = ReadRects(room);
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		if (!IsArmed(state) || !state->bossStranded || !state->bossPicker || state->bossPicker->done()) {
+			return;
+		}
+		if (!rects.ok || !state->strandedRetry.due(rects.drlg)) {
+			return;
+		}
+	}
+	const uint8_t* path = At<const uint8_t*>(unit, 0x38);  // a player's dynamic path: subtile x, y are uint16 at +0x2 and +0x6 (see ServeWhere)
+	if (path == nullptr) {
+		plog::Warn("map Boss '%s': the player has no position yet; trying again", state->bossName.c_str());
+		return;
+	}
+	const ep::Spot spot{static_cast<int32_t>(At<uint16_t>(path, 0x2)), static_cast<int32_t>(At<uint16_t>(path, 0x6))};
+	plog::Info("map Boss '%s': no room is left to populate; try %d at the player's spot (%d,%d) in DRLG room %s (the last resort)", state->bossName.c_str(), state->strandedRetry.tries(), spot.x, spot.y, Describe(rects.drlg).c_str());
+	AutoCheckNoteBossRoom(rects.drlg.x, rects.drlg.y, rects.drlg.w, rects.drlg.h);
+	for (const uint16_t flags : ep::strandedFlags()) {
+		if (SpawnMapBoss(game, room, *state, rects, flags != 0, &spot) == ep::BossTry::Made) {
+			std::lock_guard<std::mutex> lock(g_lock);
+			state->bossStranded = false;
+			state->bossPicker->finish();
+			plog::Info("map Boss '%s': boss path: the player's spot, from the player tick (the last resort, %s)", state->bossName.c_str(), flags != 0 ? "collision test skipped" : "ordinary spot test");
+			return;
+		}
+	}
+	plog::Warn("map Boss '%s': the game refused the Boss at the player's spot, with and without the collision test; trying again when the player's room changes or in a few seconds", state->bossName.c_str());
 }
 
 void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexcept {
@@ -1191,6 +1256,14 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 		// The room must be on the map's level: the level id is checked as well as the server rect (in the Ambush tick).
 		const int roomLevel = room != nullptr ? Call<RoomLevelFn>(EvRoomLevelId)(room) : -1;
 		const bool ambushStarted = Event6bAmbushTick(rawGame, roomLevel, room, &ReadServerRect, &SpawnAmbushUnit);
+		// The stranded Boss is placed from the player tick, in the room of its own map (PlaceStrandedBoss takes g_lock itself).
+		if (room != nullptr) {
+			for (const std::shared_ptr<State>& state : states) {
+				if (state->level == roomLevel) {
+					PlaceStrandedBoss(static_cast<Game*>(rawGame), unit, room, state);
+				}
+			}
+		}
 		std::vector<std::vector<std::string>> messages;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
@@ -1228,6 +1301,9 @@ void EventsGameLeft() noexcept {
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
+		for (const auto& entry : g_states) {
+			LogBossNeverPlaced(entry.second);
+		}
 		++g_generation;
 		g_states.clear();
 		g_busy = false;

@@ -926,3 +926,80 @@ TEST_CASE("driveBoss: a level whose room list could not be read still places the
 	CHECK(run.placedIn == 0);
 	CHECK(run.picker.done());
 }
+
+// --- The real Boss on every rung (issue #463) ----------------------------------------------------------------------------------------
+
+TEST_CASE("bossCall: a Boss with a superuniques row is spawned as that row on every rung; only the last resort skips the collision test")
+{
+	CHECK(bossCall(true, false).super);
+	CHECK(bossCall(true, false).flags == 0);
+	CHECK(bossCall(true, true).super);  // the last resort keeps the superunique row (never its base monster)
+	CHECK(bossCall(true, true).flags == kSpawnFlagNoCollision);
+	CHECK_FALSE(bossCall(false, true).super);  // a Boss that is a plain monstats id is that monster on every rung
+	CHECK(bossCall(false, false).flags == 0);
+}
+
+TEST_CASE("every rung of the ladder ends with the real Boss: the engine's call for the tier is always the superunique, whatever room takes it")
+{
+	// A game that takes the superunique only where the rung says so: ordinary in `accepts`, collision-free in `acceptsForced`; it never takes anything else.
+	struct Case {
+		std::set<int> accepts, acceptsForced;
+		std::vector<Rect> populate;
+		Tier want;
+	};
+	const Rect cellRoom = rA, other = rFar;
+	const std::vector<Case> cases = {
+		{{0}, {}, {rA}, Tier::Cell},                       // the plan's boss room
+		{{1}, {}, {rA, rB}, Tier::Cell},                   // another room of the cell
+		{{2}, {}, {rA, rB, other}, Tier::Other},           // another room of the level
+		{{}, {2}, {rA, rB, other}, Tier::Forced},         // refused everywhere ordinary: forced in the room populating now
+		{{}, {0}, {rB, other, rEntry, rA}, Tier::Forced},  // the cell room populated early: forced at once in the boss room
+	};
+	for (const Case &c : cases) {
+		Run run(BossRoomPicker({cellRoom, rB}, {other}, rEntry));
+		run.accepts = c.accepts;
+		run.acceptsForced = c.acceptsForced;
+		for (const Rect &r : c.populate) run.populate(r);
+		INFO("rung " << static_cast<int>(c.want) << " accepts " << c.accepts.size() << " forced " << c.acceptsForced.size() << " populated " << c.populate.size());
+		CHECK(run.placedTier == c.want);
+		CHECK(run.picker.done());
+		CHECK(bossCall(true, run.placedTier == Tier::Forced).super);
+	}
+}
+
+TEST_CASE("no room left: the Boss is not placed by the ladder, and the picker says nothing can populate (the player tick takes over)")
+{
+	Run run(BossRoomPicker({rA}, {}, rEntry));
+	run.populate(rEntry);
+	run.populate(rA);  // refused, forced and refused
+	CHECK(run.placedIn == -1);
+	CHECK(run.waiting);
+	CHECK_FALSE(run.picker.pending());
+	CHECK_FALSE(run.picker.done());  // the tick's try (finish() on success) is still to come
+}
+
+TEST_CASE("strandedFlags: the player's floor first without the collision skip, then with it") {
+	const std::vector<uint16_t> f = strandedFlags();
+	REQUIRE(f.size() == 2);
+	CHECK(f[0] == 0);
+	CHECK(f[1] == kSpawnFlagNoCollision);
+}
+
+TEST_CASE("StrandedRetry: tries at once, on a room change, and every interval; never gives up") {
+	StrandedRetry r;
+	const Rect a{10, 10, 8, 8}, b{18, 10, 8, 8};
+	CHECK(r.due(a));  // the first tick
+	for (int i = 1; i < kStrandedRetryTicks; ++i) {
+		CHECK_FALSE(r.due(a));
+	}
+	CHECK(r.due(a));  // the interval elapsed in the same room
+	CHECK_FALSE(r.due(a));
+	CHECK(r.due(b));  // the player moved to another room
+	CHECK(r.tries() == 3);
+	for (int n = 0; n < 5; ++n) {  // it keeps coming due for as long as it is asked
+		for (int i = 1; i < kStrandedRetryTicks; ++i) {
+			CHECK_FALSE(r.due(b));
+		}
+		CHECK(r.due(b));
+	}
+}
