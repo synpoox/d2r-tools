@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <string>
+#include <array>
 #include <string_view>
 #include <vector>
 
@@ -46,6 +47,10 @@ inline constexpr const char* MazeSlot = "Maze";
 // outdoor/outdoor_tilesets.h. A map's item opens its slot level; the outdoor build hook builds it.
 inline constexpr int OutdoorDrlgType = 3;
 
+// The monstats.txt Ids with boss 1 in D2R's own top-level monstats.txt (Reign of the Warlock included) (the base game, not a mod). A bosses.txt Base may not be one of them; a mod's own
+// boss-flagged monster is fine. Twin: $VanillaBossIds in tools/install.ps1. Compared case-sensitively, like every monstats key.
+inline constexpr std::array<std::string_view, 28> VanillaBossIds = {"andariel", "duriel", "radament", "mephisto", "diablo", "summoner", "izual", "bloodraven", "diabloclone", "griswold", "nihlathakboss", "baalcrab", "putriddefiler1", "putriddefiler2", "putriddefiler3", "putriddefiler4", "putriddefiler5", "baalcrabstairs", "baalclone", "ubermephisto", "uberdiablo", "uberizual", "uberandariel", "uberduriel", "uberbaal", "colossal1", "colossal2", "colossal3"};
+
 // Names the loader checks against D2's own tables. An empty list with `have*` false means the table could not be read:
 // those cells are then not checked (fail open) and the report says so.
 struct GameNames {
@@ -53,8 +58,6 @@ struct GameNames {
 	std::vector<std::string> monsters;      // monstats.txt Id
 	std::vector<std::string> superUniques;  // superuniques.txt Superunique
 	std::vector<std::string> itemCodes;     // misc.txt, weapons.txt and armor.txt code
-	bool haveBossFlags = false;
-	std::vector<std::string> bossMonsters;  // monstats.txt Id whose boss column is 1 (act bosses and the like)
 	bool haveMods = false;
 	std::vector<int> monsterMods;           // monumod.txt id
 	bool haveItemSpells = false;

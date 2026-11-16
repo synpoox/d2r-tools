@@ -172,25 +172,6 @@ auto ReadItemSpells(const std::wstring& file, std::vector<std::pair<std::string,
 	return carto::ParseItemSpells(text, out, compact, cursor);
 }
 
-// monstats.txt Ids whose boss column is 1. False when the table or either column is missing.
-auto ReadBossIds(const std::wstring& file, std::vector<std::string>* out) -> bool {
-	std::string text;
-	if (!ReadFile(file, &text)) {
-		return false;
-	}
-	const carto::Tsv table = carto::ParseTsv(text);
-	const int cId = table.Column("Id"), cBoss = table.Column("boss");
-	if (cId < 0 || cBoss < 0) {
-		return false;
-	}
-	for (const carto::TsvRow& row : table.rows) {
-		if (table.Cell(row, cBoss) == "1" && !table.Cell(row, cId).empty()) {
-			out->push_back(table.Cell(row, cId));
-		}
-	}
-	return true;
-}
-
 auto ReadGameNames() -> carto::GameNames {
 	carto::GameNames names;
 	if (g_excelDir.empty()) {
@@ -198,7 +179,6 @@ auto ReadGameNames() -> carto::GameNames {
 	}
 	names.haveMonsters = ReadColumn(g_excelDir + L"\\monstats.txt", "Id", &names.monsters);
 	names.haveSuperUniques = ReadColumn(g_excelDir + L"\\superuniques.txt", "Superunique", &names.superUniques);
-	names.haveBossFlags = ReadBossIds(g_excelDir + L"\\monstats.txt", &names.bossMonsters);
 	std::vector<std::string> modIds;
 	if (ReadColumn(g_excelDir + L"\\monumod.txt", "id", &modIds)) {
 		for (const std::string& id : modIds) {
