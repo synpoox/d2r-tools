@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstring>
 #include <algorithm>
+#include <map>
 #include <mutex>
 #include <vector>
 
@@ -24,7 +25,7 @@ std::atomic<bool> g_hooked{false};
 std::mutex g_mutex;                         // the build (any thread), the player's level feed (server tick, or LevelChanged on the UI thread) and the read (game thread) share the skip state
 std::vector<int> g_keptLogged;              // layers whose kept read was already logged for the armed skip (a waypoint load reads dozens)
 SkipState g_skip;                           // armed / the layer left / the slot level / the player seen in it (automap_skip.h)
-std::atomic<uint64_t> g_lastMap{0};         // the map built last in this game (0: none); building the same map again (the return from a town trip) keeps its cells
+std::map<int, uint64_t> g_lastMaps;        // per slot level: the map built last through it in this game; building the same map again (the return from a town trip) keeps its cells
 int g_playerLevel = -1;                     // the local player's level id, from the player's server tick or, on a TCP/IP client (no server tick), the LevelChanged event (-1 unknown)
 
 // The layer object's key (levels.txt Layer) is its first dword; -1 when no object is current.
@@ -105,10 +106,13 @@ void AutomapResetArm(uint64_t map, int slotLevel) noexcept {
 	if (!g_hooked.load()) {
 		return;
 	}
-	if (map != 0 && g_lastMap.exchange(map) == map) {
-		return;  // the same map again: a trip to town and back rebuilds it from the same seed, and its saved cells belong to it
-	}
 	std::lock_guard<std::mutex> lock(g_mutex);
+	if (map != 0) {
+		if (g_lastMaps[slotLevel] == map) {
+			return;  // the same map again: a trip to town and back rebuilds it from the same seed, and its saved cells belong to it
+		}
+		g_lastMaps[slotLevel] = map;
+	}
 	SkipArm(g_skip, CurrentKey(), slotLevel);
 	g_keptLogged.clear();
 }
@@ -124,7 +128,7 @@ void AutomapResetDisarm() noexcept {
 	g_skip = {};
 	g_keptLogged.clear();
 	g_playerLevel = -1;
-	g_lastMap = 0;
+	g_lastMaps.clear();
 }
 
 auto AutomapResetPartStatus() -> PartStatus {
