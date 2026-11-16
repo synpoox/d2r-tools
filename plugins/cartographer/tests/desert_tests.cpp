@@ -172,7 +172,7 @@ TEST_CASE("pinned Desert plans: map and arena stamp hashes never change (issue #
 	for (const ArenaCase &c : arenas) {
 		FrameFillRequest r = arenaRequest(c.w, c.h, c.ex, c.ey);
 		r.options.originX = 6000;
-		r.options.originY = 4400;
+		r.options.originY = 3400;
 		const FrameFillPlan p = planFrameFillArena(kDesert, r);
 		INFO("arena ", c.w, "x", c.h, " hash ", p.hash);
 		REQUIRE(p.ok);

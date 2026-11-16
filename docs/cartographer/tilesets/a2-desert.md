@@ -39,4 +39,12 @@ Game check, Hell, level 99 Barbarian, PD2 Resurrected slot 3 (HD):
 - Act 2 palette in an Act 5 level: right in HD (sand, Act 2 monsters spawn). Legacy graphics (`g`) show the Act 5 palette over the Act 2 tiles, red and green noise: HD only for now.
 - Not checked: DS1-embedded Valley and Lost City props.
 - Map plan `6674b179b8a1562b` (seed 7598453245661758433). Arena `Desert Test`, 3 x 3, 25 stamps, plan `e4e02db7a382dfea`.
-- The installer's default Desert spot (6000, 4400) overlaps pd2-resurrected's Rathma stage 1 (6000, 4500), so the installer skips the level there; pass `-DesertOffsetY` (the check used 4350).
+
+Second run (fix cycle), installer default origin (6000, 3400), no `-DesertOffsetY`, pd2r from a fresh detached origin/main worktree, Hell, level 99 Barbarian, slot 3. The map `Sandy Reach` (`Dune Warden` Boss, `EventChance` 100, a `Horde` row in `mapevents.txt`) was opened with `cartographer open`:
+
+- Level 219 added at (6000, 3400) by the installer with no overlap message. Plan `b1004f59fbfea308`, 120 stamps, 0 void cells.
+- Arrival: `outdoor arrival: room 39 of 120 (at 6064,3448) marked as the level entry, in the entrance cell (6064,3448)`; the character stood on sand next to the portal.
+- Boss: `map Boss 'Dune Warden': spawned in the room (30080,17080) 40 x 40 (as a superunique)`, then `boss path: the plan's boss room`.
+- Event: `event 'Dune Raiders' (Horde): spawned 6 of 6 in the event room (30120,17240) 40 x 40 (0 as a superunique, 0 refused by the game)`, on walking into the event room.
+- `core-events event wanderer` was armed (`the next map rolls event wanderer`) but `cartographer open` does not consume it (`event ... none`); the event came from the map's own `mapevents.txt` row instead. A forced core-events event needs a map item.
+- Asserts in `d2rloader.log`: 4, all at game start while the tables compile (skill calc `energy.accr`, `MonsterTbls.cpp:1279`, `BBE.cpp:1063`), none after the map opened.
