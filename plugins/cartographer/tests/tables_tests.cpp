@@ -1382,7 +1382,7 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 20);
+	REQUIRE(all.size() == 21);
 	CHECK(all[14] == "Temple");
 	CHECK(all[15] == "Jungle");  // the outdoor rows come last, in table order
 	CHECK(all[16] == "Snow");
@@ -1390,13 +1390,16 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[18] == "Mesa");
 	CHECK(all[19] == "Desert");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Jungle", "Snow", "Siege", "Mesa", "Desert"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness"};
+
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
 	CHECK(OutdoorLevelType("snow") == 31);
 	CHECK(OutdoorLevelType("Siege") == 30);
 	CHECK(OutdoorLevelType("Mesa") == 27);
 	CHECK(OutdoorLevelType("desert") == 16);
+	CHECK(OutdoorLevelType("Wilderness") == 2);
+	CHECK(OutdoorSlotLevelName("outdoorwilderness") == "Cartographer Wilderness");
 	CHECK(OutdoorSlotLevelName("outdoorsiege") == "Cartographer Siege");
 	CHECK(OutdoorSlotLevelName("outdoormesa") == "Cartographer Mesa");
 	CHECK(OutdoorSlotLevelName("outdoordesert") == "Cartographer Desert");
@@ -1749,7 +1752,7 @@ TEST_CASE("arenas.txt: each bad row gives one plain-English line and is skipped"
 	    {"A\t200\t\t0\t2\t\t\n", "Width '0'"},
 	    {"A\t200\t\t2\t15\t\t\n", "Height '15'"},
 	    {"A\t200\t\t15\t2\t\t\n", "Width '15'"},
-	    {"A\t200\tJungle\t\t\t\t\n", "Use Mesa or Desert."},
+	    {"A\t200\tJungle\t\t\t\t\n", "Use Mesa, Desert or Wilderness."},
 	    {"A\t200\t\t\t\tMesa4\t\n", "Mesa1, Mesa2 or Mesa3"},
 	    {"A\t200\t\t2\t2\t\t2,0\n", "outside the 2 x 2 interior"},
 	    {"A\t200\t\t2\t2\t\t0\n", "two whole numbers"},

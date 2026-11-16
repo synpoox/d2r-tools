@@ -54,7 +54,7 @@ struct FrameFillTileset {
 	const char *name;          // the maps.txt / arenas.txt Tileset ("Mesa")
 	int levelType;             // the levels.txt LevelType its level must have
 	EdgePieces edge;
-	int borderFiles;           // DS1 files of every ring piece
+	EdgePieces edgeFiles;      // DS1 files of each ring piece, in the order of edge (Wilderness has 3 on the straight pieces and 1 on the corners)
 	int setCount;
 	FillSet sets[kMaxFillSets];
 	int maxCellsW, maxCellsH;  // the largest interior (ExtraLarge), in grid cells
@@ -64,12 +64,14 @@ struct FrameFillTileset {
 extern const FrameFillTileset kMesa;
 // Desert (Act 2 sand, LevelType 16): ring 364..371 (1 file each), one set Desert of the ten 8 x 8 fills 398..407.
 extern const FrameFillTileset kDesert;
+// Wilderness (Act 1 fields, LevelType 2): ring 4..11 (Bord1..8), sets Swamp (38, 39) and Tree (38, 40). Notes in docs/cartographer/tilesets/a1-wilderness.md.
+extern const FrameFillTileset kWilderness;
 // Every frame-plus-fill tileset, in table order. A new tileset is one row here.
 extern const FrameFillTileset *const kFrameFillTilesets[];
 extern const int kFrameFillTilesetCount;
 // The row for a tileset name (ignoring case), or nullptr.
 const FrameFillTileset *findFrameFillTileset(std::string_view name);
-// "Mesa", "Mesa or Desert": the names for a message.
+// "Mesa", "Mesa, Desert or Wilderness": the names for a message.
 std::string frameFillTilesetNames();
 // The index of the fill set named `name` (ignoring case, "Mesa1"), or -1.
 int findFillSet(const FrameFillTileset &tileset, std::string_view name);

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
@@ -27,7 +27,9 @@
     levels.txt    a sixth new level (the fifth outdoor one), "Cartographer Desert", for Desert (Act 2 sand) maps: LevelType 16 (Act 2 - Desert), SizeX 128 and SizeY 112 (14 x 12 fill cells of
                   8 tiles plus a one-cell frame), at OffsetX 6000, OffsetY 3400, copied from level 111 or the first plain Act 5 outdoor row, with the same Quest, LevelGroup, SubType, Vis
                   and Waypoint values as the Outdoor level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa and OutdoorDesert rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    levels.txt    a seventh new level (the sixth outdoor one), "Cartographer Wilderness", for Wilderness (Act 1 fields) maps and arenas: LevelType 2 (Act 1 - Wilderness), SizeX 128 and SizeY 112, at OffsetX 6000, OffsetY 3530,
+                  copied the same way as the Desert level.
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert and OutdoorWilderness rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -67,7 +69,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) and -DesertOffsetX and -DesertOffsetY (6000, 3400). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) and -WildernessOffsetX and -WildernessOffsetY (6000, 3530). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -108,7 +110,9 @@ param(
     [int]$MesaOffsetX = 6000,
     [int]$MesaOffsetY = 4200,
     [int]$DesertOffsetX = 6000,
-    [int]$DesertOffsetY = 3400
+    [int]$DesertOffsetY = 3400,
+    [int]$WildernessOffsetX = 6000,
+    [int]$WildernessOffsetY = 3530
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +154,8 @@ $OutdoorTilesets = @(
     @{ Tileset = 'Mesa';   Slot = 'OutdoorMesa';  LevelName = 'Cartographer Mesa';    LevelType = '27'; Size = '128'; SizeY = '112'; Param = 'Mesa';    Template = 111 },
     # Desert: LevelType 16 is Act 2 - Desert (sand). The widest plan is 14 x 12 fill cells of 8 tiles plus the one-cell frame: 128 x 112 tiles, at 6000, 3400 (below Mesa's 4200..4312). Its layer is the town's 79, so its offset needs no automap range. Template 111 as for Mesa.
     @{ Tileset = 'Desert'; Slot = 'OutdoorDesert'; LevelName = 'Cartographer Desert';  LevelType = '16'; Size = '128'; SizeY = '112'; Param = 'Desert';  Template = 111 }
+    # Wilderness: LevelType 2 is Act 1 - Wilderness (the Act 1 fields). Same 14 x 12 fill cells plus the frame as Mesa: 128 x 112 tiles, at x 6000..6128, y 3530..3642, between Desert (3400..3512) and Kurast's 3660, clear of pd2r's Rathma levels (y 4500 and up). Its layer is the town's 79, so its offset needs no automap range. Template 111 as for Mesa.
+    @{ Tileset = 'Wilderness'; Slot = 'OutdoorWilderness'; LevelName = 'Cartographer Wilderness'; LevelType = '2'; Size = '128'; SizeY = '112'; Param = 'Wilderness'; Template = 111 }
 )
 # Level positions are u16 subtiles in game (5 per tile): origin plus size must stay within 13107 tiles (cartographer/05-maze-slot.md Q2).
 # A level whose layer is not the town's 79 (the Maze level, Snow) is swapped out on a town trip and its revealed map is saved as 16-bit cells
