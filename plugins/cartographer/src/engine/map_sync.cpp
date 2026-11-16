@@ -215,10 +215,10 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 		facts.namesSetting = tables->settings.mapNames != 0;
 		facts.mazeSteeringLive = MazeSteeringLive();
 		facts.tilesetFits = !maze || MazeTilesetProblem(map, *tables).empty();
-		facts.slotBuilt = MazeSlotRanAny();
+		facts.slotBuilt = MazeSlotRanAny(slotLevel);
 		facts.clientOutdoorMap = outdoor;
 		facts.outdoorBuildLive = OutdoorBuildLive() && OutdoorSlotLevelId() > 0;
-		facts.outdoorSlotBuilt = OutdoorSlotRanAny();
+		facts.outdoorSlotBuilt = OutdoorSlotRanAny(slotLevel);
 		const ms::ApplyPlan plan = ms::decideApply(id, facts);
 		std::string note;
 		if (plan.names) {

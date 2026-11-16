@@ -642,14 +642,14 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 		if (!state->tracker) {
 			std::optional<ep::Rect> plan;
-			const bool outdoor = !state->maze && state->level == OutdoorSlotLevelId();  // the Outdoor slot level: its plan's rooms (issue #145)
+			const bool outdoor = !state->maze && IsOutdoorSlotLevel(state->level);  // an Outdoor slot level: its plan's rooms (issue #145)
 			if (outdoor) {
-				const MazeEventRect m = OutdoorEventRoom();
+				const MazeEventRect m = OutdoorEventRoom(state->level);
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				}
 			} else if (state->maze) {
-				const MazeEventRect m = MazeEventRoom();
+				const MazeEventRect m = MazeEventRoom(state->level);
 				if (m.known && m.levelId == state->level) {
 					plan = ep::Rect{m.x, m.y, m.w, m.h};
 				} else {
@@ -664,7 +664,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			if (state->bossArmed) {
 				std::vector<ep::Rect> bossRanked;  // the plan's boss room first, then the rest of its cell (a maze cell has several engine rooms)
 				if (outdoor || state->maze) {
-					const MazeEventRect b = outdoor ? OutdoorBossRoom() : MazeBossRoom();
+					const MazeEventRect b = outdoor ? OutdoorBossRoom(state->level) : MazeBossRoom(state->level);
 					if (b.known && b.levelId == state->level) {
 						bossRanked.push_back(ep::Rect{b.x, b.y, b.w, b.h});
 						for (const MazeRoomRect& o : b.more) {

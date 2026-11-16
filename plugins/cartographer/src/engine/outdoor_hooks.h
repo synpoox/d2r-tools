@@ -45,27 +45,26 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables);
 // layout seed; a non-zero `fixedSeed` is the seed as it is (a client taking the host's).
 void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed = 0);
 
-// True once the Outdoor slot level's build has started in this game (with or without a map open). A client then keeps the layout it has: the
+// True once the Outdoor slot level `level`'s build has started in this game (with or without a map open). A client then keeps the layout it has: the
 // host's map seed is not applied (map sync, issue #146).
-auto OutdoorSlotRanAny() -> bool;
+auto OutdoorSlotRanAny(int level) -> bool;
 
-// The seed of the open outdoor map (what map sync sends the clients), or 0.
-auto OutdoorOpenSeed() -> uint64_t;
+// The seed of the outdoor map open through slot level `level` (what map sync sends the clients), or 0.
+auto OutdoorOpenSeed(int level) -> uint64_t;
 
-// Empty when the map just handed to OutdoorMapOpened can be planned on the Outdoor slot (the same cached plan the build uses); otherwise the
+// Empty when the map just handed to OutdoorMapOpened can be planned on the Outdoor slot level `level` (the same cached plan the build uses); otherwise the
 // player-facing reason. Call right after OutdoorMapOpened, before the portal opens.
-auto OutdoorPlanProblem() -> std::string;
+auto OutdoorPlanProblem(int level) -> std::string;
 
-// True when the Outdoor slot level was built with a map open (or is being built) in this game: it holds that layout for the game, so another
-// outdoor map cannot be opened until the game is left.
-auto OutdoorSlotBuilt() -> bool;
+// True when the Outdoor slot level `level` was built with a map open (or is being built) in this game: it holds that layout for the game, so another
+// map cannot be opened through that slot until the game is left.
+auto OutdoorSlotBuilt(int level) -> bool;
 
-// The tileset of the outdoor map opened and not yet cleared (the job the next slot build would use), or empty. One job serves both outdoor
-// slots, so portal.cpp refuses to open a map of the other tileset while this is set (OutdoorOpenConflict).
-auto OutdoorPendingTileset() -> std::string;
+// True when `level` is the level of an Outdoor slot row (not an arena).
+auto IsOutdoorSlotLevel(int level) -> bool;
 
-// The portal did not open after all: forget the map.
-void OutdoorMapCancelled();
+// The portal did not open after all: forget the map opened through slot level `level`.
+void OutdoorMapCancelled(int level);
 
 // Leaving a game: forget the map and the cached plans.
 void OutdoorGameLeft();
@@ -76,8 +75,8 @@ auto OutdoorSlotLevelId() -> int;
 // The rooms of the built Outdoor slot level at the centres of the plan's event and boss cells (the exact DRLG rect of one room each, which the
 // map events compare with the room the game populates), in the maze's form. Known once the slot build ran as planned; cleared when the game is
 // left. Not known when the layout has no such cell. Any thread.
-auto OutdoorEventRoom() -> MazeEventRect;
-auto OutdoorBossRoom() -> MazeEventRect;
+auto OutdoorEventRoom(int level) -> MazeEventRect;
+auto OutdoorBossRoom(int level) -> MazeEventRect;
 
 // What the arrival probe found for the local player in this game: 0 not yet, 1 in the planned entrance cell, 2 not in it, 3 could not be told,
 // 4 the room was read but no entrance cell was marked (the arrival is left to the game).

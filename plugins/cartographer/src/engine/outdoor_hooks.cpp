@@ -119,6 +119,15 @@ SlotLevels g_slotLevels;  // the slot level id of each row, -1 with no slot row
 auto SlotIndexFor(std::string_view tileset) noexcept -> int {
 	return static_cast<int>(co::outdoorTilesetIndex(tileset));
 }
+// The row of the outdoor slot whose level is `levelId`, or -1 (an arena, or no slot level).
+auto OutdoorSlotIndexOf(int levelId) noexcept -> int {
+	for (int i = 0; i < SlotCount; ++i) {
+		if (levelId > 0 && g_slotLevels[i].load() == levelId) {
+			return i;
+		}
+	}
+	return -1;
+}
 
 struct Job {
 	uint64_t id = 0;
@@ -131,13 +140,13 @@ struct SlotGeometry {
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
 };
 std::mutex g_lock;
-std::shared_ptr<const Job> g_job;
+std::shared_ptr<const Job> g_jobs[SlotCount];  // the map opened through each outdoor slot row (guarded by g_lock)
 SlotGeometry g_geometry[SlotCount];
 std::string g_slotRefusal[SlotCount];  // OutdoorSlotRefusal of each slot row; empty when the slot may be built
 uint64_t g_nextJobId = 1;
 co::PlanCache g_cache(4);
 // What the last slot build left for the events and the probe (tiles, absolute). Guarded by g_lock; cleared when the game is left.
-MazeEventRect g_eventRoom, g_bossRoom;
+MazeEventRect g_eventRooms[SlotCount], g_bossRooms[SlotCount];  // per outdoor slot row
 struct ArrivalFact {
 	bool known = false;
 	int32_t levelId = 0;
@@ -161,7 +170,7 @@ void SetArrival(const ArrivalFact& fact) {  // g_lock held
 	}
 	g_arrivals.push_back(fact);
 }
-// A fixed arena (arenas.txt, issue #486): a level row of the mod's own, built from a plan made when the tables load. It is not a map open: it never touches g_job or g_slotState.
+// A fixed arena (arenas.txt, issue #486): a level row of the mod's own, built from a plan made when the tables load. It is not a map open: it never touches g_jobs or g_slotStates.
 struct ArenaEntry {
 	ArenaDef def;
 	std::shared_ptr<const co::MapPlan> plan;
@@ -185,7 +194,7 @@ struct WhereBox {
 WhereBox g_whereBox;
 std::atomic<bool> g_arrivalLogged{false};
 std::atomic<int> g_arrivalResult{0};  // OutdoorArrivalResult: what the arrival probe found (AutoCheck reads it); reset in ArrangeRooms and OutdoorGameLeft
-cartographer::maze::SlotBuildState g_slotState;  // the slot level was built with a map open (or is being built) in this game (cleared on GameLeft)
+cartographer::maze::SlotBuildState g_slotStates[SlotCount];  // per outdoor slot row: the level was built with a map open (or is being built) in this game (cleared on GameLeft)
 
 // One build of the slot level, on the thread that runs it: the Act 5 hook stamps this plan, and only for this level.
 struct BuildCtx {
@@ -349,23 +358,20 @@ auto SlotNameOf(const std::string& tileset) -> const char* {
 
 // The plan for the opened map, for this slot level. Null, with a reason, when the game must build its own level. May throw (strings, vectors).
 auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const co::MapPlan> {
+	const int slot = OutdoorSlotIndexOf(Read<int32_t>(level, LvlId));
 	std::shared_ptr<const Job> job;
 	SlotGeometry geometry;
 	std::string refusal;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		job = g_job;
-		if (job != nullptr) {
-			geometry = g_geometry[SlotIndexFor(job->tileset)];
-			refusal = g_slotRefusal[SlotIndexFor(job->tileset)];
+		if (slot >= 0) {
+			job = g_jobs[slot];
+			geometry = g_geometry[slot];
+			refusal = g_slotRefusal[slot];
 		}
 	}
 	if (job == nullptr) {
-		*why = "no outdoor map was opened in this game";
-		return nullptr;
-	}
-	if (Read<int32_t>(level, LvlId) != g_slotLevels[SlotIndexFor(job->tileset)].load()) {
-		*why = "this is not the slot level of a " + job->tileset + " map (the other outdoor slot's level)";
+		*why = "no outdoor map was opened for this slot level in this game";
 		return nullptr;
 	}
 	if (!refusal.empty()) {
@@ -471,11 +477,12 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	plog::Info("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		if (event.known) {
-			g_eventRoom = event;  // a known room is never replaced by an unknown one
+		const int slot = OutdoorSlotIndexOf(id);  // an arena is not a map: its event and boss cells are not kept
+		if (slot >= 0 && event.known) {
+			g_eventRooms[slot] = event;  // a known room is never replaced by an unknown one
 		}
-		if (boss.known) {
-			g_bossRoom = boss;
+		if (slot >= 0 && boss.known) {
+			g_bossRooms[slot] = boss;
 		}
 	}
 	for (int i = ArrivalFinderPart; i <= ArrivalFlagTestPart; ++i) {
@@ -782,12 +789,16 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 		}
 		return built;
 	}
+	const int slot = OutdoorSlotIndexOf(Read<int32_t>(level, LvlId));
+	if (slot < 0) {
+		return false;  // IsSlotLevel matched and no arena did, so this is always a slot row: nothing of ours is built otherwise
+	}
 	bool hadJob = false;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		hadJob = g_job != nullptr;
+		hadJob = g_jobs[slot] != nullptr;
 	}
-	g_slotState.begin();
+	g_slotStates[slot].begin();
 	const bool ours = BuildSlotLevel(dataFlag, level, original, result, nullptr);
 	if (!ours && t_ctx == nullptr && Read<int32_t>(level, LvlType) == OutdoorType && Read<void*>(level, LvlFirstRoom) == nullptr) {
 		// The game builds the level itself. Its rectangle is 0 now and must hold the map border, or the game exits (issue #471): give it the slot row's.
@@ -809,25 +820,31 @@ auto OutdoorLevelBuild(uint8_t dataFlag, void* level, LevelBuildFn original, uin
 			plog::Warn("outdoor slot level %d: the game builds its own level in %d x %d tiles at (%d,%d); it has no entry marked, so the portal may not take the player in (issue #471)", Read<int32_t>(level, LvlId), rect.w, rect.h, rect.x, rect.y);
 		}
 	}
-	g_slotState.end(hadJob);
+	g_slotStates[slot].end(hadJob);
 	return ours;
 }
 
-auto OutdoorSlotBuilt() -> bool {
-	return g_slotState.blocked();
+auto OutdoorSlotBuilt(int level) -> bool {
+	const int slot = OutdoorSlotIndexOf(level);
+	return slot >= 0 && g_slotStates[slot].blocked();
 }
 
-auto OutdoorPlanProblem() -> std::string {
+auto IsOutdoorSlotLevel(int level) -> bool {
+	return OutdoorSlotIndexOf(level) >= 0;
+}
+
+auto OutdoorPlanProblem(int level) -> std::string {
 	try {
+		const int slot = OutdoorSlotIndexOf(level);
 		std::shared_ptr<const Job> job;
 		SlotGeometry geometry;
 		std::string refusal;
 		{
 			std::lock_guard<std::mutex> lock(g_lock);
-			job = g_job;
-			if (job != nullptr) {
-				geometry = g_geometry[SlotIndexFor(job->tileset)];
-				refusal = g_slotRefusal[SlotIndexFor(job->tileset)];
+			if (slot >= 0) {
+				job = g_jobs[slot];
+				geometry = g_geometry[slot];
+				refusal = g_slotRefusal[slot];
 			}
 		}
 		if (job == nullptr) {
@@ -849,13 +866,15 @@ auto OutdoorPlanProblem() -> std::string {
 	}
 }
 
-auto OutdoorSlotRanAny() -> bool {
-	return g_slotState.ranAny();
+auto OutdoorSlotRanAny(int level) -> bool {
+	const int slot = OutdoorSlotIndexOf(level);
+	return slot >= 0 && g_slotStates[slot].ranAny();
 }
 
-auto OutdoorOpenSeed() -> uint64_t {
+auto OutdoorOpenSeed(int level) -> uint64_t {
+	const int slot = OutdoorSlotIndexOf(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_job != nullptr ? g_job->seed : 0;
+	return slot >= 0 && g_jobs[slot] != nullptr ? g_jobs[slot]->seed : 0;
 }
 
 auto OutdoorBuildLive() -> bool {
@@ -880,14 +899,16 @@ auto OutdoorSlotLevelId() -> int {
 	return g_slotLevel.load();
 }
 
-auto OutdoorEventRoom() -> MazeEventRect {
+auto OutdoorEventRoom(int level) -> MazeEventRect {
+	const int slot = OutdoorSlotIndexOf(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_eventRoom;
+	return slot >= 0 ? g_eventRooms[slot] : MazeEventRect{};
 }
 
-auto OutdoorBossRoom() -> MazeEventRect {
+auto OutdoorBossRoom(int level) -> MazeEventRect {
+	const int slot = OutdoorSlotIndexOf(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_bossRoom;
+	return slot >= 0 ? g_bossRooms[slot] : MazeEventRect{};
 }
 
 auto OutdoorArrivalResult() -> int {
@@ -1023,33 +1044,34 @@ void OutdoorMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt
 	}
 	job->id = g_nextJobId++;
 	job->seed = fixedSeed != 0 ? fixedSeed : cartographer::maze::mixSeed(seedSalt, job->id);
-	g_job = job;
+	g_jobs[SlotIndexFor(job->tileset)] = job;
 	plog::Info("outdoor map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
 	           static_cast<unsigned long long>(job->seed));
 }
 
-auto OutdoorPendingTileset() -> std::string {
+void OutdoorMapCancelled(int level) {
+	const int slot = OutdoorSlotIndexOf(level);
+	if (slot < 0) {
+		return;
+	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_job != nullptr ? g_job->tileset : std::string();
-}
-
-void OutdoorMapCancelled() {
-	std::lock_guard<std::mutex> lock(g_lock);
-	g_job.reset();
+	g_jobs[slot].reset();
 }
 
 void OutdoorGameLeft() {
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_job.reset();
-		g_eventRoom = {};
-		g_bossRoom = {};
+		for (int i = 0; i < SlotCount; ++i) {
+			g_jobs[i].reset();
+			g_eventRooms[i] = {};
+			g_bossRooms[i] = {};
+			g_slotStates[i].clear();
+		}
 		g_arrivals.clear();
 		g_arrivalLogged = false;
 		g_arrivalResult = 0;
 	}
 	g_cache.clear();
-	g_slotState.clear();
 }
 
 void InstallOutdoorHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {

@@ -219,7 +219,7 @@ void StartMapEvents(const MapDef& map, const std::shared_ptr<const Tables>& tabl
 void NoteMapOpenedForClients(const MapDef& map, const Tables& tables, Game* game, int level, bool maze) noexcept {
 	try {
 		const bool outdoor = MapIsOutdoor(map);
-		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor);
+		MapSyncMapOpened(map, tables, level, Openings(game), maze, maze ? MazeOpenSeed(level) : outdoor ? OutdoorOpenSeed(level) : 0, outdoor);
 	} catch (...) {
 		plog::Error("telling the clients about '%s' failed", map.name.c_str());
 	}
@@ -265,10 +265,10 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 		if (const std::string problem = OutdoorProblem(map, tables); !problem.empty()) {
 			return problem;
 		}
-		if (OutdoorSlotBuilt()) {
+		if (OutdoorSlotBuilt(level)) {
 			return "Cartographer: an outdoor level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.";
 		}
-		return OutdoorOpenConflict(map, OutdoorPendingTileset());
+		return {};
 	}
 	if (IsMazeMap(map) && !MazeSteeringLive()) {
 		return "Cartographer: the maze steering is off, so " + map.tileset + " maps cannot be built. Run 'cartographer check' and see the plugin log.";
@@ -277,10 +277,10 @@ auto SlotProblem(const MapDef& map, const Tables& tables, int level) -> std::str
 		if (const std::string problem = MazeTilesetProblem(map, tables); !problem.empty()) {
 			return problem;
 		}
-		if (MazeSlotBuilt()) {
+		if (MazeSlotBuilt(level)) {
 			return std::string("Cartographer: a maze level was already built (or is being built) in this game, so " + map.name + " cannot be opened now. Leave the game and start a new one.");
 		}
-		return MazeOpenConflict(map, MazePendingTileset());
+		return {};
 	}
 	return {};
 }
@@ -296,9 +296,9 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 	if (outdoor) {
 		OutdoorMapOpened(map, tables, NowMs() ^ static_cast<uint64_t>(reinterpret_cast<uintptr_t>(game)));
 		// The plan is made now (and cached for the build), so a map that cannot be planned is refused before a portal exists.
-		*refusal = OutdoorPlanProblem();
+		*refusal = OutdoorPlanProblem(level);
 		if (!refusal->empty()) {
-			OutdoorMapCancelled();
+			OutdoorMapCancelled(level);
 			return 0;
 		}
 	}
@@ -318,10 +318,10 @@ auto OpenMapPortal(Game* game, Unit* player, const MapDef& map, const Tables& ta
 		LevelRowOpenFailed(level);
 	}
 	if (maze && opened == 0) {
-		MazeMapCancelled();
+		MazeMapCancelled(level);
 	}
 	if (outdoor && opened == 0) {
-		OutdoorMapCancelled();
+		OutdoorMapCancelled(level);
 	}
 	return opened;
 }
