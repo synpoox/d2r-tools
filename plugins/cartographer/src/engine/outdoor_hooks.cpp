@@ -395,8 +395,13 @@ auto PrepareSlot(const void* level, std::string* why) -> std::shared_ptr<const c
 // The plan of an arena, made when the tables loaded. Null, with a reason, when the game must build the level itself.
 auto PrepareArena(const void* level, const ArenaEntry& arena, std::string* why) -> std::shared_ptr<const co::MapPlan> {
 	const int have = Read<int32_t>(level, LvlTileType);
-	if (have != co::mesa::kLevelType) {
-		*why = "arena '" + arena.def.name + "': the level's LevelType is " + std::to_string(have) + " but a Mesa arena needs " + std::to_string(co::mesa::kLevelType) + " (levels.txt LevelType)";
+	const co::framefill::FrameFillTileset* ts = co::framefill::findFrameFillTileset(arena.def.tileset);
+	if (ts == nullptr) {
+		*why = "arena '" + arena.def.name + "': '" + arena.def.tileset + "' is not a frame-plus-fill tileset";
+		return nullptr;
+	}
+	if (have != ts->levelType) {
+		*why = "arena '" + arena.def.name + "': the level's LevelType is " + std::to_string(have) + " but a " + ts->name + " arena needs " + std::to_string(ts->levelType) + " (levels.txt LevelType)";
 		return nullptr;
 	}
 	if (arena.plan == nullptr || !arena.plan->ok) {
@@ -996,7 +1001,7 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 		for (const ArenaDef& def : tables->arenas) {
 			auto entry = std::make_shared<ArenaEntry>();
 			entry->def = def;
-			co::mesa::MesaRequest request;
+			co::framefill::FrameFillRequest request;
 			request.cellsW = def.width;
 			request.cellsH = def.height;
 			request.arenaFill = def.fill;
@@ -1006,7 +1011,15 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 			request.options.originY = def.offsetY;
 			request.options.maxTilesX = def.sizeX;
 			request.options.maxTilesY = def.sizeY;
-			entry->plan = std::make_shared<const co::MapPlan>(co::planArenaMap(request));
+			const co::framefill::FrameFillTileset* ts = co::framefill::findFrameFillTileset(def.tileset);
+			if (ts == nullptr) {
+				// LoadArenas only accepts tileset names with a row, so this is a table fault: plan nothing and let the game build the level.
+				co::MapPlan none;
+				none.reason = "'" + def.tileset + "' is not a frame-plus-fill tileset";
+				entry->plan = std::make_shared<const co::MapPlan>(std::move(none));
+			} else {
+				entry->plan = std::make_shared<const co::MapPlan>(co::planArenaMap(*ts, request));
+			}
 			if (entry->plan->ok) {
 				plog::Info("arena '%s' (level %d): planned %d x %d cells, %d stamps, level %d x %d tiles at (%d,%d), plan %016llx", def.name.c_str(), def.level, def.width, def.height,
 				           static_cast<int>(entry->plan->stamps.stamps.size()), entry->plan->stamps.tilesW, entry->plan->stamps.tilesH, entry->plan->stamps.originX, entry->plan->stamps.originY,

@@ -1,7 +1,7 @@
 #include "tables.h"
 
 #include "maze_tilesets.h"
-#include "mesa_plan.h"
+#include "frame_fill_plan.h"
 #include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
 #include "text.h"
@@ -288,7 +288,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const std::string shape = table.Cell(row, cShape);
 		// Snow, Siege and Mesa build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
-		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::Mesa);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::FrameFill);
 		if (shape.empty() && ignoresShape) {
 			map.shape.clear();
 		} else if (shape.empty()) {
@@ -921,7 +921,7 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 }
 
 auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef> {
-	namespace mesa = cartographer::outdoor::mesa;
+	namespace ff = cartographer::outdoor::framefill;
 	std::vector<ArenaDef> out;
 	const Tsv table = ParseTsv(text);
 	if (NoteIfEmpty(ArenasFile, table, report) || !RequireColumns(ArenasFile, table, {"Name", "Level"}, report)) {
@@ -935,7 +935,6 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 	const int cName = table.Column("Name"), cLevel = table.Column("Level"), cTileset = table.Column("Tileset"), cWidth = table.Column("Width"), cHeight = table.Column("Height");
 	const int cFill = table.Column("Fill"), cEntry = table.Column("Entry");
 	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
-	static const std::vector<std::string> fills = {"Mesa1", "Mesa2", "Mesa3"};
 	for (const TsvRow& row : table.rows) {
 		ArenaDef def;
 		def.line = row.line;
@@ -969,12 +968,15 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 			return column >= 0 && ParseInt(levels.Cell(*levelRow, column), -1000000, 1000000, &v) ? v : -1;
 		};
 		const std::string tileset = table.Cell(row, cTileset);
-		if (!tileset.empty() && !EqualsNoCase(tileset, "Mesa")) {
-			fail(who + "the tileset '" + tileset + "' is not supported yet. Only Mesa is.");
+		const ff::FrameFillTileset* ts = tileset.empty() ? &ff::kMesa : ff::findFrameFillTileset(tileset);  // blank: Mesa
+		if (ts == nullptr) {
+			fail(who + "the tileset '" + tileset + "' is not supported for arenas. Use " + ff::frameFillTilesetNames() + ".");
 			continue;
 		}
-		if (cellOf(lAct) != 4 || cellOf(lDrlg) != OutdoorDrlgType || cellOf(lType) != mesa::kLevelType) {
-			fail(who + "the level must be Act 5 (Act 4), DrlgType " + std::to_string(OutdoorDrlgType) + " and LevelType " + std::to_string(mesa::kLevelType) + " (Mesa) in levels.txt; it has Act " +
+		def.tileset = ts->name;
+		def.fill = ts->setCount - 1;  // blank: the last fill set
+		if (cellOf(lAct) != 4 || cellOf(lDrlg) != OutdoorDrlgType || cellOf(lType) != ts->levelType) {
+			fail(who + "the level must be Act 5 (Act 4), DrlgType " + std::to_string(OutdoorDrlgType) + " and LevelType " + std::to_string(ts->levelType) + " (" + ts->name + ") in levels.txt; it has Act " +
 			     std::to_string(cellOf(lAct)) + ", DrlgType " + std::to_string(cellOf(lDrlg)) + ", LevelType " + std::to_string(cellOf(lType)) + ".");
 			continue;
 		}
@@ -997,19 +999,19 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 				ok = false;
 			}
 		};
-		whole(cWidth, "Width", mesa::kMaxCellsW, &def.width);
-		whole(cHeight, "Height", mesa::kMaxCellsH, &def.height);
+		whole(cWidth, "Width", ts->maxCellsW, &def.width);
+		whole(cHeight, "Height", ts->maxCellsH, &def.height);
 		if (!ok) {
 			continue;
 		}
 		const std::string fill = table.Cell(row, cFill);
 		if (!fill.empty()) {
-			const std::string* known = Canonical(fills, fill);
-			if (known == nullptr) {
-				fail(who + "the fill set '" + fill + "' is not Mesa1, Mesa2 or Mesa3.");
+			const int set = ff::findFillSet(*ts, fill);
+			if (set < 0) {
+				fail(who + "the fill set '" + fill + "' is not " + ff::fillSetNames(*ts) + ".");
 				continue;
 			}
-			def.fill = static_cast<int>(known - fills.data());
+			def.fill = set;
 		}
 		def.entryX = def.width / 2;  // blank: the bottom-centre cell
 		def.entryY = def.height - 1;
@@ -1042,7 +1044,7 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 		def.offsetY = cellOf(lOffY);
 		def.sizeX = cellOf(lSizeX);
 		def.sizeY = cellOf(lSizeY);
-		const int tilesW = (def.width + 2 * mesa::kRingCells) * mesa::kGridTiles, tilesH = (def.height + 2 * mesa::kRingCells) * mesa::kGridTiles;
+		const int tilesW = (def.width + 2 * ff::kRingCells) * ff::kGridTiles, tilesH = (def.height + 2 * ff::kRingCells) * ff::kGridTiles;
 		if ((def.sizeX > 0 && tilesW > def.sizeX) || (def.sizeY > 0 && tilesH > def.sizeY)) {
 			fail(who + "the arena needs " + std::to_string(tilesW) + " x " + std::to_string(tilesH) + " tiles with its ring, more than the level's SizeX x SizeY in levels.txt (" +
 			     std::to_string(def.sizeX) + " x " + std::to_string(def.sizeY) + ").");
@@ -1062,7 +1064,7 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 }
 
 void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report, int objectRows) {
-	namespace mesa = cartographer::outdoor::mesa;
+	namespace ff = cartographer::outdoor::framefill;
 	const Tsv table = ParseTsv(text);
 	if (NoteIfEmpty(ArenaSpotsFile, table, report) || !RequireColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y"}, report)) {
 		return;
@@ -1096,7 +1098,7 @@ void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const 
 			fail(who + "another spot of this arena has that name.");
 			continue;
 		}
-		const int tilesW = arena->width * mesa::kGridTiles, tilesH = arena->height * mesa::kGridTiles;
+		const int tilesW = arena->width * ff::kGridTiles, tilesH = arena->height * ff::kGridTiles;
 		if (!ParseInt(table.Cell(row, cX), 0, tilesW - 1, &spot.x) || !ParseInt(table.Cell(row, cY), 0, tilesH - 1, &spot.y)) {
 			fail(who + "X '" + table.Cell(row, cX) + "' and Y '" + table.Cell(row, cY) + "' must be whole tiles inside the " + std::to_string(tilesW) + " x " + std::to_string(tilesH) +
 			     " interior (0 to " + std::to_string(tilesW - 1) + " and 0 to " + std::to_string(tilesH - 1) + ", counted from its top-left corner, the ring not counted).");
@@ -1128,14 +1130,14 @@ void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const 
 				continue;
 			}
 		}
-		const int interiorX = arena->offsetX + mesa::kRingCells * mesa::kGridTiles, interiorY = arena->offsetY + mesa::kRingCells * mesa::kGridTiles;
+		const int interiorX = arena->offsetX + ff::kRingCells * ff::kGridTiles, interiorY = arena->offsetY + ff::kRingCells * ff::kGridTiles;
 		spot.tileX = interiorX + spot.x;
 		spot.tileY = interiorY + spot.y;
 		spot.subX = spot.tileX * 5 + 2;
 		spot.subY = spot.tileY * 5 + 2;
-		spot.roomX = interiorX + spot.x / mesa::kGridTiles * mesa::kGridTiles;
-		spot.roomY = interiorY + spot.y / mesa::kGridTiles * mesa::kGridTiles;
-		spot.roomW = spot.roomH = mesa::kGridTiles;
+		spot.roomX = interiorX + spot.x / ff::kGridTiles * ff::kGridTiles;
+		spot.roomY = interiorY + spot.y / ff::kGridTiles * ff::kGridTiles;
+		spot.roomW = spot.roomH = ff::kGridTiles;
 		arena->spots.push_back(std::move(spot));
 	}
 }

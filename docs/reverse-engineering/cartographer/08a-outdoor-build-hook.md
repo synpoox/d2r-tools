@@ -77,3 +77,7 @@ Decision: the stamps' file draws depend on nothing else. The level build still r
 - The host's call is in `portal.cpp` (`NoteMapOpenedForClients`): `MapSyncMapOpened(..., maze, maze ? MazeOpenSeed() : outdoor ? OutdoorOpenSeed() : 0, outdoor)`, with `outdoor = MapIsOutdoor(map)`. The client classifies a map with the same `MapIsOutdoor`, so both agree (a Jungle map's name still syncs).
 
 Needs a game (deferred by the owner until the plugin is complete): a TCP/IP host and a remote client with identical tables open one Jungle map. Confirm (1) both logs show the same `outdoor slot level N: planned ... plan <hash>` line and `built as planned`; (2) the room lists (count and rect of each room, `OutdoorProbe = 1`) are equal; (3) the client log shows `the next build of the Outdoor slot level here uses the host's layout seed` before its first build of the slot level, and, if the client builds first, the skip line and the stock layout instead; (4) in a single-process host both DRLGs print one plan line (cached).
+
+## Arena build and the tileset (issue #504)
+
+The only Mesa assumption in the arena path of the outdoor build hook was the level record's `LvlTileType` check in `PrepareArena` (a hard-coded 27). It now reads the LevelType of the arena's own `FrameFillTileset` row (`arenas.txt` `Tileset`). Nothing else in `outdoor_hooks.cpp` depends on the tileset for an arena: the plan, the room lookups and the entrance come from the stamp plan. No new engine address or signature was needed; the check reads the same field as before.

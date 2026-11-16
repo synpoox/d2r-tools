@@ -1215,7 +1215,7 @@ TEST_CASE("the outdoor tileset table holds Jungle, Snow, Siege then Mesa, with t
 	CHECK(OutdoorTilesets[3].levelType == 27);
 	CHECK(std::string(OutdoorTilesets[3].slot) == "OutdoorMesa");
 	CHECK(std::string(OutdoorTilesets[3].levelName) == "Cartographer Mesa");
-	CHECK(OutdoorTilesets[3].planner == Planner::Mesa);
+	CHECK(OutdoorTilesets[3].planner == Planner::FrameFill);
 	// Lookups ignore case; an unknown name has no row and slot index 0 (Jungle's), as the hooks always assumed.
 	CHECK(findOutdoorTileset("sNoW") == &OutdoorTilesets[1]);
 	CHECK(findOutdoorTileset("JUNGLE") == &OutdoorTilesets[0]);

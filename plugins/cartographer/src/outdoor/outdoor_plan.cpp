@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "outdoor_tilesets.h"
-#include "mesa_plan.h"
+#include "frame_fill_plan.h"
 #include "siege_plan.h"
 #include "snow_plan.h"
 
@@ -127,23 +127,27 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		out.ok = true;
 		return out;
 	}
-	if (tileset->planner == Planner::Mesa) {
-		// Mesa is a ring of border pieces round a packed fill: only the stamps reach the hook and the grid comparison, as for Snow.
-		mesa::MesaRequest mesaRequest;
-		if (!mesa::mesaSizeCells(request.size, &mesaRequest.cellsW, &mesaRequest.cellsH)) {
+	if (tileset->planner == Planner::FrameFill) {
+		// A frame-plus-fill tileset is a ring of border pieces round a packed fill: only the stamps reach the hook and the grid comparison, as for Snow.
+		const framefill::FrameFillTileset *row = framefill::findFrameFillTileset(tileset->name);
+		if (row == nullptr) {
+			return fail("Cartographer has no frame-plus-fill row for the tileset '" + std::string(tileset->name) + "'.");
+		}
+		framefill::FrameFillRequest fillRequest;
+		if (!framefill::frameFillSizeCells(request.size, &fillRequest.cellsW, &fillRequest.cellsH)) {
 			return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
 		}
-		mesaRequest.seed = request.seed;
-		mesaRequest.options.originX = request.options.originX;
-		mesaRequest.options.originY = request.options.originY;
-		mesaRequest.options.maxTilesX = request.options.maxTilesX;
-		mesaRequest.options.maxTilesY = request.options.maxTilesY;
-		mesaRequest.options.pinFiles = request.options.pinFiles;
-		mesa::MesaPlan mesaPlan = mesa::planMesaMap(mesaRequest);
-		if (!mesaPlan.ok) {
-			return fail("Cartographer could not plan the Mesa map: " + mesaPlan.reason);
+		fillRequest.seed = request.seed;
+		fillRequest.options.originX = request.options.originX;
+		fillRequest.options.originY = request.options.originY;
+		fillRequest.options.maxTilesX = request.options.maxTilesX;
+		fillRequest.options.maxTilesY = request.options.maxTilesY;
+		fillRequest.options.pinFiles = request.options.pinFiles;
+		framefill::FrameFillPlan fillPlan = framefill::planFrameFillMap(*row, fillRequest);
+		if (!fillPlan.ok) {
+			return fail("Cartographer could not plan the " + std::string(tileset->name) + " map: " + fillPlan.reason);
 		}
-		out.stamps = std::move(mesaPlan.stamps);
+		out.stamps = std::move(fillPlan.stamps);
 		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
 		out.ok = true;
 		return out;
@@ -188,9 +192,9 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	return out;
 }
 
-MapPlan planArenaMap(const mesa::MesaRequest &request) {
+MapPlan planArenaMap(const framefill::FrameFillTileset &tileset, const framefill::FrameFillRequest &request) {
 	MapPlan out;
-	mesa::MesaPlan plan = mesa::planMesaArena(request);
+	framefill::FrameFillPlan plan = framefill::planFrameFillArena(tileset, request);
 	if (!plan.ok) {
 		out.reason = "Cartographer could not plan the arena: " + plan.reason;
 		return out;

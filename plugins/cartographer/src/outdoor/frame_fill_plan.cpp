@@ -1,4 +1,4 @@
-#include "mesa_plan.h"
+#include "frame_fill_plan.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -6,34 +6,83 @@
 
 #include "outdoor_plan.h"
 
-namespace cartographer::outdoor::mesa {
+namespace cartographer::outdoor::framefill {
+
+// Rows 812..816, 817..821 and 823..827 of lvlprest.txt (822 is Izual's spot and is not used). The Files column is 5 everywhere but Mesa3's four larger pieces (4).
+// The weights make the big pieces common without crowding out the small ones that finish the edges.
+const FrameFillTileset kMesa = {
+	"Mesa",
+	27,  // lvltypes.txt "Act 4 - Mesa"
+	{800, 801, 802, 799, 804, 805, 806, 803},
+	3,
+	3,
+	{
+		{"Mesa1", 5, {{812, 3, 3, 5, 4}, {813, 2, 2, 5, 3}, {814, 2, 1, 5, 2}, {815, 1, 2, 5, 2}, {816, 1, 1, 5, 1}}},
+		{"Mesa2", 5, {{817, 3, 3, 5, 4}, {818, 2, 2, 5, 3}, {819, 2, 1, 5, 2}, {820, 1, 2, 5, 2}, {821, 1, 1, 5, 1}}},
+		{"Mesa3", 5, {{823, 3, 3, 4, 4}, {824, 2, 2, 4, 3}, {825, 2, 1, 4, 2}, {826, 1, 2, 4, 2}, {827, 1, 1, 5, 1}}},
+	},
+	14,
+	12,
+};
+
+const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa};
+const int kFrameFillTilesetCount = static_cast<int>(sizeof(kFrameFillTilesets) / sizeof(kFrameFillTilesets[0]));
+
+const FrameFillTileset *findFrameFillTileset(std::string_view name) {
+	for (const FrameFillTileset *t : kFrameFillTilesets)
+		if (layout::equalsNoCase(t->name, name)) return t;
+	return nullptr;
+}
 
 namespace {
 
-// Rows 812..816, 817..821 and 823..827 of lvlprest.txt (822 is Izual's spot and is not used). The Files column is 5 everywhere but Mesa 3's four larger pieces (4).
-// The weights make the big pieces common without crowding out the small ones that finish the edges.
-const FillSet kSets[kFillSets] = {
-	{"Mesa 1", {{812, 3, 3, 5, 4}, {813, 2, 2, 5, 3}, {814, 2, 1, 5, 2}, {815, 1, 2, 5, 2}, {816, 1, 1, 5, 1}}},
-	{"Mesa 2", {{817, 3, 3, 5, 4}, {818, 2, 2, 5, 3}, {819, 2, 1, 5, 2}, {820, 1, 2, 5, 2}, {821, 1, 1, 5, 1}}},
-	{"Mesa 3", {{823, 3, 3, 4, 4}, {824, 2, 2, 4, 3}, {825, 2, 1, 4, 2}, {826, 1, 2, 4, 2}, {827, 1, 1, 5, 1}}},
-};
+std::string joinOr(const std::vector<std::string> &names) {
+	std::string out;
+	for (size_t i = 0; i < names.size(); ++i) {
+		if (i > 0) out += i + 1 == names.size() ? " or " : ", ";
+		out += names[i];
+	}
+	return out;
+}
+
+} // namespace
+
+std::string frameFillTilesetNames() {
+	std::vector<std::string> names;
+	for (const FrameFillTileset *t : kFrameFillTilesets) names.push_back(t->name);
+	return joinOr(names);
+}
+
+int findFillSet(const FrameFillTileset &tileset, std::string_view name) {
+	for (int i = 0; i < tileset.setCount; ++i)
+		if (layout::equalsNoCase(tileset.sets[i].name, name)) return i;
+	return -1;
+}
+
+std::string fillSetNames(const FrameFillTileset &tileset) {
+	std::vector<std::string> names;
+	for (int i = 0; i < tileset.setCount; ++i) names.push_back(tileset.sets[i].name);
+	return joinOr(names);
+}
+
+namespace {
 
 struct Placed {
 	int x, y;     // interior grid cell of the piece's top-left
 	int fill;     // index into the set
 };
 
-const Fill *findFill(int lvlPrest, int *set) {
-	for (int s = 0; s < kFillSets; ++s)
-		for (const Fill &f : kSets[s].fills)
-			if (f.lvlPrest == lvlPrest) {
+const Fill *findFill(const FrameFillTileset &t, int lvlPrest, int *set) {
+	for (int s = 0; s < t.setCount; ++s)
+		for (int i = 0; i < t.sets[s].count; ++i)
+			if (t.sets[s].fills[i].lvlPrest == lvlPrest) {
 				if (set != nullptr) *set = s;
-				return &f;
+				return &t.sets[s].fills[i];
 			}
 	return nullptr;
 }
 
-TileRect pieceRect(const MesaOptions &o, int ax, int ay, int cw, int ch) {
+TileRect pieceRect(const FrameFillOptions &o, int ax, int ay, int cw, int ch) {
 	TileRect r;
 	r.known = true;
 	r.x = o.originX + (ax + kRingCells) * kGridTiles;
@@ -43,18 +92,19 @@ TileRect pieceRect(const MesaOptions &o, int ax, int ay, int cw, int ch) {
 	return r;
 }
 
-TileRect roomRect(const MesaOptions &o, int ax, int ay) { return pieceRect(o, ax, ay, kRoomCells, kRoomCells); }
+TileRect roomRect(const FrameFillOptions &o, int ax, int ay) { return pieceRect(o, ax, ay, kRoomCells, kRoomCells); }
 
 // Size problems, shared by the planner and the checker. Empty means the size is acceptable.
-std::string sizeProblem(const MesaRequest &r) {
+std::string sizeProblem(const FrameFillTileset &t, const FrameFillRequest &r) {
+	const std::string name = t.name;
 	if (r.arena) {
-		if (r.cellsW < 1 || r.cellsH < 1 || r.cellsW > kMaxCellsW || r.cellsH > kMaxCellsH)
-			return "a Mesa arena is 1 to " + std::to_string(kMaxCellsW) + " by 1 to " + std::to_string(kMaxCellsH) + " cells of 8 tiles, not " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + ".";
-		if (r.arenaFill < 0 || r.arenaFill >= kFillSets) return "the arena's fill set is not Mesa1, Mesa2 or Mesa3.";
+		if (r.cellsW < 1 || r.cellsH < 1 || r.cellsW > t.maxCellsW || r.cellsH > t.maxCellsH)
+			return "a " + name + " arena is 1 to " + std::to_string(t.maxCellsW) + " by 1 to " + std::to_string(t.maxCellsH) + " cells of 8 tiles, not " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + ".";
+		if (r.arenaFill < 0 || r.arenaFill >= t.setCount) return "the arena's fill set is not " + fillSetNames(t) + ".";
 		if (r.entryX < 0 || r.entryY < 0 || r.entryX >= r.cellsW || r.entryY >= r.cellsH)
 			return "the arena's entry cell (" + std::to_string(r.entryX) + "," + std::to_string(r.entryY) + ") is outside its " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + " interior.";
-	} else if (r.cellsW < kMinCells || r.cellsH < kMinCells || r.cellsW > kMaxCellsW || r.cellsH > kMaxCellsH)
-		return "a Mesa map is " + std::to_string(kMinCells) + " to " + std::to_string(kMaxCellsW) + " by " + std::to_string(kMinCells) + " to " + std::to_string(kMaxCellsH) +
+	} else if (r.cellsW < kMinCells || r.cellsH < kMinCells || r.cellsW > t.maxCellsW || r.cellsH > t.maxCellsH)
+		return "a " + name + " map is " + std::to_string(kMinCells) + " to " + std::to_string(t.maxCellsW) + " by " + std::to_string(kMinCells) + " to " + std::to_string(t.maxCellsH) +
 			" cells of 8 tiles, not " + std::to_string(r.cellsW) + " x " + std::to_string(r.cellsH) + ".";
 	const int tilesW = (r.cellsW + 2 * kRingCells) * kGridTiles, tilesH = (r.cellsH + 2 * kRingCells) * kGridTiles;
 	if ((r.options.maxTilesX > 0 && tilesW > r.options.maxTilesX) || (r.options.maxTilesY > 0 && tilesH > r.options.maxTilesY)) {
@@ -74,9 +124,9 @@ std::vector<Placed> pack(int w, int h, const FillSet &set, layout::Pcg32 *rng) {
 	for (int y = 0; y < h; ++y) {
 		for (int x = 0; x < w; ++x) {
 			if (used[static_cast<size_t>(y) * w + x]) continue;
-			int fits[kFillsPerSet];
+			int fits[kMaxFillsPerSet];
 			int count = 0, total = 0;
-			for (int i = 0; i < kFillsPerSet; ++i) {
+			for (int i = 0; i < set.count; ++i) {
 				const Fill &f = set.fills[i];
 				bool free = x + f.w <= w && y + f.h <= h;
 				for (int dy = 0; free && dy < f.h; ++dy)
@@ -113,7 +163,7 @@ struct RoomCells {
 
 bool apart(const GridCell &a, const GridCell &b) { return std::abs(a.x - b.x) >= kRoomCells || std::abs(a.y - b.y) >= kRoomCells; }
 
-RoomCells chooseRoomCells(const MesaRequest &r) {
+RoomCells chooseRoomCells(const FrameFillRequest &r) {
 	RoomCells out;
 	layout::Pcg32 rng(layout::splitmix64(r.seed + 0x4D455341ull));
 	const int lastX = r.cellsW - kRoomCells - 1, lastY = r.cellsH - kRoomCells - 1;  // the highest anchor that keeps a free cell on the far side
@@ -133,24 +183,20 @@ RoomCells chooseRoomCells(const MesaRequest &r) {
 
 } // namespace
 
-const FillSet &fillSet(int index) { return kSets[std::clamp(index, 0, kFillSets - 1)]; }
-
-const EdgePieces kEdgePieces = {800, 801, 802, 799, 804, 805, 806, 803};
-
-int edgePieceAt(int x, int y, int w, int h) {
+int edgePieceAt(const EdgePieces &edge, int x, int y, int w, int h) {
 	const bool west = x < 0, east = x >= w, north = y < 0, south = y >= h;
-	if (north && west) return kEdgePieces.nw;
-	if (north && east) return kEdgePieces.ne;
-	if (south && east) return kEdgePieces.se;
-	if (south && west) return kEdgePieces.sw;
-	if (west) return kEdgePieces.west;
-	if (east) return kEdgePieces.east;
-	if (north) return kEdgePieces.north;
-	if (south) return kEdgePieces.south;
+	if (north && west) return edge.nw;
+	if (north && east) return edge.ne;
+	if (south && east) return edge.se;
+	if (south && west) return edge.sw;
+	if (west) return edge.west;
+	if (east) return edge.east;
+	if (north) return edge.north;
+	if (south) return edge.south;
 	return 0;
 }
 
-bool mesaSizeCells(std::string_view size, int *cellsW, int *cellsH) {
+bool frameFillSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	const std::string s = lowerAscii(size);
 	int w = 0, h = 0;
 	if (s.empty() || s == "large") { w = 12; h = 10; }
@@ -163,13 +209,13 @@ bool mesaSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	return true;
 }
 
-MesaPlan planMesaArena(MesaRequest request) {
+FrameFillPlan planFrameFillArena(const FrameFillTileset &tileset, FrameFillRequest request) {
 	request.arena = true;
-	return planMesaMap(request);
+	return planFrameFillMap(tileset, request);
 }
 
-MesaPlan planMesaMap(const MesaRequest &request) {
-	MesaPlan out;
+FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillRequest &request) {
+	FrameFillPlan out;
 	const auto fail = [&out](std::string why) {
 		out.ok = false;
 		out.reason = std::move(why);
@@ -177,14 +223,14 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 		out.hash = 0;
 		return out;
 	};
-	if (const std::string bad = sizeProblem(request); !bad.empty()) return fail(bad);
+	if (const std::string bad = sizeProblem(tileset, request); !bad.empty()) return fail(bad);
 
 	const int w = request.cellsW, h = request.cellsH;
 	out.cellsW = w;
 	out.cellsH = h;
 	layout::Pcg32 rng(layout::splitmix64(request.seed + 0x4D455341ull + 1));
-	out.fillSet = request.arena ? request.arenaFill : static_cast<int>(rng.below(kFillSets));
-	const FillSet &set = kSets[out.fillSet];
+	out.fillSet = request.arena ? request.arenaFill : static_cast<int>(rng.below(static_cast<uint32_t>(tileset.setCount)));
+	const FillSet &set = tileset.sets[out.fillSet];
 	const std::vector<Placed> placed = pack(w, h, set, request.arena ? nullptr : &rng);
 
 	StampPlan &plan = out.stamps;
@@ -208,7 +254,7 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 			Stamp s;
 			s.cx = x + kRingCells;
 			s.cy = y + kRingCells;
-			s.lvlPrest = edgePieceAt(x, y, w, h);
+			s.lvlPrest = edgePieceAt(tileset.edge, x, y, w, h);
 			s.macroX = s.cx;
 			s.macroY = s.cy;
 			plan.stamps.push_back(s);
@@ -226,11 +272,11 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 		plan.stamps.push_back(s);
 	}
 	std::sort(plan.stamps.begin(), plan.stamps.end(), [](const Stamp &a, const Stamp &b) { return a.cy != b.cy ? a.cy < b.cy : a.cx < b.cx; });
-	// The file draws have their own stream, so pinning files does not move the layout. The entrance cell's piece is marked above; a ring piece has 3 files.
+	// The file draws have their own stream, so pinning files does not move the layout. The entrance cell's piece is marked above; a ring piece has borderFiles files.
 	layout::Pcg32 fileRng(layout::splitmix64(request.seed + 0x46494C45ull));
 	for (Stamp &s : plan.stamps) {
-		const Fill *f = findFill(s.lvlPrest, nullptr);
-		const int files = f != nullptr ? f->files : kBorderFiles;
+		const Fill *f = findFill(tileset, s.lvlPrest, nullptr);
+		const int files = f != nullptr ? f->files : tileset.borderFiles;
 		s.file = request.options.pinFiles ? static_cast<int>(fileRng.below(static_cast<uint32_t>(files))) : -1;
 	}
 	if (request.arena) {
@@ -248,42 +294,44 @@ MesaPlan planMesaMap(const MesaRequest &request) {
 
 	out.ok = true;
 	out.hash = stampPlanHash(plan);
-	if (const std::vector<std::string> bad = checkMesaPlan(request, out); !bad.empty()) {
+	if (const std::vector<std::string> bad = checkFrameFillPlan(tileset, request, out); !bad.empty()) {
 		const std::string why = bad.front() + (bad.size() > 1 ? " (and " + std::to_string(bad.size() - 1) + " more)" : std::string());
-		return fail("the Mesa plan failed its own check: " + why);
+		return fail("the " + std::string(tileset.name) + " plan failed its own check: " + why);
 	}
 	return out;
 }
 
-// The checker's own side-to-piece table (not kEdgePieces). Rows are north, middle, south; columns west, middle, east.
-static int checkEdgePiece(int x, int y, int w, int h) {
-	static const int table[3][3] = {{804, 801, 805}, {800, 0, 802}, {803, 799, 806}};
+namespace {
+
+// The checker's own side-to-piece lookup (not edgePieceAt). Rows are north, middle, south; columns west, middle, east.
+int checkEdgePiece(const EdgePieces &e, int x, int y, int w, int h) {
+	const int table[3][3] = {{e.nw, e.north, e.ne}, {e.west, 0, e.east}, {e.sw, e.south, e.se}};
 	const int col = x < 0 ? 0 : (x >= w ? 2 : 1), row = y < 0 ? 0 : (y >= h ? 2 : 1);
 	return table[row][col];
 }
 
-// The fill piece's size from its id alone: the checker does not read the planner's table for this. Offsets in a set: 24 x 24, 16 x 16, 16 x 8, 8 x 16, 8 x 8.
-static bool checkFillSize(int lvlPrest, int *set, int *w, int *h) {
-	static const int base[3] = {812, 817, 823};
-	static const int cw[5] = {3, 2, 2, 1, 1}, ch[5] = {3, 2, 1, 2, 1};
-	for (int s = 0; s < 3; ++s) {
-		const int i = lvlPrest - base[s];
-		if (i >= 0 && i < 5) {
-			*set = s;
-			*w = cw[i];
-			*h = ch[i];
-			return true;
-		}
-	}
+// The fill piece's size and set from its id alone, scanning the row.
+bool checkFillSize(const FrameFillTileset &t, int lvlPrest, int *set, int *w, int *h) {
+	for (int s = 0; s < t.setCount; ++s)
+		for (int i = 0; i < t.sets[s].count; ++i)
+			if (t.sets[s].fills[i].lvlPrest == lvlPrest) {
+				*set = s;
+				*w = t.sets[s].fills[i].w;
+				*h = t.sets[s].fills[i].h;
+				return true;
+			}
 	return false;
 }
 
-std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPlan &plan) {
+} // namespace
+
+std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, const FrameFillRequest &request, const FrameFillPlan &plan) {
 	std::vector<std::string> bad;
-	if (const std::string size = sizeProblem(request); !size.empty()) {
+	if (const std::string size = sizeProblem(tileset, request); !size.empty()) {
 		bad.push_back(size);
 		return bad;
 	}
+	const std::string name = tileset.name;
 	const int w = request.cellsW, h = request.cellsH, lw = w + 2 * kRingCells, lh = h + 2 * kRingCells;
 	const StampPlan &sp = plan.stamps;
 	if (plan.cellsW != w || plan.cellsH != h) bad.push_back("the plan's interior is not the request's");
@@ -291,9 +339,9 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 		sp.macroMinY != 0 || sp.originX != request.options.originX || sp.originY != request.options.originY)
 		bad.push_back("the stamp plan's level box does not match the request");
 	if (plan.hash != stampPlanHash(sp)) bad.push_back("the plan's hash is not the hash of its stamps");
-	if (!sp.voidCells.empty()) bad.push_back("a Mesa map covers its whole box but the plan lists void cells");
-	if (plan.fillSet < 0 || plan.fillSet >= kFillSets) {
-		bad.push_back("the plan's fill set is not 0, 1 or 2");
+	if (!sp.voidCells.empty()) bad.push_back("a " + name + " map covers its whole box but the plan lists void cells");
+	if (plan.fillSet < 0 || plan.fillSet >= tileset.setCount) {
+		bad.push_back("the plan's fill set is not one of " + fillSetNames(tileset));
 		return bad;
 	}
 	if (request.arena && plan.fillSet != request.arenaFill) bad.push_back("the plan's fill set is not the arena's");
@@ -306,7 +354,7 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 		prevY = s.cy;
 		prevX = s.cx;
 		if (s.macroX != s.cx || s.macroY != s.cy || s.mask != 0) bad.push_back(where + " has the wrong macro cell or mask");
-		int pw = 1, ph = 1, files = kBorderFiles;
+		int pw = 1, ph = 1, files = tileset.borderFiles;
 		const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;  // interior coordinates
 		const bool ring = ix < 0 || iy < 0 || ix >= w || iy >= h;
 		if (ring) {
@@ -314,16 +362,16 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 				bad.push_back(where + " is outside the level");
 				continue;
 			}
-			if (s.lvlPrest != checkEdgePiece(ix, iy, w, h)) bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", not the ring piece for that side");
+			if (s.lvlPrest != checkEdgePiece(tileset.edge, ix, iy, w, h)) bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", not the ring piece for that side");
 		} else {
 			int set = 0;
-			if (!checkFillSize(s.lvlPrest, &set, &pw, &ph)) {
-				bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", which is not a Mesa fill piece");
+			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph)) {
+				bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", which is not a " + name + " fill piece");
 				continue;
 			}
 			if (set != plan.fillSet) bad.push_back(where + " is from fill set " + std::to_string(set + 1) + ", not the plan's " + std::to_string(plan.fillSet + 1));
 			if (ix + pw > w || iy + ph > h) bad.push_back(where + " reaches past the interior");
-			files = findFill(s.lvlPrest, nullptr) != nullptr ? findFill(s.lvlPrest, nullptr)->files : 0;
+			files = findFill(tileset, s.lvlPrest, nullptr) != nullptr ? findFill(tileset, s.lvlPrest, nullptr)->files : 0;
 		}
 		if (s.file < -1 || s.file >= files) bad.push_back(where + " has file index " + std::to_string(s.file) + ", out of range for piece " + std::to_string(s.lvlPrest));
 		if (!request.options.pinFiles && s.file != -1) bad.push_back(where + " pins a file index though pinFiles is off");
@@ -349,7 +397,7 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 			++entranceStamps;
 			int set = 0, pw = 1, ph = 1;
 			const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;
-			if (!checkFillSize(s.lvlPrest, &set, &pw, &ph) || request.entryX < ix || request.entryX >= ix + pw || request.entryY < iy || request.entryY >= iy + ph)
+			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph) || request.entryX < ix || request.entryX >= ix + pw || request.entryY < iy || request.entryY >= iy + ph)
 				bad.push_back("the entrance stamp does not hold the entry cell");
 			else if (sp.entrance.x != sp.originX + s.cx * kGridTiles || sp.entrance.y != sp.originY + s.cy * kGridTiles || sp.entrance.w != pw * kGridTiles ||
 			         sp.entrance.h != ph * kGridTiles || !sp.entrance.known)
@@ -385,13 +433,13 @@ std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPla
 	return bad;
 }
 
-std::string mesaPlanAscii(const MesaPlan &plan) {
+std::string frameFillPlanAscii(const FrameFillTileset &tileset, const FrameFillPlan &plan) {
 	const StampPlan &sp = plan.stamps;
 	std::vector<std::string> rows(static_cast<size_t>(sp.cellsH), std::string(static_cast<size_t>(sp.cellsW), '?'));
 	for (const Stamp &s : sp.stamps) {
 		int set = 0, pw = 1, ph = 1;
 		char c = '+';
-		if (checkFillSize(s.lvlPrest, &set, &pw, &ph)) c = pw == 3 ? '3' : (pw == 2 && ph == 2 ? '2' : (pw == 2 ? 'h' : (ph == 2 ? 'v' : '1')));
+		if (checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph)) c = pw == 3 ? '3' : (pw == 2 && ph == 2 ? '2' : (pw == 2 ? 'h' : (ph == 2 ? 'v' : '1')));
 		else pw = ph = 1;
 		for (int dy = 0; dy < ph; ++dy)
 			for (int dx = 0; dx < pw; ++dx)
@@ -410,4 +458,4 @@ std::string mesaPlanAscii(const MesaPlan &plan) {
 	return out;
 }
 
-} // namespace cartographer::outdoor::mesa
+} // namespace cartographer::outdoor::framefill

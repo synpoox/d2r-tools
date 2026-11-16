@@ -148,7 +148,8 @@ struct ArenaDef {
 	std::string name;
 	int level = 0;          // levels.txt Id
 	int width = 2, height = 2;   // the interior in 8-tile grid cells, without the ring
-	int fill = 2;           // fill set index: 0 Mesa1, 1 Mesa2, 2 Mesa3
+	std::string tileset = "Mesa";  // the frame-plus-fill tileset (a FrameFillTileset name)
+	int fill = 2;           // fill set index in that tileset (Mesa: 0 Mesa1, 1 Mesa2, 2 Mesa3)
 	int entryX = 1, entryY = 1;  // the interior cell whose piece is the arrival
 	cartographer::maplight::Look look;  // Brightness, Warmth: the arena's own look (blank: the tileset's)
 	// levels.txt OffsetX, OffsetY, SizeX and SizeY of the level, in tiles (read at load: the level record's rectangle is still zero when the build starts).

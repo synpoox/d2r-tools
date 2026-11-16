@@ -1,6 +1,6 @@
 # Adding an outdoor tileset to Cartographer
 
-For developers. Jungle, Snow, Siege and Mesa share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`). Mesa (`mesa_plan.*`) is the model for a frame of border pieces around a packed fill.
+For developers. Jungle, Snow, Siege and Mesa share the outdoor plumbing in `plugins/cartographer/src/outdoor/` (`outdoor_plan.*`, `stamp.*`, `outdoor.h`). A new tileset (Barbarian Highlands style fields, a third Act 5 look) is one row in a table plus its planner and data. The evidence for the tilesets that exist is in [cartographer-snow.md](../reverse-engineering/cartographer-snow.md), [cartographer-siege.md](../reverse-engineering/cartographer-siege.md) and the outdoor builder notes there. Siege (`siege_plan.*`) is the model for a plan that is one line of strips with seam sockets, a slot level that is not square (the table's and the installer's `SizeY`) and macro cells that are not square (`compareGrid`). Mesa (`frame_fill_plan.*`) is the model for a frame of border pieces around a packed fill.
 
 ## Every touch point
 
@@ -36,6 +36,10 @@ The table is `OutdoorTilesets` in `src/outdoor/outdoor_tilesets.h`. A row is `{n
 ## What the tileset must supply
 
 The way it fills a grid of cells with pieces (a layout plus a picker, or lines of pieces); its size rules (the cell counts of Small, Medium, Large and ExtraLarge, the minimum and maximum, the slot's `maxTilesX/Y`); the entrance cell; and the list of candidate cells for the Boss and the event room (Snow: run cells one or more in from the line ends) with a seed for the tie-break. If the tileset has edge pieces, one straight piece per side (W, N, E, S) and one per corner (NW, NE, SE, SW), each with floor on its inner side.
+
+## Adding a frame-plus-fill tileset (maps and arenas)
+
+A tileset that is a ring of border pieces round open fill pieces needs no new planner. Its pieces are one `FrameFillTileset` row in `src/outdoor/frame_fill_plan.cpp` (the model is `kMesa`): the name, the `levels.txt` LevelType, the eight ring pieces and their file count, the fill sets (each piece with its LvlPrest id, size in 8-tile cells, file count and weight, the 8 x 8 piece last) and the largest interior. Add the row to `kFrameFillTilesets`, then one `OutdoorTilesets` row with `Planner::FrameFill` (the next free slot index; Desert is 4, Wilderness 5 and Kurast 6, reserved in `outdoor_tilesets.h`) and one `$OutdoorTilesets` row in `tools/install.ps1`. The same row serves `arenas.txt`: its `Tileset` then accepts the name, `Fill` takes one of the row's set names, and the arena's level must have the row's LevelType. Pin the new row's plans with golden hashes like the Mesa ones in `tests/mesa_tests.cpp`.
 
 ## Adding a maze tileset
 

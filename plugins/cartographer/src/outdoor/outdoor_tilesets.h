@@ -14,7 +14,7 @@
 namespace cartographer::outdoor {
 
 // Which planner builds the tileset's map (the switch in planOutdoorMap).
-enum class Planner { Jungle, Snow, Siege, Mesa };
+enum class Planner { Jungle, Snow, Siege, FrameFill };
 
 struct OutdoorTileset {
 	const char *name;       // the maps.txt Tileset
@@ -25,11 +25,14 @@ struct OutdoorTileset {
 };
 
 // The row order is the slot index in the outdoor hooks: Jungle is 0 (the default for an unknown tileset), Snow is 1, Siege is 2, Mesa is 3.
+// Slot indexes 4, 5 and 6 are reserved for the frame-plus-fill tilesets Desert (slot OutdoorDesert), Wilderness (OutdoorWilderness) and Kurast
+// (OutdoorKurast), so those three can be added in parallel: no rows yet. A FrameFill row needs a FrameFillTileset row of the same name
+// (frame_fill_plan.cpp) and a $OutdoorTilesets row in tools/install.ps1.
 inline constexpr OutdoorTileset OutdoorTilesets[] = {
 	{"Jungle", 21, "Outdoor", "Cartographer Outdoor", Planner::Jungle},
 	{"Snow", 31, "OutdoorSnow", "Cartographer Snow", Planner::Snow},
 	{"Siege", 30, "OutdoorSiege", "Cartographer Siege", Planner::Siege},
-	{"Mesa", 27, "OutdoorMesa", "Cartographer Mesa", Planner::Mesa},
+	{"Mesa", 27, "OutdoorMesa", "Cartographer Mesa", Planner::FrameFill},
 };
 inline constexpr size_t OutdoorTilesetCount = sizeof(OutdoorTilesets) / sizeof(OutdoorTilesets[0]);
 
