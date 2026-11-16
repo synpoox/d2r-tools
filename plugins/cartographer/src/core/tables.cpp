@@ -612,8 +612,8 @@ auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -
 			fail("the Base cell is empty. Put a monstats.txt Id here.");
 		} else if (names.haveMonsters && !Contains(names.monsters, def.base)) {
 			fail(NotInTable("Base monster", def.base, "monstats.txt", names.monsters));
-		} else if (names.haveBossFlags && Contains(names.bossMonsters, def.base)) {
-			fail("Base '" + def.base + "' is a vanilla boss (its monstats.txt boss column is 1). A boss entry needs an ordinary monster as its Base.");
+		} else if (std::find(VanillaBossIds.begin(), VanillaBossIds.end(), def.base) != VanillaBossIds.end()) {
+			fail("Base '" + def.base + "' is a vanilla boss. A boss entry needs an ordinary monster, or a boss of the mod's own, as its Base.");
 		}
 		const std::string mods = table.Cell(r, cMods);
 		if (!mods.empty()) {

@@ -864,15 +864,14 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
         # Ordinal (case-sensitive) sets for Base, like the plugin's Contains; the Name checks fold only A-Z (Get-AsciiLower), like ContainsNoCase.
         $monsterIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         $monsterIdsNoCase = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)  # holds Get-AsciiLower ids
-        $bossIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        # The base game's own boss=1 monstats Ids (D2R's table, not the mod's). Twin: VanillaBossIds in src/core/tables.h.
+        $bossIds = [System.Collections.Generic.HashSet[string]]::new([string[]]@('andariel', 'duriel', 'radament', 'mephisto', 'diablo', 'summoner', 'izual', 'bloodraven', 'diabloclone', 'griswold', 'nihlathakboss', 'baalcrab', 'putriddefiler1', 'putriddefiler2', 'putriddefiler3', 'putriddefiler4', 'putriddefiler5', 'baalcrabstairs', 'baalclone', 'ubermephisto', 'uberdiablo', 'uberizual', 'uberandariel', 'uberduriel', 'uberbaal'), [StringComparer]::Ordinal)
         $monstats = if (-not $noEntries) { Read-Table $monstatsPath } else { $null }
         $mIdCol = if ($monstats) { Column $monstats 'Id' } else { 0 }
-        $mBossCol = if ($monstats) { [array]::IndexOf($monstats.Header, 'boss') } else { -1 }
         for ($i = 1; $monstats -and $i -lt $monstats.Lines.Count; $i++) {
             $c = $monstats.Lines[$i] -split "`t"
             if ($c.Count -gt $mIdCol -and $c[$mIdCol] -ne '') {
                 [void]$monsterIds.Add($c[$mIdCol]); [void]$monsterIdsNoCase.Add((Get-AsciiLower $c[$mIdCol]))
-                if ($mBossCol -ge 0 -and $c.Count -gt $mBossCol -and $c[$mBossCol] -eq '1') { [void]$bossIds.Add($c[$mIdCol]) }
             }
         }
         $modIds = $null
@@ -923,7 +922,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
             if ($vanillaSupers.ContainsKey((Get-AsciiLower $bossName)) -or $monsterIdsNoCase.Contains((Get-AsciiLower $bossName))) { & $skip 'that is the name of a vanilla boss or monster.'; continue }
             if ($bossBase -eq '') { & $skip 'the Base cell is empty.'; continue }
             if (-not $monsterIds.Contains($bossBase)) { & $skip "Base '$bossBase' is not an Id in monstats.txt."; continue }
-            if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is a vanilla boss (its monstats.txt boss column is 1)."; continue }
+            if ($bossIds.Contains($bossBase)) { & $skip "Base '$bossBase' is one of the base game's own bosses."; continue }
             $mods = @()
             $bad = ''
             if ($modsAt -ge 0 -and $bc.Count -gt $modsAt -and $bc[$modsAt].Trim() -ne '') {
