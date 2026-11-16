@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "layout.h"
+#include "mesa_plan.h"
 #include "outdoor.h"
 #include "rng.h"
 #include "stamp.h"
@@ -66,6 +67,9 @@ std::string capJungleOpenRules(layout::Rules &rules);
 // checks the stamp plan with checkStampPlan. Any failure leaves ok false with the reason (the first error, with the count
 // of the others). Never throws for bad input; allocation failures propagate.
 MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue);
+
+// The plan of a fixed Mesa arena (mesa::planMesaArena) as the MapPlan the outdoor build hook replays: only the stamps and their hash. No seed, no cache.
+MapPlan planArenaMap(const mesa::MesaRequest &request);
 
 // The cache key of a request: seed, lower-cased tileset, shape and size, origin, limits and options. shapes.txt is not part of
 // it, so the owner clears the cache when the tables are reloaded.

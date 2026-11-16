@@ -157,6 +157,10 @@ These files sit beside `maps.txt` and are tab separated with a header row. `slot
 writes it; the others can be left out. A bad row is skipped and named in `cartographer-report.txt`, except in
 `signatures.txt`, where a bad row is skipped silently and shows only as that engine part being off. [tables.md](../../docs/cartographer/tables.md) is the full reference for every file.
 
+#### arenas.txt
+
+Fixed, square, enclosed arena levels built from stock Mesa pieces in a `levels.txt` row of the mod's own (Act 5, `DrlgType` 3, `LevelType` 27): `Name`, `Level`, `Tileset`, `Width`, `Height`, `Fill`, `Entry`. See [tables.md](../../docs/cartographer/tables.md#arenastxt-optional).
+
 #### Map item modifiers
 
 There is no `mapstats.txt`. Rarity and modifiers are the game's own: add `magicprefix.txt`, `magicsuffix.txt`, `rareprefix.txt`,

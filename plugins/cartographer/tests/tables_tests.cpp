@@ -1614,3 +1614,96 @@ TEST_CASE("the look columns load, blank keeps the tileset's own look and a bad c
 	CHECK(Joined(report).find("Brightness '5' is not a whole number") != std::string::npos);
 	CHECK(Joined(report).find("Warmth '401'") != std::string::npos);
 }
+
+namespace {
+// levels.txt rows for the arena tests: 200 is a Mesa Act 5 outdoor level, 201 the same with a small SizeX, 202 a Jungle level, 203 an Act 4 level, 204 not outdoor.
+const char* const ArenaLevels =
+    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
+    "Arena A\t200\t4\t3\t27\t6000\t4000\t128\t112\n"
+    "Arena B\t201\t4\t3\t27\t0\t0\t32\t112\n"
+    "Arena C\t202\t4\t3\t21\t0\t0\t128\t112\n"
+    "Arena D\t203\t3\t3\t27\t0\t0\t128\t112\n"
+    "Arena E\t204\t4\t1\t27\t0\t0\t128\t112\n"
+    "Slot\t205\t4\t3\t27\t0\t0\t128\t112\n";
+const char* const ArenaHeader = "Name\tLevel\tTileset\tWidth\tHeight\tFill\tEntry\n";
+
+auto Arenas(const std::string& rows, Report& report) -> std::vector<ArenaDef> {
+	Report slotReport;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoor\t205\n", slotReport);
+	return LoadArenas(std::string(ArenaHeader) + rows, ArenaLevels, slots, report);
+}
+}  // namespace
+
+TEST_CASE("arenas.txt: blank means a 2 x 2 Mesa3 arena entered at the bottom centre, geometry from levels.txt") {
+	Report report;
+	const auto arenas = Arenas("Lava\t200\t\t\t\t\t\n", report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(report.Errors() == 0);
+	CHECK(arenas[0].width == 2);
+	CHECK(arenas[0].height == 2);
+	CHECK(arenas[0].fill == 2);
+	CHECK(arenas[0].entryX == 1);
+	CHECK(arenas[0].entryY == 1);
+	CHECK(arenas[0].offsetX == 6000);
+	CHECK(arenas[0].offsetY == 4000);
+	CHECK(arenas[0].sizeX == 128);
+	CHECK(arenas[0].sizeY == 112);
+}
+
+TEST_CASE("arenas.txt: every cell is read ignoring case") {
+	Report report;
+	const auto arenas = Arenas("Big\t200\tmesa\t4\t3\tmesa1\t3,0\n", report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(arenas[0].width == 4);
+	CHECK(arenas[0].height == 3);
+	CHECK(arenas[0].fill == 0);
+	CHECK(arenas[0].entryX == 3);
+	CHECK(arenas[0].entryY == 0);
+	CHECK(report.Errors() == 0);
+}
+
+TEST_CASE("arenas.txt: each bad row gives one plain-English line and is skipped") {
+	const struct {
+		const char* row;
+		const char* text;
+	} bad[] = {
+	    {"A\t999\t\t\t\t\t\n", "no row with that Id"},
+	    {"A\tx\t\t\t\t\t\n", "not a levels.txt Id"},
+	    {"A\t203\t\t\t\t\t\n", "Act 5"},
+	    {"A\t204\t\t\t\t\t\n", "DrlgType 3"},
+	    {"A\t202\t\t\t\t\t\n", "LevelType 27"},
+	    {"A\t205\t\t\t\t\t\n", "also a map slot level"},
+	    {"A\t200\t\t0\t2\t\t\n", "Width '0'"},
+	    {"A\t200\t\t2\t15\t\t\n", "Height '15'"},
+	    {"A\t200\t\t15\t2\t\t\n", "Width '15'"},
+	    {"A\t200\tJungle\t\t\t\t\n", "Only Mesa is"},
+	    {"A\t200\t\t\t\tMesa4\t\n", "Mesa1, Mesa2 or Mesa3"},
+	    {"A\t200\t\t2\t2\t\t2,0\n", "outside the 2 x 2 interior"},
+	    {"A\t200\t\t2\t2\t\t0\n", "two whole numbers"},
+	    {"A\t201\t\t4\t2\t\t\n", "SizeX"},
+	    {"\t200\t\t\t\t\t\n", "Name cell is empty"},
+	};
+	for (const auto& b : bad) {
+		Report report;
+		const auto arenas = Arenas(b.row, report);
+		INFO(b.row);
+		CHECK(arenas.empty());
+		CHECK(report.Errors() == 1);
+		CHECK(Joined(report).find(b.text) != std::string::npos);
+	}
+}
+
+TEST_CASE("arenas.txt: two rows on one level keep the first; a missing column or empty file is refused") {
+	Report report;
+	const auto arenas = Arenas("A\t200\t\t\t\t\t\nB\t200\t\t\t\t\t\n", report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(arenas[0].name == "A");
+	CHECK(report.Errors() == 1);
+	CHECK(Joined(report).find("another arena already uses the level") != std::string::npos);
+	Report noColumn;
+	CHECK(LoadArenas("Name\nA\n", ArenaLevels, {}, noColumn).empty());
+	CHECK(noColumn.Errors() == 1);
+	Report noLevels;
+	CHECK(LoadArenas(std::string(ArenaHeader) + "A\t200\t\t\t\t\t\n", "", {}, noLevels).empty());
+	CHECK(Joined(noLevels).find("levels.txt could not be read") != std::string::npos);
+}

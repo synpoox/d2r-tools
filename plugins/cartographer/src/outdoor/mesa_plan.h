@@ -68,6 +68,11 @@ struct MesaRequest {
 	int cellsW = 12;       // the interior in 8-tile grid cells, without the ring; Large is 12 x 10
 	int cellsH = 10;
 	MesaOptions options;
+	// An arena (planMesaArena): no seed, the interior from 1 cell up, one named fill set, and an entry cell instead of the seeded rooms.
+	bool arena = false;
+	int arenaFill = 2;     // the fill set, 0..2 (blank in arenas.txt: Mesa 3)
+	int entryX = 0;        // the interior cell whose piece is the arrival
+	int entryY = 0;
 };
 
 // Small, Medium, Large or ExtraLarge (blank means Large), case-insensitive. False for any other word. 8 x 6, 10 x 8, 12 x 10 and 14 x 12 cells.
@@ -87,10 +92,15 @@ struct MesaPlan {
 // leaves ok false with the reason. Never throws for bad input.
 MesaPlan planMesaMap(const MesaRequest &request);
 
+// Plans a fixed arena: the same ring as planMesaMap round an interior of request.cellsW x cellsH cells (1 to kMaxCellsW / kMaxCellsH), packed largest piece first
+// from one fill set with no RNG, so the plan is the same in every game. The stamp holding the entry cell is the entrance; there is no boss or event rectangle.
+// request.arena is forced on. Checked with checkMesaPlan. Any failure leaves ok false with the reason. Never throws for bad input.
+MesaPlan planMesaArena(MesaRequest request);
+
 // Independent check of a plan against its request (does not use planMesaMap). Empty means: the size is within the limits, every grid cell of the level
 // is covered by exactly one stamp, the ring holds the right piece on every side and corner, the fill stamps are all of one set and fit inside the
 // interior, pinned files are in range, the stamps are in row-major order and the entrance, boss and event rectangles sit inside the interior and
-// do not overlap.
+// do not overlap. For an arena request: sizes from 1 cell, one fill set (arenaFill), the entrance rectangle is the piece holding the entry cell and nothing else is planned.
 std::vector<std::string> checkMesaPlan(const MesaRequest &request, const MesaPlan &plan);
 
 // One character per grid cell of the level for logs and failed tests: the ring is '+', a fill piece is its size class (3 for 24 x 24, 2 for
