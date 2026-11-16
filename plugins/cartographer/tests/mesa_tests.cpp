@@ -578,7 +578,7 @@ TEST_CASE("the frame-fill table: Mesa is a row, found by name, with its fill set
 	CHECK(findFrameFillTileset("mesa") == &kMesa);
 	CHECK(findFrameFillTileset("Jungle") == nullptr);
 	CHECK(kMesa.levelType == 27);
-	CHECK(frameFillTilesetNames() == "Mesa, Desert or Wilderness");
+	CHECK(frameFillTilesetNames() == "Mesa, Desert, Wilderness or Kurast");
 	CHECK(fillSetNames(kMesa) == "Mesa1, Mesa2 or Mesa3");
 	CHECK(findFillSet(kMesa, "MESA2") == 1);
 	CHECK(findFillSet(kMesa, "Mesa4") == -1);

@@ -1382,15 +1382,17 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 21);
+	REQUIRE(all.size() == 22);
 	CHECK(all[14] == "Temple");
 	CHECK(all[15] == "Jungle");  // the outdoor rows come last, in table order
 	CHECK(all[16] == "Snow");
 	CHECK(all[17] == "Siege");
 	CHECK(all[18] == "Mesa");
 	CHECK(all[19] == "Desert");
+	CHECK(all[20] == "Wilderness");
+	CHECK(all[21] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
@@ -1399,6 +1401,8 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(OutdoorLevelType("Mesa") == 27);
 	CHECK(OutdoorLevelType("desert") == 16);
 	CHECK(OutdoorLevelType("Wilderness") == 2);
+	CHECK(OutdoorLevelType("Kurast") == 22);
+	CHECK(OutdoorSlotLevelName("outdoorkurast") == "Cartographer Kurast");
 	CHECK(OutdoorSlotLevelName("outdoorwilderness") == "Cartographer Wilderness");
 	CHECK(OutdoorSlotLevelName("outdoorsiege") == "Cartographer Siege");
 	CHECK(OutdoorSlotLevelName("outdoormesa") == "Cartographer Mesa");
@@ -1683,6 +1687,25 @@ TEST_CASE("arenas.txt: every cell is read ignoring case") {
 	CHECK(report.Errors() == 0);
 }
 
+TEST_CASE("arenas.txt: a Kurast arena needs a LevelType 22 level and takes the Burbs fill") {
+	const std::string levels =
+	    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
+	    "K\t230\t4\t3\t22\t6000\t5000\t128\t112\n"
+	    "M\t231\t4\t3\t27\t6000\t4000\t128\t112\n";
+	Report report;
+	const auto arenas = LoadArenas(
+	    std::string(ArenaHeader) +
+	    "Ok\t230\tkurast\t3\t3\tburbs\t1,2\n"
+	    "Wrong\t231\tKurast\t\t\t\t\n"
+	    "Set\t230\tKurast\t\t\tMesa1\t\n",
+	    levels, {}, report);
+	REQUIRE(arenas.size() == 1);
+	CHECK(arenas[0].tileset == "Kurast");
+	CHECK(arenas[0].fill == 0);
+	CHECK(arenas[0].width == 3);
+	CHECK(report.Errors() == 2);
+}
+
 TEST_CASE("arenas.txt: Brightness and Warmth load; blank keeps the tileset's look") {
 	const std::string levels =
 	    "Name\tId\tAct\tDrlgType\tLevelType\tOffsetX\tOffsetY\tSizeX\tSizeY\n"
@@ -1752,7 +1775,7 @@ TEST_CASE("arenas.txt: each bad row gives one plain-English line and is skipped"
 	    {"A\t200\t\t0\t2\t\t\n", "Width '0'"},
 	    {"A\t200\t\t2\t15\t\t\n", "Height '15'"},
 	    {"A\t200\t\t15\t2\t\t\n", "Width '15'"},
-	    {"A\t200\tJungle\t\t\t\t\n", "Use Mesa, Desert or Wilderness."},
+	    {"A\t200\tJungle\t\t\t\t\n", "Use Mesa, Desert, Wilderness or Kurast."},
 	    {"A\t200\t\t\t\tMesa4\t\n", "Mesa1, Mesa2 or Mesa3"},
 	    {"A\t200\t\t2\t2\t\t2,0\n", "outside the 2 x 2 interior"},
 	    {"A\t200\t\t2\t2\t\t0\n", "two whole numbers"},

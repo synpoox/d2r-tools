@@ -88,7 +88,7 @@ TEST_CASE("the Wilderness row: LevelType 2, ring 4..11, Swamp and Tree fills, fo
 	CHECK(findFrameFillTileset("wilderness") == &kWilderness);
 	CHECK(std::string(kWilderness.name) == "Wilderness");
 	CHECK(kWilderness.levelType == 2);
-	CHECK(frameFillTilesetNames() == "Mesa, Desert or Wilderness");
+	CHECK(frameFillTilesetNames() == "Mesa, Desert, Wilderness or Kurast");
 	CHECK(fillSetNames(kWilderness) == "Swamp or Tree");
 	CHECK(findFillSet(kWilderness, "TREE") == 1);
 	CHECK(findFillSet(kWilderness, "Mesa1") == -1);

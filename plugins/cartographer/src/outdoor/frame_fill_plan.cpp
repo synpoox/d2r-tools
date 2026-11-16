@@ -60,7 +60,22 @@ const FrameFillTileset kWilderness = {
 	12,
 };
 
-const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert, &kWilderness};
+// Kurast (Act 3 city, LevelType 22): one district, the Burbs; no gates, bridge, temple, sewer or waypoint piece. Ring 619..626 (Burbs Border N, S, E, W: 2 files each; NE, NW, SE, SW: 1 file;
+// floor on the inner side, read from the DS1 walk flags), one fill set "Burbs" 635/634/633/632 (4, 4, 4 and 5 files; the 8 x 8 piece last). Notes in docs/cartographer/tilesets/a3-kurast.md.
+const FrameFillTileset kKurast = {
+	"Kurast",
+	22,  // lvltypes.txt "Act 3 - Kurast"
+	{622, 619, 621, 620, 624, 623, 625, 626},
+	{2, 2, 2, 2, 1, 1, 1, 1},
+	1,
+	{
+		{"Burbs", 4, {{635, 2, 2, 4, 3}, {634, 2, 1, 4, 2}, {633, 1, 2, 4, 2}, {632, 1, 1, 5, 1}}},
+	},
+	14,
+	12,
+};
+
+const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert, &kWilderness, &kKurast};
 const int kFrameFillTilesetCount = static_cast<int>(sizeof(kFrameFillTilesets) / sizeof(kFrameFillTilesets[0]));
 
 const FrameFillTileset *findFrameFillTileset(std::string_view name) {

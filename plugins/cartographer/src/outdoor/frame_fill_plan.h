@@ -66,12 +66,14 @@ extern const FrameFillTileset kMesa;
 extern const FrameFillTileset kDesert;
 // Wilderness (Act 1 fields, LevelType 2): ring 4..11 (Bord1..8), sets Swamp (38, 39) and Tree (38, 40). Notes in docs/cartographer/tilesets/a1-wilderness.md.
 extern const FrameFillTileset kWilderness;
+// Kurast (Act 3 city, LevelType 22): one district, the Burbs. Ring 619..626, one set Burbs (632..635). Notes in docs/cartographer/tilesets/a3-kurast.md.
+extern const FrameFillTileset kKurast;
 // Every frame-plus-fill tileset, in table order. A new tileset is one row here.
 extern const FrameFillTileset *const kFrameFillTilesets[];
 extern const int kFrameFillTilesetCount;
 // The row for a tileset name (ignoring case), or nullptr.
 const FrameFillTileset *findFrameFillTileset(std::string_view name);
-// "Mesa", "Mesa, Desert or Wilderness": the names for a message.
+// "Mesa", "Mesa, Desert, Wilderness or Kurast": the names for a message.
 std::string frameFillTilesetNames();
 // The index of the fill set named `name` (ignoring case, "Mesa1"), or -1.
 int findFillSet(const FrameFillTileset &tileset, std::string_view name);
