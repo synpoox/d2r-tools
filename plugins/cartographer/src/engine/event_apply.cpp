@@ -1,6 +1,7 @@
 #include "engine/event_apply.h"
 
 #include "core/part_signatures.h"
+#include "engine/arena_service.h"
 #include "engine/auto_check.h"
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
@@ -20,6 +21,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -782,6 +784,8 @@ void OnPopulated(Game* game, void* room) noexcept {
 	}
 }
 
+void OnArenaPopulated(Game* game, void* room);
+
 auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 	if (g_original == nullptr) {
 		return 0;  // reachable only if the loader gave no original (the install logs it and marks the part off)
@@ -799,6 +803,13 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 	if (paced) {
 		UniquePaceEnd();
 	}
+	if (game != nullptr) {
+		try {
+			OnArenaPopulated(game, room);  // arenas are no map open: this runs without g_busy
+		} catch (...) {
+			plog::Error("arena spots: handling a populated room failed");
+		}
+	}
 	if (g_busy.load(std::memory_order_relaxed) && game != nullptr) {
 		try {
 			OnPopulated(game, room);
@@ -811,10 +822,9 @@ auto PopulateHook(Game* game, void* room) noexcept -> uint64_t {
 
 // A monster name (an event's Spawn, or a map's Boss) as a monstats row or a superuniques row: the game's loaded tables first (section 11), the mod's
 // .txt files only when that route is off or cannot decide. Unresolved when neither has the name. Game thread, at map open.
-auto ResolveName(const std::string& name, const ep::SpawnTable& txt, void* player) noexcept -> ep::Resolved {
+auto ResolveNameFlag(const std::string& name, const ep::SpawnTable& txt, bool haveFlag, uint32_t dataFlag) noexcept -> ep::Resolved {
 	ep::Resolved out;
-	if (player != nullptr && g_dataTables != nullptr) {
-		const uint32_t dataFlag = At<uint8_t>(player, UnitDataFlagOffset);
+	if (haveFlag && g_dataTables != nullptr) {
 		const ep::RouteVerdict route = RouteFor(dataFlag);
 		if (route.monsters) {
 			if (ResolveFromGameTables(route, dataFlag, name, txt, &out)) {
@@ -835,6 +845,88 @@ auto ResolveName(const std::string& name, const ep::SpawnTable& txt, void* playe
 		}
 	}
 	return ep::resolveSpawn(txt, name);
+}
+
+auto ResolveName(const std::string& name, const ep::SpawnTable& txt, void* player) noexcept -> ep::Resolved {
+	return ResolveNameFlag(name, txt, player != nullptr, player != nullptr ? At<uint8_t>(player, UnitDataFlagOffset) : 0);
+}
+
+// --- Arena spots (arenaspots.txt, issue #488) -------------------------------------------------------------------------------
+// A room of an arena level that holds a spot with a Monster or an Object gets it once per game: the game frees and re-populates rooms, so the spots done are kept here.
+std::mutex g_arenaLock;
+std::set<std::string> g_arenaDone;  // "<level>:<spot>"
+
+void OnArenaPopulated(Game* game, void* room) {
+	const std::shared_ptr<const Tables> tables = ArenaServiceTables();
+	if (tables == nullptr || tables->arenas.empty() || room == nullptr || !On(EvRoomLevelId)) {
+		return;
+	}
+	const int level = Call<RoomLevelFn>(EvRoomLevelId)(room);
+	const ArenaDef* arena = nullptr;
+	for (const ArenaDef& a : tables->arenas) {
+		if (a.level == level && !a.spots.empty()) {
+			arena = &a;
+		}
+	}
+	if (arena == nullptr) {
+		return;
+	}
+	const RoomRects rects = ReadRects(room);
+	if (!rects.ok) {
+		return;
+	}
+	const int scale = ep::spotScale(rects.server, rects.drlg);
+	plog::Info("arena '%s': room DRLG %s populated, server %s (%d server unit(s) per tile)", arena->name.c_str(), Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), scale);
+	const uint32_t dataFlag = At<uint8_t>(game, GameDataFlagOffset);
+	for (const ArenaSpotDef& spot : arena->spots) {
+		if ((spot.monster.empty() && spot.object.empty()) || spot.tileX < rects.drlg.x || spot.tileX >= rects.drlg.x + rects.drlg.w || spot.tileY < rects.drlg.y || spot.tileY >= rects.drlg.y + rects.drlg.h) {
+			continue;
+		}
+		{
+			std::lock_guard<std::mutex> lock(g_arenaLock);
+			if (!g_arenaDone.insert(std::to_string(level) + ":" + spot.name).second) {
+				continue;  // once per game
+			}
+		}
+		if (scale < 1) {
+			plog::Warn("arena '%s' spot '%s': the room's server units are not a whole multiple of its tiles; not spawned", arena->name.c_str(), spot.name.c_str());
+			continue;
+		}
+		const int x = rects.server.x + (spot.tileX - rects.drlg.x) * scale + scale / 2, y = rects.server.y + (spot.tileY - rects.drlg.y) * scale + scale / 2;
+		if (!spot.object.empty()) {
+			int px = 0, py = 0;
+			const bool made = Event6bPlaceObjectAt(game, room, rects.server, tables->objectClasses, tables->objectNames, spot.object, x, y, &px, &py);
+			plog::Info("arena '%s' spot '%s': object '%s' %s at (%d,%d) (the spot is (%d,%d))", arena->name.c_str(), spot.name.c_str(), spot.object.c_str(), made ? "placed" : "NOT placed", px, py, x, y);
+			continue;
+		}
+		ep::Resolved found;
+		std::string note;
+		if (const auto entry = std::find_if(tables->bosses.begin(), tables->bosses.end(), [&](const BossDef& b) { return b.name == spot.monster; }); entry != tables->bosses.end()) {
+			found = ResolveNameFlag(BossKey(entry->name), tables->spawnNames, true, dataFlag);
+			if (found.kind != ev::NameKind::Unique) {
+				found = ResolveNameFlag(entry->base, tables->spawnNames, true, dataFlag);
+				note = " (its base monster: no superuniques row, run tools\\install.ps1)";
+			}
+		} else {
+			found = ResolveNameFlag(spot.monster, tables->spawnNames, true, dataFlag);
+		}
+		if (found.kind != ev::NameKind::Unique && found.kind != ev::NameKind::Monster) {
+			plog::Warn("arena '%s' spot '%s': monster '%s' is not in the game's tables; not spawned", arena->name.c_str(), spot.name.c_str(), spot.monster.c_str());
+			continue;
+		}
+		ep::Spawn spawn;
+		spawn.superUnique = found.kind == ev::NameKind::Unique;
+		spawn.row = found.row;
+		spawn.classRow = found.classRow;
+		spawn.spot = {x, y};
+		bool asSuper = false;
+		void* unit = nullptr;
+		bool made = SpawnOne(game, room, spawn, &asSuper, &unit);
+		if (!made) {  // a taken spot: the spawn core takes the nearest ring spot when the collision test is skipped
+			made = SpawnOne(game, room, spawn, &asSuper, &unit, SpawnFlagNoCollision);
+		}
+		plog::Info("arena '%s' spot '%s': monster '%s'%s %s at the spot (%d,%d)%s", arena->name.c_str(), spot.name.c_str(), spot.monster.c_str(), note.c_str(), made ? (asSuper ? "spawned as a superunique" : "spawned as a plain monster") : "REFUSED by the game", x, y, made ? "" : "; not retried");
+	}
 }
 
 // Arms the map's own Boss (the maps.txt `Boss` column) when it can be spawned; else says why not and leaves it off. The rest of the map is untouched.
@@ -1113,6 +1205,10 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 
 void EventsGameLeft() noexcept {
 	Event6bGameLeft();
+	{
+		std::lock_guard<std::mutex> lock(g_arenaLock);
+		g_arenaDone.clear();
+	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		++g_generation;

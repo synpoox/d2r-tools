@@ -81,6 +81,11 @@ bool Event6bAmbushTick(void* game, void* playerRoom, AmbushRectFn roomRect, Ambu
 // populator's arguments. True only when the game created the object, so a Shrine that was not placed is never announced. Game thread.
 bool Event6bPlaceShrine(void* game, void* room, const cartographer::eventplan::Rect& serverRect) noexcept;
 
+// An arena spot's object (issue #488): resolve `spec` (an objects.txt Class, Name or row number) and create it at the free spot nearest (x, y), in `serverRect`'s units, inside that room.
+// True only when the game created it; the spot it took is returned. Game thread, from the populator.
+bool Event6bPlaceObjectAt(void* game, void* room, const cartographer::eventplan::Rect& serverRect, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, const std::string& spec,
+                          int x, int y, int* placedX, int* placedY) noexcept;
+
 // The Boss event spawned its boss (`unit`, the spawn's return value): remember it for the Drop.
 void Event6bBossSpawned(void* unit) noexcept;
 

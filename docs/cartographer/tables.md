@@ -228,7 +228,7 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 
 ## arenas.txt (optional)
 
-Declares fixed arena levels: a square, enclosed arena stamped from whole stock Mesa pieces inside the border ring Blizzard made for them, the same in every game, with no exit but the portal or entry. It builds in a row of the mod's own `levels.txt` (no installer slot row), which must be Act 5 (`Act` 4), `DrlgType` 3 and `LevelType` 27, and must not also be a `slots.txt` level. The level's `OffsetX`, `OffsetY`, `SizeX` and `SizeY` are read from that row; `SizeX` x `SizeY` must hold the interior plus the one-cell ring (8 tiles on each side). `OffsetX` / `OffsetY` plus the arena's tiles must stay under 6553: past that world position HD draws no floor (a signed 16-bit limit in subtiles), so the row is skipped. An arena is not a map: no portal item, no map event, Boss or stat, and it does not count as the game's one open map. A row that cannot be used is skipped with a line in `cartographer-report.txt` and the game builds that level itself. Other plugins read the arena through the content services in [ADR 0001](adr-0001-cartographer-standalone.md) (`cartographer.arena.v1`; later work).
+Declares fixed arena levels: a square, enclosed arena stamped from whole stock Mesa pieces inside the border ring Blizzard made for them, the same in every game, with no exit but the portal or entry. It builds in a row of the mod's own `levels.txt` (no installer slot row), which must be Act 5 (`Act` 4), `DrlgType` 3 and `LevelType` 27, and must not also be a `slots.txt` level. The level's `OffsetX`, `OffsetY`, `SizeX` and `SizeY` are read from that row; `SizeX` x `SizeY` must hold the interior plus the one-cell ring (8 tiles on each side). `OffsetX` / `OffsetY` plus the arena's tiles must stay under 6553: past that world position HD draws no floor (a signed 16-bit limit in subtiles), so the row is skipped. An arena is not a map: no portal item, no map event, Boss or stat, and it does not count as the game's one open map. A row that cannot be used is skipped with a line in `cartographer-report.txt` and the game builds that level itself. Other plugins read the arena through the content services in [ADR 0001](adr-0001-cartographer-standalone.md) (`cartographer.arena.v1`, see [arena-service.md](arena-service.md)).
 
 | Column | What to put | Default | Example |
 |---|---|---|---|
@@ -240,6 +240,20 @@ Declares fixed arena levels: a square, enclosed arena stamped from whole stock M
 | `Entry` | The interior cell (`x,y`, counted from 0 at the top left) whose piece is the arrival | the bottom-centre cell | 1,1 |
 
 The interior is packed largest piece first from the fill set (a 2 x 2 interior is one 16 x 16 piece) with no random draw; the engine picks each piece's DS1 variant from a level seed taken from the plan, so the layout is the same in every game and on every client. The arrival is the room of the piece that holds the `Entry` cell.
+
+## arenaspots.txt (optional)
+
+Named spots in the fixed arenas of `arenas.txt`, one row per spot, the same in every game: a boss, an add, a chest, an altar, a portal or a marker, given once in data instead of as coordinates in a consumer. A spot with a `Monster` or an `Object` is spawned there once per game, when the room that holds it is populated; a spot with neither only names a place, for another plugin to read through `cartographer.arena.v1` ([arena-service.md](arena-service.md)). The file is read only when `arenas.txt` has an arena. A bad row is skipped with one line in `cartographer-report.txt`: an `Arena` that is not a `Name` in `arenas.txt` (or whose row was skipped), a repeated `Spot` in the arena (ignoring case), an `X` or `Y` outside the interior, no `OffsetX` / `OffsetY` for the arena's level in `levels.txt`, both `Monster` and `Object` set, a `Monster` that is not a `bosses.txt` entry, a `superuniques.txt` row or a `monstats.txt` Id, or an `Object` that is not an `objects.txt` `Class` or `Name` (or a row number). A name list the game's tables could not be read for is not checked.
+
+| Column | What to put | Default | Example |
+|---|---|---|---|
+| `Arena` | A `Name` in `arenas.txt` | none (required) | Uber Mephisto |
+| `Spot` | The spot's name, unique within the arena | none (required) | centre |
+| `X`, `Y` | Tiles from the interior's top-left corner (the ring is not counted), counted from 0. A 2 x 2 arena has 0 to 15 | none (required) | 7, 7 |
+| `Monster` | A `bosses.txt` entry, a `superuniques.txt` row or a `monstats.txt` Id, spawned at the spot | none | Lucion |
+| `Object` | An `objects.txt` `Class` or `Name`, or a row number, created at the spot | none | Chest3 |
+
+The spot is the centre of its tile. If the game refuses the exact spot (it is taken), the monster is spawned with the collision test skipped and the object at the nearest free spot of the same room; the plugin log says where each unit went (`arena '<Name>' spot '<spot>'`). A superunique the game already spawned this game is spawned as its class instead (once per game, the game's rule).
 
 ## shapes.txt (optional, advanced)
 

@@ -1050,6 +1050,102 @@ auto LoadArenas(std::string_view text, std::string_view levelsText, const std::v
 	return out;
 }
 
+void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report) {
+	namespace mesa = cartographer::outdoor::mesa;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(ArenaSpotsFile, table, report) || !RequireColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y"}, report)) {
+		return;
+	}
+	ReportRepeatedColumns(ArenaSpotsFile, table, report);
+	NoteUnusedColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y", "Monster", "Object"}, report);
+	const int cArena = table.Column("Arena"), cSpot = table.Column("Spot"), cX = table.Column("X"), cY = table.Column("Y"), cMonster = table.Column("Monster"), cObject = table.Column("Object");
+	for (const TsvRow& row : table.rows) {
+		ArenaSpotDef spot;
+		spot.line = row.line;
+		spot.name = table.Cell(row, cSpot);
+		const std::string arenaName = table.Cell(row, cArena);
+		const auto fail = [&](const std::string& why) { report.Error(ArenaSpotsFile, row.line, why + " This spot is skipped."); };
+		ArenaDef* arena = nullptr;
+		for (ArenaDef& a : arenas) {
+			if (EqualsNoCase(a.name, arenaName)) {
+				arena = &a;
+				break;
+			}
+		}
+		if (arena == nullptr) {
+			fail("Arena '" + arenaName + "' is not a Name in " + ArenasFile + " (or that row was skipped).");
+			continue;
+		}
+		const std::string who = "arena '" + arena->name + "', spot '" + spot.name + "': ";
+		if (spot.name.empty()) {
+			fail("arena '" + arena->name + "': the Spot cell is empty.");
+			continue;
+		}
+		if (std::any_of(arena->spots.begin(), arena->spots.end(), [&](const ArenaSpotDef& o) { return EqualsNoCase(o.name, spot.name); })) {
+			fail(who + "another spot of this arena has that name.");
+			continue;
+		}
+		const int tilesW = arena->width * mesa::kGridTiles, tilesH = arena->height * mesa::kGridTiles;
+		if (!ParseInt(table.Cell(row, cX), 0, tilesW - 1, &spot.x) || !ParseInt(table.Cell(row, cY), 0, tilesH - 1, &spot.y)) {
+			fail(who + "X '" + table.Cell(row, cX) + "' and Y '" + table.Cell(row, cY) + "' must be whole tiles inside the " + std::to_string(tilesW) + " x " + std::to_string(tilesH) +
+			     " interior (0 to " + std::to_string(tilesW - 1) + " and 0 to " + std::to_string(tilesH - 1) + ", counted from its top-left corner, the ring not counted).");
+			continue;
+		}
+		if (arena->offsetX < 0 || arena->offsetY < 0) {
+			fail(who + "levels.txt gives no OffsetX / OffsetY for the arena's level, so the spot has no position.");
+			continue;
+		}
+		spot.monster = table.Cell(row, cMonster);
+		spot.object = table.Cell(row, cObject);
+		if (!spot.monster.empty() && !spot.object.empty()) {
+			fail(who + "Monster and Object are both set; a spot holds one of them.");
+			continue;
+		}
+		if (!spot.monster.empty()) {
+			const bool known = std::any_of(bosses.begin(), bosses.end(), [&](const BossDef& b) { return b.name == spot.monster; }) ||
+			                   (names.haveSuperUniques && ContainsNoCase(names.superUniques, spot.monster)) || (names.haveMonsters && ContainsNoCase(names.monsters, spot.monster));
+			const bool unchecked = !names.haveSuperUniques && !names.haveMonsters;
+			if (!known && !unchecked) {
+				fail(who + "Monster '" + spot.monster + "' is not an entry in bosses.txt, a superuniques.txt row or a monstats.txt Id.");
+				continue;
+			}
+		}
+		if (!spot.object.empty() && !objects.empty()) {
+			int rowNumber = 0;
+			if (!ContainsNoCase(objects, spot.object) && !(ParseInt(spot.object, 0, 100000, &rowNumber) && rowNumber < static_cast<int>(objects.size()))) {
+				fail(who + "Object '" + spot.object + "' is not a Class or Name in objects.txt, nor a row number.");
+				continue;
+			}
+		}
+		const int interiorX = arena->offsetX + mesa::kRingCells * mesa::kGridTiles, interiorY = arena->offsetY + mesa::kRingCells * mesa::kGridTiles;
+		spot.tileX = interiorX + spot.x;
+		spot.tileY = interiorY + spot.y;
+		spot.subX = spot.tileX * 5 + 2;
+		spot.subY = spot.tileY * 5 + 2;
+		spot.roomX = interiorX + spot.x / mesa::kGridTiles * mesa::kGridTiles;
+		spot.roomY = interiorY + spot.y / mesa::kGridTiles * mesa::kGridTiles;
+		spot.roomW = spot.roomH = mesa::kGridTiles;
+		arena->spots.push_back(std::move(spot));
+	}
+}
+
+auto FindArenaSpot(const std::vector<ArenaDef>& arenas, int level, std::string_view name, const ArenaDef** arena) -> const ArenaSpotDef* {
+	for (const ArenaDef& a : arenas) {
+		if (a.level != level) {
+			continue;
+		}
+		for (const ArenaSpotDef& s : a.spots) {
+			if (EqualsNoCase(s.name, name)) {
+				if (arena != nullptr) {
+					*arena = &a;
+				}
+				return &s;
+			}
+		}
+	}
+	return nullptr;
+}
+
 auto IsMazeSlotName(std::string_view slot) -> bool {
 	return cartographer::maze::findMazeTilesetBySlot(slot) != nullptr;
 }
