@@ -71,7 +71,7 @@ extern const FrameFillTileset *const kFrameFillTilesets[];
 extern const int kFrameFillTilesetCount;
 // The row for a tileset name (ignoring case), or nullptr.
 const FrameFillTileset *findFrameFillTileset(std::string_view name);
-// "Mesa", "Mesa or Desert": the names for a message.
+// "Mesa", "Mesa, Desert or Wilderness": the names for a message.
 std::string frameFillTilesetNames();
 // The index of the fill set named `name` (ignoring case, "Mesa1"), or -1.
 int findFillSet(const FrameFillTileset &tileset, std::string_view name);

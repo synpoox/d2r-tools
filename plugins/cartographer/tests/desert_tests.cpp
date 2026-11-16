@@ -56,7 +56,8 @@ std::string joined(const std::vector<std::string> &v)
 TEST_CASE("Desert: eight ring pieces of one file, one fill set of ten 8 x 8 pieces, LevelType 16")
 {
 	CHECK(kDesert.levelType == 16);
-	CHECK(kDesert.borderFiles == 1);
+	const EdgePieces &f = kDesert.edgeFiles;
+	CHECK((f.west == 1 && f.north == 1 && f.east == 1 && f.south == 1 && f.nw == 1 && f.ne == 1 && f.se == 1 && f.sw == 1));
 	CHECK(kDesert.setCount == 1);
 	const FillSet &set = kDesert.sets[0];
 	REQUIRE(set.count == 10);
