@@ -181,6 +181,25 @@ int pieceAfterWalk(const Plan &plan, int roomIndex)
 	return r.special >= 0 && r.fix == Room::Fix::ByPlacer ? plan.entrance.fromPiece : r.piece;
 }
 
+uint32_t arcaneDrawRotation(uint32_t *lo, uint32_t *hi)
+{
+	const uint64_t state = static_cast<uint64_t>(*lo) * 0x6ac690c5ull + *hi;
+	*lo = static_cast<uint32_t>(state);
+	*hi = static_cast<uint32_t>(state >> 32);
+	return *lo & 3;
+}
+
+int32_t arcaneFileVariant(int index, uint32_t rot, int mask)
+{
+	if (mask <= 0 || mask > 15 || (mask & (mask - 1)) == 0) return -1;
+	return static_cast<int32_t>((static_cast<uint32_t>(index / 15) + rot) & 3);
+}
+
+bool mayRunOriginalStep(bool ownGrower, size_t roomsMade)
+{
+	return !ownGrower || roomsMade == 0;
+}
+
 bool fixAfterWalk(const Plan &plan, int roomIndex)
 {
 	if (roomIndex < 0 || roomIndex >= static_cast<int>(plan.rooms.size())) return false;

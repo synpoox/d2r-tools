@@ -52,7 +52,7 @@ constexpr int RoomPiece = 0x40;       // piece*: {id +0, file +4, flags +0x10}
 constexpr int RoomNext = 0x48;
 constexpr int RoomFlags = 0x50;       // uint32; bits 16 and 17 (cm::kArrivalFlags) make the level-entry finder pick the room
 constexpr int RoomX = 0x60, RoomY = 0x64, RoomW = 0x68, RoomH = 0x6c;
-constexpr int PieceId = 0x00, PieceFlags = 0x10;
+constexpr int PieceId = 0x00, PieceFile = 0x04, PieceFlags = 0x10;
 constexpr uint32_t PieceFixed = 2;
 constexpr int32_t MazeType = 1;
 constexpr int MaxRooms = 4096;        // a sanity bound for the walks of the room list (the probe's and the event room's)
@@ -69,6 +69,8 @@ enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAd
                   // Only checked, never called or hooked: the level-entry finder, its first-room-with-flags helper and the flag test. They gate
                   // MarkArrival alone; a missing one leaves the arrival to the game and does not turn the steering off.
                   ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest,
+                  // Arcane Sanctuary's own room grower (RE note 37): hooked only when found; a missing one refuses Arcane maps and leaves the other maze tilesets on.
+                  ArcaneGrower,
                   // Hooked only with WovenProbe on (issue #415): the room tile loader, to log which DT1 files a room loads. Never needed for steering.
                   RoomTileLoader, MazePartCount };
 constexpr int MazeSteerParts = ArrivalFinder;  // the parts the steering needs
@@ -84,12 +86,15 @@ Part g_parts[MazePartCount] = {
 	{"ArrivalFinder", sig::ArrivalFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
+	{"ArcaneGrower", sig::MazeArcaneGrower, 15, false, nullptr, {}, {}},
 	{"RoomTileLoader", sig::RoomTileLoader, 15, false, nullptr, {}, {}},
 };
 
 LevelBuildFn g_levelOriginal = nullptr;
 std::atomic<bool> g_levelBuildTried{false};  // InstallMazeHooks reached the level build hook (it may still have been refused)
 WalkFn g_walkOriginal = nullptr;
+WalkFn g_growerOriginal = nullptr;  // Arcane's grower 0x3e7a80, same shape as the walk: (level)
+std::atomic<bool> g_growerHooked{false};
 SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
 
@@ -101,8 +106,11 @@ std::atomic<bool> g_live{false};
 std::atomic<int> g_slotLevels[cm::MazeTilesetCount];  // the level id of each maze tileset's slot (the row order of cm::MazeTilesets), -1: none; set by SetMazeTables
 std::atomic<int> g_dataFlag{-1};  // the data flag the level build was last called with in this game (-1: none yet); on a remote client every build is its own
 std::atomic<bool> g_probe{false};
-std::atomic<int> g_closedFillerPiece{-1};  // the closed piece the filler ring's rooms were given by the last steered walk, -1: none (cleared when a steered walk starts and on GameLeft)
-cm::SlotBuildState g_slotState;  // a map's slot build is running or has run in this game (cleared on GameLeft)
+struct ClosedPiece {
+	std::atomic<int> piece{-1};  // the closed piece the filler ring's rooms were given by the last steered walk, -1: none (cleared when a steered walk starts and on GameLeft)
+};
+ClosedPiece g_closedFillerPieces[cm::MazeTilesetCount];  // per maze slot level (the row order of cm::MazeTilesets)
+cm::SlotBuildState g_slotStates[cm::MazeTilesetCount];  // a map's slot build is running or has run in this game (cleared on GameLeft), per maze slot level
 
 // The map that was opened, and the plan for it. Guarded by g_lock.
 struct Job {
@@ -117,8 +125,8 @@ struct Prepared {
 	const int32_t* row = nullptr;  // the private LvlMaze row; never freed, because the level record keeps the pointer
 };
 std::mutex g_lock;
-std::shared_ptr<const Job> g_job;
-Prepared g_cache;
+std::shared_ptr<const Job> g_jobs[cm::MazeTilesetCount];  // the map opened through each maze slot level (guarded by g_lock)
+Prepared g_caches[cm::MazeTilesetCount];
 uint64_t g_nextJobId = 1;
 std::atomic<bool> g_arrivalLogged{false};
 std::atomic<int> g_arrivalResult{0};  // MazeArrival: what the arrival probe found (AutoCheck reads it)
@@ -137,13 +145,14 @@ struct Entrance {
 	int32_t minX = 0, minY = 0, unit = 0;  // the rooms' box corner and the plan cell size, tiles: a room's cell = (pos - min) / unit
 };
 Entrance g_entrance;  // guarded by g_lock
-MazeEventRect g_eventRoom;  // guarded by g_lock
-MazeEventRect g_bossRoom;   // guarded by g_lock
+MazeEventRect g_eventRooms[cm::MazeTilesetCount];  // per maze slot level, guarded by g_lock
+MazeEventRect g_bossRooms[cm::MazeTilesetCount];   // per maze slot level, guarded by g_lock
 
 // One build of the slot level, on the thread that runs it. The walk, special-room and ring hooks read it; they only act
 // while it is set and the level is the one being built.
 struct BuildCtx {
 	void* level = nullptr;
+	int slotIndex = -1;  // the maze slot index of level (SlotIndexOfId)
 	SlotOriginal orig;
 	Prepared prep;
 	bool steer = false;
@@ -434,7 +443,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 // hell-check-2 log, see docs/reverse-engineering/cartographer/09-map-events.md). So each room is matched by rect in the level's list against its plan cell, as
 // the arrival is. A room that cannot be found is refused here with the reason: the event then falls back to the distance rule and
 // the map Boss is left off.
-void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
+void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int unit) {
 	std::vector<cm::RoomRect> rects;
 	for (const void* room = Read<const void*>(level, LvlFirstRoom); room != nullptr && rects.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98);
 	     room = Read<const void*>(room, RoomNext)) {
@@ -464,8 +473,8 @@ void RecordEventRoom(const void* level, const cm::Plan& plan, int unit) {
 	const MazeEventRect rect = find(plan.eventRoom, "event", "the event room is chosen by the distance rule instead");
 	const MazeEventRect boss = find(plan.bossRoom, "boss", "the map Boss is left off");
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_eventRoom = rect;
-	g_bossRoom = boss;
+	g_eventRooms[slotIndex] = rect;
+	g_bossRooms[slotIndex] = boss;
 }
 
 // --- The plan --------------------------------------------------------------------------------------------------------
@@ -477,25 +486,21 @@ auto Prepare(void* level, int slotIndex, int declX, int declY, std::string* why)
 	std::shared_ptr<const Job> job;
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		job = g_job;
+		job = g_jobs[slotIndex];
 	}
 	if (job == nullptr) {
-		*why = "no maze map was opened in this game";
-		return std::nullopt;
-	}
-	if (static_cast<int>(cm::mazeTilesetIndex(job->tileset)) != slotIndex) {
-		*why = "the map opened in this game is a " + job->tileset + " map, which has a slot level of its own";
+		*why = "no maze map was opened for this slot level in this game";
 		return std::nullopt;
 	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	if (g_cache.job == job && g_cache.plan != nullptr) {
-		const cm::Plan& cached = g_cache.plan->seedPlan.plan;
-		if (g_cache.plan->steer && (cached.levelTilesX > declX || cached.levelTilesY > declY)) {
+	if (g_caches[slotIndex].job == job && g_caches[slotIndex].plan != nullptr) {
+		const cm::Plan& cached = g_caches[slotIndex].plan->seedPlan.plan;
+		if (g_caches[slotIndex].plan->steer && (cached.levelTilesX > declX || cached.levelTilesY > declY)) {
 			*why = "the level declares " + std::to_string(declX) + " x " + std::to_string(declY) + " tiles, less than the plan's " + std::to_string(cached.levelTilesX) + " x " +
 			       std::to_string(cached.levelTilesY);
 			return std::nullopt;
 		}
-		return g_cache;
+		return g_caches[slotIndex];
 	}
 	Prepared prep;
 	prep.job = job;
@@ -506,7 +511,7 @@ auto Prepare(void* level, int slotIndex, int declX, int declY, std::string* why)
 		std::memcpy(copy, row.data(), sizeof(int32_t) * row.size());
 		prep.row = copy;
 	}
-	g_cache = prep;
+	g_caches[slotIndex] = prep;
 	return prep;
 }
 
@@ -567,8 +572,8 @@ void WovenGuestRooms(BuildCtx& ctx) {
 
 // Replaces the walk: the plan's rooms in creation order, then its loop links, then the piece of every room.
 // False (with ctx.why set by the caller from `why`) when the engine refuses a step; the caller then lets the game's walk finish.
-auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may throw (strings, vectors); WalkHook catches
-	g_closedFillerPiece.store(-1);  // a fallback to the game's walk, or a build with no ring, must not keep an earlier build's piece
+auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -> bool {  // may throw (strings, vectors); WalkHook catches
+	g_closedFillerPieces[ctx.slotIndex].piece.store(-1);  // a fallback to the game's walk, or a build with no ring, must not keep an earlier build's piece
 	const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
 	void* first = Read<void*>(level, LvlFirstRoom);
 	if (first == nullptr || Read<int32_t>(level, LvlRoomCount) != 1 || Read<void*>(first, RoomNext) != nullptr) {
@@ -604,6 +609,29 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	for (size_t i = 0; i < n; ++i) {
 		(void)pick(ctx.rooms[i], 1);
 	}
+	// Arcane's grower gives each room of its spiral a DS1 file variant, (index / 15 + rot) & 3 (not to a one-exit piece: see arcaneFileVariant), after the spiral (0x3e7edb..), with rot the start
+	// rotation it draws from the level seed (the same draw, so the seed moves on as in the game's build). The steered build writes the same
+	// variants: plan room k is the game's room k-1 (its array does not hold the first room), and the first room is left as the picker made it.
+	if (ownGrower && Readable(static_cast<uint8_t*>(level) + LvlSeed, 8)) {
+		uint32_t lo = Read<uint32_t>(level, LvlSeed), hi = Read<uint32_t>(level, LvlSeed + 4);
+		const uint32_t rot = cm::arcaneDrawRotation(&lo, &hi);
+		Write<uint32_t>(level, LvlSeed, lo);
+		Write<uint32_t>(level, LvlSeed + 4, hi);
+		int perVariant[4] = {0, 0, 0, 0}, left = 0;
+		for (size_t i = 1; i < n; ++i) {
+			uint8_t* piece = Read<uint8_t*>(ctx.rooms[i], RoomPiece);
+			if (piece != nullptr && Readable(piece + PieceFile, 4) && Readable(piece + PieceId, 4)) {
+				const int32_t variant = cm::arcaneFileVariant(static_cast<int>(i - 1), rot, Read<int32_t>(piece, PieceId) - ctx.prep.plan->tileset.pieceBase);
+				if (variant >= 0) {
+					Write<int32_t>(piece, PieceFile, variant);
+					++perVariant[variant & 3];
+				} else {
+					++left;
+				}
+			}
+		}
+		plog::Info("maze Arcane file variants: start rotation %u; rooms per variant 0/1/2/3 = %d/%d/%d/%d, %d one-exit rooms left to the engine", rot, perVariant[0], perVariant[1], perVariant[2], perVariant[3], left);
+	}
 	// The filler ring (Lava): cells around the layout so no void shows past its edges. Made after the plan rooms have their pieces, so
 	// a plan room's piece never counts the link to the filler beside it. The picker gives a filler 836 + the mask of its link to its parent (a
 	// walkable dead end), so the piece id is set back to the tileset's closed piece (pieceBase, no exits) after the pick. A refused filler is
@@ -628,7 +656,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 			all.push_back(made);  // a null keeps the indices; its children are refused too
 		}
 		const int made = static_cast<int>(plan.fills.size()) - refused;
-		g_closedFillerPiece.store(closed > 0 ? static_cast<int>(closedPiece) : -1);
+		g_closedFillerPieces[ctx.slotIndex].piece.store(closed > 0 ? static_cast<int>(closedPiece) : -1);
 		if (refused != 0) {
 			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
@@ -648,19 +676,18 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why) -> bool {  // may
 	return true;
 }
 
-void WalkHook(void* level) noexcept {
-	if (g_walkOriginal == nullptr) {
-		return;  // unreachable unless the loader gave no way back; there is nothing to call
-	}
+// The steered walk in place of a build step that has the walk's shape (level): the game's walk 0x3e96d0, or Arcane's own grower 0x3e7a80. `original` is that
+// step's own function, run when the build is not steered or the engine refused a step.
+void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
 	BuildCtx* ctx = t_ctx;
 	if (ctx == nullptr || !ctx->steer || ctx->fellBack || ctx->level != level) {
-		g_walkOriginal(level);
+		original(level);
 		return;
 	}
 	std::string why;
 	bool done = false;
 	try {
-		done = SteeredWalk(level, *ctx, &why);
+		done = SteeredWalk(level, *ctx, &why, ownGrower);
 	} catch (...) {
 		try {
 			why = "an exception while building the rooms";
@@ -669,7 +696,34 @@ void WalkHook(void* level) noexcept {
 	}
 	if (!done) {
 		Fallback(*ctx, why);
-		g_walkOriginal(level);  // the game grows the rest of the maze from the rooms that exist
+		size_t made = 0;
+		for (size_t i = 1; i < ctx->rooms.size(); ++i) {
+			made += ctx->rooms[i] != nullptr ? 1 : 0;
+		}
+		if (cm::mayRunOriginalStep(ownGrower, made)) {
+			original(level);  // the game grows the rest of the maze from the rooms that exist
+			return;
+		}
+		// Arcane's spiral would pass a refused (null) room on as the next parent and crash: keep the rooms made, with their pieces, and stop.
+		plog::Warn("maze: the steered build stopped after %d plan rooms and the game's grower is not run (it cannot continue from a partial build); the map is incomplete", static_cast<int>(made));
+		const auto pick = Call<PickFn>(MazePiecePicker);
+		for (void* room : ctx->rooms) {
+			if (room != nullptr) {
+				(void)pick(room, 1);
+			}
+		}
+	}
+}
+
+void WalkHook(void* level) noexcept {
+	if (g_walkOriginal != nullptr) {  // else unreachable unless the loader gave no way back; there is nothing to call
+		SteeredStep(level, g_walkOriginal, false);
+	}
+}
+
+void ArcaneGrowerHook(void* level) noexcept {
+	if (g_growerOriginal != nullptr) {
+		SteeredStep(level, g_growerOriginal, true);
 	}
 }
 
@@ -824,6 +878,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	}
 	BuildCtx ctx;
 	ctx.level = level;
+	ctx.slotIndex = slotIndex;
 	const int id = Read<int32_t>(level, LvlId);
 	if (Read<int32_t>(level, LvlType) != MazeType) {
 		// Not a maze level (levels.txt DrlgType must be 1): nothing of ours is recorded or written to it.
@@ -837,9 +892,9 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 		{
 			// The first time this level is seen in the game, nothing of ours has touched it: record what it declares.
 			std::lock_guard<std::mutex> lock(g_lock);
-			hadJob = g_job != nullptr && static_cast<int>(cm::mazeTilesetIndex(g_job->tileset)) == slotIndex;  // a map of another tileset belongs to its own slot level
+			hadJob = g_jobs[slotIndex] != nullptr;
 			// Marked as running in the same hold that reads the job, so a remote apply (MazeRemoteMapOpened) sees this build or this build sees its job.
-			g_slotState.begin();
+			g_slotStates[slotIndex].begin();
 			const cm::DeclaredSizes::Size size = g_declared.record(id, Read<int32_t>(level, LvlSizeX), Read<int32_t>(level, LvlSizeY));
 			ctx.orig.sizeX = size.x;
 			ctx.orig.sizeY = size.y;
@@ -853,6 +908,8 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else if (Read<int32_t>(level, LvlTileType) != prep->plan->tileset.levelType) {
 				why = std::string("the ") + cm::MazeTilesets[slotIndex].slot + " slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
 				      std::to_string(prep->plan->tileset.levelType) + " (levels.txt LevelType)";
+			} else if (cm::MazeTilesets[slotIndex].ownGrower && !g_growerHooked.load()) {
+				why = std::string("the ") + prep->plan->tileset.name + " room grower was not found or not hooked (see 'cartographer check')";
 			} else {
 				ctx.steer = true;
 			}
@@ -881,14 +938,14 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 	BuildCtx* previous = t_ctx;
 	t_ctx = &ctx;  // also unsteered: the special-room hook still suppresses the game's stairs there
 	const uint64_t result = g_levelOriginal(dataFlag, level);
-	g_slotState.end(hadJob);
+	g_slotStates[slotIndex].end(hadJob);
 	t_ctx = previous;
 	if (ctx.steer) {
 		try {
 			const cm::Plan& plan = ctx.prep.plan->seedPlan.plan;
 			const std::string problem = ctx.fellBack ? ctx.why : cm::specialProblem(plan, ctx.special);
 			if (!problem.empty()) {
-				plog::Warn("maze slot level %d: %s%s", id, ctx.fellBack ? "built partly by the game's own walk: " : "the entrance was not placed as planned: ", problem.c_str());
+				plog::Warn("maze slot level %d: %s%s", id, ctx.fellBack ? "the steered build stopped and the game finished it (or, for Arcane, left it partial): " : "the entrance was not placed as planned: ", problem.c_str());
 			} else {
 				plog::Info("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
 			}
@@ -898,7 +955,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else {
 				plog::Info("maze arrival: left to the game, because the build is not the plan");
 			}
-			RecordEventRoom(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
+			RecordEventRoom(level, slotIndex, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
 		} catch (...) {
 		}
 	}
@@ -942,6 +999,10 @@ namespace {
 // the seed as it is (a client takes the host's). With `requireNoBuild` the job is installed only if no slot build has started, tested under the
 // same lock hold as the install; returns whether it was installed.
 auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t fixedSeed, bool requireNoBuild) -> bool {
+	const size_t slot = cm::mazeTilesetIndex(map.tileset);
+	if (slot >= cm::MazeTilesetCount) {
+		return false;  // not a maze tileset: it has no maze slot level
+	}
 	auto job = std::make_shared<Job>();
 	job->name = map.name;
 	job->tileset = map.tileset;
@@ -949,16 +1010,16 @@ auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	job->size = map.size;
 	job->shapes = tables.shapes;
 	std::lock_guard<std::mutex> lock(g_lock);
-	if (requireNoBuild && g_slotState.ranAny()) {
+	if (requireNoBuild && g_slotStates[slot].ranAny()) {
 		return false;
 	}
 	job->id = g_nextJobId++;
 	job->seed = fixedSeed != 0 ? fixedSeed : cm::mixSeed(seedSalt, job->id);
-	g_job = job;
-	g_cache = {};
+	g_jobs[slot] = job;
+	g_caches[slot] = {};
 	g_entrance = {};
-	g_eventRoom = {};
-	g_bossRoom = {};
+	g_eventRooms[slot] = {};
+	g_bossRooms[slot] = {};
 	g_arrivalLogged = false;
 	g_arrivalResult = 0;
 	plog::Info("maze map '%s' (%s, %s, %s) opened with %sseed %llu", map.name.c_str(), map.tileset.c_str(), map.shape.c_str(), map.size.c_str(), fixedSeed != 0 ? "the host's " : "",
@@ -979,28 +1040,29 @@ auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostS
 	return SetJob(map, tables, 0, hostSeed, true);  // false when the slot level exists already: it is not rebuilt
 }
 
-auto MazeSlotRanAny() -> bool {
-	return g_slotState.ranAny();
+auto MazeSlotRanAny(int level) -> bool {
+	const int slot = SlotIndexOfId(level);
+	return slot >= 0 && g_slotStates[slot].ranAny();
 }
 
 auto MazeLevelDataFlag() -> int {
 	return g_dataFlag.load();
 }
 
-auto MazePendingTileset() -> std::string {
+auto MazeOpenSeed(int level) -> uint64_t {
+	const int slot = SlotIndexOfId(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_job != nullptr ? g_job->tileset : std::string();
+	return slot >= 0 && g_jobs[slot] != nullptr ? g_jobs[slot]->seed : 0;
 }
 
-auto MazeOpenSeed() -> uint64_t {
+void MazeMapCancelled(int level) {
+	const int slot = SlotIndexOfId(level);
+	if (slot < 0) {
+		return;
+	}
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_job != nullptr ? g_job->seed : 0;
-}
-
-void MazeMapCancelled() {
-	std::lock_guard<std::mutex> lock(g_lock);
-	g_job.reset();
-	g_cache = {};
+	g_jobs[slot].reset();
+	g_caches[slot] = {};
 }
 
 void MazeGameLeft() {
@@ -1012,16 +1074,18 @@ void MazeGameLeft() {
 		}
 		g_tileLists.clear();
 	}
-	g_closedFillerPiece = -1;
 	std::lock_guard<std::mutex> lock(g_lock);
-	g_job.reset();
-	g_cache = {};
+	for (size_t i = 0; i < cm::MazeTilesetCount; ++i) {
+		g_closedFillerPieces[i].piece = -1;
+		g_jobs[i].reset();
+		g_caches[i] = {};
+		g_slotStates[i].clear();
+		g_eventRooms[i] = {};
+		g_bossRooms[i] = {};
+	}
 	g_declared.clear();
 	g_ownRows.clear();
-	g_slotState.clear();
 	g_entrance = {};
-	g_eventRoom = {};
-	g_bossRoom = {};
 	g_arrivalLogged = false;
 	g_arrivalResult = 0;
 }
@@ -1038,8 +1102,13 @@ auto MazeRoomPieceId(const void* drlgRoom) noexcept -> int {
 }
 
 auto MazeRoomIsFiller(const void* drlgRoom) noexcept -> bool {
-	const int closed = g_closedFillerPiece.load();
-	return closed >= 0 && MazeRoomPieceId(drlgRoom) == closed;
+	const int id = MazeRoomPieceId(drlgRoom);
+	for (const ClosedPiece& closed : g_closedFillerPieces) {
+		if (closed.piece.load() >= 0 && id == closed.piece.load()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect>* out) noexcept -> bool {
@@ -1067,22 +1136,25 @@ auto LevelRoomRects(const void* level, std::vector<cartographer::eventplan::Rect
 	return !out->empty();
 }
 
-auto MazeEventRoom() -> MazeEventRect {
+auto MazeEventRoom(int level) -> MazeEventRect {
+	const int slot = SlotIndexOfId(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_eventRoom;
+	return slot >= 0 ? g_eventRooms[slot] : MazeEventRect{};
 }
 
 auto MazeArrivalResult() -> int {
 	return g_arrivalResult.load();
 }
 
-auto MazeBossRoom() -> MazeEventRect {
+auto MazeBossRoom(int level) -> MazeEventRect {
+	const int slot = SlotIndexOfId(level);
 	std::lock_guard<std::mutex> lock(g_lock);
-	return g_bossRoom;
+	return slot >= 0 ? g_bossRooms[slot] : MazeEventRect{};
 }
 
-auto MazeSlotBuilt() -> bool {
-	return g_slotState.blocked();
+auto MazeSlotBuilt(int level) -> bool {
+	const int slot = SlotIndexOfId(level);
+	return slot >= 0 && g_slotStates[slot].blocked();
 }
 
 // Any maze slot level is installed.
@@ -1108,6 +1180,10 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string 
 	cm::Tileset ts;
 	if (!cm::builtinTileset(map.tileset, ts)) {
 		return {};
+	}
+	const cm::MazeTileset* row = cm::findMazeTileset(map.tileset);
+	if (row != nullptr && row->ownGrower && g_live.load() && !g_growerHooked.load()) {
+		return "Cartographer: the " + ts.name + " room grower was not found in this game build or its hook was refused, so " + ts.name + " map '" + map.name + "' is not opened (see 'cartographer check').";
 	}
 	for (const Slot& slot : tables.slots) {
 		if (EqualsNoCase(slot.name, MapSlotName(map))) {
@@ -1184,6 +1260,10 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	bool ok = install(MazeRingGrower, reinterpret_cast<void*>(&RingHook), reinterpret_cast<void**>(&g_ringOriginal));
 	ok = ok && install(MazeEntranceExit, reinterpret_cast<void*>(&SpecialHook), reinterpret_cast<void**>(&g_specialOriginal));
 	ok = ok && install(MazeWalk, reinterpret_cast<void*>(&WalkHook), reinterpret_cast<void**>(&g_walkOriginal));
+	if (ok && g_parts[ArcaneGrower].status.on) {
+		// Optional: only Arcane maps need it. A refusal leaves the part off, and Arcane maps are refused (MazeTilesetProblem, LevelBuildHook).
+		g_growerHooked = install(ArcaneGrower, reinterpret_cast<void*>(&ArcaneGrowerHook), reinterpret_cast<void**>(&g_growerOriginal));
+	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {
 		plog::Warn("maze steering is off: a hook was refused (see 'cartographer check'); the hooks that went in pass straight through");

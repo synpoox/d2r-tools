@@ -11,6 +11,7 @@
 #include "core/tsv.h"
 #include "event6b.h"
 #include "crash_guard.h"
+#include "engine/arena_service.h"
 #include "engine/boss_names.h"
 #include "engine/map_stat_text.h"
 #include "engine/event_apply.h"
@@ -315,6 +316,18 @@ auto LoadAll() -> Loaded {
 	text.clear();
 	ReadFile(g_excelDir + L"\\levels.txt", &text);
 	carto::ValidateSlots(loaded.tables->slots, text, loaded.report);
+	{
+		std::string arenaText;
+		if (ReadTable(g_tableDir + L"\\" + Widen(carto::ArenasFile), carto::ArenasFile, &arenaText, loaded.report)) {
+			loaded.tables->arenas = carto::LoadArenas(arenaText, text, loaded.tables->slots, loaded.report);
+		}
+		std::string spotText;
+		if (!loaded.tables->arenas.empty() && ReadTable(g_tableDir + L"\\" + Widen(carto::ArenaSpotsFile), carto::ArenaSpotsFile, &spotText, loaded.report)) {
+			std::vector<std::string> objects = loaded.tables->objectClasses;
+			objects.insert(objects.end(), loaded.tables->objectNames.begin(), loaded.tables->objectNames.end());
+			carto::LoadArenaSpots(spotText, loaded.tables->arenas, loaded.tables->bosses, names, objects, loaded.report, static_cast<int>(loaded.tables->objectClasses.size()));
+		}
+	}
 	// A maze slot is one LevelType (3 Cave, 4 Crypt, one slot each): name each maze map its slot cannot build. An Outdoor slot's origin, declared size and
 	// act are read from the same file for the outdoor build hook.
 	if (carto::HasMazeSlot(loaded.tables->slots) || carto::HasOutdoorSlot(loaded.tables->slots)) {
@@ -573,6 +586,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallMapPanel(context, g_overrides, &panelParts);
 		std::vector<carto::PartStatus> lightParts;
 		(void)carto::InstallMapLighting(context, g_overrides, &lightParts);
+		carto::PublishArenaService(context);
 		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;

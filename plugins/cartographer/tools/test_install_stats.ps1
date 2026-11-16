@@ -20,13 +20,13 @@ function Write-Tsv([string]$name, [string[]]$header, $rows) {
 function Read-Rows([string]$name) { @(Get-Content (Join-Path $dir $name) | Select-Object -Skip 1 | Where-Object { $_ -ne '' } | ForEach-Object { , ($_ -split "`t") }) }
 function Run-Installer { $ErrorActionPreference = 'Continue'; & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer -ExcelDir $dir 2>&1 | Out-String }
 try {
-    $lh = @('Name', 'Id', 'Act', 'DrlgType', 'LevelType', 'Depend', 'OffsetX', 'OffsetY', 'Position', 'SizeX', 'SizeY', 'Quest', 'LevelGroup', 'LevelName', 'LevelEntry', 'LevelWarp', 'SubType', 'SubTheme', 'Waypoint') +
+    $lh = @('Name', 'Id', 'Act', 'DrlgType', 'LevelType', 'Depend', 'OffsetX', 'OffsetY', 'Position', 'SizeX', 'SizeY', 'Quest', 'QuestFlag', 'QuestFlagEx', 'LevelGroup', 'LevelName', 'LevelEntry', 'LevelWarp', 'SubType', 'SubTheme', 'Waypoint') +
         (0..7 | ForEach-Object { "Vis$_" }) + (0..7 | ForEach-Object { "Warp$_" })
     function Level($name, $id, $act, $drlg, $type) {
-        $c = @{ Name = $name; Id = "$id"; Act = "$act"; DrlgType = "$drlg"; LevelType = "$type"; Depend = '0'; OffsetX = '0'; OffsetY = '0'; Position = '0'; SizeX = '48'; SizeY = '48'; Quest = '0'; LevelGroup = 'Null'; LevelName = $name; LevelEntry = ''; LevelWarp = ''; SubType = '-1'; SubTheme = '-1'; Waypoint = '255' }
+        $c = @{ Name = $name; Id = "$id"; Act = "$act"; DrlgType = "$drlg"; LevelType = "$type"; Depend = '0'; OffsetX = '0'; OffsetY = '0'; Position = '0'; SizeX = '48'; SizeY = '48'; Quest = '0'; QuestFlag = $(if ($type -eq 22) { '18' } else { '0' }); QuestFlagEx = $(if ($type -eq 22) { '18' } else { '0' }); LevelGroup = 'Null'; LevelName = $name; LevelEntry = ''; LevelWarp = ''; SubType = '-1'; SubTheme = '-1'; Waypoint = '255' }
         , @($lh | ForEach-Object { if ($c.ContainsKey($_)) { $c[$_] } elseif ($_ -like 'Vis*') { '0' } elseif ($_ -like 'Warp*') { '-1' } else { '' } })
     }
-    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Icy Cellar' 119 4 1 33),(Level 'Last' 136 4 3 21))
+    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Icy Cellar' 119 4 1 33), (Level 'Mephisto 1' 100 2 1 22), (Level 'Arcane Sanctuary' 74 1 1 19), (Level 'Last' 136 4 3 21))
     Write-Tsv 'lvlmaze.txt' @('Name', 'Level', 'Rooms', 'SizeX', 'SizeY', 'Merge') @(, @('Cave 1', '8', '3', '10', '10', '0'))
     $ih = @('ItemType', 'Code', 'Equiv1', 'Equiv2', 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2', 'Rare', 'Magic')
     Write-Tsv 'itemtypes.txt' $ih @(, @('Herb', 'herb', 'misc', '', '0', '0', '0', '0', '0', '0', '1', '1', '', '', '', '', '0', '0'))
@@ -39,6 +39,8 @@ try {
 
     $log1 = Run-Installer
     Check ($LASTEXITCODE -eq 0) 'first run succeeds'
+    $dur = @(Read-Rows 'levels.txt' | Where-Object { $_[0] -eq 'Cartographer Durance' })
+    Check ($dur.Count -eq 1 -and $dur[0][$lh.IndexOf('QuestFlag')] -eq '0' -and $dur[0][$lh.IndexOf('QuestFlagEx')] -eq '0') 'the Durance level copy has no quest flags'
     $firstTypeRows = @(Read-Rows 'itemtypes.txt' | Where-Object { $_[1] -eq 'cmap' })
     Check ($firstTypeRows.Count -eq 1) 'a fresh run writes one cmap item type row'
     if ($LASTEXITCODE -ne 0) { Write-Host $log1 }

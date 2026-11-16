@@ -1,6 +1,7 @@
 #include "tables.h"
 
 #include "maze_tilesets.h"
+#include "mesa_plan.h"
 #include "outdoor_plan.h"
 #include "outdoor_tilesets.h"
 #include "text.h"
@@ -22,13 +23,13 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava and Ice) are buildable through the maze
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice and Durance) are buildable through the maze
 // steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
 	{"Barracks", false}, {"Jail", false},
-	{"Lair", false},   {"Durance", false}, {"Dungeon", false}, {"Sewer", false},    {"Harem", false},
+	{"Lair", false},   {"Dungeon", false}, {"Sewer", false},    {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 
@@ -285,9 +286,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
-		// Snow and Siege build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
+		// Snow, Siege and Mesa build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
-		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege);
+		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::Mesa);
 		if (shape.empty() && ignoresShape) {
 			map.shape.clear();
 		} else if (shape.empty()) {
@@ -917,6 +918,243 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 			}
 		}
 	}
+}
+
+auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef> {
+	namespace mesa = cartographer::outdoor::mesa;
+	std::vector<ArenaDef> out;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(ArenasFile, table, report) || !RequireColumns(ArenasFile, table, {"Name", "Level"}, report)) {
+		return out;
+	}
+	ReportRepeatedColumns(ArenasFile, table, report);
+	NoteUnusedColumns(ArenasFile, table, {"Name", "Level", "Tileset", "Width", "Height", "Fill", "Entry", "Brightness", "Warmth"}, report);
+	const Tsv levels = ParseTsv(levelsText);
+	const int lId = levels.Column("Id"), lAct = levels.Column("Act"), lDrlg = levels.Column("DrlgType"), lType = levels.Column("LevelType");
+	const int lOffX = levels.Column("OffsetX"), lOffY = levels.Column("OffsetY"), lSizeX = levels.Column("SizeX"), lSizeY = levels.Column("SizeY");
+	const int cName = table.Column("Name"), cLevel = table.Column("Level"), cTileset = table.Column("Tileset"), cWidth = table.Column("Width"), cHeight = table.Column("Height");
+	const int cFill = table.Column("Fill"), cEntry = table.Column("Entry");
+	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
+	static const std::vector<std::string> fills = {"Mesa1", "Mesa2", "Mesa3"};
+	for (const TsvRow& row : table.rows) {
+		ArenaDef def;
+		def.line = row.line;
+		def.name = table.Cell(row, cName);
+		const auto fail = [&](const std::string& why) { report.Error(ArenasFile, row.line, why + " This arena is skipped, so the game builds that level itself."); };
+		if (def.name.empty()) {
+			fail("the Name cell is empty.");
+			continue;
+		}
+		if (!ParseInt(table.Cell(row, cLevel), 1, 65535, &def.level)) {
+			fail("arena '" + def.name + "': Level '" + table.Cell(row, cLevel) + "' is not a levels.txt Id.");
+			continue;
+		}
+		const std::string who = "arena '" + def.name + "' (level " + std::to_string(def.level) + "): ";
+		const TsvRow* levelRow = nullptr;
+		if (lId >= 0) {
+			for (const TsvRow& r : levels.rows) {
+				int id = 0;
+				if (ParseInt(levels.Cell(r, lId), 0, 65535, &id) && id == def.level) {
+					levelRow = &r;
+					break;
+				}
+			}
+		}
+		if (levelRow == nullptr) {
+			fail(who + (lId < 0 ? "levels.txt could not be read." : "levels.txt has no row with that Id."));
+			continue;
+		}
+		const auto cellOf = [&](int column) {
+			int v = -1;
+			return column >= 0 && ParseInt(levels.Cell(*levelRow, column), -1000000, 1000000, &v) ? v : -1;
+		};
+		const std::string tileset = table.Cell(row, cTileset);
+		if (!tileset.empty() && !EqualsNoCase(tileset, "Mesa")) {
+			fail(who + "the tileset '" + tileset + "' is not supported yet. Only Mesa is.");
+			continue;
+		}
+		if (cellOf(lAct) != 4 || cellOf(lDrlg) != OutdoorDrlgType || cellOf(lType) != mesa::kLevelType) {
+			fail(who + "the level must be Act 5 (Act 4), DrlgType " + std::to_string(OutdoorDrlgType) + " and LevelType " + std::to_string(mesa::kLevelType) + " (Mesa) in levels.txt; it has Act " +
+			     std::to_string(cellOf(lAct)) + ", DrlgType " + std::to_string(cellOf(lDrlg)) + ", LevelType " + std::to_string(cellOf(lType)) + ".");
+			continue;
+		}
+		if (std::any_of(slots.begin(), slots.end(), [&](const Slot& s) { return s.level == def.level; })) {
+			fail(who + "the level is also a map slot level.");
+			continue;
+		}
+		if (std::any_of(out.begin(), out.end(), [&](const ArenaDef& o) { return o.level == def.level; })) {
+			fail(who + "another arena already uses the level.");
+			continue;
+		}
+		bool ok = true;
+		const auto whole = [&](int column, const char* label, int hi, int* v) {
+			const std::string cell = table.Cell(row, column);
+			if (cell.empty() || !ok) {
+				return;
+			}
+			if (!ParseInt(cell, 1, hi, v)) {
+				fail(who + std::string(label) + " '" + cell + "' is not a whole number " + Range(1, hi) + " (grid cells of 8 tiles).");
+				ok = false;
+			}
+		};
+		whole(cWidth, "Width", mesa::kMaxCellsW, &def.width);
+		whole(cHeight, "Height", mesa::kMaxCellsH, &def.height);
+		if (!ok) {
+			continue;
+		}
+		const std::string fill = table.Cell(row, cFill);
+		if (!fill.empty()) {
+			const std::string* known = Canonical(fills, fill);
+			if (known == nullptr) {
+				fail(who + "the fill set '" + fill + "' is not Mesa1, Mesa2 or Mesa3.");
+				continue;
+			}
+			def.fill = static_cast<int>(known - fills.data());
+		}
+		def.entryX = def.width / 2;  // blank: the bottom-centre cell
+		def.entryY = def.height - 1;
+		const std::string entry = table.Cell(row, cEntry);
+		if (!entry.empty()) {
+			const size_t comma = entry.find(',');
+			int x = 0, y = 0;
+			if (comma == std::string::npos || !ParseInt(entry.substr(0, comma), 0, 1000, &x) || !ParseInt(entry.substr(comma + 1), 0, 1000, &y)) {
+				fail(who + "Entry '" + entry + "' is not two whole numbers like 1,1.");
+				continue;
+			}
+			if (x >= def.width || y >= def.height) {
+				fail(who + "Entry " + entry + " is outside the " + std::to_string(def.width) + " x " + std::to_string(def.height) + " interior (cells count from 0).");
+				continue;
+			}
+			def.entryX = x;
+			def.entryY = y;
+		}
+		// The look columns are cosmetic, as in maps.txt: a bad cell keeps the tileset's own look for that column and the arena still loads.
+		namespace ml = cartographer::maplight;
+		const auto look = [&](int column, const char* label, int lo, int hi, int* out) {
+			const std::string cell = table.Cell(row, column);
+			if (!cell.empty() && !ParseInt(cell, lo, hi, out)) {
+				report.Error(ArenasFile, row.line, who + std::string(label) + " '" + cell + "' is not a whole number " + Range(lo, hi) + ". The tileset's own look is kept for this column.");
+			}
+		};
+		look(cBrightness, "Brightness", ml::MinBrightness, ml::MaxBrightness, &def.look.brightness);
+		look(cWarmth, "Warmth", ml::MinWarmth, ml::MaxWarmth, &def.look.warmth);
+		def.offsetX = cellOf(lOffX);
+		def.offsetY = cellOf(lOffY);
+		def.sizeX = cellOf(lSizeX);
+		def.sizeY = cellOf(lSizeY);
+		const int tilesW = (def.width + 2 * mesa::kRingCells) * mesa::kGridTiles, tilesH = (def.height + 2 * mesa::kRingCells) * mesa::kGridTiles;
+		if ((def.sizeX > 0 && tilesW > def.sizeX) || (def.sizeY > 0 && tilesH > def.sizeY)) {
+			fail(who + "the arena needs " + std::to_string(tilesW) + " x " + std::to_string(tilesH) + " tiles with its ring, more than the level's SizeX x SizeY in levels.txt (" +
+			     std::to_string(def.sizeX) + " x " + std::to_string(def.sizeY) + ").");
+			continue;
+		}
+		// HD scene coordinates are signed 16-bit in subtiles (5 per tile): a level whose world position passes 32767 / 5 = 6553 tiles draws no floor in HD
+		// (game check, issue #491: origin 6520 drew, 6560 did not; X the same). The far edge is held under it so the margin is safe.
+		constexpr int kHdWorldTiles = 6553;
+		if (def.offsetX + tilesW > kHdWorldTiles || def.offsetY + tilesH > kHdWorldTiles) {
+			fail(who + "the level's OffsetX / OffsetY plus the arena's " + std::to_string(tilesW) + " x " + std::to_string(tilesH) + " tiles pass " + std::to_string(kHdWorldTiles) +
+			     " in levels.txt (" + std::to_string(def.offsetX) + ", " + std::to_string(def.offsetY) + "); HD draws no floor past it. Lower the offset.");
+			continue;
+		}
+		out.push_back(std::move(def));
+	}
+	return out;
+}
+
+void LoadArenaSpots(std::string_view text, std::vector<ArenaDef>& arenas, const std::vector<BossDef>& bosses, const GameNames& names, const std::vector<std::string>& objects, Report& report, int objectRows) {
+	namespace mesa = cartographer::outdoor::mesa;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(ArenaSpotsFile, table, report) || !RequireColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y"}, report)) {
+		return;
+	}
+	ReportRepeatedColumns(ArenaSpotsFile, table, report);
+	NoteUnusedColumns(ArenaSpotsFile, table, {"Arena", "Spot", "X", "Y", "Monster", "Object"}, report);
+	const int cArena = table.Column("Arena"), cSpot = table.Column("Spot"), cX = table.Column("X"), cY = table.Column("Y"), cMonster = table.Column("Monster"), cObject = table.Column("Object");
+	for (const TsvRow& row : table.rows) {
+		ArenaSpotDef spot;
+		spot.line = row.line;
+		spot.name = table.Cell(row, cSpot);
+		const std::string arenaName = table.Cell(row, cArena);
+		const auto fail = [&](const std::string& why) { report.Error(ArenaSpotsFile, row.line, why + " This spot is skipped."); };
+		ArenaDef* arena = nullptr;
+		for (ArenaDef& a : arenas) {
+			if (EqualsNoCase(a.name, arenaName)) {
+				arena = &a;
+				break;
+			}
+		}
+		if (arena == nullptr) {
+			fail("Arena '" + arenaName + "' is not a Name in " + ArenasFile + " (or that row was skipped).");
+			continue;
+		}
+		const std::string who = "arena '" + arena->name + "', spot '" + spot.name + "': ";
+		if (spot.name.empty()) {
+			fail("arena '" + arena->name + "': the Spot cell is empty.");
+			continue;
+		}
+		if (std::any_of(arena->spots.begin(), arena->spots.end(), [&](const ArenaSpotDef& o) { return EqualsNoCase(o.name, spot.name); })) {
+			fail(who + "another spot of this arena has that name.");
+			continue;
+		}
+		const int tilesW = arena->width * mesa::kGridTiles, tilesH = arena->height * mesa::kGridTiles;
+		if (!ParseInt(table.Cell(row, cX), 0, tilesW - 1, &spot.x) || !ParseInt(table.Cell(row, cY), 0, tilesH - 1, &spot.y)) {
+			fail(who + "X '" + table.Cell(row, cX) + "' and Y '" + table.Cell(row, cY) + "' must be whole tiles inside the " + std::to_string(tilesW) + " x " + std::to_string(tilesH) +
+			     " interior (0 to " + std::to_string(tilesW - 1) + " and 0 to " + std::to_string(tilesH - 1) + ", counted from its top-left corner, the ring not counted).");
+			continue;
+		}
+		if (arena->offsetX < 0 || arena->offsetY < 0) {
+			fail(who + "levels.txt gives no OffsetX / OffsetY for the arena's level, so the spot has no position.");
+			continue;
+		}
+		spot.monster = table.Cell(row, cMonster);
+		spot.object = table.Cell(row, cObject);
+		if (!spot.monster.empty() && !spot.object.empty()) {
+			fail(who + "Monster and Object are both set; a spot holds one of them.");
+			continue;
+		}
+		if (!spot.monster.empty()) {
+			const bool known = std::any_of(bosses.begin(), bosses.end(), [&](const BossDef& b) { return b.name == spot.monster; }) ||
+			                   (names.haveSuperUniques && ContainsNoCase(names.superUniques, spot.monster)) || (names.haveMonsters && ContainsNoCase(names.monsters, spot.monster));
+			const bool unchecked = !names.haveSuperUniques && !names.haveMonsters;
+			if (!known && !unchecked) {
+				fail(who + "Monster '" + spot.monster + "' is not an entry in bosses.txt, a superuniques.txt row or a monstats.txt Id.");
+				continue;
+			}
+		}
+		if (!spot.object.empty() && !objects.empty()) {
+			int rowNumber = 0;
+			if (!ContainsNoCase(objects, spot.object) && !(ParseInt(spot.object, 0, 100000, &rowNumber) && rowNumber < (objectRows >= 0 ? objectRows : static_cast<int>(objects.size())))) {
+				fail(who + "Object '" + spot.object + "' is not a Class or Name in objects.txt, nor a row number.");
+				continue;
+			}
+		}
+		const int interiorX = arena->offsetX + mesa::kRingCells * mesa::kGridTiles, interiorY = arena->offsetY + mesa::kRingCells * mesa::kGridTiles;
+		spot.tileX = interiorX + spot.x;
+		spot.tileY = interiorY + spot.y;
+		spot.subX = spot.tileX * 5 + 2;
+		spot.subY = spot.tileY * 5 + 2;
+		spot.roomX = interiorX + spot.x / mesa::kGridTiles * mesa::kGridTiles;
+		spot.roomY = interiorY + spot.y / mesa::kGridTiles * mesa::kGridTiles;
+		spot.roomW = spot.roomH = mesa::kGridTiles;
+		arena->spots.push_back(std::move(spot));
+	}
+}
+
+auto FindArenaSpot(const std::vector<ArenaDef>& arenas, int level, std::string_view name, const ArenaDef** arena) -> const ArenaSpotDef* {
+	for (const ArenaDef& a : arenas) {
+		if (a.level != level) {
+			continue;
+		}
+		for (const ArenaSpotDef& s : a.spots) {
+			if (EqualsNoCase(s.name, name)) {
+				if (arena != nullptr) {
+					*arena = &a;
+				}
+				return &s;
+			}
+		}
+	}
+	return nullptr;
 }
 
 auto IsMazeSlotName(std::string_view slot) -> bool {

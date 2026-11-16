@@ -15,7 +15,7 @@ namespace carto {
 // Finds the restore function by signature and hooks it (17 bytes). Never throws; off with a logged reason when the part is not found or refused.
 void InstallAutomapReset(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count);
 
-// The slot map (levels.txt id `slotLevel`) is being built; `map` identifies it (plan hash and seed; 0: always treat as new). When it is not the map built last in this game, the next time the
+// The slot map (levels.txt id `slotLevel`) is being built; `map` identifies it (plan hash and seed; 0: always treat as new). When it is not the map built last through `slotLevel` in this game, the next time the
 // game makes another layer current and reads its cells back, skip that read. Building the same map again (the return from a town trip) skips nothing. Any thread.
 // No effect when the part is off.
 void AutomapResetArm(uint64_t map, int slotLevel) noexcept;

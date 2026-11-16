@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "outdoor_tilesets.h"
+#include "mesa_plan.h"
 #include "siege_plan.h"
 #include "snow_plan.h"
 
@@ -126,6 +127,27 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		out.ok = true;
 		return out;
 	}
+	if (tileset->planner == Planner::Mesa) {
+		// Mesa is a ring of border pieces round a packed fill: only the stamps reach the hook and the grid comparison, as for Snow.
+		mesa::MesaRequest mesaRequest;
+		if (!mesa::mesaSizeCells(request.size, &mesaRequest.cellsW, &mesaRequest.cellsH)) {
+			return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
+		}
+		mesaRequest.seed = request.seed;
+		mesaRequest.options.originX = request.options.originX;
+		mesaRequest.options.originY = request.options.originY;
+		mesaRequest.options.maxTilesX = request.options.maxTilesX;
+		mesaRequest.options.maxTilesY = request.options.maxTilesY;
+		mesaRequest.options.pinFiles = request.options.pinFiles;
+		mesa::MesaPlan mesaPlan = mesa::planMesaMap(mesaRequest);
+		if (!mesaPlan.ok) {
+			return fail("Cartographer could not plan the Mesa map: " + mesaPlan.reason);
+		}
+		out.stamps = std::move(mesaPlan.stamps);
+		out.hash = mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps));
+		out.ok = true;
+		return out;
+	}
 	const std::optional<layout::Size> size = layout::parseSizeName(request.size.empty() ? std::string_view("Large") : std::string_view(request.size));
 	if (!size) {
 		return fail("The size '" + request.size + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(request.size));
@@ -162,6 +184,21 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 	h = mix(h, picksHash(out.picks));
 	h = mix(h, stampPlanHash(out.stamps));
 	out.hash = h;
+	out.ok = true;
+	return out;
+}
+
+MapPlan planArenaMap(const mesa::MesaRequest &request) {
+	MapPlan out;
+	mesa::MesaPlan plan = mesa::planMesaArena(request);
+	if (!plan.ok) {
+		out.reason = "Cartographer could not plan the arena: " + plan.reason;
+		return out;
+	}
+	out.stamps = std::move(plan.stamps);
+	// The stamp hash leaves out the entrance rectangle, so the entry cell is mixed in: two arenas that differ only in their entry are two plans.
+	const TileRect &e = out.stamps.entrance;
+	out.hash = mix(mix(mix(mix(mix(0xcbf29ce484222325ull, stampPlanHash(out.stamps)), static_cast<uint64_t>(e.x)), static_cast<uint64_t>(e.y)), static_cast<uint64_t>(e.w)), static_cast<uint64_t>(e.h));
 	out.ok = true;
 	return out;
 }

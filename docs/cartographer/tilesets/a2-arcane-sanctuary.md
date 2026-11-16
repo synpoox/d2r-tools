@@ -1,6 +1,6 @@
 # Act 2 Arcane Sanctuary (#280): generate as maze
 
-**Verdict: generate as maze.** Effort **L** (an own-grower spike and hook; the piece data is already catalogued).
+**Verdict: generate as maze. Built (#280).** The grower is hooked (`docs/reverse-engineering/cartographer/37-arcane-grower.md`); the tileset is the `Arcane` row of `MazeTilesets`, slot `MazeArcane`, 12-tile rooms, pieces 509 + mask, no filler ring.
 
 Research note, 2026-11-12, vanilla build 3.3.0 tables read-only. No game run, no engine disassembly (no dump available to this research).
 

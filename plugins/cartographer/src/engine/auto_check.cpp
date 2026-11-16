@@ -351,7 +351,7 @@ void Step(void* game, void* unit, std::unique_lock<std::mutex>& lock, uint64_t g
 			Enter(Phase::Stats);
 			return;
 		}
-		const MazeEventRect room = Outside(lock, [&] { return (MapIsOutdoor(g_run.map) ? OutdoorBossRoom() : MazeBossRoom()); });
+		const MazeEventRect room = Outside(lock, [&] { return (MapIsOutdoor(g_run.map) ? OutdoorBossRoom(g_run.opened.level) : MazeBossRoom(g_run.opened.level)); });
 		if (g_gen != gen) {
 			return;
 		}

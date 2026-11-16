@@ -39,18 +39,18 @@ void MazeMapOpened(const MapDef& map, const Tables& tables, uint64_t seedSalt);
 // here (with or without a map open): it is not rebuilt. Never call it on a host or in single player.
 auto MazeRemoteMapOpened(const MapDef& map, const Tables& tables, uint64_t hostSeed) -> bool;
 
-// True once the Maze slot level was built, or is being built, in this game, whether or not a map was open then.
-auto MazeSlotRanAny() -> bool;
+// True once the Maze slot level `level` was built, or is being built, in this game, whether or not a map was open then.
+auto MazeSlotRanAny(int level) -> bool;
 
 // The data flag the game last called the level build with in this game, or -1 before any build. On a remote client every build is the
 // client's own, so this is the flag its tables are looked up with. The map sync's client apply reads it for the levels row.
 auto MazeLevelDataFlag() -> int;
 
-// The layout seed of the map opened last (the seed MazeMapOpened chose), or 0 when none is open. For the map sync (host to client).
-auto MazeOpenSeed() -> uint64_t;
+// The layout seed of the map opened through slot level `level` (the seed MazeMapOpened chose), or 0 when none is open there. For the map sync (host to client).
+auto MazeOpenSeed(int level) -> uint64_t;
 
-// The portal did not open after all: forget the map.
-void MazeMapCancelled();
+// The portal did not open after all: forget the map opened through slot level `level`.
+void MazeMapCancelled(int level);
 
 // Leaving a game: forget the map and its plan.
 void MazeGameLeft();
@@ -62,13 +62,9 @@ void MazeProbeArrival(void* room, int32_t levelId);
 // The probe runs when MazeProbe or AutoCheck is 1. Read by AutoCheck.
 auto MazeArrivalResult() -> int;
 
-// The tileset of the maze map that is open and not yet built, or empty. The maze slots share one job, so portal.cpp refuses a map of another
-// tileset while this is set (MazeOpenConflict).
-auto MazePendingTileset() -> std::string;
-
-// True while a slot build is running, or once one ran for an opened map in this game; no map is opened through the slot then
-// (the level can be torn down and rebuilt, so a later open could mix plans) until the game is left.
-auto MazeSlotBuilt() -> bool;
+// True while a slot build of slot level `level` is running, or once one ran for an opened map in this game; no map is opened through that slot
+// then (the level can be torn down and rebuilt, so a later open could mix plans) until the game is left.
+auto MazeSlotBuilt(int level) -> bool;
 
 // True while the arrival probe still has something to log (MazeProbe on, a slot, not logged yet). Cheap; the tick asks first.
 auto MazeArrivalPending() -> bool;
@@ -92,10 +88,10 @@ struct MazeEventRect {
 	int32_t levelId = 0, x = 0, y = 0, w = 0, h = 0;
 	std::vector<MazeRoomRect> more;  // the plan cell's other rooms, nearest the centre first: the fallbacks when this one cannot host the Boss
 };
-auto MazeEventRoom() -> MazeEventRect;
+auto MazeEventRoom(int level) -> MazeEventRect;
 
 // The plan's boss room (the far cell of the main path), in the same form and with the same lifetime. Not known when the layout has no boss room.
-auto MazeBossRoom() -> MazeEventRect;
+auto MazeBossRoom(int level) -> MazeEventRect;
 
 // The DRLG rects (tiles) of every room in `level`'s room list (level +0x10 first room, room +0x48 next), read through the guarded
 // walker. False, and `out` left empty, when the list cannot be read (no level, no first room, an unreadable room, or more than the

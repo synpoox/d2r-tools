@@ -10,9 +10,9 @@ What the plugin reads, and what takes effect in game today:
 
 | File | Read today? | Applied in game today? |
 |---|---|---|
-| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave, Crypt or Ice map opens the installed Maze level of its tileset, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
+| `maps.txt` | Yes. Checked row by row when the game starts and again by `cartographer check`. | `Name`, `Item`, `MinCharLevel`, `Tileset`, `Shape`, `Size`, `Boss` and `EventChance` act; a Cave, Crypt, Ice, Durance or Arcane map opens the installed Maze level of its tileset, a Jungle, Snow or Siege map the Outdoor, OutdoorSnow or OutdoorSiege level. `Monsters` is written into the map's level when it opens and the listed monsters filled the map in game; `Level`, `Density` and `Uniques` are written the same way (experimental, their effect not measured). `Champions` is checked, then never applied: the game has no setting for it, and a value above 0 is logged as not applied. |
 | `cartographer.txt` | Yes, checked the same way. | All settings are used (see below). |
-| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `MazeIce`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
+| `slots.txt` | Yes. Written by `tools\install.ps1` (the `Maze`, `MazeCrypt`, `MazeIce`, `MazeDurance`, `MazeArcane`, `Outdoor` and `OutdoorSnow` rows); you do not edit it. | Yes: it names the level the portal opens. |
 | `shapes.txt`, `mapevents.txt` | Yes, each is optional. Checked row by row like `maps.txt`; a bad row is skipped and reported. | `shapes.txt`: yes, a map's `Shape` can name a row and the layout is built from it exactly like a built-in shape (unit tested; not verified in game). `mapevents.txt`: yes, a map's event is drawn from it by `Weight` when the map opens (Boss, Horde, Ambush, Shrine and Treasure were seen in game; see testing.md). |
 | `tilesets.txt` | Not yet. | No. A file you add now is ignored. |
 
@@ -43,8 +43,8 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | Column | Required | What to put | Default | Example |
 |---|---|---|---|---|
 | `Name` | yes | The map's name, used by `cartographer open` and in the message "Cartographer: <Name> is open." when the portal opens. Unique across maps, ignoring case | none | Shorelines |
-| `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame) and `Ice` (Ice caves) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava` and `MazeIce`), and `Jungle`, `Snow` and `Siege` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Durance`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
-| `Shape` | yes (the column); the cell may be blank for `Snow` and `Siege` | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). `Snow` and `Siege` ignore Shape, so leave the cell blank there (`Open` is still refused for Snow); every other tileset needs one. | none | Corridor |
+| `Tileset` | yes | A tileset name. `Cave`, `Crypt`, `Lava` (River of Flame), `Ice` (Ice caves) and `Durance` (Durance of Hate) and `Arcane` (Arcane Sanctuary) are built (each opens through its own level, `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance` and `MazeArcane`), and `Jungle`, `Snow`, `Siege` and `Mesa` (always built; outdoor maps have no setting). `Barracks`, `Jail`, `Lair`, `Dungeon`, `Sewer`, `Harem`, `Basement`, `Spider` and `Temple` are known names that are refused with a message until they are built | none | Cave |
+| `Shape` | yes (the column); the cell may be blank for `Snow`, `Siege` and `Mesa` | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open`, or the `Name` of a row in `shapes.txt` (matched ignoring case). `Snow`, `Siege` and `Mesa` ignore Shape, so leave the cell blank there (`Open` is still refused for Snow); every other tileset needs one. | none | Corridor |
 | `Size` | no | `Small`, `Medium`, `Large` or `ExtraLarge` | Large | ExtraLarge |
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
@@ -225,6 +225,39 @@ Adds your own room-piece set to a built-in tileset. Only for maze tilesets. Your
 | `Name` | The name to use in `maps.txt` | none (required) | Mossy Cave |
 | `Base` | The built-in tileset it copies | none (required) | Cave |
 | `First` | The `Def` value of the "W" piece in the game's room piece table (`LvlPrest`); the other 14 follow it | none (required) | 1200 (illustrative) |
+
+## arenas.txt (optional)
+
+Declares fixed arena levels: a square, enclosed arena stamped from whole stock Mesa pieces inside the border ring Blizzard made for them, the same in every game, with no exit but the portal or entry. It builds in a row of the mod's own `levels.txt` (no installer slot row), which must be Act 5 (`Act` 4), `DrlgType` 3 and `LevelType` 27, and must not also be a `slots.txt` level. The level's `OffsetX`, `OffsetY`, `SizeX` and `SizeY` are read from that row; `SizeX` x `SizeY` must hold the interior plus the one-cell ring (8 tiles on each side). `OffsetX` / `OffsetY` plus the arena's tiles must stay under 6553: past that world position HD draws no floor (a signed 16-bit limit in subtiles), so the row is skipped. An arena is not a map: no portal item, no map event, Boss or stat, and it does not count as the game's one open map. A row that cannot be used is skipped with a line in `cartographer-report.txt` and the game builds that level itself. Other plugins read the arena through the content services in [ADR 0001](adr-0001-cartographer-standalone.md) (`cartographer.arena.v1`, see [arena-service.md](arena-service.md)).
+
+| Column | What to put | Default | Example |
+|---|---|---|---|
+| `Name` | The arena's name, for the log and messages | none (required) | Uber Mephisto |
+| `Level` | The mod's own `levels.txt` `Id` | none (required) | 150 |
+| `Tileset` | `Mesa` (the only one so far) | Mesa | Mesa |
+| `Width`, `Height` | The interior in 8-tile grid cells, without the ring: 1 to 14 wide, 1 to 12 high. 2 x 2 is 16 x 16 tiles of floor | 2, 2 | 4, 3 |
+| `Fill` | The fill set: `Mesa1`, `Mesa2` or `Mesa3` | Mesa3 | Mesa1 |
+| `Entry` | The interior cell (`x,y`, counted from 0 at the top left) whose piece is the arrival | the bottom-centre cell | 1,1 |
+| `Brightness` | Percent, 10 to 400 (HD only): lower is darker, higher is brighter, 100 is the tileset's look. The look applies while the player is in the arena's level, and it is the same as a map's `Brightness` (see [maps.txt](#mapstxt-required)). A value outside the range or not a whole number is reported and treated as blank | tileset's own | 150 |
+| `Warmth` | Percent, 25 to 400 (HD only): above 100 is warmer (more orange), below 100 cooler (more blue), 100 is the tileset's look. The look applies while the player is in the arena's level, and it is the same as a map's `Warmth`. A value outside the range or not a whole number is reported and treated as blank | tileset's own | 60 |
+
+The interior is packed largest piece first from the fill set (a 2 x 2 interior is one 16 x 16 piece) with no random draw; the engine picks each piece's DS1 variant from a level seed taken from the plan, so the layout is the same in every game and on every client. The arrival is the room of the piece that holds the `Entry` cell.
+
+A Boss is not a column here: put it in `arenaspots.txt` as a `Monster` (a `bosses.txt` Name), so it spawns once per game at its named spot. Monsters, density, monster level and unique packs are not set here either: the arena builds in its own `levels.txt` row, so set `mon1..`, `MonDen`, `MonLvl` / `MonLvlEx` and `MonUMin` / `MonUMax` there. `Tileset` is still Mesa only.
+
+## arenaspots.txt (optional)
+
+Named spots in the fixed arenas of `arenas.txt`, one row per spot, the same in every game: a boss, an add, a chest, an altar, a portal or a marker, given once in data instead of as coordinates in a consumer. A spot with a `Monster` or an `Object` is spawned there once per game, when the room that holds it is populated; a spot with neither only names a place, for another plugin to read through `cartographer.arena.v1` ([arena-service.md](arena-service.md)). The file is read only when `arenas.txt` has an arena. A bad row is skipped with one line in `cartographer-report.txt`: an `Arena` that is not a `Name` in `arenas.txt` (or whose row was skipped), a repeated `Spot` in the arena (ignoring case), an `X` or `Y` outside the interior, no `OffsetX` / `OffsetY` for the arena's level in `levels.txt`, both `Monster` and `Object` set, a `Monster` that is not a `bosses.txt` entry, a `superuniques.txt` row or a `monstats.txt` Id, or an `Object` that is not an `objects.txt` `Class` or `Name` (or a row number). A name list the game's tables could not be read for is not checked.
+
+| Column | What to put | Default | Example |
+|---|---|---|---|
+| `Arena` | A `Name` in `arenas.txt` | none (required) | Uber Mephisto |
+| `Spot` | The spot's name, unique within the arena | none (required) | centre |
+| `X`, `Y` | Tiles from the interior's top-left corner (the ring is not counted), counted from 0. A 2 x 2 arena has 0 to 15 | none (required) | 7, 7 |
+| `Monster` | A `bosses.txt` entry, a `superuniques.txt` row or a `monstats.txt` Id, spawned at the spot | none | Lucion |
+| `Object` | An `objects.txt` `Class` or `Name`, or a row number, created at the spot | none | Chest3 |
+
+The spot is the centre of its tile. If the game refuses the exact spot (it is taken), the monster is spawned with the collision test skipped and the object at the nearest free spot of the same room (the free-spot search is asked for the spot itself first); an object given by name (`Class` or `Name`) needs the mod's own `objects.txt` in its excel folder, without it only a row number works; a spot is marked done before it spawns, so a spawn the game refused is not retried in that game; a spot is spawned only when Cartographer built the level from its plan (when the game builds the level itself the spot would land on its coordinates, so nothing spawns); the plugin log says where each unit went (`arena '<Name>' spot '<spot>'`). A superunique the game already spawned this game is spawned as its class instead (once per game, the game's rule).
 
 ## shapes.txt (optional, advanced)
 

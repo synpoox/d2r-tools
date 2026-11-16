@@ -21,6 +21,7 @@ struct Tables {
 	std::vector<SkippedMap> skippedMaps;  // maps.txt rows left out at load, so their items can say why they open nothing
 	Settings settings;
 	std::vector<Slot> slots;
+	std::vector<ArenaDef> arenas;  // arenas.txt (optional): fixed Mesa arenas built in the mod's own levels.txt rows
 	// Optional tables. Shapes and events are loaded and checked only.
 	cartographer::layout::ShapeTable shapes;
 	std::vector<cartographer::events::Row> events;

@@ -790,6 +790,53 @@ bool Event6bPlaceShrine(void* rawGame, void* room, const ep::Rect& serverRect) n
 	}
 }
 
+bool Event6bPlaceObjectAt(void* rawGame, void* room, const ep::Rect& serverRect, const std::vector<std::string>& objectClasses, const std::vector<std::string>& objectNames, const std::string& spec, int x, int y,
+                          int* placedX, int* placedY) noexcept {
+	try {
+		auto* game = static_cast<Game*>(rawGame);
+		if (game == nullptr || room == nullptr || !On(FreeSpot) || !On(CreateObject) || !On(DataTables)) {
+			plog::Warn("arena spot object '%s' not placed: %s", spec.c_str(), game == nullptr || room == nullptr ? "no game or room" : "a part is off");
+			return false;
+		}
+		std::string why;
+		const uint8_t* dt = TablesBase(At<uint8_t>(game, GameDataFlagOffset), &why);
+		if (dt == nullptr) {
+			plog::Warn("arena spot object '%s' not placed: %s", spec.c_str(), why.c_str());
+			return false;
+		}
+		const e6::ObjectLookup lookup = e6::resolveObject(objectClasses, objectNames, spec, At<uint32_t>(dt, DtObjectCountOffset));
+		if (lookup.result != e6::ObjectResult::Found) {
+			plog::Warn("arena spot object not placed: %s", e6::describeObjectLookup(lookup, spec, objectNames.size(), At<uint32_t>(dt, DtObjectCountOffset)).c_str());
+			return false;
+		}
+		// The spot first, then the engine's free-spot search with a growing footprint; a result in another room is refused (the neighbour may not be populated yet).
+		const e6::SpotBox box{serverRect.x, serverRect.y, serverRect.w, serverRect.h};
+		for (const int radius : {1, 3, FreeSpotRadius}) {
+			int32_t xy[2] = {x + 1, y + 1};  // the engine's free-spot search (0x402f50) starts at (-1,-1) from this, so it tries the spot itself first
+			void* landed = nullptr;
+			Call<FreeSpotFn>(FreeSpot)(room, xy, radius, FreeSpotMask, &landed);
+			const bool inside = landed == room && e6::spotInBox(box, xy[0], xy[1]);
+			plog::Info("arena spot: objects row %d, free spot near (%d,%d) radius %d gave (%d,%d) room %p (%s the room)", lookup.row, x, y, radius, xy[0], xy[1], landed, inside ? "in" : "NOT in");
+			if (!inside) {
+				continue;
+			}
+			void* unit = Call<CreateObjectFn>(CreateObject)(ObjectUnitType, lookup.row, xy[0], xy[1], game, landed, ObjectCreateFlag, 0, 0, 0);
+			if (unit == nullptr) {
+				plog::Warn("arena spot object not placed: the game refused to create objects row %d at (%d,%d)", lookup.row, xy[0], xy[1]);
+				return false;
+			}
+			*placedX = xy[0];
+			*placedY = xy[1];
+			return true;
+		}
+		plog::Warn("arena spot object '%s' not placed: no free spot near (%d,%d) inside the room", spec.c_str(), x, y);
+		return false;
+	} catch (...) {
+		plog::Error("arena spot: placing the object failed");
+		return false;
+	}
+}
+
 void Event6bGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_state = State{};
