@@ -8,6 +8,7 @@
 #include "maze_tilesets.h"
 #include "outdoor_hooks.h"
 #include "steer.h"
+#include "tomb_growers.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -750,9 +751,10 @@ void CatacombsGrowerHook(void* level, int32_t isLevel34) noexcept {
 	g_catGrowerOriginal(level, isLevel34);
 }
 
-// True when the tileset's steered build needs a room-grower hook that is not in.
+// True when the tileset's steered build needs a room-grower hook that is not in (Arcane's own grower, the Catacombs grower, the two Tombs growers).
 auto GrowerHookMissing(const cm::MazeTileset& row) -> bool {
-	return (row.ownGrower && !g_growerHooked.load()) || (row.levelType == kCatacombsLevelType && !g_catGrowerHooked.load());
+	return (row.ownGrower && !g_growerHooked.load()) || (row.levelType == kCatacombsLevelType && !g_catGrowerHooked.load()) ||
+	       (row.tombGrowers && !TombGrowersHooked());
 }
 
 void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
@@ -1000,6 +1002,11 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 
 }  // namespace
 
+auto MazeBuildSkipsTombGrower(void* level) -> bool {
+	const BuildCtx* ctx = t_ctx;
+	return ctx != nullptr && ctx->level == level;
+}
+
 auto MazeLevelBuildHookTried() -> bool {
 	return g_levelBuildTried.load();
 }
@@ -1012,6 +1019,9 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 	std::vector<PartStatus> out;
 	for (const Part& part : g_parts) {
 		out.push_back(part.status);
+	}
+	for (PartStatus& status : TombGrowerStatuses()) {
+		out.push_back(std::move(status));
 	}
 	out.push_back(AutomapResetPartStatus());
 	return out;
@@ -1302,6 +1312,9 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	}
 	if (ok && g_parts[CatacombsGrower].status.on) {
 		g_catGrowerHooked = install(CatacombsGrower, reinterpret_cast<void*>(&CatacombsGrowerHook), reinterpret_cast<void**>(&g_catGrowerOriginal));
+	}
+	if (ok) {
+		InstallTombGrowerHooks(context, overrides, ranges, count);  // optional, like Arcane's: a refusal refuses only Tombs maps (GrowerHookMissing)
 	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {

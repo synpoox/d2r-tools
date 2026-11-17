@@ -1129,7 +1129,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Nowhere") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider or Temple");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Tombs, Spider or Temple");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1151,7 +1151,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Nowhere", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Nowhere'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider or Temple.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Nowhere'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Tombs, Spider or Temple.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1532,6 +1532,58 @@ TEST_CASE("the Catacombs row and its plans: 12-tile rooms, mask pieces from 258,
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 288; to <= 298; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Prev, Next, Waypoint: never placed
+}
+
+// Act 2 Tombs (#242): 16-tile rooms, Def 414..428 = 413 + exit mask, own growers 0x3ea0e0 and 0x3eb610 skipped on every slot-level build (RE note 47).
+TEST_CASE("the Tombs row and its plans: 16-tile rooms, mask pieces from 414, no Prev family, no ring")
+{
+	const MazeTileset *row = findMazeTileset("tombs");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 17);
+	CHECK(std::string(row->slot) == "MazeTombs");
+	CHECK(std::string(row->levelName) == "Cartographer Tombs");
+	CHECK(row->roomTiles == 16);
+	CHECK(row->roomTilesY == 0);
+	CHECK(row->pieceBase + 1 == 414);  // W; NSEW is 428
+	CHECK(row->pieceBase + 15 == 428);
+	CHECK_FALSE(row->callsRingGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(row->tombGrowers);
+	CHECK_FALSE(row->ownGrower);
+	CHECK(row->offsetX == 4000);
+	CHECK(row->offsetY == 500);
+	CHECK(findMazeTilesetBySlot("mazetombs") == row);
+	for (size_t i = 0; i < MazeTilesetCount; ++i) CHECK((MazeTilesets[i].tombGrowers == (&MazeTilesets[i] == row)));
+	for (int i = 0; i < 4; ++i) CHECK(row->prevPiece[i] == 0);  // 444..447 hold the level's Up stairs
+	Tileset ts;
+	REQUIRE(builtinTileset("Tombs", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 16);
+				CHECK(sp.plan.lvlMaze.sizeY == 16);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK(sp.plan.levelTilesY <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				CHECK(sp.plan.fills.empty());
+				CHECK_FALSE(sp.plan.ring.noOp);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 414 && room.piece <= 428));  // never a Prev, Next, Tal Rasha or other special piece (444..480)
+			}
+	CHECK(steered > 200);
+	// 360 tiles hold 21 rooms of 16 across (the first room is centred: 10 before it, 10 after).
+	const Capacity cap = capacityAt(16, 360, 360);
+	CHECK(cap.left == 10);
+	CHECK(cap.right == 10);
+	CHECK(cap.up == 10);
+	CHECK(cap.down == 10);
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
