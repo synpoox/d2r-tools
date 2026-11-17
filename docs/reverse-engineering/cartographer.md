@@ -48,3 +48,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [42. The Barracks builder case (issue #272)](cartographer/42-barracks-case.md)
 - [43. The maze builder's case for the Act 3 Kurast Sewers (issue #285)](cartographer/43-kurast-sewer-builder.md)
 - [44. The maze builder's case for the Act 2 Harem and Palace Cellar (issues #277 and #278)](cartographer/44-harem-cellar-builder.md)
+- [48. The maze builder's case for the Act 3 Spider Cavern (issue #284)](cartographer/48-spider-builder.md)
