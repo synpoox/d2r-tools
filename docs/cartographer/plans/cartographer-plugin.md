@@ -34,8 +34,8 @@ Cartographer is a fully **standalone D2RLoader plugin** that any D2R mod can dro
   - Cartographer replaces the room walk `0x3e96d0` for the map level. D2R's own room placer and piece picker then follow the layout graph.
   - The entrance and exit placer `0x3eb850` is steered too.
   - Cave, Crypt and Act 4 Lava steer as-is.
-  - With a no-op ring grower `0x3e9820`, these also steer: Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Ice, Harem, Basement, Spider and Temple.
-  - Not yet steerable: Arcane, Catacombs, the tombs, Act 2 Sewer and Baal.
+  - With a no-op ring grower `0x3e9820`, these also steer: Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Act 2 Sewer, Ice, Harem, Basement, Spider and Temple.
+  - Not yet steerable: Arcane, Catacombs, the tombs and Baal.
 - **D2R's own outdoor builders cannot build a map level ([pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929) §3).** Outdoor maps need Cartographer's own outdoor builder (separate plan), with the Act 3 jungle first.
 - **D2R rebuilds an empty level on the next visit ([pd2-resurrected#930](https://github.com/synpoox/pd2-resurrected/pull/930)).** The builder must therefore produce the same rooms in the same order every time within a game. The solved layout is cached per act seed and map level.
 
@@ -179,8 +179,8 @@ A tileset that isn't ready is refused at load, with a message that says so.
 | Group | Tilesets | What it takes |
 |---|---|---|
 | Maze, ready | Cave, Crypt, Act 4 Lava (`Lava` in the README) | Nothing more ([pd2-resurrected#929](https://github.com/synpoox/pd2-resurrected/pull/929)) |
-| Maze, one extra hook | Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Ice, Harem, Basement, Spider, Temple, Act 5 Lava (own name, not yet set) | A no-op ring-grower hook plus a game check for each |
-| Maze, own growers | Arcane, Catacombs, Tombs, Act 2 Sewer | A spike and a hook for each grower |
+| Maze, one extra hook | Barracks, Jail, Lair, Durance, Dungeon, Act 3 Sewer, Act 2 Sewer, Ice, Harem, Basement, Spider, Temple, Act 5 Lava (own name, not yet set) | A no-op ring-grower hook plus a game check for each |
+| Maze, own growers | Arcane, Catacombs, Tombs | A spike and a hook for each grower |
 | Outdoor, connectable pieces | Jungle, Snow/Barricade, Siege, Kurast | The outdoor builder, Jungle first |
 | Outdoor, open fields | Act 1 Wilderness, Act 2 Desert, Act 4 Mesa | An outline-polygon method (outdoor plan phase 8 spike) |
 | Fixed areas | Towns, Monastery, Courtyard, Cathedral, Tristram, Baal | No room pieces: usable only as whole fixed (`preset`) maps, or later as landmarks inside other maps |
