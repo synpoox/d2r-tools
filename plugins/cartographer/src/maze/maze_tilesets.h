@@ -62,7 +62,7 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
 	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
 	// Barracks (Act 1 Barracks, LevelType 7, #272): rooms 10 wide and 14 tall (LvlMaze SizeX 10, SizeY 14, the first non-square tileset), "Barracks W" is Def 168
-	// (base 167, 168..182). Its case calls the ring grower, then the walk, and no special-room call: docs/reverse-engineering/cartographer/41-barracks-case.md.
+	// (base 167, 168..182). Its case calls the ring grower, then the walk, and no special-room call: docs/reverse-engineering/cartographer/42-barracks-case.md.
 	// Offset x 1000, y 500: the second band (see Jail, #273), one spot past the next free one so a parallel row does not collide.
 	{"Barracks", 7, "MazeBarracks", "Cartographer Barracks", 10, 167, {0, 0, 0, 0}, true, 1000, 500, 0, false, 14},
 };

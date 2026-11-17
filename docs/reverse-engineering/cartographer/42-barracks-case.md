@@ -1,4 +1,4 @@
-## 41. The Barracks builder case (issue #272)
+## 42. The Barracks builder case (issue #272)
 
 Build 93847 (D2R 3.3, image stamp 0x6ab3782c). Evidence: **static** (disassembly of the memory dump with `plugins/cartographer/tools/dump_dis.py`); in-game behaviour is **needs game**.
 
@@ -8,4 +8,4 @@ The common tail `0x3e75bc` branches on the level id: `0x1c` (28, vanilla Barrack
 
 Data: LvlMaze level 28 is `SizeX 10, SizeY 14, Merge 500`; LvlPrest 167 is Court Connect (mask 0), 168..182 the 15 mask pieces. Barracks is the first non-square room, so the planner, arrival and event-room matching carry a separate room height (`Tileset::roomTilesY`).
 
-Needs game: whether the built rooms give a box equal to the plan's 10 x 14 cells, and whether the edge needs a filler ring.
+Game check (slot 10, 2026-11-17, Hell): the built rooms give a box equal to the plan's 10 x 14 cells on Small, Medium, Large and ExtraLarge ("built as planned", 0 refits), the arrival, boss and event rooms are found by the plan cell, and no filler ring was needed.
