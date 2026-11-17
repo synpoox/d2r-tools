@@ -66,7 +66,7 @@ struct Tileset {
 	int roomH() const { return roomTilesY > 0 ? roomTilesY : roomTiles; } // the room height in tiles
 	bool callsRingGrower = false;   // the tileset's case in 0x3e69e0 calls 0x3e9820 first
 	bool walkFollowsRing = true;    // false: no walk follows the ring grower, so the graph must be built inside it
-	bool fixedRing = false;         // ring-only (Harem, Palace Cellar): the layout is one fixed ring of four corner rooms (fixedRingLayout), whatever the map's shape and size
+	bool fixedRing = false;         // ring-only (Harem, Palace Cellar, Spider): the layout is one fixed ring of four corner rooms (fixedRingLayout), whatever the map's shape and size
 	std::array<int, 16> pieceByMask{}; // not 0: the piece for exit mask m (a ring-only tileset's corner pieces); 0: pieceBase + m
 	int ringCells = 0;              // filler rooms (closed pieces) placed this many cells around the layout, so no void shows past its edges (Lava); 0: none
 	DeadEndFamily prev;             // the "Prev" group: the entrance. Absent: the entrance is an ordinary room

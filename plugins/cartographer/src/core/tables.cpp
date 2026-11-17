@@ -28,7 +28,7 @@ struct Tileset {
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Spider", false}, {"Temple", false},
+	{"Temple", false},
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
@@ -290,7 +290,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
 		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::FrameFill);
 		if (fixedRing) {
-			// One shape (#277, #278): Harem and Palace Cellar maps are always the same ring of four rooms, so Shape and Size are not checked and are not used.
+			// One shape (#277, #278): Harem, Palace Cellar and Spider maps are always the same ring of four rooms, so Shape and Size are not checked and are not used.
 			map.shape.clear();
 			if (!shape.empty() || !table.Cell(row, cSize).empty()) {
 				report.Note(MapsFile, row.line, "the " + map.tileset + " tileset is always one ring of four rooms, so its Shape and Size are ignored.");
