@@ -60,3 +60,9 @@ tools/build.ps1          build (and test) one or all plugins
 docs/                    RELEASING.md, reverse-engineering/ (native addresses and evidence)
 .github/workflows/       ci (build matrix), release (suite release, run by hand)
 ```
+
+## License
+
+The plugins and tools in this repository are released under the [MIT License](LICENSE). Third-party code stays under its own license: the D2RLoader PluginSDK submodule (MIT), the doctest test framework bundled with Cartographer (MIT), and code adapted from the d2rAI-toolkit plugin template (MIT, see the notices in Better XP Bar and Quick NPC).
+
+Not affiliated with or endorsed by Blizzard Entertainment. Diablo is a trademark of Blizzard Entertainment. Provided as is, without warranty; use at your own risk.

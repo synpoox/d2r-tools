@@ -54,6 +54,9 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     $dlls | Copy-Item -Destination $stage
     Get-ChildItem $dist -Directory -Filter 'd2rl-*' -ErrorAction SilentlyContinue | Copy-Item -Destination $stage -Recurse
     Copy-Item (Join-Path $dir 'README.md'), (Join-Path $dir 'CHANGELOG.md') -Destination $stage
+    $lic = Join-Path $dir 'LICENSE'; if (-not (Test-Path $lic)) { $lic = Join-Path $repo 'LICENSE' }   # a plugin's own license wins
+    Copy-Item $lic -Destination $stage
+    Get-ChildItem $dir -File -Filter 'THIRD_PARTY_NOTICES*' | Copy-Item -Destination $stage
     $extra = Join-Path $dir 'release-files.txt'   # optional: extra files or folders to ship, one path per line, relative to the plugin
     if (Test-Path $extra) {
         foreach ($line in [IO.File]::ReadAllLines($extra)) {
