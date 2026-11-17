@@ -64,6 +64,8 @@ struct Tileset {
 	std::string notSteerableReason; // plain English, shown when steerable is false
 	bool callsRingGrower = false;   // the tileset's case in 0x3e69e0 calls 0x3e9820 first
 	bool walkFollowsRing = true;    // false: no walk follows the ring grower, so the graph must be built inside it
+	bool fixedRing = false;         // ring-only (Harem, Palace Cellar): the layout is one fixed ring of four corner rooms (fixedRingLayout), whatever the map's shape and size
+	std::array<int, 16> pieceByMask{}; // not 0: the piece for exit mask m (a ring-only tileset's corner pieces); 0: pieceBase + m
 	int ringCells = 0;              // filler rooms (closed pieces) placed this many cells around the layout, so no void shows past its edges (Lava); 0: none
 	DeadEndFamily prev;             // the "Prev" group: the entrance. Absent: the entrance is an ordinary room
 	// No Next / Down family: a maze has no exit, so those groups are never placed (plan section 3.6).
@@ -164,6 +166,10 @@ constexpr int kRefits = 8;
 constexpr uint64_t kRefitSalt = 0x4D415A45ull; // "MAZE"
 
 layout::Rules fitRules(const Tileset &ts, layout::Rules rules);
+
+// The layout of a ring-only tileset: a 2x2 ring of four rooms. The seed picks the entrance cell and which neighbour is the event room; the boss room is
+// the cell opposite the entrance, so the three are distinct.
+layout::Layout fixedRingLayout(uint64_t seed);
 
 struct SeedPlan {
 	layout::Layout layout;

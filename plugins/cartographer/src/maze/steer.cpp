@@ -27,6 +27,14 @@ bool builtinTileset(std::string_view name, Tileset &out)
 	t.pieceBase = row->pieceBase;
 	t.callsRingGrower = row->callsRingGrower;
 	t.ringCells = row->ringCells;
+	if (row->ringPieces[0] != 0) {
+		// NE, SE, SW, NW: exit masks 10 (E+N), 6 (E+S), 5 (W+S) and 9 (W+N); no other piece exists
+		t.fixedRing = true;
+		t.walkFollowsRing = false;
+		t.maskPieces = 0x0660;
+		const int masks[4] = {10, 6, 5, 9};
+		for (int i = 0; i < 4; ++i) t.pieceByMask[static_cast<size_t>(masks[i])] = row->ringPieces[i];
+	}
 	t.prev.present = row->prevPiece[0] != 0;
 	for (int i = 0; i < 4; ++i) t.prev.piece[i] = row->prevPiece[i];  // Prev W, E, S, N
 	out = std::move(t);
@@ -96,6 +104,18 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 		out.reason = fit.reason;
 		return out;
 	}
+	if (base.fixedRing) {
+		// One shape: Shape and Size are ignored (the loader notes this once per map).
+		out.tileset = fit.tileset;
+		out.seedPlan = planForSeed(out.tileset, layout::Rules{}, seed);
+		out.hash = planHash(out.seedPlan.plan);
+		if (!out.seedPlan.plan.steer) {
+			out.reason = out.seedPlan.plan.reason;
+			return out;
+		}
+		out.steer = true;
+		return out;
+	}
 	const std::optional<layout::Size> sz = layout::parseSizeName(size.empty() ? std::string_view("Large") : size);
 	if (!sz) {
 		out.reason = "The size '" + std::string(size) + "' is not Small, Medium, Large or ExtraLarge." + layout::sizeRenameNote(size);
@@ -112,10 +132,6 @@ MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, s
 	out.hash = planHash(out.seedPlan.plan);
 	if (!out.seedPlan.plan.steer) {
 		out.reason = out.seedPlan.plan.reason;
-		return out;
-	}
-	if (out.seedPlan.plan.ring.graphInRing) {
-		out.reason = base.name + " builds its graph inside the ring grower, which the hooks do not do yet.";
 		return out;
 	}
 	out.steer = true;

@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane or Dungeon");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Harem or Basement");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane or Dungeon.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Harem or Basement.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1711,6 +1711,54 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	CHECK(before[1] * 20 > total[1]);  // the problem is real: over a twentieth of ExtraLarge Lava layouts (all six shapes) were clipped
 	CHECK(after[0] == 0);
 	CHECK(after[1] == 0);
+}
+
+// Act 2 Harem (#277) and Palace Cellar (#278): one fixed ring of four 16-tile rooms, the corner pieces by exit mask, built inside the ring grower's hook.
+TEST_CASE("the Harem and Palace Cellar rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
+{
+	struct Want { const char *name; int type; int ne, se, sw, nw; int x; };
+	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000}, {"Basement", 15, 358, 359, 360, 361, 2500}};
+	for (const Want &w : wants) {
+		INFO(w.name);
+		const MazeTileset *row = findMazeTileset(w.name);
+		REQUIRE(row != nullptr);
+		CHECK(row->levelType == w.type);
+		CHECK(row->roomTiles == 16);
+		CHECK(row->callsRingGrower);
+		CHECK(row->offsetX == w.x);
+		CHECK(row->offsetY == 500);
+		Tileset ts;
+		REQUIRE(builtinTileset(w.name, ts));
+		CHECK(ts.fixedRing);
+		CHECK_FALSE(ts.walkFollowsRing);
+		CHECK(ts.maskPieces == 0x0660);
+		bool seenEntrance[4] = {false, false, false, false};
+		for (uint64_t seed = 1; seed <= 60; ++seed) {
+			const SeedPlan sp = planForSeed(ts, layout::Rules{}, seed);
+			REQUIRE(sp.plan.steer);
+			const Plan &p = sp.plan;
+			CHECK(p.rooms.size() == 4);
+			CHECK(p.adds.size() == 3);
+			CHECK(p.links.size() == 1);  // the ring's fourth edge
+			CHECK(p.fills.empty());
+			CHECK(p.ring.noOp);
+			CHECK(p.ring.graphInRing);
+			CHECK_FALSE(p.entrance.place);
+			CHECK(p.levelTilesX <= 360);
+			REQUIRE(p.eventRoom >= 0);
+			REQUIRE(p.bossRoom >= 0);
+			const int entrance = p.entrance.room;
+			CHECK(entrance != p.eventRoom);
+			CHECK(entrance != p.bossRoom);
+			CHECK(p.eventRoom != p.bossRoom);
+			for (const Room &r : p.rooms) {
+				const int want = r.mask == 10 ? w.ne : r.mask == 6 ? w.se : r.mask == 5 ? w.sw : r.mask == 9 ? w.nw : -1;
+				CHECK(r.piece == want);
+			}
+			seenEntrance[static_cast<size_t>(sp.layout.mainPath.front().x + 2 * sp.layout.mainPath.front().y)] = true;
+		}
+		for (bool b : seenEntrance) CHECK(b);
+	}
 }
 
 // Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021, Durance 784-787, Dungeon 695-698) each carry

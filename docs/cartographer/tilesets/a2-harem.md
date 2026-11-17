@@ -1,6 +1,6 @@
 # Act 2 Harem (#277)
 
-Research only, nothing run in a game. Sources as in `a1-barracks.md`.
+Built (note 44), checked in game. Sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
