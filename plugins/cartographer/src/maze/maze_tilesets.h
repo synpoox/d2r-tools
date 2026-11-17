@@ -93,6 +93,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// draw one random number. No hook beyond the shared walk is needed. Offset x 3000, y 500: the next free spot in the second band (Jail 0, Lair 500, Barracks 1000, KurastSewer 1500,
 	// Harem 2000, Basement 2500), clear of Crypt (x 3000, y 0..360). docs/reverse-engineering/cartographer/45-act2-sewer-case.md, docs/cartographer/tilesets/a2-sewers.md.
 	{"Sewer", 13, "MazeSewer", "Cartographer Sewer", 12, 301, {0, 0, 0, 0}, true, 3000, 500, 0},
+	// Catacombs (Act 1 Catacombs 1..3, LevelType 10, #275): 12-tile rooms, "Catacombs W" is Def 258 (base 257, 258..272; 257 is the Cathedral preset, not a closed piece). Its case calls its own
+	// grower 0x3e8610 (skipped on every slot-level build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
+	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
+	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
 	// Tombs (Act 2 Tombs, LevelType 17, #242): 16-tile rooms, "Tomb W" is Def 414 (base 413, 414..428). Its case calls neither the ring grower nor the entrance call: it calls its own
 	// grower 0x3ea0e0 (a cross of rooms round the first, the Prev piece 444..447 as its centre), the walk, then 0x3eb610 (special rooms by level id); a steered build skips both
 	// (tombGrowers), so the entrance is an ordinary room. 413 is no closed piece of this set, so no filler ring. Offset x 4000, y 500: the last spot the automap range allows

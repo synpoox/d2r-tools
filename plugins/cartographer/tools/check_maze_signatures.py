@@ -29,6 +29,7 @@ SIGNATURES = [
     ("MazePiecePicker", 0x3EB960, "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB", 0, 36),
     ("MazeRingGrower", 0x3E9820, "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 48 48 8B 49 10", 0, 39),
     ("MazeArcaneGrower", 0x3E7A80, "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 81 EC 30 02 00 00", 0, 999),  # hooked 15 bytes (whole instructions); the next instruction is a RIP-relative load (stack cookie), not a branch, so the end-of-patch check is off
+    ("MazeCatacombsGrower", 0x3E8610, "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 30", 0, 999),  # hooked 19 bytes (whole instructions); the signature ends inside straight-line code (sub rsp, 0x30), the first branch is further on
     ("MazeTombPreGrower", 0x3EA0E0, "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 8B 81 E4 01 00 00 4C 8B F1 48 8B 69 10 BE 03 00 00 00", 0, 107),  # hooked 15 bytes (whole instructions); the first call is at byte 107
     ("MazeTombSpecialRooms", 0x3EB610, "48 89 5C 24 18 48 89 74 24 20 57 48 83 EC 20 48 8B 41 10 33 D2 89 54 24 38 48 8B F9 8B DA 48 85 C0 74", 0, 33),  # hooked 15 bytes; the first branch (je) is byte 33
     ("MazeAddRoom", 0x3E77A0, "40 55 56 57 41 56 41 57 48 83 EC 30 48 63 EA 48 8B F9 48 8B 89 90 00 00 00", 0, 33),

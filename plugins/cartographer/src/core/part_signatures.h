@@ -51,6 +51,8 @@ inline constexpr const char* MazeWalk = "48 89 7C 24 20 41 56 48 83 EC 20 4C 8B 
 inline constexpr const char* MazeEntranceExit = "41 56 48 83 EC 30 44 8B 0A 4D 8B F0 48 89 5C 24 40 4C 8B D2 48 8B 59 10";
 inline constexpr const char* MazeRingGrower = "89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 48 48 8B 49 10";
 // Arcane Sanctuary's own room grower (LevelType 19; RE note 37): the maze builder's case calls it instead of the walk. 31 bytes, the prologue up to the first RIP-relative load.
+// Catacombs' room grower (LevelType 10; RE note 46): the maze builder's case calls it, then the walk. 23 bytes up to `sub rsp, 0x30`; hooked 19 bytes.
+inline constexpr const char* MazeCatacombsGrower = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 30";
 inline constexpr const char* MazeArcaneGrower = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 48 81 EC 30 02 00 00";
 // The Tombs case's own growers (LevelType 17; RE note 47): 0x3ea0e0 runs before the walk, 0x3eb610 after it. Both are hooked (15 bytes, whole instructions) and skipped on a steered build.
 inline constexpr const char* MazeTombPreGrower = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 8B 81 E4 01 00 00 4C 8B F1 48 8B 69 10 BE 03 00 00 00";

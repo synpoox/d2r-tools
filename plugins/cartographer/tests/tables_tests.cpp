@@ -1382,17 +1382,17 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 24);
-	CHECK(all[16] == "Temple");
-	CHECK(all[17] == "Jungle");  // the outdoor rows come last, in table order
-	CHECK(all[18] == "Snow");
-	CHECK(all[19] == "Siege");
-	CHECK(all[20] == "Mesa");
-	CHECK(all[21] == "Desert");
-	CHECK(all[22] == "Wilderness");
-	CHECK(all[23] == "Kurast");
+	REQUIRE(all.size() == 25);
+	CHECK(all[17] == "Temple");
+	CHECK(all[18] == "Jungle");  // the outdoor rows come last, in table order
+	CHECK(all[19] == "Snow");
+	CHECK(all[20] == "Siege");
+	CHECK(all[21] == "Mesa");
+	CHECK(all[22] == "Desert");
+	CHECK(all[23] == "Wilderness");
+	CHECK(all[24] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Tombs", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Catacombs", "Tombs", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
@@ -1501,6 +1501,8 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(MazeSlotLevelName("MazeBarracks") == "Cartographer Barracks");
 	CHECK(IsMazeSlotName("MazeHarem"));
 	CHECK(MazeSlotLevelName("MazeBasement") == "Cartographer Palace Cellar");
+	CHECK(IsMazeSlotName("MazeCatacombs"));
+	CHECK(MazeSlotLevelName("MazeCatacombs") == "Cartographer Catacombs");
 	CHECK(MazeSlotLevelName("MazeTombs") == "Cartographer Tombs");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
