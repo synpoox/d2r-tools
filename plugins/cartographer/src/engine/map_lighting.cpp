@@ -57,14 +57,15 @@ Part g_lightsPart = {"LightsGetter", sig::LightsGetterCall, 0, false, nullptr, {
 StorageFn g_lightsStorage = nullptr;  // the get-the-DirectionalLightComponent-storage function, found from the call in VisualDataSystem::Update
 
 // What the game wrote and what the tint wrote, per light and colour copy, so a light the game did not rewrite is neither tinted twice nor left tinted
-// (game thread only). `written` is compared to the live value: unchanged means the game left it alone.
+// (render thread, hook only), keyed by the light's entity id (+0x20) so a light that moved in the storage is not tinted twice or left tinted. `written` is compared to the live value: unchanged means the game left it alone.
 struct TintSlot {
 	bool valid = false;
 	float base[3] = {}, written[3] = {};
 };
-TintSlot g_slots[MaxLights][2];
+std::map<uint32_t, TintSlot[2]> g_slots;
+std::atomic<bool> g_reset{false};  // MapLightingGameLeft asks the hook to forget g_slots and g_tintWritten (they belong to the render thread)
 
-auto LightData(void* registry, size_t* count) -> uint8_t* {
+auto LightData(void* registry, size_t* count, const uint32_t** ids) -> uint8_t* {
 	*count = 0;
 	if (g_lightsStorage == nullptr) {
 		return nullptr;
@@ -85,17 +86,19 @@ auto LightData(void* registry, size_t* count) -> uint8_t* {
 		return nullptr;
 	}
 	*count = n;
+	*ids = reinterpret_cast<const uint32_t*>(begin);
 	return data;
 }
 
 // factor == nullptr puts every light the tint changed back.
 void ScaleLights(void* registry, const float* factor) {
 	size_t count = 0;
-	uint8_t* data = LightData(registry, &count);
+	const uint32_t* ids = nullptr;
+	uint8_t* data = LightData(registry, &count, &ids);
 	for (size_t i = 0; i < count; i++) {
 		for (size_t c = 0; c < 2; c++) {
 			float* colour = reinterpret_cast<float*>(data + i * LightStride + LightColourOffsets[c]);
-			TintSlot& slot = g_slots[i][c];
+			TintSlot& slot = g_slots[ids[i]][c];
 			const bool ours = slot.valid && std::memcmp(colour, slot.written, sizeof(slot.written)) == 0;
 			if (!ours) {
 				if (factor == nullptr) {
@@ -113,7 +116,7 @@ void ScaleLights(void* registry, const float* factor) {
 	}
 }
 
-bool g_tintWritten = false;  // a tint was written since the last restore (game thread)
+bool g_tintWritten = false;  // a tint was written since the last restore (render thread, hook only)
 
 void TintLights(void* registry, float r, float g, float b) {
 	const float factor[3] = {r, g, b};
@@ -134,6 +137,10 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 	try {
 		if (instance && component != nullptr && frame != nullptr) {
 			g_instanceCalls.fetch_add(1, std::memory_order_relaxed);
+			if (g_reset.exchange(false)) {
+				g_slots.clear();
+				g_tintWritten = false;
+			}
 			if (g_active.load(std::memory_order_relaxed) && Readable(component, ComponentSize)) {
 				float exposure = 1.0f, temperature = 1.0f, tintR = 1.0f, tintG = 1.0f, tintB = 1.0f;
 				bool changesTemperature = false, tint = false;
@@ -163,6 +170,8 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 				g_changed.fetch_add(1, std::memory_order_relaxed);
 				if (tint) {
 					TintLights(registry, tintR, tintG, tintB);
+				} else {
+					UntintLights(registry);
 				}
 			} else {
 				UntintLights(registry);
@@ -282,6 +291,7 @@ void MapLightingGameLeft() noexcept {
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_looks.clear();
 	g_active = false;
+	g_reset = true;
 }
 
 auto MapLightingSummary() -> std::string {
