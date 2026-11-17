@@ -156,6 +156,9 @@ struct Groups {
 };
 auto MergeExtraGroups(const std::vector<int>& rows, const std::vector<int>& weights, const std::vector<ExtraGroup>& extras, std::vector<std::string>* notes) -> Groups;
 
+// The number of groups the extras ask for: the sum of their counts (not the number of monstats Ids).
+auto ExtraGroupsAsked(const std::vector<ExtraGroup>& extras) -> int;
+
 // Why the Monsters list of `request` is not written (empty when it is fine or the list is empty): too many entries, a row outside
 // 0..MaxRow, a missing or out-of-range weight, weights that are all 0 or add up to more than MaxWeightSum.
 auto MonstersRefusal(const Request& request) -> std::string;

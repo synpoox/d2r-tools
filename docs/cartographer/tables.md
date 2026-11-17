@@ -274,6 +274,8 @@ Read the same way (from the map's summed route keys). They apply to **hostile mo
 | `lifesteal_pct` | | percent | every hit a hostile monster lands heals it by that percent of the damage dealt (physical plus element damage; the game caps it at the target's life) |
 | `phys_as_fire`, `phys_as_ltng`, `phys_as_cold`, `phys_as_mag`, `phys_as_pois` | | percent | the monster's min and max physical damage, that percent of each, is added as damage of that element when it spawns (cold 50 frames, poison 100 frames) |
 
+An `extra_groups` Id the map already lists adds weight to that monster, not a new group slot.
+
 A game check without a map item: set `CARTOGRAPHER_TEST_ROUTING` (for example `extra_groups:quillrat1=3;lifesteal_pct=50;phys_as_fire=50`) before starting the game; the values are added to the map's sums, and the log says so. Unset, it does nothing. See [52](../reverse-engineering/cartographer/52-map-combat-behaviours.md).
 
 ## bosses.txt (optional)

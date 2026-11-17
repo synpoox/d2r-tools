@@ -728,6 +728,16 @@ TEST_CASE("MergeExtraGroups adds weight to a held row and appends a new one")
 	CHECK(MergeExtraGroups({5}, {10}, {{5, 1, 0}}, &notes).weights[0] == 10);  // a count of 0 adds nothing
 }
 
+TEST_CASE("extra_groups counts groups, not monster ids")
+{
+	const std::vector<ExtraGroup> extras{{63, 2, 3}};
+	CHECK(ExtraGroupsAsked(extras) == 3);
+	std::vector<std::string> notes;
+	const auto g = MergeExtraGroups({63, 5}, {2, 2}, extras, &notes);
+	CHECK(g.rows == std::vector<int>{63, 5});
+	CHECK(g.weights == std::vector<int>{8, 2});
+}
+
 TEST_CASE("MergeExtraGroups holds 13 groups and 255 weight")
 {
 	std::vector<std::string> notes;

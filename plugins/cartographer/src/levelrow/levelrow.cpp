@@ -194,6 +194,14 @@ auto MonstersRefusal(const Request& r) -> std::string {
 	return "";
 }
 
+auto ExtraGroupsAsked(const std::vector<ExtraGroup>& extras) -> int {
+	int n = 0;
+	for (const ExtraGroup& e : extras) {
+		n += std::max(0, e.count);
+	}
+	return n;
+}
+
 auto MergeExtraGroups(const std::vector<int>& rows, const std::vector<int>& weights, const std::vector<ExtraGroup>& extras, std::vector<std::string>* notes) -> Groups {
 	Groups g{rows, weights};
 	for (const ExtraGroup& e : extras) {

@@ -411,7 +411,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 						for (const int w : request.monsterWeights) {
 							sum += w;
 						}
-						plog::Info("map monsters: '%s': extra_groups: %zu extra group(s) asked, the map now has %zu group(s), weight sum %d (rows %s)", map.name.c_str(), extras.size(),
+						plog::Info("map monsters: '%s': extra_groups: %d extra group(s) asked, the map now has %zu group(s), weight sum %d (rows %s)", map.name.c_str(), lr::ExtraGroupsAsked(extras),
 						           request.monsterRows.size(), sum, ListText(request.monsterRows).c_str());
 					}
 				}
