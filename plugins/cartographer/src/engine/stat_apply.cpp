@@ -2,6 +2,7 @@
 
 #include "core/part_signatures.h"
 #include "core/text.h"
+#include "engine/map_behaviours.h"
 #include "engine/map_panel.h"
 #include "engine/scan.h"
 #include "log.h"
@@ -599,8 +600,11 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_routing[slot] = mapped.routing;
 	}
+	// The map's drop behaviours (issue #538), replaced on every open (an empty set clears the slot's). A CARTOGRAPHER_TEST_BEHAVIOURS test spec
+	// is applied afterwards by StartMapStats's caller (MapBehavioursTestOpened) and so wins.
+	carto::SetMapBehaviours(slot, cartographer::behaviours::fromRouting(mapped.routing));
 	for (const sp::KeyedValue& k : mapped.routing.behaviours) {
-		// A behaviour key with no handler yet is logged once per game and skipped (the handlers come with issue #538).
+		// A behaviour key with no handler yet is logged once per process and skipped (extra_groups, lifesteal_pct and phys_as_* come with issue #540).
 		static std::mutex noted;
 		static std::set<std::string> seen;
 		std::lock_guard<std::mutex> lock(noted);
@@ -662,7 +666,7 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 	}
 	try {
 		if (!g_chainLogged.load(std::memory_order_relaxed) && At<int32_t>(unit, UnitTypeOffset) == UnitPlayer) {
-			g_chainLogged = true;  // once per game: a list left on the player by an earlier map (a save and reload) would show here
+			g_chainLogged = true;  // once per process: a list left on the player by an earlier map (a save and reload) would show here
 			bool found = false;
 			const int lists = Chain(unit, nullptr, &found);
 			const uint8_t* owner = At<const uint8_t*>(unit, UnitOwnerListOffset);

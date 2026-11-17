@@ -670,14 +670,7 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 	NoteUnusedColumns(StatRoutesFile, table, {"Stat", "Target", "Apply", "Value", "Param"}, report);
 	const int cStat = table.Column("Stat"), cTarget = table.Column("Target"), cApply = table.Column("Apply"), cValue = table.Column("Value"), cParam = table.Column("Param");
 	const std::vector<std::string> targets = {"monster", "player", "area", "behaviour", "none"};
-	// Every stat that has a route: the built-ins and this file's rows. An Apply must not be one (no chains).
-	std::vector<std::string> routed;
-	for (const sp::Route& r : sp::builtInRoutes()) {
-		routed.push_back(r.stat);
-	}
-	for (const TsvRow& r : table.rows) {
-		routed.push_back(table.Cell(r, cStat));
-	}
+	std::vector<int> lines;  // the file line of each row kept in `out`, for the chain check at the end
 	for (const TsvRow& r : table.rows) {
 		sp::Route route;
 		bool ok = true;
@@ -722,9 +715,6 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 				fail("the Apply cell is empty. Put the itemstatcost.txt stat that monsters get.");
 			} else if (!route.apply.empty()) {
 				statCheck("Apply", route.apply);
-				if (ok && route.apply != route.stat && std::find(routed.begin(), routed.end(), route.apply) != routed.end()) {
-					fail("Apply '" + route.apply + "' is itself a routed stat, and routes do not chain. Name the game's stat it should end up as.");
-				}
 				if (ok && ids.loaded) {
 					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply));
 					if (!refused.empty()) {
@@ -768,9 +758,24 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 		}
 		if (ok) {
 			out.push_back(std::move(route));
+			lines.push_back(r.line);
 		}
 	}
-	return out;
+	// No chains: an Apply must not be a stat that has a route, in the built-ins or among the rows accepted above (a rejected row routes nothing).
+	std::vector<sp::Route> kept;
+	for (size_t i = 0; i < out.size(); ++i) {
+		const sp::Route& route = out[i];
+		bool chained = false;
+		if ((route.target == sp::RouteTarget::Monster || route.target == sp::RouteTarget::Player) && !route.apply.empty() && route.apply != route.stat) {
+			chained = sp::findRoute(sp::builtInRoutes(), route.apply) != nullptr || sp::findRoute(out, route.apply) != nullptr;
+		}
+		if (chained) {
+			report.Error(StatRoutesFile, lines[i], "Apply '" + route.apply + "' is itself a routed stat, and routes do not chain. Name the game's stat it should end up as. This row is skipped.");
+		} else {
+			kept.push_back(route);
+		}
+	}
+	return kept;
 }
 
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row> {

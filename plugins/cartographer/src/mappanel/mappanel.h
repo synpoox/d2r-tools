@@ -46,11 +46,12 @@ std::string statLine(const Stat &stat);
 // there is nothing to show.
 PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0);
 
-// The most property lines panelText shows, monster and player together: the 7 monster-side built-in stats plus the 16 player stats the game
-// sends (statplan kMaxPlayerStats). The route table can hold more monster stats than that, so a longer list ends in one "and N more" line instead
-// of growing the panel. Density has its own line.
+// The most property lines panelText shows, monster and player together: kMaxMonsterLines monster-side stats plus the 16 player stats the game
+// sends (statplan kMaxPlayerStats). The route table holds far more monster stats than that (the catalogue of issue #539), so a longer list ends in one
+// "and N more" line instead of growing the panel. Density has its own line.
+constexpr int kMaxMonsterLines = 12;
 constexpr int kMaxPlayerLines = 16;  // statplan kMaxPlayerStats
-constexpr int kMaxStatLines = 7 + kMaxPlayerLines;
+constexpr int kMaxStatLines = kMaxMonsterLines + kMaxPlayerLines;
 // The most lines panelText can give: the level, "Monsters have", the stat lines, the Density, "Players have" and the "and N more" line.
 constexpr int kMaxLines = 1 + 1 + 1 + 1 + kMaxStatLines + 1;
 

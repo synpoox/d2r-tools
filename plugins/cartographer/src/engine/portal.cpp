@@ -639,13 +639,25 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	MapDef opening = *map;
 	const cartographer::statplan::MapLevelPick pick = cartographer::statplan::mapLevelFromItem(itemStats, tables->statIds, map->level);
 	opening.level = pick.level;
+	const cartographer::statplan::MapRouting areas = cartographer::statplan::itemStatsToProperties(cartographer::statplan::withoutMapLevel(itemStats, tables->statIds), tables->statIds, tables->routes).routing;
+	// The AreaLevel area param adds to the map's area level (the level row's monster level, which the game's 0x508f80 reads), cut to 1..255.
+	const int levelBonus = areas.area("AreaLevel");
+	if (levelBonus != 0) {
+		opening.level = cartographer::statplan::levelWithBonus(pick.level, levelBonus);
+		plog::Info("map area level: %d from the item %+d from its affixes = %d", pick.level, levelBonus, opening.level);
+	}
+	const int uniquesBonus = areas.area("Uniques");
+	if (uniquesBonus != 0) {
+		opening.uniques = cartographer::statplan::densityWithBonus(map->uniques, uniquesBonus);
+		plog::Info("map uniques: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->uniques, uniquesBonus, opening.uniques);
+	}
 	if (!pick.note.empty()) {
 		plog::Warn("map level: %s", pick.note.c_str());
 	}
 	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
 	// Bonus Density: the sum over the item's affixes (the Density area param of the stat routes) is added to the map's Density (uncapped).
-	const int densityBonus = cartographer::statplan::itemStatsToProperties(itemStats, tables->statIds, tables->routes).routing.area("Density");
+	const int densityBonus = areas.area("Density");
 	if (densityBonus != 0) {
 		opening.density = cartographer::statplan::densityWithBonus(map->density, densityBonus);
 		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
