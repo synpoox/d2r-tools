@@ -46,3 +46,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [40. The Jail case of the maze builder (issue #273)](cartographer/40-jail-case.md)
 - [41. The maze builder's case for LevelType 18 (Act 2 Maggot Lair, issue #279)](cartographer/41-lair-builder.md)
 - [43. The maze builder's case for the Act 3 Kurast Sewers (issue #285)](cartographer/43-kurast-sewer-builder.md)
+- [46. The maze builder's case for the Act 1 Catacombs and its grower (issue #275)](cartographer/46-catacombs-grower.md)

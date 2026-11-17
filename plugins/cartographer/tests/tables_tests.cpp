@@ -1382,17 +1382,17 @@ TEST_CASE("the OutdoorSnow slot must be the level the installer wrote, and the i
 TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow the outdoor tileset table")
 {
 	const auto all = TilesetNames();
-	REQUIRE(all.size() == 23);
-	CHECK(all[15] == "Temple");
-	CHECK(all[16] == "Jungle");  // the outdoor rows come last, in table order
-	CHECK(all[17] == "Snow");
-	CHECK(all[18] == "Siege");
-	CHECK(all[19] == "Mesa");
-	CHECK(all[20] == "Desert");
-	CHECK(all[21] == "Wilderness");
-	CHECK(all[22] == "Kurast");
+	REQUIRE(all.size() == 24);
+	CHECK(all[16] == "Temple");
+	CHECK(all[17] == "Jungle");  // the outdoor rows come last, in table order
+	CHECK(all[18] == "Snow");
+	CHECK(all[19] == "Siege");
+	CHECK(all[20] == "Mesa");
+	CHECK(all[21] == "Desert");
+	CHECK(all[22] == "Wilderness");
+	CHECK(all[23] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Catacombs", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
@@ -1495,6 +1495,8 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(MazeSlotLevelName("MazeLair") == "Cartographer Lair");
 	CHECK(IsMazeSlotName("MazeKurastSewer"));
 	CHECK(MazeSlotLevelName("MazeKurastSewer") == "Cartographer Kurast Sewer");
+	CHECK(IsMazeSlotName("MazeCatacombs"));
+	CHECK(MazeSlotLevelName("MazeCatacombs") == "Cartographer Catacombs");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
 

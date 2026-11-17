@@ -76,6 +76,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// the walk and two special-room calls (the Drain and Chest pieces 739..746, always suppressed). Offset x 1500, y 500: the next free spot in the second band (Jail 0, Lair 500,
 	// Barracks 1000), clear of Snow (1500..1692, y 0..192). docs/reverse-engineering/cartographer/43-kurast-sewer-builder.md, docs/cartographer/tilesets/a3-kurast-sewers.md.
 	{"KurastSewer", 25, "MazeKurastSewer", "Cartographer Kurast Sewer", 12, 704, {0, 0, 0, 0}, true, 1500, 500, 0},
+	// Catacombs (Act 1 Catacombs 1..3, LevelType 10, #275): 12-tile rooms, "Catacombs W" is Def 258 (base 257, 258..272; 257 is the Cathedral preset, not a closed piece). Its case calls its own
+	// grower 0x3e8610 (skipped on a steered build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
+	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
+	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

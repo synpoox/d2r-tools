@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair or KurastSewer");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer or Catacombs");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair or KurastSewer.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer or Catacombs.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1434,6 +1434,50 @@ TEST_CASE("the KurastSewer row and its plans: 12-tile rooms, mask pieces from 70
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 739; to <= 746; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Drain, Chest: never placed
+}
+
+// Act 1 Catacombs (#275): 12-tile rooms, Def 258..272 = 257 + exit mask (257 is the Cathedral preset), Next 291..294 (the case's one special-room call); its own grower is skipped when steered (RE note 46).
+TEST_CASE("the Catacombs row and its plans: 12-tile rooms, mask pieces from 258, no Prev family, Next suppressed")
+{
+	const MazeTileset *row = findMazeTileset("catacombs");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 10);
+	CHECK(std::string(row->slot) == "MazeCatacombs");
+	CHECK(std::string(row->levelName) == "Cartographer Catacombs");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase + 1 == 258);  // W; NSEW is 272
+	CHECK(row->pieceBase + 15 == 272);
+	CHECK_FALSE(row->callsRingGrower);
+	CHECK_FALSE(row->ownGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(row->offsetX == 3500);
+	CHECK(row->offsetY == 500);
+	CHECK(automapInRange(row->offsetX, row->offsetY, levelTiles));
+	CHECK(findMazeTilesetBySlot("mazecatacombs") == row);
+	for (const MazeTileset &other : MazeTilesets)  // the slot level's 360 x 360 box must not overlap another's
+		if (&other != row) CHECK((other.offsetX + levelTiles <= row->offsetX || row->offsetX + levelTiles <= other.offsetX || other.offsetY + levelTiles <= row->offsetY || row->offsetY + levelTiles <= other.offsetY));
+	Tileset ts;
+	REQUIRE(builtinTileset("Catacombs", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 258 && room.piece <= 272));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 288; to <= 298; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Prev, Next, Waypoint: never placed
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")

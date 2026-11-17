@@ -71,6 +71,8 @@ enum MazePartId { LevelBuild, MazeWalk, MazeEntranceExit, MazeRingGrower, MazeAd
                   ArrivalFinder, ArrivalRoomFinder, ArrivalFlagTest,
                   // Arcane Sanctuary's own room grower (RE note 37): hooked only when found; a missing one refuses Arcane maps and leaves the other maze tilesets on.
                   ArcaneGrower,
+                  // Catacombs' room grower (RE note 46), called before the walk: skipped on a steered build, so the walk hook meets a level with its first room alone.
+                  CatacombsGrower,
                   // Hooked only with WovenProbe on (issue #415): the room tile loader, to log which DT1 files a room loads. Never needed for steering.
                   RoomTileLoader, MazePartCount };
 constexpr int MazeSteerParts = ArrivalFinder;  // the parts the steering needs
@@ -87,6 +89,7 @@ Part g_parts[MazePartCount] = {
 	{"ArrivalRoomFinder", sig::ArrivalRoomFinder, 0, false, nullptr, {}, {}},
 	{"ArrivalFlagTest", sig::ArrivalFlagTest, 0, false, nullptr, {}, {}},
 	{"ArcaneGrower", sig::MazeArcaneGrower, 15, false, nullptr, {}, {}},
+	{"CatacombsGrower", sig::MazeCatacombsGrower, 19, false, nullptr, {}, {}},
 	{"RoomTileLoader", sig::RoomTileLoader, 15, false, nullptr, {}, {}},
 };
 
@@ -95,6 +98,10 @@ std::atomic<bool> g_levelBuildTried{false};  // InstallMazeHooks reached the lev
 WalkFn g_walkOriginal = nullptr;
 WalkFn g_growerOriginal = nullptr;  // Arcane's grower 0x3e7a80, same shape as the walk: (level)
 std::atomic<bool> g_growerHooked{false};
+using CatacombsGrowerFn = void (*)(void* level, int32_t isLevel34) noexcept;
+CatacombsGrowerFn g_catGrowerOriginal = nullptr;
+std::atomic<bool> g_catGrowerHooked{false};
+constexpr int kCatacombsLevelType = 10;
 SpecialFn g_specialOriginal = nullptr;
 RingFn g_ringOriginal = nullptr;
 
@@ -157,6 +164,7 @@ struct BuildCtx {
 	Prepared prep;
 	bool steer = false;
 	bool fellBack = false;
+	bool growerSkipped = false;  // the Catacombs grower was not run (CatacombsGrowerHook)
 	std::string why;
 	cm::SpecialState special;
 	std::vector<void*> rooms;
@@ -701,6 +709,9 @@ void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
 			made += ctx->rooms[i] != nullptr ? 1 : 0;
 		}
 		if (cm::mayRunOriginalStep(ownGrower, made)) {
+			if (ctx->growerSkipped && made == 0 && g_catGrowerOriginal != nullptr) {
+				g_catGrowerOriginal(level, 0);  // the game's build as it would have been
+			}
 			original(level);  // the game grows the rest of the maze from the rooms that exist
 			return;
 		}
@@ -725,6 +736,24 @@ void ArcaneGrowerHook(void* level) noexcept {
 	if (g_growerOriginal != nullptr) {
 		SteeredStep(level, g_growerOriginal, true);
 	}
+}
+
+// Catacombs' case calls its grower (0x3e8610) and then the walk. The grower puts rooms beside the first, which the steered walk refuses (it needs the first room alone): a steered build skips it.
+void CatacombsGrowerHook(void* level, int32_t isLevel34) noexcept {
+	if (g_catGrowerOriginal == nullptr) {
+		return;
+	}
+	BuildCtx* ctx = t_ctx;
+	if (ctx != nullptr && ctx->steer && !ctx->fellBack && ctx->level == level && ctx->prep.plan->tileset.levelType == kCatacombsLevelType) {
+		ctx->growerSkipped = true;
+		return;
+	}
+	g_catGrowerOriginal(level, isLevel34);
+}
+
+// True when the tileset's steered build needs a room-grower hook that is not in.
+auto GrowerHookMissing(const cm::MazeTileset& row) -> bool {
+	return (row.ownGrower && !g_growerHooked.load()) || (row.levelType == kCatacombsLevelType && !g_catGrowerHooked.load());
 }
 
 void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
@@ -908,7 +937,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else if (Read<int32_t>(level, LvlTileType) != prep->plan->tileset.levelType) {
 				why = std::string("the ") + cm::MazeTilesets[slotIndex].slot + " slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
 				      std::to_string(prep->plan->tileset.levelType) + " (levels.txt LevelType)";
-			} else if (cm::MazeTilesets[slotIndex].ownGrower && !g_growerHooked.load()) {
+			} else if (GrowerHookMissing(cm::MazeTilesets[slotIndex])) {
 				why = std::string("the ") + prep->plan->tileset.name + " room grower was not found or not hooked (see 'cartographer check')";
 			} else {
 				ctx.steer = true;
@@ -1182,7 +1211,7 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string 
 		return {};
 	}
 	const cm::MazeTileset* row = cm::findMazeTileset(map.tileset);
-	if (row != nullptr && row->ownGrower && g_live.load() && !g_growerHooked.load()) {
+	if (row != nullptr && g_live.load() && GrowerHookMissing(*row)) {
 		return "Cartographer: the " + ts.name + " room grower was not found in this game build or its hook was refused, so " + ts.name + " map '" + map.name + "' is not opened (see 'cartographer check').";
 	}
 	for (const Slot& slot : tables.slots) {
@@ -1263,6 +1292,9 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	if (ok && g_parts[ArcaneGrower].status.on) {
 		// Optional: only Arcane maps need it. A refusal leaves the part off, and Arcane maps are refused (MazeTilesetProblem, LevelBuildHook).
 		g_growerHooked = install(ArcaneGrower, reinterpret_cast<void*>(&ArcaneGrowerHook), reinterpret_cast<void**>(&g_growerOriginal));
+	}
+	if (ok && g_parts[CatacombsGrower].status.on) {
+		g_catGrowerHooked = install(CatacombsGrower, reinterpret_cast<void*>(&CatacombsGrowerHook), reinterpret_cast<void**>(&g_catGrowerOriginal));
 	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {

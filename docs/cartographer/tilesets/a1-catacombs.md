@@ -1,6 +1,6 @@
 # Act 1 Catacombs (#275)
 
-Research only, nothing run in a game. Sources as in `a1-barracks.md`.
+Sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
@@ -14,18 +14,12 @@ Research only, nothing run in a game. Sources as in `a1-barracks.md`.
 
 ## Does the Cave/Crypt path work unchanged?
 
-No. The Catacombs case runs **its own room grower (`0x3e8610`)** instead of the shared walk `0x3e96d0`. Cartographer replaces the walk, so for this tileset the plan never reaches the engine. The grower must be hooked (graph built inside it, as `Plan::ring.graphInRing` does for ring tilesets) after a spike on what it calls. The research marks Catacombs "not yet steerable".
+Almost. The Catacombs case runs its own room grower (`0x3e8610`) before the shared walk. It only adds rooms next to the first room and places no special room, but the extra rooms break the steered walk (it needs exactly one first room). A small hook on the grower skips it on steered builds and runs it as before on a fallback (RE note 46).
 
-Prev is not a one-exit family, so the entrance is an ordinary room (`prev.present = false`, supported).
+Prev is not a one-exit family, so the entrance is an ordinary room (`prev.present = false`, supported). Prev, Next and Waypoint pieces are never placed.
 
-Tileset name: `Catacombs` (not yet in `TilesetNames`).
+Tileset name: `Catacombs`. Row: LevelType 10, 12-tile rooms, `pieceBase` 257, slot `MazeCatacombs`, level "Cartographer Catacombs" at (3500, 500).
 
-## Risk, effort
+## Game checks (slot 11, 2026-11-17)
 
-Risk **high** (unstudied grower; it may place the waypoint and Next rooms itself). Effort **L**: a spike on `0x3e8610` (signature, callees, whether it ends in `0x3eb850`), a hook with a fallback, then the Jail-sized catalogue and docs work.
-
-## Game checks
-
-- The grower replacement builds exactly the planned rooms; no waypoint or Next room appears unplanned.
-- Arrival, Boss and event; 12-tile cell box check.
-- A second game after a restart builds the same level (cached plan).
+Small, Medium, Large and ExtraLarge each built as planned with arrival in the entrance cell. Boss spawned in the plan's boss room (Small, Large, ExtraLarge by log; minions seen on Small) and the event in its room. Medium: all 13 rooms visited, outer rooms show N and W walls with black past S and E, no walkable void. A Cave map still builds. Not checked: a restart giving the same level, an Arcane map.
