@@ -157,15 +157,88 @@ Example rows (columns not named are as in the vanilla file; `spawnable` 1, `rare
 
 Name text: the game shows an affix by its `Name` as a string key. Add the names to your strings (a missing one shows as the key, and the log notes `Missing string`).
 
+## Stat catalogue (issue #539)
+
+`tools\install.ps1` appends 64 more `itemstatcost.txt` stats and a `properties.txt` property for each, after the rows above (never moved, an existing row never changed). They are the generic catalogue: a mod's affix rows name the property and need no code. Each stat has a built-in route (`statplan builtInRoutes()`), listed under **Goes to**; a `statroutes.txt` row with the same `Stat` overrides it. All are signed. Most are 10 save bits, -512 to 511 (a percent or a small count, like the first seven). The **wide** ones (flat values that PD2 lets pass 511) are 14 save bits, -8192 to 8191, saved with an add of 8192: the attack rating, the elemental damage minimum and maximum, the flat absorbs, damage reduction, thorns, life regeneration, `map-uniques` and `map-drop-bonus`. As for the rows above, do not change a width once items carry the stat.
+
+| Property | Stat | Goes to |
+|---|---|---|
+| `mon-tohit` | `cartographer_mon_tohit` | monsters: `tohit` |
+| `mon-tohit-pct` | `cartographer_mon_tohit_pct` | monsters: `item_tohit_percent` |
+| `mon-armor-pct` | `cartographer_mon_armor_pct` | monsters: `item_armor_percent` |
+| `mon-dmg-fire-min` | `cartographer_mon_dmg_fire_min` | monsters: `firemindam` |
+| `mon-dmg-fire-max` | `cartographer_mon_dmg_fire_max` | monsters: `firemaxdam` |
+| `mon-dmg-ltng-min` | `cartographer_mon_dmg_ltng_min` | monsters: `lightmindam` |
+| `mon-dmg-ltng-max` | `cartographer_mon_dmg_ltng_max` | monsters: `lightmaxdam` |
+| `mon-dmg-cold-min` | `cartographer_mon_dmg_cold_min` | monsters: `coldmindam` |
+| `mon-dmg-cold-max` | `cartographer_mon_dmg_cold_max` | monsters: `coldmaxdam` |
+| `mon-dmg-cold-len` | `cartographer_mon_dmg_cold_len` | monsters: `coldlength` |
+| `mon-dmg-mag-min` | `cartographer_mon_dmg_mag_min` | monsters: `magicmindam` |
+| `mon-dmg-mag-max` | `cartographer_mon_dmg_mag_max` | monsters: `magicmaxdam` |
+| `mon-dmg-pois-min` | `cartographer_mon_dmg_pois_min` | monsters: `poisonmindam` |
+| `mon-dmg-pois-max` | `cartographer_mon_dmg_pois_max` | monsters: `poisonmaxdam` |
+| `mon-dmg-pois-len` | `cartographer_mon_dmg_pois_len` | monsters: `poisonlength` |
+| `mon-mastery-fire` | `cartographer_mon_mastery_fire` | monsters: `passive_fire_mastery` |
+| `mon-mastery-ltng` | `cartographer_mon_mastery_ltng` | monsters: `passive_ltng_mastery` |
+| `mon-mastery-cold` | `cartographer_mon_mastery_cold` | monsters: `passive_cold_mastery` |
+| `mon-mastery-pois` | `cartographer_mon_mastery_pois` | monsters: `passive_pois_mastery` |
+| `mon-mastery-mag` | `cartographer_mon_mastery_mag` | monsters: `passive_mag_mastery` |
+| `mon-pierce-fire` | `cartographer_mon_pierce_fire` | monsters: `passive_fire_pierce` |
+| `mon-pierce-ltng` | `cartographer_mon_pierce_ltng` | monsters: `passive_ltng_pierce` |
+| `mon-pierce-cold` | `cartographer_mon_pierce_cold` | monsters: `passive_cold_pierce` |
+| `mon-pierce-pois` | `cartographer_mon_pierce_pois` | monsters: `passive_pois_pierce` |
+| `mon-absorb-fire` | `cartographer_mon_absorb_fire` | monsters: `item_absorbfire` |
+| `mon-absorb-fire-pct` | `cartographer_mon_absorb_fire_pct` | monsters: `item_absorbfire_percent` |
+| `mon-absorb-ltng` | `cartographer_mon_absorb_ltng` | monsters: `item_absorblight` |
+| `mon-absorb-ltng-pct` | `cartographer_mon_absorb_ltng_pct` | monsters: `item_absorblight_percent` |
+| `mon-absorb-cold` | `cartographer_mon_absorb_cold` | monsters: `item_absorbcold` |
+| `mon-absorb-cold-pct` | `cartographer_mon_absorb_cold_pct` | monsters: `item_absorbcold_percent` |
+| `mon-absorb-mag` | `cartographer_mon_absorb_mag` | monsters: `item_absorbmagic` |
+| `mon-absorb-mag-pct` | `cartographer_mon_absorb_mag_pct` | monsters: `item_absorbmagic_percent` |
+| `mon-dr` | `cartographer_mon_dr` | monsters: `normal_damage_reduction` |
+| `mon-mdr` | `cartographer_mon_mdr` | monsters: `magic_damage_reduction` |
+| `mon-dr-pct` | `cartographer_mon_dr_pct` | monsters: `damageresist` |
+| `mon-mag-res` | `cartographer_mon_mag_res` | monsters: `magicresist` |
+| `mon-deadly` | `cartographer_mon_deadly` | monsters: `item_deadlystrike` |
+| `mon-crush` | `cartographer_mon_crush` | monsters: `item_crushingblow` |
+| `mon-openwounds` | `cartographer_mon_openwounds` | monsters: `item_openwounds` |
+| `mon-thorns` | `cartographer_mon_thorns` | monsters: `item_attackertakesdamage` |
+| `mon-attackrate` | `cartographer_mon_attackrate` | monsters: `attackrate` |
+| `mon-far` | `cartographer_mon_far` | monsters: `item_fasterattackrate` |
+| `mon-fcr` | `cartographer_mon_fcr` | monsters: `item_fastercastrate` |
+| `mon-fhr` | `cartographer_mon_fhr` | monsters: `item_fastergethitrate` |
+| `mon-fbr` | `cartographer_mon_fbr` | monsters: `item_fasterblockrate` |
+| `mon-regen` | `cartographer_mon_regen` | monsters: `hpregen` |
+| `mon-cannotfreeze` | `cartographer_mon_cannotfreeze` | monsters: `item_cannotbefrozen` |
+| `mon-halffreeze` | `cartographer_mon_halffreeze` | monsters: `item_halffreezeduration` |
+| `mon-curse-res` | `cartographer_mon_curse_res` | monsters: `curse_resistance` |
+| `mon-missile-pierce` | `cartographer_mon_missile_pierce` | monsters: `item_pierce` |
+| `map-area-level` | `cartographer_map_area_level` | area param `AreaLevel` |
+| `map-uniques` | `cartographer_map_uniques` | area param `Uniques` |
+| `map-extra-groups` | `cartographer_map_extra_groups` | behaviour `extra_groups` |
+| `map-extra-boss` | `cartographer_map_extra_boss` | behaviour `extra_boss` |
+| `map-drop-tc` | `cartographer_map_drop_tc` | behaviour `drop_tc` |
+| `map-drop-ethereal` | `cartographer_map_drop_ethereal` | behaviour `drop_ethereal` |
+| `map-drop-socketed` | `cartographer_map_drop_socketed` | behaviour `drop_socketed` |
+| `map-drop-bonus` | `cartographer_map_drop_bonus` | behaviour `drop_bonus` |
+| `mon-lifesteal-pct` | `cartographer_mon_lifesteal_pct` | behaviour `lifesteal_pct` |
+| `mon-phys-as-fire` | `cartographer_mon_phys_as_fire` | behaviour `phys_as_fire` |
+| `mon-phys-as-cold` | `cartographer_mon_phys_as_cold` | behaviour `phys_as_cold` |
+| `mon-phys-as-ltng` | `cartographer_mon_phys_as_ltng` | behaviour `phys_as_ltng` |
+| `mon-phys-as-pois` | `cartographer_mon_phys_as_pois` | behaviour `phys_as_pois` |
+| `mon-phys-as-mag` | `cartographer_mon_phys_as_mag` | behaviour `phys_as_mag` |
+
+Monster stats go to every hostile monster of the map (the engine stats are read by the game as for a monster's own list: the table at the top of issue #536 lists which are known to work; `mon-crush`, `mon-openwounds`, `mon-thorns` and `mon-curse-res` are to be checked in game). The area params add to the map's own values when it opens: `map-area-level` adds to the area level (cut to 1 to 255, so the monsters' level and the panel follow), `map-uniques` adds percentage points to the map's `Uniques` (never below 0). The behaviours are summed per opened map: `map-drop-tc` is one chance in percent of one drop from a treasure class per kill, and the built-in route has no treasure class (a mod cannot be guessed): give it one with a `statroutes.txt` row (`Stat` `cartographer_map_drop_tc`, `Target` `Behaviour`, `Apply` `drop_tc`, `Param` the treasure class name), one row per class for classes of your own stats. A `drop_tc` with no `Param` does nothing. `map-drop-bonus`, `map-drop-ethereal`, `map-drop-socketed` and `map-extra-boss` are handled (see Map drop behaviours below). `map-extra-groups`, `mon-lifesteal-pct` and `mon-phys-as-*` are carried, shown on the item, and logged once as having no handler in this version (issue #540).
+
 ## statroutes.txt (optional)
 
-Where a map item's stat goes. Every stat the item carries is routed: the seven `cartographer_mon_*` stats go to the monsters, `cartographer_map_density` adds to the map's `Density`, and any other stat goes to the player as before. A row here adds a route for a stat of your own mod, or overrides a built-in one. Edit it, run `cartographer check`.
+Where a map item's stat goes. Every stat the item carries is routed: the `cartographer_mon_*` stats go to the monsters, `cartographer_map_density` adds to the map's `Density` (and `cartographer_map_area_level` and `cartographer_map_uniques` to its area level and `Uniques`), and any other stat goes to the player as before. A row here adds a route for a stat of your own mod, or overrides a built-in one. Edit it, run `cartographer check`.
 
 | Column | Meaning |
 |---|---|
 | `Stat` | The itemstatcost.txt stat on the map item. Not `cartographer_map_level`. Each stat once. |
 | `Target` | `Monster` (monsters get the `Apply` stat), `Player` (the player gets it), `Area` (adds to an area value), `Behaviour` (a number a behaviour reads), `None` (the stat does nothing). |
-| `Apply` | Monster and Player: the itemstatcost.txt stat that is applied (blank on Player: the stat itself). Area: the value, `Density`. Behaviour: the behaviour key. Not another routed stat: routes do not chain. |
+| `Apply` | Monster and Player: the itemstatcost.txt stat that is applied (blank on Player: the stat itself). Area: the value, `Density`, `AreaLevel` or `Uniques`. Behaviour: the behaviour key. Not another routed stat: routes do not chain. |
 | `Value` | Optional whole number, not 0. Replaces the item's own value. Blank uses the item's value. |
 | `Param` | Optional, Behaviour only: a label told apart in the sum, e.g. which drop. Ignored elsewhere. |
 

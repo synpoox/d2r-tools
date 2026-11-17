@@ -152,6 +152,9 @@ inline constexpr const char *kMapDensityStat = "cartographer_map_density";
 // The map's Density with the bonus added: `base` plus `bonus` percentage points, never below 0.
 int densityWithBonus(int base, int bonus);
 
+// The map's area level with the AreaLevel area param added: cut to kMinMapLevel..kMaxMapLevel.
+int levelWithBonus(int level, int bonus);
+
 // --- Stat routes (issue #537, epic #536) ------------------------------------------------------------------------------------
 // Where a stat on a map item goes. The built-in table (builtInRoutes()) and the optional statroutes.txt (mergeRoutes) say it; a stat with no
 // route is a player stat under its own name. Routes are by itemstatcost name and never chain: `apply` names an engine stat, an area param
@@ -172,12 +175,12 @@ struct Route {
 	std::string param;        // behaviour routes: a parameter handed to the handler with the sum (such as a treasure class row); unused by the other targets
 };
 
-// The built-in routes: the plugin's seven monster stats and cartographer_map_density (area Density). New rows are appended, never moved.
+// The built-in routes: the plugin's monster stats (the generic catalogue of issue #539), the area params (Density, AreaLevel, Uniques) and the behaviour keys. New rows are appended, never moved.
 const std::vector<Route> &builtInRoutes();
 
 // The area params an Area route may name. Matched ignoring case; routes keep this spelling.
 const std::vector<std::string> &knownAreaParams();
-// Whether the plugin has a handler for behaviour `key` (none yet: the drop and boss behaviours come with issue #538).
+// Whether the plugin has a handler for behaviour `key` (the drop and boss keys of issue #538; lifesteal, phys-as and extra groups are #540).
 bool behaviourHandled(std::string_view key);
 
 // The area param spelling `name` has ignoring case, or "" when it is not one.

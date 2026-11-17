@@ -130,3 +130,23 @@ TEST_CASE("parseSpec refuses bad items and leaves the output alone")
 	CHECK(parseSpec("", &b, &why));
 	CHECK_FALSE(any(b));
 }
+
+TEST_CASE("fromRouting builds the map's behaviours from the routed sums (issue #539)")
+{
+	using cartographer::statplan::MapRouting;
+	MapRouting r;
+	r.behaviours = {{"drop_tc", "Map Rewards", 25}, {"drop_tc", "", 10}, {"drop_tc", "Junk", -5}, {"drop_tc", "Other", 100}, {"drop_bonus", "", 150},
+	                {"drop_ethereal", "", 30}, {"drop_socketed", "", 20}, {"extra_boss", "", 50}, {"extra_groups", "", 4}};
+	const MapBehaviours b = fromRouting(r);
+	CHECK(b.dropBonusPct == 150);
+	CHECK(b.etherealPct == 30);
+	CHECK(b.socketedPct == 20);
+	CHECK(b.extraBoss == kMaxExtraBoss);
+	REQUIRE(b.dropTcs.size() == 2);  // a TC with no name or a sum of 0 or less is left out
+	CHECK(b.dropTcs[0] == std::make_pair(std::string("Map Rewards"), 25));
+	CHECK(b.dropTcs[1] == std::make_pair(std::string("Other"), 100));
+	CHECK(any(b));
+	CHECK_FALSE(any(fromRouting(MapRouting{})));  // an empty routing clears the map's behaviours
+	r.behaviours = {{"drop_bonus", "", -40}};
+	CHECK(fromRouting(r).dropBonusPct == 0);  // never below 0
+}
