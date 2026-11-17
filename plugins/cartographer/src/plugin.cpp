@@ -235,17 +235,22 @@ auto LoadAll() -> Loaded {
 	if (ReadFile(g_excelDir + L"\\itemstatcost.txt", &text)) {
 		loaded.tables->statIds = cartographer::statplan::parseItemStatCost(text);
 	}
+	// statroutes.txt (optional): a mod's own map stats, or overrides of the built-in routes. Read after itemstatcost.txt, which its names are checked against.
+	text.clear();
+	if (ReadTable(g_tableDir + L"\\" + Widen(carto::StatRoutesFile), carto::StatRoutesFile, &text, loaded.report)) {
+		loaded.tables->routes = cartographer::statplan::mergeRoutes(cartographer::statplan::builtInRoutes(), carto::LoadStatRoutes(text, loaded.tables->statIds, loaded.report));
+	}
 	if (!loaded.tables->statIds.loaded) {
 		loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt could not be read, so no map stats can be applied.");
 	} else {
 		std::string missing;
-		for (const cartographer::statplan::MonsterStat& m : cartographer::statplan::monsterStats()) {
-			if (loaded.tables->statIds.find(m.itemStat) < 0) {
-				missing += (missing.empty() ? "" : ", ") + std::string(m.itemStat);
+		for (const cartographer::statplan::Route& m : cartographer::statplan::builtInRoutes()) {
+			if (loaded.tables->statIds.find(m.stat) < 0) {
+				missing += (missing.empty() ? "" : ", ") + m.stat;
 			}
 		}
 		if (!missing.empty()) {
-			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those monster stats cannot be on a map item. Run tools\\install.ps1 again.");
+			loaded.report.Note(carto::MapsFile, 0, "itemstatcost.txt has no row for " + missing + ", so those stats cannot be on a map item. Run tools\\install.ps1 again.");
 		}
 	}
 	text.clear();

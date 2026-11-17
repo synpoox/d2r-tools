@@ -81,6 +81,13 @@ std::string StatIds::descNegKey(std::string_view name) const
 	return "";
 }
 
+int StatIds::opOf(std::string_view name) const
+{
+	for (const auto &p : ops)
+		if (p.first == name) return p.second;
+	return -1;
+}
+
 int StatIds::find(std::string_view name) const
 {
 	for (const auto &p : byName)
@@ -112,6 +119,7 @@ StatIds parseItemStatCost(std::string_view text)
 	out.loaded = true;
 	const int cDesc = table.Column("descstrpos");
 	const int cDescNeg = table.Column("descstrneg");
+	const int cOp = table.Column("op");
 	// The stat id is the row number: the game counts data rows from 0. A column that starts with '*' (such as
 	// *ID) is a comment to the game, and vanilla has one wrong (row 212 says 213), so it is not read.
 	int ordinal = 0;
@@ -122,6 +130,7 @@ StatIds parseItemStatCost(std::string_view text)
 		out.byName.emplace_back(name, id);
 		if (const std::string key = table.Cell(row, cDesc); !key.empty()) out.descKeys.emplace_back(name, key);
 		if (const std::string key = table.Cell(row, cDescNeg); !key.empty()) out.descNegKeys.emplace_back(name, key);
+		if (int op = 0; parseInt(table.Cell(row, cOp), &op)) out.ops.emplace_back(name, op);
 	}
 	return out;
 }
@@ -322,22 +331,6 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 	return out;
 }
 
-int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids)
-{
-	const int id = ids.find(kMapDensityStat);
-	if (id < 0) {
-		return 0;
-	}
-	int64_t sum = 0;
-	for (const ItemStat &s : stats) {
-		if (s.stat == id && s.layer == 0) {
-			sum += s.value;
-		}
-	}
-	constexpr int64_t limit = 0x7fffffff;
-	return static_cast<int>(sum > limit ? limit : sum < -limit ? -limit : sum);
-}
-
 int densityWithBonus(int base, int bonus)
 {
 	const int64_t total = static_cast<int64_t>(base) + bonus;
@@ -347,33 +340,111 @@ int densityWithBonus(int base, int bonus)
 	return total > 0x7fffffff ? 0x7fffffff : static_cast<int>(total);
 }
 
-std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids)
+const std::vector<Route> &builtInRoutes()
 {
-	const int id = ids.find(kMapDensityStat);
-	std::vector<ItemStat> out;
-	for (const ItemStat &s : stats) {
-		if (id < 0 || s.stat != id) {
-			out.push_back(s);
-		}
-	}
-	return out;
-}
-
-const std::vector<MonsterStat> &monsterStats()
-{
-	static const std::vector<MonsterStat> table = {
-		{"cartographer_mon_life", "item_maxhp_percent"},
-		{"cartographer_mon_damage", "damagepercent"},
-		{"cartographer_mon_fire_res", "fireresist"},
-		{"cartographer_mon_cold_res", "coldresist"},
-		{"cartographer_mon_light_res", "lightresist"},
-		{"cartographer_mon_poison_res", "poisonresist"},
-		{"cartographer_mon_speed", "velocitypercent"},
+	static const std::vector<Route> table = {
+		{"cartographer_mon_life", RouteTarget::Monster, "item_maxhp_percent", std::nullopt, ""},
+		{"cartographer_mon_damage", RouteTarget::Monster, "damagepercent", std::nullopt, ""},
+		{"cartographer_mon_fire_res", RouteTarget::Monster, "fireresist", std::nullopt, ""},
+		{"cartographer_mon_cold_res", RouteTarget::Monster, "coldresist", std::nullopt, ""},
+		{"cartographer_mon_light_res", RouteTarget::Monster, "lightresist", std::nullopt, ""},
+		{"cartographer_mon_poison_res", RouteTarget::Monster, "poisonresist", std::nullopt, ""},
+		{"cartographer_mon_speed", RouteTarget::Monster, "velocitypercent", std::nullopt, ""},
+		{kMapDensityStat, RouteTarget::Area, "Density", std::nullopt, ""},
 	};
 	return table;
 }
 
-ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids)
+const std::vector<std::string> &knownAreaParams()
+{
+	static const std::vector<std::string> params = {"Density"};
+	return params;
+}
+
+bool behaviourHandled(std::string_view key)
+{
+	static const char *const handled[] = {nullptr}; // #538 adds its keys here
+	for (const char *h : handled)
+		if (h != nullptr && key == h) return true;
+	return false;
+}
+
+std::string canonicalAreaParam(std::string_view name)
+{
+	for (const std::string &p : knownAreaParams())
+		if (carto::EqualsNoCase(p, name)) return p;
+	return "";
+}
+
+std::vector<Route> mergeRoutes(const std::vector<Route> &base, const std::vector<Route> &overrides)
+{
+	std::vector<Route> out = base;
+	for (const Route &r : overrides) {
+		bool replaced = false;
+		for (Route &o : out) {
+			if (o.stat == r.stat) {
+				o = r;
+				replaced = true;
+				break;
+			}
+		}
+		if (!replaced) out.push_back(r);
+	}
+	return out;
+}
+
+const Route *findRoute(const std::vector<Route> &routes, std::string_view stat)
+{
+	for (const Route &r : routes)
+		if (r.stat == stat) return &r;
+	return nullptr;
+}
+
+namespace {
+
+void addRouted(std::vector<KeyedValue> &list, const std::string &key, const std::string &param, int value)
+{
+	for (KeyedValue &k : list) {
+		if (k.key == key && k.param == param) {
+			const int64_t sum = static_cast<int64_t>(k.value) + value;
+			k.value = static_cast<int>(sum > INT_MAX ? INT_MAX : sum < -INT_MAX ? -INT_MAX : sum);
+			return;
+		}
+	}
+	list.push_back({key, param, value});
+}
+
+} // namespace
+
+int MapRouting::area(std::string_view param) const
+{
+	int64_t sum = 0;
+	for (const KeyedValue &k : areas)
+		if (carto::EqualsNoCase(k.key, param)) sum += k.value;
+	return static_cast<int>(sum > INT_MAX ? INT_MAX : sum < -INT_MAX ? -INT_MAX : sum);
+}
+
+int MapRouting::behaviour(std::string_view key) const
+{
+	int64_t sum = 0;
+	for (const KeyedValue &k : behaviours)
+		if (k.key == key) sum += k.value;
+	return static_cast<int>(sum > INT_MAX ? INT_MAX : sum < -INT_MAX ? -INT_MAX : sum);
+}
+
+int MapRouting::behaviour(std::string_view key, std::string_view param) const
+{
+	for (const KeyedValue &k : behaviours)
+		if (k.key == key && k.param == param) return k.value;
+	return 0;
+}
+
+bool monsterGetsMapStats(int alignment)
+{
+	return alignment <= 0;
+}
+
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids, const std::vector<Route> &routes)
 {
 	ItemProperties out;
 	for (const ItemStat &s : stats) {
@@ -395,17 +466,18 @@ ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const S
 			out.dropped.push_back(label + ": no itemstatcost row has this id");
 			continue;
 		}
-		const MonsterStat *mon = nullptr;
-		for (const MonsterStat &m : monsterStats()) {
-			if (name == m.itemStat) {
-				mon = &m;
-				break;
-			}
-		}
-		if (mon != nullptr) {
-			out.properties.push_back({Target::Monsters, mon->applied, s.value});
-		} else {
+		const Route *route = findRoute(routes, name);
+		if (route == nullptr) {
 			out.properties.push_back({Target::Players, name, s.value});
+			continue;
+		}
+		const int value = route->value.value_or(s.value);
+		switch (route->target) {
+		case RouteTarget::Monster: out.properties.push_back({Target::Monsters, route->apply, value}); break;
+		case RouteTarget::Player: out.properties.push_back({Target::Players, route->apply.empty() ? name : route->apply, value}); break;
+		case RouteTarget::Area: addRouted(out.routing.areas, route->apply, "", value); break;
+		case RouteTarget::Behaviour: addRouted(out.routing.behaviours, route->apply, route->param, value); break;
+		case RouteTarget::None: break;
 		}
 	}
 	return out;

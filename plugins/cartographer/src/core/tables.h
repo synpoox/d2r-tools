@@ -10,6 +10,7 @@
 #include "layout.h"
 #include "maplight.h"
 #include "report.h"
+#include "statplan.h"
 
 #include <cstdint>
 #include <string>
@@ -26,6 +27,7 @@ inline constexpr const char* ShapesFile = "shapes.txt";
 inline constexpr const char* ArenasFile = "arenas.txt";
 inline constexpr const char* ArenaSpotsFile = "arenaspots.txt";
 inline constexpr const char* MapStatsFile = "mapstats.txt";  // retired: only noted when it exists
+inline constexpr const char* StatRoutesFile = "statroutes.txt";  // optional: where a map item's stats go (issue #537)
 inline constexpr const char* MapEventsFile = "mapevents.txt";
 inline constexpr const char* BossesFile = "bosses.txt";
 // The superuniques.txt key (Superunique column) of a boss entry. The prefix is on every key, so it can never equal a vanilla row; tools/install.ps1 writes the same.
@@ -177,6 +179,13 @@ auto ResolveBoss(const std::vector<BossDef>& bosses, std::string_view value, con
 // A superunique row is used when there is one; the game returning no unit falls back to a plain monster of the base id (the engine does that at spawn).
 enum class BossPath { Superunique, PlainMonster, None };
 auto PickBossPath(bool rowFound, bool baseFound) -> BossPath;
+
+// statroutes.txt (optional; Stat, Target, Apply, Value, Param): routes for a mod's own map stats, or overrides of built-in ones (statplan builtInRoutes()). Returns only the
+// file's rows; merge them with statplan::mergeRoutes. A bad row is left out and described in `report`: a Stat that is not in itemstatcost.txt (with a spelling suggestion), the
+// plugin's own map level stat, an unknown Target, an Apply that is not an itemstatcost stat (monster, player), an area param or a repeated Stat, a chain (Apply is itself a routed
+// Stat), a stat the game bakes into a save, a Value that is not a whole number. A behaviour key with no handler, an Apply with Op 13 and a Param that the Target does not use are noted.
+// With `ids.loaded` false the stat names cannot be checked and are taken as written.
+auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds& ids, Report& report) -> std::vector<cartographer::statplan::Route>;
 
 // maps.txt. Rows with a problem are left out and described in `report`. Every map needs its own Item code.
 // `bosses` (from LoadBosses) is what a Boss cell may name; null means none. A Boss that is not an entry is refused with a message but the map loads without it.

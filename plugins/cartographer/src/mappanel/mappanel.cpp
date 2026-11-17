@@ -143,7 +143,14 @@ std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
 
 PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density)
 {
-	const std::vector<Stat> stats = mergedStats(rolled);
+	std::vector<Stat> stats = mergedStats(rolled);
+	// Monsters first, then players: the list is cut to kMaxStatLines and the rest counted.
+	std::stable_sort(stats.begin(), stats.end(), [](const Stat &a, const Stat &b) { return a.monsters && !b.monsters; });
+	int more = 0;
+	if (stats.size() > static_cast<size_t>(kMaxStatLines)) {
+		more = static_cast<int>(stats.size()) - kMaxStatLines;
+		stats.resize(static_cast<size_t>(kMaxStatLines));
+	}
 	PanelText out;
 	bool any = false;
 	const auto line = [&out, &any](const std::string &header, const std::string &property) {
@@ -169,6 +176,7 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int densi
 			line("", densityLine(density));
 		}
 	}
+	if (more > 0) line("", "and " + std::to_string(more) + " more");
 	return out;
 }
 

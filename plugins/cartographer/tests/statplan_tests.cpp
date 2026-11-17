@@ -681,10 +681,12 @@ TEST_CASE("every monster-side map stat names a vanilla stat buildPlan accepts on
 	StatIds ids;
 	ids.loaded = true;
 	int next = 100;  // clear of the ids buildPlan refuses
-	for (const auto &m : monsterStats()) ids.byName.emplace_back(m.applied, next++);
-	for (const auto &m : monsterStats()) {
-		const auto plan = buildPlan({{Target::Monsters, m.applied, 10}}, ids);
-		CHECK_MESSAGE(plan.monsters.size() == 1, m.applied);
+	for (const auto &m : builtInRoutes())
+		if (m.target == RouteTarget::Monster) ids.byName.emplace_back(m.apply, next++);
+	for (const auto &m : builtInRoutes()) {
+		if (m.target != RouteTarget::Monster) continue;
+		const auto plan = buildPlan({{Target::Monsters, m.apply, 10}}, ids);
+		CHECK_MESSAGE(plan.monsters.size() == 1, m.apply);
 	}
 }
 
@@ -797,15 +799,15 @@ TEST_CASE("isStaticState lists the fixed ids")
 	for (int s : {1, 39, 108, 116, 230, 231}) CHECK_FALSE(isStaticState(s));
 }
 
-TEST_CASE("every monster-side map stat is a row the installer adds, with a description text")
+TEST_CASE("every built-in route stat is a row the installer adds, with a description text")
 {
 	std::string here = __FILE__;
 	std::ifstream in(here.substr(0, here.find_last_of("/\\") + 1) + "../tools/install.ps1", std::ios::binary);
 	REQUIRE(in.good());
 	std::stringstream all;
 	all << in.rdbuf();
-	for (const auto &m : monsterStats()) {
-		CHECK_MESSAGE(all.str().find(std::string("'") + m.itemStat + "'") != std::string::npos, m.itemStat);
+	for (const auto &m : builtInRoutes()) {
+		CHECK_MESSAGE(all.str().find(std::string("'") + m.stat + "'") != std::string::npos, m.stat);
 	}
 }
 
@@ -863,22 +865,27 @@ TEST_CASE("decodeItemStatList reads D2RLoader's 16-byte entries and refuses any 
 	CHECK(problem.empty());
 }
 
-TEST_CASE("mapDensityBonus: the item's map-density values are added up over its affixes")
+TEST_CASE("the Density area route adds up the item's map-density values over its affixes")
 {
 	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
 	const int D = 1, MF = 2;
 	REQUIRE(ids.find(kMapDensityStat) == D);
+	const auto density = [&](const std::vector<ItemStat> &stats, const StatIds &i) { return itemStatsToProperties(stats, i).routing.area("Density"); };
 	// Two affixes with density (20 and 35) and one with magic find: only density counts.
-	CHECK(mapDensityBonus({{D, 0, 20}, {MF, 0, 15}, {D, 0, 35}}, ids) == 55);
-	CHECK(mapDensityBonus({{D, 0, 20}, {D, 0, -50}}, ids) == -30);
-	CHECK(mapDensityBonus({{MF, 0, 15}}, ids) == 0);
-	CHECK(mapDensityBonus({}, ids) == 0);
+	CHECK(density({{D, 0, 20}, {MF, 0, 15}, {D, 0, 35}}, ids) == 55);
+	CHECK(density({{D, 0, 20}, {D, 0, -50}}, ids) == -30);
+	CHECK(density({{MF, 0, 15}}, ids) == 0);
+	CHECK(density({}, ids) == 0);
 	// A layer makes it another stat; a missing row or an unreadable table gives nothing.
-	CHECK(mapDensityBonus({{D, 3, 20}}, ids) == 0);
-	CHECK(mapDensityBonus({{D, 0, 20}}, testIds()) == 0);
-	CHECK(mapDensityBonus({{D, 0, 20}}, StatIds{}) == 0);
-	// Not capped at 1000: an item saves one value of -524288 to 524287 for the stat, so a sum of 500000 is within what a saved item holds.
-	CHECK(mapDensityBonus({{D, 0, 200000}, {D, 0, 200000}, {D, 0, 100000}}, ids) == 500000);
+	CHECK(density({{D, 3, 20}}, ids) == 0);
+	CHECK(density({{D, 0, 20}}, testIds()) == 0);
+	CHECK(density({{D, 0, 20}}, StatIds{}) == 0);
+	// Not capped at 1000: a sum of 500000 is within what a saved item holds.
+	CHECK(density({{D, 0, 200000}, {D, 0, 200000}, {D, 0, 100000}}, ids) == 500000);
+	// The density stat is consumed by its route: it is never a player stat.
+	const auto mapped = itemStatsToProperties({{D, 0, 20}, {MF, 0, 15}, {0, 0, 5}}, ids);
+	REQUIRE(mapped.properties.size() == 2);
+	CHECK(mapped.properties[0] == Property{Target::Players, "item_magicbonus", 15});
 }
 
 TEST_CASE("densityWithBonus adds percentage points, uncapped, never below 0")
@@ -888,21 +895,6 @@ TEST_CASE("densityWithBonus adds percentage points, uncapped, never below 0")
 	CHECK(densityWithBonus(1000, 500) == 1500);
 	CHECK(densityWithBonus(100, 0) == 100);
 	CHECK(densityWithBonus(50, -80) == 0);
-}
-
-TEST_CASE("withoutMapDensity drops only the density stat, so it is not read as a player stat")
-{
-	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\ncartographer_map_density\t400\nitem_magicbonus\t80\n");
-	const std::vector<ItemStat> stats = {{1, 0, 20}, {2, 0, 15}, {0, 0, 5}};
-	const auto rest = withoutMapDensity(stats, ids);
-	REQUIRE(rest.size() == 2);
-	CHECK(rest[0].stat == 2);
-	CHECK(rest[1].stat == 0);
-	// The magic find left over is a player stat on the player under its own name.
-	const auto mapped = itemStatsToProperties(rest, ids);
-	REQUIRE(mapped.properties.size() == 2);
-	CHECK(mapped.properties[0] == Property{Target::Players, "item_magicbonus", 15});
-	CHECK(withoutMapDensity(stats, StatIds{}).size() == 3);
 }
 
 TEST_CASE("a monster velocitypercent of -100 or lower is kept as it is")
@@ -959,10 +951,13 @@ TEST_CASE("mapLevelToStamp: a new map item is given its maps.txt Level")
 	CHECK(mapLevelToStamp(0, 0, true) == 0);     // no usable Level
 }
 
-TEST_CASE("the map panel is sized for the monster and player stat lines the plan can hold")
+TEST_CASE("the map panel's cap is the built-in monster stats plus the player stats the game sends, not the route table's size")
 {
-	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxMonsterLines) == monsterStats().size());
+	size_t monsterRoutes = 0;
+	for (const auto &r : builtInRoutes()) monsterRoutes += r.target == RouteTarget::Monster ? 1 : 0;
 	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxPlayerLines) == kMaxPlayerStats);
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxStatLines) == monsterRoutes + kMaxPlayerStats);
+	CHECK(builtInRoutes().size() > monsterRoutes);  // the table holds non-monster rows too
 }
 
 TEST_CASE("decodeItemStatList reads a list longer than 16 whole when maxStats allows it (issue #429)")
@@ -978,4 +973,112 @@ TEST_CASE("decodeItemStatList reads a list longer than 16 whole when maxStats al
 	CHECK(problem.empty());
 	CHECK(all[23].stat == 33);
 	CHECK(all[23].value == 24);
+}
+
+// --- Stat routes (issue #537) ---------------------------------------------------------------------------------------------
+
+namespace {
+
+StatIds routeIds()
+{
+	// 0 strength, 1 fireresist, 2 item_maxhp_percent, 3 cartographer_mon_life, 4 cartographer_map_density, 5 mon_thorns, 6 cartographer_my_stat, 7 cartographer_my_drop
+	return parseItemStatCost("Stat\nstrength\nfireresist\nitem_maxhp_percent\ncartographer_mon_life\ncartographer_map_density\nmon_thorns\ncartographer_my_stat\ncartographer_my_drop\n");
+}
+
+} // namespace
+
+TEST_CASE("the built-in routes are the seven monster stats and the Density area route, unchanged")
+{
+	const auto &t = builtInRoutes();
+	REQUIRE(t.size() == 8);
+	const char *want[][2] = {{"cartographer_mon_life", "item_maxhp_percent"}, {"cartographer_mon_damage", "damagepercent"}, {"cartographer_mon_fire_res", "fireresist"},
+	                         {"cartographer_mon_cold_res", "coldresist"},     {"cartographer_mon_light_res", "lightresist"}, {"cartographer_mon_poison_res", "poisonresist"},
+	                         {"cartographer_mon_speed", "velocitypercent"}};
+	for (size_t i = 0; i < 7; ++i) {
+		CHECK(t[i].stat == want[i][0]);
+		CHECK(t[i].target == RouteTarget::Monster);
+		CHECK(t[i].apply == want[i][1]);
+	}
+	CHECK(t[7].stat == "cartographer_map_density");
+	CHECK(t[7].target == RouteTarget::Area);
+	CHECK(t[7].apply == "Density");
+	// A built-in stat goes to monsters and a vanilla stat to the player.
+	const auto r = itemStatsToProperties({{3, 0, 30}, {1, 0, -20}}, routeIds());
+	REQUIRE(r.properties.size() == 2);
+	CHECK(r.properties[0] == Property{Target::Monsters, "item_maxhp_percent", 30});
+	CHECK(r.properties[1] == Property{Target::Players, "fireresist", -20});
+}
+
+TEST_CASE("a route in statroutes.txt overrides a built-in one and keeps its place")
+{
+	const auto routes = mergeRoutes(builtInRoutes(), {{"cartographer_mon_life", RouteTarget::Player, "", std::nullopt, ""}});
+	REQUIRE(routes.size() == builtInRoutes().size());
+	CHECK(routes[0].target == RouteTarget::Player);
+	const auto r = itemStatsToProperties({{3, 0, 30}}, routeIds(), routes);
+	REQUIRE(r.properties.size() == 1);
+	CHECK(r.properties[0].target == Target::Players);
+	CHECK(mergeRoutes(builtInRoutes(), {}).size() == builtInRoutes().size());
+}
+
+TEST_CASE("a mod stat gets a route; a Value replaces the item's number")
+{
+	const auto routes = mergeRoutes(builtInRoutes(), {{"cartographer_my_stat", RouteTarget::Monster, "mon_thorns", 100, ""}});
+	REQUIRE(routes.size() == builtInRoutes().size() + 1);
+	const auto r = itemStatsToProperties({{6, 0, 3}}, routeIds(), routes);
+	REQUIRE(r.properties.size() == 1);
+	CHECK(r.properties[0] == Property{Target::Monsters, "mon_thorns", 100});
+	// Without the route it is a player stat under its own name.
+	const auto plain = itemStatsToProperties({{6, 0, 3}}, routeIds());
+	REQUIRE(plain.properties.size() == 1);
+	CHECK(plain.properties[0] == Property{Target::Players, "cartographer_my_stat", 3});
+}
+
+TEST_CASE("a none route does nothing and gives no dropped line")
+{
+	const auto routes = mergeRoutes(builtInRoutes(), {{"cartographer_my_stat", RouteTarget::None, "", std::nullopt, ""}});
+	const auto r = itemStatsToProperties({{6, 0, 3}, {0, 0, 5}}, routeIds(), routes);
+	REQUIRE(r.properties.size() == 1);
+	CHECK(r.properties[0].stat == "strength");
+	CHECK(r.dropped.empty());
+	CHECK(r.routing.empty());
+}
+
+TEST_CASE("area params and behaviour keys are summed over the item's affixes")
+{
+	const auto routes = mergeRoutes(builtInRoutes(), {{"cartographer_my_drop", RouteTarget::Behaviour, "map_drop_tc", std::nullopt, "42"},
+	                                                  {"cartographer_my_stat", RouteTarget::Behaviour, "map_drop_tc", std::nullopt, "7"}});
+	const auto r = itemStatsToProperties({{4, 0, 20}, {7, 0, 10}, {4, 0, 35}, {7, 0, 5}, {6, 0, 1}}, routeIds(), routes);
+	CHECK(r.properties.empty());
+	CHECK(r.routing.area("Density") == 55);
+	CHECK(r.routing.area("Nothing") == 0);
+	CHECK(r.routing.behaviour("map_drop_tc") == 16);         // every Param
+	CHECK(r.routing.behaviour("map_drop_tc", "42") == 15);   // one Param
+	CHECK(r.routing.behaviour("map_drop_tc", "7") == 1);
+	CHECK(r.routing.behaviour("map_other") == 0);
+	// A sum is kept inside int.
+	CHECK(itemStatsToProperties({{4, 0, 2000000000}, {4, 0, 2000000000}}, routeIds()).routing.area("Density") == 2147483647);
+	// Value on an area route replaces each affix's number.
+	const auto fixed = itemStatsToProperties({{4, 0, 20}, {4, 0, 35}}, routeIds(), mergeRoutes(builtInRoutes(), {{"cartographer_map_density", RouteTarget::Area, "Density", 10, ""}}));
+	CHECK(fixed.routing.area("Density") == 20);
+	CHECK_FALSE(behaviourHandled("map_drop_tc"));  // no handler yet (#538)
+	CHECK(canonicalAreaParam("density") == "Density");
+	CHECK(canonicalAreaParam("level").empty());
+}
+
+TEST_CASE("only a hostile unit gets the map's monster stats")
+{
+	CHECK(monsterGetsMapStats(0));
+	CHECK_FALSE(monsterGetsMapStats(1));  // neutral
+	CHECK_FALSE(monsterGetsMapStats(2));  // ally: a summon, mercenary or converted monster
+	CHECK(monsterGetsMapStats(-1));       // not readable: applied as before
+}
+
+TEST_CASE("parseItemStatCost reads the Op column")
+{
+	const StatIds ids = parseItemStatCost("Stat\tOp\nstrength\t\nfoo\t13\nbar\t2\n");
+	CHECK(ids.opOf("foo") == 13);
+	CHECK(ids.opOf("bar") == 2);
+	CHECK(ids.opOf("strength") == -1);
+	CHECK(ids.opOf("nope") == -1);
+	CHECK(parseItemStatCost("Stat\nfoo\n").opOf("foo") == -1);
 }

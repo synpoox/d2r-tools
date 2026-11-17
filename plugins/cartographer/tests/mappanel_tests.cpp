@@ -123,11 +123,11 @@ TEST_CASE("a map with no density bonus has no Density line, a map with one shows
 TEST_CASE("the longest panel text fits the panel under the most padding")
 {
 	std::vector<Stat> stats;
-	for (int i = 0; i < kMaxMonsterLines; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
+	for (int i = 0; i < kMaxStatLines - kMaxPlayerLines; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
 	for (int i = 0; i < kMaxPlayerLines; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
 	const PanelText p = panelText(85, stats, 40);
-	CHECK(lineCount(p.gold) == kMaxLines);
-	CHECK(lineCount(p.blue) == kMaxLines);
+	CHECK(lineCount(p.gold) == kMaxLines - 1);  // the last line is the "and N more" one, shown only on overflow
+	CHECK(lineCount(p.blue) == kMaxLines - 1);
 	CHECK(lineCount("") == 0);
 	CHECK(lineCount("a\nb\n") == 3);
 	const int units = kLineUnits;
@@ -148,4 +148,17 @@ TEST_CASE("the two panel texts merge into one, line by line")
 	CHECK(mergeLines("", "").empty());
 	CHECK(mergeLines("", "only") == "only");
 	CHECK(mergeLines("only", "") == "only");
+}
+
+TEST_CASE("more stat lines than the cap are cut, monsters first, and end in an 'and N more' line")
+{
+	std::vector<Stat> stats;
+	for (int i = 0; i < 12; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
+	for (int i = 0; i < kMaxPlayerLines; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
+	const PanelText p = panelText(85, stats, 40);
+	CHECK(lineCount(p.gold) <= kMaxLines);
+	CHECK(lineCount(p.blue) == lineCount(p.gold));
+	const int more = 12 + kMaxPlayerLines - kMaxStatLines;
+	CHECK(more > 0);
+	CHECK(p.blue.substr(p.blue.rfind('\n') + 1) == "and " + std::to_string(more) + " more");
 }

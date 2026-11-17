@@ -4,6 +4,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -35,6 +36,7 @@ struct StatIds {
 	std::vector<std::pair<std::string, int>> byName;
 	std::vector<std::pair<std::string, std::string>> descKeys; // stat name -> its descstrpos string key (rows that have one)
 	std::vector<std::pair<std::string, std::string>> descNegKeys; // stat name -> its descstrneg string key (rows that have one)
+	std::vector<std::pair<std::string, int>> ops; // stat name -> its Op column (rows that have a whole number there)
 	bool loaded = false; // false: the table could not be read, so names are not checked and nothing can be applied
 
 	// The id of `name` (exact), or -1.
@@ -43,6 +45,8 @@ struct StatIds {
 	std::string descKey(std::string_view name) const;
 	// The descstrneg string key of stat `name` (the text for a negative value), or "".
 	std::string descNegKey(std::string_view name) const;
+	// The Op column of stat `name`, or -1 (no such row, no Op column or no number in it).
+	int opOf(std::string_view name) const;
 	// The name of stat `id`, or "" when no row has it.
 	std::string nameOf(int id) const;
 	// The listed name closest to `name` (for a "did you mean" message), or "" when nothing is close.
@@ -145,35 +149,84 @@ bool cubeLevelKnown(bool itemReadsOk, int inputLevel, bool cubeStepHooked);
 // The itemstatcost.txt stat that holds a map affix's bonus Density in percent (tools/install.ps1 adds the row and the `map-density` property).
 inline constexpr const char *kMapDensityStat = "cartographer_map_density";
 
-// The bonus Density of a map item: the sum of every layer 0 value of the map-density stat over `stats` (one entry per affix that carries it, or
-// one entry the game already added up). 0 when `ids` does not name the stat or the item has none. Not capped by the plugin: the installer's stat row saves -524288 to 524287 on an item, and the result is only kept inside int.
-int mapDensityBonus(const std::vector<ItemStat> &stats, const StatIds &ids);
-
 // The map's Density with the bonus added: `base` plus `bonus` percentage points, never below 0.
 int densityWithBonus(int base, int bonus);
 
-// `stats` without the map-density stat, so it is not reported as a stat with no meaning on a map.
-std::vector<ItemStat> withoutMapDensity(const std::vector<ItemStat> &stats, const StatIds &ids);
+// --- Stat routes (issue #537, epic #536) ------------------------------------------------------------------------------------
+// Where a stat on a map item goes. The built-in table (builtInRoutes()) and the optional statroutes.txt (mergeRoutes) say it; a stat with no
+// route is a player stat under its own name. Routes are by itemstatcost name and never chain: `apply` names an engine stat, an area param
+// or a behaviour key, not another route's stat.
+enum class RouteTarget {
+	Monster,   // `apply` is the itemstatcost stat the game puts on every hostile monster of the map
+	Player,    // `apply` is the itemstatcost stat put on the player in the map (blank: the stat itself)
+	Area,      // `apply` is an area param (knownAreaParams()); the map's summed value is read with MapRouting::area
+	Behaviour, // `apply` is a behaviour key; the summed value is read with MapRouting::behaviour. A key with no handler is logged once and skipped
+	None       // the stat is carried for its tooltip only: it does nothing
+};
+
+struct Route {
+	std::string stat;  // itemstatcost name of the stat on the map item
+	RouteTarget target = RouteTarget::Player;
+	std::string apply;
+	std::optional<int> value; // set: this number is used instead of the item stat's value (blank in statroutes.txt: the item's value)
+	std::string param;        // behaviour routes: a parameter handed to the handler with the sum (such as a treasure class row); unused by the other targets
+};
+
+// The built-in routes: the plugin's seven monster stats and cartographer_map_density (area Density). New rows are appended, never moved.
+const std::vector<Route> &builtInRoutes();
+
+// The area params an Area route may name. Matched ignoring case; routes keep this spelling.
+const std::vector<std::string> &knownAreaParams();
+// Whether the plugin has a handler for behaviour `key` (none yet: the drop and boss behaviours come with issue #538).
+bool behaviourHandled(std::string_view key);
+
+// The area param spelling `name` has ignoring case, or "" when it is not one.
+std::string canonicalAreaParam(std::string_view name);
+
+// `base` with each row of `overrides` replacing the route of the same Stat (the built-in one keeps its place) or, for a new Stat, added at the end.
+std::vector<Route> mergeRoutes(const std::vector<Route> &base, const std::vector<Route> &overrides);
+
+// The route for item stat `stat`, or nullptr (a player stat).
+const Route *findRoute(const std::vector<Route> &routes, std::string_view stat);
+
+// One routed sum: the area param or behaviour key, the route's Param (behaviours), and the sum of every layer 0 value over the item.
+struct KeyedValue {
+	std::string key;
+	std::string param;
+	int value = 0;
+};
+
+// What an opened map's item gave its area params and behaviours (issue #537). #538 and #539 read this; the sums are over every affix on the
+// item (one entry per affix, or one the game already added up), not capped by the plugin beyond staying inside int.
+struct MapRouting {
+	std::vector<KeyedValue> areas;       // one entry per area param
+	std::vector<KeyedValue> behaviours;  // one entry per behaviour key and Param
+	// The summed value of area param `param` (ignoring case), 0 when no stat routes to it.
+	int area(std::string_view param) const;
+	// The summed value of behaviour `key` over every Param, 0 when no stat routes to it.
+	int behaviour(std::string_view key) const;
+	// The summed value of behaviour `key` with exactly this Param, 0 when none.
+	int behaviour(std::string_view key, std::string_view param) const;
+	bool empty() const { return areas.empty() && behaviours.empty(); }
+};
 
 struct ItemProperties {
-	std::vector<Property> properties; // in the item's order
+	std::vector<Property> properties; // in the item's order (monster and player routes only)
 	std::vector<std::string> dropped; // one plain-English line for each item stat that was left out
+	MapRouting routing;               // the area and behaviour routes' sums
 };
 
-// A monster-side map stat: the itemstatcost row tools/install.ps1 adds (`itemStat`) and the vanilla stat the game applies to
-// monsters for it (`applied`). The rows are the plugin's own so a vanilla stat on a map item never reads as a monster stat.
-struct MonsterStat {
-	const char *itemStat;
-	const char *applied;
-};
-// The monster-side stats a map item can carry (cartographer/14-item-stats.md).
-const std::vector<MonsterStat> &monsterStats();
+// Turns the map item's stats into the map's properties, in the item's order. Each stat is sent where `routes` says: monster and player routes
+// become properties (a route's Value replaces the item's value), area and behaviour routes are summed into `routing`, none routes are dropped
+// without a line; a stat with no route is a player stat under its own (vanilla) name. buildPlan then refuses what the game bakes into a save.
+// A stat with a layer, a value of 0 or an id no itemstatcost row has is dropped and listed in `dropped`. With `ids.loaded` false nothing
+// can be named: every stat is dropped.
+ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids, const std::vector<Route> &routes = builtInRoutes());
 
-// Turns the map item's stats into the map's properties, in the item's order. A stat named in monsterStats() applies its vanilla
-// stat to monsters; any other stat is a player stat, applied to the player under its own (vanilla) name; buildPlan then refuses what
-// the game bakes into a save. A stat with a layer, a value of 0 or an id no itemstatcost row has is dropped and listed in
-// `dropped`. With `ids.loaded` false nothing can be named: every stat is dropped.
-ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const StatIds &ids);
+// Whether a unit with this alignment (the game's UnitAlignment, stat 172: 0 hostile, 1 neutral, 2 ally) gets the map's monster stats: only a
+// hostile one does, so player summons, mercenaries and allies never do. -1 (not readable: the UnitStat part is off) counts as hostile, so
+// the stats are applied as they were before the check existed.
+bool monsterGetsMapStats(int alignment);
 
 // One line for the log: "monsters: item_maxhp_percent(76)=+30; players: fireresist(39)=-20".
 std::string describe(const Plan &plan);
