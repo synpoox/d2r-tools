@@ -159,6 +159,20 @@ Name text: the game shows an affix by its `Name` as a string key. Add the names 
 
 Retired: `mapstats.txt`, the `Properties` column and setting and `ItemStats`. A file or column left over is ignored and `cartographer check` says so.
 
+## Map drop behaviours
+
+Generic, mod-agnostic behaviours a map can have (issue #538). Cartographer applies them to every **hostile, non-minion monster** killed on the map's level; the stat router (issue #537) sums the values per opened map and sets them, and another plugin sets them through `SetMapBehaviours`. Mod-specific drop rules plug in through [cartographer.map-drop.v1](map-drop-service.md).
+
+| Behaviour key | Param | Value | Effect |
+|---|---|---|---|
+| `drop_tc` | a treasure class name from TreasureClassEx | chance in percent | each kill rolls that class once with that chance; several keys are rolled independently |
+| `drop_bonus` | | percent | extra picks of the monster's own treasure class: every full 100 is one sure extra pick, the rest is the chance of one more |
+| `drop_ethereal` | | percent | chance a map drop is ethereal (the game still only makes an ethereal-capable item ethereal) |
+| `drop_socketed` | | percent | chance a socketable map drop gets 1 or 2 sockets (the game cuts it to the item's own maximum; a two-handed weapon is not given more) |
+| `extra_boss` | | count, 0 to 9 | that many more spawns of the map's `Boss`, in its room |
+
+Minions never count. Not checked in game beyond the lane's Slot11 check: see [51](../reverse-engineering/cartographer/51-map-drop-behaviours.md).
+
 ## bosses.txt (optional)
 
 The bosses a map's `Boss` can name. A boss is always an entry of its own here, never a vanilla one. See the README for the columns (`Name`, `Base`, `Mods`, `Minions`) and how `tools\install.ps1` writes a `superuniques.txt` row per entry, keyed `cartoboss:` plus the escaped Name.

@@ -123,6 +123,11 @@ inline constexpr const char* ItemListCopy = "FF 25 ?? ?? ?? ?? 90 90 90 90 57 48
 // its own: it is byte-identical to a sibling for 452 bytes, so it is the target of the call at SpawnObject + 0xff.
 inline constexpr const char* DeathDrop = "48 8B C4 44 89 40 18 53 55 56 57 41 54 41 56 41 57 48 83 EC 70 4D 8B F9 48 8B EA 4C 8B F1";
 inline constexpr const char* DropRoller = "40 53 55 56 57 41 54 41 55 41 56 41 57 48 81 EC 98 00 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 88 00 00 00 4C 8B BC 24 18 01 00 00";
+// Map drop behaviours (issue #538, cartographer/51-map-drop-behaviours.md). ItemMake (game, dropRequest, int) makes one dropped item: hooked, 20 bytes, only its call from the monster drop (0x44486b) is acted on.
+// The two socket functions are twins of another function (0x36b1d0, 0x375560): told apart by the distance of their first call, kept unmasked.
+inline constexpr const char* ItemMake = "40 55 53 56 41 54 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00 80 B9 06 01 00 00 01 41 8B D8 48 8B F2 4C 8B F9 75 19";
+inline constexpr const char* ItemSocketable = "40 57 48 83 EC 20 48 8B F9 48 85 C9 75 13 88 4C 24 30 48 8D 4C 24 30 E8 A4 C6 FF FF 84 C0 74 01 CC 48 8B CF 48 89 5C 24 38 E8 ?? ?? ?? ?? 83 F8 04 75 51";
+inline constexpr const char* ItemSetSockets = "40 57 41 56 48 83 EC 28 44 8B F2 48 8B F9 48 85 C9 74 0A E8 38 D1 FD FF 83 F8 04 74 1D 48 8D 4C 24 40 C6 44 24 40 00 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 85 FF 0F 84 ?? ?? ?? ??";
 inline constexpr const char* DropLevel = "48 89 5C 24 08 57 48 83 EC 20 8B FA 48 8B D9 E8 ?? ?? ?? ?? 83 F8 01 75 ?? 45 33 C0 8D 50 0B";
 inline constexpr const char* SpawnObject = "40 55 41 56 41 57 48 83 EC 60 4C 8B F1 41 BF 01 00 00 00 41 8B CF 8B EA E8 ?? ?? ?? ?? 48 85 C0 0F 84 ?? ?? ?? ??";
 inline constexpr const char* CreateObject = "40 55 53 57 48 8D AC 24 70 FC FF FF 48 81 EC 90 04 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48";

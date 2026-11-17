@@ -26,6 +26,7 @@
 #include "engine/open_extra_service.h"
 #include "engine/maze_hooks.h"
 #include "engine/portal.h"
+#include "engine/map_behaviours.h"
 #include "engine/room_populate_service.h"
 #include "engine/stat_apply.h"
 #include "log.h"
@@ -580,6 +581,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		carto::PublishArenaService(context);
 		carto::PublishRoomPopulateService(context, carto::PopulateHookLive());
 		carto::PublishOpenExtraService(context);
+		carto::PublishMapDropService(context);
 		(void)carto::InstallMapSync(context);  // SDK only, no engine part: nothing here can turn the portal off
 	} catch (...) {
 		g_loadFailed = true;

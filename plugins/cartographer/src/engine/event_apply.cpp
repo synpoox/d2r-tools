@@ -6,6 +6,7 @@
 #include "engine/event_6b.h"
 #include "engine/game_memory.h"
 #include "engine/level_row.h"
+#include "engine/map_behaviours.h"
 #include "engine/map_panel.h"
 #include "engine/maze_hooks.h"
 #include "engine/outdoor_hooks.h"
@@ -591,6 +592,12 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 	const ep::BossCall call = ep::bossCall(unique, force);
 	const int row = plan.spawns.front().row;
 	uint8_t* const bitmap = reinterpret_cast<uint8_t*>(game) + GameSuperBitmapOffset;
+	bool asSuper = false;
+	void* unit = nullptr;
+	const size_t total = plan.spawns.size();
+	const char* const how = call.super ? (call.flags != 0 ? "as a superunique, collision test skipped" : "as a superunique") : (call.flags != 0 ? "collision test skipped" : "as its monster");
+	// One placement: the first spot the game takes. Run once for the Boss and once more for each extra Boss (issue #538).
+	const auto place = [&]() -> bool {
 	if (unique && ep::superSeen(bitmap, row)) {
 		// The game spawns a superunique once per game and refuses a second one; the map's Boss is placed anyway, so the once-per-game bit is cleared first.
 		bitmap[row >> 3] = static_cast<uint8_t>(bitmap[row >> 3] & ~(1u << (row & 7)));
@@ -599,11 +606,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 	// The game's own free-spot search (p7 = 0xa) walks rings 3, 6, ... 30 subtiles out from the start, so a refusal means no free subtile
 	// on any of those rings (about the whole room for a ~40 x 40 maze room; an outdoor clearing may be larger; section 9, "Plan rooms and
 	// the map Boss spot"). The spots are a fail-open backstop: starts a few subtiles apart move the ring grid onto subtiles the first start skipped.
-	bool asSuper = false;
-	void* unit = nullptr;
-	const size_t total = plan.spawns.size();
 	size_t tried = 0;
-	const char* const how = call.super ? (call.flags != 0 ? "as a superunique, collision test skipped" : "as a superunique") : (call.flags != 0 ? "collision test skipped" : "as its monster");
 	bool made = false;
 	for (const ep::Spawn& spawn : plan.spawns) {
 		++tried;
@@ -623,11 +626,23 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		}
 		plog::Info("map Boss '%s': the game refused the spot (%d,%d) (%s, %zu of %zu spots)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, how, tried, total);
 	}
+	return made;
+	};
+	const bool made = place();
 	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
 	if (!made) {
 		return ep::BossTry::Refused;
 	}
 	AutoCheckNoteBoss(state.bossName, true, asSuper, std::string());
+	// extra_boss (issue #538): N more of the same Boss in the same room. Each takes the next free spot; one the game refuses is logged and stops the rest.
+	cartographer::behaviours::MapBehaviours behaviours;
+	if (at == nullptr && GetMapBehaviours(state.level, &behaviours) && behaviours.extraBoss > 0) {
+		int placed = 0;
+		for (int i = 0; i < behaviours.extraBoss && place(); ++i) {
+			++placed;
+		}
+		plog::Info("map Boss '%s': extra_boss %d: %d placed in the room %s", state.bossName.c_str(), behaviours.extraBoss, placed, Describe(rects.server).c_str());
+	}
 	return ep::BossTry::Made;
 }
 
@@ -1161,6 +1176,7 @@ auto PopulateHookLive() -> bool {
 }
 
 void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t playerId, uint32_t openings, int level, bool maze, void* player) {
+	MapBehavioursTestOpened(level);  // issue #538: the game-check knob; the route table sets the real ones
 	Event6bMapOpened(level);  // phase 6b: this slot's previous map's boss Drop and Shrine end here; the other maps keep theirs
 	if (tables == nullptr || (!g_tickOn.load() && !g_spawnOn.load())) {
 		return;
@@ -1316,6 +1332,7 @@ void EventsPlayerTick(void* rawGame, void* rawUnit, uint32_t localPlayer) noexce
 }
 
 void EventsGameLeft() noexcept {
+	MapBehavioursGameLeft();
 	Event6bGameLeft();
 	{
 		std::lock_guard<std::mutex> lock(g_arenaLock);

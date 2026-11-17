@@ -1,6 +1,7 @@
 #include "engine/event_6b.h"
 
 #include "core/part_signatures.h"
+#include "engine/map_behaviours.h"
 #include "engine/scan.h"
 #include "event6b.h"
 #include "log.h"
@@ -23,6 +24,7 @@ namespace {
 namespace e6 = cartographer::event6b;
 namespace ep = cartographer::eventplan;
 namespace ev = cartographer::events;
+namespace beh = cartographer::behaviours;
 
 // --- Engine facts. Build 93847; each is recorded with its evidence in docs/reverse-engineering/cartographer/13-ambush-treasure-shrine.md.
 constexpr int UnitTypeOffset = 0x00;         // int32: 1 monster
@@ -79,11 +81,28 @@ using ObjectFlagsSetFn = void (*)(Unit*, uint8_t) noexcept;  // writes that low 
 using TcLookupFn = const void* (*)(uint32_t dataFlag, uint16_t tcIndex, int32_t level) noexcept;
 using TcRollerFn = uint64_t (*)(Game*, Unit* a, Unit* b, const void* tc, int32_t s20, int32_t s28, int32_t s30, void* out, int32_t* s40, int32_t s48) noexcept;
 
-enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, ObjectFlagsGet, ObjectFlagsSet, TcLookup, TcRoller, DataTables, NameToRow, PartCount };
+// Map drop behaviours (issue #538): ItemMake (game, dropRequest, int) makes one dropped item and returns its unit; the request's +0 is the dropper and +0xc0 a flag word (0x4 = ethereal).
+using ItemMakeFn = uint64_t (*)(Game*, void* request, int32_t a3) noexcept;
+using ItemFlagFn = int32_t (*)(Unit*) noexcept;                 // ItemSocketable: nonzero when the item can take sockets and has none
+using ItemSetSocketsFn = void (*)(Unit*, uint32_t count) noexcept;  // clamps to the item's own maximum
+using UnitStatFn = int32_t (*)(Unit*, int32_t stat, int32_t layer) noexcept;
+using UnitRoomFn = void* (*)(Unit*) noexcept;
+using RoomLevelFn = int32_t (*)(void* room) noexcept;
+constexpr int32_t StatAlignment = 172;        // 0 hostile (the same test as the route table, #537)
+constexpr int32_t StatSockets = 0xc2;
+constexpr int MonsterDataOffset = 0x10;       // unit -> monster data
+constexpr int MonsterFlagsOffset = 0x1a;      // uint8 in the monster data; 0x10 is a minion (from the PD2R notes; the flags byte is logged at each kill)
+constexpr uint8_t MonsterMinionBit = 0x10;
+constexpr int DropRequestDropperOffset = 0x00;
+constexpr int DropRequestFlagsOffset = 0xc0;
+constexpr uint32_t DropFlagEthereal = 0x4;
+
+enum PartId { DeathDrop, DropRoller, DropLevel, SpawnObject, FreeSpot, CreateObject, ChestOperate, ObjectFlagsGet, ObjectFlagsSet, TcLookup, TcRoller, DataTables, NameToRow,
+              ItemMake, ItemSocketable, ItemSetSockets, UnitStat, UnitRoom, RoomLevelId, PartCount };
 
 Part g_parts[PartCount] = {
 	{"DeathDrop", sig::DeathDrop, 15, false, nullptr, {}, {}},
-	{"DropRoller", sig::DropRoller, 0, false, nullptr, {}, {}},
+	{"DropRoller", sig::DropRoller, 20, false, nullptr, {}, {}},  // hooked for the map bonus picks (issue #538); every other use only calls it
 	{"DropLevel", sig::DropLevel, 0, false, nullptr, {}, {}},
 	{"SpawnObject", sig::SpawnObject, 0, false, nullptr, {}, {}},
 	{"FreeSpot", nullptr, 0, false, nullptr, {}, {}},  // no signature: the call target inside SpawnObject
@@ -95,10 +114,19 @@ Part g_parts[PartCount] = {
 	{"TcRoller", sig::TcRoller, 0, false, nullptr, {}, {}},
 	{"DataTablesBase", nullptr, 0, false, nullptr, {}, {}},  // shared with event_apply.cpp (copied in at load)
 	{"NameToRow", nullptr, 0, false, nullptr, {}, {}},       // shared with event_apply.cpp (copied in at load)
+	{"ItemMake", sig::ItemMake, 20, false, nullptr, {}, {}},
+	{"ItemSocketable", sig::ItemSocketable, 0, false, nullptr, {}, {}},
+	{"ItemSetSockets", sig::ItemSetSockets, 0, false, nullptr, {}, {}},
+	{"BehavioursUnitStat", sig::UnitStat, 0, false, nullptr, {}, {}},
+	{"BehavioursUnitRoom", sig::UnitRoom, 0, false, nullptr, {}, {}},
+	{"BehavioursRoomLevelId", sig::RoomLevelId, 0, false, nullptr, {}, {}},
 };
 
 const D2RL::PluginContext* g_context = nullptr;
 DeathDropFn g_original = nullptr;
+DropRollerFn g_rollerOriginal = nullptr;
+ItemMakeFn g_itemMakeOriginal = nullptr;
+std::atomic<bool> g_behavioursHook{false};  // the DropRoller and ItemMake hooks are in (the map drop behaviours can act)
 OperateFn g_operateOriginal = nullptr;
 bool g_populatorOn = false;            // the room populator hook (event_apply.cpp) is in; set once at load
 bool g_deathListener = false;          // the SDK monster death listener is registered (the Ambush needs it to count kills)
@@ -204,6 +232,125 @@ auto TablesBase(uint32_t dataFlag, std::string* why) noexcept -> const uint8_t* 
 	return nullptr;
 }
 
+// --- Map drop behaviours (issue #538) ----------------------------------------------------------------------------------------
+// The death hook opens a context for a hostile, non-minion monster that dies on a map level with behaviours; while it is open (this thread only), the
+// DropRoller hook adds the bonus picks and the ItemMake hook makes drops ethereal and socketed and tells the map-drop subscribers.
+
+struct DropContext {
+	bool active = false;
+	bool extra = false;      // the bonus picks are running: the roller hook passes through
+	bool rolled = false;     // the monster's own roll was seen (the bonus applies to it once)
+	Unit* victim = nullptr;
+	int level = 0;
+	beh::MapBehaviours b;
+	beh::Rng rng{1};
+};
+thread_local DropContext t_drop;
+
+// Builds the context for `victim`; false (nothing set) when the behaviours do not apply to it. Logs why, for the game check.
+auto OpenDropContext(Game* game, Unit* victim) noexcept -> bool {
+	(void)game;
+	if (!On(UnitStat) || !On(UnitRoom) || !On(RoomLevelId) || At<int32_t>(victim, UnitTypeOffset) != UnitTypeMonster) {
+		return false;
+	}
+	void* room = Call<UnitRoomFn>(UnitRoom)(victim);
+	const int level = room == nullptr ? -1 : Call<RoomLevelFn>(RoomLevelId)(room);
+	beh::MapBehaviours b;
+	if (level < 0 || !GetMapBehaviours(level, &b)) {
+		return false;
+	}
+	const uint8_t* data = At<const uint8_t*>(victim, MonsterDataOffset);
+	const uint8_t flags = data == nullptr ? 0 : data[MonsterFlagsOffset];
+	const int32_t alignment = Call<UnitStatFn>(UnitStat)(victim, StatAlignment, 0);
+	const bool eligible = alignment == 0 && (flags & MonsterMinionBit) == 0;
+	plog::Info("map behaviours: kill of unit %u on level %d: alignment %d, monster flags 0x%02x: %s", At<uint32_t>(victim, UnitIdOffset), level, alignment, flags, eligible ? "behaviours apply" : "not hostile or a minion, skipped");
+	if (!eligible) {
+		return false;
+	}
+	DropContext& c = t_drop;
+	c.active = true;
+	c.extra = false;
+	c.rolled = false;
+	c.victim = victim;
+	c.level = level;
+	c.b = b;
+	c.rng = beh::Rng(GetTickCount64() * 0x9E3779B97F4A7C15ull ^ At<uint32_t>(victim, UnitIdOffset));
+	return true;
+}
+
+// The drop_tc rolls of the kill: each class that hits is rolled once, as the game's own drop is. Runs inside the context.
+void RollDropTcs(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
+	DropContext& c = t_drop;
+	if (c.b.dropTcs.empty()) {
+		return;
+	}
+	std::string why;
+	const uint8_t* dt = TablesBase(At<uint8_t>(game, GameDataFlagOffset), &why);
+	void* map = dt == nullptr ? nullptr : At<void*>(dt, DtTcMapOffset);
+	if (map == nullptr) {
+		plog::Warn("map behaviours: drop_tc not rolled: %s", dt == nullptr ? why.c_str() : "the treasure class name map is null");
+		return;
+	}
+	void* killer = At<void*>(info, DeathInfoKillerOffset);
+	const int32_t levelValue = Call<DropLevelFn>(DropLevel)(victim, c.level);
+	c.extra = true;
+	for (const size_t i : beh::hitTcs(c.b.dropTcs, c.rng)) {
+		const std::string& name = c.b.dropTcs[i].first;
+		std::string tcWhy;
+		const int tc = e6::tcIndexFromLookup(Call<NameToRowFn>(NameToRow)(map, name.c_str(), 0), At<uint64_t>(dt, DtTcCountOffset), &tcWhy);
+		if (tc < 0) {
+			plog::Warn("map behaviours: drop_tc '%s' is not applied: %s", name.c_str(), tcWhy.c_str());
+			continue;
+		}
+		plog::Info("map behaviours: drop_tc '%s' (treasure class %d, %d%%) hit: rolling it for unit %u", name.c_str(), tc, c.b.dropTcs[i].second, At<uint32_t>(victim, UnitIdOffset));
+		Call<DropRollerFn>(DropRoller)(game, victim, killer, static_cast<uint16_t>(tc), 0, levelValue, arg3, 0, 0, 0);
+	}
+	c.extra = false;
+}
+
+// The monster's own roll, then the bonus picks: the same arguments again, so the same treasure class and level.
+void DropRollerHook(Game* game, Unit* victim, void* killer, uint16_t tcIndex, int32_t a5, int32_t a6, int32_t a7, uint64_t a8, uint64_t a9, int32_t a10) noexcept {
+	g_rollerOriginal(game, victim, killer, tcIndex, a5, a6, a7, a8, a9, a10);
+	DropContext& c = t_drop;
+	if (!c.active || c.extra || c.rolled || victim != c.victim) {
+		return;
+	}
+	c.rolled = true;
+	const int picks = beh::extraDrops(c.b.dropBonusPct, c.rng);
+	plog::Info("map behaviours: drop_bonus %d%%: %d extra pick(s) of the monster's own treasure class %u", c.b.dropBonusPct, picks, static_cast<unsigned>(tcIndex));
+	c.extra = true;
+	for (int i = 0; i < picks; ++i) {
+		g_rollerOriginal(game, victim, killer, tcIndex, a5, a6, a7, a8, a9, a10);
+	}
+	c.extra = false;
+}
+
+auto ItemMakeHook(Game* game, void* request, int32_t a3) noexcept -> uint64_t {
+	DropContext& c = t_drop;
+	if (!c.active || request == nullptr || At<Unit*>(request, DropRequestDropperOffset) != c.victim) {
+		return g_itemMakeOriginal(game, request, a3);
+	}
+	const bool ethereal = beh::chance(c.b.etherealPct, c.rng);
+	if (ethereal) {
+		*reinterpret_cast<uint32_t*>(static_cast<uint8_t*>(request) + DropRequestFlagsOffset) |= DropFlagEthereal;
+	}
+	const uint64_t item = g_itemMakeOriginal(game, request, a3);
+	if (item == 0) {
+		return item;
+	}
+	auto* unit = reinterpret_cast<Unit*>(item);
+	int sockets = 0;
+	const bool socketRoll = beh::chance(c.b.socketedPct, c.rng);
+	const bool socketable = socketRoll && On(ItemSocketable) && On(ItemSetSockets) && Call<ItemFlagFn>(ItemSocketable)(unit) != 0;
+	if (socketable) {
+		Call<ItemSetSocketsFn>(ItemSetSockets)(unit, static_cast<uint32_t>(beh::socketCount(c.rng)));
+		sockets = Call<UnitStatFn>(UnitStat)(unit, StatSockets, 0);
+	}
+	plog::Info("map behaviours: item %p dropped: ethereal rolled %s, socket roll %s%s, sockets now %d", static_cast<void*>(unit), ethereal ? "yes" : "no", socketRoll ? "hit" : "miss", socketRoll && !socketable ? " (not socketable)" : "", sockets);
+	MapDropNotify(unit, c.level, c.b);
+	return item;
+}
+
 // --- Boss Drop --------------------------------------------------------------------------------------------------------------
 
 void OnDeath(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
@@ -251,7 +398,23 @@ auto DeathDropHook(Game* game, Unit* victim, int32_t arg3, void* info) noexcept 
 	if (g_original == nullptr) {
 		return 0;  // reachable only if the loader gave no original (the install logs it and marks the part off)
 	}
+	bool behaviours = false;
+	if (g_behavioursHook.load(std::memory_order_relaxed) && MapBehavioursAny() && game != nullptr && victim != nullptr) {
+		try {
+			behaviours = OpenDropContext(game, victim);
+		} catch (...) {
+			plog::Error("map behaviours: opening a kill failed");
+		}
+	}
 	const uint64_t result = g_original(game, victim, arg3, info);
+	if (behaviours) {
+		try {
+			RollDropTcs(game, victim, arg3, info);
+		} catch (...) {
+			plog::Error("map behaviours: rolling drop_tc failed");
+		}
+		t_drop.active = false;  // closed before the Boss Drop below: that roll is not a map drop
+	}
 	if (g_dropArmed.load(std::memory_order_relaxed) && game != nullptr) {
 		try {
 			OnDeath(game, victim, arg3, info);
@@ -516,6 +679,23 @@ void InstallEvent6b(const D2RL::PluginContext* context, const std::vector<Signat
 	} else if (On(DeathDrop)) {
 		g_parts[DeathDrop].status.on = false;
 		g_parts[DeathDrop].status.detail = "off: not hooked, because a part it needs was not found";
+	}
+	// The map drop behaviours (issue #538): the roller and item hooks, only when the death hook is in and the parts they call were found.
+	if (g_dropHook.load() && On(DropRoller) && On(ItemMake) && On(UnitStat) && On(UnitRoom) && On(RoomLevelId)) {
+		const auto install = [&](PartId id, void* hook, void** original) {
+			Part& part = g_parts[id];
+			const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+			const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, hook, original);
+			return HookOutcome(part, hooked, *original != nullptr);
+		};
+		const bool roller = install(DropRoller, reinterpret_cast<void*>(&DropRollerHook), reinterpret_cast<void**>(&g_rollerOriginal));
+		const bool item = roller && install(ItemMake, reinterpret_cast<void*>(&ItemMakeHook), reinterpret_cast<void**>(&g_itemMakeOriginal));
+		g_behavioursHook = roller && item;
+		if (!g_behavioursHook.load()) {
+			plog::Warn("map behaviours: off (the DropRoller or ItemMake hook did not go in)");
+		}
+	} else {
+		plog::Info("map behaviours: off (a part it needs was not found, or the death hook is off)");
 	}
 	// The operate hook, for a Treasure chest's Drop: likewise only when everything the roll calls was found.
 	if (On(ChestOperate) && On(TcLookup) && On(TcRoller) && On(DropLevel) && On(DataTables) && On(NameToRow)) {
