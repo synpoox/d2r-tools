@@ -1,6 +1,6 @@
 # Act 2 Sewers (#243)
 
-Research only, nothing run in a game. Sources as in `a1-barracks.md`.
+Sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
@@ -12,17 +12,10 @@ Research only, nothing run in a game. Sources as in `a1-barracks.md`.
 | Special rooms | 332-335 Prev W/E/S/N (dead ends) and 336 Prev NS (dock); 337-340 Next; 341-344 Radament's Lair; 345-348 Waypoint; 349-352 Chest |
 | Warps | 21 (Dock to Town), 22 Up, 23 Down |
 
-## Does the Cave/Crypt path work unchanged?
+## Built (#243)
 
-No. The Act 2 sewer case runs **its own grower (`0x3eab30`)** instead of the shared walk. The one-exit Prev family fits the model (`prev = {332, 333, 334, 335}`), so once the grower is hooked the rest is the Jail recipe. The research marks the Act 2 sewer "not yet steerable".
-
-Naming: the known tileset name `Sewer` is Act 3 (LevelType 25 in `tilesets.tsv`); the Act 2 one is `Act 2 Sewer` in the catalogue. Pick the user-facing name before adding the `TilesetNames` entry. The Radament piece (quest, level-id test) is unreachable from a slot.
-
-## Risk, effort
-
-Risk **medium-high** (unstudied grower). Effort **L**: grower spike and hook, name, installer value, tests, docs.
+Built as the maze tileset `Sewer` (slot `MazeSewer`, level "Cartographer Sewer", offset x 3000, y 500). The research note's "own grower" was wrong: the case runs the ring grower and the shared walk, and `0x3eab30` after them only places special rooms for the game's own levels 47 to 49 and 65, so a slot level needs no grower hook (`docs/reverse-engineering/cartographer/45-act2-sewer-case.md`). The Act 3 tileset is `KurastSewer`. No filler ring: piece 301 is the Act 2 Town preset, not a closed piece, and no Prev, Next, Radament, Waypoint or Chest piece is ever placed (#455).
 
 ## Game checks
 
-- The grower hook builds exactly the planned rooms; no Radament or Waypoint room appears unplanned.
-- Prev redirect, arrival, Boss, event at 12 tiles per cell.
+Arrival, Boss, event and the four outer edges per Size are recorded in the pull request of #243.

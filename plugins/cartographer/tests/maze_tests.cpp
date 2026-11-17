@@ -1129,7 +1129,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Temple") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem or Basement");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement or Sewer");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1151,7 +1151,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Temple", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Temple'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem or Basement.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Temple'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement or Sewer.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1443,6 +1443,47 @@ TEST_CASE("the KurastSewer row and its plans: 12-tile rooms, mask pieces from 70
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 739; to <= 746; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Drain, Chest: never placed
+}
+
+// Act 2 Sewers (#243): 12-tile rooms, Def 302..316 = 301 + exit mask. 301 is the Act 2 Town preset, so no piece is ever 301. The case's 0x3eab30 places special rooms only for levels 47-49 and 65.
+TEST_CASE("the Sewer row and its plans: 12-tile rooms, mask pieces from 302, no Prev, Next, Radament, Waypoint or Chest piece")
+{
+	const MazeTileset *row = findMazeTileset("sewer");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 13);
+	CHECK(std::string(row->slot) == "MazeSewer");
+	CHECK(std::string(row->levelName) == "Cartographer Sewer");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase + 1 == 302);  // W; NSEW is 316
+	CHECK(row->pieceBase + 15 == 316);
+	CHECK(row->callsRingGrower);
+	CHECK_FALSE(row->ownGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(row->offsetX == 3000);
+	CHECK(row->offsetY == 500);
+	CHECK(findMazeTilesetBySlot("mazesewer") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("Sewer", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 302 && room.piece <= 316));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 332; to <= 352; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Prev, Next, Radament, Waypoint, Chest: never placed
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
@@ -1986,7 +2027,7 @@ TEST_CASE("the Harem and Palace Cellar rows: a fixed ring of four corner rooms w
 // the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/35-map-link-tiles.md), so no table row has a family and no plan places one.
 TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordinary room, and every Prev call is suppressed")
 {
-	const int prevGroups[7][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {695, 696, 697, 698}, {236, 237, 238, 239}, {497, 498, 499, 500}};
+	const int prevGroups[8][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {695, 696, 697, 698}, {236, 237, 238, 239}, {497, 498, 499, 500}, {332, 333, 334, 335}};
 	for (size_t i = 0; i < MazeTilesetCount; ++i) {
 		const MazeTileset &row = MazeTilesets[i];
 		for (int piece : row.prevPiece) CHECK_MESSAGE(piece == 0, row.name << " has a Prev piece");
