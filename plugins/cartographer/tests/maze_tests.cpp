@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Harem or Basement");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Harem or Basement");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Harem or Basement.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Harem or Basement.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1219,7 +1219,7 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 		CHECK(automapInRange(a.x, a.y, a.size));
 		CHECK(a.y + a.size <= 1000);
 		for (const MazeTileset &row : MazeTilesets)
-			CHECK((a.x + a.size <= row.offsetX || row.offsetX + levelTiles <= a.x));
+			CHECK((a.x + a.size <= row.offsetX || row.offsetX + levelTiles <= a.x || a.y + a.size <= row.offsetY || row.offsetY + levelTiles <= a.y));
 		for (const Spot &b : planned)
 			if (&a != &b) CHECK((a.x + a.size <= b.x || b.x + b.size <= a.x));
 	}
@@ -1358,6 +1358,84 @@ TEST_CASE("the Dungeon row and its plans: 14-tile rooms, mask pieces from 665, n
 	for (int to = 680; to <= 702; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Prev, Next: never placed
 }
 
+// Act 2 Maggot Lair (#279): 10-tile rooms, Def 482..496 = 481 + exit mask, Prev 497..500, Next 501..504, Treasure 505..508, Tight Spot 509.
+TEST_CASE("the Lair row and its plans: 10-tile rooms, mask pieces from 482, no Prev family, every other special piece suppressed")
+{
+	const MazeTileset *row = findMazeTileset("lair");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 18);
+	CHECK(std::string(row->slot) == "MazeLair");
+	CHECK(std::string(row->levelName) == "Cartographer Lair");
+	CHECK(row->roomTiles == 10);
+	CHECK(row->pieceBase + 1 == 482);  // W; NSEW is 496
+	CHECK(row->pieceBase + 15 == 496);
+	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(findMazeTilesetBySlot("mazelair") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("Lair", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 10);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 482 && room.piece <= 496));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 497; to <= 509; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Prev, Next, Treasure, Tight Spot: never placed
+}
+
+// Act 3 Kurast Sewers (#285): 12-tile rooms, Def 705..719 = 704 + exit mask, Drain 739..742, Chest 743..746 (the case's two special-room calls).
+TEST_CASE("the KurastSewer row and its plans: 12-tile rooms, mask pieces from 705, no Prev family, Drain and Chest suppressed")
+{
+	const MazeTileset *row = findMazeTileset("kurastsewer");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 25);
+	CHECK(std::string(row->slot) == "MazeKurastSewer");
+	CHECK(std::string(row->levelName) == "Cartographer Kurast Sewer");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase + 1 == 705);  // W; NSEW is 719
+	CHECK(row->pieceBase + 15 == 719);
+	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(row->offsetX == 1500);
+	CHECK(row->offsetY == 500);
+	CHECK(findMazeTilesetBySlot("mazekurastsewer") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("KurastSewer", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 705 && room.piece <= 719));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 739; to <= 746; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Drain, Chest: never placed
+}
+
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")
 {
 	Tileset ts;
@@ -1424,6 +1502,44 @@ TEST_CASE("the Durance row and its plans: 12-tile rooms, mask pieces from 754, n
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 769; to <= 795; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Prev, Next, Waypoint: never placed
+}
+
+// Act 1 Jail (#273): 12-tile rooms, Def 206..220 = 205 + exit mask, Theme 221..235, Prev 236..239, Next 240..243, Cath 244..247, Waypoint 248..251, Pitspawn 252..255.
+TEST_CASE("the Jail row and its plans: 12-tile rooms, mask pieces from 206, no Prev family, every other special piece suppressed")
+{
+	const MazeTileset *row = findMazeTileset("jail");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 8);
+	CHECK(std::string(row->slot) == "MazeJail");
+	CHECK(std::string(row->levelName) == "Cartographer Jail");
+	CHECK(row->roomTiles == 12);
+	CHECK(row->pieceBase + 1 == 206);
+	CHECK(row->pieceBase + 15 == 220);
+	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);  // no filler ring: piece 205 is the Barracks Forge N (10 x 14), not a closed Jail room; a ring of it broke the arrival, boss and event lookups
+	CHECK(findMazeTilesetBySlot("mazejail") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("Jail", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 12);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 206 && room.piece <= 220));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 221; to <= 255; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Prev, Next, Cath, Waypoint, Pitspawn: never placed
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------
@@ -1761,11 +1877,11 @@ TEST_CASE("the Harem and Palace Cellar rows: a fixed ring of four corner rooms w
 	}
 }
 
-// Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021, Durance 784-787, Dungeon 695-698) each carry
+// Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021, Durance 784-787, Dungeon 695-698, Jail 236-239, Lair 497-500) each carry
 // the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/35-map-link-tiles.md), so no table row has a family and no plan places one.
 TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordinary room, and every Prev call is suppressed")
 {
-	const int prevGroups[5][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {695, 696, 697, 698}};
+	const int prevGroups[7][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {695, 696, 697, 698}, {236, 237, 238, 239}, {497, 498, 499, 500}};
 	for (size_t i = 0; i < MazeTilesetCount; ++i) {
 		const MazeTileset &row = MazeTilesets[i];
 		for (int piece : row.prevPiece) CHECK_MESSAGE(piece == 0, row.name << " has a Prev piece");

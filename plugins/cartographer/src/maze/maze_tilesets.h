@@ -65,6 +65,18 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// special-room call (the Prev pieces 695..698, never placed). Offset x 0, y 0: the next free slot, clear of Arcane (500..860).
 	// docs/reverse-engineering/cartographer/39-dungeon-builder.md, docs/cartographer/tilesets/a3-dungeon.md.
 	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {0, 0, 0, 0}, true, 0, 0, 0},
+	// Jail (Act 1 Jail, LevelType 8, #273): 12-tile rooms, "Jail W" is Def 206 (base 205, 206..220). Its case calls the ring grower first, then the walk, then two
+	// special-room calls (Prev and Next, both suppressed): docs/reverse-engineering/cartographer/40-jail-case.md. Offset x 0, y 500: the y-0 band is full, so
+	// the next rows go in a second band below it (y 500..860, 500 under the first, still above the first Act 5 level at y 1000).
+	{"Jail", 8, "MazeJail", "Cartographer Jail", 12, 205, {0, 0, 0, 0}, true, 0, 500, 0},
+	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower, the walk, then two
+	// special-room calls (Next and Prev, both suppressed): docs/reverse-engineering/cartographer/41-lair-builder.md. Offset x 500, y 500: the second band, right of Jail
+	// (x 0, y 500, #273) and clear of Barracks (x 1000, y 500, #272); y 500..860 stays above the first Act 5 level (y 1000).
+	{"Lair", 18, "MazeLair", "Cartographer Lair", 10, 481, {0, 0, 0, 0}, true, 500, 500, 0},
+	// Kurast Sewer (Act 3 Sewer 1, LevelType 25, #285; named apart from the Act 2 sewer): 12-tile rooms, "Sewer W" is Def 705 (base 704, 705..719). Its case calls the ring grower,
+	// the walk and two special-room calls (the Drain and Chest pieces 739..746, always suppressed). Offset x 1500, y 500: the next free spot in the second band (Jail 0, Lair 500,
+	// Barracks 1000), clear of Snow (1500..1692, y 0..192). docs/reverse-engineering/cartographer/43-kurast-sewer-builder.md, docs/cartographer/tilesets/a3-kurast-sewers.md.
+	{"KurastSewer", 25, "MazeKurastSewer", "Cartographer Kurast Sewer", 12, 704, {0, 0, 0, 0}, true, 1500, 500, 0},
 	// Harem (Act 2 Harem, LevelType 14, #277) and Palace Cellar (Basement, LevelType 15, #278): 16-tile rooms. Their case in the builder calls only the ring grower (n 2): one ring of four
 	// rooms, each a corner piece the picker takes from the exit mask (Harem 354 NE, 355 SE, 356 SW, 357 NW; Basement 358..361), and no walk, so the plan is that ring and nothing else.
 	// Offsets: y 500, the next free x after Jail, Lair, Barracks and Kurast Sewers (x 0..1500). docs/reverse-engineering/cartographer/44-harem-cellar-builder.md.
