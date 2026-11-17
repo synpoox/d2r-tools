@@ -1,6 +1,6 @@
 # Act 3 Kurast sewers (issue #285)
 
-Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
+**Status: Built (#285).** The KurastSewer row is in `MazeTilesets` (LevelType 25, offset 1500, 500). Research notes below, from the vanilla tables of build 3.3.0.
 
 | Item | Finding |
 |---|---|
