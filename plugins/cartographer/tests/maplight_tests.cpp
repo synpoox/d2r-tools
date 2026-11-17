@@ -71,3 +71,17 @@ TEST_CASE("describe names every column") {
 	look.warmth = 150;
 	CHECK(describe(look) == "brightness 80%, warmth 150%");
 }
+
+TEST_CASE("hue and saturation count as a look and are named by describe") {
+	Look look;
+	look.hue = 360;
+	CHECK_FALSE(look.any());
+	look.hue = 90;
+	CHECK(look.any());
+	CHECK(look.grade().hue == 90);
+	CHECK(describe(look).find("hue 90, saturation 100%") != std::string::npos);
+	look = Look{};
+	look.saturation = 0;
+	CHECK(look.any());
+	CHECK(describe(Look{}).find("hue") == std::string::npos);
+}

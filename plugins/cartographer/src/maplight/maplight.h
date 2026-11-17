@@ -3,6 +3,8 @@
 // notes: docs/reverse-engineering/cartographer/32-level-lighting.md.
 #pragma once
 
+#include "lutgrade.h"
+
 #include <string>
 
 namespace cartographer::maplight {
@@ -13,14 +15,20 @@ inline constexpr int MinBrightness = 10, MaxBrightness = 400;
 inline constexpr int MinWarmth = 25, MaxWarmth = 400;
 // TintR, TintG, TintB: the percent each light colour channel is multiplied by (0 removes the channel, 100 keeps it). Maps only.
 inline constexpr int MinTint = 0, MaxTint = 200;
+// Hue (degrees, 0 keeps the tileset's colours) and Saturation (percent, 100 keeps them): the whole picture, through the colour-grading table. Maps only.
+inline constexpr int MinHue = lutgrade::MinHue, MaxHue = lutgrade::MaxHue;
+inline constexpr int MinSaturation = lutgrade::MinSaturation, MaxSaturation = lutgrade::MaxSaturation;
 
 struct Look {
 	int brightness = DefaultPercent;
 	int warmth = DefaultPercent;
 	int tintR = DefaultPercent, tintG = DefaultPercent, tintB = DefaultPercent;
+	int hue = lutgrade::DefaultHue, saturation = lutgrade::DefaultSaturation;
 
 	// True when any column differs from the tileset's own look.
 	auto any() const -> bool;
+	// The hue and saturation as a grade (any() is false when both are blank or neutral).
+	auto grade() const -> lutgrade::Grade;
 };
 
 // The factor the level's exposure value is multiplied by for `brightness` percent. The game's exposure value divides the picture

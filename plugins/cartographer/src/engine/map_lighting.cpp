@@ -3,6 +3,7 @@
 #include "core/part_signatures.h"
 #include "engine/arena_service.h"
 #include "engine/game_memory.h"
+#include "engine/lut_grade.h"
 #include "engine/scan.h"
 #include "log.h"
 #include "maplight.h"
@@ -247,8 +248,8 @@ void MapLightingMapOpened(const MapDef& map, int slotLevel) {
 }
 
 void MapLightingPlayerTick(int playerLevel) noexcept {
-	if (!g_live.load(std::memory_order_relaxed)) {
-		return;
+	if (!g_live.load(std::memory_order_relaxed) && !LutGradeLive()) {
+		return;  // neither the apply hook nor the grading hooks are in
 	}
 	// An arena is not a map open, so its look comes from its arenas.txt row. Read before g_lock: the arena tables have their own lock.
 	ml::Look arenaLook;
@@ -267,6 +268,7 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 	} catch (...) {
 	}
 	bool active = false;
+	cartographer::lutgrade::Grade grade;  // maps only: an arena has no Hue or Saturation
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		const auto found = g_looks.find(playerLevel);
@@ -280,8 +282,10 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 			g_tint[0] = static_cast<float>(look->tintR) / 100.0f;
 			g_tint[1] = static_cast<float>(look->tintG) / 100.0f;
 			g_tint[2] = static_cast<float>(look->tintB) / 100.0f;
+			grade = look->grade();
 		}
 	}
+	LutGradeSet(active ? &grade : nullptr);
 	if (g_active.exchange(active) != active) {
 		plog::Info("map look: %s", active ? "applied (the player is in the map)" : "off (the player left the map)");
 	}
@@ -292,6 +296,7 @@ void MapLightingGameLeft() noexcept {
 	g_looks.clear();
 	g_active = false;
 	g_reset = true;
+	LutGradeSet(nullptr);
 }
 
 auto MapLightingSummary() -> std::string {
