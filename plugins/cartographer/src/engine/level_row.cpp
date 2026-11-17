@@ -315,6 +315,17 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			monsterRows.clear();
 			monsterWeights.clear();
 		}
+		// Extra groups (issue #540): each id on its own, so a monster the game keeps out of the groups costs only itself.
+		std::vector<lr::ExtraGroup> extras;
+		for (const auto& [id, count] : map.extraGroups) {
+			std::vector<int> rows, weights;
+			std::string why;
+			if (!GameMonsterRows(dataFlag, {id}, &rows, &weights, &why)) {
+				plog::Warn("map monsters: '%s': extra_groups '%s' is left out: %s", map.name.c_str(), id.c_str(), why.c_str());
+				continue;
+			}
+			extras.push_back({rows[0], weights[0], count});
+		}
 		std::string recordWhy;
 		int64_t levelCount = 0;
 		uint8_t* record = nullptr;
@@ -378,6 +389,33 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 				plog::Warn("map monsters: level %d: %s; that part is off for this open", level, why.c_str());
 			}
 			recOn = verdict.on;
+			if (!extras.empty()) {
+				if (!recOn.monsters) {
+					plog::Warn("map monsters: '%s': extra_groups is off for this open: the Monsters part is off", map.name.c_str());
+				} else {
+					// The map's own list when it has one, else the groups the level already has.
+					const bool listed = !request.monsterRows.empty();
+					std::vector<std::string> notes;
+					const lr::Groups merged = lr::MergeExtraGroups(listed ? request.monsterRows : recSnap.groupRows, listed ? request.monsterWeights : recSnap.groupWeights, extras, &notes);
+					for (const std::string& note : notes) {
+						plog::Warn("map monsters: '%s': extra_groups: %s", map.name.c_str(), note.c_str());
+					}
+					lr::Request withExtras = request;
+					withExtras.monsterRows = merged.rows;
+					withExtras.monsterWeights = merged.weights;
+					if (const std::string refusal = lr::MonstersRefusal(withExtras); !refusal.empty()) {
+						plog::Warn("map monsters: '%s': extra_groups is not applied: %s", map.name.c_str(), refusal.c_str());
+					} else {
+						request = std::move(withExtras);
+						int sum = 0;
+						for (const int w : request.monsterWeights) {
+							sum += w;
+						}
+						plog::Info("map monsters: '%s': extra_groups: %zu extra group(s) asked, the map now has %zu group(s), weight sum %d (rows %s)", map.name.c_str(), extras.size(),
+						           request.monsterRows.size(), sum, ListText(request.monsterRows).c_str());
+					}
+				}
+			}
 			recPrep = lr::Prepare(g_rec.ledger, level, record, lr::PlanRecord(request, recSnap, recOn));
 			if (recOn.density && map.density > 0 && recSnap.density == 0) {
 				plog::Info("map monsters: '%s': Density %d%% adds nothing, the slot level's MonDen is 0 in this difficulty", map.name.c_str(), map.density);

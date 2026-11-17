@@ -363,7 +363,7 @@ const std::vector<std::string> &knownAreaParams()
 
 bool behaviourHandled(std::string_view key)
 {
-	static const char *const handled[] = {nullptr}; // #538 adds its keys here
+	static const char *const handled[] = {"extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois", nullptr}; // #538 adds its keys here
 	for (const char *h : handled)
 		if (h != nullptr && key == h) return true;
 	return false;

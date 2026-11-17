@@ -1082,3 +1082,11 @@ TEST_CASE("parseItemStatCost reads the Op column")
 	CHECK(ids.opOf("nope") == -1);
 	CHECK(parseItemStatCost("Stat\nfoo\n").opOf("foo") == -1);
 }
+
+TEST_CASE("the combat behaviour keys have handlers (issue #540)")
+{
+	for (const char* key : {"extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois"}) {
+		CHECK(behaviourHandled(key));
+	}
+	CHECK_FALSE(behaviourHandled("phys_as_holy"));
+}

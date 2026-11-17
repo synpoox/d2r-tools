@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace carto {
@@ -33,6 +34,14 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 // slot level `slotLevel` (the level the map opened through); empty when no map is open there. Any thread. Set when the map opens, whether or not
 // the monster and player halves are on, and forgotten when the game is left. Issues #538 (behaviours) and #539 (area params) read it.
 auto StatApplyMapRouting(int slotLevel) -> cartographer::statplan::MapRouting;
+
+// The test routing (issue #540): CARTOGRAPHER_TEST_ROUTING adds behaviour sums to `routing` as if a map item gave them, a game check only
+// (`<key>[:<param>]=<value>;...`). A no-op when the variable is unset. Called by the open path before the map's groups are written and by
+// StatApplyMapOpened, so both see the same sums.
+void StatApplyTestRouting(cartographer::statplan::MapRouting* routing);
+
+// The map's extra_groups behaviour as (monstats Id, groups) pairs, each count cut to behaviours::kMaxExtraGroups; entries of 0 or less are left out.
+auto StatApplyExtraGroups(const cartographer::statplan::MapRouting& routing) -> std::vector<std::pair<std::string, int>>;
 
 // The PlayerStats setting of cartographer.txt (on by default). While off, nothing is ever attached to the player. While on, the
 // player's list sits on the unit until the next tick outside the map; the save writer was seen to write base stats only

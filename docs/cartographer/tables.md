@@ -189,6 +189,18 @@ Generic, mod-agnostic behaviours a map can have (issue #538). Cartographer appli
 
 Minions never count. Not checked in game beyond the lane's Slot11 check: see [51](../reverse-engineering/cartographer/51-map-drop-behaviours.md).
 
+### Combat behaviours (issue #540)
+
+Read the same way (from the map's summed route keys). They apply to **hostile monsters** (alignment 0) of an opened map only.
+
+| Behaviour key | Param | Value | Effect |
+|---|---|---|---|
+| `extra_groups` | a monstats `Id` | count, 0 to 13 | that many more monster groups of that monster in the map's region record (a monster already in `Monsters` gains weight; a new one is added while the record has room, 13 groups at most; weights are scaled to add up to 255 at most) |
+| `lifesteal_pct` | | percent | every hit a hostile monster lands heals it by that percent of the damage dealt (physical plus element damage; the game caps it at the target's life) |
+| `phys_as_fire`, `phys_as_ltng`, `phys_as_cold`, `phys_as_mag`, `phys_as_pois` | | percent | the monster's min and max physical damage, that percent of each, is added as damage of that element when it spawns (cold 50 frames, poison 100 frames) |
+
+A game check without a map item: set `CARTOGRAPHER_TEST_ROUTING` (for example `extra_groups:quillrat1=3;lifesteal_pct=50;phys_as_fire=50`) before starting the game; the values are added to the map's sums, and the log says so. Unset, it does nothing. See [52](../reverse-engineering/cartographer/52-map-combat-behaviours.md).
+
 ## bosses.txt (optional)
 
 The bosses a map's `Boss` can name. A boss is always an entry of its own here, never a vanilla one. See the README for the columns (`Name`, `Base`, `Mods`, `Minions`) and how `tools\install.ps1` writes a `superuniques.txt` row per entry, keyed `cartoboss:` plus the escaped Name.

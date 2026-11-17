@@ -214,12 +214,12 @@ TEST_CASE("monsters fill the group count, weight sum and entries of the record, 
 	r.monsterRows = {};
 	r.monsterWeights = {};
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());
-	r.monsterRows = std::vector<int>(MaxMonsters + 1, 3);
-	r.monsterWeights = std::vector<int>(MaxMonsters + 1, 1);
+	r.monsterRows = std::vector<int>(RecMaxGroups + 1, 3);
+	r.monsterWeights = std::vector<int>(RecMaxGroups + 1, 1);
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());
-	r.monsterRows = std::vector<int>(MaxMonsters, 3);
-	r.monsterWeights = std::vector<int>(MaxMonsters, 1);
-	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).size() == 3 + 3 * MaxMonsters + (RecMaxGroups - MaxMonsters));
+	r.monsterRows = std::vector<int>(RecMaxGroups, 3);
+	r.monsterWeights = std::vector<int>(RecMaxGroups, 1);
+	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).size() == 3 + 3 * RecMaxGroups + (RecMaxGroups - RecMaxGroups));
 	r.monsterRows = {5, -1};
 	r.monsterWeights = {1, 1};
 	CHECK(PlanRecord(r, s, RecordOnly(true, false, false)).empty());
@@ -249,8 +249,8 @@ TEST_CASE("the group weight sum is a byte: 255 is written, more is refused with 
 	r.monsterWeights = {100, 100, 56};  // 256 would wrap to 0
 	CHECK(!MonstersRefusal(r).empty());
 	CHECK(PlanRecord(r, snap, RecordOnly(true, false, false)).empty());
-	r.monsterRows = std::vector<int>(MaxMonsters, 3);
-	r.monsterWeights = std::vector<int>(MaxMonsters, 100);  // 1000
+	r.monsterRows = std::vector<int>(RecMaxGroups, 3);
+	r.monsterWeights = std::vector<int>(RecMaxGroups, 100);  // 1000
 	CHECK(!MonstersRefusal(r).empty());
 	CHECK(PlanRecord(r, snap, RecordOnly(true, false, false)).empty());
 }
@@ -714,4 +714,38 @@ TEST_CASE("leaving the filler rooms out of the share of rooms done keeps the las
 	}
 	CHECK(withSkip / runs > without / runs + 0.03);
 	CHECK(lastThirdWith > lastThirdWithout);
+}
+
+TEST_CASE("MergeExtraGroups adds weight to a held row and appends a new one")
+{
+	std::vector<std::string> notes;
+	const auto g = MergeExtraGroups({5, 6}, {10, 20}, {{6, 4, 2}, {9, 3, 1}}, &notes);
+	REQUIRE(g.rows.size() == 3);
+	CHECK(g.weights[1] == 28);
+	CHECK(g.rows[2] == 9);
+	CHECK(g.weights[2] == 3);
+	CHECK(notes.empty());
+	CHECK(MergeExtraGroups({5}, {10}, {{5, 1, 0}}, &notes).weights[0] == 10);  // a count of 0 adds nothing
+}
+
+TEST_CASE("MergeExtraGroups holds 13 groups and 255 weight")
+{
+	std::vector<std::string> notes;
+	std::vector<int> rows, weights;
+	for (int i = 0; i < RecMaxGroups; ++i) {
+		rows.push_back(i);
+		weights.push_back(10);
+	}
+	auto g = MergeExtraGroups(rows, weights, {{99, 1, 2}}, &notes);
+	CHECK(g.rows.size() == static_cast<size_t>(RecMaxGroups));
+	CHECK(notes.size() == 1);
+	notes.clear();
+	g = MergeExtraGroups({1, 2}, {200, 50}, {{2, 100, 13}}, &notes);
+	int sum = 0;
+	for (const int w : g.weights) {
+		CHECK(w >= 1);
+		sum += w;
+	}
+	CHECK(sum <= MaxWeightSum);
+	CHECK_FALSE(notes.empty());
 }

@@ -177,7 +177,7 @@ const std::vector<Route> &builtInRoutes();
 
 // The area params an Area route may name. Matched ignoring case; routes keep this spelling.
 const std::vector<std::string> &knownAreaParams();
-// Whether the plugin has a handler for behaviour `key` (none yet: the drop and boss behaviours come with issue #538).
+// Whether the plugin has a handler for behaviour `key` (extra_groups, lifesteal_pct, phys_as_<fire|ltng|cold|mag|pois>: issue #540; the drop and boss keys: #538).
 bool behaviourHandled(std::string_view key);
 
 // The area param spelling `name` has ignoring case, or "" when it is not one.

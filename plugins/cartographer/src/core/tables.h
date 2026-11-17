@@ -99,6 +99,7 @@ struct MapDef {
 	int minCharLevel = 1;
 	int eventChance = -1;  // -1: use the cartographer.txt value
 	int density = 0, champions = 0, uniques = 0;
+	std::vector<std::pair<std::string, int>> extraGroups;  // the map item's extra_groups behaviour (issue #540): monstats Id, groups; set when the map opens, not by maps.txt
 	cartographer::maplight::Look look;  // Brightness, Warmth: the map's own look (blank: the tileset's)
 };
 

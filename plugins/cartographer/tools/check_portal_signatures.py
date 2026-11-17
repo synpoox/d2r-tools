@@ -50,6 +50,8 @@ PARTS = [
     ("DetachStatList", 0x2F7920, 9, "E8", 0),
     ("FreeStatList", 0x2F4180, 3, "74", 0),
     ("MonsterSetup", 0x494A60, 43, None, 14),
+    # The leech step (cartographer/52-map-combat-behaviours.md): hooked (18 bytes); the first relative operand (jnz) is at +30.
+    ("LeechStep", 0x450C90, 30, None, 18),
     # Map events (cartographer/09-map-events.md)
     ("PopulateRoom", 0x50ACF0, 12, "48 8B 05", 12),
     ("SpawnMonster", 0x492CF0, 56, None, 0),

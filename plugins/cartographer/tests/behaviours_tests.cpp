@@ -130,3 +130,81 @@ TEST_CASE("parseSpec refuses bad items and leaves the output alone")
 	CHECK(parseSpec("", &b, &why));
 	CHECK_FALSE(any(b));
 }
+
+TEST_CASE("extra_groups is cut to 0..13")
+{
+	CHECK(clampExtraGroups(-3) == 0);
+	CHECK(clampExtraGroups(0) == 0);
+	CHECK(clampExtraGroups(5) == 5);
+	CHECK(clampExtraGroups(13) == 13);
+	CHECK(clampExtraGroups(99) == kMaxExtraGroups);
+}
+
+TEST_CASE("lifestealBlock adds a percent of the hit and never lowers the block")
+{
+	CHECK(lifestealBlock(0, 1000, 50) == 500);
+	CHECK(lifestealBlock(100, 1000, 10) == 200);
+	CHECK(lifestealBlock(100, 0, 50) == 100);
+	CHECK(lifestealBlock(100, -5, 50) == 100);
+	CHECK(lifestealBlock(100, 1000, 0) == 100);
+	CHECK(lifestealBlock(0, 1000, 100000) == 10000);  // the percent is cut to 1000
+	CHECK(lifestealBlock(kMaxLifestealBlock - 1, 1000000, 100) == kMaxLifestealBlock);
+	CHECK(lifestealBlock(kMaxLifestealBlock + 10, 1000, 50) == kMaxLifestealBlock + 10);
+}
+
+TEST_CASE("element names")
+{
+	Element e{};
+	CHECK(elementFromName("ltng", &e));
+	CHECK(e == Element::Lightning);
+	CHECK(elementFromName("pois", &e));
+	CHECK(e == Element::Poison);
+	CHECK_FALSE(elementFromName("light", &e));
+	CHECK_FALSE(elementFromName("", &e));
+}
+
+TEST_CASE("physAsStats: percent of the physical damage as element damage")
+{
+	const auto fire = physAsStats(Element::Fire, 50, 10, 20);
+	REQUIRE(fire.size() == 2);
+	CHECK(fire[0].stat == 48);
+	CHECK(fire[0].value == 5);
+	CHECK(fire[1].stat == 49);
+	CHECK(fire[1].value == 10);
+	const auto cold = physAsStats(Element::Cold, 100, 10, 20);
+	REQUIRE(cold.size() == 3);
+	CHECK(cold[0].stat == 54);
+	CHECK(cold[2].stat == 56);
+	CHECK(cold[2].value == kColdLength);
+	const auto pois = physAsStats(Element::Poison, 100, 10, 20);
+	REQUIRE(pois.size() == 3);
+	CHECK(pois[0].stat == 57);
+	CHECK(pois[0].value == 10 * 256 / kPoisonLength);
+	CHECK(pois[2].value == kPoisonLength);
+	CHECK(physAsStats(Element::Magic, 50, 10, 20)[1].stat == 53);
+	CHECK(physAsStats(Element::Lightning, 50, 10, 20)[0].stat == 50);
+	CHECK(physAsStats(Element::Fire, 0, 10, 20).empty());
+	CHECK(physAsStats(Element::Fire, 50, 0, 0).empty());
+	CHECK(physAsStats(Element::Fire, 1, 1, 5)[1].value == 1);  // never rounds the max to 0
+}
+
+TEST_CASE("parseTestRouting: key[:param]=value pairs")
+{
+	std::vector<TestRoute> r;
+	std::string why;
+	REQUIRE(parseTestRouting("extra_groups:quillrat1=3;lifesteal_pct=50;;phys_as_fire=20", &r, &why));
+	REQUIRE(r.size() == 3);
+	CHECK(r[0].key == "extra_groups");
+	CHECK(r[0].param == "quillrat1");
+	CHECK(r[0].value == 3);
+	CHECK(r[1].key == "lifesteal_pct");
+	CHECK(r[1].param.empty());
+	CHECK(r[2].value == 20);
+	CHECK_FALSE(parseTestRouting("lifesteal_pct=0", &r, &why));
+	CHECK_FALSE(parseTestRouting("lifesteal_pct", &r, &why));
+	CHECK_FALSE(parseTestRouting("x:=3", &r, &why));
+	CHECK_FALSE(why.empty());
+	CHECK(r.size() == 3);  // untouched on failure
+	REQUIRE(parseTestRouting("", &r, &why));
+	CHECK(r.empty());
+}
