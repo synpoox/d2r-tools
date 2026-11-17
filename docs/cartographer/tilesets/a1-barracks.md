@@ -1,6 +1,6 @@
 # Act 1 Barracks (#272)
 
-Research only, nothing run in a game. Sources: vanilla 3.3.0 `levels`, `lvltypes`, `lvlmaze`, `lvlprest` (read only); engine facts from `docs/reverse-engineering/cartographer/05-maze-slot.md` and the DRLG steering research in pd2-resurrected (`docs/research/drlg-steering.md`).
+**Status: Built (#272).** The Barracks row is in `MazeTilesets` (LevelType 7, offset 1000, 500, rooms 10 x 14). Research notes below, from the vanilla tables of build 3.3.0. Sources: vanilla 3.3.0 `levels`, `lvltypes`, `lvlmaze`, `lvlprest` (read only); engine facts from `docs/reverse-engineering/cartographer/05-maze-slot.md` and the DRLG steering research in pd2-resurrected (`docs/research/drlg-steering.md`).
 
 One install-wide limit applies to every maze tileset: each maze tileset has a slot level of its own (a row of `MazeTilesets` in `src/maze/maze_tilesets.h`, installed by `install.ps1`; see `docs/cartographer/adding-a-tileset.md`), because a level's LevelType fixes its tileset.
 
@@ -32,7 +32,9 @@ Risk **medium-high**: first non-square room and first ring tileset together; 10 
 
 ### Result (game check, 2026-11-17, slot 10, D2R build 93847, Hell, test character, `cartographer open`)
 
-Built as planned on all four Sizes, with the engine's 10 x 14 cells matching the plan's box (0 refits): Small (Winding, 8 rooms, 50 x 42), Medium (Branching, 13 rooms, 70 x 70), Large (Loop, 12 rooms, 50 x 70), ExtraLarge (Branching, 36 rooms, 90 x 154). The arrival room was marked as the level entry in the plan's entrance cell on every Size. The Boss spawned in the plan's boss room and the event Horde (6 of 6) in the event room on Small, Large and ExtraLarge (log lines, and the units seen on screen in those rooms); on Medium the boss and event cells were matched to built rooms but their spawns were not looked at. Outer edges on Medium and Large: the rim rooms that exist (north and west) are closed by walls, no void past them, so no filler ring is needed (`ringCells` 0); the rim cells that hold no room cannot be entered. No Forge, Next or Court Connect piece was seen. A Cave regression map built as planned. Not done: a walk of every rim row.
+Built as planned on all four Sizes, with the engine's 10 x 14 cells matching the plan's box (0 refits): Small (Winding, 8 rooms, 50 x 42), Medium (Branching, 13 rooms, 70 x 70), Large (Loop, 12 rooms, 50 x 70), ExtraLarge (Branching, 36 rooms, 90 x 154). The arrival room was marked as the level entry in the plan's entrance cell on every Size. The Boss spawned in the plan's boss room and the event Horde (6 of 6) in the event room on Small, Large and ExtraLarge (log lines, and the units seen on screen in those rooms). Outer edges on Medium and Large: the rim rooms that exist (north and west) are closed by walls, no void past them, so no filler ring is needed (`ringCells` 0); the rim cells that hold no room cannot be entered. No Forge, Next or Court Connect piece was seen. A Cave regression map built as planned.
+
+Re-run on slot 11 after merging main (head f0c083a, Hell): Small (Winding, 8 rooms, 30 x 98), Medium (Branching, 16 rooms, 50 x 98), Large (Loop, 15 rooms, 70 x 70) and ExtraLarge (Branching, 38 rooms, 130 x 182) all built as planned, 0 refits. On Medium the Boss with its zombie escort and the Horde (6 of 6, with the entry banner) were seen on screen. On Medium and Large the south and east edges show black past the floor with no walkable void floor (the accepted vanilla look); the north and west rooms show walls.
 
 ## Original checks
 
