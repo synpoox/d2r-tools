@@ -60,6 +60,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
 	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
+	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower and the walk, then two special-room calls
+	// (Next and Prev, never placed); the engine's Theme swap skips this type. Offset x 500, y 500: the y 0 band is full, clear of Jail (x 0, y 500).
+	// docs/reverse-engineering/cartographer/40-lair-builder.md, docs/cartographer/tilesets/a2-maggot-lair.md.
+	{"Lair", 18, "MazeLair", "Cartographer Lair", 10, 481, {0, 0, 0, 0}, true, 500, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

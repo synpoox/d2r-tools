@@ -1,6 +1,6 @@
 # Act 2 Maggot Lair (#279)
 
-Research only, nothing run in a game. Sources as in `a1-barracks.md`.
+Status: built (#279). Row in `maze_tilesets.h`, slot `MazeLair`, offset 500, 500; the builder case is read in `docs/reverse-engineering/cartographer/40-lair-builder.md`. Research notes below, sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
