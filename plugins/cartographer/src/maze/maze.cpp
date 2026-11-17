@@ -71,24 +71,25 @@ int engineDir(uint8_t maskBit)
 
 uint8_t maskBitOfEngineDir(int dir) { return dir >= 0 && dir < 4 ? kBitOfDir[dir] : 0; }
 
-Capacity capacityAt(int roomTiles, int levelTilesX, int levelTilesY)
+Capacity capacityAt(int roomTiles, int levelTilesX, int levelTilesY, int roomTilesY)
 {
 	Capacity c;
+	if (roomTilesY <= 0) roomTilesY = roomTiles;
 	if (roomTiles <= 0) return c;
-	auto side = [&](int levelTiles, int &before, int &after) {
+	auto side = [&](int levelTiles, int roomTiles, int &before, int &after) {
 		if (levelTiles < roomTiles) return;
 		const int offset = (levelTiles - roomTiles) / 2; // the first room is centred
 		before = offset / roomTiles;
 		after = (levelTiles - offset - roomTiles) / roomTiles;
 	};
-	side(levelTilesX, c.left, c.right);
-	side(levelTilesY, c.up, c.down);
+	side(levelTilesX, roomTiles, c.left, c.right);
+	side(levelTilesY, roomTilesY, c.up, c.down);
 	return c;
 }
 
 Capacity maxCapacity(const Tileset &ts)
 {
-	Capacity c = capacityAt(ts.roomTiles, ts.maxLevelTiles, ts.maxLevelTiles);
+	Capacity c = capacityAt(ts.roomTiles, ts.maxLevelTiles, ts.maxLevelTiles, ts.roomH());
 	const int ring = std::max(ts.ringCells, 0); // the filler ring takes its cells on every side
 	c.left = std::max(c.left - ring, 0);
 	c.right = std::max(c.right - ring, 0);
@@ -97,9 +98,9 @@ Capacity maxCapacity(const Tileset &ts)
 	return c;
 }
 
-int levelTilesFor(const Tileset &ts, int roomsPerSide)
+int levelTilesFor(const Tileset &ts, int roomsPerSide, bool yAxis)
 {
-	return std::min((2 * std::max(roomsPerSide, 1) + 1) * ts.roomTiles, ts.maxLevelTiles);
+	return std::min((2 * std::max(roomsPerSide, 1) + 1) * (yAxis ? ts.roomH() : ts.roomTiles), ts.maxLevelTiles);
 }
 
 Plan planMaze(const Tileset &ts, const layout::Layout &l)
@@ -109,7 +110,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	if (!ts.steerable)
 		return fallbackPlan(ts.notSteerableReason.empty() ? who + " grows its own rooms, so Cartographer cannot steer it yet."
 		                                                    : ts.notSteerableReason);
-	if (ts.roomTiles <= 0 || ts.maxLevelTiles < ts.roomTiles)
+	if (ts.roomTiles <= 0 || ts.maxLevelTiles < std::max(ts.roomTiles, ts.roomH()))
 		return fallbackPlan(who + " has no usable room size, so it cannot hold a layout.");
 	if (l.cells.size() != static_cast<size_t>(l.width) * static_cast<size_t>(l.height) || l.width <= 0 || l.height <= 0)
 		return fallbackPlan("The layout is empty.");
@@ -165,14 +166,14 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	// the smallest total growth first, one axis at a time, and gives up only when even the largest level fails.
 	Point root{-1, -1};
 	int levelX = 0, levelY = 0;
-	const int maxSteps = ts.maxLevelTiles / ts.roomTiles + 1;
+	const int maxSteps = ts.maxLevelTiles / std::min(ts.roomTiles, ts.roomH()) + 1;
 	const int ring = std::max(ts.ringCells, 0);
 	// The filler ring wants `ring` free cells around the layout. A layout that cannot have them in any level is planned in the largest
 	// level with no margin and its ring is cut to what fits (a gap of void at that one side beats the game's own unsteered maze).
 	const auto findRoot = [&](int lx, int ly, int margin) {
 		levelX = lx;
 		levelY = ly;
-		const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY);
+		const Capacity cap = capacityAt(ts.roomTiles, levelX, levelY, ts.roomH());
 		int bestScore = 0;
 		for (int y = minY; y <= maxY; ++y)
 			for (int x = minX; x <= maxX; ++x) {
@@ -188,7 +189,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	bool searchedLargest = false;
 	for (int total = 0; total <= 2 * maxSteps && root.x < 0 && !searchedLargest; ++total)
 		for (int sx = 0; sx <= total && root.x < 0 && !searchedLargest; ++sx) {
-			findRoot(levelTilesFor(ts, spanX / 2 + sx), levelTilesFor(ts, spanY / 2 + (total - sx)), ring);
+			findRoot(levelTilesFor(ts, spanX / 2 + sx), levelTilesFor(ts, spanY / 2 + (total - sx), true), ring);
 			// Both axes at the maximum is the largest level; every later step would repeat it.
 			if (root.x < 0 && levelX == ts.maxLevelTiles && levelY == ts.maxLevelTiles) searchedLargest = true;
 		}
@@ -258,7 +259,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 		std::set<int64_t> taken;
 		for (const Room &r : plan.rooms) taken.insert(key(r.dx, r.dy));
 		std::set<int64_t> want;
-		const Capacity box = capacityAt(ts.roomTiles, levelX, levelY); // only cells inside the level can be made
+		const Capacity box = capacityAt(ts.roomTiles, levelX, levelY, ts.roomH()); // only cells inside the level can be made
 		for (const Room &r : plan.rooms)
 			for (int oy = -ring; oy <= ring; ++oy)
 				for (int ox = -ring; ox <= ring; ++ox) {
@@ -306,7 +307,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 		}
 	}
 
-	plan.lvlMaze = LvlMazeRow{static_cast<int>(plan.rooms.size() + plan.fills.size()), ts.roomTiles, ts.roomTiles, 0};
+	plan.lvlMaze = LvlMazeRow{static_cast<int>(plan.rooms.size() + plan.fills.size()), ts.roomTiles, ts.roomH(), 0};
 	plan.ring.noOp = ts.callsRingGrower;
 	plan.ring.graphInRing = ts.callsRingGrower && !ts.walkFollowsRing;
 	plan.levelTilesX = levelX;

@@ -99,8 +99,9 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 	// The level size is the plan's output: the formula, the allowed maximum, and room to spare on every side.
 	for (int axis = 0; axis < 2; ++axis) {
 		const int got = axis == 0 ? p.levelTilesX : p.levelTilesY;
-		if (got > ts.maxLevelTiles || got < ts.roomTiles) return "level size outside the allowed range";
-		if (got != ts.maxLevelTiles && got % (2 * ts.roomTiles) != ts.roomTiles) return "level size is not (2 x k + 1) rooms";
+		const int room = axis == 0 ? ts.roomTiles : ts.roomH();
+		if (got > ts.maxLevelTiles || got < room) return "level size outside the allowed range";
+		if (got != ts.maxLevelTiles && got % (2 * room) != room) return "level size is not (2 x k + 1) rooms";
 	}
 	const int levelX = p.levelTilesX, levelY = p.levelTilesY;
 	const size_t n = p.rooms.size();
@@ -108,7 +109,8 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 	if (n == 0 || p.rooms[0].dx != 0 || p.rooms[0].dy != 0) return "room 0 is not the first room";
 
 	// Tile positions: the first room is centred in the level.
-	const int offX = (levelX - ts.roomTiles) / 2, offY = (levelY - ts.roomTiles) / 2;
+	const int roomW = ts.roomTiles, roomH = ts.roomH();
+	const int offX = (levelX - roomW) / 2, offY = (levelY - roomH) / 2;
 	std::vector<int> tx(n, 0), ty(n, 0);
 	std::vector<char> made(n, 0);
 	std::vector<uint8_t> mask(n, 0);
@@ -123,8 +125,8 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 		if (!made[static_cast<size_t>(a.parent)] || made[static_cast<size_t>(a.room)]) return "add order wrong";
 		if (a.dir < 0 || a.dir > 3) return "bad add dir";
 		made[static_cast<size_t>(a.room)] = 1;
-		tx[static_cast<size_t>(a.room)] = tx[static_cast<size_t>(a.parent)] + dxOf[a.dir] * ts.roomTiles;
-		ty[static_cast<size_t>(a.room)] = ty[static_cast<size_t>(a.parent)] + dyOf[a.dir] * ts.roomTiles;
+		tx[static_cast<size_t>(a.room)] = tx[static_cast<size_t>(a.parent)] + dxOf[a.dir] * roomW;
+		ty[static_cast<size_t>(a.room)] = ty[static_cast<size_t>(a.parent)] + dyOf[a.dir] * roomH;
 		mask[static_cast<size_t>(a.parent)] = static_cast<uint8_t>(mask[static_cast<size_t>(a.parent)] | bitOf[a.dir]);
 		mask[static_cast<size_t>(a.room)] = static_cast<uint8_t>(mask[static_cast<size_t>(a.room)] | oppBit[a.dir]);
 	}
@@ -132,7 +134,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 		if (!made[i]) return "a room is never made";
 	// Rooms must not overlap and must stay inside the level.
 	for (size_t i = 0; i < n; ++i) {
-		if (tx[i] < 0 || ty[i] < 0 || tx[i] + ts.roomTiles > levelX || ty[i] + ts.roomTiles > levelY) return "a room leaves the level";
+		if (tx[i] < 0 || ty[i] < 0 || tx[i] + roomW > levelX || ty[i] + roomH > levelY) return "a room leaves the level";
 		for (size_t j = i + 1; j < n; ++j)
 			if (tx[i] == tx[j] && ty[i] == ty[j]) return "two rooms overlap";
 	}
@@ -141,7 +143,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 		if (k.a < 0 || k.b < 0 || static_cast<size_t>(k.a) >= n || static_cast<size_t>(k.b) >= n) return "bad link index";
 		if (k.dir < 0 || k.dir > 3) return "bad link dir";
 		const size_t a = static_cast<size_t>(k.a), b = static_cast<size_t>(k.b);
-		if (tx[a] + dxOf[k.dir] * ts.roomTiles != tx[b] || ty[a] + dyOf[k.dir] * ts.roomTiles != ty[b]) return "link between rooms that do not touch";
+		if (tx[a] + dxOf[k.dir] * roomW != tx[b] || ty[a] + dyOf[k.dir] * roomH != ty[b]) return "link between rooms that do not touch";
 		mask[a] = static_cast<uint8_t>(mask[a] | bitOf[k.dir]);
 		mask[b] = static_cast<uint8_t>(mask[b] | oppBit[k.dir]);
 	}
@@ -150,7 +152,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 	for (size_t i = 0; i < n; ++i) {
 		const Room &r = p.rooms[i];
 		if (r.cell.x - p.rooms[0].cell.x != r.dx || r.cell.y - p.rooms[0].cell.y != r.dy) return "room offset differs from its cell";
-		if (tx[i] != offX + r.dx * ts.roomTiles || ty[i] != offY + r.dy * ts.roomTiles) return "room position differs from the add chain";
+		if (tx[i] != offX + r.dx * roomW || ty[i] != offY + r.dy * roomH) return "room position differs from the add chain";
 		if (mask[i] != cellOf(l, r.cell).mask) return "the replayed exits differ from the layout's mask";
 		if (r.mask != mask[i]) return "room.mask differs from its links";
 		if (r.role != cellOf(l, r.cell).role) return "role differs";
@@ -231,7 +233,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 		const int ex[4] = {-1, 0, 1, 0}, ey[4] = {0, -1, 0, 1};
 		std::set<std::pair<int, int>> taken;
 		for (const Room &r : p.rooms) taken.insert({r.dx, r.dy});
-		const Capacity box = capacityAt(ts.roomTiles, p.levelTilesX, p.levelTilesY);
+		const Capacity box = capacityAt(ts.roomTiles, p.levelTilesX, p.levelTilesY, ts.roomH());
 		for (size_t k = 0; k < p.fills.size(); ++k) {
 			const AddStep &f = p.fills[k];
 			const Point o = p.fillOffsets[k];
@@ -252,7 +254,7 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 					if (taken.count({fx, fy}) == 0) return "a free cell beside a room has no filler";
 				}
 	}
-	if (p.lvlMaze.rooms != static_cast<int>(n + p.fills.size()) || p.lvlMaze.sizeX != ts.roomTiles || p.lvlMaze.sizeY != ts.roomTiles || p.lvlMaze.merge != 0) return "LvlMaze row";
+	if (p.lvlMaze.rooms != static_cast<int>(n + p.fills.size()) || p.lvlMaze.sizeX != ts.roomTiles || p.lvlMaze.sizeY != ts.roomH() || p.lvlMaze.merge != 0) return "LvlMaze row";
 	return std::string();
 }
 
@@ -261,9 +263,9 @@ std::string verify(const Tileset &ts, const Layout &l, const Plan &p, bool fixPl
 // root rule. Only a one-exit entrance that gets a special room (made last, so never first) is excluded as a root.
 bool genuinelyDoesNotFit(const Tileset &ts, const Layout &l)
 {
-	const int room = ts.roomTiles, level = ts.maxLevelTiles;
-	if (level < room) return true;
-	const int off = (level - room) / 2;
+	const int room = ts.roomTiles, roomY = ts.roomH(), level = ts.maxLevelTiles;
+	if (level < std::max(room, roomY)) return true;
+	const int off = (level - room) / 2, offY = (level - roomY) / 2;
 	const Point entrance = l.mainPath.front();
 	for (int ry = 0; ry < l.height; ++ry)
 		for (int rx = 0; rx < l.width; ++rx) {
@@ -274,9 +276,9 @@ bool genuinelyDoesNotFit(const Tileset &ts, const Layout &l)
 			for (int y = 0; y < l.height && all; ++y)
 				for (int x = 0; x < l.width && all; ++x) {
 					if (l.at(x, y).role == Role::Empty) continue;
-					const int tx = off + (x - rx) * room, ty = off + (y - ry) * room;
-					const int m = ts.ringCells * room;  // the filler ring needs its cells inside the level too
-					if (tx - m < 0 || ty - m < 0 || tx + room + m > level || ty + room + m > level) all = false;
+					const int tx = off + (x - rx) * room, ty = offY + (y - ry) * roomY;
+					const int m = ts.ringCells * room, mY = ts.ringCells * roomY;  // the filler ring needs its cells inside the level too
+					if (tx - m < 0 || ty - mY < 0 || tx + room + m > level || ty + roomY + mY > level) all = false;
 				}
 			if (all) return false;
 		}
@@ -830,7 +832,7 @@ TEST_CASE("built-in tilesets are Cave, Crypt and Lava, found ignoring case")
 	CHECK(t.roomTiles == 24);
 	CHECK(t.pieceBase == 836);
 	CHECK(!t.prev.present);
-	CHECK(!builtinTileset("Barracks", t));
+	CHECK(!builtinTileset("Temple", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -922,7 +924,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Medium", 5, 360, 360).steer);
-	CHECK(planForMap("Barracks", none, "Winding", "Large", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Temple", none, "Winding", "Large", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Large", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium, Large or ExtraLarge") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Large", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -1119,15 +1121,15 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK_FALSE(MazeTilesets[2].callsRingGrower);
 	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
 	CHECK(findMazeTileset("Lava") == &MazeTilesets[2]);
-	CHECK(findMazeTileset("Barracks") == nullptr);
+	CHECK(findMazeTileset("Temple") == nullptr);
 	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
 	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
-	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer or Sewer");
+	CHECK(mazeTilesetIndex("Temple") == MazeTilesetCount);
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks or Sewer");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1147,9 +1149,9 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 		CHECK(t.prev.present == (row.prevPiece[0] != 0));
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
+	const MapPlan refused = planForMap("Temple", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer or Sewer.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Temple'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks or Sewer.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1179,6 +1181,13 @@ TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the s
 		CHECK(field(body, "LevelName") == MazeTilesets[row].levelName);
 		CHECK(field(body, "LevelType") == std::to_string(MazeTilesets[row].levelType));
 		CHECK(field(body, "Size") == std::to_string(levelTiles));
+		// The lvlmaze.txt room size the installer writes (24 when a row has none) is the table's, both axes.
+		const auto optional = [&body, &field](const char *key) { return body.find(std::string(key) + " = '") == std::string::npos ? std::string() : field(body, key); };
+		const int wantW = MazeTilesets[row].roomTiles, wantH = MazeTilesets[row].roomTilesY > 0 ? MazeTilesets[row].roomTilesY : wantW;
+		if (!optional("RoomTiles").empty()) {
+			CHECK(std::stoi(optional("RoomTiles")) == wantW);
+			CHECK((optional("RoomTilesY").empty() ? wantW : std::stoi(optional("RoomTilesY"))) == wantH);
+		}
 		// The installer's -<Param>OffsetX / -<Param>OffsetY defaults are the row's offsets.
 		const std::string param = field(body, "Param");
 		for (const char *axis : {"X", "Y"}) {
@@ -1581,6 +1590,102 @@ TEST_CASE("the Jail row and its plans: 12-tile rooms, mask pieces from 206, no P
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 221; to <= 255; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Prev, Next, Cath, Waypoint, Pitspawn: never placed
+}
+
+// Act 1 Barracks (#272): LvlMaze 10 x 14, Def 168..182 = 167 + exit mask (Def 167 is the Court Connect, never used), Theme 183..197, Next 198..201, Forge 202..205.
+TEST_CASE("the Barracks row and its plans: 10 x 14 rooms, mask pieces from 168, the ring grower, no Prev family")
+{
+	const MazeTileset *row = findMazeTileset("barracks");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 7);
+	CHECK(std::string(row->slot) == "MazeBarracks");
+	CHECK(std::string(row->levelName) == "Cartographer Barracks");
+	CHECK(row->roomTiles == 10);
+	CHECK(row->roomTilesY == 14);
+	CHECK(row->pieceBase + 1 == 168);
+	CHECK(row->pieceBase + 15 == 182);
+	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(findMazeTilesetBySlot("mazebarracks") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("Barracks", ts));
+	CHECK(ts.roomTiles == 10);
+	CHECK(ts.roomH() == 14);
+	CHECK_FALSE(ts.prev.present);
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 10);
+				CHECK(sp.plan.lvlMaze.sizeY == 14);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK(sp.plan.levelTilesY <= 360);
+				CHECK(sp.plan.ring.noOp);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 168 && room.piece <= 182));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 183; to <= 205; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Next, Forge: never placed
+}
+
+TEST_CASE("a non-square room: the capacity, the level size and the lvlmaze row follow each axis")
+{
+	// 360 tiles hold (360 - 10) / 2 / 10 = 17 rooms each side of the first one across, and (360 - 14) / 2 / 14 = 12 down.
+	const Capacity c = capacityAt(10, 360, 360, 14);
+	CHECK(c.left == 17);
+	CHECK(c.right == 17);
+	CHECK(c.up == 12);
+	CHECK(c.down == 12);
+	const Capacity square = capacityAt(10, 360, 360);  // no height: square
+	CHECK(square.up == 17);
+	Tileset ts;
+	REQUIRE(builtinTileset("Barracks", ts));
+	CHECK(levelTilesFor(ts, 3) == 70);        // 7 rooms of 10
+	CHECK(levelTilesFor(ts, 3, true) == 98);  // 7 rooms of 14
+	CHECK(levelTilesFor(ts, 100) == 360);
+	CHECK(lvlMazeRow(77, planForSeed(ts, layout::presetRules(layout::Shape::Loop, layout::Size::Medium), 2).plan)[4] == 10);
+	CHECK(lvlMazeRow(77, planForSeed(ts, layout::presetRules(layout::Shape::Loop, layout::Size::Medium), 2).plan)[5] == 14);
+	// A slot level smaller than the taller side of a room is refused, one that holds both is kept.
+	CHECK_FALSE(clampToSlot(ts, 360, 12).ok);
+	CHECK(clampToSlot(ts, 360, 14).ok);
+}
+
+TEST_CASE("Barracks arrival, event and boss rooms: a 10 x 14 cell holds one engine room and its box is the plan's")
+{
+	Tileset ts;
+	REQUIRE(builtinTileset("Barracks", ts));
+	for (uint64_t seed = 1; seed <= 40; ++seed) {
+		const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Branching, layout::Size::Large), seed);
+		if (!sp.plan.steer) continue;
+		int minX = sp.plan.rooms[0].dx, minY = sp.plan.rooms[0].dy;
+		for (const Room &r : sp.plan.rooms) {
+			minX = std::min(minX, r.dx);
+			minY = std::min(minY, r.dy);
+		}
+		std::vector<RoomRect> rects;
+		for (const Room &r : sp.plan.rooms) rects.push_back({500 + (r.dx - minX) * 10, 700 + (r.dy - minY) * 14, 10, 14, 0});
+		const ArrivalMark m = planArrival(sp.plan, 10, rects, 14);
+		INFO("seed " << seed << ": " << m.why);
+		REQUIRE(m.mark);
+		const Room &e = sp.plan.rooms[static_cast<size_t>(sp.plan.entrance.room)];
+		CHECK(m.originX == 500 + (e.dx - minX) * 10);
+		CHECK(m.originY == 700 + (e.dy - minY) * 14);
+		CHECK(rects[static_cast<size_t>(m.room)].x == m.originX);
+		CHECK(rects[static_cast<size_t>(m.room)].y == m.originY);
+		CHECK(planCellRoom(sp.plan, 10, sp.plan.bossRoom, rects, 14).room >= 0);
+		CHECK(planCellRoom(sp.plan, 10, sp.plan.eventRoom, rects, 14).room >= 0);
+		// Read as square cells (the old rule) the box does not match, so a build with the wrong height would be refused, not mis-chosen.
+		CHECK(planCellRoom(sp.plan, 10, sp.plan.bossRoom, rects).room < 0);
+	}
 }
 
 // --- the arrival room ----------------------------------------------------------------------------------------------
