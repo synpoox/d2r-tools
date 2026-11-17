@@ -832,7 +832,7 @@ TEST_CASE("built-in tilesets are Cave, Crypt and Lava, found ignoring case")
 	CHECK(t.roomTiles == 24);
 	CHECK(t.pieceBase == 836);
 	CHECK(!t.prev.present);
-	CHECK(!builtinTileset("Temple", t));
+	CHECK(!builtinTileset("Nowhere", t));
 	CHECK(!builtinTileset("", t));
 }
 
@@ -924,7 +924,7 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 		CHECK(!c.reason.empty());
 	}
 	CHECK(planForMap("Crypt", none, "Loop", "Medium", 5, 360, 360).steer);
-	CHECK(planForMap("Temple", none, "Winding", "Large", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
+	CHECK(planForMap("Nowhere", none, "Winding", "Large", 1, 360, 360).reason.find("no maze numbers") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Zigzag", "Large", 1, 360, 360).reason.find("cannot be used") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Huge", 1, 360, 360).reason.find("Small, Medium, Large or ExtraLarge") != std::string::npos);
 	CHECK(planForMap("Cave", none, "Winding", "Large", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
@@ -1121,15 +1121,15 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK_FALSE(MazeTilesets[2].callsRingGrower);
 	CHECK(findMazeTileset("cRyPt") == &MazeTilesets[1]);
 	CHECK(findMazeTileset("Lava") == &MazeTilesets[2]);
-	CHECK(findMazeTileset("Temple") == nullptr);
+	CHECK(findMazeTileset("Nowhere") == nullptr);
 	CHECK(findMazeTilesetBySlot("mazecrypt") == &MazeTilesets[1]);
 	CHECK(findMazeTilesetBySlot("Maze") == &MazeTilesets[0]);
 	CHECK(findMazeTilesetBySlot("Outdoor") == nullptr);
 	CHECK(mazeTilesetIndex("crypt") == 1);
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
-	CHECK(mazeTilesetIndex("Temple") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer or Catacombs");
+	CHECK(mazeTilesetIndex("Nowhere") == MazeTilesetCount);
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs or Temple");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,9 +1149,9 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 		CHECK(t.prev.present == (row.prevPiece[0] != 0));
 		for (int i = 0; i < 4; ++i) CHECK(t.prev.piece[i] == row.prevPiece[i]);
 	}
-	const MapPlan refused = planForMap("Temple", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
+	const MapPlan refused = planForMap("Nowhere", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Temple'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer or Catacombs.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Nowhere'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs or Temple.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1180,7 +1180,7 @@ TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the s
 		CHECK(field(body, "Slot") == MazeTilesets[row].slot);
 		CHECK(field(body, "LevelName") == MazeTilesets[row].levelName);
 		CHECK(field(body, "LevelType") == std::to_string(MazeTilesets[row].levelType));
-		CHECK(field(body, "Size") == std::to_string(levelTiles));
+		CHECK(field(body, "Size") == std::to_string(reservedTiles(MazeTilesets[row])));
 		// The lvlmaze.txt room size the installer writes (24 when a row has none) is the table's, both axes.
 		const auto optional = [&body, &field](const char *key) { return body.find(std::string(key) + " = '") == std::string::npos ? std::string() : field(body, key); };
 		const int wantW = MazeTilesets[row].roomTiles, wantH = MazeTilesets[row].roomTilesY > 0 ? MazeTilesets[row].roomTilesY : wantW;
@@ -1206,9 +1206,9 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 {
 	// Range: the corners of each level, and a rule check of the function itself against the cell arithmetic.
 	for (const MazeTileset &row : MazeTilesets) {
-		CHECK_MESSAGE(automapInRange(row.offsetX, row.offsetY, levelTiles), row.name);
-		for (const int tx : {row.offsetX, row.offsetX + levelTiles})
-			for (const int ty : {row.offsetY, row.offsetY + levelTiles}) {
+		CHECK_MESSAGE(automapInRange(row.offsetX, row.offsetY, reservedTiles(row)), row.name);
+		for (const int tx : {row.offsetX, row.offsetX + reservedTiles(row)})
+			for (const int ty : {row.offsetY, row.offsetY + reservedTiles(row)}) {
 				CHECK((tx - ty) * 8 >= -32768);
 				CHECK((tx - ty) * 8 <= 32767);
 				CHECK((tx + ty) * 4 <= 32767);
@@ -1216,8 +1216,12 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 				CHECK(ty >= 0);
 			}
 		// Above the first Act 5 level of the game (Harrogath and the others start at y 1000), so no vanilla level is hit.
-		CHECK(row.offsetY + levelTiles <= 1000);
+		CHECK(row.offsetY + reservedTiles(row) <= 1000);
 	}
+	// A plain row reserves its 360; a ring-only row only the level its one 2 x 2 ring builds (three rooms a side).
+	CHECK(reservedTiles(MazeTilesets[0]) == 360);
+	CHECK(reservedTiles(*findMazeTileset("Harem")) == 48);
+	CHECK(reservedTiles(*findMazeTileset("Temple")) == 120);
 	// The old spots were out of range: Cave at 6000,0.
 	CHECK_FALSE(automapInRange(6000, 0, levelTiles));
 	CHECK(automapInRange(3500, 0, levelTiles));
@@ -1228,15 +1232,15 @@ TEST_CASE("every maze slot level keeps its revealed map: offsets are in the 16-b
 		CHECK(automapInRange(a.x, a.y, a.size));
 		CHECK(a.y + a.size <= 1000);
 		for (const MazeTileset &row : MazeTilesets)
-			CHECK((a.x + a.size <= row.offsetX || row.offsetX + levelTiles <= a.x || a.y + a.size <= row.offsetY || row.offsetY + levelTiles <= a.y));
+			CHECK((a.x + a.size <= row.offsetX || row.offsetX + reservedTiles(row) <= a.x || a.y + a.size <= row.offsetY || row.offsetY + reservedTiles(row) <= a.y));
 		for (const Spot &b : planned)
 			if (&a != &b) CHECK((a.x + a.size <= b.x || b.x + b.size <= a.x));
 	}
-	// No two levels overlap (rectangles of levelTiles x levelTiles).
+	// No two levels overlap (rectangles of reservedTiles x reservedTiles: 360, or the ring level of a ring-only row).
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
-			const bool apart = MazeTilesets[i].offsetX + levelTiles <= MazeTilesets[j].offsetX || MazeTilesets[j].offsetX + levelTiles <= MazeTilesets[i].offsetX ||
-			                   MazeTilesets[i].offsetY + levelTiles <= MazeTilesets[j].offsetY || MazeTilesets[j].offsetY + levelTiles <= MazeTilesets[i].offsetY;
+			const bool apart = MazeTilesets[i].offsetX + reservedTiles(MazeTilesets[i]) <= MazeTilesets[j].offsetX || MazeTilesets[j].offsetX + reservedTiles(MazeTilesets[j]) <= MazeTilesets[i].offsetX ||
+			                   MazeTilesets[i].offsetY + reservedTiles(MazeTilesets[i]) <= MazeTilesets[j].offsetY || MazeTilesets[j].offsetY + reservedTiles(MazeTilesets[j]) <= MazeTilesets[i].offsetY;
 			CHECK_MESSAGE(apart, MazeTilesets[i].name << " overlaps " << MazeTilesets[j].name);
 		}
 }
@@ -2019,20 +2023,20 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	CHECK(after[1] == 0);
 }
 
-// Act 2 Harem (#277) and Palace Cellar (#278): one fixed ring of four 16-tile rooms, the corner pieces by exit mask, built inside the ring grower's hook.
-TEST_CASE("the Harem and Palace Cellar rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
+// Act 2 Harem (#277), Palace Cellar (#278) and Act 5 Temple (#290): one fixed ring of four 16- or 40-tile rooms, the corner pieces by exit mask, built inside the ring grower's hook.
+TEST_CASE("the Harem, Palace Cellar and Temple rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
 {
-	struct Want { const char *name; int type; int ne, se, sw, nw; int x; };
-	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000}, {"Basement", 15, 358, 359, 360, 361, 2500}};
+	struct Want { const char *name; int type; int ne, se, sw, nw; int x, y, tiles; };
+	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000, 500, 16}, {"Basement", 15, 358, 359, 360, 361, 2500, 500, 16}, {"Temple", 32, 1042, 1044, 1045, 1043, 2000, 600, 40}};
 	for (const Want &w : wants) {
 		INFO(w.name);
 		const MazeTileset *row = findMazeTileset(w.name);
 		REQUIRE(row != nullptr);
 		CHECK(row->levelType == w.type);
-		CHECK(row->roomTiles == 16);
+		CHECK(row->roomTiles == w.tiles);
 		CHECK(row->callsRingGrower);
 		CHECK(row->offsetX == w.x);
-		CHECK(row->offsetY == 500);
+		CHECK(row->offsetY == w.y);
 		Tileset ts;
 		REQUIRE(builtinTileset(w.name, ts));
 		CHECK(ts.fixedRing);
@@ -2050,7 +2054,8 @@ TEST_CASE("the Harem and Palace Cellar rows: a fixed ring of four corner rooms w
 			CHECK(p.ring.noOp);
 			CHECK(p.ring.graphInRing);
 			CHECK_FALSE(p.entrance.place);
-			CHECK(p.levelTilesX <= 360);
+			CHECK(p.levelTilesX == reservedTiles(*row));  // the reserved rect is exactly the level the ring builds
+			CHECK(p.levelTilesY == reservedTiles(*row));
 			REQUIRE(p.eventRoom >= 0);
 			REQUIRE(p.bossRoom >= 0);
 			const int entrance = p.entrance.room;

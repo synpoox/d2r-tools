@@ -95,7 +95,7 @@ TEST_CASE("a typo gets a plain-English message with a suggestion and the row num
 
 TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
 	Report report;
-	const auto maps = Load("Temple One\tTemple\tWinding\t\t\tt20\n", report);
+	const auto maps = Load("Spider One\tSpider\tWinding\t\t\tt20\n", report);
 	CHECK(maps.empty());
 	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
 }
@@ -1383,7 +1383,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 {
 	const auto all = TilesetNames();
 	REQUIRE(all.size() == 24);
-	CHECK(all[16] == "Temple");
+	CHECK(all[16] == "Spider");
 	CHECK(all[17] == "Jungle");  // the outdoor rows come last, in table order
 	CHECK(all[18] == "Snow");
 	CHECK(all[19] == "Siege");
@@ -1392,7 +1392,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[22] == "Wilderness");
 	CHECK(all[23] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Catacombs", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Catacombs", "Temple", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);

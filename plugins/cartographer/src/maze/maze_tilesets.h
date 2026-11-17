@@ -42,6 +42,12 @@ constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
 	return offsetX - offsetY + size <= 4095 && offsetY - offsetX + size <= 4096 && offsetX + offsetY + 2 * size <= 8191;
 }
 
+// The tiles a row's level reserves in the overlap and range tests and in the installer (its levels.txt SizeX and SizeY). A plain maze row keeps the 360 of its largest plan. A ring-only
+// row is always one 2 x 2 ring, which builds a level 3 rooms a side (Harem 3 x 16 = 48, Temple 3 x 40 = 120), so it reserves only that.
+constexpr int reservedTiles(const MazeTileset &t) noexcept {
+	return t.ringPieces[0] == 0 ? levelTiles : 3 * (t.roomTiles > t.roomTilesY ? t.roomTiles : t.roomTilesY);
+}
+
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
 inline constexpr MazeTileset MazeTilesets[] = {
 	// No row has a Prev family: its entrance rooms (Cave 83-86, Crypt 139-142, Ice 1018-1021) carry the level's Up stairs, a level exit tile, and a
@@ -96,6 +102,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// grower 0x3e8610 (skipped on every slot-level build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
 	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
 	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
+	// Temple (Act 5 Nihlathak Temples, LevelType 32, #290): 40-tile rooms. Its case is the Harem case plus one special-room call (a Down piece, always suppressed); the picker's mask table gives
+	// plain corners only: NE 1042, SE 1044, SW 1045, NW 1043 (the Down 1046..1048 and Waypoint 1049..1052 variants only come from special-room calls). Its level is 120 tiles (reservedTiles),
+	// so it sits in the second band under Harem, which is 48 wide: x 2000, y 600. docs/reverse-engineering/cartographer/49-temple-builder.md, docs/cartographer/tilesets/a5-nihlathak-temples.md.
+	{"Temple", 32, "MazeTemple", "Cartographer Temple", 40, 0, {0, 0, 0, 0}, true, 2000, 600, 0, false, 0, {1042, 1044, 1045, 1043}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

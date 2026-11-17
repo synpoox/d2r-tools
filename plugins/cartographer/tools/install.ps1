@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Palace Cellar, Sewer, Catacombs) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Palace Cellar, Sewer, Catacombs, Temple) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate), "Cartographer Arcane Sanctuary" (Arcane Sanctuary), "Cartographer Dungeon" (Act 3 Dungeon), "Cartographer Jail" (Act 1 Jail), "Cartographer Lair" (Act 2 Maggot Lair), "Cartographer Kurast Sewer" (Act 3 Kurast Sewers), "Cartographer Barracks" (Act 1 Barracks), "Cartographer Harem" (Act 2 Harem), "Cartographer Palace Cellar" (Act 2 Palace Cellar), "Cartographer Sewer" (Act 2 Sewers) and "Cartographer Catacombs" (Act 1 Catacombs; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane), 24 (Dungeon), 8 (Jail), 18 (Lair), 25 (Kurast Sewer), 7 (Barracks), 14 (Harem), 15 (Palace Cellar), 13 (Sewer) or 10 (Catacombs),
-                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Barracks, Kurast Sewer, Harem, Palace Cellar, Act 2 Sewer and Act 1 Catacombs sit below them at Y 500, X 0, X 500, X 1000, X 1500, X 2000, X 2500, X 3000 and X 3500); copied from a plain (non-quest) game maze level of that type,
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Barracks, Kurast Sewer, Harem, Palace Cellar, Act 2 Sewer and Act 1 Catacombs sit below them at Y 500, X 0, X 500, X 1000, X 1500, X 2000, X 2500, X 3000 and X 3500; Harem and Palace Cellar declare only the 48 x 48 tiles they build, and Temple 120 x 120 at X 2000, Y 600); copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
@@ -71,7 +71,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -BarracksOffsetX and -BarracksOffsetY (1000, 500), -HaremOffsetX and -HaremOffsetY (2000, 500), -BasementOffsetX and -BasementOffsetY (2500, 500), -SewerOffsetX and -SewerOffsetY (3000, 500), -CatacombsOffsetX and -CatacombsOffsetY (3500, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -BarracksOffsetX and -BarracksOffsetY (1000, 500), -HaremOffsetX and -HaremOffsetY (2000, 500), -BasementOffsetX and -BasementOffsetY (2500, 500), -SewerOffsetX and -SewerOffsetY (3000, 500), -CatacombsOffsetX and -CatacombsOffsetY (3500, 500), -TempleOffsetX and -TempleOffsetY (2000, 600), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -125,6 +125,8 @@ param(
     [int]$SewerOffsetY = 500,
     [int]$CatacombsOffsetX = 3500,
     [int]$CatacombsOffsetY = 500,
+    [int]$TempleOffsetX = 2000,
+    [int]$TempleOffsetY = 600,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900,
     [int]$MesaOffsetX = 6000,
@@ -172,12 +174,14 @@ $MazeTilesets = @(
     # Barracks (Act 1): x 1000..1360, y 500..860, between the Lair row (x 500) and the Kurast Sewer row (x 1500) in the second band, clear of the Act 5 levels (y 1000). Copied from the first DrlgType 1 level of LevelType 7. Its rooms are 10 wide and 14 tall (RoomTiles, RoomTilesY: the lvlmaze.txt SizeX and SizeY).
     @{ Tileset = 'Barracks'; Slot = 'MazeBarracks'; LevelName = 'Cartographer Barracks'; LevelType = '7'; Size = '360'; Param = 'Barracks'; RoomTiles = '10'; RoomTilesY = '14' },
     # Harem and Palace Cellar (Act 2, #277 and #278): x 2000 and 2500, y 500: the next free slots in the second band, after Jail, Lair, Barracks (x 0..1000) and Kurast Sewers (x 1500). Copied from the first DrlgType 1 level of LevelType 14 and 15.
-    @{ Tileset = 'Harem'; Slot = 'MazeHarem'; LevelName = 'Cartographer Harem'; LevelType = '14'; Size = '360'; Param = 'Harem' },
-    @{ Tileset = 'Basement'; Slot = 'MazeBasement'; LevelName = 'Cartographer Palace Cellar'; LevelType = '15'; Size = '360'; Param = 'Basement' },
+    @{ Tileset = 'Harem'; Slot = 'MazeHarem'; LevelName = 'Cartographer Harem'; LevelType = '14'; Size = '48'; Param = 'Harem' },
+    @{ Tileset = 'Basement'; Slot = 'MazeBasement'; LevelName = 'Cartographer Palace Cellar'; LevelType = '15'; Size = '48'; Param = 'Basement' },
     # Sewer (Act 2 Sewers): x 3000..3360, y 500..860, the last free spot of the second band, clear of Crypt (y 0..360). Copied from the first plain DrlgType 1 level of LevelType 13 (level 47).
     @{ Tileset = 'Sewer'; Slot = 'MazeSewer'; LevelName = 'Cartographer Sewer'; LevelType = '13'; Size = '360'; Param = 'Sewer' },
     # Catacombs (Act 1 Catacombs 1): x 3500..3860, y 500..860, the end of the second band, under Cave (y 0..360). Copied from the first DrlgType 1 level of LevelType 10 (level 34).
-    @{ Tileset = 'Catacombs'; Slot = 'MazeCatacombs'; LevelName = 'Cartographer Catacombs'; LevelType = '10'; Size = '360'; Param = 'Catacombs' }
+    @{ Tileset = 'Catacombs'; Slot = 'MazeCatacombs'; LevelName = 'Cartographer Catacombs'; LevelType = '10'; Size = '360'; Param = 'Catacombs' },
+    # Temple (Act 5 Nihlathak Temples, #290): x 2000..2120, y 600..720, a ring-only level (one 2 x 2 ring of 40-tile rooms builds 120 tiles), so it fits the second band under Harem (48 wide). Copied from the first DrlgType 1 level of LevelType 32 (level 122). Its rooms are 40 tiles (RoomTiles).
+    @{ Tileset = 'Temple'; Slot = 'MazeTemple'; LevelName = 'Cartographer Temple'; LevelType = '32'; Size = '120'; Param = 'Temple'; RoomTiles = '40' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);
 # tests/outdoor_tests.cpp reads this block and fails when they differ. Size is SizeX and SizeY in every difficulty (the largest plan of the
@@ -406,6 +410,11 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
         $cells = Cells $levels $levels.Lines[$existing]
         Warn-LevelOverlap $levels $name $cells
         $before = $cells -join "`t"
+        # A ring-only level declares only the level it builds (Harem and Palace Cellar were 360 before #290): shrink a bigger rect to that, so the level placed in the freed room does not overlap it.
+        for ($h = 0; $h -lt $levels.Header.Count; $h++) {
+            $cur = 0
+            if ($levels.Header[$h] -match '^Size[XY]' -and [int]::TryParse($cells[$h], [ref]$cur) -and $cur -gt [int]$size -and [int]$size -lt 360) { $cells[$h] = $size }
+        }
         if ($retyped) {
             Set-Cell $levels $cells 'LevelType' $type
             Write-Host "levels.txt: level $mazeId had LevelType $haveType, not $type ($tilesetName): set it back to $type."

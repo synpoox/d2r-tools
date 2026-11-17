@@ -1,6 +1,6 @@
 # Act 5 Nihlathak temples (issue #290)
 
-Research only. Vanilla tables of build 3.3.0 were read, nothing copied.
+Built (note 49) as one more row on the fixed-ring path of Harem and Palace Cellar (`a2-harem.md`). The picker gives plain corners only (Def 1042 NE, 1044 SE, 1045 SW, 1043 NW by exit mask); the Down and Waypoint variants come only from special-room calls, which a ring plan suppresses, so no stairs or waypoint appear. Vanilla tables of build 3.3.0 were read, nothing copied.
 
 | Item | Finding |
 |---|---|
