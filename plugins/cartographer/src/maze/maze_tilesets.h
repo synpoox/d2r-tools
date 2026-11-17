@@ -87,9 +87,14 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// Offsets: y 500, the next free x after Jail, Lair, Barracks and Kurast Sewers (x 0..1500). docs/reverse-engineering/cartographer/44-harem-cellar-builder.md.
 	{"Harem", 14, "MazeHarem", "Cartographer Harem", 16, 0, {0, 0, 0, 0}, true, 2000, 500, 0, false, 0, {354, 355, 356, 357}},
 	{"Basement", 15, "MazeBasement", "Cartographer Palace Cellar", 16, 0, {0, 0, 0, 0}, true, 2500, 500, 0, false, 0, {358, 359, 360, 361}},
+	// Sewer (Act 2 Sewer 1 and 2, LevelType 13, #243): 12-tile rooms, "Sewer W" is Def 302 (base 301, 302..316; 301 is the Act 2 Town preset, so there is no closed piece and no filler ring).
+	// Its case calls the ring grower, the walk and then 0x3eab30, which is not a grower: it places special rooms only for the game's own levels 47 to 49 and 65, so a slot level only has it
+	// draw one random number. No hook beyond the shared walk is needed. Offset x 3000, y 500: the next free spot in the second band (Jail 0, Lair 500, Barracks 1000, KurastSewer 1500,
+	// Harem 2000, Basement 2500), clear of Crypt (x 3000, y 0..360). docs/reverse-engineering/cartographer/45-act2-sewer-case.md, docs/cartographer/tilesets/a2-sewers.md.
+	{"Sewer", 13, "MazeSewer", "Cartographer Sewer", 12, 301, {0, 0, 0, 0}, true, 3000, 500, 0},
 	// Spider Cavern (Act 3 Spider, LevelType 23, #284): 16-tile rooms. Its case is the Harem/Basement case (one ring grower call, no walk); the picker's mask table gives SW 659,
-	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 4000, y 500: the next free x in the second band. docs/reverse-engineering/cartographer/48-spider-builder.md.
-	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 4000, 500, 0, false, 0, {662, 660, 659, 661}},
+	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3500, y 500: the next free x in the second band (main's rule, #243). docs/reverse-engineering/cartographer/48-spider-builder.md.
+	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3500, 500, 0, false, 0, {662, 660, 659, 661}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
