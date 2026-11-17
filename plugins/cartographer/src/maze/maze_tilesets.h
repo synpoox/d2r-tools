@@ -28,7 +28,7 @@ struct MazeTileset {
 	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
 	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
-	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
+	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar, Spider, Temple): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
 };
 
 // Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
@@ -102,6 +102,9 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// grower 0x3e8610 (skipped on every slot-level build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
 	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
 	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
+	// Spider Cavern (Act 3 Spider, LevelType 23, #284): 16-tile rooms. Its case is the Harem/Basement case (one ring grower call, no walk); the picker's mask table gives SW 659,
+	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3860, y 130: no 360-wide spot of the two bands is left once #522 (3500, 500) and #523 (4000, 500) land; this is the free spot between them and the y-0 band (docs/cartographer/adding-a-tileset.md). docs/reverse-engineering/cartographer/48-spider-builder.md.
+	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3860, 130, 0, false, 0, {662, 660, 659, 661}},
 	// Temple (Act 5 Nihlathak Temples, LevelType 32, #290): 40-tile rooms. Its case is the Harem case plus one special-room call (a Down piece, always suppressed); the picker's mask table gives
 	// plain corners only: NE 1042, SE 1044, SW 1045, NW 1043 (the Down 1046..1048 and Waypoint 1049..1052 variants only come from special-room calls). Its level is 120 tiles (reservedTiles),
 	// so it sits in the second band under Harem, which is 48 wide: x 2000, y 600. docs/reverse-engineering/cartographer/49-temple-builder.md, docs/cartographer/tilesets/a5-nihlathak-temples.md.

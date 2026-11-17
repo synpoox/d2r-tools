@@ -1129,7 +1129,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Nowhere") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs or Temple");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider or Temple");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1151,7 +1151,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Nowhere", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Nowhere'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs or Temple.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Nowhere'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider or Temple.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -2023,11 +2023,11 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	CHECK(after[1] == 0);
 }
 
-// Act 2 Harem (#277), Palace Cellar (#278) and Act 5 Temple (#290): one fixed ring of four 16- or 40-tile rooms, the corner pieces by exit mask, built inside the ring grower's hook.
-TEST_CASE("the Harem, Palace Cellar and Temple rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
+// Act 2 Harem (#277), Palace Cellar (#278), Act 3 Spider (#284) and Act 5 Temple (#290): one fixed ring of four 16- or 40-tile rooms, the corner pieces by exit mask, built inside the ring grower's hook.
+TEST_CASE("the Harem, Palace Cellar, Spider and Temple rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
 {
 	struct Want { const char *name; int type; int ne, se, sw, nw; int x, y, tiles; };
-	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000, 500, 16}, {"Basement", 15, 358, 359, 360, 361, 2500, 500, 16}, {"Temple", 32, 1042, 1044, 1045, 1043, 2000, 600, 40}};
+	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000, 500, 16}, {"Basement", 15, 358, 359, 360, 361, 2500, 500, 16}, {"Spider", 23, 662, 660, 659, 661, 3860, 130, 16}, {"Temple", 32, 1042, 1044, 1045, 1043, 2000, 600, 40}};
 	for (const Want &w : wants) {
 		INFO(w.name);
 		const MazeTileset *row = findMazeTileset(w.name);
