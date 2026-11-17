@@ -1392,7 +1392,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[21] == "Wilderness");
 	CHECK(all[22] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
@@ -1497,6 +1497,8 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(MazeSlotLevelName("MazeKurastSewer") == "Cartographer Kurast Sewer");
 	CHECK(IsMazeSlotName("MazeBarracks"));
 	CHECK(MazeSlotLevelName("MazeBarracks") == "Cartographer Barracks");
+	CHECK(IsMazeSlotName("MazeHarem"));
+	CHECK(MazeSlotLevelName("MazeBasement") == "Cartographer Palace Cellar");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");
 	CHECK(MazeSlotLevelName("Outdoor").empty());
 

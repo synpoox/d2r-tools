@@ -284,7 +284,7 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 	// Pieces, reserved rooms and the special calls.
 	for (size_t i = 0; i < plan.rooms.size(); ++i) {
 		Room &r = plan.rooms[i];
-		r.piece = ts.pieceBase + r.mask;
+		r.piece = ts.pieceByMask[r.mask] != 0 ? ts.pieceByMask[r.mask] : ts.pieceBase + r.mask;
 		const bool reserved = r.role == layout::Role::Entrance || r.role == layout::Role::Event || r.role == layout::Role::Boss ||
 		                      r.cell == entranceCell;
 		r.fix = reserved ? Room::Fix::AfterWalk : Room::Fix::None;
@@ -336,9 +336,40 @@ layout::Rules fitRules(const Tileset &ts, layout::Rules rules)
 	return rules;
 }
 
+layout::Layout fixedRingLayout(uint64_t seed)
+{
+	using layout::Point;
+	const Point ring[4] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}; // clockwise from the north-west cell
+	const uint8_t masks[4] = {layout::kEast | layout::kSouth, layout::kWest | layout::kSouth, layout::kWest | layout::kNorth, layout::kEast | layout::kNorth};
+	const uint64_t r = layout::splitmix64(seed);
+	const int e = static_cast<int>(r & 3);
+	const int ev = (e + ((r >> 2) & 1 ? 1 : 3)) & 3;
+	const int boss = (e + 2) & 3;
+	layout::Layout l;
+	l.width = l.height = 2;
+	l.cells.assign(4, layout::Cell{});
+	for (int i = 0; i < 4; ++i) {
+		layout::Cell &c = l.at(ring[i].x, ring[i].y);
+		c.mask = masks[i];
+		c.role = i == e ? layout::Role::Entrance : i == ev ? layout::Role::Event : i == boss ? layout::Role::Boss : layout::Role::Branch;
+	}
+	l.mainPath = {ring[e], ring[ev], ring[boss]};
+	l.eventIdx = 1;
+	l.bossIdx = 2;
+	l.ring = true;
+	l.seed = seed;
+	l.rulesMet = true;
+	return l;
+}
+
 SeedPlan planForSeed(const Tileset &ts, const layout::Rules &rules, uint64_t seed)
 {
 	SeedPlan out;
+	if (ts.fixedRing) {
+		out.layout = fixedRingLayout(seed);
+		out.plan = planMaze(ts, out.layout);
+		return out;
+	}
 	const layout::Rules fitted = fitRules(ts, rules);
 	const std::string problem = layout::validateRules(fitted);
 	if (!problem.empty()) {

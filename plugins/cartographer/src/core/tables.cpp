@@ -28,8 +28,8 @@ struct Tileset {
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Sewer", false},    {"Harem", false},
-	{"Basement", false}, {"Spider", false}, {"Temple", false},
+	{"Sewer", false},
+	{"Spider", false}, {"Temple", false},
 };
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
@@ -285,10 +285,18 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string shape = table.Cell(row, cShape);
+		const cartographer::maze::MazeTileset* ringRow = map.tileset.empty() ? nullptr : cartographer::maze::findMazeTileset(map.tileset);
+		const bool fixedRing = ringRow != nullptr && ringRow->ringPieces[0] != 0;
 		// Snow, Siege and Mesa build without a Shape, so a blank cell is fine there (map.shape stays empty); a Shape that is set is still checked.
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
 		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::FrameFill);
-		if (shape.empty() && ignoresShape) {
+		if (fixedRing) {
+			// One shape (#277, #278): Harem and Palace Cellar maps are always the same ring of four rooms, so Shape and Size are not checked and are not used.
+			map.shape.clear();
+			if (!shape.empty() || !table.Cell(row, cSize).empty()) {
+				report.Note(MapsFile, row.line, "the " + map.tileset + " tileset is always one ring of four rooms, so its Shape and Size are ignored.");
+			}
+		} else if (shape.empty() && ignoresShape) {
 			map.shape.clear();
 		} else if (shape.empty()) {
 			// A refused tileset already has its own error; a second one about the blank Shape would only add noise.
@@ -308,7 +316,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		}
 
 		const std::string size = table.Cell(row, cSize);
-		if (!size.empty()) {
+		if (!size.empty() && !fixedRing) {
 			if (const std::string* known = Canonical(Sizes, size)) {
 				map.size = *known;
 			} else {

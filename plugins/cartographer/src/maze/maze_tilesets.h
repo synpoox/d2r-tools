@@ -28,6 +28,7 @@ struct MazeTileset {
 	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
 	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
+	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
 };
 
 // Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
@@ -81,6 +82,11 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// ring grower, then the walk, with no special-room call: docs/reverse-engineering/cartographer/42-barracks-case.md. Offset x 1000, y 500: the second band, between Lair
 	// (x 500) and Kurast Sewer (x 1500); y 500..860 stays above the first Act 5 level (y 1000).
 	{"Barracks", 7, "MazeBarracks", "Cartographer Barracks", 10, 167, {0, 0, 0, 0}, true, 1000, 500, 0, false, 14},
+	// Harem (Act 2 Harem, LevelType 14, #277) and Palace Cellar (Basement, LevelType 15, #278): 16-tile rooms. Their case in the builder calls only the ring grower (n 2): one ring of four
+	// rooms, each a corner piece the picker takes from the exit mask (Harem 354 NE, 355 SE, 356 SW, 357 NW; Basement 358..361), and no walk, so the plan is that ring and nothing else.
+	// Offsets: y 500, the next free x after Jail, Lair, Barracks and Kurast Sewers (x 0..1500). docs/reverse-engineering/cartographer/44-harem-cellar-builder.md.
+	{"Harem", 14, "MazeHarem", "Cartographer Harem", 16, 0, {0, 0, 0, 0}, true, 2000, 500, 0, false, 0, {354, 355, 356, 357}},
+	{"Basement", 15, "MazeBasement", "Cartographer Palace Cellar", 16, 0, {0, 0, 0, 0}, true, 2500, 500, 0, false, 0, {358, 359, 360, 361}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
