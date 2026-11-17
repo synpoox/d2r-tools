@@ -24,6 +24,7 @@ bool builtinTileset(std::string_view name, Tileset &out)
 	t.name = row->name;
 	t.levelType = row->levelType;
 	t.roomTiles = row->roomTiles;
+	t.roomTilesY = row->roomTilesY;
 	t.pieceBase = row->pieceBase;
 	t.callsRingGrower = row->callsRingGrower;
 	t.ringCells = row->ringCells;
@@ -46,9 +47,9 @@ SlotFit clampToSlot(Tileset tileset, int declaredX, int declaredY)
 	SlotFit fit;
 	const std::string who = tileset.name.empty() ? std::string("The tileset") : tileset.name;
 	const int side = std::min(declaredX, declaredY);
-	if (tileset.roomTiles <= 0 || side < tileset.roomTiles) {
+	if (tileset.roomTiles <= 0 || side < std::max(tileset.roomTiles, tileset.roomH())) {
 		fit.reason = "The Maze slot level declares " + std::to_string(declaredX) + " by " + std::to_string(declaredY) +
-		             " tiles, which is less than one " + who + " room (" + std::to_string(tileset.roomTiles) +
+		             " tiles, which is less than one " + who + " room (" + std::to_string(std::max(tileset.roomTiles, tileset.roomH())) +
 		             "). Set its SizeX and SizeY in levels.txt (see the Cartographer README).";
 		return fit;
 	}
@@ -211,9 +212,9 @@ int32_t arcaneFileVariant(int index, uint32_t rot, int mask)
 	return static_cast<int32_t>((static_cast<uint32_t>(index / 15) + rot) & 3);
 }
 
-bool mayRunOriginalStep(bool ownGrower, size_t roomsMade)
+bool mayRunOriginalStep(bool noResume, size_t roomsMade)
 {
-	return !ownGrower || roomsMade == 0;
+	return !noResume || roomsMade == 0;
 }
 
 bool fixAfterWalk(const Plan &plan, int roomIndex)
@@ -222,8 +223,9 @@ bool fixAfterWalk(const Plan &plan, int roomIndex)
 	return plan.rooms[static_cast<size_t>(roomIndex)].fix == Room::Fix::AfterWalk;
 }
 
-CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects)
+CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects, int unitY)
 {
+	if (unitY <= 0) unitY = unit;
 	CellRoom out;
 	const auto refuse = [&out](const char *why) {
 		out.why = why;
@@ -272,13 +274,13 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	// The built box must be the plan's box exactly (every planned cell is built whole), or the cell numbers mean nothing: a
 	// partly missing edge column or row would move minX/minY by a part of a cell and shift the chosen cell.
 	const int64_t w = maxX - minX, h = maxY - minY;
-	if (w != static_cast<int64_t>(pMaxX - pMinX + 1) * unit || h != static_cast<int64_t>(pMaxY - pMinY + 1) * unit) {
+	if (w != static_cast<int64_t>(pMaxX - pMinX + 1) * unit || h != static_cast<int64_t>(pMaxY - pMinY + 1) * unitY) {
 		return refuse("the built rooms do not span the plan's box");
 	}
 	out.minX = static_cast<int32_t>(minX);
 	out.minY = static_cast<int32_t>(minY);
 	out.originX = out.minX + out.cellX * unit;
-	out.originY = out.minY + out.cellY * unit;
+	out.originY = out.minY + out.cellY * unitY;
 	// The rooms whose top-left corner is in the cell, nearest the cell's centre first (doubled coordinates, so there are no
 	// halves); ties go to the smaller y, then the smaller x. The first is the cell's room; the rest are its fallbacks.
 	struct Cand {
@@ -289,9 +291,9 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	for (size_t i = 0; i < rects.size(); ++i) {
 		const RoomRect &r = rects[i];
 		if (r.w <= 0 || r.h <= 0) continue;  // a room with no area is not a room of the cell
-		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unit) continue;
+		if (r.x < out.originX || r.y < out.originY || r.x >= out.originX + unit || r.y >= out.originY + unitY) continue;
 		const int64_t dx = 2 * static_cast<int64_t>(r.x) + r.w - (2 * static_cast<int64_t>(out.originX) + unit);
-		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unit);
+		const int64_t dy = 2 * static_cast<int64_t>(r.y) + r.h - (2 * static_cast<int64_t>(out.originY) + unitY);
 		cands.push_back({dx * dx + dy * dy, static_cast<int>(i)});
 	}
 	std::sort(cands.begin(), cands.end(), [&rects](const Cand &a, const Cand &b) {
@@ -307,7 +309,7 @@ CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vecto
 	return out;
 }
 
-ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects)
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects, int unitY)
 {
 	ArrivalMark out;
 	if (!plan.steer || plan.rooms.empty()) {
@@ -318,7 +320,7 @@ ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> 
 		out.why = "the plan has no entrance cell";
 		return out;
 	}
-	const CellRoom c = planCellRoom(plan, unit, plan.entrance.room, rects);
+	const CellRoom c = planCellRoom(plan, unit, plan.entrance.room, rects, unitY);
 	if (c.room < 0) {
 		out.why = c.why == "the cell holds no room" ? "the entrance cell holds no room" : c.why;
 		return out;

@@ -141,9 +141,9 @@ std::array<int32_t, 7> lvlMazeRow(int levelId, const Plan &plan);
 int pieceAfterWalk(const Plan &plan, int roomIndex);
 
 // After a refused steered step the game's own step may run only when it is safe on the rooms that exist. The random walk grows from whatever
-// exists; Arcane's grower and the ring grower (noResume) lay a fixed spiral from the newest room and crashes on a refused add, so it runs only with no plan room
+// exists; Arcane's grower and the ring grower (noResume) lay a fixed spiral from the newest room and crash on a refused add, so they run only with no plan room
 // added (roomsMade counts the rooms beyond the first).
-bool mayRunOriginalStep(bool ownGrower, size_t roomsMade);
+bool mayRunOriginalStep(bool noResume, size_t roomsMade);
 
 // Arcane's grower (0x3e7a80) draws its start rotation from the level seed {lo, hi} (state = lo * 0x6ac690c5 + hi, as 64 bits; the new
 // lo is the low half and the new hi the high half; rot = new lo & 3) and then gives room `index` of its spiral the file variant
@@ -180,10 +180,10 @@ struct ArrivalMark {
 	int32_t minX = 0, minY = 0;        // the built rooms' box corner, tiles
 };
 
-// `rects` are the rooms the build made, `unit` the plan cell size in tiles (the tileset's roomTiles). The entrance cell is
+// `rects` are the rooms the build made, `unit` the plan cell width in tiles (the tileset's roomTiles), `unitY` its height (roomH(); 0: the same as `unit`). The entrance cell is
 // the plan's `entrance.room`, which every plan has, also the loops that place no special entrance piece. The built box
 // must be the plan's (in cells) and the cell must hold a room; the room nearest the cell's centre is chosen.
-ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects);
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects, int unitY = 0);
 
 // The built room of one plan room (issue #184): the walk's record of a plan room is stale once the build splits the cell (the cell's
 // top-left room, or freed memory read as (1,0) 0 x 0), so the room is found by its rect in the level's list, as the arrival is: the
@@ -198,6 +198,6 @@ struct CellRoom {
 	int cellX = 0, cellY = 0;
 	int32_t originX = 0, originY = 0, minX = 0, minY = 0;
 };
-CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects);
+CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects, int unitY = 0);
 
 } // namespace cartographer::maze
