@@ -12,7 +12,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Red portal**: one map per game, in Harrogath, in Hell. A refused map stays in your inventory and you see "I can't use this yet."
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt`; the rest load.
-- **Cave, Crypt, Lava, Ice caves, Durance of Hate, Arcane Sanctuary, Act 3 Dungeon, Jail, Maggot Lair, Kurast Sewer, Act 1 Barracks, Act 2 Harem, Palace Cellar, Act 2 Sewer, Act 1 Catacombs and Act 2 Tombs mazes**: every map is generated (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs or Tombs) from the map's layout (`Corridor`, `Winding`,
+- **Cave, Crypt, Lava, Ice caves, Durance of Hate, Arcane Sanctuary, Act 3 Dungeon, Jail, Maggot Lair, Kurast Sewer, Act 1 Barracks, Act 2 Harem, Palace Cellar, Act 2 Sewer, Act 1 Catacombs, Act 2 Tombs and Act 3 Spider Cavern mazes**: every map is generated (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Tombs or Spider) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the maze slots that `tools\install.ps1` adds (see below).
 - **Map items**: a map item is meant to be normal, rare or unique (a plugin hook makes a map the game rolls as magic normal; a map forced magic by a cheat or already existing stays magic, and the hook applies to any item with the map spell 16). A rare map is rolled by the game from the
   `magicprefix`, `magicsuffix`, `rareprefix` and `raresuffix` rows whose type is `cmap`; a unique map is a
@@ -49,9 +49,9 @@ in [`examples/first-map/`](examples/first-map/).
 1. Close the game.
 2. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 3. From the folder you unzipped, run
-   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their slots to the mod's
+   `tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"`. It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their slots to the mod's
    tables, plus a `superuniques.txt` row for each boss in `bosses.txt` and the `cmap` item type in `itemtypes.txt` (backing up each file once as `.bak`). It adds
-   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer and Catacombs maps (one map per game).
+   no map items. Each tileset has a level of its own, so one install serves Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs and Spider maps (one map per game).
    Running it again is safe. If the mod ships its own
    `.bin` table files the game reads those instead: rebuild or remove them first.
    If another level of the mod already sits where a map level would go, the installer leaves that one out and says how
@@ -67,7 +67,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
-   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their twenty-one slots,
+   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their twenty-two slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
@@ -100,6 +100,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Sewer` | a plain game Act 2 Sewer maze row (DrlgType 1), such as level 47 | 1 | 13 (Sewer) | 360 | 3000, 500 |
    | `Cartographer Catacombs` | a plain game Act 1 Catacombs maze row (DrlgType 1), such as level 34 | 1 | 10 (Catacombs) | 360 | 3500, 500 |
    | `Cartographer Tombs` | a plain game Act 2 Tombs maze row (DrlgType 1; not Tal Rasha's Tomb, which holds the quest) | 1 | 17 (Tombs) | 360 | 4000, 500 |
+   | `Cartographer Spider` | a plain game Act 3 Spider maze row (DrlgType 1), such as level 84 | 2 | 23 (Spider) | 360 | 3860, 130 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
@@ -122,7 +123,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
-   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `MazeArcane`, `MazeDungeon`, `MazeJail`, `MazeLair`, `MazeKurastSewer`, `MazeBarracks`, `MazeHarem`, `MazeBasement`, `MazeSewer`, `MazeCatacombs`, `MazeTombs`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege`, `OutdoorMesa`, `OutdoorDesert`, `OutdoorWilderness` and `OutdoorKurast`, each with the `Id` of your own row from step 1.
+   header `Slot` and `Level`, then rows `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `MazeArcane`, `MazeDungeon`, `MazeJail`, `MazeLair`, `MazeKurastSewer`, `MazeBarracks`, `MazeHarem`, `MazeBasement`, `MazeSewer`, `MazeCatacombs`, `MazeTombs`, `MazeSpider`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege`, `OutdoorMesa`, `OutdoorDesert`, `OutdoorWilderness` and `OutdoorKurast`, each with the `Id` of your own row from step 1.
 5. **itemtypes.txt**: add one row at the end, a copy of the `herb` row, with `ItemType` `Map`, `Code` `cmap`, `Equiv1` `misc`, `Equiv2` empty, `Repair`, `Body`, `Throwable`, `Reload`, `ReEquip`, `AutoStack`, `Normal` and `Beltable` 0, `Rare` 1, `Magic` 0, and `Shoots`, `Quiver`, `BodyLoc1` and `BodyLoc2` empty (`StorePage` stays `misc`, as on `herb`). The `Map` type is for the map items: a type of its own
    because the game names an item of type `scro` or `book` after its item spell (not its `namestr`), and `Equiv1` `misc` makes it plain
    miscellaneous like `herb`, `scro` and `key` (it is not a scroll, so it cannot be a Town Portal scroll; not a potion
@@ -135,7 +136,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Cave`, `Crypt`, `Lava`, `Ice`, `Durance`, `Arcane`, `Dungeon`, `Jail`, `Lair`, `KurastSewer`, `Barracks`, `Harem`, `Basement`, `Sewer`, `Catacombs` or `Tombs` (each opens through its own level); other tileset names are accepted but refused for now | required |
+| Tileset | `Cave`, `Crypt`, `Lava`, `Ice`, `Durance`, `Arcane`, `Dungeon`, `Jail`, `Lair`, `KurastSewer`, `Barracks`, `Harem`, `Basement`, `Sewer`, `Catacombs`, `Tombs` or `Spider` (each opens through its own level); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow`, `Siege`, `Mesa`, `Desert`, `Wilderness` and `Kurast` ignore Shape: leave the cell blank there | required (blank is fine for Snow, Siege, Mesa, Desert, Wilderness and Kurast) |
 | Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
@@ -266,13 +267,13 @@ Example row: `Snake	Winding	12	16	30	2	4	0` under the header `Name	Base	MinPath	
 
 #### slots.txt
 
-Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `MazeIce` (Ice caves), `MazeDurance` (Durance), `MazeArcane` (Arcane Sanctuary), `MazeDungeon` (Act 3 Dungeon), `MazeJail` (Jail), `MazeLair` (Maggot Lair), `MazeKurastSewer` (Act 3 Kurast Sewers), `MazeBarracks` (Barracks), `MazeHarem` (Act 2 Harem), `MazeBasement` (Act 2 Palace Cellar), `MazeSewer` (Act 2 Sewers), `MazeCatacombs` (Catacombs), `MazeTombs` (Act 2 Tombs), `Outdoor` (Jungle), `OutdoorSnow` (Snow), `OutdoorSiege` (Siege), `OutdoorMesa` (Mesa), `OutdoorDesert` (Desert), `OutdoorWilderness` (Wilderness) and `OutdoorKurast` (Kurast). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-lava-and-ice)). A slot
-that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`, `MazeLava` needs `Cartographer Lava`, `MazeIce` needs `Cartographer Ice Caves`, `MazeDurance` needs `Cartographer Durance`, `MazeArcane` needs `Cartographer Arcane Sanctuary`, `MazeDungeon` needs `Cartographer Dungeon`, `MazeJail` needs `Cartographer Jail`, `MazeLair` needs `Cartographer Lair`, `MazeKurastSewer` needs `Cartographer Kurast Sewer`, `MazeBarracks` needs `Cartographer Barracks`, `MazeHarem` needs `Cartographer Harem`, `MazeBasement` needs `Cartographer Palace Cellar`, `MazeSewer` needs `Cartographer Sewer`, `MazeCatacombs` needs `Cartographer Catacombs`, `MazeTombs` needs `Cartographer Tombs`), or a level another slot uses is
+Which level each slot opens: `Maze` (Cave), `MazeCrypt` (Crypt), `MazeLava` (Lava), `MazeIce` (Ice caves), `MazeDurance` (Durance), `MazeArcane` (Arcane Sanctuary), `MazeDungeon` (Act 3 Dungeon), `MazeJail` (Jail), `MazeLair` (Maggot Lair), `MazeKurastSewer` (Act 3 Kurast Sewers), `MazeBarracks` (Barracks), `MazeHarem` (Act 2 Harem), `MazeBasement` (Act 2 Palace Cellar), `MazeSewer` (Act 2 Sewers), `MazeCatacombs` (Catacombs), `MazeTombs` (Act 2 Tombs), `MazeSpider` (Act 3 Spider Cavern), `Outdoor` (Jungle), `OutdoorSnow` (Snow), `OutdoorSiege` (Siege), `OutdoorMesa` (Mesa), `OutdoorDesert` (Desert), `OutdoorWilderness` (Wilderness) and `OutdoorKurast` (Kurast). `tools\install.ps1` writes the rows (see [Maze slot](#maze-slot-cave-crypt-lava-and-ice)). A slot
+that names a level of the original game, a town, a level with no row in `levels.txt`, a maze or outdoor slot on a level the installer did not write (`Maze` needs `Cartographer Maze`, `MazeCrypt` needs `Cartographer Crypt`, `MazeLava` needs `Cartographer Lava`, `MazeIce` needs `Cartographer Ice Caves`, `MazeDurance` needs `Cartographer Durance`, `MazeArcane` needs `Cartographer Arcane Sanctuary`, `MazeDungeon` needs `Cartographer Dungeon`, `MazeJail` needs `Cartographer Jail`, `MazeLair` needs `Cartographer Lair`, `MazeKurastSewer` needs `Cartographer Kurast Sewer`, `MazeBarracks` needs `Cartographer Barracks`, `MazeHarem` needs `Cartographer Harem`, `MazeBasement` needs `Cartographer Palace Cellar`, `MazeSewer` needs `Cartographer Sewer`, `MazeCatacombs` needs `Cartographer Catacombs`, `MazeTombs` needs `Cartographer Tombs`, `MazeSpider` needs `Cartographer Spider`), or a level another slot uses is
 left out and named in `cartographer-report.txt`; maps then do not open. An old `Preset` row is ignored and can be deleted.
 
 | Column | Meaning | Default |
 |---|---|---|
-| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `MazeArcane`, `MazeDungeon`, `MazeJail`, `MazeLair`, `MazeKurastSewer`, `MazeBarracks`, `MazeHarem`, `MazeBasement`, `MazeSewer`, `MazeCatacombs`, `MazeTombs`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege`, `OutdoorMesa`, `OutdoorDesert`, `OutdoorWilderness` or `OutdoorKurast` | required |
+| Slot | `Maze`, `MazeCrypt`, `MazeLava`, `MazeIce`, `MazeDurance`, `MazeArcane`, `MazeDungeon`, `MazeJail`, `MazeLair`, `MazeKurastSewer`, `MazeBarracks`, `MazeHarem`, `MazeBasement`, `MazeSewer`, `MazeCatacombs`, `MazeTombs`, `MazeSpider`, `Outdoor`, `OutdoorSnow`, `OutdoorSiege`, `OutdoorMesa`, `OutdoorDesert`, `OutdoorWilderness` or `OutdoorKurast` | required |
 | Level | The level id in the mod's `levels.txt`, above 137 | required |
 
 #### signatures.txt
@@ -287,7 +288,7 @@ rebuild. You will not normally need it. See [the reverse-engineering notes](../.
 
 A part found this way is checked before it is used; if the check fails the part stays off and the log says why.
 
-## Maze slot (Cave, Crypt, Lava, Ice caves, Arcane, Dungeon, Harem and Palace Cellar)
+## Maze slot (Cave, Crypt, Lava, Ice caves, Arcane, Dungeon, Harem, Palace Cellar and Spider)
 
 Every map is a generated maze, built on a maze level that `tools\install.ps1` adds. A level has one `LevelType`, which fixes
 its tileset, so each maze tileset has a level of its own: `Cartographer Maze` (Cave, slot `Maze`), `Cartographer Crypt`

@@ -28,7 +28,7 @@ struct MazeTileset {
 	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
 	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
-	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
+	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar, Spider): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
 	bool tombGrowers;       // Tombs (note 47): the case calls two growers of its own, 0x3ea0e0 before the walk and 0x3eb610 after it, which a steered build skips (engine/tomb_growers.cpp)
 };
 
@@ -102,6 +102,9 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// (tombGrowers), so the entrance is an ordinary room. 413 is no closed piece of this set, so no filler ring. Offset x 4000, y 500: the last spot the automap range allows
 	// (x up to 4235 at y 500), past Catacombs (x 3500), above every Act 5 level (y 1000). docs/reverse-engineering/cartographer/47-tomb-growers.md.
 	{"Tombs", 17, "MazeTombs", "Cartographer Tombs", 16, 413, {0, 0, 0, 0}, false, 4000, 500, 0, false, 0, {0, 0, 0, 0}, true},
+	// Spider Cavern (Act 3 Spider, LevelType 23, #284): 16-tile rooms. Its case is the Harem/Basement case (one ring grower call, no walk); the picker's mask table gives SW 659,
+	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3860, y 130: no 360-wide spot of the two bands is left once #522 (3500, 500) and #523 (4000, 500) land; this is the free spot between them and the y-0 band (docs/cartographer/adding-a-tileset.md). docs/reverse-engineering/cartographer/48-spider-builder.md.
+	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3860, 130, 0, false, 0, {662, 660, 659, 661}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

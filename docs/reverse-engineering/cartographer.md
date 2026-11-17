@@ -51,3 +51,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [45. The maze builder's case for the Act 2 Sewers (issue #243)](cartographer/45-act2-sewer-case.md)
 - [46. The maze builder's case for the Act 1 Catacombs and its grower (issue #275)](cartographer/46-catacombs-grower.md)
 - [47. The Act 2 Tombs growers (issue #242)](cartographer/47-tomb-growers.md)
+- [48. The maze builder's case for the Act 3 Spider Cavern (issue #284)](cartographer/48-spider-builder.md)
