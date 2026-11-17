@@ -10,15 +10,15 @@ auto exposureScale(const Look& look) -> float {
 	return 100.0f / static_cast<float>(look.brightness);
 }
 
-auto temperatureScale(const Look& look) -> float {
+auto lightPowerScale(const Look& look) -> float {
 	return 100.0f / static_cast<float>(look.warmth);
 }
 
-auto clampKelvin(float kelvin) -> float {
-	return kelvin < MinKelvin ? MinKelvin : (kelvin > MaxKelvin ? MaxKelvin : kelvin);
+auto clampLightPower(float power) -> float {
+	return power < MinLightPower ? MinLightPower : (power > MaxLightPower ? MaxLightPower : power);
 }
 
-auto changesTemperature(const Look& look) -> bool {
+auto changesLightPower(const Look& look) -> bool {
 	return look.warmth != DefaultPercent;
 }
 

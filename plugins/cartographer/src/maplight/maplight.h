@@ -1,5 +1,5 @@
 // A map's own look (issue #380): the maps.txt columns Brightness and Warmth, and what they become: a scale for the level's exposure
-// and a scale for its colour temperature. Pure C++ (no engine, no SDK). The hook that applies them: src/engine/map_lighting.cpp;
+// and a scale for the strength of the light around the player. Pure C++ (no engine, no SDK). The hook that applies them: src/engine/map_lighting.cpp;
 // notes: docs/reverse-engineering/cartographer/32-level-lighting.md.
 #pragma once
 
@@ -27,18 +27,18 @@ struct Look {
 // (a higher value is darker), so this is 100 / brightness.
 auto exposureScale(const Look& look) -> float;
 
-// The factor the level's colour temperature (Kelvin) is multiplied by for `warmth` percent: a warmer light is a lower temperature,
-// so this is 100 / warmth.
-auto temperatureScale(const Look& look) -> float;
+// The factor the player light power (component +0x40) is multiplied by for `warmth` percent: it divides the power, so a higher Warmth
+// is a dimmer light around the player (100 / warmth). It is not a colour temperature; colour is TintR/G/B.
+auto lightPowerScale(const Look& look) -> float;
 
-// The colour temperatures seen working in game (1000 K to 20000 K, note 32): a result outside this range is clamped to it, because
+// The light powers seen working in game (1000 to 20000, note 32): a result outside this range is clamped to it, because
 // below it the game's behaviour was not checked.
-inline constexpr float MinKelvin = 1000.0f, MaxKelvin = 20000.0f;
-auto clampKelvin(float kelvin) -> float;
+inline constexpr float MinLightPower = 1000.0f, MaxLightPower = 20000.0f;
+auto clampLightPower(float power) -> float;
 
-// False when Warmth is blank or 100: the colour temperature is then not written at all, so a Brightness-only map never clamps
-// the tileset's own temperature.
-auto changesTemperature(const Look& look) -> bool;
+// False when Warmth is blank or 100: the light power is then not written at all, so a Brightness-only map never clamps
+// the tileset's own light power.
+auto changesLightPower(const Look& look) -> bool;
 
 // False when TintR, TintG and TintB are all blank or 100: the light colours are then not touched.
 auto changesTint(const Look& look) -> bool;
