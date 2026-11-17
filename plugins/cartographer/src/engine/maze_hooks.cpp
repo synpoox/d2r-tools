@@ -164,7 +164,6 @@ struct BuildCtx {
 	Prepared prep;
 	bool steer = false;
 	bool fellBack = false;
-	bool growerSkipped = false;  // the Catacombs grower was not run (CatacombsGrowerHook)
 	std::string why;
 	cm::SpecialState special;
 	std::vector<void*> rooms;
@@ -713,9 +712,6 @@ void SteeredStep(void* level, Original original, bool ownGrower, bool noResume) 
 			made += ctx->rooms[i] != nullptr ? 1 : 0;
 		}
 		if (cm::mayRunOriginalStep(noResume, made)) {
-			if (ctx->growerSkipped && made == 0 && g_catGrowerOriginal != nullptr) {
-				g_catGrowerOriginal(level, 0);  // the game's build as it would have been
-			}
 			original();  // the game grows the rest of the maze from the rooms that exist
 			return;
 		}
@@ -742,14 +738,13 @@ void ArcaneGrowerHook(void* level) noexcept {
 	}
 }
 
-// Catacombs' case calls its grower (0x3e8610) and then the walk. The grower puts rooms beside the first, which the steered walk refuses (it needs the first room alone): a steered build skips it.
+// Catacombs' case calls its grower (0x3e8610) and then the walk. The grower puts rooms beside the first, which the steered walk refuses (it needs the first room alone), and it writes the first room's piece as a Prev (Up stairs) piece 288..290 (RE note 46): every slot-level build skips it, so the walk grows from the lone first room as for Cave. Vanilla levels 34..36 have no build context and run it.
 void CatacombsGrowerHook(void* level, int32_t isLevel34) noexcept {
 	if (g_catGrowerOriginal == nullptr) {
 		return;
 	}
 	BuildCtx* ctx = t_ctx;
-	if (ctx != nullptr && ctx->steer && !ctx->fellBack && ctx->level == level && ctx->prep.plan->tileset.levelType == kCatacombsLevelType) {
-		ctx->growerSkipped = true;
+	if (ctx != nullptr && ctx->level == level) {
 		return;
 	}
 	g_catGrowerOriginal(level, isLevel34);

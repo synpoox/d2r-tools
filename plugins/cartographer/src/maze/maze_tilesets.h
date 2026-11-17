@@ -88,7 +88,7 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	{"Harem", 14, "MazeHarem", "Cartographer Harem", 16, 0, {0, 0, 0, 0}, true, 2000, 500, 0, false, 0, {354, 355, 356, 357}},
 	{"Basement", 15, "MazeBasement", "Cartographer Palace Cellar", 16, 0, {0, 0, 0, 0}, true, 2500, 500, 0, false, 0, {358, 359, 360, 361}},
 	// Catacombs (Act 1 Catacombs 1..3, LevelType 10, #275): 12-tile rooms, "Catacombs W" is Def 258 (base 257, 258..272; 257 is the Cathedral preset, not a closed piece). Its case calls its own
-	// grower 0x3e8610 (skipped on a steered build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
+	// grower 0x3e8610 (skipped on every slot-level build), then the walk, then one special-room call (the Next pieces 291..294, always suppressed). Offset x 3500, y 500: the end of the second
 	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
 	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
 };

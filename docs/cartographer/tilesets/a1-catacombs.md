@@ -14,7 +14,7 @@ Sources as in `a1-barracks.md`.
 
 ## Does the Cave/Crypt path work unchanged?
 
-Almost. The Catacombs case runs its own room grower (`0x3e8610`) before the shared walk. It only adds rooms next to the first room and places no special room, but the extra rooms break the steered walk (it needs exactly one first room). A small hook on the grower skips it on steered builds and runs it as before on a fallback (RE note 46).
+Almost. The Catacombs case runs its own room grower (`0x3e8610`) before the shared walk. It adds rooms next to the first room (which breaks the steered walk, it needs exactly one first room) and writes a Prev (Up stairs) piece 288..290 into the first room. A small hook on the grower skips it on every slot-level build, steered or fallback, so the map has no stairs; vanilla levels run it as before (RE note 46).
 
 Prev is not a one-exit family, so the entrance is an ordinary room (`prev.present = false`, supported). Prev, Next and Waypoint pieces are never placed.
 
