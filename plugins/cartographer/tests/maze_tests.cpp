@@ -1127,7 +1127,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	CHECK(mazeTilesetIndex("lava") == 2);
 	CHECK(mazeTilesetIndex("ice") == 3);
 	CHECK(mazeTilesetIndex("Barracks") == MazeTilesetCount);
-	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane or Lair");
+	CHECK(mazeTilesetNames() == "Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon or Lair");
 	// The slots are distinct and every LevelType is used once: one slot level, one tileset.
 	for (size_t i = 0; i < MazeTilesetCount; ++i)
 		for (size_t j = i + 1; j < MazeTilesetCount; ++j) {
@@ -1149,7 +1149,7 @@ TEST_CASE("the maze tileset table holds Cave, Crypt and Lava, with the values th
 	}
 	const MapPlan refused = planForMap("Barracks", layout::ShapeTable{}, "Loop", "Large", 1, 360, 360);
 	CHECK_FALSE(refused.steer);
-	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane or Lair.");
+	CHECK(refused.reason == "Cartographer has no maze numbers for the tileset 'Barracks'. Use Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon or Lair.");
 }
 
 TEST_CASE("tools/install.ps1 lists the same maze tilesets as the table, in the same order")
@@ -1318,6 +1318,44 @@ TEST_CASE("Arcane plans: every shape and size builds, the Summoner rooms are sup
 	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
 	REQUIRE(sp.plan.steer);
 	for (int to = 525; to <= 528; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);
+}
+
+// Act 3 Dungeon (#244): 14-tile rooms, Def 665..679 = 664 + exit mask, Theme 680..694, Prev 695..698, Next 699..702.
+TEST_CASE("the Dungeon row and its plans: 14-tile rooms, mask pieces from 665, no Prev family, every other special piece suppressed")
+{
+	const MazeTileset *row = findMazeTileset("dungeon");
+	REQUIRE(row != nullptr);
+	CHECK(row->levelType == 24);
+	CHECK(std::string(row->slot) == "MazeDungeon");
+	CHECK(std::string(row->levelName) == "Cartographer Dungeon");
+	CHECK(row->roomTiles == 14);
+	CHECK(row->pieceBase + 1 == 665);  // W; NSEW is 679
+	CHECK(row->pieceBase + 15 == 679);
+	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);
+	CHECK(findMazeTilesetBySlot("mazedungeon") == row);
+	Tileset ts;
+	REQUIRE(builtinTileset("Dungeon", ts));
+	const layout::Shape shapes[] = {layout::Shape::Corridor, layout::Shape::Winding, layout::Shape::Branching, layout::Shape::Loop};
+	const layout::Size sizes[] = {layout::Size::Small, layout::Size::Medium, layout::Size::Large, layout::Size::ExtraLarge};
+	int steered = 0;
+	for (layout::Shape shape : shapes)
+		for (layout::Size size : sizes)
+			for (uint64_t seed = 1; seed <= 25; ++seed) {
+				const SeedPlan sp = planForSeed(ts, layout::presetRules(shape, size), seed);
+				if (!sp.plan.steer) continue;
+				++steered;
+				INFO("shape " << static_cast<int>(shape) << " size " << static_cast<int>(size) << " seed " << seed << ": " << verify(ts, sp.layout, sp.plan));
+				CHECK(verify(ts, sp.layout, sp.plan).empty());
+				CHECK(sp.plan.lvlMaze.sizeX == 14);
+				CHECK(sp.plan.levelTilesX <= 360);
+				CHECK_FALSE(sp.plan.entrance.place);
+				for (const Room &room : sp.plan.rooms) CHECK((room.piece >= 665 && room.piece <= 679));
+			}
+	CHECK(steered > 200);
+	const SeedPlan sp = planForSeed(ts, layout::presetRules(layout::Shape::Winding, layout::Size::Large), 4);
+	REQUIRE(sp.plan.steer);
+	for (int to = 680; to <= 702; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Theme, Prev, Next: never placed
 }
 
 // Act 2 Maggot Lair (#279): 10-tile rooms, Def 482..496 = 481 + exit mask, Prev 497..500, Next 501..504, Treasure 505..508, Tight Spot 509.
@@ -1713,11 +1751,11 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 	CHECK(after[1] == 0);
 }
 
-// Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021, Durance 784-787, Lair 497-500) each carry
+// Issue #455: a map's only way in and out is its portal. The entrance rooms of the Prev families (Cave 83-86, Crypt 139-142, Ice 1018-1021, Durance 784-787, Dungeon 695-698, Lair 497-500) each carry
 // the level's Up stairs, a level exit tile (docs/reverse-engineering/cartographer/35-map-link-tiles.md), so no table row has a family and no plan places one.
 TEST_CASE("no maze tileset places a Prev entrance room: the entrance is an ordinary room, and every Prev call is suppressed")
 {
-	const int prevGroups[5][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {497, 498, 499, 500}};
+	const int prevGroups[6][4] = {{83, 84, 85, 86}, {139, 140, 141, 142}, {1018, 1019, 1020, 1021}, {784, 785, 786, 787}, {695, 696, 697, 698}, {497, 498, 499, 500}};
 	for (size_t i = 0; i < MazeTilesetCount; ++i) {
 		const MazeTileset &row = MazeTilesets[i];
 		for (int piece : row.prevPiece) CHECK_MESSAGE(piece == 0, row.name << " has a Prev piece");

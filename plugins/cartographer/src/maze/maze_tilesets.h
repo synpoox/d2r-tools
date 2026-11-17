@@ -60,9 +60,13 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
 	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
+	// Dungeon (Act 3 Dungeon 1 and 2, LevelType 24, #244): 14-tile rooms, "Dungeon W" is Def 665 (base 664, 665..679). Its case calls the ring grower, the walk and one
+	// special-room call (the Prev pieces 695..698, never placed). Offset x 0, y 0: the next free slot, clear of Arcane (500..860).
+	// docs/reverse-engineering/cartographer/39-dungeon-builder.md, docs/cartographer/tilesets/a3-dungeon.md.
+	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {0, 0, 0, 0}, true, 0, 0, 0},
 	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower and the walk, then two special-room calls
-	// (Next and Prev, never placed); the engine's Theme swap skips this type. Offset x 500, y 500: the y 0 band is full, clear of Jail (x 0, y 500).
-	// docs/reverse-engineering/cartographer/40-lair-builder.md, docs/cartographer/tilesets/a2-maggot-lair.md.
+	// (Next and Prev, never placed); the engine's Theme swap skips this type. Offset x 500, y 500: clear of Jail (x 0, y 500, #273) and Barracks (x 1000, y 500, #272); y 500..860 stays above the first Act 5 level (y 1000).
+	// docs/reverse-engineering/cartographer/41-lair-builder.md, docs/cartographer/tilesets/a2-maggot-lair.md.
 	{"Lair", 18, "MazeLair", "Cartographer Lair", 10, 481, {0, 0, 0, 0}, true, 500, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);

@@ -1,4 +1,4 @@
-## 40. The maze builder's case for LevelType 18 (Act 2 Maggot Lair, issue #279)
+## 41. The maze builder's case for LevelType 18 (Act 2 Maggot Lair, issue #279)
 
 Build: D2R 3.3 build 93847, image stamp `0x6ab3782c`. Addresses are RVAs of that build. Evidence: **static** (`python -I plugins/cartographer/tools/dump_dis.py <dump> --stamp 0x6ab3782c dis 0x3e6de8 40`, the jump tables `0x3e76d8` and `0x3ec264` and the call table read from the dump bytes). No new hook or signature.
 

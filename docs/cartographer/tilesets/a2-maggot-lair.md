@@ -1,6 +1,6 @@
 # Act 2 Maggot Lair (#279)
 
-Status: built (#279). Row in `maze_tilesets.h`, slot `MazeLair`, offset 500, 500; the builder case is read in `docs/reverse-engineering/cartographer/40-lair-builder.md`. Research notes below, sources as in `a1-barracks.md`.
+Status: built (#279). Row in `maze_tilesets.h`, slot `MazeLair`, offset 500, 500; the builder case is read in `docs/reverse-engineering/cartographer/41-lair-builder.md`. Research notes below, sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
@@ -14,7 +14,7 @@ Status: built (#279). Row in `maze_tilesets.h`, slot `MazeLair`, offset 500, 500
 
 ## Does the Cave/Crypt path work unchanged?
 
-Almost: Prev is a one-exit family like Cave and Crypt (`prev = {497, 498, 499, 500}`, `pieceBase` 481, `roomTiles` 10). The Lair case lays a 2 x 2 ring first, then walks, so `callsRingGrower = true` (the hook exists). Open points:
+Almost: Prev is a one-exit family like Cave and Crypt (`prev = {497, 498, 499, 500}` (superseded by #455: the row has no Prev family, `prev = {0, 0, 0, 0}`, the entrance is an ordinary room), `pieceBase` 481, `roomTiles` 10). The Lair case lays a 2 x 2 ring first, then walks, so `callsRingGrower = true` (the hook exists). Open points:
 
 1. **The "+15" swap** (`0x3ebd90`: `max(2, rooms/5+1)` rooms become the same-exit Theme piece). The Lair has no Theme family, so the engine must skip it for this type; if it does not, plan rooms turn into Prev, Next or Treasure pieces. Needs a static read, then a game check.
 2. 10-tile cells are not a multiple of the 8-tile engine rooms; the built box may not equal plan width x 10 (arrival, Boss and event then refuse).
@@ -26,5 +26,5 @@ Risk **medium** (swap behaviour, 10-tile box). Effort **M**: catalogue row, inst
 
 ## Game checks
 
-- Ring no-op leaves exactly the planned rooms; no Prev, Next, Treasure or Tight Spot room appears except the entrance.
+- Ring no-op leaves exactly the planned rooms; no Prev, Next, Treasure or Tight Spot room appears (the "except the entrance" part is superseded by #455: no Prev room is placed at all).
 - Built box equals the plan box at 10 tiles per cell; arrival, Boss, event.
