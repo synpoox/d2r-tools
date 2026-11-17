@@ -8,6 +8,7 @@
 #include "maze_tilesets.h"
 #include "outdoor_hooks.h"
 #include "steer.h"
+#include "tomb_growers.h"
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -799,6 +800,11 @@ void SpecialHook(void* level, int32_t* entry, uint32_t* rot) noexcept {
 	}
 }
 
+// A tileset whose case needs a grower hook (Arcane's own grower, the two Tombs growers) is refused when that hook is not in.
+auto GrowerMissing(const cm::MazeTileset& row) -> bool {
+	return (row.ownGrower && !g_growerHooked.load()) || (row.tombGrowers && !TombGrowersHooked());
+}
+
 void RingHook(void* level, int32_t n) noexcept {
 	if (g_ringOriginal == nullptr) {
 		return;
@@ -917,7 +923,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			} else if (Read<int32_t>(level, LvlTileType) != prep->plan->tileset.levelType) {
 				why = std::string("the ") + cm::MazeTilesets[slotIndex].slot + " slot level's LevelType is " + std::to_string(Read<int32_t>(level, LvlTileType)) + " but a " + prep->plan->tileset.name + " map needs " +
 				      std::to_string(prep->plan->tileset.levelType) + " (levels.txt LevelType)";
-			} else if (cm::MazeTilesets[slotIndex].ownGrower && !g_growerHooked.load()) {
+			} else if (GrowerMissing(cm::MazeTilesets[slotIndex])) {
 				why = std::string("the ") + prep->plan->tileset.name + " room grower was not found or not hooked (see 'cartographer check')";
 			} else {
 				ctx.steer = true;
@@ -976,6 +982,11 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 
 }  // namespace
 
+auto MazeBuildSkipsTombGrower(void* level, bool afterWalk) -> bool {
+	const BuildCtx* ctx = t_ctx;
+	return ctx != nullptr && ctx->level == level && cm::skipTombGrower(ctx->steer, ctx->fellBack, afterWalk);
+}
+
 auto MazeLevelBuildHookTried() -> bool {
 	return g_levelBuildTried.load();
 }
@@ -988,6 +999,9 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 	std::vector<PartStatus> out;
 	for (const Part& part : g_parts) {
 		out.push_back(part.status);
+	}
+	for (PartStatus& status : TombGrowerStatuses()) {
+		out.push_back(std::move(status));
 	}
 	out.push_back(AutomapResetPartStatus());
 	return out;
@@ -1194,7 +1208,7 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string 
 		return {};
 	}
 	const cm::MazeTileset* row = cm::findMazeTileset(map.tileset);
-	if (row != nullptr && row->ownGrower && g_live.load() && !g_growerHooked.load()) {
+	if (row != nullptr && g_live.load() && GrowerMissing(*row)) {
 		return "Cartographer: the " + ts.name + " room grower was not found in this game build or its hook was refused, so " + ts.name + " map '" + map.name + "' is not opened (see 'cartographer check').";
 	}
 	for (const Slot& slot : tables.slots) {
@@ -1275,6 +1289,9 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	if (ok && g_parts[ArcaneGrower].status.on) {
 		// Optional: only Arcane maps need it. A refusal leaves the part off, and Arcane maps are refused (MazeTilesetProblem, LevelBuildHook).
 		g_growerHooked = install(ArcaneGrower, reinterpret_cast<void*>(&ArcaneGrowerHook), reinterpret_cast<void**>(&g_growerOriginal));
+	}
+	if (ok) {
+		InstallTombGrowerHooks(context, overrides, ranges, count);  // optional, like Arcane's: a refusal refuses only Tombs maps (GrowerMissing)
 	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {

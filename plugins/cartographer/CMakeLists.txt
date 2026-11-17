@@ -74,6 +74,7 @@ add_library(cartographer SHARED
 	src/engine/map_sync.cpp
 	src/engine/scan.cpp
 	src/engine/maze_hooks.cpp
+	src/engine/tomb_growers.cpp
 	src/engine/outdoor_hooks.cpp
 	src/engine/boss_names.cpp
 	src/engine/map_stat_text.cpp

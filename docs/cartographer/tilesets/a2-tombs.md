@@ -14,11 +14,11 @@ Research only, nothing run in a game. Sources as in `a1-barracks.md`.
 
 ## Does the Cave/Crypt path work unchanged?
 
-No. The tomb cases run **their own growers (`0x3ea0e0`, `0x3eb610`)**. Also `0x3e96d0` triples the room count for the act's chosen tomb (the level id at `drlg+0x120`, drawn at act start-up) and doubles it for another (`drlg+0x874`); a slot id matches neither. The growers must be hooked as for the Catacombs. The quest pieces (Tal Rasha, Kaa, Leatherarm, Cube) are chosen by level id and a slot never gets them; the Treasure and Chest pieces are not reachable from a plan unless the tileset adds them as event rooms. The research marks the tombs "not yet steerable".
+No. The tomb cases run **their own growers (`0x3ea0e0`, `0x3eb610`)**. Also `0x3e96d0` triples the room count for the act's chosen tomb (the level id at `drlg+0x120`, drawn at act start-up) and doubles it for another (`drlg+0x874`); a slot id matches neither. Both growers are hooked and skipped on a steered build (`tombGrowers` row flag, `src/engine/tomb_growers.cpp`, RE note 47). The quest pieces (Tal Rasha, Kaa, Leatherarm, Cube) are chosen by level id and a slot never gets them; the Treasure and Chest pieces are not reachable from a plan unless the tileset adds them as event rooms. The research marks the tombs "not yet steerable".
 
 The entrance is an ordinary room (the three-exit Prev pieces are not a one-exit family).
 
-Tileset name: `Tombs` (not yet in `TilesetNames`).
+Tileset name: `Tombs` (built, #242). Slot `MazeTombs`, level `Cartographer Tombs`, offset 4000, 500, 16-tile rooms, pieces 414-428 (`pieceBase` 413). The filler ring is off (413 is no closed piece), so the edge void is closed by the plan itself; see the PR for the in-game edge check.
 
 ## Risk, effort
 
