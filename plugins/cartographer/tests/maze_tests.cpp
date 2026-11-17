@@ -1438,6 +1438,7 @@ TEST_CASE("the Jail row and its plans: 12-tile rooms, mask pieces from 206, no P
 	CHECK(row->pieceBase + 1 == 206);
 	CHECK(row->pieceBase + 15 == 220);
 	CHECK(row->callsRingGrower);
+	CHECK(row->ringCells == 0);  // no filler ring: piece 205 is the Barracks Forge N (10 x 14), not a closed Jail room; a ring of it broke the arrival, boss and event lookups
 	CHECK(findMazeTilesetBySlot("mazejail") == row);
 	Tileset ts;
 	REQUIRE(builtinTileset("Jail", ts));
