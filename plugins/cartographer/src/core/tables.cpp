@@ -23,13 +23,12 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice, Durance, Arcane and Barracks) are buildable through the maze
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair and Barracks) are buildable through the maze
 // steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
 constexpr Tileset Tilesets[] = {
-	{"Jail", false},
-	{"Lair", false},   {"Dungeon", false}, {"Sewer", false},    {"Harem", false},
+	{"Sewer", false},    {"Harem", false},
 	{"Basement", false}, {"Spider", false}, {"Temple", false},
 };
 

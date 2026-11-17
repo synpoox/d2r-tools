@@ -30,7 +30,7 @@ Risk **medium-high**: first non-square room and first ring tileset together; 10 
 
 ## Game checks
 
-## Result (game check, 2026-11-17, slot 10, D2R build 93847, Hell, test character, `cartographer open`)
+### Result (game check, 2026-11-17, slot 10, D2R build 93847, Hell, test character, `cartographer open`)
 
 Built as planned on all four Sizes, with the engine's 10 x 14 cells matching the plan's box (0 refits): Small (Winding, 8 rooms, 50 x 42), Medium (Branching, 13 rooms, 70 x 70), Large (Loop, 12 rooms, 50 x 70), ExtraLarge (Branching, 36 rooms, 90 x 154). The arrival room was marked as the level entry in the plan's entrance cell on every Size. The Boss spawned in the plan's boss room and the event Horde (6 of 6) in the event room on Small, Large and ExtraLarge (log lines, and the units seen on screen in those rooms); on Medium the boss and event cells were matched to built rooms but their spawns were not looked at. Outer edges on Medium and Large: the rim rooms that exist (north and west) are closed by walls, no void past them, so no filler ring is needed (`ringCells` 0); the rim cells that hold no room cannot be entered. No Forge, Next or Court Connect piece was seen. A Cave regression map built as planned. Not done: a walk of every rim row.
 

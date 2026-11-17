@@ -61,9 +61,21 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
 	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
-	// Barracks (Act 1 Barracks, LevelType 7, #272): rooms 10 wide and 14 tall (LvlMaze SizeX 10, SizeY 14, the first non-square tileset), "Barracks W" is Def 168
-	// (base 167, 168..182). Its case calls the ring grower, then the walk, and no special-room call: docs/reverse-engineering/cartographer/42-barracks-case.md.
-	// Offset x 1000, y 500: the second band (see Jail, #273), one spot past the next free one so a parallel row does not collide.
+	// Dungeon (Act 3 Dungeon 1 and 2, LevelType 24, #244): 14-tile rooms, "Dungeon W" is Def 665 (base 664, 665..679). Its case calls the ring grower, the walk and one
+	// special-room call (the Prev pieces 695..698, never placed). Offset x 0, y 0: the next free slot, clear of Arcane (500..860).
+	// docs/reverse-engineering/cartographer/39-dungeon-builder.md, docs/cartographer/tilesets/a3-dungeon.md.
+	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {0, 0, 0, 0}, true, 0, 0, 0},
+	// Jail (Act 1 Jail, LevelType 8, #273): 12-tile rooms, "Jail W" is Def 206 (base 205, 206..220). Its case calls the ring grower first, then the walk, then two
+	// special-room calls (Prev and Next, both suppressed): docs/reverse-engineering/cartographer/40-jail-case.md. Offset x 0, y 500: the y-0 band is full, so
+	// the next rows go in a second band below it (y 500..860, 500 under the first, still above the first Act 5 level at y 1000).
+	{"Jail", 8, "MazeJail", "Cartographer Jail", 12, 205, {0, 0, 0, 0}, true, 0, 500, 0},
+	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower, the walk, then two
+	// special-room calls (Next and Prev, both suppressed): docs/reverse-engineering/cartographer/41-lair-builder.md. Offset x 500, y 500: the second band, right of Jail
+	// (x 0, y 500, #273); y 500..860 stays above the first Act 5 level (y 1000).
+	{"Lair", 18, "MazeLair", "Cartographer Lair", 10, 481, {0, 0, 0, 0}, true, 500, 500, 0},
+	// Barracks (Act 1 Barracks, LevelType 7, #272): rooms 10 wide and 14 tall (the first non-square tileset), "Barracks W" is Def 168 (base 167, 168..182). Its case calls the
+	// ring grower, then the walk, with no special-room call: docs/reverse-engineering/cartographer/42-barracks-case.md. Offset x 1000, y 500: the second band, right of Lair
+	// (x 500, y 500, #279); y 500..860 stays above the first Act 5 level (y 1000).
 	{"Barracks", 7, "MazeBarracks", "Cartographer Barracks", 10, 167, {0, 0, 0, 0}, true, 1000, 500, 0, false, 14},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);

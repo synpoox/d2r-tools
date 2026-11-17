@@ -95,7 +95,7 @@ TEST_CASE("a typo gets a plain-English message with a suggestion and the row num
 
 TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
 	Report report;
-	const auto maps = Load("Lair One\tLair\tWinding\t\t\tt20\n", report);
+	const auto maps = Load("Sewer One\tSewer\tWinding\t\t\tt20\n", report);
 	CHECK(maps.empty());
 	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
 }
@@ -1392,7 +1392,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[20] == "Wilderness");
 	CHECK(all[21] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Barracks", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "Barracks", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);
@@ -1487,6 +1487,12 @@ TEST_CASE("Cave, Crypt and Lava open through the Maze, MazeCrypt and MazeLava sl
 	CHECK(MazeSlotLevelName("MazeDurance") == "Cartographer Durance");
 	CHECK(IsMazeSlotName("MazeArcane"));
 	CHECK(MazeSlotLevelName("MazeArcane") == "Cartographer Arcane Sanctuary");
+	CHECK(IsMazeSlotName("MazeDungeon"));
+	CHECK(MazeSlotLevelName("MazeDungeon") == "Cartographer Dungeon");
+	CHECK(IsMazeSlotName("MazeJail"));
+	CHECK(MazeSlotLevelName("MazeJail") == "Cartographer Jail");
+	CHECK(IsMazeSlotName("MazeLair"));
+	CHECK(MazeSlotLevelName("MazeLair") == "Cartographer Lair");
 	CHECK(IsMazeSlotName("MazeBarracks"));
 	CHECK(MazeSlotLevelName("MazeBarracks") == "Cartographer Barracks");
 	CHECK(MazeSlotLevelName("Maze") == "Cartographer Maze");

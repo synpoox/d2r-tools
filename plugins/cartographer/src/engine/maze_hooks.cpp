@@ -952,12 +952,15 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 				plog::Info("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
 			}
 			ProbeRooms(level, ctx.prep.plan->tileset, plan, "after the slot build");
+			const cm::Tileset &ts = ctx.prep.plan->tileset;
+			const int unit = ts.roomTiles > 0 ? ts.roomTiles : 24;
+			const int unitY = ts.roomTiles > 0 ? ts.roomH() : 24;
 			if (!ctx.fellBack && problem.empty()) {
-				MarkArrival(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomH() : 24);
+				MarkArrival(level, plan, unit, unitY);
 			} else {
 				plog::Info("maze arrival: left to the game, because the build is not the plan");
 			}
-			RecordEventRoom(level, slotIndex, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomH() : 24);
+			RecordEventRoom(level, slotIndex, plan, unit, unitY);
 		} catch (...) {
 		}
 	}
