@@ -24,6 +24,39 @@ struct MapBehaviours {
 
 inline constexpr int kMaxExtraBoss = 9;
 
+// --- Combat behaviours (issue #540, pieces D8 and D9 of #536). Keys the stat router sums per opened map and the engine reads with
+// StatApplyMapRouting(slotLevel).behaviour(key[, param]): extra_groups (param = a monstats Id), lifesteal_pct, phys_as_<element>.
+inline constexpr const char* kKeyExtraGroups = "extra_groups";
+inline constexpr const char* kKeyLifesteal = "lifesteal_pct";
+inline constexpr int kMaxExtraGroups = 13;   // the region record holds 13 monster groups
+inline constexpr int kMaxLifestealPct = 1000;
+inline constexpr int kMaxLifestealBlock = 0x1FFFFFF;  // the game shifts the block's leech by 6 bits, so it stays below 2^25
+
+// N extra groups cut to 0..kMaxExtraGroups.
+int clampExtraGroups(int n);
+
+// The leech of a damage block after a hit of `dealt` (1/256 life, as the game's block holds it): `current` plus pct percent of `dealt`, at most
+// kMaxLifestealBlock; `current` is never lowered. A `dealt` or `pct` of 0 or less changes nothing.
+int lifestealBlock(int current, int dealt, int pct);
+
+enum class Element { Fire, Lightning, Cold, Magic, Poison };
+
+// The behaviour key suffix: "fire", "ltng", "cold", "mag", "pois"; `out` is set and true, or false for any other name.
+bool elementFromName(const std::string& name, Element* out);
+
+struct StatValue {
+	int stat = 0;
+	int value = 0;
+};
+
+// The stats that add `pct` percent of a monster's physical damage (`minDmg`, `maxDmg`: stats 21 and 22) as `element` damage. Fire, lightning and
+// magic: min and max (48/49, 50/51, 52/53). Cold: 54/55 and the length 56. Poison: 57/58 are damage per frame, so the percent is spread over the
+// length (59): value * 256 / length. Empty when pct or the damage is 0 or less. The percent is cut to kMaxPhysAsPct.
+inline constexpr int kMaxPhysAsPct = 1000;
+inline constexpr int kColdLength = 50;     // frames
+inline constexpr int kPoisonLength = 100;  // frames
+std::vector<StatValue> physAsStats(Element element, int pct, int minDmg, int maxDmg);
+
 // The behaviours an opened map's item routed (issue #539): drop_bonus, drop_ethereal and drop_socketed are the summed values (never below 0),
 // extra_boss is cut to 0..kMaxExtraBoss, and each drop_tc route with a Param (the treasure class name) and a positive sum is one dropTcs entry.
 MapBehaviours fromRouting(const cartographer::statplan::MapRouting& routing);
@@ -53,6 +86,14 @@ std::vector<size_t> hitTcs(const std::vector<std::pair<std::string, int>>& tcs, 
 
 // Sockets for a drop that can take them: 1 or 2 (the game cuts it to what the item's type allows).
 int socketCount(Rng& rng);
+
+// The test routing of CARTOGRAPHER_TEST_ROUTING (a game check only; the route table's own keys, set without an item): `;`-separated
+// `<key>[:<param>]=<value>`, e.g. `extra_groups:quillrat1=3;lifesteal_pct=50;phys_as_fire=50`. The value is a whole number above 0.
+struct TestRoute {
+	std::string key, param;
+	int value = 0;
+};
+bool parseTestRouting(const std::string& spec, std::vector<TestRoute>* out, std::string* why);
 
 // The test spec of CARTOGRAPHER_TEST_BEHAVIOURS (a game check only): `;`-separated `tc=<name>:<pct>`, `bonus=<pct>`, `eth=<pct>`, `sock=<pct>`,
 // `boss=<n>`. False (with `why`) on anything else; `out` is then unchanged.

@@ -657,7 +657,10 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
 	// Bonus Density: the sum over the item's affixes (the Density area param of the stat routes) is added to the map's Density (uncapped).
-	const int densityBonus = areas.area("Density");
+	cartographer::statplan::MapRouting routing = areas;
+	StatApplyTestRouting(&routing);
+	const int densityBonus = routing.area("Density");
+	opening.extraGroups = StatApplyExtraGroups(routing);  // extra_groups (issue #540): written into the region record by the level row hook
 	if (densityBonus != 0) {
 		opening.density = cartographer::statplan::densityWithBonus(map->density, densityBonus);
 		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
@@ -710,7 +713,13 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 	}
 	plog::Info("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
 	std::string refusal;
-	out.opened = OpenMapPortal(game, player, *map, *tables, level, &refusal, &out.shaped) != 0;
+	MapDef opening = *map;
+	{
+		cartographer::statplan::MapRouting testRouting;  // CARTOGRAPHER_TEST_ROUTING only: this path has no item
+		StatApplyTestRouting(&testRouting);
+		opening.extraGroups = StatApplyExtraGroups(testRouting);
+	}
+	out.opened = OpenMapPortal(game, player, opening, *tables, level, &refusal, &out.shaped) != 0;
 	if (!out.opened && !refusal.empty()) {
 		out.refused = true;
 		out.why = refusal;

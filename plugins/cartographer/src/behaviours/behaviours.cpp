@@ -5,6 +5,50 @@
 
 namespace cartographer::behaviours {
 
+int clampExtraGroups(int n) {
+	return std::clamp(n, 0, kMaxExtraGroups);
+}
+
+int lifestealBlock(int current, int dealt, int pct) {
+	if (dealt <= 0 || pct <= 0) {
+		return current;
+	}
+	const int64_t gain = static_cast<int64_t>(dealt) * std::min(pct, kMaxLifestealPct) / 100;
+	return static_cast<int>(std::max<int64_t>(current, std::min<int64_t>(static_cast<int64_t>(current) + gain, kMaxLifestealBlock)));
+}
+
+bool elementFromName(const std::string& name, Element* out) {
+	static const std::pair<const char*, Element> names[] = {
+	    {"fire", Element::Fire}, {"ltng", Element::Lightning}, {"cold", Element::Cold}, {"mag", Element::Magic}, {"pois", Element::Poison}};
+	for (const auto& n : names) {
+		if (name == n.first) {
+			*out = n.second;
+			return true;
+		}
+	}
+	return false;
+}
+
+std::vector<StatValue> physAsStats(Element element, int pct, int minDmg, int maxDmg) {
+	if (pct <= 0 || maxDmg <= 0 || minDmg < 0) {
+		return {};
+	}
+	pct = std::min(pct, kMaxPhysAsPct);
+	const int lo = static_cast<int>(static_cast<int64_t>(minDmg) * pct / 100);
+	const int hi = std::max(1, static_cast<int>(static_cast<int64_t>(maxDmg) * pct / 100));
+	switch (element) {
+	case Element::Fire: return {{48, lo}, {49, hi}};
+	case Element::Lightning: return {{50, lo}, {51, hi}};
+	case Element::Magic: return {{52, lo}, {53, hi}};
+	case Element::Cold: return {{54, lo}, {55, hi}, {56, kColdLength}};
+	case Element::Poison: {
+		const auto perFrame = [](int v) { return static_cast<int>(static_cast<int64_t>(v) * 256 / kPoisonLength); };
+		return {{57, perFrame(lo)}, {58, std::max(1, perFrame(hi))}, {59, kPoisonLength}};
+	}
+	}
+	return {};
+}
+
 MapBehaviours fromRouting(const statplan::MapRouting& routing) {
 	const auto atLeast0 = [](int v) { return v < 0 ? 0 : v; };
 	MapBehaviours b;
@@ -81,6 +125,39 @@ bool parseInt(const std::string& text, int lo, int hi, int* out) {
 }
 
 }  // namespace
+
+bool parseTestRouting(const std::string& spec, std::vector<TestRoute>* out, std::string* why) {
+	std::vector<TestRoute> routes;
+	size_t pos = 0;
+	while (pos <= spec.size()) {
+		size_t end = spec.find(';', pos);
+		if (end == std::string::npos) {
+			end = spec.size();
+		}
+		const std::string item = spec.substr(pos, end - pos);
+		pos = end + 1;
+		if (item.empty()) {
+			continue;
+		}
+		const size_t eq = item.find('=');
+		TestRoute r;
+		bool ok = eq != std::string::npos && eq > 0 && parseInt(item.substr(eq + 1), 1, 1000000, &r.value);
+		if (ok) {
+			const std::string name = item.substr(0, eq);
+			const size_t colon = name.find(':');
+			r.key = colon == std::string::npos ? name : name.substr(0, colon);
+			r.param = colon == std::string::npos ? std::string() : name.substr(colon + 1);
+			ok = !r.key.empty() && (colon == std::string::npos || !r.param.empty());
+		}
+		if (!ok) {
+			*why = "bad item '" + item + "' (<key>[:<param>]=<whole number above 0>)";
+			return false;
+		}
+		routes.push_back(std::move(r));
+	}
+	*out = std::move(routes);
+	return true;
+}
 
 bool parseSpec(const std::string& spec, MapBehaviours* out, std::string* why) {
 	MapBehaviours b;

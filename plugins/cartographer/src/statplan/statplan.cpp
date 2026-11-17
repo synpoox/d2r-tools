@@ -433,8 +433,7 @@ const std::vector<std::string> &knownAreaParams()
 
 bool behaviourHandled(std::string_view key)
 {
-	// extra_groups, lifesteal_pct and phys_as_* come with issue #540 and stay unhandled (logged once, skipped).
-	static const char *const handled[] = {"drop_tc", "drop_bonus", "drop_ethereal", "drop_socketed", "extra_boss", nullptr};
+	static const char *const handled[] = {"drop_tc", "drop_bonus", "drop_ethereal", "drop_socketed", "extra_boss", "extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois", nullptr};
 	for (const char *h : handled)
 		if (h != nullptr && key == h) return true;
 	return false;

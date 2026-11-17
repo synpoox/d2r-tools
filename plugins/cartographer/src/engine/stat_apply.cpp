@@ -1,5 +1,6 @@
 #include "engine/stat_apply.h"
 
+#include "behaviours/behaviours.h"
 #include "core/part_signatures.h"
 #include "core/text.h"
 #include "engine/map_behaviours.h"
@@ -42,12 +43,23 @@ constexpr int32_t UnitPlayer = 0;
 constexpr int32_t UnitMonster = 1;
 constexpr int SpawnRoomOffset = 0x08;      // the monster setup's first argument: +8 is the room (the spawn block)
 constexpr int32_t StatLevel = 12;          // 0xc: the monster level stat
+constexpr int32_t StatLife = 6;            // hitpoints, in 1/256 life
 constexpr int32_t StatMaxLife = 7;         // maxhp, in 1/256 life
 constexpr int32_t StatAlignment = 172;     // the unit's alignment, as the game's UnitAlignment (0x2f4190) reads it: 0 hostile, 1 neutral, 2 ally (docs/reverse-engineering/cartographer/07-map-stats-parts.md, "Alignment")
 constexpr int MonsterProbes = 6;           // monsters logged in full per game
 constexpr int MaxEntries = 32;             // stats read back per probe
 constexpr int DtStatesRowsOffset = 0x290;  // on the data tables base: the compiled states rows pointer; the 64-bit count is at +0x298
 constexpr int DtStatesCountOffset = 0x298;
+constexpr int32_t StatMinDamage = 21;      // the monster's min and max physical damage (set before the monster setup runs)
+constexpr int32_t StatMaxDamage = 22;
+constexpr int LeechBlockSpan = 0x128;      // the leech step's damage block: what is read and written (RE note 52)
+constexpr int LeechBlockFlagsOffset = 0x00;
+constexpr uint8_t LeechBlockElements = 0x40;  // flag: the block's element damages count as dealt
+constexpr int LeechBlockPhysOffset = 0x18;
+constexpr int LeechBlockElementOffsets[] = {0x20, 0x2c, 0x30, 0x34};
+constexpr int LeechBlockLifeOffset = 0x120;  // life leech: a flat amount for a hostile non-pet monster attacker (a percent for a player)
+constexpr int kPhysElements = 5;
+constexpr const char* kPhysNames[kPhysElements] = {"fire", "ltng", "cold", "mag", "pois"};
 constexpr uint32_t DataFlagLimit = 4;      // the base accessor takes a data flag below 4
 
 struct Game;
@@ -67,10 +79,11 @@ using SetStateBitFn = void (*)(Unit*, int32_t state, int32_t on) noexcept;
 using StateOnFn = int32_t (*)(Unit*, int32_t state) noexcept;
 using FindStateListFn = void* (*)(Unit*, int32_t state) noexcept;
 using DataTablesBaseFn = uint8_t* (*)(uint32_t dataFlag) noexcept;
+using LeechStepFn = uint64_t (*)(void* game, Unit* attacker, Unit* target, uint8_t* block) noexcept;
 
 enum PartId {
 	NewStatList, SetListStat, AttachStatList, DetachStatList, FreeStatList, MonsterSetup, UnitRoom, RoomLevelId, UnitStat,
-	SetListState, SetStateBit, StateOn, FindStateList, StatDataTablesBase, PartCount
+	SetListState, SetStateBit, StateOn, FindStateList, StatDataTablesBase, LeechStep, PartCount
 };
 
 // UnitRoom, RoomLevelId and UnitStat are the portal's parts, found again here so this half stands alone.
@@ -89,6 +102,7 @@ Part g_parts[PartCount] = {
 	{"StateOn", sig::StateOn, 0, false, nullptr, {}, {}},
 	{"FindStateList", sig::FindStateList, 0, false, nullptr, {}, {}},
 	{"StatDataTablesBase", sig::DataTablesBase, 0, false, nullptr, {}, {}},
+	{"LeechStep", sig::LeechStep, 18, false, nullptr, {}, {}},  // hooked for lifesteal_pct (issue #540)
 };
 
 std::mutex g_lock;
@@ -113,6 +127,10 @@ const D2RL::PluginContext* g_context = nullptr;
 const D2RL::DataTableService* g_dataTables = nullptr;
 const D2RL::LocalizationService* g_localization = nullptr;  // optional: the game's own text for a stat in the map panel
 MonsterSetupFn g_original = nullptr;
+LeechStepFn g_leechOriginal = nullptr;
+std::atomic<bool> g_leechOn{false};        // the leech hook is in
+std::atomic<bool> g_lifestealAny{false};   // some opened map has lifesteal_pct above 0: the leech hook looks at nothing else when false
+std::atomic<int> g_leechProbes{0};
 
 // The game's text for a stat's descstrpos key in the current language, "" when there is no key, no service or no such string.
 // A bare key is looked up in this plugin's own namespace, so the game's strings are asked for as "d2r:<key>".
@@ -140,6 +158,14 @@ auto On(PartId id) noexcept -> bool {
 
 void UpdateBusy() noexcept {  // g_lock must be held
 	g_busy = !g_plans.empty() || !g_lists.empty();
+}
+
+void UpdateLifestealAny() noexcept {  // g_lock must be held
+	bool any = false;
+	for (const auto& entry : g_routing) {
+		any = any || entry.second.behaviour(cartographer::behaviours::kKeyLifesteal) > 0;
+	}
+	g_lifestealAny = any;
 }
 
 // The plan of the map in slot `level`, or null. g_lock must be held.
@@ -243,7 +269,22 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		plan = PlanAt(levelId);  // the map of the room the monster spawns in
 	}
-	if (plan == nullptr || plan->monsters.empty()) {
+	if (plan == nullptr) {
+		return;
+	}
+	int physPct[kPhysElements] = {};
+	bool physAny = false;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		const auto routing = g_routing.find(levelId);
+		if (routing != g_routing.end()) {
+			for (int i = 0; i < kPhysElements; ++i) {
+				physPct[i] = routing->second.behaviour(std::string("phys_as_") + kPhysNames[i]);
+				physAny = physAny || physPct[i] > 0;
+			}
+		}
+	}
+	if (plan->monsters.empty() && !physAny) {
 		return;
 	}
 	if (!sp::monsterGetsStats(true, levelId, levelId)) {
@@ -259,6 +300,21 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		}
 		return;
 	}
+	// phys_as_<element> (issue #540): that percent of the monster's own physical damage, added as element damage. Read now, before the list is made.
+	std::vector<sp::Entry> entries = plan->monsters;
+	int32_t minDamage = 0, maxDamage = 0;
+	if (physAny) {
+		minDamage = Stat(monster, StatMinDamage);
+		maxDamage = Stat(monster, StatMaxDamage);
+		for (int i = 0; i < kPhysElements; ++i) {
+			cartographer::behaviours::Element element{};
+			if (physPct[i] > 0 && cartographer::behaviours::elementFromName(kPhysNames[i], &element)) {
+				for (const cartographer::behaviours::StatValue& v : cartographer::behaviours::physAsStats(element, physPct[i], minDamage, maxDamage)) {
+					entries.push_back({std::string("phys_as_") + kPhysNames[i], v.stat, v.value});
+				}
+			}
+		}
+	}
 	const int number = g_monsterCount.load() + g_monsterFailed.load();
 	const bool probe = number < MonsterProbes;
 	int32_t levelBefore = 0, lifeBefore = 0;
@@ -266,9 +322,15 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 	if (probe) {
 		levelBefore = Stat(monster, StatLevel);
 		lifeBefore = Stat(monster, StatMaxLife);
-		before = Totals(monster, plan->monsters);
+		before = Totals(monster, entries);
 	}
-	void* list = MakeList(monster, UnitMonster, plan->monsters);
+	if (entries.empty()) {
+		if (probe) {
+			plog::Warn("statprobe: monster class %d: phys_as asked, but its physical damage (stats 21/22) reads %d/%d, so nothing is added", At<int32_t>(params, 0x18), minDamage, maxDamage);
+		}
+		return;
+	}
+	void* list = MakeList(monster, UnitMonster, entries);
 	if (list == nullptr) {
 		const int failed = ++g_monsterFailed;
 		if (failed == 1 || failed % 100 == 0) {
@@ -282,7 +344,12 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		const int chain = Chain(monster, list, &found);
 		plog::Info("statprobe: monster #%d id %u class %d level %d: stat %d (level) was %d at the hook, maxhp %d -> %d, totals [%s] -> [%s], list on chain: %s (%d lists)",
 		           number + 1, At<uint32_t>(monster, UnitIdOffset), At<int32_t>(params, 0x18), levelId, StatLevel, levelBefore, lifeBefore,
-		           Stat(monster, StatMaxLife), before.c_str(), Totals(monster, plan->monsters).c_str(), found ? "yes" : "NO", chain);
+		           Stat(monster, StatMaxLife), before.c_str(), Totals(monster, entries).c_str(), found ? "yes" : "NO", chain);
+		if (physAny) {
+			plog::Info("statprobe: monster #%d phys_as: physical damage 21/22 = %d/%d at the hook, now %d/%d; fire 48/49 = %d/%d, ltng 50/51 = %d/%d, mag 52/53 = %d/%d, cold 54/55 = %d/%d, pois 57/58 = %d/%d",
+			           number + 1, minDamage, maxDamage, Stat(monster, StatMinDamage), Stat(monster, StatMaxDamage), Stat(monster, 48), Stat(monster, 49), Stat(monster, 50), Stat(monster, 51),
+			           Stat(monster, 52), Stat(monster, 53), Stat(monster, 54), Stat(monster, 55), Stat(monster, 57), Stat(monster, 58));
+		}
 	}
 }
 
@@ -299,6 +366,68 @@ auto MonsterSetupHook(void* params, Unit* monster) noexcept -> uint64_t {
 		} catch (...) {
 			plog::Error("map stats: applying a monster's stats failed");
 		}
+	}
+	return result;
+}
+
+// --- Life steal (issue #540) --------------------------------------------------------------------------------------------------
+// The game's leech step takes a life leech as a flat amount for a hostile non-pet monster attacker (a percent for a player), so the map's
+// lifesteal_pct is turned into that amount here: the percent of what the hit deals, added to the block's leech before the step runs. The
+// game then caps it at the target's life and applies it to the attacker. Only a hostile monster (alignment 0) standing in an opened map.
+// Returns true when this hit is a probe (the first few): the caller logs the attacker's life after the step; `lifeBefore` is its life now.
+auto AddLifesteal(Unit* attacker, uint8_t* block, int32_t* lifeBefore) noexcept -> bool {
+	if (attacker == nullptr || block == nullptr || !Readable(block, LeechBlockSpan) || At<int32_t>(attacker, UnitTypeOffset) != UnitMonster) {
+		return false;
+	}
+	const int32_t levelId = UnitLevelId(attacker);
+	int pct = 0;
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		const auto routing = g_routing.find(levelId);
+		if (routing != g_routing.end()) {
+			pct = routing->second.behaviour(cartographer::behaviours::kKeyLifesteal);
+		}
+	}
+	if (pct <= 0 || Stat(attacker, StatAlignment) != 0) {
+		return false;
+	}
+	int32_t dealt = At<int32_t>(block, LeechBlockPhysOffset);
+	if ((At<uint8_t>(block, LeechBlockFlagsOffset) & LeechBlockElements) != 0) {
+		for (const int offset : LeechBlockElementOffsets) {
+			dealt += At<int32_t>(block, offset);
+		}
+	}
+	const int32_t before = At<int32_t>(block, LeechBlockLifeOffset);
+	const int32_t after = cartographer::behaviours::lifestealBlock(before, dealt, pct);
+	if (after != before) {
+		std::memcpy(block + LeechBlockLifeOffset, &after, sizeof(after));
+	}
+	const bool probe = g_leechProbes.fetch_add(1) < MonsterProbes;
+	if (probe) {
+		*lifeBefore = Stat(attacker, StatLife);
+		plog::Info("statprobe: lifesteal_pct %d on a hit by monster %u in level %d: dealt %d (1/256 life), leech in the block %d -> %d", pct,
+		           At<uint32_t>(attacker, UnitIdOffset), levelId, dealt, before, after);
+	}
+	return probe;
+}
+
+auto LeechStepHook(void* game, Unit* attacker, Unit* target, uint8_t* block) noexcept -> uint64_t {
+	if (g_leechOriginal == nullptr) {
+		return 0;  // as MonsterSetupHook: the install logs it and marks the part off
+	}
+	bool probe = false;
+	int32_t lifeBefore = 0;
+	if (g_lifestealAny.load(std::memory_order_relaxed)) {
+		try {
+			probe = AddLifesteal(attacker, block, &lifeBefore);
+		} catch (...) {
+			plog::Error("map stats: adding the map's life steal failed");
+		}
+	}
+	const uint64_t result = g_leechOriginal(game, attacker, target, block);
+	if (probe) {
+		plog::Info("statprobe: lifesteal_pct: the attacker's life (stat 6, 1/256) was %d before the leech step and is %d after it (max %d)", lifeBefore, Stat(attacker, StatLife),
+		           Stat(attacker, StatMaxLife));
 	}
 	return result;
 }
@@ -557,6 +686,22 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 		g_monstersOn = ok;
 	}
 
+	// Life steal (issue #540): its own hook, only when the room and stat reads it makes are there.
+	if (On(LeechStep)) {
+		if (AllOn({UnitRoom, RoomLevelId, UnitStat})) {
+			Part& part = g_parts[LeechStep];
+			const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
+			const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&LeechStepHook), reinterpret_cast<void**>(&g_leechOriginal));
+			g_leechOn = HookOutcome(part, hooked, g_leechOriginal != nullptr);
+		} else {
+			g_parts[LeechStep].status.on = false;
+			g_parts[LeechStep].status.detail = "off: not hooked, because a part it needs was not found";
+		}
+	}
+	if (!g_leechOn) {
+		plog::Warn("map life steal (lifesteal_pct) is off (see the LeechStep part below)");
+	}
+
 	// Players: applied from the portal's player tick hook, so that part must be on too.
 	bool tickOn = false;
 	for (const PartStatus& s : PartStatuses()) {
@@ -596,15 +741,18 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	}
 	const int slot = SlotLevel(tables->slots, MapSlotName(map));
 	const auto mapped = sp::itemStatsToProperties(itemStats, tables->statIds, tables->routes);
+	sp::MapRouting routing = mapped.routing;
+	StatApplyTestRouting(&routing);
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_routing[slot] = mapped.routing;
+		g_routing[slot] = routing;
+		UpdateLifestealAny();
 	}
 	// The map's drop behaviours (issue #538), replaced on every open (an empty set clears the slot's). A CARTOGRAPHER_TEST_BEHAVIOURS test spec
 	// is applied afterwards by StartMapStats's caller (MapBehavioursTestOpened) and so wins.
-	carto::SetMapBehaviours(slot, cartographer::behaviours::fromRouting(mapped.routing));
-	for (const sp::KeyedValue& k : mapped.routing.behaviours) {
-		// A behaviour key with no handler yet is logged once per process and skipped (extra_groups, lifesteal_pct and phys_as_* come with issue #540).
+	carto::SetMapBehaviours(slot, cartographer::behaviours::fromRouting(routing));
+	for (const sp::KeyedValue& k : routing.behaviours) {
+		// A behaviour key with no handler is logged once per process and skipped.
 		static std::mutex noted;
 		static std::set<std::string> seen;
 		std::lock_guard<std::mutex> lock(noted);
@@ -721,6 +869,7 @@ void StatApplyGameLeft() noexcept {
 		++g_generation;
 		g_plans.clear();
 		g_routing.clear();
+		UpdateLifestealAny();
 		g_lastSlot = -1;
 		g_listLevels.clear();
 		g_lists.clear();  // the game frees the units and their lists; nothing is touched here
@@ -735,6 +884,47 @@ void StatApplyGameLeft() noexcept {
 	g_playerCount = 0;
 	g_chainLogged = false;
 	g_stateRefused = false;
+}
+
+void StatApplyTestRouting(cartographer::statplan::MapRouting* routing) {
+	char spec[512] = {};
+	if (routing == nullptr || GetEnvironmentVariableA("CARTOGRAPHER_TEST_ROUTING", spec, sizeof(spec)) == 0) {
+		return;
+	}
+	std::vector<cartographer::behaviours::TestRoute> routes;
+	std::string why;
+	if (!cartographer::behaviours::parseTestRouting(spec, &routes, &why)) {
+		plog::Warn("map routing test: CARTOGRAPHER_TEST_ROUTING='%s' is not valid (%s); ignored", spec, why.c_str());
+		return;
+	}
+	for (const auto& r : routes) {
+		bool added = false;
+		for (sp::KeyedValue& k : routing->behaviours) {
+			if (k.key == r.key && k.param == r.param) {
+				k.value += r.value;
+				added = true;
+			}
+		}
+		if (!added) {
+			routing->behaviours.push_back({r.key, r.param, r.value});
+		}
+	}
+	plog::Warn("map routing test: %zu behaviour sum(s) added from CARTOGRAPHER_TEST_ROUTING='%s' (a game check only)", routes.size(), spec);
+}
+
+auto StatApplyExtraGroups(const cartographer::statplan::MapRouting& routing) -> std::vector<std::pair<std::string, int>> {
+	std::vector<std::pair<std::string, int>> out;
+	for (const sp::KeyedValue& k : routing.behaviours) {
+		const int count = cartographer::behaviours::clampExtraGroups(k.value);
+		if (k.key == cartographer::behaviours::kKeyExtraGroups && k.param.empty() && count > 0) {
+			static std::once_flag warned;
+			std::call_once(warned, [] { plog::Warn("map stats: extra_groups has no Param, so its sum is dropped; its statroutes.txt row needs a monstats Id as the Param"); });
+		}
+		if (k.key == cartographer::behaviours::kKeyExtraGroups && !k.param.empty() && count > 0) {
+			out.emplace_back(k.param, count);
+		}
+	}
+	return out;
 }
 
 auto StatApplyMapRouting(int slotLevel) -> cartographer::statplan::MapRouting {

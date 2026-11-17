@@ -101,6 +101,11 @@ auto RecordSnapshotOf(const uint8_t* record) -> RecordSnapshot {
 	s.groupCount = SignedLoad(record, RecGroupCountOffset, 1);
 	s.groupWeight = SignedLoad(record, RecGroupWeightOffset, 1);
 	s.groupCount2 = SignedLoad(record, RecGroupCount2Offset, 1);
+	for (int i = 0; i < s.groupCount && i < RecMaxGroups; ++i) {
+		const int base = RecGroupsOffset + RecGroupStride * i;
+		s.groupRows.push_back(SignedLoad(record, base + RecGroupRowDelta, 2));
+		s.groupWeights.push_back(static_cast<int>(Load(record, base + RecGroupWeightDelta, 1)));
+	}
 	return s;
 }
 
@@ -164,8 +169,8 @@ auto MonstersRefusal(const Request& r) -> std::string {
 	if (n == 0) {
 		return "";
 	}
-	if (n > static_cast<size_t>(MaxMonsters)) {
-		return "more than " + std::to_string(MaxMonsters) + " monsters";
+	if (n > static_cast<size_t>(RecMaxGroups)) {
+		return "more than " + std::to_string(RecMaxGroups) + " monster groups";
 	}
 	if (r.monsterWeights.size() != n) {
 		return "a monster has no weight";
@@ -187,6 +192,45 @@ auto MonstersRefusal(const Request& r) -> std::string {
 		return "the monsters' weights add up to " + std::to_string(sum) + ", above " + std::to_string(MaxWeightSum) + " (the game keeps the sum in a byte)";
 	}
 	return "";
+}
+
+auto MergeExtraGroups(const std::vector<int>& rows, const std::vector<int>& weights, const std::vector<ExtraGroup>& extras, std::vector<std::string>* notes) -> Groups {
+	Groups g{rows, weights};
+	for (const ExtraGroup& e : extras) {
+		const int add = std::max(1, e.weight) * std::clamp(e.count, 0, RecMaxGroups);
+		if (e.count <= 0) {
+			continue;
+		}
+		const auto found = std::find(g.rows.begin(), g.rows.end(), e.row);
+		if (found != g.rows.end()) {
+			int& w = g.weights[static_cast<size_t>(found - g.rows.begin())];
+			w = std::min(255, w + add);
+		} else if (g.rows.size() < static_cast<size_t>(RecMaxGroups)) {
+			g.rows.push_back(e.row);
+			g.weights.push_back(std::min(255, add));
+		} else {
+			notes->push_back("monstats row " + std::to_string(e.row) + " is left out: the map already has " + std::to_string(RecMaxGroups) + " monster groups");
+		}
+	}
+	int sum = 0;
+	for (const int w : g.weights) {
+		sum += w;
+	}
+	if (sum > MaxWeightSum) {
+		notes->push_back("the group weights add up to " + std::to_string(sum) + ", so they are scaled down to " + std::to_string(MaxWeightSum));
+		int scaled = 0;
+		for (int& w : g.weights) {
+			w = std::max(1, w * MaxWeightSum / sum);
+			scaled += w;
+		}
+		for (size_t i = 0; scaled > MaxWeightSum && !g.weights.empty(); i = (i + 1) % g.weights.size()) {  // 13 groups at most: the 1s can overshoot by a few
+			if (g.weights[i] > 1) {
+				--g.weights[i];
+				--scaled;
+			}
+		}
+	}
+	return g;
 }
 
 auto UniqueTotal(const Request& r, const RecordSnapshot& s, bool uniquesAllowed) -> int {

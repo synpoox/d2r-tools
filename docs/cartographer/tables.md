@@ -49,7 +49,7 @@ One row per map. The header row must have `Name`, `Tileset`, `Shape` and `Item`;
 | `Level` | no | Monster level in the map, 1 to 255 (written into the map's level when it opens; experimental) | 85 | 90 |
 | `Item` | yes | Item code that opens this map, and only this map. Up to 4 characters. Unique across maps. The item must be in your mod's `misc.txt` with item spell 16 (`pSpell`) and type `cmap` (see [Map item type](#map-item-type-itemtypestxt)): the plugin ships no items | none | `t20` |
 | `Boss` | no | The `Name` of an entry in `bosses.txt` (ignoring case). A vanilla boss or monster, or a name not in `bosses.txt`, is refused with a message and the map opens without a Boss | no boss | `Shoreline Warden` |
-| `Monsters` | no | Up to 10 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; the listed monsters filled the map in game) | the tileset's own monsters | `quillrat1,zombie1` |
+| `Monsters` | no | Up to 13 monstats `Id`s, separated by commas (no empty entries; case must match; written into the map's level when it opens; the listed monsters filled the map in game) | the tileset's own monsters | `quillrat1,zombie1` |
 | `MinCharLevel` | no | Character level needed, 1 to 99 | 1 | 80 |
 | `EventChance` | no | Percent chance of an event, 0 to 100 | the `cartographer.txt` value (20) | 25 |
 | `Density` | no | Percent more monsters than the tileset's normal, 0 and up (no cap; the result is cut at the game's 32-bit limit; scales the level's own density; experimental; adds nothing on a level whose density is 0) | 0 | 50 |
@@ -260,7 +260,21 @@ Generic, mod-agnostic behaviours a map can have (issue #538). Cartographer appli
 | `drop_socketed` | | percent | chance a socketable map drop gets 1 or 2 sockets (the game cuts it to the item's own maximum; a two-handed weapon is not given more) |
 | `extra_boss` | | count, 0 to 9 | that many more spawns of the map's `Boss`, in its room |
 
+The built-in `cartographer_map_extra_groups` route has an empty Param, so its sum is dropped (a warning is logged once). `extra_groups` needs a `statroutes.txt` row whose Param is a monstats `Id`.
+
 Minions never count. Not checked in game beyond the lane's Slot11 check: see [51](../reverse-engineering/cartographer/51-map-drop-behaviours.md).
+
+### Combat behaviours (issue #540)
+
+Read the same way (from the map's summed route keys). They apply to **hostile monsters** (alignment 0) of an opened map only.
+
+| Behaviour key | Param | Value | Effect |
+|---|---|---|---|
+| `extra_groups` | a monstats `Id` | count, 0 to 13 | that many more monster groups of that monster in the map's region record (a monster already in `Monsters` gains weight; a new one is added while the record has room, 13 groups at most; weights are scaled to add up to 255 at most) |
+| `lifesteal_pct` | | percent | every hit a hostile monster lands heals it by that percent of the damage dealt (physical plus element damage; the game caps it at the target's life) |
+| `phys_as_fire`, `phys_as_ltng`, `phys_as_cold`, `phys_as_mag`, `phys_as_pois` | | percent | the monster's min and max physical damage, that percent of each, is added as damage of that element when it spawns (cold 50 frames, poison 100 frames) |
+
+A game check without a map item: set `CARTOGRAPHER_TEST_ROUTING` (for example `extra_groups:quillrat1=3;lifesteal_pct=50;phys_as_fire=50`) before starting the game; the values are added to the map's sums, and the log says so. Unset, it does nothing. See [52](../reverse-engineering/cartographer/52-map-combat-behaviours.md).
 
 ## bosses.txt (optional)
 

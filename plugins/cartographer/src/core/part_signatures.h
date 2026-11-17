@@ -44,6 +44,10 @@ inline constexpr const char* FreeStatList = "48 85 D2 74 ?? 83 7A 1C 00 0F 8D ??
 // 14-byte prefix alone matches 11 sites, so the signature runs on to 21 bytes; the hook cuts the first 14.
 inline constexpr const char* MonsterSetup = "48 89 5C 24 18 48 89 6C 24 20 56 57 41 57 48 83 EC 30 8B 69 18";
 
+// The hit's leech step (game, attacker, target, damage block), run for every hit that carries a life or mana leech (issue #540, RE note 52).
+// The hook cuts the first 18 bytes: the `cmp dword [r9+0x120], 0` that opens it is the last whole instruction of the signature.
+inline constexpr const char* LeechStep = "40 55 56 57 41 56 48 83 EC 58 41 83 B9 20 01 00 00 00";
+
 // The maze steering parts (build 93847; docs/reverse-engineering/cartographer/01a-maze-signatures.md), re-checked by tools/check_maze_signatures.py.
 // The first four are hooked (the hook cuts the first 14, 18, 17 and 14 bytes: whole instructions, all exact); the last three are only called.
 inline constexpr const char* LevelBuild = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 20 48 8B 82 C8 01 00 00 4C 8B F2";

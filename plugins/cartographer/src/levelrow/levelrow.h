@@ -48,7 +48,6 @@ inline constexpr int RecUniqueCountOffset = 0x2c8;         // byte: unique packs
 inline constexpr size_t RecSpan = 0x2d0;                   // the bytes from the record start the plugin reads
 
 inline constexpr int MaxWeightSum = 255;                   // the group weight sum is one byte in the record
-inline constexpr int MaxMonsters = 10;                     // maps.txt Monsters: at most 10 entries
 inline constexpr int LastVanillaLevel = 137;               // Colossal Summit, the last vanilla 3.3.0 level; the slots start above it
 
 inline constexpr int MaxLevel = 255;
@@ -83,6 +82,7 @@ struct RecordSnapshot {
 	int32_t density = 0;
 	int32_t uMin = 0, uMax = 0;
 	int32_t groupCount = 0, groupWeight = 0, groupCount2 = 0;
+	std::vector<int> groupRows, groupWeights;  // the groups held (at most groupCount, at most RecMaxGroups): the monstats row and the weight of each
 };
 
 // What a map asks for. monsterRows are monstats row indexes in the order of maps.txt `Monsters`, monsterWeights the monstats
@@ -138,8 +138,23 @@ auto CheckRecord(const RecordSnapshot& record, const Snapshot& row, int difficul
 // The row field writes for `request` (Level), only those whose value would change.
 auto PlanRow(const Request& request, const Snapshot& snapshot, bool level) -> std::vector<Field>;
 // The record field writes for `request` for the parts in `allowed`. Scaling uses the record's original values. Monsters: empty when
-// the list is empty, longer than MaxMonsters, holds a row outside 0..MaxRow or lacks a weight (0..255) per row, or the weights sum to 0 or above MaxWeightSum (MonstersRefusal).
+// the list is empty, longer than RecMaxGroups, holds a row outside 0..MaxRow or lacks a weight (0..255) per row, or the weights sum to 0 or above MaxWeightSum (MonstersRefusal).
 auto PlanRecord(const Request& request, const RecordSnapshot& snapshot, const Parts& allowed) -> std::vector<Field>;
+
+// Extra monster groups (issue #540): `count` more groups of monstats row `row`, whose monstats weight is `weight` (0 counts as 1).
+struct ExtraGroup {
+	int row = 0;
+	int weight = 1;
+	int count = 0;
+};
+
+// The group list with the extras in it: a row already in the list gains count * weight; a new row is appended with count * weight, while
+// there is room (RecMaxGroups). Weights are cut to 255 each, then all scaled down together (none below 1) until they add up to MaxWeightSum
+// or less. `notes` gets one line for each extra left out or cut. `rows` and `weights` must be the same length.
+struct Groups {
+	std::vector<int> rows, weights;
+};
+auto MergeExtraGroups(const std::vector<int>& rows, const std::vector<int>& weights, const std::vector<ExtraGroup>& extras, std::vector<std::string>* notes) -> Groups;
 
 // Why the Monsters list of `request` is not written (empty when it is fine or the list is empty): too many entries, a row outside
 // 0..MaxRow, a missing or out-of-range weight, weights that are all 0 or add up to more than MaxWeightSum.

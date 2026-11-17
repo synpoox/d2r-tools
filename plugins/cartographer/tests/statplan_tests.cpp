@@ -1063,7 +1063,7 @@ TEST_CASE("area params and behaviour keys are summed over the item's affixes")
 	CHECK(fixed.routing.area("Density") == 20);
 	CHECK_FALSE(behaviourHandled("map_drop_tc"));  // the key is drop_tc, not the stat name
 	for (const char *k : {"drop_tc", "drop_bonus", "drop_ethereal", "drop_socketed", "extra_boss"}) CHECK(behaviourHandled(k));
-	for (const char *k : {"extra_groups", "lifesteal_pct", "phys_as_fire"}) CHECK_FALSE(behaviourHandled(k));  // #540
+	for (const char *k : {"extra_groups", "lifesteal_pct", "phys_as_fire"}) CHECK(behaviourHandled(k));  // #540
 	CHECK(canonicalAreaParam("density") == "Density");
 	CHECK(canonicalAreaParam("arealevel") == "AreaLevel");
 	CHECK(canonicalAreaParam("UNIQUES") == "Uniques");
@@ -1086,6 +1086,14 @@ TEST_CASE("parseItemStatCost reads the Op column")
 	CHECK(ids.opOf("strength") == -1);
 	CHECK(ids.opOf("nope") == -1);
 	CHECK(parseItemStatCost("Stat\nfoo\n").opOf("foo") == -1);
+}
+
+TEST_CASE("the combat behaviour keys have handlers (issue #540)")
+{
+	for (const char* key : {"extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois"}) {
+		CHECK(behaviourHandled(key));
+	}
+	CHECK_FALSE(behaviourHandled("phys_as_holy"));
 }
 
 TEST_CASE("the catalogue routes (issue #539): monster stats to their engine stat, area stats to area params, behaviour stats to behaviour keys")

@@ -35,7 +35,7 @@ inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
 inline constexpr int DefaultEventChance = 20;
-inline constexpr int MaxMonsters = 10;
+inline constexpr int MaxMonsters = 13;  // the region record holds 13 monster groups
 inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.
@@ -99,6 +99,7 @@ struct MapDef {
 	int minCharLevel = 1;
 	int eventChance = -1;  // -1: use the cartographer.txt value
 	int density = 0, champions = 0, uniques = 0;
+	std::vector<std::pair<std::string, int>> extraGroups;  // the map item's extra_groups behaviour (issue #540): monstats Id, groups; set when the map opens, not by maps.txt
 	cartographer::maplight::Look look;  // Brightness, Warmth: the map's own look (blank: the tileset's)
 };
 
