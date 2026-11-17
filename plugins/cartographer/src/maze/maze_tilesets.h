@@ -76,6 +76,11 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// the walk and two special-room calls (the Drain and Chest pieces 739..746, always suppressed). Offset x 1500, y 500: the next free spot in the second band (Jail 0, Lair 500,
 	// Barracks 1000), clear of Snow (1500..1692, y 0..192). docs/reverse-engineering/cartographer/43-kurast-sewer-builder.md, docs/cartographer/tilesets/a3-kurast-sewers.md.
 	{"KurastSewer", 25, "MazeKurastSewer", "Cartographer Kurast Sewer", 12, 704, {0, 0, 0, 0}, true, 1500, 500, 0},
+	// Sewer (Act 2 Sewer 1 and 2, LevelType 13, #243): 12-tile rooms, "Sewer W" is Def 302 (base 301, 302..316; 301 is the Act 2 Town preset, so there is no closed piece and no filler ring).
+	// Its case calls the ring grower, the walk and then 0x3eab30, which is not a grower: it places special rooms only for the game's own levels 47 to 49 and 65, so a slot level only has it
+	// draw one random number. No hook beyond the shared walk is needed. Offset x 3000, y 500: the next free spot in the second band (Jail 0, Lair 500, Barracks 1000, KurastSewer 1500,
+	// Harem 2000, Basement 2500), clear of Crypt (x 3000, y 0..360). docs/reverse-engineering/cartographer/45-act2-sewer-case.md, docs/cartographer/tilesets/a2-sewers.md.
+	{"Sewer", 13, "MazeSewer", "Cartographer Sewer", 12, 301, {0, 0, 0, 0}, true, 3000, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
