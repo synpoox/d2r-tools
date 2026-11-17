@@ -1530,7 +1530,7 @@ TEST_CASE("the Catacombs row and its plans: 12-tile rooms, mask pieces from 258,
 	for (int to = 288; to <= 298; ++to) CHECK(steerSpecial(ts, sp.plan, to).action == SpecialSteer::Action::Suppress);  // Prev, Next, Waypoint: never placed
 }
 
-// Act 2 Tombs (#242): 16-tile rooms, Def 414..428 = 413 + exit mask, own growers 0x3ea0e0 and 0x3eb610 skipped on a steered build (RE note 47).
+// Act 2 Tombs (#242): 16-tile rooms, Def 414..428 = 413 + exit mask, own growers 0x3ea0e0 and 0x3eb610 skipped on every slot-level build (RE note 47).
 TEST_CASE("the Tombs row and its plans: 16-tile rooms, mask pieces from 414, no Prev family, no ring")
 {
 	const MazeTileset *row = findMazeTileset("tombs");
@@ -1580,17 +1580,6 @@ TEST_CASE("the Tombs row and its plans: 16-tile rooms, mask pieces from 414, no 
 	CHECK(cap.right == 10);
 	CHECK(cap.up == 10);
 	CHECK(cap.down == 10);
-}
-
-TEST_CASE("the Tombs growers are skipped only on a steered build (before the walk until it falls back, after the walk always)")
-{
-	CHECK(skipTombGrower(true, false, false));
-	CHECK(skipTombGrower(true, false, true));
-	CHECK_FALSE(skipTombGrower(true, true, false));  // fell back: the game's walk finishes, the pre-walk grower had already run (it is skipped before any fallback)
-	CHECK(skipTombGrower(true, true, true));         // the pre-walk grower was skipped, so there is no special piece for the after-walk pass to find
-	CHECK_FALSE(skipTombGrower(false, false, false));  // an unsteered slot build, or any other level
-	CHECK_FALSE(skipTombGrower(false, false, true));
-	CHECK_FALSE(skipTombGrower(false, true, true));
 }
 
 TEST_CASE("Ice arrival: a 16-tile cell the engine splits into 2 x 2 rooms of 8 gives the top-left room of the entrance cell")

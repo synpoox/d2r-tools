@@ -29,7 +29,7 @@ struct MazeTileset {
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
 	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
 	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar, Spider): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
-	bool tombGrowers;       // Tombs (note 47): the case calls two growers of its own, 0x3ea0e0 before the walk and 0x3eb610 after it, which a steered build skips (engine/tomb_growers.cpp)
+	bool tombGrowers;       // Tombs (note 47): the case calls two growers of its own, 0x3ea0e0 before the walk and 0x3eb610 after it, which every slot-level build skips (engine/tomb_growers.cpp)
 };
 
 // Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
@@ -98,7 +98,7 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// band, under Cave (x 3500, y 0). docs/reverse-engineering/cartographer/46-catacombs-grower.md, docs/cartographer/tilesets/a1-catacombs.md.
 	{"Catacombs", 10, "MazeCatacombs", "Cartographer Catacombs", 12, 257, {0, 0, 0, 0}, false, 3500, 500, 0},
 	// Tombs (Act 2 Tombs, LevelType 17, #242): 16-tile rooms, "Tomb W" is Def 414 (base 413, 414..428). Its case calls neither the ring grower nor the entrance call: it calls its own
-	// grower 0x3ea0e0 (a cross of rooms round the first, the Prev piece 444..447 as its centre), the walk, then 0x3eb610 (special rooms by level id); a steered build skips both
+	// grower 0x3ea0e0 (a cross of rooms round the first, the Prev piece 444..447 as its centre), the walk, then 0x3eb610 (special rooms by level id); every slot-level build skips both
 	// (tombGrowers), so the entrance is an ordinary room. 413 is no closed piece of this set, so no filler ring. Offset x 4000, y 500: the last spot the automap range allows
 	// (x up to 4235 at y 500), past Catacombs (x 3500), above every Act 5 level (y 1000). docs/reverse-engineering/cartographer/47-tomb-growers.md.
 	{"Tombs", 17, "MazeTombs", "Cartographer Tombs", 16, 413, {0, 0, 0, 0}, false, 4000, 500, 0, false, 0, {0, 0, 0, 0}, true},

@@ -217,12 +217,6 @@ bool mayRunOriginalStep(bool noResume, size_t roomsMade)
 	return !noResume || roomsMade == 0;
 }
 
-bool skipTombGrower(bool steer, bool fellBack, bool afterWalk)
-{
-	// The pre-walk grower runs before any fallback; the after-walk pass must stay skipped after one, because the pre-walk grower was skipped too (no special piece to find).
-	return steer && (afterWalk || !fellBack);
-}
-
 bool fixAfterWalk(const Plan &plan, int roomIndex)
 {
 	if (roomIndex < 0 || roomIndex >= static_cast<int>(plan.rooms.size())) return false;

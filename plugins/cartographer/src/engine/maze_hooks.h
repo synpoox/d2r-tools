@@ -19,8 +19,8 @@ namespace carto {
 // Finds the maze parts and installs the four hooks. Never throws. `ranges` are the exe's executable sections.
 void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count);
 
-// True when the slot build of `level` that is running on this thread must skip the Tombs case's own grower (afterWalk: the one after the walk, else the one before it).
-auto MazeBuildSkipsTombGrower(void* level, bool afterWalk) -> bool;
+// True when `level` is a slot build running on this thread: every slot build, steered, unsteered or fallen back, skips both of the Tombs case's growers (RE note 47).
+auto MazeBuildSkipsTombGrower(void* level) -> bool;
 
 // True once InstallMazeHooks reached the level build hook (0x3271c0), whether or not it went in: the outdoor build shares it, or stays off.
 auto MazeLevelBuildHookTried() -> bool;

@@ -19,15 +19,15 @@ Part g_parts[TombPartCount] = {
 GrowerFn g_original[TombPartCount] = {nullptr, nullptr};
 std::atomic<bool> g_hooked{false};
 
-// Both take (level) and return nothing the caller reads. A level that is not a steered Tombs build runs the game's own function.
+// Both take (level) and return nothing the caller reads. A level that is not a slot build runs the game's own function.
 void PreGrowerHook(void* level) noexcept {
-	if (g_original[PreGrower] != nullptr && !MazeBuildSkipsTombGrower(level, false)) {
+	if (g_original[PreGrower] != nullptr && !MazeBuildSkipsTombGrower(level)) {
 		g_original[PreGrower](level);
 	}
 }
 
 void SpecialRoomsHook(void* level) noexcept {
-	if (g_original[SpecialRooms] != nullptr && !MazeBuildSkipsTombGrower(level, true)) {
+	if (g_original[SpecialRooms] != nullptr && !MazeBuildSkipsTombGrower(level)) {
 		g_original[SpecialRooms](level);
 	}
 }

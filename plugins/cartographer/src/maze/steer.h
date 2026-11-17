@@ -145,11 +145,6 @@ int pieceAfterWalk(const Plan &plan, int roomIndex);
 // added (roomsMade counts the rooms beyond the first).
 bool mayRunOriginalStep(bool noResume, size_t roomsMade);
 
-// The Tombs case (RE note 47) calls two growers of its own around the walk: 0x3ea0e0 before it (a cross of rooms round the first, whose centre becomes a three-exit
-// Prev piece) and 0x3eb610 after it (special rooms by level id, none for a slot level, but it asserts when the room list has no special piece). A steered build skips
-// both: the first leaves the first room alone for the plan, the second has nothing to place. `fellBack`: the steered walk was given up (the game's walk finishes).
-bool skipTombGrower(bool steer, bool fellBack, bool afterWalk);
-
 // Arcane's grower (0x3e7a80) draws its start rotation from the level seed {lo, hi} (state = lo * 0x6ac690c5 + hi, as 64 bits; the new
 // lo is the low half and the new hi the high half; rot = new lo & 3) and then gives room `index` of its spiral the file variant
 // (index / 15 + rot) & 3 (piece + 4). Both are the game's own arithmetic; `*lo` and `*hi` are advanced.

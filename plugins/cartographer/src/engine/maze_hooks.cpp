@@ -1002,9 +1002,9 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 
 }  // namespace
 
-auto MazeBuildSkipsTombGrower(void* level, bool afterWalk) -> bool {
+auto MazeBuildSkipsTombGrower(void* level) -> bool {
 	const BuildCtx* ctx = t_ctx;
-	return ctx != nullptr && ctx->level == level && cm::skipTombGrower(ctx->steer, ctx->fellBack, afterWalk);
+	return ctx != nullptr && ctx->level == level;
 }
 
 auto MazeLevelBuildHookTried() -> bool {

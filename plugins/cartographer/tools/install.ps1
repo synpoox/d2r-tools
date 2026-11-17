@@ -182,7 +182,7 @@ $MazeTilesets = @(
     @{ Tileset = 'Sewer'; Slot = 'MazeSewer'; LevelName = 'Cartographer Sewer'; LevelType = '13'; Size = '360'; Param = 'Sewer' },
     # Catacombs (Act 1 Catacombs 1): x 3500..3860, y 500..860, the end of the second band, under Cave (y 0..360). Copied from the first DrlgType 1 level of LevelType 10 (level 34).
     @{ Tileset = 'Catacombs'; Slot = 'MazeCatacombs'; LevelName = 'Cartographer Catacombs'; LevelType = '10'; Size = '360'; Param = 'Catacombs' }
-    # Tombs (Act 2, #242): x 4000, y 500, the last spot the automap range allows in the second band (x + y + 2 * 360 <= 8191 puts the limit at 4235; 3500 is the Catacombs row). Copied from a plain Act 2 Tombs maze level; 16-tile rooms.
+    # Tombs (Act 2, #242): x 4000, y 500, the last spot the automap range allows in the second band (x - y + 360 <= 4095 puts the limit at 4235; 3500 is the Catacombs row). Copied from a plain Act 2 Tombs maze level; 16-tile rooms.
     @{ Tileset = 'Tombs'; Slot = 'MazeTombs'; LevelName = 'Cartographer Tombs'; LevelType = '17'; Size = '360'; Param = 'Tombs'; RoomTiles = '16' }
     # Spider Cavern (Act 3, #284): x 3860..4220, y 130..490, the one free spot once Catacombs (3500, 500) and Tombs (4000, 500) took the end of the second band: x 3860 clears Cave (x 3500..3860, y 0..360) and the 16-bit automap range allows no larger x; inside the automap range and above the Act 5 levels (y 1000). Copied from the first DrlgType 1 level of LevelType 23.
     @{ Tileset = 'Spider'; Slot = 'MazeSpider'; LevelName = 'Cartographer Spider'; LevelType = '23'; Size = '360'; Param = 'Spider' }
