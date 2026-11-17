@@ -688,10 +688,12 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 
 // The steered walk in place of a build step that has the walk's shape (level): the game's walk 0x3e96d0, or Arcane's own grower 0x3e7a80. `original` is that
 // step's own function, run when the build is not steered or the engine refused a step.
-void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
+// noResume: the game's step cannot continue from a partial build (Arcane's spiral, the ring grower): it runs only when no plan room was made.
+template <class Original>
+void SteeredStep(void* level, Original original, bool ownGrower, bool noResume) noexcept {
 	BuildCtx* ctx = t_ctx;
 	if (ctx == nullptr || !ctx->steer || ctx->fellBack || ctx->level != level) {
-		original(level);
+		original();
 		return;
 	}
 	std::string why;
@@ -710,11 +712,11 @@ void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
 		for (size_t i = 1; i < ctx->rooms.size(); ++i) {
 			made += ctx->rooms[i] != nullptr ? 1 : 0;
 		}
-		if (cm::mayRunOriginalStep(ownGrower, made)) {
+		if (cm::mayRunOriginalStep(noResume, made)) {
 			if (ctx->growerSkipped && made == 0 && g_catGrowerOriginal != nullptr) {
 				g_catGrowerOriginal(level, 0);  // the game's build as it would have been
 			}
-			original(level);  // the game grows the rest of the maze from the rooms that exist
+			original();  // the game grows the rest of the maze from the rooms that exist
 			return;
 		}
 		// Arcane's spiral would pass a refused (null) room on as the next parent and crash: keep the rooms made, with their pieces, and stop.
@@ -730,13 +732,13 @@ void SteeredStep(void* level, WalkFn original, bool ownGrower) noexcept {
 
 void WalkHook(void* level) noexcept {
 	if (g_walkOriginal != nullptr) {  // else unreachable unless the loader gave no way back; there is nothing to call
-		SteeredStep(level, g_walkOriginal, false);
+		SteeredStep(level, [level] { g_walkOriginal(level); }, false, false);
 	}
 }
 
 void ArcaneGrowerHook(void* level) noexcept {
 	if (g_growerOriginal != nullptr) {
-		SteeredStep(level, g_growerOriginal, true);
+		SteeredStep(level, [level] { g_growerOriginal(level); }, true, true);
 	}
 }
 
@@ -831,6 +833,11 @@ void RingHook(void* level, int32_t n) noexcept {
 		return;
 	}
 	BuildCtx* ctx = t_ctx;
+	if (ctx != nullptr && ctx->steer && !ctx->fellBack && ctx->level == level && ctx->prep.plan->seedPlan.plan.ring.graphInRing) {
+		// No walk follows this tileset's ring grower (Harem, Palace Cellar): the plan's rooms are built here, in its place.
+		SteeredStep(level, [level, n] { g_ringOriginal(level, n); }, false, true);
+		return;
+	}
 	if (ctx != nullptr && ctx->steer && !ctx->fellBack && ctx->level == level && ctx->prep.plan->seedPlan.plan.ring.noOp) {
 		if (g_probe.load()) {
 			plog::Info("[maze probe] ring grower skipped (n %d)", n);
