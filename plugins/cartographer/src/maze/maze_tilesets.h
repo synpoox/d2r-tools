@@ -64,9 +64,13 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// special-room call (the Prev pieces 695..698, never placed). Offset x 0, y 0: the next free slot, clear of Arcane (500..860).
 	// docs/reverse-engineering/cartographer/39-dungeon-builder.md, docs/cartographer/tilesets/a3-dungeon.md.
 	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {0, 0, 0, 0}, true, 0, 0, 0},
-	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower and the walk, then two special-room calls
-	// (Next and Prev, never placed); the engine's Theme swap skips this type. Offset x 500, y 500: clear of Jail (x 0, y 500, #273) and Barracks (x 1000, y 500, #272); y 500..860 stays above the first Act 5 level (y 1000).
-	// docs/reverse-engineering/cartographer/41-lair-builder.md, docs/cartographer/tilesets/a2-maggot-lair.md.
+	// Jail (Act 1 Jail, LevelType 8, #273): 12-tile rooms, "Jail W" is Def 206 (base 205, 206..220). Its case calls the ring grower first, then the walk, then two
+	// special-room calls (Prev and Next, both suppressed): docs/reverse-engineering/cartographer/40-jail-case.md. Offset x 0, y 500: the y-0 band is full, so
+	// the next rows go in a second band below it (y 500..860, 500 under the first, still above the first Act 5 level at y 1000).
+	{"Jail", 8, "MazeJail", "Cartographer Jail", 12, 205, {0, 0, 0, 0}, true, 0, 500, 0},
+	// Lair (Act 2 Maggot Lair, LevelType 18, #279): 10-tile rooms, "Lair W" is Def 482 (base 481, 482..496). Its case calls the ring grower, the walk, then two
+	// special-room calls (Next and Prev, both suppressed): docs/reverse-engineering/cartographer/41-lair-builder.md. Offset x 500, y 500: the second band, right of Jail
+	// (x 0, y 500, #273) and clear of Barracks (x 1000, y 500, #272); y 500..860 stays above the first Act 5 level (y 1000).
 	{"Lair", 18, "MazeLair", "Cartographer Lair", 10, 481, {0, 0, 0, 0}, true, 500, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
