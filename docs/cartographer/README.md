@@ -86,7 +86,7 @@ The blank cell under `Level` for Tunneling Depths keeps level 85.
 
 ### The tilesets
 
-- **Indoor:** `Cave`, `Crypt`, `Ice` (Act 5 Ice caves), `Lava` (Act 4 Lava), `Durance` (Act 3 Durance of Hate), `Dungeon` (Act 3 Dungeon), `Jail` (Act 1 Jail), `Lair` (Act 2 Maggot Lair), `KurastSewer` (Act 3 Kurast Sewers), `Barracks` (Act 1 Barracks), `Harem` (Act 2 Harem), `Basement` (Act 2 Palace Cellar; Harem, Basement and Spider are always one ring of four rooms). `Sewer` (Act 2 Sewers), `Spider` (Act 3 Spider Cavern). More follow: `Temple`. Act 5 Lava follows under its own name (not yet set).
+- **Indoor:** `Cave`, `Crypt`, `Ice` (Act 5 Ice caves), `Lava` (Act 4 Lava), `Durance` (Act 3 Durance of Hate), `Dungeon` (Act 3 Dungeon), `Jail` (Act 1 Jail), `Lair` (Act 2 Maggot Lair), `KurastSewer` (Act 3 Kurast Sewers), `Barracks` (Act 1 Barracks), `Harem` (Act 2 Harem), `Basement` (Act 2 Palace Cellar; Harem, Basement and Spider are always one ring of four rooms). `Sewer` (Act 2 Sewers), `Catacombs` (Act 1 Catacombs), `Spider` (Act 3 Spider Cavern). More follow: `Temple`. Act 5 Lava follows under its own name (not yet set).
 - **Outdoor:** `Jungle`, `Snow`, `Siege` (Act 5 Bloody Foothills, one strip), then `Mesa` (Act 4 plains), `Desert` (Act 2 sand), `Wilderness` (Act 1 fields) and `Kurast` (Act 3 Burbs district), the framed fields.
 
 A tileset that is not ready is refused when the game loads, with a message that says so.
