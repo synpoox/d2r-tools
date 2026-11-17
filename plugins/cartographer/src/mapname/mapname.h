@@ -56,7 +56,7 @@ auto BossStringsJson(const std::vector<std::string>& names) -> std::string;
 // this text for MapLevelStatLocalKey. The text is a format that takes the stat's value (descfunc 19).
 inline constexpr const char* MapLevelStatLocalKey = "map_level_stat";
 inline constexpr const char* MapLevelStatText = "Area Level: %d";
-// The monster-side map stats (statplan monsterStats()): itemstatcost.txt row `cartographer_<key>`, description key RowKey(plugin id, key), and the text, a format that
+// The monster-side map stats (the Monster rows of statplan builtInRoutes()): itemstatcost.txt row `cartographer_<key>`, description key RowKey(plugin id, key), and the text, a format that
 // takes the stat's signed value.
 struct MonsterStatText {
 	const char* key;
@@ -70,7 +70,7 @@ inline constexpr MonsterStatText MonsterStatTexts[] = {
     {"mon_light_res", "%+d%% Monster Lightning Resistance"},
     {"mon_poison_res", "%+d%% Monster Poison Resistance"},
     {"mon_speed", "%+d%% Monster Speed"},
-    {"map_density", "%+d%% Map Density"},  // not a monster stat: the bonus Density of the map (statplan mapDensityBonus)
+    {"map_density", "%+d%% Map Density"},  // not a monster stat: the bonus Density of the map (statplan route `Area Density`, MapRouting::area)
 };
 auto MapStatStringsJson() -> std::string;
 

@@ -17,6 +17,7 @@
 #include <initializer_list>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 
 namespace carto {
@@ -41,6 +42,7 @@ constexpr int32_t UnitMonster = 1;
 constexpr int SpawnRoomOffset = 0x08;      // the monster setup's first argument: +8 is the room (the spawn block)
 constexpr int32_t StatLevel = 12;          // 0xc: the monster level stat
 constexpr int32_t StatMaxLife = 7;         // maxhp, in 1/256 life
+constexpr int32_t StatAlignment = 172;     // the unit's alignment, as the game's UnitAlignment (0x2f4190) reads it: 0 hostile, 1 neutral, 2 ally (docs/reverse-engineering/cartographer/07-map-stats-parts.md, "Alignment")
 constexpr int MonsterProbes = 6;           // monsters logged in full per game
 constexpr int MaxEntries = 32;             // stats read back per probe
 constexpr int DtStatesRowsOffset = 0x290;  // on the data tables base: the compiled states rows pointer; the 64-bit count is at +0x298
@@ -91,6 +93,7 @@ Part g_parts[PartCount] = {
 std::mutex g_lock;
 // The armed maps' plans, keyed by slot level: a map opened later leaves the earlier maps' stats alone. Guarded by g_lock.
 std::map<int, std::shared_ptr<const sp::Plan>> g_plans;
+std::map<int, sp::MapRouting> g_routing;  // the area and behaviour sums of the maps opened this game, keyed by slot level; guarded by g_lock
 int g_lastSlot = -1;                     // the slot level of the newest map opened (its plan is the one the counts show); guarded by g_lock
 std::map<uint32_t, int> g_listLevels;    // the slot level each player's list was made for; guarded by g_lock
 sp::PlayerLists g_lists;                 // lists put on players; guarded by g_lock
@@ -101,6 +104,7 @@ std::atomic<bool> g_playerSetting{false};  // PlayerStats=1 in cartographer.txt 
 uint64_t g_generation = 0;               // counts games left; guarded by g_lock. A list made in an earlier game is never tracked
 std::atomic<int> g_monsterCount{0};      // monsters given a list in this map
 std::atomic<int> g_monsterFailed{0};
+std::atomic<int> g_monsterSkipped{0};    // monsters left alone because they are not hostile (summons, mercenaries, allies)
 std::atomic<int> g_playerCount{0};
 std::atomic<bool> g_chainLogged{false};  // the first player's list chain was logged this game
 std::atomic<bool> g_stateRefused{false};  // the state for the player's list was refused this map: logged once, nothing more is tried
@@ -242,6 +246,16 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		return;
 	}
 	if (!sp::monsterGetsStats(true, levelId, levelId)) {
+		return;
+	}
+	// Only a hostile unit gets the map's stats: a player's summon, a mercenary or an ally spawns in the map too. The alignment is set before
+	// this setup call runs (spawn core order, cartographer/06-stats-events-checks.md). Not readable (UnitStat part off): -1, treated as hostile.
+	const int32_t alignment = Stat(monster, StatAlignment);
+	if (!sp::monsterGetsMapStats(alignment)) {
+		const int skipped = ++g_monsterSkipped;
+		if (skipped == 1 || skipped % 100 == 0) {
+			plog::Info("map stats: a monster with alignment %d is not hostile, so it gets no map stats (%d so far)", alignment, skipped);
+		}
 		return;
 	}
 	const int number = g_monsterCount.load() + g_monsterFailed.load();
@@ -580,12 +594,25 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		return;
 	}
 	const int slot = SlotLevel(tables->slots, MapSlotName(map));
+	const auto mapped = sp::itemStatsToProperties(itemStats, tables->statIds, tables->routes);
+	{
+		std::lock_guard<std::mutex> lock(g_lock);
+		g_routing[slot] = mapped.routing;
+	}
+	for (const sp::KeyedValue& k : mapped.routing.behaviours) {
+		// A behaviour key with no handler yet is logged once per game and skipped (the handlers come with issue #538).
+		static std::mutex noted;
+		static std::set<std::string> seen;
+		std::lock_guard<std::mutex> lock(noted);
+		if (!sp::behaviourHandled(k.key) && seen.insert(k.key).second) {
+			plog::Warn("map stats: behaviour '%s' has no handler in this version, so it does nothing", k.key.c_str());
+		}
+	}
 	if (!g_monstersOn.load() && !g_playersOn.load()) {
 		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {}, densityBonus);  // the level only, no properties
 		MapPanelMapOpened(text.gold, text.blue, slot);
 		return;
 	}
-	const auto mapped = sp::itemStatsToProperties(itemStats, tables->statIds);
 	for (const std::string& line : mapped.dropped) {
 		plog::Warn("map item stats: %s", line.c_str());
 	}
@@ -617,6 +644,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	g_lastSlot = slot;
 	g_monsterCount = 0;
 	g_monsterFailed = 0;
+	g_monsterSkipped = 0;
 	g_playerCount = 0;
 	g_stateRefused = false;
 	UpdateBusy();
@@ -688,6 +716,7 @@ void StatApplyGameLeft() noexcept {
 		const bool had = !g_plans.empty();
 		++g_generation;
 		g_plans.clear();
+		g_routing.clear();
 		g_lastSlot = -1;
 		g_listLevels.clear();
 		g_lists.clear();  // the game frees the units and their lists; nothing is touched here
@@ -698,9 +727,16 @@ void StatApplyGameLeft() noexcept {
 	}
 	g_monsterCount = 0;
 	g_monsterFailed = 0;
+	g_monsterSkipped = 0;
 	g_playerCount = 0;
 	g_chainLogged = false;
 	g_stateRefused = false;
+}
+
+auto StatApplyMapRouting(int slotLevel) -> cartographer::statplan::MapRouting {
+	std::lock_guard<std::mutex> lock(g_lock);
+	const auto it = g_routing.find(slotLevel);
+	return it != g_routing.end() ? it->second : sp::MapRouting{};
 }
 
 auto StatApplyPartStatuses() -> std::vector<PartStatus> {

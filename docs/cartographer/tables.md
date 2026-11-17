@@ -157,6 +157,22 @@ Example rows (columns not named are as in the vanilla file; `spawnable` 1, `rare
 
 Name text: the game shows an affix by its `Name` as a string key. Add the names to your strings (a missing one shows as the key, and the log notes `Missing string`).
 
+## statroutes.txt (optional)
+
+Where a map item's stat goes. Every stat the item carries is routed: the seven `cartographer_mon_*` stats go to the monsters, `cartographer_map_density` adds to the map's `Density`, and any other stat goes to the player as before. A row here adds a route for a stat of your own mod, or overrides a built-in one. Edit it, run `cartographer check`.
+
+| Column | Meaning |
+|---|---|
+| `Stat` | The itemstatcost.txt stat on the map item. Not `cartographer_map_level`. Each stat once. |
+| `Target` | `Monster` (monsters get the `Apply` stat), `Player` (the player gets it), `Area` (adds to an area value), `Behaviour` (a number a behaviour reads), `None` (the stat does nothing). |
+| `Apply` | Monster and Player: the itemstatcost.txt stat that is applied (blank on Player: the stat itself). Area: the value, `Density`. Behaviour: the behaviour key. Not another routed stat: routes do not chain. |
+| `Value` | Optional whole number, not 0. Replaces the item's own value. Blank uses the item's value. |
+| `Param` | Optional, Behaviour only: a label told apart in the sum, e.g. which drop. Ignored elsewhere. |
+
+Values of the same area value or behaviour key add up over the item's affixes. A behaviour key no Cartographer version handles is noted by `cartographer check` and logged once, and the stat does nothing. `check` suggests the nearest name for a misspelt stat or target, and notes an `Apply` whose itemstatcost.txt `Op` is 13, which the game may not add the way the item shows.
+
+Monster stats are applied to hostile monsters only: summons, mercenaries and other allies get none.
+
 Retired: `mapstats.txt`, the `Properties` column and setting and `ItemStats`. A file or column left over is ignored and `cartographer check` says so.
 
 ## bosses.txt (optional)

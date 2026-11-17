@@ -659,6 +659,120 @@ auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -
 	return out;
 }
 
+auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds& ids, Report& report) -> std::vector<cartographer::statplan::Route> {
+	namespace sp = cartographer::statplan;
+	std::vector<sp::Route> out;
+	const Tsv table = ParseTsv(text);
+	if (NoteIfEmpty(StatRoutesFile, table, report) || !RequireColumns(StatRoutesFile, table, {"Stat", "Target", "Apply"}, report)) {
+		return out;
+	}
+	ReportRepeatedColumns(StatRoutesFile, table, report);
+	NoteUnusedColumns(StatRoutesFile, table, {"Stat", "Target", "Apply", "Value", "Param"}, report);
+	const int cStat = table.Column("Stat"), cTarget = table.Column("Target"), cApply = table.Column("Apply"), cValue = table.Column("Value"), cParam = table.Column("Param");
+	const std::vector<std::string> targets = {"monster", "player", "area", "behaviour", "none"};
+	// Every stat that has a route: the built-ins and this file's rows. An Apply must not be one (no chains).
+	std::vector<std::string> routed;
+	for (const sp::Route& r : sp::builtInRoutes()) {
+		routed.push_back(r.stat);
+	}
+	for (const TsvRow& r : table.rows) {
+		routed.push_back(table.Cell(r, cStat));
+	}
+	for (const TsvRow& r : table.rows) {
+		sp::Route route;
+		bool ok = true;
+		const auto fail = [&](const std::string& message) {
+			report.Error(StatRoutesFile, r.line, message + " This row is skipped.");
+			ok = false;
+		};
+		const auto statCheck = [&](const char* what, const std::string& name) {
+			if (ids.loaded && ids.find(name) < 0) {
+				const std::string near = ids.suggest(name);
+				fail(std::string(what) + " '" + name + "' is not a Stat in itemstatcost.txt." + (near.empty() ? std::string() : " Did you mean '" + near + "'?"));
+			}
+		};
+		const auto paramIgnored = [&]() {
+			if (ok && !route.param.empty()) {
+				report.Note(StatRoutesFile, r.line, "the Param cell is only used by Behaviour routes and is ignored here.");
+				route.param.clear();
+			}
+		};
+		route.stat = table.Cell(r, cStat);
+		const std::string targetWord = table.Cell(r, cTarget);
+		route.apply = table.Cell(r, cApply);
+		route.param = table.Cell(r, cParam);
+		if (route.stat.empty()) {
+			fail("the Stat cell is empty.");
+		} else if (route.stat == sp::kMapLevelStat) {
+			fail("'" + route.stat + "' cannot be routed: the plugin uses it for the map's level.");
+		} else {
+			statCheck("Stat", route.stat);
+		}
+		for (const sp::Route& other : out) {
+			if (ok && other.stat == route.stat) {
+				fail("'" + route.stat + "' already has a route in this file.");
+			}
+		}
+		const std::string* target = Canonical(targets, targetWord);
+		if (target == nullptr) {
+			fail("Target '" + targetWord + "' is not known." + DidYouMean(targetWord, targets) + " Use " + OneOf(targets) + ".");
+		} else if (*target == "monster" || *target == "player") {
+			route.target = *target == "monster" ? sp::RouteTarget::Monster : sp::RouteTarget::Player;
+			if (route.apply.empty() && route.target == sp::RouteTarget::Monster) {
+				fail("the Apply cell is empty. Put the itemstatcost.txt stat that monsters get.");
+			} else if (!route.apply.empty()) {
+				statCheck("Apply", route.apply);
+				if (ok && route.apply != route.stat && std::find(routed.begin(), routed.end(), route.apply) != routed.end()) {
+					fail("Apply '" + route.apply + "' is itself a routed stat, and routes do not chain. Name the game's stat it should end up as.");
+				}
+				if (ok && ids.loaded) {
+					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply));
+					if (!refused.empty()) {
+						fail(refused);
+					}
+				}
+				if (ok && ids.opOf(route.apply) == 13) {
+					report.Note(StatRoutesFile, r.line, "warning: Apply '" + route.apply + "' has Op 13 in itemstatcost.txt; the game may not add its value the way the item shows it, so check it in game.");
+				}
+			}
+			paramIgnored();
+		} else if (*target == "area") {
+			route.target = sp::RouteTarget::Area;
+			const std::string canonical = sp::canonicalAreaParam(route.apply);
+			if (canonical.empty()) {
+				fail("area param '" + route.apply + "' is not known." + DidYouMean(route.apply, sp::knownAreaParams()) + " Use " + OneOf(sp::knownAreaParams()) + ".");
+			} else {
+				route.apply = canonical;
+			}
+			paramIgnored();
+		} else if (*target == "behaviour") {
+			route.target = sp::RouteTarget::Behaviour;
+			if (route.apply.empty()) {
+				fail("the Apply cell is empty. Put the behaviour key here.");
+			} else if (!sp::behaviourHandled(route.apply)) {
+				report.Note(StatRoutesFile, r.line, "behaviour '" + route.apply + "' has no handler in this version of Cartographer, so the stat will do nothing.");
+			}
+		} else {
+			route.target = sp::RouteTarget::None;
+			route.apply.clear();
+			paramIgnored();
+		}
+		const std::string value = table.Cell(r, cValue);
+		if (ok && !value.empty()) {
+			int v = 0;
+			if (!ParseInt(value, -2147483647, 2147483647, &v) || v == 0) {
+				fail("Value '" + value + "' is not a whole number other than 0. Leave it blank to use the item's own value.");
+			} else {
+				route.value = v;
+			}
+		}
+		if (ok) {
+			out.push_back(std::move(route));
+		}
+	}
+	return out;
+}
+
 auto LoadMapEvents(std::string_view text, Report& report) -> std::vector<cartographer::events::Row> {
 	using cartographer::events::Row;
 	std::vector<Row> rows;

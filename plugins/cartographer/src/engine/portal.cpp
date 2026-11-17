@@ -644,13 +644,12 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
-	// Bonus Density: the sum over the item's affixes is added to the map's Density (uncapped), then the stat is taken out like the level.
-	const int densityBonus = cartographer::statplan::mapDensityBonus(itemStats, tables->statIds);
+	// Bonus Density: the sum over the item's affixes (the Density area param of the stat routes) is added to the map's Density (uncapped).
+	const int densityBonus = cartographer::statplan::itemStatsToProperties(itemStats, tables->statIds, tables->routes).routing.area("Density");
 	if (densityBonus != 0) {
 		opening.density = cartographer::statplan::densityWithBonus(map->density, densityBonus);
 		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
 	}
-	itemStats = cartographer::statplan::withoutMapDensity(itemStats, tables->statIds);
 	std::string refusal;
 	const int32_t opened = OpenMapPortal(game, player, opening, *tables, level, &refusal);
 	if (!refusal.empty()) {

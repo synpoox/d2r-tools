@@ -1985,3 +1985,96 @@ TEST_CASE("findSpot: by level and name, ignoring case; unknown level or name giv
 	CHECK(FindArenaSpot(arenas, 201, "centre") == nullptr);
 	CHECK(FindArenaSpot(arenas, 200, "portal1") == nullptr);
 }
+
+// --- statroutes.txt (issue #537) ----------------------------------------------------------------------------------
+
+namespace {
+
+cartographer::statplan::StatIds RouteTestIds() {
+	// 0 strength, 1 fireresist, 2 item_maxhp_percent, 3 cartographer_mon_life, 4 mon_thorns, 5 cartographer_my_stat, 18 item_goldbonus (Op 13)
+	std::string text = "Stat\tOp\nstrength\t\nfireresist\t\nitem_maxhp_percent\t\ncartographer_mon_life\t\nmon_thorns\t\ncartographer_my_stat\t\n";
+	for (int i = 0; i < 12; ++i) {
+		text += "filler" + std::to_string(i) + "\t\n";  // keeps the next row clear of the ids buildPlan refuses (4-15)
+	}
+	return cartographer::statplan::parseItemStatCost(text + "item_goldbonus\t13\n");
+}
+
+bool SayCloseTo(const Report& r, const char* part) {
+	for (const auto& p : r.problems) {
+		if (p.text.find(part) != std::string::npos) {
+			return true;
+		}
+	}
+	return false;
+}
+
+}  // namespace
+
+TEST_CASE("statroutes.txt: a good file gives its routes, with no problems") {
+	using cartographer::statplan::RouteTarget;
+	Report report;
+	const auto routes = LoadStatRoutes("Stat\tTarget\tApply\tValue\tParam\n"
+	                                   "cartographer_my_stat\tMonster\tmon_thorns\t50\t\n"
+	                                   "cartographer_mon_life\tplayer\t\t\t\n"
+	                                   "item_goldbonus\tnone\t\t\t\n"
+	                                   "strength\tarea\tdensity\t\t\n"
+	                                   "fireresist\tbehaviour\tmap_x\t\t7\n",
+	                                   RouteTestIds(), report);
+	REQUIRE(routes.size() == 5);
+	CHECK(report.Errors() == 0);
+	CHECK(routes[0].target == RouteTarget::Monster);
+	CHECK(routes[0].apply == "mon_thorns");
+	CHECK(routes[0].value == 50);
+	CHECK(routes[1].target == RouteTarget::Player);
+	CHECK(routes[2].target == RouteTarget::None);
+	CHECK(routes[3].target == RouteTarget::Area);
+	CHECK(routes[3].apply == "Density");
+	CHECK(routes[4].target == RouteTarget::Behaviour);
+	CHECK(routes[4].param == "7");
+	CHECK(SayCloseTo(report, "no handler"));  // a Note, not an error
+}
+
+TEST_CASE("statroutes.txt: bad rows are errors that skip the row") {
+	const auto ids = RouteTestIds();
+	const auto bad = [&](const char* row, const char* expect) {
+		Report report;
+		const auto routes = LoadStatRoutes(std::string("Stat\tTarget\tApply\tValue\n") + row + "\n", ids, report);
+		CHECK_MESSAGE(routes.empty(), row);
+		CHECK_MESSAGE(report.Errors() == 1, row);
+		CHECK_MESSAGE(SayCloseTo(report, expect), row);
+	};
+	bad("cartographer_my_stat\tmonstr\tmon_thorns\t", "Did you mean 'monster'");
+	bad("cartographer_my_stat\tmonster\tmon_thorsn\t", "Did you mean 'mon_thorns'");
+	bad("cartographer_my_stats\tmonster\tmon_thorns\t", "Did you mean 'cartographer_my_stat'");
+	bad("cartographer_map_level\tnone\t\t", "cannot be routed");
+	bad("cartographer_my_stat\tmonster\tcartographer_mon_life\t", "do not chain");
+	bad("cartographer_my_stat\tmonster\t\t", "Apply cell is empty");
+	bad("cartographer_my_stat\tmonster\tmon_thorns\t0", "not a whole number");
+	bad("cartographer_my_stat\tmonster\tmon_thorns\tabc", "not a whole number");
+	bad("cartographer_my_stat\tarea\tdensty\t", "Did you mean 'Density'");
+	bad("cartographer_my_stat\tbehaviour\t\t", "behaviour key");
+}
+
+TEST_CASE("statroutes.txt: a repeated Stat is an error, an Op 13 Apply is a warning note") {
+	Report dup;
+	const auto two = LoadStatRoutes("Stat\tTarget\tApply\ncartographer_my_stat\tnone\t\ncartographer_my_stat\tplayer\t\n", RouteTestIds(), dup);
+	CHECK(two.size() == 1);
+	CHECK(dup.Errors() == 1);
+	CHECK(SayCloseTo(dup, "already has a route"));
+	Report op13;
+	const auto one = LoadStatRoutes("Stat\tTarget\tApply\ncartographer_my_stat\tplayer\titem_goldbonus\n", RouteTestIds(), op13);
+	CHECK(one.size() == 1);
+	CHECK(op13.Errors() == 0);
+	REQUIRE(op13.problems.size() == 1);
+	CHECK(op13.problems[0].severity == Severity::Note);
+	CHECK(op13.problems[0].text.find("warning:") == 0);
+}
+
+TEST_CASE("statroutes.txt: missing columns are an error and an empty file is a note") {
+	Report missing;
+	CHECK(LoadStatRoutes("Stat\tApply\nx\ty\n", RouteTestIds(), missing).empty());
+	CHECK(missing.Errors() >= 1);
+	Report empty;
+	CHECK(LoadStatRoutes("", RouteTestIds(), empty).empty());
+	CHECK(empty.Errors() == 0);
+}

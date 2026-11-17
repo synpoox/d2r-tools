@@ -29,6 +29,11 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
                         const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0);
 
+// What the open map's item gave its area params and behaviours (statplan MapRouting: `area("Density")`, `behaviour(key)`), for the map in
+// slot level `slotLevel` (the level the map opened through); empty when no map is open there. Any thread. Set when the map opens, whether or not
+// the monster and player halves are on, and forgotten when the game is left. Issues #538 (behaviours) and #539 (area params) read it.
+auto StatApplyMapRouting(int slotLevel) -> cartographer::statplan::MapRouting;
+
 // The PlayerStats setting of cartographer.txt (on by default). While off, nothing is ever attached to the player. While on, the
 // player's list sits on the unit until the next tick outside the map; the save writer was seen to write base stats only
 // (one Save and Exit, docs/reverse-engineering/cartographer/07-map-stats-parts.md); an autosave in the map is untested.

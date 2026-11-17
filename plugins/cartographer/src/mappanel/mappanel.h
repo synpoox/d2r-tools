@@ -42,15 +42,17 @@ std::string statLine(const Stat &stat);
 // property lines, then "Players have" and its lines (a group with no property is left out). Header lines are in `gold`, property
 // lines in `blue`. `density` is the bonus Density the map item's properties add (not the maps.txt Density), a monster value: "+N% Monster
 // Density" ends the Monsters group (left out at 0). Magic find is a player stat from the affixes (maps.txt has no MF column), so stats of one
-// name and group are added up into one line. The map's name is not in it: the game shows it above Difficulty. Both empty when
+// name and group are added up into one line. More than kMaxStatLines stat lines are cut (monsters first) and end in "and N more". The map's name is not in it: the game shows it above Difficulty. Both empty when
 // there is nothing to show.
 PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0);
 
-// The most lines panelText can give: the level, "Monsters have", one line for each monster-side map stat (statplan monsterStats(): 7), the
-// Density, "Players have" and the most player stats the game sends (statplan kMaxPlayerStats: 16).
-constexpr int kMaxMonsterLines = 7;  // statplan monsterStats().size(); a test ties the two
+// The most property lines panelText shows, monster and player together: the 7 monster-side built-in stats plus the 16 player stats the game
+// sends (statplan kMaxPlayerStats). The route table can hold more monster stats than that, so a longer list ends in one "and N more" line instead
+// of growing the panel. Density has its own line.
 constexpr int kMaxPlayerLines = 16;  // statplan kMaxPlayerStats
-constexpr int kMaxLines = 1 + 1 + kMaxMonsterLines + 1 + 1 + kMaxPlayerLines;
+constexpr int kMaxStatLines = 7 + kMaxPlayerLines;
+// The most lines panelText can give: the level, "Monsters have", the stat lines, the Density, "Players have" and the "and N more" line.
+constexpr int kMaxLines = 1 + 1 + 1 + 1 + kMaxStatLines + 1;
 
 // The panel's layout, in layout units (twice the 1080p pixels): where it starts, the height of one text line at the panel's font size
 // (measured live) and the most blank lines of padding it puts in front of the text.
