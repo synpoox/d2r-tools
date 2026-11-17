@@ -52,3 +52,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [46. The maze builder's case for the Act 1 Catacombs and its grower (issue #275)](cartographer/46-catacombs-grower.md)
 - [47. The Act 2 Tombs growers (issue #242)](cartographer/47-tomb-growers.md)
 - [48. The maze builder's case for the Act 3 Spider Cavern (issue #284)](cartographer/48-spider-builder.md)
+- [49. The maze builder's case for the Act 5 Nihlathak Temples (issue #290)](cartographer/49-temple-builder.md)

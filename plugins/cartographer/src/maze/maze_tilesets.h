@@ -28,7 +28,7 @@ struct MazeTileset {
 	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
 	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
-	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar, Spider): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
+	int ringPieces[4];      // not 0: a ring-only tileset (Harem, Palace Cellar, Spider, Temple): one fixed ring of four rooms whose corner pieces are NE, SE, SW, NW (the picker's table by exit mask); the ring grower's hook builds it
 	bool tombGrowers;       // Tombs (note 47): the case calls two growers of its own, 0x3ea0e0 before the walk and 0x3eb610 after it, which every slot-level build skips (engine/tomb_growers.cpp)
 };
 
@@ -41,6 +41,12 @@ inline constexpr int levelTiles = 360;
 // (Test-AutomapRange) and refuses an offset that fails it.
 constexpr bool automapInRange(int offsetX, int offsetY, int size) noexcept {
 	return offsetX - offsetY + size <= 4095 && offsetY - offsetX + size <= 4096 && offsetX + offsetY + 2 * size <= 8191;
+}
+
+// The tiles a row's level reserves in the overlap and range tests and in the installer (its levels.txt SizeX and SizeY). A plain maze row keeps the 360 of its largest plan. A ring-only
+// row is always one 2 x 2 ring, which builds a level 3 rooms a side (Harem 3 x 16 = 48, Temple 3 x 40 = 120), so it reserves only that.
+constexpr int reservedTiles(const MazeTileset &t) noexcept {
+	return t.ringPieces[0] == 0 ? levelTiles : 3 * (t.roomTiles > t.roomTilesY ? t.roomTiles : t.roomTilesY);
 }
 
 // The row order is the slot index in the maze hooks. Cave keeps the slot "Maze" of the installs before the table existed.
@@ -105,6 +111,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// Spider Cavern (Act 3 Spider, LevelType 23, #284): 16-tile rooms. Its case is the Harem/Basement case (one ring grower call, no walk); the picker's mask table gives SW 659,
 	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3860, y 130: no 360-wide spot of the two bands is left once #522 (3500, 500) and #523 (4000, 500) land; this is the free spot between them and the y-0 band (docs/cartographer/adding-a-tileset.md). docs/reverse-engineering/cartographer/48-spider-builder.md.
 	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3860, 130, 0, false, 0, {662, 660, 659, 661}},
+	// Temple (Act 5 Nihlathak Temples, LevelType 32, #290): 40-tile rooms. Its case is the Harem case plus one special-room call (a Down piece, always suppressed); the picker's mask table gives
+	// the corners NE 1042, SE 1044, SW 1045, NW 1043 (the Down 1046..1048 and Waypoint 1049..1052 variants only come from special-room calls). Def 1044 (SE) holds the Up stairs (tile 11/0/0, 11/0/1), so every Temple map has stairs in its SE room; the owner allowed the inert stairs as an exception to #455 (2026-11-17); one BC_VERIFY ptWarp at build, no crash. Its level is 120 tiles (reservedTiles),
+	// so it sits in the second band under Harem, which is 48 wide: x 2000, y 600. docs/reverse-engineering/cartographer/49-temple-builder.md, docs/cartographer/tilesets/a5-nihlathak-temples.md.
+	{"Temple", 32, "MazeTemple", "Cartographer Temple", 40, 0, {0, 0, 0, 0}, true, 2000, 600, 0, false, 0, {1042, 1044, 1045, 1043}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

@@ -26,7 +26,7 @@ try {
         $c = @{ Name = $name; Id = "$id"; Act = "$act"; DrlgType = "$drlg"; LevelType = "$type"; Depend = '0'; OffsetX = '0'; OffsetY = '0'; Position = '0'; SizeX = '48'; SizeY = '48'; Quest = '0'; QuestFlag = $(if ($type -eq 22) { '18' } else { '0' }); QuestFlagEx = $(if ($type -eq 22) { '18' } else { '0' }); LevelGroup = 'Null'; LevelName = $name; LevelEntry = ''; LevelWarp = ''; SubType = '-1'; SubTheme = '-1'; Waypoint = '255' }
         , @($lh | ForEach-Object { if ($c.ContainsKey($_)) { $c[$_] } elseif ($_ -like 'Vis*') { '0' } elseif ($_ -like 'Warp*') { '-1' } else { '' } })
     }
-    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Icy Cellar' 119 4 1 33), (Level 'Mephisto 1' 100 2 1 22), (Level 'Arcane Sanctuary' 74 1 1 19), (Level 'Swampy Pit Level 1' 86 2 1 24), (Level 'Jail 1' 29 0 1 8), (Level 'Lair 1 A' 62 1 1 18), (Level 'Sewer Level 1' 92 2 1 25), (Level 'Barracks' 28 0 1 7), (Level 'Sewers 1 A' 47 1 1 13), (Level 'Catacombs Level 1' 34 0 1 10), (Level 'Harem Level 2' 51 1 1 14), (Level 'Palace Cellar Level 1' 52 1 1 15), (Level 'Tomb 1 A' 55 1 1 17), (Level 'Spider Cavern' 84 2 1 23), (Level 'Last' 136 4 3 21))
+    Write-Tsv 'levels.txt' $lh @((Level 'Cave 1' 8 0 1 3), (Level 'Crypt 1' 9 0 1 4), (Level 'River of Flame' 107 3 1 28), (Level 'Bloody Foothills' 110 4 3 30), (Level 'Barricade 1' 111 4 3 21), (Level 'Frozen Tundra' 117 4 3 31), (Level 'Icy Cellar' 119 4 1 33), (Level 'Mephisto 1' 100 2 1 22), (Level 'Arcane Sanctuary' 74 1 1 19), (Level 'Swampy Pit Level 1' 86 2 1 24), (Level 'Jail 1' 29 0 1 8), (Level 'Lair 1 A' 62 1 1 18), (Level 'Sewer Level 1' 92 2 1 25), (Level 'Barracks' 28 0 1 7), (Level 'Sewers 1 A' 47 1 1 13), (Level 'Catacombs Level 1' 34 0 1 10), (Level 'Harem Level 2' 51 1 1 14), (Level 'Palace Cellar Level 1' 52 1 1 15), (Level 'Tomb 1 A' 55 1 1 17), (Level 'Spider Cavern' 84 2 1 23), (Level 'Halls of Anguish' 122 4 1 32), (Level 'Last' 136 4 3 21))
     Write-Tsv 'lvlmaze.txt' @('Name', 'Level', 'Rooms', 'SizeX', 'SizeY', 'Merge') @(, @('Cave 1', '8', '3', '10', '10', '0'))
     $ih = @('ItemType', 'Code', 'Equiv1', 'Equiv2', 'Repair', 'Body', 'Throwable', 'Reload', 'ReEquip', 'AutoStack', 'Normal', 'Beltable', 'Shoots', 'Quiver', 'BodyLoc1', 'BodyLoc2', 'Rare', 'Magic')
     Write-Tsv 'itemtypes.txt' $ih @(, @('Herb', 'herb', 'misc', '', '0', '0', '0', '0', '0', '0', '1', '1', '', '', '', '', '0', '0'))
@@ -123,6 +123,19 @@ try {
     $before = (Get-FileHash $typePath).Hash
     $log7 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
+
+    # An old install's ring-only level (Spider, Size 360) is shrunk to the 48 tiles its ring builds, and a run after that changes nothing.
+    $levelsPath = Join-Path $dir 'levels.txt'
+    $iSx = $lh.IndexOf('SizeX'); $iSy = $lh.IndexOf('SizeY')
+    $spiderLine = @(Get-Content $levelsPath | Where-Object { $_.StartsWith("Cartographer Spider`t") })[0]
+    $sp = $spiderLine -split "`t"; $sp[$iSx] = '360'; $sp[$iSy] = '360'
+    [System.IO.File]::WriteAllText($levelsPath, [System.IO.File]::ReadAllText($levelsPath).Replace($spiderLine, ($sp -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $null = Run-Installer
+    $sp2 = @(Read-Rows 'levels.txt' | Where-Object { $_[0] -eq 'Cartographer Spider' })[0]
+    Check ($sp2[$iSx] -eq '48' -and $sp2[$iSy] -eq '48') "an old Spider level at 360 is shrunk to 48 (got $($sp2[$iSx]) x $($sp2[$iSy]))"
+    $before = (Get-FileHash $levelsPath).Hash
+    $null = Run-Installer
+    Check ((Get-FileHash $levelsPath).Hash -eq $before) 'a run after the shrink changes nothing'
 
     # Cartographer's own row from pd2-resurrected's merge is named CartographerMap (code cmap). Identical to the installer's row, it counts as installed:
     # the run passes and changes nothing. The same code under another item type name is refused, and the refused run writes nothing: no table, no

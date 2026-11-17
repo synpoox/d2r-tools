@@ -93,13 +93,6 @@ TEST_CASE("a typo gets a plain-English message with a suggestion and the row num
 	CHECK(report.Errors() == 1);
 }
 
-TEST_CASE("a known tileset that cannot be built yet is refused plainly") {
-	Report report;
-	const auto maps = Load("Temple One\tTemple\tWinding\t\t\tt20\n", report);
-	CHECK(maps.empty());
-	CHECK(Joined(report).find("planned but Cartographer cannot build it yet") != std::string::npos);
-}
-
 TEST_CASE("the Open shape loads for Cave, Crypt and Jungle; Snow takes no Shape, so Open is refused there with a report line") {
 	Report report;
 	const auto maps = Load(
@@ -1392,7 +1385,7 @@ TEST_CASE("the tileset names, the ready list and the outdoor slot helpers follow
 	CHECK(all[23] == "Wilderness");
 	CHECK(all[24] == "Kurast");
 	const auto ready = ReadyTilesetNames();
-	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Catacombs", "Tombs", "Spider", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
+	const std::vector<std::string> want = {"Cave", "Crypt", "Lava", "Ice", "Durance", "Arcane", "Dungeon", "Jail", "Lair", "KurastSewer", "Barracks", "Harem", "Basement", "Sewer", "Catacombs", "Tombs", "Spider", "Temple", "Jungle", "Snow", "Siege", "Mesa", "Desert", "Wilderness", "Kurast"};
 
 	CHECK(ready == want);
 	CHECK(OutdoorLevelType("Jungle") == 21);

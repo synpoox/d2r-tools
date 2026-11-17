@@ -8,6 +8,7 @@
 #include "tsv.h"
 
 #include <algorithm>
+#include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -23,13 +24,11 @@ struct Tileset {
 	bool ready;
 };
 
-// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement and Sewer) are buildable through the maze
+// Plan section 3.5. The maze tilesets (the table in maze/maze_tilesets.h, listed before these: Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider and Temple) are buildable through the maze
 // steering hooks, which need the tileset's slot; the outdoor tilesets (the table in
 // outdoor/outdoor_tilesets.h, listed after these) are buildable through the outdoor build hook, which needs the tileset's slot
 // (each is checked when the map opens); the others are accepted names that the loader refuses with a message that says so, until their builders ship.
-constexpr Tileset Tilesets[] = {
-	{"Temple", false},
-};
+constexpr std::array<Tileset, 0> Tilesets{};  // every planned tileset now has a builder; a new planned name goes here with ready false
 
 const std::vector<std::string> Shapes = {"Corridor", "Winding", "Branching", "Loop", "Sprawl", "Open"};
 const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"};
@@ -290,7 +289,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		const cartographer::outdoor::OutdoorTileset* shapeRow = map.tileset.empty() ? nullptr : cartographer::outdoor::findOutdoorTileset(map.tileset);
 		const bool ignoresShape = shapeRow != nullptr && (shapeRow->planner == cartographer::outdoor::Planner::Snow || shapeRow->planner == cartographer::outdoor::Planner::Siege || shapeRow->planner == cartographer::outdoor::Planner::FrameFill);
 		if (fixedRing) {
-			// One shape (#277, #278): Harem, Palace Cellar and Spider maps are always the same ring of four rooms, so Shape and Size are not checked and are not used.
+			// One shape (#277, #278, #284, #290): Harem, Palace Cellar, Spider and Temple maps are always the same ring of four rooms, so Shape and Size are not checked and are not used.
 			map.shape.clear();
 			if (!shape.empty() || !table.Cell(row, cSize).empty()) {
 				report.Note(MapsFile, row.line, "the " + map.tileset + " tileset is always one ring of four rooms, so its Shape and Size are ignored.");
