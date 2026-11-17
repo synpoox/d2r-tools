@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Catacombs) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Catacombs) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate), "Cartographer Arcane Sanctuary" (Arcane Sanctuary), "Cartographer Dungeon" (Act 3 Dungeon), "Cartographer Jail" (Act 1 Jail) and "Cartographer Lair" (Act 2 Maggot Lair) and "Cartographer Kurast Sewer" (Act 3 Kurast Sewers; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane), 24 (Dungeon), 8 (Jail) or 18 (Lair),
-                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Kurast Sewer and Catacombs sit below them at Y 500, X 0, X 500, X 1500 and X 3500); copied from a plain (non-quest) game maze level of that type,
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate), "Cartographer Arcane Sanctuary" (Arcane Sanctuary), "Cartographer Dungeon" (Act 3 Dungeon), "Cartographer Jail" (Act 1 Jail), "Cartographer Lair" (Act 2 Maggot Lair), "Cartographer Kurast Sewer" (Act 3 Kurast Sewers), "Cartographer Barracks" (Act 1 Barracks) and "Cartographer Catacombs" (Act 1 Catacombs; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane), 24 (Dungeon), 8 (Jail), 18 (Lair), 25 (Kurast Sewer), 7 (Barracks) or 10 (Catacombs),
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Barracks, Kurast Sewer and Catacombs sit below them at Y 500, X 0, X 500, X 1000, X 1500 and X 3500); copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
@@ -31,7 +31,7 @@
                   copied the same way as the Desert level.
     levels.txt    an eighth new level (the seventh outdoor one), "Cartographer Kurast", for Kurast (Act 3, the Burbs district) maps and arenas: LevelType 22 (Act 3 - Kurast), SizeX 128 and SizeY 112, at OffsetX 6000,
                   OffsetY 3660, copied the same way as the Desert level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeCatacombs, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeBarracks, MazeCatacombs, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -39,7 +39,7 @@
     The Ice level ("Cartographer Ice Caves", slot MazeIce) is a fourth maze level of the same kind with LevelType 33 (Act 5 ice caves), copied from a plain game ice cave level.
     The Durance level ("Cartographer Durance", slot MazeDurance) is a fifth maze level of the same kind with LevelType 22 (Act 3 Durance of Hate), copied from a plain game Durance level.
     The Arcane level ("Cartographer Arcane Sanctuary", slot MazeArcane) is a sixth maze level with LevelType 19 (Act 2 Arcane Sanctuary), offset 500, copied by id from the game's Arcane Sanctuary (level 74, a quest level whose quest fields are cleared).
-    Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, Kurast Sewer and Catacombs maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
+    Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, Kurast Sewer, Barracks and Catacombs maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
@@ -71,7 +71,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -CatacombsOffsetX and -CatacombsOffsetY (3500, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -BarracksOffsetX and -BarracksOffsetY (1000, 500), -CatacombsOffsetX and -CatacombsOffsetY (3500, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -115,6 +115,8 @@ param(
     [int]$LairOffsetY = 500,
     [int]$KurastSewerOffsetX = 1500,
     [int]$KurastSewerOffsetY = 500,
+    [int]$BarracksOffsetX = 1000,
+    [int]$BarracksOffsetY = 500,
     [int]$CatacombsOffsetX = 3500,
     [int]$CatacombsOffsetY = 500,
     [int]$SiegeOffsetX = 6000,
@@ -130,7 +132,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer and Catacombs are all added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks and Catacombs are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -161,6 +163,8 @@ $MazeTilesets = @(
     @{ Tileset = 'Lair'; Slot = 'MazeLair'; LevelName = 'Cartographer Lair'; LevelType = '18'; Size = '360'; Param = 'Lair' },
     # Kurast Sewer (Act 3 Sewer 1): x 1500..1860, y 500..860, in the second band, clear of Snow (y 0..192). Copied from the first DrlgType 1 level of LevelType 25 (level 92).
     @{ Tileset = 'KurastSewer'; Slot = 'MazeKurastSewer'; LevelName = 'Cartographer Kurast Sewer'; LevelType = '25'; Size = '360'; Param = 'KurastSewer' },
+    # Barracks (Act 1): x 1000..1360, y 500..860, between the Lair row (x 500) and the Kurast Sewer row (x 1500) in the second band, clear of the Act 5 levels (y 1000). Copied from the first DrlgType 1 level of LevelType 7. Its rooms are 10 wide and 14 tall (RoomTiles, RoomTilesY: the lvlmaze.txt SizeX and SizeY).
+    @{ Tileset = 'Barracks'; Slot = 'MazeBarracks'; LevelName = 'Cartographer Barracks'; LevelType = '7'; Size = '360'; Param = 'Barracks'; RoomTiles = '10'; RoomTilesY = '14' },
     # Catacombs (Act 1 Catacombs 1): x 3500..3860, y 500..860, the end of the second band, under Cave (y 0..360). Copied from the first DrlgType 1 level of LevelType 10 (level 34).
     @{ Tileset = 'Catacombs'; Slot = 'MazeCatacombs'; LevelName = 'Cartographer Catacombs'; LevelType = '10'; Size = '360'; Param = 'Catacombs' }
 )
@@ -485,7 +489,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
     $mazeId
 }
 
-# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Catacombs) -------------------------------------------------------------
+# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Catacombs) -------------------------------------------------------------
 $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
@@ -822,7 +826,8 @@ foreach ($t in $MazeTilesets) {
         Set-Cell $mazes $cells 'Level' "$mazeId"
         foreach ($h in $mazes.Header) {
             if ($h -match '^Rooms') { Set-Cell $mazes $cells $h '4' }
-            elseif ($h -eq 'SizeX' -or $h -eq 'SizeY') { Set-Cell $mazes $cells $h $(if ($t.RoomTiles) { $t.RoomTiles } else { '24' }) }
+            elseif ($h -eq 'SizeX') { Set-Cell $mazes $cells $h $(if ($t.RoomTiles) { $t.RoomTiles } else { '24' }) }
+            elseif ($h -eq 'SizeY') { Set-Cell $mazes $cells $h $(if ($t.RoomTilesY) { $t.RoomTilesY } elseif ($t.RoomTiles) { $t.RoomTiles } else { '24' }) }
             elseif ($h -eq 'Merge') { Set-Cell $mazes $cells $h '500' }
         }
         $mazes.Lines.Add($cells -join "`t")

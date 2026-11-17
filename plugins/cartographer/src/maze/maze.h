@@ -56,12 +56,14 @@ struct DeadEndFamily {
 struct Tileset {
 	std::string name;
 	int levelType = 0;
-	int roomTiles = 0;              // LvlMaze SizeX = SizeY: a room is roomTiles x roomTiles tiles
+	int roomTiles = 0;              // LvlMaze SizeX: a room is roomTiles wide
+	int roomTilesY = 0;             // LvlMaze SizeY: a room is this tall; 0: the same as roomTiles (a square room)
 	int pieceBase = 0;              // a room's piece is pieceBase + exit mask (LvlPrest Def of "<tileset> W" is base + 1)
 	uint16_t maskPieces = 0xFFFE;   // bit m set: the piece for exit mask m exists (m = 1..15)
 	int maxLevelTiles = kMaxLevelTiles; // the largest level (each axis, tiles) the plan may ask for
 	bool steerable = true;          // false for tilesets that grow their own rooms (Arcane, Catacombs, tombs ...)
 	std::string notSteerableReason; // plain English, shown when steerable is false
+	int roomH() const { return roomTilesY > 0 ? roomTilesY : roomTiles; } // the room height in tiles
 	bool callsRingGrower = false;   // the tileset's case in 0x3e69e0 calls 0x3e9820 first
 	bool walkFollowsRing = true;    // false: no walk follows the ring grower, so the graph must be built inside it
 	int ringCells = 0;              // filler rooms (closed pieces) placed this many cells around the layout, so no void shows past its edges (Lava); 0: none
@@ -75,12 +77,12 @@ struct Capacity {
 	int across() const { return left + right + 1; }
 	int tall() const { return up + down + 1; }
 };
-Capacity capacityAt(int roomTiles, int levelTilesX, int levelTilesY);
+Capacity capacityAt(int roomTiles, int levelTilesX, int levelTilesY, int roomTilesY = 0); // roomTilesY 0: square rooms
 Capacity maxCapacity(const Tileset &ts); // capacityAt the largest allowed level
 // The level size (tiles, one axis) with `roomsPerSide` rooms on each side of the centred first room:
 // (2 x roomsPerSide + 1) x roomTiles, clamped to ts.maxLevelTiles. The plan starts at half the layout's span (the first
 // room is chosen near the middle) and grows by one room per side until the layout fits.
-int levelTilesFor(const Tileset &ts, int roomsPerSide);
+int levelTilesFor(const Tileset &ts, int roomsPerSide, bool yAxis = false); // the Y axis counts rooms of ts.roomH()
 
 // One room of the plan. rooms[0] is the first room (made by D2R before the walk); the rest are in creation order,
 // which is also the order of the room list D2R scans for 0x3eb850 (newest last here).
