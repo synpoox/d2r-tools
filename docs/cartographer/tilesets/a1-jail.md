@@ -1,6 +1,6 @@
 # Act 1 Jail (#273)
 
-Research only, nothing run in a game. Sources as in `a1-barracks.md`.
+**Status: Built (#273).** The Jail row is in `MazeTilesets` (LevelType 8, offset 0, 500); game-checked in Hell on Small, Medium, Large and ExtraLarge. Research notes below. Sources as in `a1-barracks.md`.
 
 | | |
 |---|---|
