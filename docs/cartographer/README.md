@@ -86,7 +86,7 @@ The blank cell under `Level` for Tunneling Depths keeps level 85.
 
 ### The tilesets
 
-- **Indoor:** `Cave`, `Crypt`, `Ice` (Act 5 Ice caves), `Lava` (Act 4 Lava), `Durance` (Act 3 Durance of Hate), `Dungeon` (Act 3 Dungeon). More follow: `Barracks`, `Jail`, `Lair`, `Sewer`, `Harem`, `Basement`, `Spider`, `Temple`. Act 5 Lava follows under its own name (not yet set).
+- **Indoor:** `Cave`, `Crypt`, `Ice` (Act 5 Ice caves), `Lava` (Act 4 Lava), `Durance` (Act 3 Durance of Hate), `Dungeon` (Act 3 Dungeon), `Jail` (Act 1 Jail). More follow: `Barracks`, `Lair`, `Sewer`, `Harem`, `Basement`, `Spider`, `Temple`. Act 5 Lava follows under its own name (not yet set).
 - **Outdoor:** `Jungle`, `Snow`, `Siege` (Act 5 Bloody Foothills, one strip), then `Mesa` (Act 4 plains), `Desert` (Act 2 sand), `Wilderness` (Act 1 fields) and `Kurast` (Act 3 Burbs district), the framed fields.
 
 A tileset that is not ready is refused when the game loads, with a message that says so.
