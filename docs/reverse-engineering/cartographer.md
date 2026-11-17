@@ -54,3 +54,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [48. The maze builder's case for the Act 3 Spider Cavern (issue #284)](cartographer/48-spider-builder.md)
 - [49. The maze builder's case for the Act 5 Nihlathak Temples (issue #290)](cartographer/49-temple-builder.md)
 - [50. Colour grading: per-map hue and saturation (issue #442)](cartographer/50-colour-grading.md)
+- [51. Map drop behaviours: monster drop, item make, socket parts (issue #538)](cartographer/51-map-drop-behaviours.md)

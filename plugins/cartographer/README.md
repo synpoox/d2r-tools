@@ -188,6 +188,8 @@ Cartographer publishes `cartographer.room-populate.v1` when its room populate ho
 
 Cartographer also publishes `cartographer.open-extra.v1` (game thread only): `openExtra(game, player, nearUnit, sourceLevel, out)` opens a second map beside a unit, at the source map's monster level, while the first map stays open. Fields, refusals and limits: [open-extra-service.md](../../docs/cartographer/open-extra-service.md).
 
+Cartographer also publishes `cartographer.map-drop.v1` (game thread only): `registerCallback(pluginId, fn, user, &handle)` calls `fn(item, stats, user)` for every item a hostile, non-minion monster of a map drops. Contract: [map-drop-service.md](../../docs/cartographer/map-drop-service.md).
+
 #### Map item modifiers
 
 There is no `mapstats.txt`. Rarity and modifiers are the game's own: add `magicprefix.txt`, `magicsuffix.txt`, `rareprefix.txt`,

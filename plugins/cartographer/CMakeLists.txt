@@ -65,6 +65,7 @@ add_library(cartographer SHARED
 	src/engine/portal.cpp
 	src/engine/arena_service.cpp
 	src/engine/room_populate_service.cpp
+	src/engine/map_behaviours.cpp
 	src/engine/open_extra_service.cpp
 	src/engine/stat_apply.cpp
 	src/engine/item_stats.cpp
