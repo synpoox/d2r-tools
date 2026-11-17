@@ -21,6 +21,7 @@ namespace lg = cartographer::lutgrade;
 // The texture upload inside CreateDefaultLut (its target is the call LutUploadCall): its entry bytes are checked before it is hooked, because the
 // call site alone does not prove what it calls.
 constexpr uint32_t UploadHookSize = 25;
+constexpr uint32_t ReleaseCallOffset = 0x5c;  // LutSubmit + 0x5c is its call to the reference release (0xe2924c in build 93847)
 const uint8_t UploadGuard[UploadHookSize] = {0x40, 0x55, 0x53, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57,
                                             0x48, 0x8D, 0x6C, 0x24, 0xE8, 0x48, 0x81, 0xEC, 0x18, 0x01, 0x00, 0x00};
 
@@ -36,7 +37,6 @@ using ReleaseFn = void (*)(void* resource) noexcept;
 Part g_submitPart = {"LutSubmit", sig::LutSubmit, 15, false, nullptr, {}, {}};
 Part g_fallbackPart = {"LutFallbackCall", sig::LutFallbackCall, 0, false, nullptr, {}, {}};
 Part g_uploadCallPart = {"LutUploadCall", sig::LutUploadCall, 0, false, nullptr, {}, {}};
-Part g_releasePart = {"LutReleaseCall", sig::LutReleaseCall, 0, false, nullptr, {}, {}};
 Part g_uploadPart = {"LutUpload", nullptr, UploadHookSize, false, nullptr, {}, {}};
 
 SubmitFn g_submit = nullptr;
@@ -72,7 +72,8 @@ auto LutFor(void* renderer, uint32_t word) -> uint8_t* {
 		g_luts[word] = nullptr;
 		return nullptr;
 	}
-	*reinterpret_cast<int32_t*>(resource) = 1;  // the plugin's own reference: balanced for the whole game, never released
+	// The plugin keeps this reference for good: if the count ever hit zero the game would free the block with its own allocator, corrupting the heap (it is a VirtualAlloc block).
+	*reinterpret_cast<int32_t*>(resource) = 1;
 	resource[4] = 2;
 	const lg::Grade grade = lg::unpack(word);
 	t_building = &grade;
@@ -136,10 +137,9 @@ auto InstallLutGrade(const D2RL::PluginContext* context, const std::vector<Signa
 	CodeRange ranges[8];
 	const int count = CodeRanges(context->exeBase, ranges, 8);
 	ResolvePart(context, overrides, ranges, count, g_submitPart);
-	uint64_t fallbackRva = 0, uploadCallRva = 0, releaseRva = 0;
+	uint64_t fallbackRva = 0, uploadCallRva = 0;
 	ResolveCallSite(context, overrides, ranges, count, g_fallbackPart, &fallbackRva);
 	ResolveCallSite(context, overrides, ranges, count, g_uploadCallPart, &uploadCallRva);
-	ResolveCallSite(context, overrides, ranges, count, g_releasePart, &releaseRva);
 
 	const char* missing = nullptr;
 	const uint8_t* uploadTarget = nullptr;
@@ -149,12 +149,12 @@ auto InstallLutGrade(const D2RL::PluginContext* context, const std::vector<Signa
 		missing = "LutFallbackCall";
 	} else if (uploadCallRva == 0) {
 		missing = "LutUploadCall";
-	} else if (releaseRva == 0) {
-		missing = "LutReleaseCall";
 	} else {
 		// CreateDefaultLut is the second call of the fallback signature (its return address is 15 bytes on from the first call's).
 		const uint8_t* create = CallTarget(context, fallbackRva, 15);
-		const uint8_t* release = CallTarget(context, releaseRva, 0);
+		// The reference release is the call LutSubmit makes at +0x5c (opcode E8), so it follows LutSubmit: no signature of its own.
+		const uint8_t* const releaseCall = g_submitPart.address + ReleaseCallOffset;
+		const uint8_t* release = *releaseCall == 0xE8 ? CallTarget(context, static_cast<uint64_t>(releaseCall + 5 - reinterpret_cast<const uint8_t*>(context->exeBase)), 0) : nullptr;
 		uploadTarget = CallTarget(context, uploadCallRva, 0);
 		if (!InCode(ranges, count, create) || !InCode(ranges, count, release) || !InCode(ranges, count, uploadTarget)) {
 			missing = "a call target outside the code";
@@ -187,7 +187,6 @@ auto InstallLutGrade(const D2RL::PluginContext* context, const std::vector<Signa
 	plog::Info("part %s: %s", g_submitPart.name, g_submitPart.status.detail.c_str());
 	plog::Info("part %s: %s", g_fallbackPart.name, g_fallbackPart.status.detail.c_str());
 	plog::Info("part %s: %s", g_uploadCallPart.name, g_uploadCallPart.status.detail.c_str());
-	plog::Info("part %s: %s", g_releasePart.name, g_releasePart.status.detail.c_str());
 	if (!g_live.load()) {
 		plog::Warn("map Hue and Saturation are off: part %s is not available (the other map looks still work)", missing != nullptr ? missing : "?");
 	}
@@ -195,7 +194,7 @@ auto InstallLutGrade(const D2RL::PluginContext* context, const std::vector<Signa
 		parts->push_back(g_submitPart.status);
 		parts->push_back(g_fallbackPart.status);
 		parts->push_back(g_uploadCallPart.status);
-		parts->push_back(g_releasePart.status);
+		parts->push_back(g_uploadPart.status);
 	}
 	return g_live.load();
 }

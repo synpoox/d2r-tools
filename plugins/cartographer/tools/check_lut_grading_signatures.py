@@ -3,8 +3,8 @@
 Usage: python -I plugins/cartographer/tools/check_lut_grading_signatures.py <image>
 
 <image> is the running game image in memory layout (section file offset == RVA), as made by d2rAI-toolkit's tools/dump_image.py.
-Each of LutSubmit, LutFallbackCall, LutUploadCall and LutReleaseCall (src/core/part_signatures.h) must match exactly once in the
-executable sections, at the address in note 50, and the call targets they give must be the ones the plugin uses. The upload
+Each of LutSubmit, LutFallbackCall and LutUploadCall (src/core/part_signatures.h) must match exactly once in the
+executable sections, at the address in note 50, and the call targets they give must be the ones the plugin uses. The release call at LutSubmit + 0x5c must be E8 with target 0xe90d70. The upload
 function's 25 guard bytes (src/engine/lut_grade.cpp) must be at its target. Exit status 0 only if every check passes.
 """
 import os
@@ -51,10 +51,10 @@ def main():
     got = upload and target(upload[0])
     print("LutUploadCall: %s, target %s (expected [0xe1b0c3] -> 0xfc3c60)" % ([hex(h) for h in upload], got and hex(got)))
     ok &= upload == [0xE1B0C3] and got == 0xFC3C60
-    release = find("LutReleaseCall")
-    got = release and target(release[0])
-    print("LutReleaseCall: %s, target %s (expected [0xe2924c] -> 0xe90d70)" % ([hex(h) for h in release], got and hex(got)))
-    ok &= release == [0xE2924C] and got == 0xE90D70
+    at = submit[0] + 0x5C if submit else 0
+    got = target(at) if img[at] == 0xE8 else None
+    print("release call at LutSubmit + 0x5c: %s, target %s (expected 0xe90d70)" % (hex(at), got and hex(got)))
+    ok &= got == 0xE90D70
     with open(ENGINE, encoding="utf-8") as f:
         guard = re.search(r"UploadGuard\[UploadHookSize\] = \{([^}]+)\}", f.read()).group(1)
     guard = bytes(int(x, 16) for x in re.findall(r"0x([0-9A-Fa-f]{2})", guard))
