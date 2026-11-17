@@ -184,6 +184,8 @@ inline constexpr const char* ScreenShiftSetter = "48 83 EC 38 44 8B 0D ?? ?? ?? 
 // and the other callers of the same function do not match (RE notes 32 and 26). Must match exactly once, else the part that needs it stays off.
 // InstanceCall: VisualDataSystem::Update's call of VisualApply with the current instance's component (0xf5d837, returns 0xf5d83c); the call at 0xf5d9b2 has other bytes after it.
 inline constexpr const char* InstanceCall = "E8 ?? ?? ?? ?? E9 ?? ?? ?? ?? 0F 28 05 ?? ?? ?? ?? 48 8D 85 28 02 00 00";
+// LightsGetterCall: VisualDataSystem::Update's call of the get-the-DirectionalLightComponent-storage function (0xf5d396, call target 0x6df230); the call target is read from the call's rel32.
+inline constexpr const char* LightsGetterCall = "E8 ?? ?? ?? ?? 48 8D 50 20 4C 8D 40 38 48 85 C0 74 ?? 48 8B 4A 08 48 2B 0A 48 C1 F9 02 48 89 4D D8 48 89 4D E8 48 8D 4D 20 4C 89 45 D0";
 // MainRollCall: the item maker's own call of the item quality roll (0x442e7b, returns 0x442e80); the affix fallbacks' calls are followed by other code.
 inline constexpr const char* MainRollCall = "E8 ?? ?? ?? ?? 8B D0 BF 02 00 00 00 8B 45 40 85 C0 0F 45 D0";
 

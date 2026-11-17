@@ -56,6 +56,15 @@ TEST_CASE("a Brightness-only look does not write the colour temperature") {
 	CHECK_FALSE(changesTemperature(look));
 }
 
+TEST_CASE("a tint counts as a look and is named by describe") {
+	Look look;
+	CHECK_FALSE(changesTint(look));
+	look.tintB = 0;
+	CHECK(changesTint(look));
+	CHECK(look.any());
+	CHECK(describe(look) == "brightness 100%, warmth 100%, tint 100/100/0%");
+}
+
 TEST_CASE("describe names every column") {
 	Look look;
 	look.brightness = 80;

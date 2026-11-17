@@ -882,7 +882,7 @@ TEST_CASE("signatures: every recorded part signature parses and has at least 24 
 	const char* const all[] = {sig::ItemSpellCheck, sig::ItemSpellUse, sig::ItemRecord, sig::UnitClassOf, sig::UnitRoom, sig::RoomLevelId,
 	                           sig::ClientMessage, sig::OpenRedPortal, sig::GameCounter, sig::UnitStat, sig::UnitCoords, sig::FindFreeSpot, sig::PlayerTick,
 	                           sig::LevelBuild, sig::MazeWalk, sig::MazeEntranceExit, sig::MazeRingGrower, sig::MazeAddRoom, sig::MazeLinkRooms, sig::MazePiecePicker, sig::ArrivalFinder, sig::ArrivalRoomFinder, sig::DataTablesBase, sig::NameToRow,
-	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell, sig::UnitMove};
+	                           sig::OutdoorEntry, sig::OutdoorAct5Builder, sig::PieceStamp, sig::VoidCell, sig::UnitMove, sig::LightsGetterCall};
 	for (const char* text : all) {
 		Pattern p{};
 		INFO(text);
@@ -1634,6 +1634,28 @@ TEST_CASE("the look columns load, blank keeps the tileset's own look and a bad c
 	CHECK_FALSE(maps[2].look.any());
 	CHECK(Joined(report).find("Brightness '5' is not a whole number") != std::string::npos);
 	CHECK(Joined(report).find("Warmth '401'") != std::string::npos);
+}
+
+TEST_CASE("the tint columns load: blank keeps the tileset's colours, 0 and 100 are kept, out of range is ignored with a message") {
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tItem\tTintR\tTintG\tTintB\n"
+		"A\tCave\tCorridor\tt20\t\t\t\n"
+		"B\tCave\tCorridor\tt21\t0\t100\t200\n"
+		"C\tCave\tCorridor\tt22\t201\t-1\tred\n"
+		"D\tCave\tCorridor\tt23\t100\t100\t100\n",
+		Names(), report);
+	REQUIRE(maps.size() == 4);
+	CHECK_FALSE(maps[0].look.any());
+	CHECK(maps[1].look.any());
+	CHECK(maps[1].look.tintR == 0);
+	CHECK(maps[1].look.tintG == 100);
+	CHECK(maps[1].look.tintB == 200);
+	CHECK_FALSE(maps[2].look.any());
+	CHECK_FALSE(maps[3].look.any());
+	CHECK(Joined(report).find("TintR '201' is not a whole number") != std::string::npos);
+	CHECK(Joined(report).find("TintG '-1'") != std::string::npos);
+	CHECK(Joined(report).find("TintB 'red'") != std::string::npos);
 }
 
 namespace {

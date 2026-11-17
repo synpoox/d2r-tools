@@ -26,6 +26,11 @@ constexpr size_t ComponentSize = 0x1e8;  // VisualDataComponent, the pool stride
 // InstanceCall signature; the other call (0xf5d9b2, no instance: a component built on the stack) is not a level's look and is left alone.
 constexpr size_t ExposureOffset = 0x00;     // component float: the exposure value (a higher value is a darker picture)
 constexpr size_t TemperatureOffset = 0x40;  // component float: the colour temperature (the apply function copies it to a global)
+// The directional lights (DirectionalLightComponent storage, stride 0x60, note 32): a colour vec3 at +0x00 and a second copy at +0x4c. The game rewrites
+// them every frame (the level's transition code), so a tint written here lasts one frame and is gone the frame after the player leaves.
+constexpr size_t LightStride = 0x60, LightColourOffsets[2] = {0x00, 0x4c};
+constexpr size_t MaxLights = 32;
+constexpr size_t StorageEntitiesBegin = 0x20, StorageEntitiesEnd = 0x28, StorageData = 0x38;  // the light storage object, from the getter
 
 using ApplyFn = uint64_t (*)(void* system, void* registry, uint8_t* component, uint8_t* frame) noexcept;
 
@@ -41,9 +46,88 @@ std::map<int, ml::Look> g_looks;  // slot level -> the look of the map opened th
 float g_exposure = 1.0f;
 float g_temperature = 1.0f;
 bool g_changesTemperature = false;  // false for a Brightness-only look: the tileset's own temperature is left alone (not even clamped)
+bool g_changesTint = false;
+float g_tint[3] = {1.0f, 1.0f, 1.0f};  // TintR, TintG, TintB as multipliers
 std::atomic<bool> g_active{false};  // the local player stands in the map's slot level and the map has a look
 
 std::atomic<uint32_t> g_instanceCalls{0}, g_changed{0};
+
+using StorageFn = uint8_t* (*)(void* registry) noexcept;
+Part g_lightsPart = {"LightsGetter", sig::LightsGetterCall, 0, false, nullptr, {}, {}};
+StorageFn g_lightsStorage = nullptr;  // the get-the-DirectionalLightComponent-storage function, found from the call in VisualDataSystem::Update
+
+// What the game wrote and what the tint wrote, per light and colour copy, so a light the game did not rewrite is neither tinted twice nor left tinted
+// (game thread only). `written` is compared to the live value: unchanged means the game left it alone.
+struct TintSlot {
+	bool valid = false;
+	float base[3] = {}, written[3] = {};
+};
+TintSlot g_slots[MaxLights][2];
+
+auto LightData(void* registry, size_t* count) -> uint8_t* {
+	*count = 0;
+	if (g_lightsStorage == nullptr) {
+		return nullptr;
+	}
+	uint8_t* storage = g_lightsStorage(registry);
+	if (storage == nullptr || !Readable(storage, StorageData + 8)) {
+		return nullptr;
+	}
+	const uint8_t* begin = *reinterpret_cast<uint8_t* const*>(storage + StorageEntitiesBegin);
+	const uint8_t* end = *reinterpret_cast<uint8_t* const*>(storage + StorageEntitiesEnd);
+	uint8_t* data = *reinterpret_cast<uint8_t**>(storage + StorageData);
+	if (begin == nullptr || end < begin || data == nullptr) {
+		return nullptr;
+	}
+	size_t n = static_cast<size_t>(end - begin) / 4;
+	n = n < MaxLights ? n : MaxLights;
+	if (n == 0 || !Readable(data, n * LightStride)) {
+		return nullptr;
+	}
+	*count = n;
+	return data;
+}
+
+// factor == nullptr puts every light the tint changed back.
+void ScaleLights(void* registry, const float* factor) {
+	size_t count = 0;
+	uint8_t* data = LightData(registry, &count);
+	for (size_t i = 0; i < count; i++) {
+		for (size_t c = 0; c < 2; c++) {
+			float* colour = reinterpret_cast<float*>(data + i * LightStride + LightColourOffsets[c]);
+			TintSlot& slot = g_slots[i][c];
+			const bool ours = slot.valid && std::memcmp(colour, slot.written, sizeof(slot.written)) == 0;
+			if (!ours) {
+				if (factor == nullptr) {
+					slot.valid = false;
+					continue;
+				}
+				std::memcpy(slot.base, colour, sizeof(slot.base));
+			}
+			for (int k = 0; k < 3; k++) {
+				colour[k] = factor != nullptr ? slot.base[k] * factor[k] : slot.base[k];
+			}
+			std::memcpy(slot.written, colour, sizeof(slot.written));
+			slot.valid = factor != nullptr;
+		}
+	}
+}
+
+bool g_tintWritten = false;  // a tint was written since the last restore (game thread)
+
+void TintLights(void* registry, float r, float g, float b) {
+	const float factor[3] = {r, g, b};
+	ScaleLights(registry, factor);
+	g_tintWritten = true;
+}
+
+// The frame after the player leaves the map: put back any light the game did not rewrite itself.
+void UntintLights(void* registry) {
+	if (g_tintWritten) {
+		ScaleLights(registry, nullptr);
+		g_tintWritten = false;
+	}
+}
 
 auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame) noexcept -> uint64_t {
 	const bool instance = reinterpret_cast<uint64_t>(_ReturnAddress()) - g_base == g_instanceReturnRva;
@@ -51,13 +135,17 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 		if (instance && component != nullptr && frame != nullptr) {
 			g_instanceCalls.fetch_add(1, std::memory_order_relaxed);
 			if (g_active.load(std::memory_order_relaxed) && Readable(component, ComponentSize)) {
-				float exposure = 1.0f, temperature = 1.0f;
-				bool changesTemperature = false;
+				float exposure = 1.0f, temperature = 1.0f, tintR = 1.0f, tintG = 1.0f, tintB = 1.0f;
+				bool changesTemperature = false, tint = false;
 				{
 					std::lock_guard<std::mutex> lock(g_lock);
 					exposure = g_exposure;
 					temperature = g_temperature;
 					changesTemperature = g_changesTemperature;
+					tint = g_changesTint;
+					tintR = g_tint[0];
+					tintG = g_tint[1];
+					tintB = g_tint[2];
 				}
 				const auto scale = [&](size_t offset, float factor, bool kelvin) {
 					float value = 0;
@@ -73,6 +161,11 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 					scale(TemperatureOffset, temperature, true);
 				}
 				g_changed.fetch_add(1, std::memory_order_relaxed);
+				if (tint) {
+					TintLights(registry, tintR, tintG, tintB);
+				}
+			} else {
+				UntintLights(registry);
 			}
 		}
 	} catch (...) {
@@ -88,6 +181,14 @@ auto InstallMapLighting(const D2RL::PluginContext* context, const std::vector<Si
 	g_base = context->exeBase;
 	ResolvePart(context, overrides, ranges, count, g_part);
 	ResolveCallSite(context, overrides, ranges, count, g_callPart, &g_instanceReturnRva);
+	uint64_t lightsReturnRva = 0;
+	ResolveCallSite(context, overrides, ranges, count, g_lightsPart, &lightsReturnRva);
+	if (lightsReturnRva != 0) {
+		// The call's target: the rel32 in the four bytes before the return address. The tint is the only user; without it Brightness and Warmth still work.
+		int32_t rel = 0;
+		std::memcpy(&rel, reinterpret_cast<const void*>(context->exeBase + lightsReturnRva - 4), sizeof(rel));
+		g_lightsStorage = reinterpret_cast<StorageFn>(context->exeBase + lightsReturnRva + rel);
+	}
 	if (g_part.status.on && g_instanceReturnRva == 0) {
 		// Never hooked without its caller check: it would run and never match.
 		g_part.status.on = false;
@@ -99,19 +200,24 @@ auto InstallMapLighting(const D2RL::PluginContext* context, const std::vector<Si
 		g_live = HookOutcome(g_part, hooked, g_original != nullptr);
 	}
 	plog::Info("part %s: %s", g_callPart.name, g_callPart.status.detail.c_str());
+	plog::Info("part %s: %s", g_lightsPart.name, g_lightsPart.status.detail.c_str());
+	if (g_lightsStorage == nullptr) {
+		plog::Warn("map light tints (TintR, TintG, TintB) are off: the light storage part is not found");
+	}
 	plog::Info("part %s: %s", g_part.name, g_part.status.detail.c_str());
 	if (!g_live.load()) {
-		plog::Warn("map looks (Brightness, Warmth) are off: the visual data apply part is not hooked");
+		plog::Warn("map looks (Brightness, Warmth, tint) are off: the visual data apply part is not hooked");
 	}
 	if (parts != nullptr) {
 		parts->push_back(g_callPart.status);
+		parts->push_back(g_lightsPart.status);
 		parts->push_back(g_part.status);
 	}
 	return g_live.load();
 }
 
 auto MapLightingPartStatuses() -> std::vector<PartStatus> {
-	return {g_callPart.status, g_part.status};
+	return {g_callPart.status, g_lightsPart.status, g_part.status};
 }
 
 void MapLightingMapOpened(const MapDef& map, int slotLevel) {
@@ -161,6 +267,10 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 			g_exposure = ml::exposureScale(*look);
 			g_temperature = ml::temperatureScale(*look);
 			g_changesTemperature = ml::changesTemperature(*look);
+			g_changesTint = ml::changesTint(*look);
+			g_tint[0] = static_cast<float>(look->tintR) / 100.0f;
+			g_tint[1] = static_cast<float>(look->tintG) / 100.0f;
+			g_tint[2] = static_cast<float>(look->tintB) / 100.0f;
 		}
 	}
 	if (g_active.exchange(active) != active) {

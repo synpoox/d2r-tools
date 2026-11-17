@@ -37,6 +37,14 @@ def main():
         [hex(h) for h in hits], [hex(h + 5) for h in hits], hex(CALL), hex(RETURN)))
     ok = hits == [CALL] and hits[0] + 5 == RETURN and OTHER_CALL not in hits
     print("OK" if ok else "FAILED")
+    with open(SIGNATURES, encoding="utf-8") as f:
+        lsig = re.search(r'LightsGetterCall = "([^"]+)"', f.read()).group(1)
+    lpat = re.compile(b"".join(b"." if t == "??" else re.escape(bytes([int(t, 16)])) for t in lsig.split()), re.S)
+    lhits = [va + m.start() for va, vsize in sections for m in lpat.finditer(img[va:va + vsize])]
+    target = lhits and lhits[0] + 5 + struct.unpack_from("<i", img, lhits[0] + 1)[0]
+    print("LightsGetterCall: signature matches %s, call target %s (expected [0xf5d396] -> 0x6df230)" % ([hex(h) for h in lhits], hex(target) if lhits else None))
+    ok = ok and lhits == [0xF5D396] and target == 0x6DF230
+    print("OK" if ok else "FAILED")
     sys.exit(0 if ok else 1)
 
 

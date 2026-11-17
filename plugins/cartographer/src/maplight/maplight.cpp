@@ -3,7 +3,7 @@
 namespace cartographer::maplight {
 
 auto Look::any() const -> bool {
-	return brightness != DefaultPercent || warmth != DefaultPercent;
+	return brightness != DefaultPercent || warmth != DefaultPercent || changesTint(*this);
 }
 
 auto exposureScale(const Look& look) -> float {
@@ -22,8 +22,16 @@ auto changesTemperature(const Look& look) -> bool {
 	return look.warmth != DefaultPercent;
 }
 
+auto changesTint(const Look& look) -> bool {
+	return look.tintR != DefaultPercent || look.tintG != DefaultPercent || look.tintB != DefaultPercent;
+}
+
 auto describe(const Look& look) -> std::string {
-	return "brightness " + std::to_string(look.brightness) + "%, warmth " + std::to_string(look.warmth) + "%";
+	std::string text = "brightness " + std::to_string(look.brightness) + "%, warmth " + std::to_string(look.warmth) + "%";
+	if (changesTint(look)) {
+		text += ", tint " + std::to_string(look.tintR) + "/" + std::to_string(look.tintG) + "/" + std::to_string(look.tintB) + "%";
+	}
+	return text;
 }
 
 }  // namespace cartographer::maplight
