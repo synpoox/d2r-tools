@@ -93,8 +93,8 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// Harem 2000, Basement 2500), clear of Crypt (x 3000, y 0..360). docs/reverse-engineering/cartographer/45-act2-sewer-case.md, docs/cartographer/tilesets/a2-sewers.md.
 	{"Sewer", 13, "MazeSewer", "Cartographer Sewer", 12, 301, {0, 0, 0, 0}, true, 3000, 500, 0},
 	// Spider Cavern (Act 3 Spider, LevelType 23, #284): 16-tile rooms. Its case is the Harem/Basement case (one ring grower call, no walk); the picker's mask table gives SW 659,
-	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3500, y 500: the next free x in the second band (main's rule, #243). docs/reverse-engineering/cartographer/48-spider-builder.md.
-	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3500, 500, 0, false, 0, {662, 660, 659, 661}},
+	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3860, y 130: no 360-wide spot of the two bands is left once #522 (3500, 500) and #523 (4000, 500) land; this is the free spot between them and the y-0 band (docs/cartographer/adding-a-tileset.md). docs/reverse-engineering/cartographer/48-spider-builder.md.
+	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3860, 130, 0, false, 0, {662, 660, 659, 661}},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

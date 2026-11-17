@@ -98,7 +98,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Harem` | a plain game Act 2 Harem maze row (DrlgType 1), such as level 51 | 1 | 14 (Harem) | 360 | 2000, 500 |
    | `Cartographer Palace Cellar` | a plain game Act 2 Palace Cellar maze row (DrlgType 1), such as level 52 | 1 | 15 (Basement) | 360 | 2500, 500 |
    | `Cartographer Sewer` | a plain game Act 2 Sewer maze row (DrlgType 1), such as level 47 | 1 | 13 (Sewer) | 360 | 3000, 500 |
-   | `Cartographer Spider` | a plain game Act 3 Spider maze row (DrlgType 1), such as level 84 | 2 | 23 (Spider) | 360 | 3500, 500 |
+   | `Cartographer Spider` | a plain game Act 3 Spider maze row (DrlgType 1), such as level 84 | 2 | 23 (Spider) | 360 | 3860, 130 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |

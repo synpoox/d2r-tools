@@ -5,7 +5,7 @@
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
       levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate), "Cartographer Arcane Sanctuary" (Arcane Sanctuary), "Cartographer Dungeon" (Act 3 Dungeon), "Cartographer Jail" (Act 1 Jail), "Cartographer Lair" (Act 2 Maggot Lair), "Cartographer Kurast Sewer" (Act 3 Kurast Sewers), "Cartographer Barracks" (Act 1 Barracks), "Cartographer Harem" (Act 2 Harem), "Cartographer Palace Cellar" (Act 2 Palace Cellar), "Cartographer Sewer" (Act 2 Sewers) and "Cartographer Spider" (Act 3 Spider Cavern; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane), 24 (Dungeon), 8 (Jail), 18 (Lair), 25 (Kurast Sewer), 7 (Barracks), 14 (Harem), 15 (Palace Cellar), 13 (Sewer) or 23 (Spider),
-                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Barracks, Kurast Sewer, Harem, Palace Cellar, Act 2 Sewer and Spider sit below them at Y 500, X 0, X 500, X 1000, X 1500, X 2000, X 2500, X 3000 and X 3500); copied from a plain (non-quest) game maze level of that type,
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail, Lair, Barracks, Kurast Sewer, Harem, Palace Cellar, Act 2 Sewer and Spider sit below them at Y 500, X 0, X 500, X 1000, X 1500, X 2000, X 2500, X 3000 and X 3860 at Y 130); copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
@@ -71,7 +71,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -BarracksOffsetX and -BarracksOffsetY (1000, 500), -HaremOffsetX and -HaremOffsetY (2000, 500), -BasementOffsetX and -BasementOffsetY (2500, 500), -SewerOffsetX and -SewerOffsetY (3000, 500), -SpiderOffsetX and -SpiderOffsetY (3500, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -LairOffsetX and -LairOffsetY (500, 500), -KurastSewerOffsetX and -KurastSewerOffsetY (1500, 500), -BarracksOffsetX and -BarracksOffsetY (1000, 500), -HaremOffsetX and -HaremOffsetY (2000, 500), -BasementOffsetX and -BasementOffsetY (2500, 500), -SewerOffsetX and -SewerOffsetY (3000, 500), -SpiderOffsetX and -SpiderOffsetY (3860, 130), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -123,8 +123,8 @@ param(
     [int]$BasementOffsetY = 500,
     [int]$SewerOffsetX = 3000,
     [int]$SewerOffsetY = 500,
-    [int]$SpiderOffsetX = 3500,
-    [int]$SpiderOffsetY = 500,
+    [int]$SpiderOffsetX = 3860,
+    [int]$SpiderOffsetY = 130,
     [int]$SiegeOffsetX = 6000,
     [int]$SiegeOffsetY = 3900,
     [int]$MesaOffsetX = 6000,
@@ -176,7 +176,7 @@ $MazeTilesets = @(
     @{ Tileset = 'Basement'; Slot = 'MazeBasement'; LevelName = 'Cartographer Palace Cellar'; LevelType = '15'; Size = '360'; Param = 'Basement' },
     # Sewer (Act 2 Sewers): x 3000..3360, y 500..860, the last free spot of the second band, clear of Crypt (y 0..360). Copied from the first plain DrlgType 1 level of LevelType 13 (level 47).
     @{ Tileset = 'Sewer'; Slot = 'MazeSewer'; LevelName = 'Cartographer Sewer'; LevelType = '13'; Size = '360'; Param = 'Sewer' }
-    # Spider Cavern (Act 3, #284): x 3500..3860, y 500..860, the next free x in the second band (Harem 2000, Palace Cellar 2500, Sewer 3000; the Cave maze level at x 3500 sits at y 0); inside the automap range and above the Act 5 levels (y 1000). Copied from the first DrlgType 1 level of LevelType 23.
+    # Spider Cavern (Act 3, #284): x 3860..4220, y 130..490, the one free spot once Catacombs (3500, 500) and Tombs (4000, 500) took the end of the second band: x 3860 clears Cave (x 3500..3860, y 0..360) and the 16-bit automap range allows no larger x; inside the automap range and above the Act 5 levels (y 1000). Copied from the first DrlgType 1 level of LevelType 23.
     @{ Tileset = 'Spider'; Slot = 'MazeSpider'; LevelName = 'Cartographer Spider'; LevelType = '23'; Size = '360'; Param = 'Spider' }
 )
 # One row per outdoor tileset. Tileset, Slot, LevelName and LevelType are the same rows as the C++ table (src/outdoor/outdoor_tilesets.h);

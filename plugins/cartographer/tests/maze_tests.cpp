@@ -1979,7 +1979,7 @@ TEST_CASE("Lava: a layout that fits with a one-cell ring is not clipped (issue #
 TEST_CASE("the Harem, Palace Cellar and Spider rows: a fixed ring of four corner rooms with distinct entrance, event and boss")
 {
 	struct Want { const char *name; int type; int ne, se, sw, nw; int x; };
-	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000}, {"Basement", 15, 358, 359, 360, 361, 2500}, {"Spider", 23, 662, 660, 659, 661, 3500}};
+	const Want wants[] = {{"Harem", 14, 354, 355, 356, 357, 2000}, {"Basement", 15, 358, 359, 360, 361, 2500}, {"Spider", 23, 662, 660, 659, 661, 3860}};
 	for (const Want &w : wants) {
 		INFO(w.name);
 		const MazeTileset *row = findMazeTileset(w.name);
@@ -1988,7 +1988,7 @@ TEST_CASE("the Harem, Palace Cellar and Spider rows: a fixed ring of four corner
 		CHECK(row->roomTiles == 16);
 		CHECK(row->callsRingGrower);
 		CHECK(row->offsetX == w.x);
-		CHECK(row->offsetY == 500);
+		CHECK(row->offsetY == (w.x == 3860 ? 130 : 500));
 		Tileset ts;
 		REQUIRE(builtinTileset(w.name, ts));
 		CHECK(ts.fixedRing);
