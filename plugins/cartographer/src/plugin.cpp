@@ -18,6 +18,7 @@
 #include "engine/item_stats.h"
 #include "engine/map_quality.h"
 #include "engine/level_row.h"
+#include "engine/lut_grade.h"
 #include "engine/map_lighting.h"
 #include "engine/map_names.h"
 #include "engine/map_panel.h"
@@ -575,6 +576,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		(void)carto::InstallMapPanel(context, g_overrides, &panelParts);
 		std::vector<carto::PartStatus> lightParts;
 		(void)carto::InstallMapLighting(context, g_overrides, &lightParts);
+		(void)carto::InstallLutGrade(context, g_overrides, &lightParts);
 		carto::PublishArenaService(context);
 		carto::PublishRoomPopulateService(context, carto::PopulateHookLive());
 		carto::PublishOpenExtraService(context);

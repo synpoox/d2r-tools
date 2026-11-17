@@ -189,4 +189,11 @@ inline constexpr const char* LightsGetterCall = "E8 ?? ?? ?? ?? 48 8D 50 20 4C 8
 // MainRollCall: the item maker's own call of the item quality roll (0x442e7b, returns 0x442e80); the affix fallbacks' calls are followed by other code.
 inline constexpr const char* MainRollCall = "E8 ?? ?? ?? ?? 8B D0 BF 02 00 00 00 8B 45 40 85 C0 0F 45 D0";
 
+// Colour grading (issue #442; cartographer/50-colour-grading.md). LutSubmit (renderer, LutResource** res, float weight in xmm2) is hooked (15 bytes, whole instructions,
+// no RIP-relative operand); the rest are call sites whose rel32 gives a target: LutFallbackCall's second call is CreateDefaultLut (renderer, LutResource* out); LutUploadCall
+// is the texture upload inside it (its target is hooked, 25 bytes, guarded in src/engine/lut_grade.cpp); the reference release is the call at LutSubmit + 0x5c, resolved in src/engine/lut_grade.cpp.
+inline constexpr const char* LutSubmit = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 0F 29 74 24 20 48 81 C1 D8 9A 13 00";
+inline constexpr const char* LutFallbackCall = "E8 ?? ?? ?? ?? 49 8B 96 C8 01 00 00 48 8B C8 E8 ?? ?? ?? ??";
+inline constexpr const char* LutUploadCall = "E8 ?? ?? ?? ?? 40 38 7D A0";
+
 }  // namespace carto::sig

@@ -3,7 +3,14 @@
 namespace cartographer::maplight {
 
 auto Look::any() const -> bool {
-	return brightness != DefaultPercent || warmth != DefaultPercent || changesTint(*this);
+	return brightness != DefaultPercent || warmth != DefaultPercent || changesTint(*this) || grade().any();
+}
+
+auto Look::grade() const -> lutgrade::Grade {
+	lutgrade::Grade g;
+	g.hue = hue;
+	g.saturation = saturation;
+	return g;
 }
 
 auto exposureScale(const Look& look) -> float {
@@ -30,6 +37,9 @@ auto describe(const Look& look) -> std::string {
 	std::string text = "brightness " + std::to_string(look.brightness) + "%, warmth " + std::to_string(look.warmth) + "%";
 	if (changesTint(look)) {
 		text += ", tint " + std::to_string(look.tintR) + "/" + std::to_string(look.tintG) + "/" + std::to_string(look.tintB) + "%";
+	}
+	if (look.grade().any()) {
+		text += ", hue " + std::to_string(look.hue) + ", saturation " + std::to_string(look.saturation) + "%";
 	}
 	return text;
 }

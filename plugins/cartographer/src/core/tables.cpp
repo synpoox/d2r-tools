@@ -35,7 +35,7 @@ const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "EventChance",
                                              "Density", "Champions",   "Uniques",
-                                             "Brightness", "Warmth", "TintR", "TintG", "TintB"};
+                                             "Brightness", "Warmth", "TintR", "TintG", "TintB", "Hue", "Saturation"};
 
 auto Canonical(const std::vector<std::string>& names, std::string_view word) -> const std::string* {
 	for (const std::string& n : names) {
@@ -218,6 +218,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 	const int cDensity = table.Column("Density"), cChampions = table.Column("Champions"), cUniques = table.Column("Uniques");
 	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
 	const int cTintR = table.Column("TintR"), cTintG = table.Column("TintG"), cTintB = table.Column("TintB");
+	const int cHue = table.Column("Hue"), cSaturation = table.Column("Saturation");
 
 	std::vector<std::string> customShapes;
 	if (shapes != nullptr) {
@@ -378,6 +379,8 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		look(cTintR, "TintR", ml::MinTint, ml::MaxTint, &map.look.tintR);
 		look(cTintG, "TintG", ml::MinTint, ml::MaxTint, &map.look.tintG);
 		look(cTintB, "TintB", ml::MinTint, ml::MaxTint, &map.look.tintB);
+		look(cHue, "Hue", ml::MinHue, ml::MaxHue, &map.look.hue);
+		look(cSaturation, "Saturation", ml::MinSaturation, ml::MaxSaturation, &map.look.saturation);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {

@@ -1658,6 +1658,32 @@ TEST_CASE("the tint columns load: blank keeps the tileset's colours, 0 and 100 a
 	CHECK(Joined(report).find("TintB 'red'") != std::string::npos);
 }
 
+TEST_CASE("the Hue and Saturation columns load: blank and neutral are no look, out of range is ignored with a message") {
+	Report report;
+	const auto maps = LoadMaps(
+		"Name\tTileset\tShape\tItem\tHue\tSaturation\n"
+		"A\tCave\tCorridor\tt20\t\t\n"
+		"B\tCave\tCorridor\tt21\t120\t\n"
+		"C\tCave\tCorridor\tt22\t\t0\n"
+		"D\tCave\tCorridor\tt23\t0\t100\n"
+		"E\tCave\tCorridor\tt24\t361\t301\n"
+		"F\tCave\tCorridor\tshm1\t-90\t250\n",
+		Names(), report);
+	REQUIRE(maps.size() == 6);
+	CHECK_FALSE(maps[0].look.any());
+	CHECK(maps[1].look.any());
+	CHECK(maps[1].look.hue == 120);
+	CHECK(maps[1].look.saturation == 100);
+	CHECK(maps[2].look.any());
+	CHECK(maps[2].look.saturation == 0);
+	CHECK_FALSE(maps[3].look.any());
+	CHECK_FALSE(maps[4].look.any());
+	CHECK(maps[5].look.grade().hue == -90);
+	CHECK(maps[5].look.saturation == 250);
+	CHECK(Joined(report).find("Hue '361' is not a whole number") != std::string::npos);
+	CHECK(Joined(report).find("Saturation '301'") != std::string::npos);
+}
+
 namespace {
 // levels.txt rows for the arena tests: 200 is a Mesa Act 5 outdoor level, 201 the same with a small SizeX, 202 a Jungle level, 203 an Act 4 level, 204 not outdoor.
 const char* const ArenaLevels =

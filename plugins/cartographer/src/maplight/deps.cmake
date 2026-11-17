@@ -1,0 +1,1 @@
+set(CARTOGRAPHER_CORE_DEPS lutgrade)
