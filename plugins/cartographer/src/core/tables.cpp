@@ -36,7 +36,7 @@ const std::vector<std::string> Sizes = {"Small", "Medium", "Large", "ExtraLarge"
 const std::vector<std::string> MapColumns = {"Name",   "Tileset",      "Shape",       "Size",      "Level",   "Item",
                                              "Boss",   "Monsters",     "MinCharLevel", "EventChance",
                                              "Density", "Champions",   "Uniques",
-                                             "Brightness", "Warmth"};
+                                             "Brightness", "Warmth", "TintR", "TintG", "TintB"};
 
 auto Canonical(const std::vector<std::string>& names, std::string_view word) -> const std::string* {
 	for (const std::string& n : names) {
@@ -218,6 +218,7 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 	const int cMinChar = table.Column("MinCharLevel"), cEvent = table.Column("EventChance");
 	const int cDensity = table.Column("Density"), cChampions = table.Column("Champions"), cUniques = table.Column("Uniques");
 	const int cBrightness = table.Column("Brightness"), cWarmth = table.Column("Warmth");
+	const int cTintR = table.Column("TintR"), cTintG = table.Column("TintG"), cTintB = table.Column("TintB");
 
 	std::vector<std::string> customShapes;
 	if (shapes != nullptr) {
@@ -375,6 +376,9 @@ auto LoadMaps(std::string_view text, const GameNames& names, Report& report, con
 		namespace ml = cartographer::maplight;
 		look(cBrightness, "Brightness", ml::MinBrightness, ml::MaxBrightness, &map.look.brightness);
 		look(cWarmth, "Warmth", ml::MinWarmth, ml::MaxWarmth, &map.look.warmth);
+		look(cTintR, "TintR", ml::MinTint, ml::MaxTint, &map.look.tintR);
+		look(cTintG, "TintG", ml::MinTint, ml::MaxTint, &map.look.tintG);
+		look(cTintB, "TintB", ml::MinTint, ml::MaxTint, &map.look.tintB);
 
 		map.item = table.Cell(row, cItem);
 		if (map.item.empty()) {

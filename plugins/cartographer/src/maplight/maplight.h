@@ -11,10 +11,13 @@ namespace cartographer::maplight {
 inline constexpr int DefaultPercent = 100;
 inline constexpr int MinBrightness = 10, MaxBrightness = 400;
 inline constexpr int MinWarmth = 25, MaxWarmth = 400;
+// TintR, TintG, TintB: the percent each light colour channel is multiplied by (0 removes the channel, 100 keeps it). Maps only.
+inline constexpr int MinTint = 0, MaxTint = 200;
 
 struct Look {
 	int brightness = DefaultPercent;
 	int warmth = DefaultPercent;
+	int tintR = DefaultPercent, tintG = DefaultPercent, tintB = DefaultPercent;
 
 	// True when any column differs from the tileset's own look.
 	auto any() const -> bool;
@@ -36,6 +39,9 @@ auto clampKelvin(float kelvin) -> float;
 // False when Warmth is blank or 100: the colour temperature is then not written at all, so a Brightness-only map never clamps
 // the tileset's own temperature.
 auto changesTemperature(const Look& look) -> bool;
+
+// False when TintR, TintG and TintB are all blank or 100: the light colours are then not touched.
+auto changesTint(const Look& look) -> bool;
 
 // A short description for the log.
 auto describe(const Look& look) -> std::string;
