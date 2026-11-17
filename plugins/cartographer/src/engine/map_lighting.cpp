@@ -25,7 +25,7 @@ constexpr size_t ComponentSize = 0x1e8;  // VisualDataComponent, the pool stride
 // The call in VisualDataSystem::Update that passes the current instance's component (call at 0xf5d837, returns 0xf5d83c) is found by the
 // InstanceCall signature; the other call (0xf5d9b2, no instance: a component built on the stack) is not a level's look and is left alone.
 constexpr size_t ExposureOffset = 0x00;     // component float: the exposure value (a higher value is a darker picture)
-constexpr size_t TemperatureOffset = 0x40;  // component float: the colour temperature (the apply function copies it to a global)
+constexpr size_t PlayerLightPowerOffset = 0x40;  // component float: the strength of the light around the player (playerUnitLightPower; the apply function copies it to a global)
 // The directional lights (DirectionalLightComponent storage, stride 0x60, note 32): a colour vec3 at +0x00 and a second copy at +0x4c. The game rewrites
 // them every frame (the level's transition code), so a tint written here lasts one frame and is gone the frame after the player leaves.
 constexpr size_t LightStride = 0x60, LightColourOffsets[2] = {0x00, 0x4c};
@@ -44,8 +44,8 @@ std::atomic<bool> g_live{false};
 std::mutex g_lock;  // g_looks and the two scales (no engine call while held)
 std::map<int, ml::Look> g_looks;  // slot level -> the look of the map opened there last (maps that share a tileset share the level)
 float g_exposure = 1.0f;
-float g_temperature = 1.0f;
-bool g_changesTemperature = false;  // false for a Brightness-only look: the tileset's own temperature is left alone (not even clamped)
+float g_lightPower = 1.0f;
+bool g_changesLightPower = false;  // false for a Brightness-only look: the tileset's own light power is left alone (not even clamped)
 bool g_changesTint = false;
 float g_tint[3] = {1.0f, 1.0f, 1.0f};  // TintR, TintG, TintB as multipliers
 std::atomic<bool> g_active{false};  // the local player stands in the map's slot level and the map has a look
@@ -82,7 +82,7 @@ auto LightData(void* registry, size_t* count, const uint32_t** ids) -> uint8_t* 
 	}
 	size_t n = static_cast<size_t>(end - begin) / 4;
 	n = n < MaxLights ? n : MaxLights;
-	if (n == 0 || !Readable(data, n * LightStride)) {
+	if (n == 0 || !Readable(begin, n * 4) || !Readable(data, n * LightStride)) {
 		return nullptr;
 	}
 	*count = n;
@@ -142,30 +142,30 @@ auto ApplyHook(void* system, void* registry, uint8_t* component, uint8_t* frame)
 				g_tintWritten = false;
 			}
 			if (g_active.load(std::memory_order_relaxed) && Readable(component, ComponentSize)) {
-				float exposure = 1.0f, temperature = 1.0f, tintR = 1.0f, tintG = 1.0f, tintB = 1.0f;
-				bool changesTemperature = false, tint = false;
+				float exposure = 1.0f, lightPower = 1.0f, tintR = 1.0f, tintG = 1.0f, tintB = 1.0f;
+				bool changesLightPower = false, tint = false;
 				{
 					std::lock_guard<std::mutex> lock(g_lock);
 					exposure = g_exposure;
-					temperature = g_temperature;
-					changesTemperature = g_changesTemperature;
+					lightPower = g_lightPower;
+					changesLightPower = g_changesLightPower;
 					tint = g_changesTint;
 					tintR = g_tint[0];
 					tintG = g_tint[1];
 					tintB = g_tint[2];
 				}
-				const auto scale = [&](size_t offset, float factor, bool kelvin) {
+				const auto scale = [&](size_t offset, float factor, bool clamp) {
 					float value = 0;
 					std::memcpy(&value, component + offset, 4);
 					value *= factor;
-					if (kelvin) {
-						value = ml::clampKelvin(value);
+					if (clamp) {
+						value = ml::clampLightPower(value);
 					}
 					std::memcpy(component + offset, &value, 4);
 				};
 				scale(ExposureOffset, exposure, false);
-				if (changesTemperature) {
-					scale(TemperatureOffset, temperature, true);
+				if (changesLightPower) {
+					scale(PlayerLightPowerOffset, lightPower, true);
 				}
 				g_changed.fetch_add(1, std::memory_order_relaxed);
 				if (tint) {
@@ -274,8 +274,8 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 		active = look != nullptr;
 		if (active) {
 			g_exposure = ml::exposureScale(*look);
-			g_temperature = ml::temperatureScale(*look);
-			g_changesTemperature = ml::changesTemperature(*look);
+			g_lightPower = ml::lightPowerScale(*look);
+			g_changesLightPower = ml::changesLightPower(*look);
 			g_changesTint = ml::changesTint(*look);
 			g_tint[0] = static_cast<float>(look->tintR) / 100.0f;
 			g_tint[1] = static_cast<float>(look->tintG) / 100.0f;
