@@ -35,7 +35,7 @@ inline constexpr const char* BossKeyPrefix = "cartoboss:";
 
 inline constexpr int DefaultMonsterLevel = 85;
 inline constexpr int DefaultEventChance = 20;
-inline constexpr int MaxMonsters = 10;
+inline constexpr int MaxMonsters = 13;  // the region record holds 13 monster groups
 inline constexpr int Normal = 0, Nightmare = 1, Hell = 2;
 
 // The item spell (misc.txt pSpell) a map's item must have: the plugin hooks the use of items with this spell.

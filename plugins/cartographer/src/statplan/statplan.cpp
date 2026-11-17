@@ -340,6 +340,12 @@ int densityWithBonus(int base, int bonus)
 	return total > 0x7fffffff ? 0x7fffffff : static_cast<int>(total);
 }
 
+int levelWithBonus(int level, int bonus)
+{
+	const int64_t total = static_cast<int64_t>(level) + bonus;
+	return total < kMinMapLevel ? kMinMapLevel : (total > kMaxMapLevel ? kMaxMapLevel : static_cast<int>(total));
+}
+
 const std::vector<Route> &builtInRoutes()
 {
 	static const std::vector<Route> table = {
@@ -351,19 +357,83 @@ const std::vector<Route> &builtInRoutes()
 		{"cartographer_mon_poison_res", RouteTarget::Monster, "poisonresist", std::nullopt, ""},
 		{"cartographer_mon_speed", RouteTarget::Monster, "velocitypercent", std::nullopt, ""},
 		{kMapDensityStat, RouteTarget::Area, "Density", std::nullopt, ""},
+		{"cartographer_mon_tohit", RouteTarget::Monster, "tohit", std::nullopt, ""},
+		{"cartographer_mon_tohit_pct", RouteTarget::Monster, "item_tohit_percent", std::nullopt, ""},
+		{"cartographer_mon_armor_pct", RouteTarget::Monster, "item_armor_percent", std::nullopt, ""},
+		{"cartographer_mon_dmg_fire_min", RouteTarget::Monster, "firemindam", std::nullopt, ""},
+		{"cartographer_mon_dmg_fire_max", RouteTarget::Monster, "firemaxdam", std::nullopt, ""},
+		{"cartographer_mon_dmg_ltng_min", RouteTarget::Monster, "lightmindam", std::nullopt, ""},
+		{"cartographer_mon_dmg_ltng_max", RouteTarget::Monster, "lightmaxdam", std::nullopt, ""},
+		{"cartographer_mon_dmg_cold_min", RouteTarget::Monster, "coldmindam", std::nullopt, ""},
+		{"cartographer_mon_dmg_cold_max", RouteTarget::Monster, "coldmaxdam", std::nullopt, ""},
+		{"cartographer_mon_dmg_cold_len", RouteTarget::Monster, "coldlength", std::nullopt, ""},
+		{"cartographer_mon_dmg_mag_min", RouteTarget::Monster, "magicmindam", std::nullopt, ""},
+		{"cartographer_mon_dmg_mag_max", RouteTarget::Monster, "magicmaxdam", std::nullopt, ""},
+		{"cartographer_mon_dmg_pois_min", RouteTarget::Monster, "poisonmindam", std::nullopt, ""},
+		{"cartographer_mon_dmg_pois_max", RouteTarget::Monster, "poisonmaxdam", std::nullopt, ""},
+		{"cartographer_mon_dmg_pois_len", RouteTarget::Monster, "poisonlength", std::nullopt, ""},
+		{"cartographer_mon_mastery_fire", RouteTarget::Monster, "passive_fire_mastery", std::nullopt, ""},
+		{"cartographer_mon_mastery_ltng", RouteTarget::Monster, "passive_ltng_mastery", std::nullopt, ""},
+		{"cartographer_mon_mastery_cold", RouteTarget::Monster, "passive_cold_mastery", std::nullopt, ""},
+		{"cartographer_mon_mastery_pois", RouteTarget::Monster, "passive_pois_mastery", std::nullopt, ""},
+		{"cartographer_mon_mastery_mag", RouteTarget::Monster, "passive_mag_mastery", std::nullopt, ""},
+		{"cartographer_mon_pierce_fire", RouteTarget::Monster, "passive_fire_pierce", std::nullopt, ""},
+		{"cartographer_mon_pierce_ltng", RouteTarget::Monster, "passive_ltng_pierce", std::nullopt, ""},
+		{"cartographer_mon_pierce_cold", RouteTarget::Monster, "passive_cold_pierce", std::nullopt, ""},
+		{"cartographer_mon_pierce_pois", RouteTarget::Monster, "passive_pois_pierce", std::nullopt, ""},
+		{"cartographer_mon_absorb_fire", RouteTarget::Monster, "item_absorbfire", std::nullopt, ""},
+		{"cartographer_mon_absorb_fire_pct", RouteTarget::Monster, "item_absorbfire_percent", std::nullopt, ""},
+		{"cartographer_mon_absorb_ltng", RouteTarget::Monster, "item_absorblight", std::nullopt, ""},
+		{"cartographer_mon_absorb_ltng_pct", RouteTarget::Monster, "item_absorblight_percent", std::nullopt, ""},
+		{"cartographer_mon_absorb_cold", RouteTarget::Monster, "item_absorbcold", std::nullopt, ""},
+		{"cartographer_mon_absorb_cold_pct", RouteTarget::Monster, "item_absorbcold_percent", std::nullopt, ""},
+		{"cartographer_mon_absorb_mag", RouteTarget::Monster, "item_absorbmagic", std::nullopt, ""},
+		{"cartographer_mon_absorb_mag_pct", RouteTarget::Monster, "item_absorbmagic_percent", std::nullopt, ""},
+		{"cartographer_mon_dr", RouteTarget::Monster, "normal_damage_reduction", std::nullopt, ""},
+		{"cartographer_mon_mdr", RouteTarget::Monster, "magic_damage_reduction", std::nullopt, ""},
+		{"cartographer_mon_dr_pct", RouteTarget::Monster, "damageresist", std::nullopt, ""},
+		{"cartographer_mon_mag_res", RouteTarget::Monster, "magicresist", std::nullopt, ""},
+		{"cartographer_mon_deadly", RouteTarget::Monster, "item_deadlystrike", std::nullopt, ""},
+		{"cartographer_mon_crush", RouteTarget::Monster, "item_crushingblow", std::nullopt, ""},
+		{"cartographer_mon_openwounds", RouteTarget::Monster, "item_openwounds", std::nullopt, ""},
+		{"cartographer_mon_thorns", RouteTarget::Monster, "item_attackertakesdamage", std::nullopt, ""},
+		{"cartographer_mon_attackrate", RouteTarget::Monster, "attackrate", std::nullopt, ""},
+		{"cartographer_mon_far", RouteTarget::Monster, "item_fasterattackrate", std::nullopt, ""},
+		{"cartographer_mon_fcr", RouteTarget::Monster, "item_fastercastrate", std::nullopt, ""},
+		{"cartographer_mon_fhr", RouteTarget::Monster, "item_fastergethitrate", std::nullopt, ""},
+		{"cartographer_mon_fbr", RouteTarget::Monster, "item_fasterblockrate", std::nullopt, ""},
+		{"cartographer_mon_regen", RouteTarget::Monster, "hpregen", std::nullopt, ""},
+		{"cartographer_mon_cannotfreeze", RouteTarget::Monster, "item_cannotbefrozen", std::nullopt, ""},
+		{"cartographer_mon_halffreeze", RouteTarget::Monster, "item_halffreezeduration", std::nullopt, ""},
+		{"cartographer_mon_curse_res", RouteTarget::Monster, "curse_resistance", std::nullopt, ""},
+		{"cartographer_mon_missile_pierce", RouteTarget::Monster, "item_pierce", std::nullopt, ""},
+		{"cartographer_map_area_level", RouteTarget::Area, "AreaLevel", std::nullopt, ""},
+		{"cartographer_map_uniques", RouteTarget::Area, "Uniques", std::nullopt, ""},
+		{"cartographer_map_extra_groups", RouteTarget::Behaviour, "extra_groups", std::nullopt, ""},
+		{"cartographer_map_extra_boss", RouteTarget::Behaviour, "extra_boss", std::nullopt, ""},
+		{"cartographer_map_drop_tc", RouteTarget::Behaviour, "drop_tc", std::nullopt, ""},
+		{"cartographer_map_drop_ethereal", RouteTarget::Behaviour, "drop_ethereal", std::nullopt, ""},
+		{"cartographer_map_drop_socketed", RouteTarget::Behaviour, "drop_socketed", std::nullopt, ""},
+		{"cartographer_map_drop_bonus", RouteTarget::Behaviour, "drop_bonus", std::nullopt, ""},
+		{"cartographer_mon_lifesteal_pct", RouteTarget::Behaviour, "lifesteal_pct", std::nullopt, ""},
+		{"cartographer_mon_phys_as_fire", RouteTarget::Behaviour, "phys_as_fire", std::nullopt, ""},
+		{"cartographer_mon_phys_as_cold", RouteTarget::Behaviour, "phys_as_cold", std::nullopt, ""},
+		{"cartographer_mon_phys_as_ltng", RouteTarget::Behaviour, "phys_as_ltng", std::nullopt, ""},
+		{"cartographer_mon_phys_as_pois", RouteTarget::Behaviour, "phys_as_pois", std::nullopt, ""},
+		{"cartographer_mon_phys_as_mag", RouteTarget::Behaviour, "phys_as_mag", std::nullopt, ""},
 	};
 	return table;
 }
 
 const std::vector<std::string> &knownAreaParams()
 {
-	static const std::vector<std::string> params = {"Density"};
+	static const std::vector<std::string> params = {"Density", "AreaLevel", "Uniques"};
 	return params;
 }
 
 bool behaviourHandled(std::string_view key)
 {
-	static const char *const handled[] = {"extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois", nullptr}; // #538 adds its keys here
+	static const char *const handled[] = {"drop_tc", "drop_bonus", "drop_ethereal", "drop_socketed", "extra_boss", "extra_groups", "lifesteal_pct", "phys_as_fire", "phys_as_ltng", "phys_as_cold", "phys_as_mag", "phys_as_pois", nullptr};
 	for (const char *h : handled)
 		if (h != nullptr && key == h) return true;
 	return false;

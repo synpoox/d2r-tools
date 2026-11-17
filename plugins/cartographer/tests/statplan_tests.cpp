@@ -680,7 +680,7 @@ TEST_CASE("every monster-side map stat names a vanilla stat buildPlan accepts on
 {
 	StatIds ids;
 	ids.loaded = true;
-	int next = 100;  // clear of the ids buildPlan refuses
+	int next = 1000;  // clear of the ids buildPlan refuses (the catalogue has more stats than the refused ids leave room for from 100)
 	for (const auto &m : builtInRoutes())
 		if (m.target == RouteTarget::Monster) ids.byName.emplace_back(m.apply, next++);
 	for (const auto &m : builtInRoutes()) {
@@ -956,7 +956,8 @@ TEST_CASE("the map panel's cap is the built-in monster stats plus the player sta
 	size_t monsterRoutes = 0;
 	for (const auto &r : builtInRoutes()) monsterRoutes += r.target == RouteTarget::Monster ? 1 : 0;
 	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxPlayerLines) == kMaxPlayerStats);
-	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxStatLines) == monsterRoutes + kMaxPlayerStats);
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxStatLines) == cartographer::mappanel::kMaxMonsterLines + kMaxPlayerStats);
+	CHECK(static_cast<size_t>(cartographer::mappanel::kMaxMonsterLines) < monsterRoutes);  // more monster stats than lines: the rest end in "and N more"
 	CHECK(builtInRoutes().size() > monsterRoutes);  // the table holds non-monster rows too
 }
 
@@ -987,10 +988,10 @@ StatIds routeIds()
 
 } // namespace
 
-TEST_CASE("the built-in routes are the seven monster stats and the Density area route, unchanged")
+TEST_CASE("the first built-in routes are the seven monster stats and the Density area route, unchanged")
 {
 	const auto &t = builtInRoutes();
-	REQUIRE(t.size() == 8);
+	REQUIRE(t.size() >= 8);
 	const char *want[][2] = {{"cartographer_mon_life", "item_maxhp_percent"}, {"cartographer_mon_damage", "damagepercent"}, {"cartographer_mon_fire_res", "fireresist"},
 	                         {"cartographer_mon_cold_res", "coldresist"},     {"cartographer_mon_light_res", "lightresist"}, {"cartographer_mon_poison_res", "poisonresist"},
 	                         {"cartographer_mon_speed", "velocitypercent"}};
@@ -1060,8 +1061,12 @@ TEST_CASE("area params and behaviour keys are summed over the item's affixes")
 	// Value on an area route replaces each affix's number.
 	const auto fixed = itemStatsToProperties({{4, 0, 20}, {4, 0, 35}}, routeIds(), mergeRoutes(builtInRoutes(), {{"cartographer_map_density", RouteTarget::Area, "Density", 10, ""}}));
 	CHECK(fixed.routing.area("Density") == 20);
-	CHECK_FALSE(behaviourHandled("map_drop_tc"));  // no handler yet (#538)
+	CHECK_FALSE(behaviourHandled("map_drop_tc"));  // the key is drop_tc, not the stat name
+	for (const char *k : {"drop_tc", "drop_bonus", "drop_ethereal", "drop_socketed", "extra_boss"}) CHECK(behaviourHandled(k));
+	for (const char *k : {"extra_groups", "lifesteal_pct", "phys_as_fire"}) CHECK(behaviourHandled(k));  // #540
 	CHECK(canonicalAreaParam("density") == "Density");
+	CHECK(canonicalAreaParam("arealevel") == "AreaLevel");
+	CHECK(canonicalAreaParam("UNIQUES") == "Uniques");
 	CHECK(canonicalAreaParam("level").empty());
 }
 
@@ -1089,4 +1094,50 @@ TEST_CASE("the combat behaviour keys have handlers (issue #540)")
 		CHECK(behaviourHandled(key));
 	}
 	CHECK_FALSE(behaviourHandled("phys_as_holy"));
+}
+
+TEST_CASE("the catalogue routes (issue #539): monster stats to their engine stat, area stats to area params, behaviour stats to behaviour keys")
+{
+	const auto &t = builtInRoutes();
+	const auto route = [&](const char *stat) {
+		const Route *r = findRoute(t, stat);
+		REQUIRE_MESSAGE(r != nullptr, stat);
+		return *r;
+	};
+	CHECK(route("cartographer_mon_tohit").apply == "tohit");
+	CHECK(route("cartographer_mon_dmg_cold_len").apply == "coldlength");
+	CHECK(route("cartographer_mon_mastery_mag").apply == "passive_mag_mastery");
+	CHECK(route("cartographer_mon_absorb_ltng_pct").apply == "item_absorblight_percent");
+	CHECK(route("cartographer_mon_fcr").apply == "item_fastercastrate");
+	CHECK(route("cartographer_mon_missile_pierce").apply == "item_pierce");
+	CHECK(route("cartographer_mon_regen").target == RouteTarget::Monster);
+	CHECK(route("cartographer_map_area_level").target == RouteTarget::Area);
+	CHECK(route("cartographer_map_area_level").apply == "AreaLevel");
+	CHECK(route("cartographer_map_uniques").apply == "Uniques");
+	for (const char *s : {"cartographer_map_drop_tc", "cartographer_map_drop_ethereal", "cartographer_map_drop_socketed", "cartographer_map_drop_bonus", "cartographer_map_extra_boss",
+	                      "cartographer_map_extra_groups", "cartographer_mon_lifesteal_pct", "cartographer_mon_phys_as_fire", "cartographer_mon_phys_as_mag"})
+		CHECK(route(s).target == RouteTarget::Behaviour);
+	CHECK(route("cartographer_map_drop_tc").apply == "drop_tc");
+	CHECK(route("cartographer_mon_phys_as_ltng").apply == "phys_as_ltng");
+	// Every area param a route names is a known one, and no route chains onto another route's stat.
+	for (const auto &r : t) {
+		if (r.target == RouteTarget::Area) CHECK_MESSAGE(!canonicalAreaParam(r.apply).empty(), r.stat);
+		if (r.target == RouteTarget::Monster) CHECK_MESSAGE(findRoute(t, r.apply) == nullptr, r.stat);
+	}
+	// Stats of one stat name are unique.
+	for (size_t i = 0; i < t.size(); ++i)
+		for (size_t j = i + 1; j < t.size(); ++j) CHECK_MESSAGE(t[i].stat != t[j].stat, t[i].stat);
+}
+
+TEST_CASE("AreaLevel and Uniques area params are summed over the item's affixes, and the level is cut to 1..255")
+{
+	const StatIds ids = parseItemStatCost("Stat\ncartographer_map_area_level\ncartographer_map_uniques\n");
+	const auto r = itemStatsToProperties({{0, 0, 2}, {0, 0, 3}, {1, 0, 40}, {1, 0, -10}}, ids);
+	CHECK(r.routing.area("AreaLevel") == 5);
+	CHECK(r.routing.area("arealevel") == 5);
+	CHECK(r.routing.area("Uniques") == 30);
+	CHECK(r.properties.empty());
+	CHECK(levelWithBonus(85, 5) == 90);
+	CHECK(levelWithBonus(254, 5) == 255);
+	CHECK(levelWithBonus(3, -10) == 1);
 }

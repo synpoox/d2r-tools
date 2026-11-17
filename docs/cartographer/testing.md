@@ -95,7 +95,7 @@ default. Cartographer's own words (tilesets, shapes, sizes) ignore case; names f
 | Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |
 | Item | Item code that opens this map, and only this map: required, unique across maps, item spell 16 | required |
-| Boss, Monsters | A monstats `Id` or superunique name; up to 10 monster ids | none |
+| Boss, Monsters | A monstats `Id` or superunique name; up to 13 monster ids | none |
 | MinCharLevel | Character level needed, 1 to 99 | 1 |
 | EventChance, Density, Champions, Uniques | Numbers; `EventChance` is used when a map opens; `Level`, `Monsters`, `Density` and `Uniques` are written into the map's level (`Monsters` seen in game, the rest experimental); `Champions` is checked only, never applied | cartographer.txt |
 
@@ -295,3 +295,5 @@ Exact game steps to verify (needs a game, test slot and test save only):
 4. Save and Exit, then read `d2rloader.log` for "Character save failed". If it appears with the codes now unique and the scroll base, the cause is the cheat-spawned item; repeat once with `cheat savecheatitems 1` (or the Cheat Settings toggle) and record both results.
 
 Verified in game (2026-11-12, slot 6, Hell, single player, test character, `-MapItems` rows with `type` `cmap`, the `Map` type added by `install.ps1`): each of `t20`, `t21`, `t22` showed its own name on hover before use ("Shorelines Map", "Tunneling Depths Map", "Overgrown Reach Map"). A right-click on the Shorelines item removed it and opened a red portal, with the log lines `opening 'Shorelines' (Cave) through level 138` and `Shorelines is open`. After Save and Exit and a reload the Overgrown Reach item answered with its own name ("Overgrown Reach cannot be opened: a map has already been opened in this game"), the once-per-game rule; the Tunneling Depths and Overgrown Reach portals were not opened in this run. Save and Exit worked with no `Character save failed` and no `BC_ASSERT`, and the character reloaded, with the PD2 `core-maps`, `core-rules` and `core-ui` DLLs moved out of the slot's plugins folder for the run (they cause the save failure, not these rows). Later in game: a map item could not be placed in the belt (the base 4-slot belt), Malah's three tabs sold none, and a Shorelines Map sold to him for 40 gold with no plugin error; Save and Exit with a map item in the inventory kept it. Not checked: a belt with more slots, the other vendors, and the map items' own inventory art (they show the scroll picture).
+
+Test-item tip: `stage_check -MapItems` does not seed `uniqueitems.txt`. Copy the vanilla table plus your row into the slot mod's excel folder, run `cheat uniques <439>`, then `cheat spawn t20,typ u,inv 0`.

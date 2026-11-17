@@ -49,6 +49,21 @@ std::vector<StatValue> physAsStats(Element element, int pct, int minDmg, int max
 	return {};
 }
 
+MapBehaviours fromRouting(const statplan::MapRouting& routing) {
+	const auto atLeast0 = [](int v) { return v < 0 ? 0 : v; };
+	MapBehaviours b;
+	b.dropBonusPct = atLeast0(routing.behaviour("drop_bonus"));
+	b.etherealPct = atLeast0(routing.behaviour("drop_ethereal"));
+	b.socketedPct = atLeast0(routing.behaviour("drop_socketed"));
+	b.extraBoss = std::min(atLeast0(routing.behaviour("extra_boss")), kMaxExtraBoss);
+	for (const statplan::KeyedValue& k : routing.behaviours) {
+		if (k.key == "drop_tc" && !k.param.empty() && k.value > 0) {
+			b.dropTcs.emplace_back(k.param, k.value);
+		}
+	}
+	return b;
+}
+
 bool any(const MapBehaviours& b) {
 	return b.dropBonusPct > 0 || b.etherealPct > 0 || b.socketedPct > 0 || b.extraBoss > 0 || !b.dropTcs.empty();
 }

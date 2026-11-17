@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "statplan.h"
+
 namespace cartographer::behaviours {
 
 // The behaviour keys the stat router sums per opened map: drop_tc (param = the TC name), drop_bonus, drop_ethereal, drop_socketed, extra_boss.
@@ -54,6 +56,10 @@ inline constexpr int kMaxPhysAsPct = 1000;
 inline constexpr int kColdLength = 50;     // frames
 inline constexpr int kPoisonLength = 100;  // frames
 std::vector<StatValue> physAsStats(Element element, int pct, int minDmg, int maxDmg);
+
+// The behaviours an opened map's item routed (issue #539): drop_bonus, drop_ethereal and drop_socketed are the summed values (never below 0),
+// extra_boss is cut to 0..kMaxExtraBoss, and each drop_tc route with a Param (the treasure class name) and a positive sum is one dropTcs entry.
+MapBehaviours fromRouting(const cartographer::statplan::MapRouting& routing);
 
 // True when the map changes anything.
 bool any(const MapBehaviours& b);

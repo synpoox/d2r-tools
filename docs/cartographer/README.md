@@ -99,7 +99,7 @@ A tileset that is not ready is refused when the game loads, with a message that 
 | `Level` | Monster level in the map |
 | `Item` | Required. The item code that opens this map, and only this map; no two maps share one. The item needs item spell 16 in `misc.txt` |
 | `Boss` | A monster placed at the end of the path. Use its `Id` from the game's monster table, or the name of a unique monster such as `Bishibosh`; upper and lower case must match |
-| `Monsters` | Up to 10 monster `Id`s, separated by commas, with the case matching. Blank: the tileset's own monsters |
+| `Monsters` | Up to 13 monster `Id`s, separated by commas, with the case matching. Blank: the tileset's own monsters |
 | `MinCharLevel` | The character level the player needs |
 | `EventChance` | Percent chance of an event |
 | `Density`, `Champions`, `Uniques` | Percent more monsters and unique packs than the level's own (experimental, not verified in game); `Champions` is read and checked but not applied |
