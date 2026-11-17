@@ -12,7 +12,7 @@ an ambush, a shrine or a treasure). MIT licensed.
 - **Red portal**: one map per game, in Harrogath, in Hell. A refused map stays in your inventory and you see "I can't use this yet."
 - **Plain-English tables**: `maps.txt` and `cartographer.txt` are checked row by row. A bad row is skipped and named in
   `cartographer-report.txt`; the rest load.
-- **Cave, Crypt, Lava, Ice caves, Durance of Hate and Arcane Sanctuary mazes**: every map is generated (Cave, Crypt, Lava, Ice, Durance or Arcane) from the map's layout (`Corridor`, `Winding`,
+- **Cave, Crypt, Lava, Ice caves, Durance of Hate, Arcane Sanctuary and Barracks mazes**: every map is generated (Cave, Crypt, Lava, Ice, Durance, Arcane or Barracks) from the map's layout (`Corridor`, `Winding`,
   `Branching`, `Loop`, `Sprawl`) through the maze slots that `tools\install.ps1` adds (see below).
 - **Map items**: a map item is meant to be normal, rare or unique (a plugin hook makes a map the game rolls as magic normal; a map forced magic by a cheat or already existing stays magic, and the hook applies to any item with the map spell 16). A rare map is rolled by the game from the
   `magicprefix`, `magicsuffix`, `rareprefix` and `raresuffix` rows whose type is `cmap`; a unique map is a
@@ -90,6 +90,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Ice Caves` | a plain game Ice caves maze row (DrlgType 1), such as level 113 | 1 | 33 (Ice) | 360 | 2000, 0 |
    | `Cartographer Durance` | a plain game Durance of Hate maze row (DrlgType 1), such as level 100 | 1 | 22 (Durance) | 360 | 1000, 0 |
    | `Cartographer Arcane Sanctuary` | the game's Arcane Sanctuary (level 74, DrlgType 1); clear `Quest`, `QuestFlag` and `QuestFlagEx` | 1 | 19 (Arcane) | 360 | 500, 0 |
+   | `Cartographer Barracks` | the game's Barracks (level 28, DrlgType 1) | 1 | 7 (Barracks) | 360 | 1000, 500 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
    | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
@@ -125,7 +126,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
 | Column | Meaning | Default |
 |---|---|---|
 | Name | Unique name | required |
-| Tileset | `Cave`, `Crypt`, `Lava`, `Ice`, `Durance` or `Arcane` (each opens through its own level); other tileset names are accepted but refused for now | required |
+| Tileset | `Cave`, `Crypt`, `Lava`, `Ice`, `Durance`, `Arcane` or `Barracks` (each opens through its own level); other tileset names are accepted but refused for now | required |
 | Shape | `Corridor`, `Winding`, `Branching`, `Loop`, `Sprawl` or `Open` (an open room grid: all rooms joined, a few walls, no dead ends; not for `Snow`). On Cave, a 200-tile slot shrinks ExtraLarge Open to about 7 x 7 rooms; on Jungle, ExtraLarge Open uses the 9 x 9 Large grid, since every block is stamped. `Snow`, `Siege`, `Mesa`, `Desert`, `Wilderness` and `Kurast` ignore Shape: leave the cell blank there | required (blank is fine for Snow, Siege, Mesa, Desert, Wilderness and Kurast) |
 | Size | `Small`, `Medium`, `Large` or `ExtraLarge` | Large |
 | Level | Monster level, 1 to 255 | 85 |

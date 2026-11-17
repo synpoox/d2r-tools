@@ -180,10 +180,10 @@ struct ArrivalMark {
 	int32_t minX = 0, minY = 0;        // the built rooms' box corner, tiles
 };
 
-// `rects` are the rooms the build made, `unit` the plan cell size in tiles (the tileset's roomTiles). The entrance cell is
+// `rects` are the rooms the build made, `unit` the plan cell width in tiles (the tileset's roomTiles), `unitY` its height (roomH(); 0: the same as `unit`). The entrance cell is
 // the plan's `entrance.room`, which every plan has, also the loops that place no special entrance piece. The built box
 // must be the plan's (in cells) and the cell must hold a room; the room nearest the cell's centre is chosen.
-ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects);
+ArrivalMark planArrival(const Plan &plan, int unit, const std::vector<RoomRect> &rects, int unitY = 0);
 
 // The built room of one plan room (issue #184): the walk's record of a plan room is stale once the build splits the cell (the cell's
 // top-left room, or freed memory read as (1,0) 0 x 0), so the room is found by its rect in the level's list, as the arrival is: the
@@ -198,6 +198,6 @@ struct CellRoom {
 	int cellX = 0, cellY = 0;
 	int32_t originX = 0, originY = 0, minX = 0, minY = 0;
 };
-CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects);
+CellRoom planCellRoom(const Plan &plan, int unit, int planRoom, const std::vector<RoomRect> &rects, int unitY = 0);
 
 } // namespace cartographer::maze

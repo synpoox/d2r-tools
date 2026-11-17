@@ -142,7 +142,7 @@ struct Entrance {
 	bool known = false;       // exactly one plan cell holds an entrance room
 	int32_t x = 0, y = 0;     // that cell's top-left corner, tiles (the last one seen when not known)
 	int32_t levelId = 0;
-	int32_t minX = 0, minY = 0, unit = 0;  // the rooms' box corner and the plan cell size, tiles: a room's cell = (pos - min) / unit
+	int32_t minX = 0, minY = 0, unit = 0, unitY = 0;  // the rooms' box corner and the plan cell size, tiles (width, height): a room's cell = (pos - min) / unit
 };
 Entrance g_entrance;  // guarded by g_lock
 MazeEventRect g_eventRooms[cm::MazeTilesetCount];  // per maze slot level, guarded by g_lock
@@ -253,6 +253,7 @@ void ProbeLevelList(const void* level) noexcept {
 void ProbeShape(const void* level, const cm::Tileset& ts, const cm::Plan& plan, const char* when, int32_t minX, int32_t minY) noexcept {
 	constexpr int GridMax = 40;
 	const int unit = ts.roomTiles > 0 ? ts.roomTiles : 24;
+	const int unitY = ts.roomTiles > 0 ? ts.roomH() : 24;
 	char built[GridMax][GridMax + 1] = {};
 	char planned[GridMax][GridMax + 1] = {};
 	for (int y = 0; y < GridMax; ++y) {
@@ -280,7 +281,7 @@ void ProbeShape(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 		if (k < distinct) {
 			++sizes[k][2];
 		}
-		const int cx = (Read<int32_t>(room, RoomX) - minX) / unit, cy = (Read<int32_t>(room, RoomY) - minY) / unit;
+		const int cx = (Read<int32_t>(room, RoomX) - minX) / unit, cy = (Read<int32_t>(room, RoomY) - minY) / unitY;
 		const void* piece = Read<const void*>(room, RoomPiece);
 		withPiece += piece != nullptr ? 1 : 0;
 		if (piece != nullptr) {
@@ -314,7 +315,7 @@ void ProbeShape(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 		const int n = std::snprintf(sz + used, sizeof(sz) - used, " %dx%d:%d", sizes[k][0], sizes[k][1], sizes[k][2]);
 		used += n > 0 ? static_cast<size_t>(n) : 0;
 	}
-	plog::Info("[maze probe] %s: room sizes (w x h : rooms)%s; rooms with a piece %d (distinct piece structs %d, rooms sharing one %d, Fixed flag set on %d), outside the grid %d; one character below = %d tiles", when, sz, withPiece, seenCount, sharedPieces, fixedRooms, outside, unit);
+	plog::Info("[maze probe] %s: room sizes (w x h : rooms)%s; rooms with a piece %d (distinct piece structs %d, rooms sharing one %d, Fixed flag set on %d), outside the grid %d; one character below = %d tiles", when, sz, withPiece, seenCount, sharedPieces, fixedRooms, outside, unit);  // one character is a cell wide; a cell is unitY tall
 	for (int pass = 0; pass < 2; ++pass) {
 		char (*grid)[GridMax + 1] = pass == 0 ? built : planned;
 		int rows = 0, cols = 0;
@@ -357,6 +358,7 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 	// The entrance is counted once per plan cell: a cell becomes 3 x 3 engine rooms and the Prev piece sits on each of them. The
 	// cells are known only once the box is, so this is a second walk of the same list.
 	const int unit = ts.roomTiles > 0 ? ts.roomTiles : 24;
+	const int unitY = ts.roomTiles > 0 ? ts.roomH() : 24;
 	constexpr int CellsKept = 8;
 	int64_t cells[CellsKept] = {};
 	int entranceRooms = 0, entranceCells = 0;
@@ -368,7 +370,7 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 			continue;
 		}
 		++entranceRooms;
-		const int32_t cx = (Read<int32_t>(room, RoomX) - minX) / unit, cy = (Read<int32_t>(room, RoomY) - minY) / unit;
+		const int32_t cx = (Read<int32_t>(room, RoomX) - minX) / unit, cy = (Read<int32_t>(room, RoomY) - minY) / unitY;
 		const int64_t key = (static_cast<int64_t>(cx) << 32) | static_cast<uint32_t>(cy);
 		bool seen = false;
 		for (int k = 0; k < std::min(entranceCells, CellsKept) && !seen; ++k) {
@@ -381,11 +383,11 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 			++entranceCells;  // past CellsKept it can only be "more than one", which is all the test needs
 		}
 		entX = minX + cx * unit;
-		entY = minY + cy * unit;
+		entY = minY + cy * unitY;
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_entrance = {entranceCells == 1, entX, entY, Read<int32_t>(level, LvlId), minX, minY, unit};
+		g_entrance = {entranceCells == 1, entX, entY, Read<int32_t>(level, LvlId), minX, minY, unit, unitY};
 	}
 	if (!g_probe.load()) {
 		return;
@@ -403,7 +405,7 @@ void ProbeRooms(const void* level, const cm::Tileset& ts, const cm::Plan& plan, 
 // bits and take them off every other room. Does nothing, and says why, when a guard part is missing or the rooms do not match the
 // plan; the game then arrives as it always did.
 // Not noexcept: it allocates, and a bad_alloc must reach the catch in LevelBuildHook instead of calling std::terminate.
-void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
+void MarkArrival(const void* level, const cm::Plan& plan, int unit, int unitY) {
 	static const char* const names[] = {"ArrivalFinder", "ArrivalRoomFinder", "ArrivalFlagTest"};
 	for (int i = ArrivalFinder; i <= ArrivalFlagTest; ++i) {
 		if (!g_parts[i].status.on) {
@@ -419,7 +421,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 		rects.push_back({Read<int32_t>(room, RoomX), Read<int32_t>(room, RoomY), Read<int32_t>(room, RoomW), Read<int32_t>(room, RoomH),
 		                 Read<uint32_t>(room, RoomFlags)});
 	}
-	const cm::ArrivalMark mark = cm::planArrival(plan, unit, rects);
+	const cm::ArrivalMark mark = cm::planArrival(plan, unit, rects, unitY);
 	if (!mark.mark) {
 		plog::Info("maze arrival: left to the game, because %s", mark.why.c_str());
 		return;
@@ -431,7 +433,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 	}
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
-		g_entrance = {true, mark.originX, mark.originY, Read<int32_t>(level, LvlId), mark.minX, mark.minY, unit};
+		g_entrance = {true, mark.originX, mark.originY, Read<int32_t>(level, LvlId), mark.minX, mark.minY, unit, unitY};
 	}
 	plog::Info("maze arrival: room %d of %d (at %d,%d) marked as the level entry, in plan cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, mark.cellX, mark.cellY, static_cast<int>(mark.clear.size()));
@@ -443,7 +445,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit) {
 // hell-check-2 log, see docs/reverse-engineering/cartographer/09-map-events.md). So each room is matched by rect in the level's list against its plan cell, as
 // the arrival is. A room that cannot be found is refused here with the reason: the event then falls back to the distance rule and
 // the map Boss is left off.
-void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int unit) {
+void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int unit, int unitY) {
 	std::vector<cm::RoomRect> rects;
 	for (const void* room = Read<const void*>(level, LvlFirstRoom); room != nullptr && rects.size() < static_cast<size_t>(MaxRooms) && Readable(room, 0x98);
 	     room = Read<const void*>(room, RoomNext)) {
@@ -455,7 +457,7 @@ void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int
 			plog::Info("eventprobe: the maze plan has no %s room", what);
 			return out;
 		}
-		const cm::CellRoom c = cm::planCellRoom(plan, unit, planRoom, rects);
+		const cm::CellRoom c = cm::planCellRoom(plan, unit, planRoom, rects, unitY);
 		if (c.room < 0) {
 			plog::Warn("eventprobe: the maze plan's %s room (plan room %d) was not found: %s; %s", what, planRoom, c.why.c_str(), instead);
 			return out;
@@ -951,11 +953,11 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			}
 			ProbeRooms(level, ctx.prep.plan->tileset, plan, "after the slot build");
 			if (!ctx.fellBack && problem.empty()) {
-				MarkArrival(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
+				MarkArrival(level, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomH() : 24);
 			} else {
 				plog::Info("maze arrival: left to the game, because the build is not the plan");
 			}
-			RecordEventRoom(level, slotIndex, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24);
+			RecordEventRoom(level, slotIndex, plan, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomTiles : 24, ctx.prep.plan->tileset.roomTiles > 0 ? ctx.prep.plan->tileset.roomH() : 24);
 		} catch (...) {
 		}
 	}
@@ -1215,7 +1217,7 @@ void MazeProbeArrival(void* room, int32_t levelId) {
 	const bool outsideBox = haveCell && (x < entrance.minX || y < entrance.minY);
 	const bool inCell = haveCell && !outsideBox;
 	const int32_t cellX = inCell ? entrance.minX + (x - entrance.minX) / entrance.unit * entrance.unit : 0;
-	const int32_t cellY = inCell ? entrance.minY + (y - entrance.minY) / entrance.unit * entrance.unit : 0;
+	const int32_t cellY = inCell ? entrance.minY + (y - entrance.minY) / entrance.unitY * entrance.unitY : 0;
 	char cell[64];
 	if (outsideBox) {
 		std::snprintf(cell, sizeof(cell), "outside the room box");

@@ -19,7 +19,7 @@ struct MazeTileset {
 	int levelType;          // the levels.txt LevelType its slot level must have
 	const char *slot;       // the slots.txt row name of its slot level
 	const char *levelName;  // the levels.txt Name tools\install.ps1 gives that level
-	int roomTiles;          // LvlMaze SizeX = SizeY: a room is roomTiles x roomTiles tiles
+	int roomTiles;          // LvlMaze SizeX: a room is roomTiles wide (and roomTilesY tall; square when that is 0)
 	int pieceBase;          // a room's piece is pieceBase + exit mask
 	int prevPiece[4];       // the entrance family ("Prev" group) by side W, E, S, N; all 0: no entrance family, the entrance is an ordinary room (every row, #455: a Prev piece holds a level exit tile)
 	bool callsRingGrower;   // the tileset's case in the maze builder 0x3e69e0 calls the ring grower 0x3e9820 first
@@ -27,6 +27,7 @@ struct MazeTileset {
 	int offsetY;            // the levels.txt OffsetY (its -<Param>OffsetY default)
 	int ringCells;          // filler rooms (the closed piece) this many cells around the layout, so no void shows past its outer rooms; 0: none
 	bool ownGrower;         // the case calls its own room grower (Arcane, 0x3e7a80) instead of the walk 0x3e96d0: the steered walk runs inside that grower's hook
+	int roomTilesY;         // LvlMaze SizeY when it differs from roomTiles (Barracks 10 x 14); 0: square, SizeY = roomTiles
 };
 
 // Every maze slot level is levelTiles x levelTiles (SizeX and SizeY in levels.txt; the largest plan is 360 tiles on a side).
@@ -60,6 +61,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// around the platforms is the tileset's own look). Its case calls the grower 0x3e7a80, neither the walk nor the ring grower, then one special-room call (the Summoner
 	// rooms 525..528, always suppressed). docs/reverse-engineering/cartographer/37-arcane-grower.md. x 500: below the Durance row (x 1000), clear of Snow (1500..1692).
 	{"Arcane", 19, "MazeArcane", "Cartographer Arcane Sanctuary", 12, 509, {0, 0, 0, 0}, false, 500, 0, 0, true},
+	// Barracks (Act 1 Barracks, LevelType 7, #272): rooms 10 wide and 14 tall (LvlMaze SizeX 10, SizeY 14, the first non-square tileset), "Barracks W" is Def 168
+	// (base 167, 168..182). Its case calls the ring grower, then the walk, and no special-room call: docs/reverse-engineering/cartographer/41-barracks-case.md.
+	// Offset x 1000, y 500: the second band (see Jail, #273), one spot past the next free one so a parallel row does not collide.
+	{"Barracks", 7, "MazeBarracks", "Cartographer Barracks", 10, 167, {0, 0, 0, 0}, true, 1000, 500, 0, false, 14},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 
