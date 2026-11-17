@@ -124,6 +124,19 @@ try {
     $log7 = Run-Installer
     Check ($LASTEXITCODE -eq 0 -and (Get-FileHash $typePath).Hash -eq $before) 'a second run after the cmap repair changes nothing'
 
+    # An old install's ring-only level (Spider, Size 360) is shrunk to the 48 tiles its ring builds, and a run after that changes nothing.
+    $levelsPath = Join-Path $dir 'levels.txt'
+    $iSx = $lh.IndexOf('SizeX'); $iSy = $lh.IndexOf('SizeY')
+    $spiderLine = @(Get-Content $levelsPath | Where-Object { $_.StartsWith("Cartographer Spider`t") })[0]
+    $sp = $spiderLine -split "`t"; $sp[$iSx] = '360'; $sp[$iSy] = '360'
+    [System.IO.File]::WriteAllText($levelsPath, [System.IO.File]::ReadAllText($levelsPath).Replace($spiderLine, ($sp -join "`t")), (New-Object System.Text.UTF8Encoding($false)))
+    $null = Run-Installer
+    $sp2 = @(Read-Rows 'levels.txt' | Where-Object { $_[0] -eq 'Cartographer Spider' })[0]
+    Check ($sp2[$iSx] -eq '48' -and $sp2[$iSy] -eq '48') "an old Spider level at 360 is shrunk to 48 (got $($sp2[$iSx]) x $($sp2[$iSy]))"
+    $before = (Get-FileHash $levelsPath).Hash
+    $null = Run-Installer
+    Check ((Get-FileHash $levelsPath).Hash -eq $before) 'a run after the shrink changes nothing'
+
     # Cartographer's own row from pd2-resurrected's merge is named CartographerMap (code cmap). Identical to the installer's row, it counts as installed:
     # the run passes and changes nothing. The same code under another item type name is refused, and the refused run writes nothing: no table, no
     # slots file, no .bak and no .new. Each case runs on a copy of the installed folder (without its .bak files).

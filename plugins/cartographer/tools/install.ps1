@@ -31,7 +31,7 @@
                   copied the same way as the Desert level.
     levels.txt    an eighth new level (the seventh outdoor one), "Cartographer Kurast", for Kurast (Act 3, the Burbs district) maps and arenas: LevelType 22 (Act 3 - Kurast), SizeX 128 and SizeY 112, at OffsetX 6000,
                   OffsetY 3660, copied the same way as the Desert level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeBarracks, MazeHarem, MazeBasement, MazeSewer, MazeCatacombs, MazeTombs, MazeSpider, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeBarracks, MazeHarem, MazeBasement, MazeSewer, MazeCatacombs, MazeTombs, MazeSpider, MazeTemple, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -418,7 +418,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
         $cells = Cells $levels $levels.Lines[$existing]
         Warn-LevelOverlap $levels $name $cells
         $before = $cells -join "`t"
-        # A ring-only level declares only the level it builds (Harem and Palace Cellar were 360 before #290): shrink a bigger rect to that, so the level placed in the freed room does not overlap it.
+        # A ring-only level declares only the level it builds (Harem, Palace Cellar and Spider were 360 before #290): shrink a bigger rect to that, so the level placed in the freed room does not overlap it.
         for ($h = 0; $h -lt $levels.Header.Count; $h++) {
             $cur = 0
             if ($levels.Header[$h] -match '^Size[XY]' -and [int]::TryParse($cells[$h], [ref]$cur) -and $cur -gt [int]$size -and [int]$size -lt 360) { $cells[$h] = $size }

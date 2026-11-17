@@ -246,7 +246,7 @@ Example row: `The Drowned King	Boss	Bishibosh	6			The water churns...	2`
 
 #### shapes.txt
 
-Your own maze shapes, for Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs and Temple maps. Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
+Your own maze shapes, for Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs maps (the ring rows Harem, Basement, Spider and Temple ignore `Shape`). Use a row's `Name` in the `Shape` column of `maps.txt`; the built-in shape
 names cannot be reused. Every column except `Name` is optional, and a blank one keeps the value of the `Base` shape. A row
 that cannot be built is skipped.
 
