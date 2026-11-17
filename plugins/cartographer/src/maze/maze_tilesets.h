@@ -64,6 +64,10 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// special-room call (the Prev pieces 695..698, never placed). Offset x 0, y 0: the next free slot, clear of Arcane (500..860).
 	// docs/reverse-engineering/cartographer/39-dungeon-builder.md, docs/cartographer/tilesets/a3-dungeon.md.
 	{"Dungeon", 24, "MazeDungeon", "Cartographer Dungeon", 14, 664, {0, 0, 0, 0}, true, 0, 0, 0},
+	// Kurast Sewer (Act 3 Sewer 1, LevelType 25, #285; named apart from the Act 2 sewer): 12-tile rooms, "Sewer W" is Def 705 (base 704, 705..719). Its case calls the ring grower,
+	// the walk and two special-room calls (the Drain and Chest pieces 739..746, always suppressed). Offset x 1500, y 500: the next free spot in the second band (Jail 0, Lair 500,
+	// Barracks 1000), clear of Snow (1500..1692, y 0..192). docs/reverse-engineering/cartographer/43-kurast-sewer-builder.md, docs/cartographer/tilesets/a3-kurast-sewers.md.
+	{"KurastSewer", 25, "MazeKurastSewer", "Cartographer Kurast Sewer", 12, 704, {0, 0, 0, 0}, true, 1500, 500, 0},
 };
 inline constexpr size_t MazeTilesetCount = sizeof(MazeTilesets) / sizeof(MazeTilesets[0]);
 

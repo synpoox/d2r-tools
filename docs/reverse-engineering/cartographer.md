@@ -43,3 +43,4 @@ New sections go in new files (the next free number, `27-<topic>.md`), and a new 
 - [37. The Arcane Sanctuary room grower (issue #280)](cartographer/37-arcane-grower.md)
 - [38. A red portal beside a unit, and a second map in a game (issue #485)](cartographer/38-open-extra-portal.md)
 - [39. The maze builder's case for the Act 3 Dungeon (issue #244)](cartographer/39-dungeon-builder.md)
+- [43. The maze builder's case for the Act 3 Kurast Sewers (issue #285)](cartographer/43-kurast-sewer-builder.md)
