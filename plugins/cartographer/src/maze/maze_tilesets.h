@@ -106,7 +106,7 @@ inline constexpr MazeTileset MazeTilesets[] = {
 	// SE 660, NW 661, NE 662 (Chest NW/NE 663/664 only on levels 84 and 85, never on a slot level). Offset x 3860, y 130: no 360-wide spot of the two bands is left once #522 (3500, 500) and #523 (4000, 500) land; this is the free spot between them and the y-0 band (docs/cartographer/adding-a-tileset.md). docs/reverse-engineering/cartographer/48-spider-builder.md.
 	{"Spider", 23, "MazeSpider", "Cartographer Spider", 16, 0, {0, 0, 0, 0}, true, 3860, 130, 0, false, 0, {662, 660, 659, 661}},
 	// Temple (Act 5 Nihlathak Temples, LevelType 32, #290): 40-tile rooms. Its case is the Harem case plus one special-room call (a Down piece, always suppressed); the picker's mask table gives
-	// plain corners only: NE 1042, SE 1044, SW 1045, NW 1043 (the Down 1046..1048 and Waypoint 1049..1052 variants only come from special-room calls). Its level is 120 tiles (reservedTiles),
+	// the corners NE 1042, SE 1044, SW 1045, NW 1043 (the Down 1046..1048 and Waypoint 1049..1052 variants only come from special-room calls). Def 1044 (SE) holds the Up stairs (tile 11/0/0, 11/0/1), so every Temple map has stairs in its SE room; awaits an owner decision (#455 portal-only). Its level is 120 tiles (reservedTiles),
 	// so it sits in the second band under Harem, which is 48 wide: x 2000, y 600. docs/reverse-engineering/cartographer/49-temple-builder.md, docs/cartographer/tilesets/a5-nihlathak-temples.md.
 	{"Temple", 32, "MazeTemple", "Cartographer Temple", 40, 0, {0, 0, 0, 0}, true, 2000, 600, 0, false, 0, {1042, 1044, 1045, 1043}},
 };

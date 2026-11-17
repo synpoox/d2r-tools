@@ -1,6 +1,6 @@
 # Act 5 Nihlathak temples (issue #290)
 
-Built (note 49) as one more row on the fixed-ring path of Harem and Palace Cellar (`a2-harem.md`). The picker gives plain corners only (Def 1042 NE, 1044 SE, 1045 SW, 1043 NW by exit mask); the Down and Waypoint variants come only from special-room calls, which a ring plan suppresses, so no stairs or waypoint appear. Vanilla tables of build 3.3.0 were read, nothing copied.
+Built (note 49) as one more row on the fixed-ring path of Harem and Palace Cellar (`a2-harem.md`). The picker gives plain corners only (Def 1042 NE, 1044 SE, 1045 SW, 1043 NW by exit mask); the Down and Waypoint variants come only from special-room calls, which a ring plan suppresses. The plain SE corner Def 1044 (also the SE Waypoint variant 1051) still holds the Up stairs (tile `11/0/0` and `11/0/1` in tempse01/02.ds1), so every Temple map has stairs in its SE room. This conflicts with the portal-only rule (#455) and awaits an owner decision; the design is unchanged. Vanilla tables of build 3.3.0 were read, nothing copied.
 
 | Item | Finding |
 |---|---|
