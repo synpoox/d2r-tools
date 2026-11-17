@@ -58,3 +58,7 @@ README and CHANGELOG conflicts are resolved by hand; read the merged result befo
 
 Keep the commit or PR description to the real scope and honest about validation. Do not commit game files, saves,
 logs, personal settings, build output or credentials.
+
+## License
+
+By contributing you agree that your contribution is licensed under the [MIT License](LICENSE).
