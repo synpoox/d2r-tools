@@ -28,3 +28,7 @@ Also needed: the slot generalisation and the unrecorded `0x3e69e0` case (ring gr
 - Risk: medium to high. The entrance rule is a core layout change, and the Act 3 tiles ride in an Act 5 slot level.
 - Effort: M to L (entrance rule change plus the tileset entry); S if option 2 is accepted with a different arrival rule.
 - Game checks: the `0x3e69e0` Sewer case; what a Prev, a Drain and a Chest room hold; arrival under each option; built grid equal to the plan; a Hell run for the Boss and event.
+
+## Built (issue #285)
+
+Built as the maze tileset `KurastSewer` (slot `MazeKurastSewer`, level "Cartographer Kurast Sewer", offset x 1500, y 500). Option 2 above: since #455 no maze row has a Prev family, so the entrance is an ordinary mask room and the arrival is steered as for the other maze rows; no Prev, Drain or Chest piece is placed (the case's two special-room calls, the Drain and Chest rows, are suppressed). The builder case is in note 43 of the reverse-engineering docs. `Sewer` stays reserved for the Act 2 sewer.
