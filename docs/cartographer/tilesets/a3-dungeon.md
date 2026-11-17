@@ -1,6 +1,6 @@
 # Act 3 dungeon (issue #244)
 
-Research only. Vanilla tables of build 3.3.0 were read, nothing copied. Engine facts are from `docs/reverse-engineering/cartographer/` (sections 05 and 01a).
+Status: built (#244). Row in `maze_tilesets.h`, slot `MazeDungeon`, offset 0,0. Research notes follow. Vanilla tables of build 3.3.0 were read, nothing copied. Engine facts are from `docs/reverse-engineering/cartographer/` (sections 05 and 01a).
 
 | Item | Finding |
 |---|---|
