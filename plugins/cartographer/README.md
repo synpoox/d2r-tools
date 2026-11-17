@@ -67,7 +67,7 @@ Step by step, with the example tables: [Your first map](../../docs/cartographer/
 1. Copy `cartographer.dll` to `<game>\d2rloader\plugins\`.
 2. Put `bosses.txt` (for map bosses) in `<Mod>.mpq\data\global\excel\d2rloader\cartographer\`, then run
    `powershell -ExecutionPolicy Bypass -File tools\install.ps1 -ModDirectory "<game>\mods\<Mod>"` from `plugins\cartographer`
-   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their twenty-one slots,
+   of the repository (the release zip does not carry it). It adds the Maze, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail, Lair, KurastSewer, Barracks, Harem, Basement, Sewer, Catacombs, Spider, Outdoor, Snow, Siege, Mesa, Desert, Wilderness and Kurast levels and their twenty-two slots,
    plus a `superuniques.txt` row per boss and the `cmap` item type in `itemtypes.txt`.
 3. Give each map an item: a `misc.txt` row of type `cmap` with item spell 16 (`pSpell`); add `maps.txt` next to `bosses.txt`.
 4. Start the game through D2RLoader and run `cartographer check`; the report is in the plugin's log folder.
