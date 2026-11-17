@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Jail) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
+    Adds Cartographer's Maze levels (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail) and Outdoor levels (Jungle, Snow, Siege, Mesa, Desert, Wilderness, Kurast) to a mod's tables. Safe to run twice.
 
 .DESCRIPTION
     D2RLoader cannot add rows to the game's tables, so the plugin needs these rows in the mod's own files:
-      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate) and "Cartographer Arcane Sanctuary" (Arcane Sanctuary), "Cartographer Jail" (Act 1 Jail; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane) or 8 (Jail),
-                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), no warps (Jail sits below them at X 0, Y 500); copied from a plain (non-quest) game maze level of that type,
+      levels.txt    one new level per maze tileset: "Cartographer Maze" (Cave), "Cartographer Crypt" (Crypt), "Cartographer Lava" (Lava, River of Flame), "Cartographer Ice Caves" (Ice), "Cartographer Durance" (Durance of Hate), "Cartographer Arcane Sanctuary" (Arcane Sanctuary) and "Cartographer Dungeon" (Act 3 Dungeon) and "Cartographer Jail" (Act 1 Jail; a level's LevelType fixes its tileset). Each is Act 5, DrlgType 1 (a generated maze), LevelType 3 (Cave), 4 (Crypt), 28 (Lava), 33 (Ice), 22 (Durance), 19 (Arcane), 24 (Dungeon) or 8 (Jail),
+                    360 x 360, Depend 0, Position 0, OffsetY 0 and OffsetX 3500 (Cave), 3000 (Crypt), 2500 (Lava), 2000 (Ice), 1000 (Durance), 500 (Arcane), 0 (Dungeon), no warps (Jail sits below them at X 0, Y 500); copied from a plain (non-quest) game maze level of that type,
                     so its LevelName keeps a string; Quest 0, LevelGroup Null and no LevelEntry or LevelWarp, so it is in none of
                     the game's level groups; Vis0..Vis7 are 0 (-1 crashes the game). A row from an older install (copied from the Den of Evil) is repaired the same way, including its name string.
       lvlmaze.txt   their maze rows (a maze level needs one with its own level id)
@@ -31,7 +31,7 @@
                   copied the same way as the Desert level.
     levels.txt    an eighth new level (the seventh outdoor one), "Cartographer Kurast", for Kurast (Act 3, the Burbs district) maps and arenas: LevelType 22 (Act 3 - Kurast), SizeX 128 and SizeY 112, at OffsetX 6000,
                   OffsetY 3660, copied the same way as the Desert level.
-    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeJail, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
+    It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
@@ -39,8 +39,7 @@
     The Ice level ("Cartographer Ice Caves", slot MazeIce) is a fourth maze level of the same kind with LevelType 33 (Act 5 ice caves), copied from a plain game ice cave level.
     The Durance level ("Cartographer Durance", slot MazeDurance) is a fifth maze level of the same kind with LevelType 22 (Act 3 Durance of Hate), copied from a plain game Durance level.
     The Arcane level ("Cartographer Arcane Sanctuary", slot MazeArcane) is a sixth maze level with LevelType 19 (Act 2 Arcane Sanctuary), offset 500, copied by id from the game's Arcane Sanctuary (level 74, a quest level whose quest fields are cleared).
-    The Jail level ("Cartographer Jail", slot MazeJail) is a seventh maze level with LevelType 8 (Act 1 Jail), offset X 0, Y 500 (the first band, y 0, is full), copied from a plain game Jail level.
-    Cave, Crypt, Lava, Ice, Durance, Arcane and Jail maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
+    Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon and Jail maps each open through their own level, so one install serves all (one map per game, as before). A Maze level made by an older install with -Tileset Crypt is set back to LevelType 3 (and a Cave name string); Crypt maps use the new Crypt level.
       itemtypes.txt one new item type row, "Map" (code cmap), appended at the end, for the map items: a copy of the Herb row (type herb: a plain
                     miscellaneous item, non-quest) with Equiv1 misc, Equiv2 empty, not throwable, not beltable, no auto-stack,
                     and the StorePage of herb (misc; vendors stock an item by the misc.txt vendor columns, not by the type). Rare is on (Magic and Normal off), so the game rolls an item of
@@ -72,7 +71,7 @@
 
 .PARAMETER MazeOffsetX
     Where the Maze level sits on the Act 5 map: OffsetX (default 3500) and, with -MazeOffsetY (default 0), OffsetY. Likewise -CryptOffsetX and
-    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -JailOffsetX and -JailOffsetY (0, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
+    -CryptOffsetY (3000, 0), -LavaOffsetX and -LavaOffsetY (2500, 0), -IceOffsetX and -IceOffsetY (2000, 0), -DuranceOffsetX and -DuranceOffsetY (1000, 0), -ArcaneOffsetX and -ArcaneOffsetY (500, 0), -DungeonOffsetX and -DungeonOffsetY (0, 0), -JailOffsetX and -JailOffsetY (0, 500), -OutdoorOffsetX and -OutdoorOffsetY (6000, 3000), -SnowOffsetX and -SnowOffsetY (1500, 0) and -SiegeOffsetX and -SiegeOffsetY (6000, 3900), -MesaOffsetX and -MesaOffsetY (6000, 4200) -DesertOffsetX and -DesertOffsetY (6000, 3400) -WildernessOffsetX and -WildernessOffsetY (6000, 3530) and -KurastOffsetX and -KurastOffsetY (6000, 3660). A level is not added where its rectangle overlaps another
     level of the same act in levels.txt (a mod may have its own custom Act 5 levels): the installer prints the row it hits and adds nothing
     for that level, so pass another spot. The spot is only used when the level is added; a level already in levels.txt stays where it is
     (an overlap is warned about). Only rectangles declared in levels.txt are checked, with a Depend level's position added; rows with
@@ -108,6 +107,8 @@ param(
     [int]$DuranceOffsetY = 0,
     [int]$ArcaneOffsetX = 500,
     [int]$ArcaneOffsetY = 0,
+    [int]$DungeonOffsetX = 0,
+    [int]$DungeonOffsetY = 0,
     [int]$JailOffsetX = 0,
     [int]$JailOffsetY = 500,
     [int]$SiegeOffsetX = 6000,
@@ -123,7 +124,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice, Durance, Arcane and Jail are all added." }
+if ($PSBoundParameters.ContainsKey('Tileset')) { Write-Host "note: -Tileset is not needed any more: every maze tileset has a level of its own, so Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon and Jail are all added." }
 $OldLevelName = 'Cartographer Preset'
 $ActFive = '4'     # levels.txt Act is zero-based
 $NoGroup = 'Null'  # levels.txt LevelGroup of level 0: the group that counts toward no Act 1-5 level
@@ -146,6 +147,8 @@ $MazeTilesets = @(
     @{ Tileset = 'Durance'; Slot = 'MazeDurance'; LevelName = 'Cartographer Durance'; LevelType = '22'; Size = '360'; Param = 'Durance' },
     # Arcane Sanctuary: x 500..860, y 0..360, clear of the Durance row (x 1000) and Snow (x 1500..1692). Level 74 is the only level of LevelType 19 and a quest level, so it is copied by id (Template; its quest fields are cleared like any copy's); its rooms are 12 tiles (RoomTiles, the lvlmaze.txt SizeX and SizeY).
     @{ Tileset = 'Arcane'; Slot = 'MazeArcane'; LevelName = 'Cartographer Arcane Sanctuary'; LevelType = '19'; Size = '360'; Param = 'Arcane'; Template = 74; RoomTiles = '12' },
+    # Dungeon (Act 3 Dungeon 1 and 2): x 0..360, y 0..360, clear of the Arcane row (x 500..860). Copied from the first DrlgType 1 level of LevelType 24 (level 86).
+    @{ Tileset = 'Dungeon'; Slot = 'MazeDungeon'; LevelName = 'Cartographer Dungeon'; LevelType = '24'; Size = '360'; Param = 'Dungeon' },
     # Jail (Act 1): x 0..360, y 500..860, the first spot of the second band (the y-0 band is full); clear of every row above and of the Act 5 levels (y 1000).
     @{ Tileset = 'Jail'; Slot = 'MazeJail'; LevelName = 'Cartographer Jail'; LevelType = '8'; Size = '360'; Param = 'Jail' }
 )
@@ -470,7 +473,7 @@ function Ensure-MazeLevel([string]$name, [string]$type, [string]$size, [int]$off
     $mazeId
 }
 
-# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance, Arcane, Jail) -------------------------------------------------------------
+# --- levels.txt: one level per maze tileset (Cave, Crypt, Lava, Ice, Durance, Arcane, Dungeon, Jail) -------------------------------------------------------------
 $mazeIds = @{}
 foreach ($t in $MazeTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly

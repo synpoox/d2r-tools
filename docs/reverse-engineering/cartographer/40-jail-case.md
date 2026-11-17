@@ -1,4 +1,4 @@
-## 39. The Jail case of the maze builder (issue #273)
+## 40. The Jail case of the maze builder (issue #273)
 
 Build: D2R 3.3 build 93847, D2RLoader 1.3.1-beta, image stamp `0x6ab3782c`. Addresses are RVAs in the memory-layout dump. **Evidence level: static** (Capstone over the dump); the live result is in the PR of #273.
 
@@ -20,6 +20,8 @@ Entry 5 of the jump table is `0x3e6c3e`:
 2. Draws `rot` (`& 3`) and calls `0x3eb850(level, table + rot*16, &rot)`: the Prev group.
 3. Only for the game's own levels 29, 30 and 31 (level id at `[level+0x1f8]`) it adds further calls (row `rot+12` for 29, `rot+16` for 30, `rot+4` for 31). A slot level is none of them.
 4. Then, for every level, one more call with row `rot+8`: the Next group. Then the common tail `0x3e75bc`.
+
+Rows 16..19 (the Jail 2 call, `rot+16`) were not read: a slot level is not level 30, so it is not asked for them.
 
 So a slot level gets two special-room calls, Prev and Next; both are answered with a suppression.
 
