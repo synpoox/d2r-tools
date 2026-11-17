@@ -1,4 +1,4 @@
-// A map's own look (issue #380): Brightness and Warmth from maps.txt, applied while the player is in
+// A map's own look (issue #380): Brightness, Warmth and the TintR/G/B light tint from maps.txt, applied while the player is in
 // the map. Maps that share a tileset share one level, one biome and so one set of vis files, so nothing is written into the
 // tileset: the game's visual data system builds the level's `VisualDataComponent` every frame and hands it to its apply
 // function (D2Render visual_data_system.cpp), which copies it into the frame settings. That function is hooked (found by byte
