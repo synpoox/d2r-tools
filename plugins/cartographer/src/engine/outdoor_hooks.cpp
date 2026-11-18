@@ -138,6 +138,7 @@ struct Job {
 struct SlotGeometry {
 	bool known = false;
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
+	int borderWest = 0, borderEast = 0;  // the Siege slot's border rows (Slot::borderWest), 0 for the others
 };
 std::mutex g_lock;
 std::shared_ptr<const Job> g_jobs[SlotCount];  // the map opened through each outdoor slot row (guarded by g_lock)
@@ -424,6 +425,8 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 	request.options.originY = geometry.offsetY;
 	request.options.maxTilesX = geometry.sizeX;
 	request.options.maxTilesY = geometry.sizeY;
+	request.options.borderWest = geometry.borderWest;
+	request.options.borderEast = geometry.borderEast;
 	bool built = false;
 	bool usedDefault = false;
 	// A failed request plans the tileset's default map (Winding, Large, built-in shapes) on the same seed instead, so the slot level is still built by this plugin: the
@@ -991,7 +994,7 @@ void SetOutdoorTables(const std::shared_ptr<const Tables>& tables) {
 			g_geometry[i] = {};
 			g_slotRefusal[i] = slot != nullptr ? OutdoorSlotRefusal(*slot) : std::string();
 			if (slot != nullptr && slot->haveGeometry) {
-				g_geometry[i] = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY};
+				g_geometry[i] = {true, slot->offsetX, slot->offsetY, slot->sizeX, slot->sizeY, slot->borderWest, slot->borderEast};
 			}
 			g_slotLevels[i] = slot != nullptr ? slot->level : -1;
 		}

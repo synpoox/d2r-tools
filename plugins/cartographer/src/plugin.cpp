@@ -321,6 +321,15 @@ auto LoadAll() -> Loaded {
 	// act are read from the same file for the outdoor build hook.
 	if (carto::HasMazeSlot(loaded.tables->slots) || carto::HasOutdoorSlot(loaded.tables->slots)) {
 		carto::ReadSlotLevelTypes(loaded.tables->slots, text);
+		std::string prestText, typesText;  // a missing file stays empty: no Siege borders (issue #549)
+		ReadFile(g_excelDir + L"\\lvlprest.txt", &prestText);
+		ReadFile(g_excelDir + L"\\lvltypes.txt", &typesText);
+		carto::ReadSiegeBorders(loaded.tables->slots, prestText, typesText);
+		for (const carto::Slot& slot : loaded.tables->slots) {
+			if (slot.borderWest > 0) {
+				plog::Info("Siege border rows: west %d, east %d (lvlprest.txt)", slot.borderWest, slot.borderEast);
+			}
+		}
 		for (const carto::MapDef& map : loaded.tables->maps) {
 			const std::string problem = carto::MapIsOutdoor(map) ? carto::OutdoorSlotProblem(map, loaded.tables->slots) : carto::MazeTilesetProblem(map, *loaded.tables);
 			if (!problem.empty()) {

@@ -1058,6 +1058,55 @@ void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText) {
 	}
 }
 
+void ReadSiegeBorders(std::vector<Slot>& slots, std::string_view lvlprestText, std::string_view lvltypesText) {
+	Slot* siege = nullptr;
+	for (Slot& slot : slots) {
+		if (EqualsNoCase(slot.name, "OutdoorSiege")) {
+			siege = &slot;
+			slot.borderWest = slot.borderEast = 0;
+		}
+	}
+	if (siege == nullptr) {
+		return;
+	}
+	// The files of lvltypes.txt row 30: bit n of a Dt1Mask selects File n+1 (an unset file is blank or "0").
+	const Tsv types = ParseTsv(lvltypesText);
+	const int tId = types.Column("Id");
+	std::vector<bool> fileSet;
+	for (const TsvRow& row : types.rows) {
+		int id = 0;
+		if (!ParseInt(types.Cell(row, tId), 0, 255, &id) || id != 30) {  // Act 5 - Siege
+			continue;
+		}
+		for (int n = 1; n <= 32; ++n) {
+			const std::string file = types.Cell(row, types.Column("File " + std::to_string(n)));
+			fileSet.push_back(!file.empty() && file != "0");
+		}
+	}
+	const Tsv prest = ParseTsv(lvlprestText);
+	const int pName = prest.Column("Name"), pDef = prest.Column("Def"), pMask = prest.Column("Dt1Mask");
+	const auto defOf = [&](const char* name) {
+		for (const TsvRow& row : prest.rows) {
+			int def = 0, mask = 0;
+			if (!EqualsNoCase(prest.Cell(row, pName), name) || !ParseInt(prest.Cell(row, pDef), 1, 65535, &def) || !ParseInt(prest.Cell(row, pMask), 1, 0x7fffffff, &mask)) {
+				continue;
+			}
+			for (int bit = 0; bit < 31; ++bit) {
+				if ((mask >> bit & 1) != 0 && (static_cast<size_t>(bit) >= fileSet.size() || !fileSet[static_cast<size_t>(bit)])) {
+					return 0;
+				}
+			}
+			return def;
+		}
+		return 0;
+	};
+	const int west = defOf(SiegeBorderWestName), east = defOf(SiegeBorderEastName);
+	if (west > 0 && east > 0) {
+		siege->borderWest = west;
+		siege->borderEast = east;
+	}
+}
+
 auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef> {
 	namespace ff = cartographer::outdoor::framefill;
 	std::vector<ArenaDef> out;

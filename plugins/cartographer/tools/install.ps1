@@ -18,9 +18,13 @@
     levels.txt    a third new level (the second outdoor one), "Cartographer Snow", for Snow (Barricade) maps: the same kind of level with LevelType 31 (the Barricade level type;
                   the Jungle level's 21 cannot serve Snow), 192 x 192 at OffsetX 1500, OffsetY 0, copied from level 117 (Frozen Tundra) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
-    levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 240 and SizeY 48 (15 strips of
-                  16 x 48 tiles, the widest and flattest slot level), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
+    levels.txt    a fourth new level (the third outdoor one), "Cartographer Siege", for Siege (Bloody Foothills) maps: LevelType 30 (Act 5 - Siege), SizeX 272 and SizeY 48 (15 strips of
+                  16 x 48 tiles and a 16-tile border column at each end, the widest and flattest slot level; an older install's 240 is grown), at OffsetX 6000, OffsetY 3900, copied from level 110 (Bloody Foothills) or the first plain Act 5
                   outdoor row, with the same Quest, LevelGroup, SubType, Vis and Waypoint values as the Outdoor level.
+    lvltypes.txt  the Barricade files the Siege border pieces use (cliff, snow, pinetree, battle, Town/collision) appended to the free File columns of row 30 (Act 5 - Siege);
+                  the Siege strips' Dt1Mask selects files 1..11 only, so they never load them. Left out, with a note, when the mod has no lvltypes.txt or lvlprest.txt.
+    lvlprest.txt  "Cartographer Siege Border West" and "Cartographer Siege Border East", copies of 882 (Barricade Cliff Border 2) and 896 (Barricade Ravine Border 4) appended
+                  with Def = the largest Def + 1 and a Dt1Mask that selects the same files by their row-30 places (#549). The plugin stamps three of each at the ends of a Siege map.
     levels.txt    a fifth new level (the fourth outdoor one), "Cartographer Mesa", for Mesa (Act 4 plains) maps: LevelType 27 (Act 4 - Mesa), SizeX 128 and SizeY 112 (14 x 12 fill cells of
                   8 tiles plus a one-cell frame), at OffsetX 6000, OffsetY 4200, copied from level 111 or the first plain Act 5 outdoor row, with the same Quest, LevelGroup, SubType, Vis
                   and Waypoint values as the Outdoor level.
@@ -32,7 +36,7 @@
     levels.txt    an eighth new level (the seventh outdoor one), "Cartographer Kurast", for Kurast (Act 3, the Burbs district) maps and arenas: LevelType 22 (Act 3 - Kurast), SizeX 128 and SizeY 112, at OffsetX 6000,
                   OffsetY 3660, copied the same way as the Desert level.
     It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeBarracks, MazeHarem, MazeBasement, MazeSewer, MazeCatacombs, MazeTombs, MazeSpider, MazeTemple, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
-    any other row is kept. Vanilla rows of every table are copied from, never edited.
+    any other row is kept. Vanilla rows of every table are copied from, never edited, except lvltypes.txt row 30, which only gains files in its empty File columns.
       superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (rows below 512; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
@@ -199,8 +203,8 @@ $OutdoorTilesets = @(
     @{ Tileset = 'Jungle'; Slot = 'Outdoor';     LevelName = 'Cartographer Outdoor'; LevelType = '21'; Size = '384'; Param = 'Outdoor'; Template = 111 },
     # Snow: LevelType 31 is Act 5 - Barricade (Frigid Highlands, Arreat Plateau, Frozen Tundra); the Jungle level's 21 cannot serve Snow maps. The largest plan is 12 x 12 cells of 16 tiles; x 1500..1692, y 0..192 is clear of the Maze level (x 3500..3860) and inside the automap range (an older install had it at 6000,3600, out of range). Template 117 is Act 5 - Barricade Snow (Frozen Tundra).
     @{ Tileset = 'Snow';   Slot = 'OutdoorSnow'; LevelName = 'Cartographer Snow';    LevelType = '31'; Size = '192'; Param = 'Snow';    Template = 117; Range = $true },
-    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles: 240 x 48. Its layer is the town's 79 (like Jungle), so its map is never swapped out and its offset needs no automap range. Template 110 is Act 5 - Siege 1.
-    @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '240'; SizeY = '48'; Param = 'Siege';   Template = 110 },
+    # Siege: LevelType 30 is Act 5 - Siege (Bloody Foothills). The widest plan is 15 strips of 16 x 48 tiles and a 16-tile Barricade border column at each end (#549): 272 x 48 (an older install's 240 is grown). Its layer is the town's 79 (like Jungle), so its map is never swapped out and its offset needs no automap range. Template 110 is Act 5 - Siege 1.
+    @{ Tileset = 'Siege';  Slot = 'OutdoorSiege'; LevelName = 'Cartographer Siege';   LevelType = '30'; Size = '272'; SizeY = '48'; Param = 'Siege';   Template = 110; Grow = $true },
     # Mesa: LevelType 27 is Act 4 - Mesa (the Act 4 plains). The widest plan is 14 x 12 fill cells of 8 tiles plus the one-cell frame: 128 x 112 tiles. Its layer is the town's 79 (like Jungle), so its offset needs no automap range. Template 111 is Act 5 - Barricade 1 (the Jungle level's template: the template must be an Act 5 row).
     @{ Tileset = 'Mesa';   Slot = 'OutdoorMesa';  LevelName = 'Cartographer Mesa';    LevelType = '27'; Size = '128'; SizeY = '112'; Param = 'Mesa';    Template = 111 },
     # Desert: LevelType 16 is Act 2 - Desert (sand). The widest plan is 14 x 12 fill cells of 8 tiles plus the one-cell frame: 128 x 112 tiles, at 6000, 3400 (below Mesa's 4200..4312). Its layer is the town's 79, so its offset needs no automap range. Template 111 as for Mesa.
@@ -529,7 +533,20 @@ if ((Find-Row $levels 'Name' $OldLevelName) -ge 0) {
 }
 
 # One new outdoor level (Act 5, DrlgType 3) copied from a plain Act 5 outdoor row; an existing row of that name is only repaired. Returns the level id.
-function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param, [string]$sizeY = '', [bool]$range = $false) {
+# An older install's row that is smaller than the level now needs (Siege: 240 wide before its border columns, #549): grow SizeX/SizeY in every
+# difficulty, unless the larger rectangle would overlap another level (then warn and leave it; the plugin plans without the columns).
+function Grow-Level($t, $cells, [string]$name, [int]$size, [int]$sizeY) {
+    $ox = 0; $oy = 0
+    if (-not ([int]::TryParse($cells[(Column $t 'OffsetX')], [ref]$ox) -and [int]::TryParse($cells[(Column $t 'OffsetY')], [ref]$oy))) { return }
+    $small = @($t.Header | Where-Object { $v = 0; [void][int]::TryParse($cells[[array]::IndexOf($t.Header, $_)], [ref]$v); ($_ -match '^SizeX' -and $v -lt $size) -or ($_ -match '^SizeY' -and $v -lt $sizeY) })
+    if ($small.Count -eq 0) { return }
+    $hit = Find-LevelOverlap $t $name $ox $oy $size $sizeY
+    if ($hit) { Write-Host "levels.txt: warning: '$name' is smaller than $size x $sizeY, and growing it would overlap $hit. It was left as it is."; return }
+    foreach ($h in $small) { Set-Cell $t $cells $h $(if ($h -match '^SizeX') { "$size" } else { "$sizeY" }) }
+    Write-Host "levels.txt: grew '$name' to $size x $sizeY tiles."
+}
+
+function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$offX, [int]$offY, [int]$wantTemplate, [string]$tilesetName, [string]$param, [string]$sizeY = '', [bool]$range = $false, [bool]$grow = $false) {
     if ($sizeY -eq '') { $sizeY = $size }
     $existingRow = Find-Row $levels 'Name' $name
     if ($existingRow -ge 0) {
@@ -546,10 +563,12 @@ function Ensure-OutdoorLevel([string]$name, [string]$type, [string]$size, [int]$
         Set-CellIf $levels $cells 'SubTheme' '-1'
         for ($n = 0; $n -lt 8; $n++) { Set-CellIf $levels $cells "Vis$n" '0' }  # -1 crashes the game
         if ($range) { Move-IntoAutomapRange $levels $cells $name $offX $offY }
+        $repaired = ($cells -join "`t") -ne $before
+        if ($grow) { Grow-Level $levels $cells $name ([int]$size) ([int]$sizeY) }
         if (($cells -join "`t") -ne $before) {
             $levels.Lines[$existingRow] = $cells -join "`t"
             Save-Table $levels
-            Write-Host "levels.txt: repaired level $newId (no quest, no level group, no entry or warp text, no sub-level set, Vis0..Vis7 = 0)."
+            if ($repaired) { Write-Host "levels.txt: repaired level $newId (no quest, no level group, no entry or warp text, no sub-level set, Vis0..Vis7 = 0)." }
         }
     } else {
         $drlgCol = Column $levels 'DrlgType'
@@ -617,7 +636,118 @@ $outdoorIds = @{}
 foreach ($t in $OutdoorTilesets) {
     $offX = Get-Variable -Name "$($t.Param)OffsetX" -ValueOnly
     $offY = Get-Variable -Name "$($t.Param)OffsetY" -ValueOnly
-    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param $(if ($t.SizeY) { $t.SizeY } else { $t.Size }) ([bool]$t.Range)
+    $outdoorIds[$t.Slot] = Ensure-OutdoorLevel $t.LevelName $t.LevelType $t.Size $offX $offY $t.Template $t.Tileset $t.Param $(if ($t.SizeY) { $t.SizeY } else { $t.Size }) ([bool]$t.Range) ([bool]$t.Grow)
+}
+
+# --- lvltypes.txt and lvlprest.txt: Barricade border rows for Siege maps (#549) ----------------------------------------
+# The Siege strips end in a blank edge the game draws black. Barricade's own border pieces close such an edge, but a piece loads the files its Dt1Mask
+# selects from its level's LevelType row (bit n is File n+1), and Siege's row 30 lacks most Barricade files. So the Barricade files the two pieces use
+# are appended to row 30 (the strips' mask 2047 selects files 1..11 only, so they never load them), and each piece gets a copy row whose Dt1Mask
+# selects the same files by their row-30 places. The plugin finds the rows by Name and stamps a column of three west of 879 and east of 865.
+# Row ids: the game looks a piece up by Def as the row's place in the table, so a copy is appended with Def = the largest Def + 1.
+$SiegeBorders = @(
+    @{ Name = 'Cartographer Siege Border West'; From = '882' },  # Act 5 - Barricade Cliff Border 2: floor on its east side, cliff to the west
+    @{ Name = 'Cartographer Siege Border East'; From = '896' }   # Act 5 - Barricade Ravine Border 4: floor on its west side, ravine to the east
+)
+$typesPath = Join-Path $ExcelDir 'lvltypes.txt'
+$prestPath = Join-Path $ExcelDir 'lvlprest.txt'
+$missing = @($typesPath, $prestPath | Where-Object { -not (Test-Path $_) } | ForEach-Object { Split-Path $_ -Leaf })
+if ($missing.Count -gt 0) {
+    Write-Host "lvltypes.txt/lvlprest.txt: this mod has no $($missing -join ' or '), so Siege maps keep a black field at their west and east ends. Copy the game's table into the excel folder and run the installer again."
+} else {
+    # Every change is staged first; a modded table that does not fit (no row 30/31, no File columns, no 882/896, no free File, gaps in Def) gets a
+    # note and no border rows, so its Siege maps are built without the columns (the plugin falls back the same way).
+    $skip = {
+        param($why)
+        Write-Host "lvltypes.txt/lvlprest.txt: $why Siege maps keep a black field at their west and east ends."
+    }
+    $types = Read-Table $typesPath
+    $prest = Read-Table $prestPath
+    $siegeTypeRow = Find-Row $types 'Id' '30'
+    $barricadeTypeRow = Find-Row $types 'Id' '31'
+    $fileCols = @(1..32 | ForEach-Object { [array]::IndexOf($types.Header, "File $_") })
+    $defCol = [array]::IndexOf($prest.Header, 'Def'); $maskCol = [array]::IndexOf($prest.Header, 'Dt1Mask')
+    $why = ''
+    if ($siegeTypeRow -lt 0 -or $barricadeTypeRow -lt 0) { $why = 'lvltypes.txt has no Act 5 - Siege (Id 30) or Act 5 - Barricade (Id 31) row.' }
+    elseif ($fileCols -contains -1) { $why = "lvltypes.txt has no 'File 1' to 'File 32' columns." }
+    elseif ($defCol -lt 0 -or $maskCol -lt 0) { $why = "lvlprest.txt has no 'Def' or 'Dt1Mask' column." }
+    $siegeCells = $null; $staged = @()
+    if (-not $why) {
+        $siegeCells = Cells $types $types.Lines[$siegeTypeRow]
+        $barricadeCells = Cells $types $types.Lines[$barricadeTypeRow]
+        # The game finds a piece by Def as its place among the data rows, so a new row's Def must be the row count: Defs must run 0..n-1.
+        $maxDef = -1; $dataRows = 0
+        for ($i = 1; $i -lt $prest.Lines.Count; $i++) {
+            $c = $prest.Lines[$i] -split "`t"; $d = 0
+            if ($c.Count -gt $defCol -and [int]::TryParse($c[$defCol], [ref]$d)) { $dataRows++; if ($d -gt $maxDef) { $maxDef = $d } }
+        }
+        $nextDef = $maxDef + 1
+        foreach ($b in $SiegeBorders) {
+            $srcRow = Find-Row $prest 'Def' $b.From
+            if ($srcRow -lt 0) { $why = "lvlprest.txt has no row with Def $($b.From) to copy for '$($b.Name)'."; break }
+            $src = Cells $prest $prest.Lines[$srcRow]
+            $srcMask = [long]0
+            if (-not [long]::TryParse($src[$maskCol], [ref]$srcMask)) { $why = "lvlprest.txt row $($b.From) has no whole-number Dt1Mask."; break }
+            $mask = [long]0
+            for ($bit = 0; $bit -lt 32 -and -not $why; $bit++) {
+                if (($srcMask -shr $bit) -band 1) {
+                    $file = $barricadeCells[$fileCols[$bit]]
+                    if ($file -eq '' -or $file -eq '0') { continue }
+                    $at = -1
+                    for ($k = 0; $k -lt 32; $k++) { if ($siegeCells[$fileCols[$k]] -ieq $file) { $at = $k; break } }
+                    if ($at -lt 0) {
+                        for ($k = 0; $k -lt 32; $k++) { if ($siegeCells[$fileCols[$k]] -in '', '0') { $at = $k; break } }
+                        if ($at -lt 0) { $why = "lvltypes.txt row 30 (Act 5 - Siege) has no free File column for $file."; break }
+                        $siegeCells[$fileCols[$at]] = $file
+                    }
+                    $mask = $mask -bor ([long]1 -shl $at)
+                }
+            }
+            if ($why) { break }
+            $have = Find-Row $prest 'Name' $b.Name
+            if ($have -ge 0) {
+                $staged += , @($b, $have, $mask)
+            } else {
+                if ($nextDef -ne $dataRows) { $why = "lvlprest.txt's Defs do not run 0 to $($dataRows - 1) (the largest is $maxDef), so a new row's Def would not be its place."; break }
+                $staged += , @($b, -1, $mask, $src, $nextDef)
+                $nextDef++; $dataRows++
+            }
+        }
+    }
+    if ($why) {
+        & $skip $why
+    } else {
+        for ($k = 0; $k -lt 32; $k++) {
+            $before = (Cells $types $types.Lines[$siegeTypeRow])[$fileCols[$k]]
+            if ($siegeCells[$fileCols[$k]] -ne $before) { Write-Host "lvltypes.txt: Act 5 - Siege File $($k + 1) is now $($siegeCells[$fileCols[$k]])." }
+        }
+        if (($siegeCells -join "`t") -ne ((Cells $types $types.Lines[$siegeTypeRow]) -join "`t")) {
+            $types.Lines[$siegeTypeRow] = $siegeCells -join "`t"
+            Save-Table $types
+        }
+        foreach ($s in $staged) {
+            $b = $s[0]; $mask = $s[2]
+            if ($s[1] -ge 0) {
+                $cells = Cells $prest $prest.Lines[$s[1]]
+                if ($cells[$maskCol] -ne "$mask") {
+                    $cells[$maskCol] = "$mask"
+                    $prest.Lines[$s[1]] = $cells -join "`t"
+                    Save-Table $prest
+                    Write-Host "lvlprest.txt: set the Dt1Mask of '$($b.Name)' (Def $($cells[$defCol])) to $mask."
+                } else {
+                    Write-Host "lvlprest.txt: '$($b.Name)' is already there (Def $($cells[$defCol]))."
+                }
+            } else {
+                $src = $s[3]
+                Set-Cell $prest $src 'Name' $b.Name
+                $src[$defCol] = "$($s[4])"
+                $src[$maskCol] = "$mask"
+                $prest.Lines.Add($src -join "`t")
+                Save-Table $prest
+                Write-Host "lvlprest.txt: added '$($b.Name)' as Def $($s[4]) (a copy of $($b.From), Dt1Mask $mask)."
+            }
+        }
+    }
 }
 
 # --- itemtypes.txt: the Map item type ---------------------------------------------------------------------------------

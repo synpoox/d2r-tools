@@ -68,8 +68,8 @@ TEST_CASE("the piece table has the 15 Siege strips in order, with the roles and 
 		CHECK_MESSAGE(siege::findPiece(vanilla[i])->east == siege::findPiece(vanilla[i + 1])->west, "seam after ", vanilla[i]);
 	}
 	for (const siege::Piece &p : all) CHECK(std::string(p.ds1).find("Expansion/Siege/") == 0);
-	// The slot level fits the widest plan: 15 strips of 16 x 48.
-	CHECK(kLevelTilesX == kMaxStrips * kStripWidth);
+	// The slot level fits the widest plan: 15 strips of 16 x 48 and a 16-tile border column at each end.
+	CHECK(kLevelTilesX == (kMaxStrips + 2) * kStripWidth);
 	CHECK(kLevelTilesY == kStripHeight);
 }
 
@@ -314,6 +314,80 @@ TEST_CASE("planOutdoorMap plans Siege through the tileset table and the grid com
 	const MapPlan tight = planOutdoorMap(m, builtinJungleCatalogue());
 	CHECK_FALSE(tight.ok);
 	CHECK(tight.reason.find("Siege") != std::string::npos);
+}
+
+TEST_CASE("Siege: no strip is on the level's west or east edge; a Barricade border column closes each end (#549)")
+{
+	// The installer's border rows (copies of 882 and 896); the ids are whatever lvlprest.txt gave them.
+	constexpr int kWest = 1093, kEast = 1094;
+	for (int strips = kMinStrips; strips <= kMaxStrips; ++strips) {
+		for (uint64_t seed = 0; seed < 40; ++seed) {
+			SiegeRequest r = request(seed, strips);
+			r.options.originX = 6000;
+			r.options.originY = 3900;
+			r.options.maxTilesX = kLevelTilesX;
+			r.options.maxTilesY = kLevelTilesY;
+			r.options.borderWest = kWest;
+			r.options.borderEast = kEast;
+			const SiegePlan p = planSiegeMap(r);
+			INFO("strips ", strips, " seed ", seed, ": ", p.reason);
+			REQUIRE(p.ok);
+			CHECK(joined(checkSiegePlan(r, p)).empty());
+			CHECK(p.borders);
+			const int columns = strips + 2;
+			CHECK(p.stamps.tilesW == columns * 16);
+			CHECK(levelRectOf(p.stamps).w == columns * 16);
+			// Which piece stands at each 16 x 16 block of the level's west and east columns, and the first and last strip.
+			std::vector<int> westColumn(3, 0), eastColumn(3, 0);
+			int westStrip = 0, eastStrip = 0;
+			for (const Stamp &s : p.stamps.stamps) {
+				if (s.cx == 0) westColumn[static_cast<size_t>(s.cy / 2)] = s.lvlPrest;
+				if (s.cx == (columns - 1) * 2) eastColumn[static_cast<size_t>(s.cy / 2)] = s.lvlPrest;
+				if (s.cx == 2) westStrip = s.lvlPrest;
+				if (s.cx == (columns - 2) * 2) eastStrip = s.lvlPrest;
+			}
+			CHECK(westColumn == std::vector<int>(3, kWest));
+			CHECK(eastColumn == std::vector<int>(3, kEast));
+			CHECK(westStrip == 879);  // the barricade strip is next to the west border, not on the edge
+			CHECK(eastStrip == 865);  // the town strip is next to the east border
+			CHECK(p.stamps.entrance.x == 6000 + (strips - 1) * 16);  // the arrival strip moved one column east with the line
+		}
+	}
+
+	// Without the rows, or in an old 240-wide slot that cannot hold the columns, the plan is the line alone, as before.
+	SiegeRequest none = request(7, 15);
+	none.options.maxTilesX = kLevelTilesX;
+	CHECK_FALSE(planSiegeMap(none).borders);
+	SiegeRequest narrow = request(7, 15);
+	narrow.options.maxTilesX = 240;
+	narrow.options.borderWest = kWest;
+	narrow.options.borderEast = kEast;
+	const SiegePlan old = planSiegeMap(narrow);
+	REQUIRE(old.ok);
+	CHECK_FALSE(old.borders);
+	CHECK(old.stamps.stamps.size() == 15);
+	narrow.strips = 13;  // 13 strips and two columns fit 240
+	CHECK(planSiegeMap(narrow).borders);
+
+	// The checker catches a plan whose border column is missing or wrong.
+	SiegeRequest r = request(99, 14);
+	r.options.borderWest = kWest;
+	r.options.borderEast = kEast;
+	const SiegePlan good = planSiegeMap(r);
+	REQUIRE(good.ok);
+	{
+		SiegePlan p = good;
+		p.stamps.stamps.resize(p.strips.size());
+		p.borders = false;
+		p.hash = stampPlanHash(p.stamps);
+		CHECK_FALSE(checkSiegePlan(r, p).empty());
+	}
+	{
+		SiegePlan p = good;
+		p.stamps.stamps.back().lvlPrest = kWest;  // the west row on the east side
+		p.hash = stampPlanHash(p.stamps);
+		CHECK_FALSE(checkSiegePlan(r, p).empty());
+	}
 }
 
 TEST_CASE("golden: a fixed seed keeps its line")

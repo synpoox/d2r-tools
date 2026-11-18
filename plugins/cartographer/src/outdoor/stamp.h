@@ -39,6 +39,8 @@ struct StampOptions {
 	int maxTilesY = 0;
 	bool pinFiles = false;  // true: pass each pick's DS1 variant as the file index; false: -1, the engine draws it from the level RNG
 	bool listVoid = true;   // true: list the grid cells of unused macro-cells so the engine can mark them void
+	int borderWest = 0;     // Siege only: the lvlprest ids of the installer's Barricade border rows for the two ends of the line; 0 when not installed (#549)
+	int borderEast = 0;
 };
 
 // One piece stamp: the arguments of the engine's 0x3ecfc0 after (dataFlag, level), minus the last constant 0.
