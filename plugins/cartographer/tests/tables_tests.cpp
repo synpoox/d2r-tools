@@ -2041,11 +2041,12 @@ TEST_CASE("statroutes.txt: a monster route's Param is the stat's layer") {
 	const auto routes = LoadStatRoutes("Stat\tTarget\tApply\tValue\tParam\n"
 	                                   "cartographer_my_stat\tMonster\titem_skillonhit\t\t27521\n"
 	                                   "cartographer_mon_life\tMonster\titem_skillonhit\t\t\n"
-	                                   "strength\tMonster\tmon_thorns\t\tx\n",
+	                                   "strength\tMonster\tmon_thorns\t\tx\n"
+	                                   "fireresist\tMonster\titem_skillonhit\t\t70000\n",
 	                                   ids, report);
 	REQUIRE(routes.size() == 1);
 	CHECK(routes[0].param == "27521");
-	CHECK(report.Errors() == 2); // no layer for a skill stat, and a Param that is not a number
+	CHECK(report.Errors() == 3); // no layer for a skill stat, a Param that is not a number, a layer above 65535
 }
 
 TEST_CASE("statroutes.txt: bad rows are errors that skip the row") {

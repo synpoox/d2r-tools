@@ -687,7 +687,7 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 		};
 		const auto paramIgnored = [&]() {
 			if (ok && !route.param.empty()) {
-				report.Note(StatRoutesFile, r.line, "the Param cell is only used by Behaviour routes and is ignored here.");
+				report.Note(StatRoutesFile, r.line, "the Param cell is only used by Behaviour and Monster routes and is ignored here.");
 				route.param.clear();
 			}
 		};
@@ -718,7 +718,7 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 				statCheck("Apply", route.apply);
 				if (ok && ids.loaded) {
 					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply),
-					                                                 std::atoi(route.param.c_str()));
+					                                                 route.target == sp::RouteTarget::Monster ? std::atoi(route.param.c_str()) : 0);
 					if (!refused.empty()) {
 						fail(refused);
 					}
@@ -732,8 +732,8 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 			} else if (!route.param.empty()) {
 				int layer = 0;
 				const char* end = route.param.data() + route.param.size();
-				if (std::from_chars(route.param.data(), end, layer).ptr != end || layer <= 0) {
-					fail("the Param cell '" + route.param + "' is not a whole number above 0. A monster route's Param is the stat's layer.");
+				if (std::from_chars(route.param.data(), end, layer).ptr != end || layer <= 0 || layer > 65535) {
+					fail("the Param cell '" + route.param + "' is not a whole number from 1 to 65535. A monster route's Param is the stat's layer.");
 				}
 			}
 		} else if (*target == "area") {

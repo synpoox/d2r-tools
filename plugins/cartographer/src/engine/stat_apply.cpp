@@ -246,7 +246,7 @@ auto Totals(Unit* unit, const std::vector<sp::Entry>& entries) noexcept -> std::
 			break;
 		}
 		char piece[48];
-		std::snprintf(piece, sizeof(piece), "%s%d=%d", out.empty() ? "" : " ", e.stat, Call<UnitStatFn>(UnitStat)(unit, e.stat, 0));
+		std::snprintf(piece, sizeof(piece), "%s%d=%d", out.empty() ? "" : " ", e.stat, Call<UnitStatFn>(UnitStat)(unit, e.stat, e.layer));
 		out += piece;
 	}
 	return out.empty() ? "-" : out;
