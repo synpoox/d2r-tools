@@ -133,12 +133,16 @@ void ReadLayoutRaw(Layout* out) noexcept {
 	const int32_t* const hudRect = Rect(hud);
 	const int32_t* const beltRect = Rect(belt);
 	int32_t labelX0 = StockLabelX;
+	bool haveLabel = false;  // labelX0 comes from the first label found, so a missing HotkeyLabel0 shifts no column
 	for (int c = 0; c < pc::Columns; ++c) {
 		char name[24];
 		std::snprintf(name, sizeof(name), "HotkeyLabel%d", c);
 		void* const label = g_nativeFindChild(belt, name);
 		const int32_t labelX = label != nullptr ? Rect(label)[0] : StockLabelX + c * StockPitch;
-		labelX0 = c == 0 ? labelX : labelX0;
+		if (label != nullptr && !haveLabel) {
+			haveLabel = true;
+			labelX0 = labelX - c * StockPitch;
+		}
 		out->columnX[c] = CellInRowX + labelX - labelX0;
 	}
 	if (g_beltBoxesField >= 0) {

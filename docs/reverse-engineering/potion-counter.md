@@ -18,14 +18,16 @@ bit), not from native code. In game each belt item's `ItemInfo::x` is its slot, 
 
 ## The BeltWidget (`D2Client\src\UI\Widgets\BeltWidget.cpp`), for reference
 
-The plugin does not use these reflected fields; it reads the hotkey labels the widget builds instead.
+The plugin does not use these reflected fields; it reads the hotkey labels the widget builds for the column spacing and
+takes the in-row offset `cellOffsetInRow`, (12, 6), as a constant.
 
 - Vtable `0x1ce2fa0`: `+0x8` layout build `0x227fd0`, `+0x10` update `0x228db0`.
 - Reflected fields (registration at `0x227e23`): `itemOffsetInCell` `+0x630`, `cellPadding` `+0x638` (IntPoint each);
   the layout build reads the cell size at `+0x5b8` and `cellOffsetInRow` at `+0x628`.
 - The layout build clones the `HotkeyLabelTemplate` child into `HotkeyLabel0`-`3` and moves each to the template's
   position plus `cellOffsetInRow + column * (cellSize.x + cellPadding.x)` (`0x856fb0`). The plugin reads those labels'
-  `+0x70`, so its squares follow any layout's belt geometry.
+  `+0x70`, so its squares follow any layout's column spacing (125 mouse, 130 controller); the first cell's offset in the
+  row is the (12, 6) constant, not read.
 - The widget also supports a `QuantityLabelTemplate` child (cloned to `QuantityLabel0`-`3`): its update `0x228db0`
   counts the column's items and sets the text from the string `BeltQuantityFormatString` with (count, rows). Stock
   layouts have no such child. A plugin cannot add one to HUDPanel without replacing the HUD layout (the SDK's child

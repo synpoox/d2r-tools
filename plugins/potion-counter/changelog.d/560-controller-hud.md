@@ -1,1 +1,1 @@
-- Shows the belt pictures on the controller HUD too, above each belt slot.
+- The belt pictures now sit above each belt slot on the controller HUD.
