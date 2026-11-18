@@ -19,9 +19,10 @@ struct Property {
 	Target target = Target::Monsters;
 	std::string stat;
 	int value = 0;
+	int layer = 0; // the stat's layer (skill and level for a proc stat); 0 for nearly every stat
 	friend bool operator==(const Property &a, const Property &b)
 	{
-		return a.target == b.target && a.stat == b.stat && a.value == b.value;
+		return a.target == b.target && a.stat == b.stat && a.value == b.value && a.layer == b.layer;
 	}
 };
 
@@ -62,6 +63,7 @@ struct Entry {
 	std::string name;
 	int stat = 0;
 	int value = 0;
+	int layer = 0;
 };
 
 // A drawn property that cannot be applied, and why (plain English).
@@ -85,7 +87,8 @@ struct Plan {
 // attributes are item stats and are fine. `level` is also refused on monsters: the game writes it itself during
 // monster setup. Matched by name or by the engine's fixed id (4, 5, 6, 8, 10, 12 to 15), so a renamed row is still
 // caught. The vanilla itemstatcost has no other stat with this behaviour (lastexp and nextexp are table look-ups).
-std::string refusedReason(Target target, std::string_view stat, int id);
+// A stat that needs a skill or state number is allowed when `layer` is not 0 (a monster route's Param gives it).
+std::string refusedReason(Target target, std::string_view stat, int id, int layer = 0);
 
 // Resolves the drawn properties. A name that is not in `ids`, a value of 0, an id outside 0..kMaxStatId and a stat
 // refusedReason() names are skipped, never guessed. With `ids.loaded` false nothing can be resolved and every property
@@ -172,7 +175,7 @@ struct Route {
 	RouteTarget target = RouteTarget::Player;
 	std::string apply;
 	std::optional<int> value; // set: this number is used instead of the item stat's value (blank in statroutes.txt: the item's value)
-	std::string param;        // behaviour routes: a parameter handed to the handler with the sum (such as a treasure class row); unused by the other targets
+	std::string param;        // behaviour routes: a parameter handed to the handler with the sum (such as a treasure class row). Monster routes: the stat's layer as a whole number (blank: 0). Unused by the other targets
 };
 
 // The built-in routes: the plugin's monster stats (the generic catalogue of issue #539), the area params (Density, AreaLevel, Uniques) and the behaviour keys. New rows are appended, never moved.

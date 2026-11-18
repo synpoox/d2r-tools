@@ -240,7 +240,7 @@ Where a map item's stat goes. Every stat the item carries is routed: the `cartog
 | `Target` | `Monster` (monsters get the `Apply` stat), `Player` (the player gets it), `Area` (adds to an area value), `Behaviour` (a number a behaviour reads), `None` (the stat does nothing). |
 | `Apply` | Monster and Player: the itemstatcost.txt stat that is applied (blank on Player: the stat itself). Area: the value, `Density`, `AreaLevel` or `Uniques`. Behaviour: the behaviour key. Not another routed stat: routes do not chain. |
 | `Value` | Optional whole number, not 0. Replaces the item's own value. Blank uses the item's value. |
-| `Param` | Optional, Behaviour only: a label told apart in the sum, e.g. which drop. Ignored elsewhere. |
+| `Param` | Optional. Behaviour: a label told apart in the sum, e.g. which drop. Monster: the stat's layer as a whole number, for stats that need a skill or state number (a proc stat's layer is `(skill << 6) | level`). Ignored elsewhere. |
 
 Values of the same area value or behaviour key add up over the item's affixes. A behaviour key no Cartographer version handles is noted by `cartographer check` and logged once, and the stat does nothing. `check` suggests the nearest name for a misspelt stat or target, and notes an `Apply` whose itemstatcost.txt `Op` is 13, which the game may not add the way the item shows.
 

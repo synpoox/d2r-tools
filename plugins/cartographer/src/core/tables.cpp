@@ -11,6 +11,7 @@
 #include <array>
 #include <cerrno>
 #include <cstdint>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -716,7 +717,8 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 			} else if (!route.apply.empty()) {
 				statCheck("Apply", route.apply);
 				if (ok && ids.loaded) {
-					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply));
+					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply),
+					                                                 std::atoi(route.param.c_str()));
 					if (!refused.empty()) {
 						fail(refused);
 					}
@@ -725,7 +727,15 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 					report.Note(StatRoutesFile, r.line, "warning: Apply '" + route.apply + "' has Op 13 in itemstatcost.txt; the game may not add its value the way the item shows it, so check it in game.");
 				}
 			}
-			paramIgnored();
+			if (route.target == sp::RouteTarget::Player) {
+				paramIgnored();
+			} else if (!route.param.empty()) {
+				int layer = 0;
+				const char* end = route.param.data() + route.param.size();
+				if (std::from_chars(route.param.data(), end, layer).ptr != end || layer <= 0) {
+					fail("the Param cell '" + route.param + "' is not a whole number above 0. A monster route's Param is the stat's layer.");
+				}
+			}
 		} else if (*target == "area") {
 			route.target = sp::RouteTarget::Area;
 			const std::string canonical = sp::canonicalAreaParam(route.apply);

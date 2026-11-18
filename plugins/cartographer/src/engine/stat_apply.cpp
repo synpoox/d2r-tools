@@ -181,7 +181,7 @@ auto UnitLevelId(Unit* unit) noexcept -> int32_t {
 	return room != nullptr ? Call<RoomLevelFn>(RoomLevelId)(room) : -1;
 }
 
-// New list on `unit` holding `entries` (layer 0). The recipe is the engine's own (cartographer/06-stats-events-checks.md, Q1): NewStatList,
+// New list on `unit` holding `entries` (each at its own layer, 0 unless a monster route gave one). The recipe is the engine's own (cartographer/06-stats-events-checks.md, Q1): NewStatList,
 // SetListStat for each stat, AttachStatList. No state is set here; a player's list gets one after (SetPlayerState).
 auto MakeList(Unit* unit, int32_t type, const std::vector<sp::Entry>& entries) noexcept -> void* {
 	const int32_t id = At<int32_t>(unit, UnitIdOffset);
@@ -191,7 +191,7 @@ auto MakeList(Unit* unit, int32_t type, const std::vector<sp::Entry>& entries) n
 	}
 	const uint32_t dataFlag = At<uint8_t>(unit, UnitDataFlagOffset);
 	for (const sp::Entry& e : entries) {
-		Call<SetListStatFn>(SetListStat)(dataFlag, list, e.stat, e.value, 0);
+		Call<SetListStatFn>(SetListStat)(dataFlag, list, e.stat, e.value, e.layer);
 	}
 	Call<AttachStatListFn>(AttachStatList)(unit, list, 1);
 	return list;
