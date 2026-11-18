@@ -62,4 +62,11 @@ gives a stock code other art in items.json still gets the stock picture.
   the HUD only with the panel's `priority` 101; at the default they were hidden behind the HUD art. Left- and
   right-clicks on the belt slots worked with the panel open (potion to the cursor, potion drunk). The item pictures
   drew at the expected size (98-unit sprite at the given `scale`); `rect.scale` scales from the widget's top-left.
-- Not validated: the controller HUD, a mod with its own HUD layout, a state where the HUD is hidden while in game.
+- Controller HUD (same slot, virtual pad from d2r-test-harness, 2026-11-18): the game reuses the `HUDPanel` panel and its
+  `Belt` for the controller layout (`layouts/controller/hudpanelhd.json`: HUDPanel -1473, -417; Belt 1591, 263;
+  cellPadding 32 so the column pitch is 130; HotkeyLabelTemplate 8, 98). It inherits `cellOffsetInRow` (12, 6), so the
+  first cell is at (12, 6) in the Belt in both layouts; the plugin now takes that as a constant and the column spacing
+  from the live hotkey labels (it used the mouse template (2, 60), which put the squares inside the cell on the
+  controller HUD). Log: `on the belt: panel at 118, -176; cells at x 12 142 272 402` (4 rows). Pictures drew above each
+  cell with 1, 3 and 4 rows; a D-pad drink emptied its square. The belt's popped-up flag could not be set on the pad.
+- Not validated: a mod with its own HUD layout, a state where the HUD is hidden while in game.

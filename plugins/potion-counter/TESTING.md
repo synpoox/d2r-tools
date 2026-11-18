@@ -16,4 +16,4 @@ row count changes.
 | 7 | 4-row belt (Demonhide Sash), also popped up | four smaller squares per slot; hidden when popped up | pass (Slot10): `belt rows: 4`, popped `yes` then `no` |
 | 8 | No belt | one square per slot | pass (Slot10): `belt rows: 1`, `belt: 1 1 1 1` |
 | 9 | 2-row belt | two squares per slot | not run: the only Sash in the save is unusable (red) and refused |
-| 10 | Controller HUD, a mod with its own HUD layout or item pictures | the squares follow the belt | not run |
+| 10 | Controller HUD (virtual pad) | the squares sit above each controller belt slot, same count as the mouse HUD, 1, 3 and 4 rows | pass (Slot10, 2026-11-18): panel at 118, -176 (4 rows), cells at x 12 142 272 402; D-pad drink empties a square. Popped-up hiding not reachable on the pad (the `` ` `` key does nothing there) |
