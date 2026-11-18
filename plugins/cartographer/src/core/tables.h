@@ -84,10 +84,6 @@ struct BossDef {
 	int minions = 0;            // 0 to 10; the game's own group size for the superunique row
 };
 
-// The most entries bosses.txt may have. The game keeps a once-per-game "already spawned" bit per superuniques row in a bitmap of
-// unknown length (docs/reverse-engineering/cartographer/01-addresses.md), so the number of added rows is kept small.
-inline constexpr size_t MaxBosses = 16;
-
 // The superuniques.txt key of the entry called `name`: BossKeyPrefix plus EscapeKeyBytes(name), ASCII only (install.ps1 Get-BossEscaped).
 auto BossKey(std::string_view name) -> std::string;
 

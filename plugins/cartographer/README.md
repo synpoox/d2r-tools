@@ -120,7 +120,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    `Mods` (0 when unused), `MinGrp` and `MaxGrp` to its `Minions`, and `hcIdx` to one more than the highest `hcIdx` in the
    table (then one more for each further row). In both names, write every character that is not A-Z, a-z or 0-9 as `_` and
    its two-digit **uppercase** hex code (`Shoreline Warden` becomes `Shoreline_20Warden`). Keep to the
-   [bosses.txt](#bossestxt) limits: at most 16 entries, `Mods` 1-255 (up to 3), `Minions` 0-10. Set the treasure class cells `TC`,
+   [bosses.txt](#bossestxt) limits: no row of `superuniques.txt` at 512 or later, `Mods` 1-255 (up to 3), `Minions` 0-10. Set the treasure class cells `TC`,
    `TC(N)` and `TC(H)` to `Act 5 Super C`, `Act 5 (N) Super C` and `Act 5 (H) Super C`, `TC(H) Desecrated` to
    `Act 5 (H) Super C Desecrated`, and the other two `Desecrated` cells to empty.
 4. **slots.txt**: in `d2rloader\cartographer\` beside `maps.txt` (not in `d2rloader\plugins`), a tab-separated file:
@@ -206,8 +206,8 @@ without a Boss. Without this file no map has a Boss. `tools\install.ps1` writes 
 keyed `cartoboss:` plus the Name (non-letters and digits written as `_` and a hex code, like the text key), so it can never match a vanilla row; it never edits a vanilla one. It checks each entry first
 (the `Base` must be an Id in `monstats.txt`, never one of the base game's own bosses such as `andariel`
 (a mod's own boss-flagged monster is fine); each `Mods` id must be in `monumod.txt`) and reports and skips a bad one. Run it again after you change this file, then restart the game: it
-rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. At most 16 entries are used (the game
-keeps a once-per-game spawn flag per row in a list of unknown length). If the game does not have an entry's row
+rebuilds the `cartoboss:` rows, so a renamed or removed entry loses its old row. Any number of entries is used, as long as
+`superuniques.txt` stays below 512 rows (the game keeps a once-per-game spawn flag per row in a 512-row list). If the game does not have an entry's row
 (the installer was not run), the boss is spawned as a plain monster of its `Base` and the log says so. Otherwise
 every map gets its real boss, with its name, mods, minions and drops, in the last resort too: when no room takes it,
 it is placed where you stand.

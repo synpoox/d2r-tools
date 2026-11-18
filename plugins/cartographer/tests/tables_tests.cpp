@@ -275,11 +275,11 @@ TEST_CASE("a bosses.txt Base that is a vanilla boss, a Mods id outside monumod.t
 	CHECK(text.find("not an id in monumod.txt") != std::string::npos);
 	Report many;
 	body = "Name\tBase\n";
-	for (size_t i = 0; i < MaxBosses + 1; ++i) {
+	for (size_t i = 0; i < 40; ++i) {  // more than the old cap of 16: bosses.txt has no entry limit (issue #552)
 		body += "Boss" + std::to_string(i) + "\tzombie1\n";
 	}
-	CHECK(LoadBosses(body, Names(), many).size() == MaxBosses);
-	CHECK(many.Errors() == 1);
+	CHECK(LoadBosses(body, Names(), many).size() == 40);
+	CHECK(many.Errors() == 0);
 }
 
 TEST_CASE("a Boss that names a cartoboss: key gets its own refusal") {

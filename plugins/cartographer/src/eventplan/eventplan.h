@@ -321,8 +321,9 @@ SpawnPlan planEvent(const events::Event &event, const Resolved &spawn, const Rec
 // superunique whose Class is not in monstats, gives a problem.
 SpawnPlan planMapBoss(const std::string &name, const Resolved &boss, const Rect &room, int scale = 1);
 
-// The game keeps one bit per superuniques row that says it was spawned in this game: bit (row & 7) of byte (row >> 3).
-constexpr int kMaxSuperRow = 0xFFFF;
+// The game keeps one bit per superuniques row that says it was spawned in this game: bit (row & 7) of byte (row >> 3) of a
+// 64-byte bitmap at game + 0x1d8, which the game indexes without a bound (note 53). A row past it is never spawned as a superunique.
+constexpr int kMaxSuperRow = 511;
 bool superSeen(const uint8_t *bitmap, int row);
 
 // --- Entry message -------------------------------------------------------------------------------------------------
