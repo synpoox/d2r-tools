@@ -10,7 +10,7 @@ Tools and plugins for Diablo II: Resurrected, built on [D2RLoader](https://githu
 | [dps-counter](plugins/dps-counter) | 1.0.0 | Damage per second you deal to monsters, just above the life globe. |
 | [multispec](plugins/multispec) | 1.0.1 | Keeps several skill setups per character and switches between them in town, without a respec token. |
 | [player-bars](plugins/player-bars) | 1.0.0 | Health and mana bars above your character, replacing the orbs. |
-| [potion-counter](plugins/potion-counter) | 1.0.0 | Shows the potions and scrolls in your belt as small pictures above each belt slot. |
+| [potion-counter](plugins/potion-counter) | 1.0.1 | Shows the potions and scrolls in your belt as small pictures above each belt slot. |
 | [quick-npc](plugins/quick-npc) | 1.0.1 | Ctrl+click an NPC to skip the dialog: trade, identify, resurrect your mercenary or travel. |
 | [scrollable-waypoints](plugins/scrollable-waypoints) | 1.0.1 | Mouse wheel switches the waypoint panel's Act tabs. |
 
