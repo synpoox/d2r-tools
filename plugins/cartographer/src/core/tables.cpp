@@ -11,6 +11,7 @@
 #include <array>
 #include <cerrno>
 #include <cstdint>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -686,7 +687,7 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 		};
 		const auto paramIgnored = [&]() {
 			if (ok && !route.param.empty()) {
-				report.Note(StatRoutesFile, r.line, "the Param cell is only used by Behaviour routes and is ignored here.");
+				report.Note(StatRoutesFile, r.line, "the Param cell is only used by Behaviour and Monster routes and is ignored here.");
 				route.param.clear();
 			}
 		};
@@ -716,7 +717,8 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 			} else if (!route.apply.empty()) {
 				statCheck("Apply", route.apply);
 				if (ok && ids.loaded) {
-					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply));
+					const std::string refused = sp::refusedReason(route.target == sp::RouteTarget::Monster ? sp::Target::Monsters : sp::Target::Players, route.apply, ids.find(route.apply),
+					                                                 route.target == sp::RouteTarget::Monster ? std::atoi(route.param.c_str()) : 0);
 					if (!refused.empty()) {
 						fail(refused);
 					}
@@ -725,7 +727,15 @@ auto LoadStatRoutes(std::string_view text, const cartographer::statplan::StatIds
 					report.Note(StatRoutesFile, r.line, "warning: Apply '" + route.apply + "' has Op 13 in itemstatcost.txt; the game may not add its value the way the item shows it, so check it in game.");
 				}
 			}
-			paramIgnored();
+			if (route.target == sp::RouteTarget::Player) {
+				paramIgnored();
+			} else if (!route.param.empty()) {
+				int layer = 0;
+				const char* end = route.param.data() + route.param.size();
+				if (std::from_chars(route.param.data(), end, layer).ptr != end || layer <= 0 || layer > 65535) {
+					fail("the Param cell '" + route.param + "' is not a whole number from 1 to 65535. A monster route's Param is the stat's layer.");
+				}
+			}
 		} else if (*target == "area") {
 			route.target = sp::RouteTarget::Area;
 			const std::string canonical = sp::canonicalAreaParam(route.apply);

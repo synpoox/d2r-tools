@@ -2034,6 +2034,21 @@ TEST_CASE("statroutes.txt: a good file gives its routes, with no problems") {
 	CHECK(SayCloseTo(report, "no handler"));  // a Note, not an error
 }
 
+TEST_CASE("statroutes.txt: a monster route's Param is the stat's layer") {
+	auto ids = RouteTestIds();
+	ids.byName.emplace_back("item_skillonhit", 198);
+	Report report;
+	const auto routes = LoadStatRoutes("Stat\tTarget\tApply\tValue\tParam\n"
+	                                   "cartographer_my_stat\tMonster\titem_skillonhit\t\t27521\n"
+	                                   "cartographer_mon_life\tMonster\titem_skillonhit\t\t\n"
+	                                   "strength\tMonster\tmon_thorns\t\tx\n"
+	                                   "fireresist\tMonster\titem_skillonhit\t\t70000\n",
+	                                   ids, report);
+	REQUIRE(routes.size() == 1);
+	CHECK(routes[0].param == "27521");
+	CHECK(report.Errors() == 3); // no layer for a skill stat, a Param that is not a number, a layer above 65535
+}
+
 TEST_CASE("statroutes.txt: bad rows are errors that skip the row") {
 	const auto ids = RouteTestIds();
 	const auto bad = [&](const char* row, const char* expect) {

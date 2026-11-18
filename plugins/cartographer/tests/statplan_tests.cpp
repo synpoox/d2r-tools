@@ -381,6 +381,28 @@ TEST_CASE("stats that need a skill or state number are refused on both targets")
 	CHECK(refusedReason(Target::Monsters, "item_skillonxyz", 200).empty()); // the list is exact: no prefix match
 }
 
+TEST_CASE("a stat that needs a skill number is allowed with a layer, and layers stay apart")
+{
+	StatIds ids;
+	ids.loaded = true;
+	ids.byName = {{"item_skillonhit", 198}};
+	const int layer = (430 << 6) | 1;
+	const Plan plan = buildPlan({{Target::Monsters, "item_skillonhit", 10, layer}, {Target::Monsters, "item_skillonhit", 5, layer},
+	                             {Target::Monsters, "item_skillonhit", 7, layer + 1}, {Target::Monsters, "item_skillonhit", 5}}, ids);
+	REQUIRE(plan.monsters.size() == 2);
+	CHECK(plan.monsters[0].value == 15);
+	CHECK(plan.monsters[0].layer == layer);
+	CHECK(plan.monsters[1].layer == layer + 1);
+	CHECK(plan.skipped.size() == 1); // the layer 0 one
+	// a route's Param becomes the property's layer
+	std::vector<Route> routes = {{"my_splash", RouteTarget::Monster, "item_splashonhit", std::nullopt, "27521"}};
+	StatIds all = ids;
+	all.byName.emplace_back("my_splash", 500);
+	const auto r = itemStatsToProperties({{500, 0, 12}}, all, routes);
+	REQUIRE(r.properties.size() == 1);
+	CHECK(r.properties[0] == Property{Target::Monsters, "item_splashonhit", 12, 27521});
+}
+
 TEST_CASE("PlayerStats off: no player entry is planned, monsters still are")
 {
 	const std::vector<Property> props = {{Target::Monsters, "damagepercent", 15}, {Target::Players, "fireresist", -20}};

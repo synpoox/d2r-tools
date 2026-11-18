@@ -1,0 +1,1 @@
+- A `Monster` row in `statroutes.txt` can now give a `Param`, the stat's layer, so a stat that needs a skill (such as `item_splashonhit`) can be routed.

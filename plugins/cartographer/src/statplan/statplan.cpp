@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdio>
+#include <charconv>
 #include <cstdlib>
 #include <cstring>
 
@@ -151,14 +152,14 @@ static bool needsParam(std::string_view stat, int id)
 	return false;
 }
 
-std::string refusedReason(Target target, std::string_view stat, int id)
+std::string refusedReason(Target target, std::string_view stat, int id, int layer)
 {
 	static const char *const kNames[] = {"statpts", "newskills", "hitpoints", "mana", "stamina", "level", "experience", "gold", "goldbank"};
 	static const int kIds[] = {4, 5, 6, 8, 10, 12, 13, 14, 15};
 	bool listed = false;
 	for (const char *n : kNames) listed = listed || stat == n;
 	for (const int i : kIds) listed = listed || id == i;
-	if (needsParam(stat, id))
+	if (layer == 0 && needsParam(stat, id))
 		return "'" + std::string(stat) + "' is refused: it needs a skill or state number, and a map stat cannot give one yet.";
 	if (!listed) return "";
 	const bool isLevel = stat == "level" || id == 12;
@@ -196,7 +197,7 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 			skip("its stat id " + std::to_string(id) + " is above " + std::to_string(kMaxStatId));
 			continue;
 		}
-		const std::string refused = refusedReason(p.target, p.stat, id);
+		const std::string refused = refusedReason(p.target, p.stat, id, p.layer);
 		if (!refused.empty()) {
 			skip(refused);
 			continue;
@@ -210,12 +211,12 @@ Plan buildPlan(const std::vector<Property> &properties, const StatIds &ids, bool
 		// Two properties of one stat on one target become one entry holding the sum: each entry goes to SetListStat, which may set the
 		// value instead of adding to it (not checked in game), and the map panel shows the sum.
 		size_t at = 0;
-		while (at < list.size() && list[at].stat != id) ++at;
+		while (at < list.size() && (list[at].stat != id || list[at].layer != p.layer)) ++at;
 		if (at < list.size()) {
 			sums[at] += p.value;
 			continue;
 		}
-		list.push_back({p.stat, id, 0});
+		list.push_back({p.stat, id, 0, p.layer});
 		sums.push_back(p.value);
 	}
 	// The sums become the entries' values: an entry that adds up to 0 is dropped (and logged), a monster speed is cut once, on the sum, and
@@ -543,7 +544,12 @@ ItemProperties itemStatsToProperties(const std::vector<ItemStat> &stats, const S
 		}
 		const int value = route->value.value_or(s.value);
 		switch (route->target) {
-		case RouteTarget::Monster: out.properties.push_back({Target::Monsters, route->apply, value}); break;
+		case RouteTarget::Monster: {
+			int layer = 0;
+			std::from_chars(route->param.data(), route->param.data() + route->param.size(), layer);
+			out.properties.push_back({Target::Monsters, route->apply, value, layer});
+			break;
+		}
 		case RouteTarget::Player: out.properties.push_back({Target::Players, route->apply.empty() ? name : route->apply, value}); break;
 		case RouteTarget::Area: addRouted(out.routing.areas, route->apply, "", value); break;
 		case RouteTarget::Behaviour: addRouted(out.routing.behaviours, route->apply, route->param, value); break;
