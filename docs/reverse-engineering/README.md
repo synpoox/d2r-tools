@@ -12,6 +12,7 @@ A feature document that grows by one section per RE or game-check PR is split in
 
 ## Feature documents
 
+- [Known RVAs reference](known-rvas-reference.md): an outside build 92777 address list, for names and notes only; not for fixed RVAs in code.
 - [Quick NPC](quick-npc.md): NPC left-click path, modifier keys, the NPC menu table, menu option handlers
   (Trade, Identify, Resurrect, Travel), the `0x101910` and `0x1141d0` hooks.
 - [Better Automap](better-automap.md): automap, mini map and mouse-wheel hook sites with evidence.
