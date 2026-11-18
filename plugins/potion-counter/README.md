@@ -1,7 +1,7 @@
 # Potion Counter
 
 A D2RLoader plugin for Diablo II: Resurrected that shows what is in each belt column as a row of small framed squares
-above the belt slot, the way Project Diablo 2 shows it. It only shows them: it never fills, refills or moves
+above the belt slot. It only shows them: it never fills, refills or moves
 anything.
 MIT licensed.
 
