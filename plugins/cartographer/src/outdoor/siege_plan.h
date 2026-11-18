@@ -12,6 +12,10 @@
 // Seen in game (#288): the stamper accepts these ids, the strips are built as 2 x 6 rooms of 8 tiles,
 // the Boss and event land in their rooms. Not settled: how the seams look on screen (the funnel pair 874/873 differs by one row at the wall) and the
 // north and south edge (KillEdge).
+//
+// Border columns (#549): the two end strips stop at a blank edge, which the game draws as a black field. When the installer's Barricade border
+// rows are there (copies of 882 and 896 whose Dt1Mask selects the Barricade files it appended to LevelType 30) and the slot level is wide enough,
+// the plan stamps a column of three 16 x 16 border pieces west of 879 and east of 865, and the strips move one column east.
 #pragma once
 #include <cstdint>
 #include <string>
@@ -26,7 +30,9 @@ constexpr int kLevelType = 30;     // lvltypes.txt "Act 5 - Siege"
 constexpr int kStripWidth = 16;    // tiles, west to east
 constexpr int kStripHeight = 48;   // tiles
 constexpr int kGridTiles = 8;      // the engine's grid cell
-constexpr int kLevelTilesX = 240;  // the slot level: 15 strips
+constexpr int kBorderPieces = 3;   // 16 x 16 border pieces stacked in an end column (48 tiles)
+constexpr int kBorderFiles = 3;    // DS1 files of each border row (882 and 896 have 3)
+constexpr int kLevelTilesX = 272;  // the slot level: 15 strips and a border column at each end
 constexpr int kLevelTilesY = 48;
 constexpr int kFirstLvlPrest = 865;
 constexpr int kLastLvlPrest = 879;
@@ -67,6 +73,8 @@ struct SiegeOptions {
 	int maxTilesX = 0;     // the slot row's declared size limit in tiles; 0 means no limit
 	int maxTilesY = 0;
 	bool pinFiles = false; // true: pass the drawn DS1 file index (always 0, every strip has one file); false: -1
+	int borderWest = 0;    // lvlprest id of the installer's west border row (a copy of 882); 0: not installed
+	int borderEast = 0;    // lvlprest id of the east border row (a copy of 896); 0: not installed
 };
 
 struct SiegeRequest {
@@ -78,10 +86,14 @@ struct SiegeRequest {
 // Small, Medium, Large or ExtraLarge (blank means Large), case-insensitive. False for any other word. 12, 13, 14 and 15 strips.
 bool siegeSizeStrips(std::string_view size, int *strips);
 
+// True when the plan gets its two border columns: both border rows are installed and the strips plus two columns fit maxTilesX.
+bool siegeBorders(const SiegeRequest &request);
+
 struct SiegePlan {
 	bool ok = false;
 	std::string reason;                 // plain English, when !ok: why the game must build its own level
 	std::vector<int> strips;            // the LvlPrest ids, west to east
+	bool borders = false;               // the stamps hold the two border columns (after the strips: west column, then east column)
 	StampPlan stamps;                   // complete only when ok
 	uint64_t hash = 0;                  // stampPlanHash of the stamps
 };

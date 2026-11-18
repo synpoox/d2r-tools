@@ -36,6 +36,15 @@ try {
     $ph = @('code', '*Id', 'stat1', '*Tooltip', '*Notes')
     $props = @(0..292 | ForEach-Object { if ($_ -eq 5) { , @('str', '5', 'strength', 'Str', '') } else { , @("vanilla_prop_$_", "$_", 'strength', '', '') } })
     Write-Tsv 'properties.txt' $ph $props
+    # lvltypes.txt rows 30 (Siege, 11 files) and 31 (Barricade) as in the game, and lvlprest.txt with the two Barricade border pieces (#549).
+    $siegeFiles = @('ascendors', 'camp', 'fence', 'ground', 'rockcliff', 'rockclifffloor', 'rocks', 'shrub', 'spike', 'trench', 'trees') | ForEach-Object { "Expansion/Siege/$_.dt1" }
+    $barricadeFiles = @('Ground', 'fence', 'cliff', 'fortified', 'snow', 'trees', 'special', 'trench', 'building') | ForEach-Object { "Expansion/Siege/$_.dt1" }
+    $barricadeFiles += @('Expansion/town/waypt.dt1') + (@('pinetree', 'battle', 'barricade', 'rockclifffloor', 'camp', 'rockcliff', 'ascendors', 'spike') | ForEach-Object { "Expansion/Siege/$_.dt1" }) + @('Expansion/Town/collision.dt1', 'Expansion/Siege/shrub.dt1', 'Expansion/Siege/rocks.dt1')
+    $r30 = @('Act 5 - Siege', '30') + $siegeFiles + @('0') * (32 - $siegeFiles.Count)
+    $r31 = @('Act 5 - Barricade', '31') + $barricadeFiles + @('0') * (32 - $barricadeFiles.Count)
+    Write-Tsv 'lvltypes.txt' (@('Name', 'Id') + (1..32 | ForEach-Object { "File $_" })) @($r30, $r31)
+    $prestRows = @(0..1091 | ForEach-Object { if ($_ -eq 882) { , @('Act 5 - Barricade Cliff Border 2', '882', '16', '16', '3', 'Expansion/Siege/Brdr02c.ds1', '1944631') } elseif ($_ -eq 896) { , @('Act 5 - Barricade Ravine Border 4', '896', '16', '16', '3', 'Expansion/Siege/Brdr04r.ds1', '1944631') } else { , @("vanilla_prest_$_", "$_", '8', '8', '1', 'x.ds1', '1') } })
+    Write-Tsv 'lvlprest.txt' @('Name', 'Def', 'SizeX', 'SizeY', 'Files', 'File1', 'Dt1Mask') $prestRows
 
     $log1 = Run-Installer
     Check ($LASTEXITCODE -eq 0) 'first run succeeds'
@@ -60,7 +69,17 @@ try {
         $r = if (293 + $i -lt $prows.Count) { $prows[293 + $i] } else { @('', '', '') }
         Check ($r[0] -eq $pnames[$i] -and $r[1] -eq "$(293 + $i)" -and $r[2] -eq $names[$i]) "property $($pnames[$i]) has id $(293 + $i) and stat $($names[$i]) (got '$($r[0])' id '$($r[1])' stat '$($r[2])')"
     }
-    $tables = 'itemstatcost.txt', 'properties.txt', 'levels.txt', 'lvlmaze.txt', 'itemtypes.txt'
+    # Siege borders: the five Barricade files the pieces need beyond Siege's own go to Files 12..16 of row 30, and each piece gets a copy row whose
+    # mask selects the same files there: Ground 3, fence 2, cliff 11, snow 12, trees 10, pinetree 13, battle 14, rockclifffloor 5, rockcliff 4,
+    # ascendors 0, collision 15, shrub 7, rocks 6 (bits) = 64765. The Siege slot level is 272 wide for the two border columns.
+    $siegeType = @(Read-Rows 'lvltypes.txt' | Where-Object { $_[1] -eq '30' })[0]
+    Check (($siegeType[13..17] -join ',') -eq 'Expansion/Siege/cliff.dt1,Expansion/Siege/snow.dt1,Expansion/Siege/pinetree.dt1,Expansion/Siege/battle.dt1,Expansion/Town/collision.dt1' -and $siegeType[18] -eq '0') "lvltypes.txt row 30 gains the five Barricade files in Files 12..16 (got $($siegeType[13..18] -join ','))"
+    $borders = @(Read-Rows 'lvlprest.txt' | Where-Object { $_[0] -like 'Cartographer Siege Border *' })
+    Check ($borders.Count -eq 2 -and $borders[0][0] -eq 'Cartographer Siege Border West' -and $borders[0][1] -eq '1092' -and $borders[0][5] -eq 'Expansion/Siege/Brdr02c.ds1' -and $borders[0][6] -eq '64765' -and
+           $borders[1][0] -eq 'Cartographer Siege Border East' -and $borders[1][1] -eq '1093' -and $borders[1][5] -eq 'Expansion/Siege/Brdr04r.ds1' -and $borders[1][6] -eq '64765') "lvlprest.txt gets the two border rows as Defs 1092 and 1093 with mask 64765 (got $(($borders | ForEach-Object { $_ -join ' ' }) -join '; '))"
+    $siegeLevel = @(Read-Rows 'levels.txt' | Where-Object { $_[0] -eq 'Cartographer Siege' })[0]
+    Check ($siegeLevel[$lh.IndexOf('SizeX')] -eq '272' -and $siegeLevel[$lh.IndexOf('SizeY')] -eq '48') "the Siege level is 272 x 48 (got $($siegeLevel[$lh.IndexOf('SizeX')]) x $($siegeLevel[$lh.IndexOf('SizeY')]))"
+    $tables = 'itemstatcost.txt', 'properties.txt', 'levels.txt', 'lvlmaze.txt', 'itemtypes.txt', 'lvltypes.txt', 'lvlprest.txt'
     $before = $tables | ForEach-Object { (Get-FileHash (Join-Path $dir $_)).Hash }
     $log2 = Run-Installer
     Check ($LASTEXITCODE -eq 0) 'second run succeeds'
@@ -175,6 +194,18 @@ try {
     Check ($logOther.Contains("'cmap'") -and $logOther.Contains('Other Type')) 'the refusal names the cmap code and the other item type'
     Check ((Get-Snapshot $otherDir) -eq $beforeOther) 'the refused run writes no file, backup or staged file'
     Remove-Item -LiteralPath $cmDir, $otherDir -Recurse -Force -ErrorAction SilentlyContinue
+    # A modded lvlprest.txt without 896 (a gap in its Defs, or other tables the border rows cannot fit) gets a note, not a failure, and no border row is written (#549).
+    $noBorderDir = $dir + '-noborder'
+    Copy-Installed $noBorderDir
+    $nbPath = Join-Path $noBorderDir 'lvlprest.txt'
+    $nbLines = @(Get-Content $nbPath | Where-Object { -not $_.StartsWith('Cartographer Siege Border') -and -not $_.StartsWith("Act 5 - Barricade Ravine Border 4`t") })
+    [System.IO.File]::WriteAllText($nbPath, (($nbLines -join "`r`n") + "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+    $nbBefore = (Get-FileHash $nbPath).Hash
+    $logNb = Run-InstallerIn $noBorderDir
+    Check ($LASTEXITCODE -eq 0) 'a run on a lvlprest.txt without row 896 still succeeds'
+    Check ($logNb.Contains('lvltypes.txt/lvlprest.txt:') -and $logNb.Contains('black field')) 'the run notes why the Siege borders were left out'
+    Check ((Get-FileHash $nbPath).Hash -eq $nbBefore) 'no border row is written when one cannot be'
+    Remove-Item -LiteralPath $noBorderDir -Recurse -Force -ErrorAction SilentlyContinue
 
     # A table with no room for a new stat id (511 rows: an item save cannot hold id 511) stops the run, and nothing is written, not even the
     # earlier itemtypes.txt repair (every table is written at the end). A scratch copy of the installed folder, with the stat rows replaced and

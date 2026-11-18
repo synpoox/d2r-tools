@@ -42,10 +42,11 @@ bool isWide(const Piece &p) {
 	return p.role != Role::WestCap && p.role != Role::EastCap && wide(p.west) && wide(p.east);
 }
 
-TileRect cellRect(const SiegeOptions &o, int index) {
+// `lead` is 1 when a border column stands west of the line (the strips move one column east), else 0.
+TileRect cellRect(const SiegeOptions &o, int index, int lead) {
 	TileRect r;
 	r.known = true;
-	r.x = o.originX + index * kStripWidth;
+	r.x = o.originX + (index + lead) * kStripWidth;
 	r.y = o.originY;
 	r.w = kStripWidth;
 	r.h = kStripHeight;
@@ -184,6 +185,11 @@ bool siegeSizeStrips(std::string_view size, int *strips) {
 	return true;
 }
 
+bool siegeBorders(const SiegeRequest &request) {
+	const SiegeOptions &o = request.options;
+	return o.borderWest > 0 && o.borderEast > 0 && (o.maxTilesX <= 0 || (request.strips + 2) * kStripWidth <= o.maxTilesX);
+}
+
 SiegePlan planSiegeMap(const SiegeRequest &request) {
 	SiegePlan out;
 	const auto fail = [&out](std::string why) {
@@ -212,32 +218,52 @@ SiegePlan planSiegeMap(const SiegeRequest &request) {
 	plan.originX = request.options.originX;
 	plan.originY = request.options.originY;
 	const int n = static_cast<int>(out.strips.size());
-	plan.tilesW = n * kStripWidth;
+	out.borders = siegeBorders(request);
+	const int lead = out.borders ? 1 : 0;
+	const int columns = n + 2 * lead;
+	plan.tilesW = columns * kStripWidth;
 	plan.tilesH = kStripHeight;
 	const int perX = kStripWidth / kGridTiles;
-	plan.cellsW = n * perX;
+	plan.cellsW = columns * perX;
 	plan.cellsH = kStripHeight / kGridTiles;
 	plan.macroMinX = 0;
 	plan.macroMinY = 0;
-	plan.macroW = n;
+	plan.macroW = columns;
 	plan.macroH = 1;
 	const int entrance = entranceIndex(n);
 	for (int i = 0; i < n; ++i) {
 		Stamp s;
-		s.cx = i * perX;
+		s.cx = (i + lead) * perX;
 		s.cy = 0;
 		s.lvlPrest = out.strips[static_cast<size_t>(i)];
 		s.file = request.options.pinFiles ? static_cast<int>(fileRng.below(1u)) : -1;
-		s.macroX = i;
+		s.macroX = i + lead;
 		s.macroY = 0;
 		s.mask = 0;
 		s.role = i == entrance ? layout::Role::Entrance : layout::Role::Path;
 		plan.stamps.push_back(s);
 	}
-	plan.entrance = cellRect(request.options, entrance);
+	// The border columns, after the strips so the strips keep their stamp index: three pieces down the west column, then three down the east one.
+	if (out.borders) {
+		for (const int column : {0, columns - 1}) {
+			for (int k = 0; k < kBorderPieces; ++k) {
+				Stamp s;
+				s.cx = column * perX;
+				s.cy = k * (kStripWidth / kGridTiles);
+				s.lvlPrest = column == 0 ? request.options.borderWest : request.options.borderEast;
+				s.file = request.options.pinFiles ? static_cast<int>(fileRng.below(static_cast<uint32_t>(kBorderFiles))) : -1;
+				s.macroX = column;
+				s.macroY = 0;
+				s.mask = 0;
+				s.role = layout::Role::Path;
+				plan.stamps.push_back(s);
+			}
+		}
+	}
+	plan.entrance = cellRect(request.options, entrance, lead);
 	const RoomCells rooms = chooseRoomCells(request, out.strips);
-	if (rooms.bossKnown) plan.boss = cellRect(request.options, rooms.boss);
-	if (rooms.eventKnown) plan.event = cellRect(request.options, rooms.event);
+	if (rooms.bossKnown) plan.boss = cellRect(request.options, rooms.boss, lead);
+	if (rooms.eventKnown) plan.event = cellRect(request.options, rooms.event, lead);
 
 	out.ok = true;
 	out.hash = stampPlanHash(plan);
@@ -261,14 +287,31 @@ std::vector<std::string> checkSiegePlan(const SiegeRequest &request, const Siege
 	}
 	const StampPlan &sp = plan.stamps;
 	const int perX = kStripWidth / kGridTiles;
-	if (sp.tilesW != n * kStripWidth || sp.tilesH != kStripHeight || sp.cellsW != n * perX || sp.cellsH != kStripHeight / kGridTiles || sp.macroW != n || sp.macroH != 1 ||
+	// The checker's own border rule: both rows installed and two more 16-tile columns fit the slot's width.
+	const SiegeOptions &o = request.options;
+	const bool borders = o.borderWest > 0 && o.borderEast > 0 && (o.maxTilesX <= 0 || n * kStripWidth + 32 <= o.maxTilesX);
+	if (plan.borders != borders) bad.push_back(borders ? "the border rows are installed and fit, but the plan has no border columns" : "the plan has border columns the request does not allow");
+	const int lead = borders ? 1 : 0;
+	const int columns = n + 2 * lead;
+	if (sp.tilesW != columns * kStripWidth || sp.tilesH != kStripHeight || sp.cellsW != columns * perX || sp.cellsH != kStripHeight / kGridTiles || sp.macroW != columns || sp.macroH != 1 ||
 		sp.originX != request.options.originX || sp.originY != request.options.originY)
 		bad.push_back("the stamp plan's level box does not match the request");
 	if (sp.macroMinX != 0 || sp.macroMinY != 0) bad.push_back("the stamp plan's macro grid does not start at 0, 0");
 	if (plan.hash != stampPlanHash(sp)) bad.push_back("the plan's hash is not the hash of its stamps");
-	if (sp.stamps.size() != plan.strips.size()) {
-		bad.push_back("the plan has " + std::to_string(sp.stamps.size()) + " stamps for " + std::to_string(plan.strips.size()) + " strips");
+	const size_t borderStamps = borders ? 6 : 0;  // three 16 x 16 pieces at each end
+	if (sp.stamps.size() != plan.strips.size() + borderStamps) {
+		bad.push_back("the plan has " + std::to_string(sp.stamps.size()) + " stamps for " + std::to_string(plan.strips.size()) + " strips" + (borders ? " and two border columns" : ""));
 		return bad;
+	}
+	for (size_t k = 0; k < borderStamps; ++k) {
+		const Stamp &s = sp.stamps[plan.strips.size() + k];
+		const bool west = k < 3;
+		const int x = west ? 0 : (columns - 1) * perX;
+		const std::string where = std::string(west ? "west" : "east") + " border piece " + std::to_string(k % 3 + 1);
+		if (s.lvlPrest != (west ? o.borderWest : o.borderEast)) bad.push_back(where + " is piece " + std::to_string(s.lvlPrest) + ", not the " + (west ? "west" : "east") + " border row");
+		if (s.cx != x || s.cy != static_cast<int>(k % 3) * 2 || s.macroX != (west ? 0 : columns - 1) || s.macroY != 0) bad.push_back(where + " is not stamped at its place in the end column");
+		if (s.file < -1 || s.file >= 3 || (!o.pinFiles && s.file != -1)) bad.push_back(where + " has file index " + std::to_string(s.file));
+		if (s.role != layout::Role::Path || s.mask != 0) bad.push_back(where + " has the wrong role or mask");
 	}
 	if (!sp.voidCells.empty()) bad.push_back("a Siege map is a full line but the plan lists void cells");
 
@@ -293,7 +336,7 @@ std::vector<std::string> checkSiegePlan(const SiegeRequest &request, const Siege
 			bad.push_back(where + " has a " + roleName(p->role) + " where it does not belong");
 		const Stamp &s = sp.stamps[i];
 		const int x = static_cast<int>(i);
-		if (s.macroX != x || s.macroY != 0 || s.cx != x * perX || s.cy != 0) bad.push_back(where + " is not stamped at its place in order, aligned to the 8-tile grid");
+		if (s.macroX != x + lead || s.macroY != 0 || s.cx != (x + lead) * perX || s.cy != 0) bad.push_back(where + " is not stamped at its place in order, aligned to the 8-tile grid");
 		if (s.lvlPrest != line[i]) bad.push_back(where + " stamps a different piece than the line holds");
 		if (s.file < -1 || s.file >= 1) bad.push_back(where + " has file index " + std::to_string(s.file) + ", out of range for piece " + std::to_string(line[i]));
 		if (!request.options.pinFiles && s.file != -1) bad.push_back(where + " pins a file index though pinFiles is off");
@@ -315,15 +358,15 @@ std::vector<std::string> checkSiegePlan(const SiegeRequest &request, const Siege
 	}
 	if (static_cast<int>(freeCount) != n - kFixedStrips) bad.push_back("the line holds " + std::to_string(freeCount) + " free strips, the size asks for " + std::to_string(n - kFixedStrips));
 
-	const TileRect want = cellRect(request.options, entranceIndex(n));
+	const TileRect want = cellRect(request.options, entranceIndex(n), lead);
 	const auto same = [](const TileRect &a, const TileRect &b) { return a.known == b.known && a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; };
 	if (!same(sp.entrance, want)) bad.push_back("the entrance rectangle is not on strip " + std::to_string(entranceIndex(n) + 1));
 	const RoomCells rooms = chooseRoomCells(request, line);
 	if (sp.boss.known != rooms.bossKnown || sp.event.known != rooms.eventKnown) {
 		bad.push_back("the plan's boss or event rectangle is missing or has no room");
 	} else {
-		if (rooms.bossKnown && !same(sp.boss, cellRect(request.options, rooms.boss))) bad.push_back("the boss rectangle is not on strip " + std::to_string(rooms.boss + 1));
-		if (rooms.eventKnown && !same(sp.event, cellRect(request.options, rooms.event))) bad.push_back("the event rectangle is not on strip " + std::to_string(rooms.event + 1));
+		if (rooms.bossKnown && !same(sp.boss, cellRect(request.options, rooms.boss, lead))) bad.push_back("the boss rectangle is not on strip " + std::to_string(rooms.boss + 1));
+		if (rooms.eventKnown && !same(sp.event, cellRect(request.options, rooms.event, lead))) bad.push_back("the event rectangle is not on strip " + std::to_string(rooms.event + 1));
 		if (rooms.bossKnown && same(sp.boss, sp.entrance)) bad.push_back("the boss and the entrance are the same strip");
 		if (rooms.eventKnown && (same(sp.event, sp.entrance) || same(sp.event, sp.boss))) bad.push_back("the event is on the entrance or boss strip");
 	}

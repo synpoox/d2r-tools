@@ -130,6 +130,9 @@ struct Slot {
 	// outdoor build needs them because the level record's rectangle is still zero when the level build starts.
 	bool haveGeometry = false;
 	int offsetX = 0, offsetY = 0, sizeX = 0, sizeY = 0;
+	// The OutdoorSiege slot only: the lvlprest.txt Defs of the installer's Barricade border rows (SiegeBorderWestName, SiegeBorderEastName); 0 when
+	// they are not installed (issue #549). See ReadSiegeBorders.
+	int borderWest = 0, borderEast = 0;
 };
 
 // One row of arenaspots.txt: a named spot in an arena's interior (issue #488). The positions are worked out at load from the arena's levels.txt origin.
@@ -222,6 +225,16 @@ void ValidateSlots(std::vector<Slot>& slots, std::string_view levelsText, Report
 // Fills in each slot's levelType, drlgType and act from the mod's levels.txt (columns Id, LevelType, DrlgType and Act; each is read when its column
 // exists). A slot with no row keeps -1.
 void ReadSlotLevelTypes(std::vector<Slot>& slots, std::string_view levelsText);
+
+// The lvlprest.txt Names of the two Barricade border rows install.ps1 adds for Siege maps (copies of 882 and 896 whose Dt1Mask selects files the
+// installer appended to lvltypes.txt row 30). Issue #549.
+inline constexpr const char* SiegeBorderWestName = "Cartographer Siege Border West";
+inline constexpr const char* SiegeBorderEastName = "Cartographer Siege Border East";
+
+// Sets the OutdoorSiege slot's borderWest and borderEast to the Defs of the border rows in the mod's lvlprest.txt. Both stay 0 unless both rows
+// are there and every file their Dt1Mask selects is set in the mod's lvltypes.txt row 30 (Act 5 - Siege): without those files the borders would
+// draw no tiles. An empty `lvltypesText` (the mod has no lvltypes.txt, so the game's own row without the files is used) gives 0.
+void ReadSiegeBorders(std::vector<Slot>& slots, std::string_view lvlprestText, std::string_view lvltypesText);
 
 // Empty, or why an outdoor slot level (a slot row of the outdoor tileset table) must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
 // say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level

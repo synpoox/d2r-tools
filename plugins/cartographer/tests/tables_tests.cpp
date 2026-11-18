@@ -500,6 +500,26 @@ TEST_CASE("slot level types are read from levels.txt") {
 	CHECK(slots[1].levelType == 4);
 }
 
+TEST_CASE("the Siege border rows are read from lvlprest.txt only when lvltypes.txt row 30 has their files (#549)") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nOutdoorSiege\t140\nOutdoor\t141\n", report);
+	const std::string prest =
+	    "Name\tDef\tDt1Mask\nAct 5 - Barricade Cliff Border 2\t882\t1944631\nCartographer Siege Border West\t1093\t3\nCartographer Siege Border East\t1094\t2049\n";
+	const std::string types12 = "Name\tId\tFile 1\tFile 2\tFile 3\tFile 12\nAct 5 - Siege\t30\ta.dt1\tb.dt1\t0\tcliff.dt1\n";
+	ReadSiegeBorders(slots, prest, types12);
+	CHECK(slots[0].borderWest == 1093);
+	CHECK(slots[0].borderEast == 1094);
+	CHECK(slots[1].borderWest == 0);  // only the Siege slot
+	// File 12 (bit 11) not set: the game's own row 30, which has 11 files, would draw nothing for the east border.
+	ReadSiegeBorders(slots, prest, "Name\tId\tFile 1\tFile 2\nAct 5 - Siege\t30\ta.dt1\tb.dt1\n");
+	CHECK(slots[0].borderWest == 0);
+	CHECK(slots[0].borderEast == 0);
+	ReadSiegeBorders(slots, prest, "");  // no lvltypes.txt in the mod
+	CHECK(slots[0].borderWest == 0);
+	ReadSiegeBorders(slots, "Name\tDef\tDt1Mask\nCartographer Siege Border West\t1093\t3\n", types12);  // one row only
+	CHECK(slots[0].borderWest == 0);
+}
+
 TEST_CASE("the Preset tileset is refused: every map is generated") {
 	Report report;
 	CHECK(Load("Old\tPreset\tLoop\t\t\tt20\n", report).empty());

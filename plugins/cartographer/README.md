@@ -104,7 +104,7 @@ game or mod row, so you can make them yourself. Work in `<Mod>.mpq\data\global\e
    | `Cartographer Temple` | a plain game Act 5 Temple maze row (DrlgType 1), such as level 122 | 1 | 32 (Temple) | 120 | 2000, 600 |
    | `Cartographer Outdoor` | level 111 | 3 | 21 | 384 | 6000, 3000 |
    | `Cartographer Snow` | level 117 | 3 | 31 | 192 | 1500, 0 |
-   | `Cartographer Siege` | level 110 | 3 | 30 | 240 x 48 | 6000, 3900 |
+   | `Cartographer Siege` | level 110 | 3 | 30 | 272 x 48 | 6000, 3900 |
    | `Cartographer Mesa` | level 111 | 3 | 27 | 128 x 112 | 6000, 4200 |
    | `Cartographer Desert` | level 111 | 3 | 16 | 128 x 112 | 6000, 3400 |
    | `Cartographer Wilderness` | level 111 | 3 | 2 | 128 x 112 | 6000, 3530 |
@@ -319,7 +319,7 @@ plain message, named in `cartographer-report.txt` and `cartographer check`. Play
 A map with Tileset `Snow` (Act 5 Barricade fences) opens the same way through the `OutdoorSnow` slot. The installer adds that
 second level too ("Cartographer Snow", LevelType 31, 192 x 192 tiles at (1500, 0)); a Snow map's Shape is ignored and its Size
 is Small, Medium, Large or ExtraLarge. A Snow map gets an entrance, a boss room and an event room from its plan, as a Jungle map does.
-A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 240 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored.
+A map with Tileset `Siege` (Act 5 Bloody Foothills) opens through the `OutdoorSiege` slot. The installer adds that third outdoor level ("Cartographer Siege", LevelType 30, 272 x 48 tiles at (6000, 3900)); a Siege map is one east-west strip of 12 to 15 pieces (Small, Medium, Large or ExtraLarge), you arrive near the east end and the Boss and event stand in other wide pieces. Its Shape is ignored. When the mod carries `lvltypes.txt` and `lvlprest.txt`, the installer also adds two Barricade border rows, and the map gets a column of border pieces at each end instead of a black field (#549).
 A map with Tileset `Mesa` (Act 4 plains) opens through the `OutdoorMesa` slot. The installer adds that fourth outdoor level ("Cartographer Mesa", LevelType 27, 128 x 112 tiles at (6000, 4200)); a Mesa map is a field of 8 to 14 by 6 to 12 cells of 8 tiles (Small, Medium, Large or ExtraLarge) inside a frame of cliff pieces, filled with one of three piece styles. You arrive in a corner of the field, the Boss stands in the far part and the event in a third. Its Shape is ignored. Not checked in game yet.
 A map with Tileset `Wilderness` (Act 1 fields) opens through the `OutdoorWilderness` slot. The installer adds that sixth outdoor level ("Cartographer Wilderness", LevelType 2, 128 x 112 tiles at (6000, 3530)); a Wilderness map is the same kind of framed field as Mesa (8 to 14 by 6 to 12 cells of 8 tiles), filled with swamp or with trees. Its Shape is ignored. A check record is in `docs/cartographer/checks/wilderness.md`.
 

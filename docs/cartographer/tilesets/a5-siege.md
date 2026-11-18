@@ -19,7 +19,7 @@ A one-dimensional chain: 15 strips of 16 x 48 across 240 tiles, read left to rig
 
 - **Planner.** Snow's "stamps only" style with a single line. Fixed order: to-town at one end, strips in the middle, to-barricade at the other. Only the strips 866-878 can be interchanged, and only where their seams match; the DS1 edge scan shows how much the strips differ at the seams.
 - **Variety.** Low. The seed only shuffles the middle strips.
-- **Border.** No ring. North and south sides are cliffs or fences inside the strips; whether the very north and south edge is a hard border or a void edge needs a game check.
+- **Border.** No ring. North and south sides are cliffs or fences inside the strips; whether the very north and south edge is a hard border or a void edge needs a game check. The west and east ends showed a black field in game (#549); they are closed by a column of Barricade border pieces at each end, which LevelType 30 can draw once the installer appends their files to it (see [cartographer-siege.md](../../reverse-engineering/cartographer-siege.md#border-columns-549)).
 - **Void.** The strips cover the full 48 rows, so nothing is left to void if all 15 columns are stamped.
 - **Arrival and boss.** To-town is the arrival; the far end is the natural boss room.
 

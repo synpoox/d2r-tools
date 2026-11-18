@@ -67,6 +67,7 @@ std::string planCacheKey(const MapRequest &request) {
 	key += ',' + std::to_string(o.maxMacroCells) + ',' + std::to_string(o.maxTilesX) + ',' + std::to_string(o.maxTilesY);
 	key += o.pinFiles ? ",pin" : ",free";
 	key += o.listVoid ? ",void" : ",fill";
+	key += ',' + std::to_string(o.borderWest) + ',' + std::to_string(o.borderEast);
 	return key;
 }
 
@@ -118,6 +119,8 @@ MapPlan planOutdoorMap(const MapRequest &request, const Catalogue &catalogue) {
 		siegeRequest.options.maxTilesX = request.options.maxTilesX;
 		siegeRequest.options.maxTilesY = request.options.maxTilesY;
 		siegeRequest.options.pinFiles = request.options.pinFiles;
+		siegeRequest.options.borderWest = request.options.borderWest;
+		siegeRequest.options.borderEast = request.options.borderEast;
 		siege::SiegePlan siegePlan = siege::planSiegeMap(siegeRequest);
 		if (!siegePlan.ok) {
 			return fail("Cartographer could not plan the Siege map: " + siegePlan.reason);
