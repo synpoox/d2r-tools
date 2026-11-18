@@ -38,4 +38,5 @@ Answers to the open checks, read from the DS1/DT1 walk flags offline:
 - **Gates and bridge:** not used. One district needs neither.
 - **Sewer and temple:** left out.
 - **Ring:** the eight Burbs border pieces form a closed ring with floor on the inner side and no void tiles.
+- **Edges (#550):** the ring is not a cliff. N (619) and E (621) end in a low wall, S (620) and W (622) in a street of open floor on their outer side (DS1 walk flags, `tools/d2r_readers.py`). Past the level the world is black, so a map showed black void beyond the ring. A map now has an outer ring (`kKurast.outer`) of the same pieces back to back, as Kurast districts meet in the game: W 621, N 620, E 622, S 619, corners NW 625, NE 626, SE 624, SW 623. It needs 4 cells more each way, so in the 128 x 112 slot Small, Medium and Large get it and ExtraLarge (144 x 128 with it) keeps the one ring. Arenas keep one ring. The outer ring rooms populate like the inner ring's.
 - **Risk:** some Burbs fill files carry link-like wall tiles (main 8, 12, 16); the planner cannot exclude files. Vanilla uses them. Game check result: [checks/kurast.md](../checks/kurast.md).

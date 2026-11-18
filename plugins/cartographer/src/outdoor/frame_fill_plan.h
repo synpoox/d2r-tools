@@ -24,7 +24,7 @@
 namespace cartographer::outdoor::framefill {
 
 constexpr int kGridTiles = 8;     // the engine's grid cell, and the border piece size
-constexpr int kRingCells = 1;     // the frame is one grid cell deep
+constexpr int kRingCells = 1;     // the frame is one grid cell deep (an arena's, and a map's without an outer ring)
 constexpr int kRoomCells = 2;     // the entrance, boss and event rectangles are 2 x 2 grid cells (16 x 16 tiles, four rooms)
 constexpr int kMinCells = 6;      // the smallest interior either way, in grid cells (Small is 8 x 6)
 constexpr int kMaxFillSets = 4;   // the most fill sets and pieces per set a tileset row holds
@@ -58,6 +58,9 @@ struct FrameFillTileset {
 	int setCount;
 	FillSet sets[kMaxFillSets];
 	int maxCellsW, maxCellsH;  // the largest interior (ExtraLarge), in grid cells
+	// A second ring round the frame of a map, for a frame whose pieces end in open floor or a low wall (Kurast): the world past the level is black, so the
+	// frame alone leaves black void in view (#550). All 0: no outer ring. Its ids must be ring pieces of `edge`, which give their file counts.
+	EdgePieces outer;
 };
 
 // Mesa (Act 4 plains, LevelType 27): ring 799..806 (3 files each), sets Mesa1 812..816, Mesa2 817..821, Mesa3 823..827.
@@ -66,7 +69,7 @@ extern const FrameFillTileset kMesa;
 extern const FrameFillTileset kDesert;
 // Wilderness (Act 1 fields, LevelType 2): ring 4..11 (Bord1..8), sets Swamp (38, 39) and Tree (38, 40). Notes in docs/cartographer/tilesets/a1-wilderness.md.
 extern const FrameFillTileset kWilderness;
-// Kurast (Act 3 city, LevelType 22): one district, the Burbs. Ring 619..626, one set Burbs (632..635). Notes in docs/cartographer/tilesets/a3-kurast.md.
+// Kurast (Act 3 city, LevelType 22): one district, the Burbs. Ring 619..626, one set Burbs (632..635), and an outer ring of the same pieces back to back. Notes in docs/cartographer/tilesets/a3-kurast.md.
 extern const FrameFillTileset kKurast;
 // Every frame-plus-fill tileset, in table order. A new tileset is one row here.
 extern const FrameFillTileset *const kFrameFillTilesets[];
@@ -82,6 +85,10 @@ std::string fillSetNames(const FrameFillTileset &tileset);
 
 // The ring piece at grid cell (x, y) of a W x H interior: x in -1..W, y in -1..H, not inside it. 0 for a cell inside.
 int edgePieceAt(const EdgePieces &edge, int x, int y, int w, int h);
+
+// How many rings a plan of `request` has: 2 for a map of a tileset with an outer ring that fits the slot level's size limit, else 1 (kRingCells).
+struct FrameFillRequest;
+int ringCellsFor(const FrameFillTileset &tileset, const FrameFillRequest &request);
 
 struct FrameFillOptions {
 	int originX = 0;       // the level's origin in tiles (the slot row's OffsetX / OffsetY)
@@ -112,7 +119,8 @@ struct FrameFillPlan {
 	int fillSet = 0;                    // index into the tileset's sets
 	int cellsW = 0;                     // the interior in grid cells
 	int cellsH = 0;
-	StampPlan stamps;                   // complete only when ok: ring and fill, row-major by their top-left grid cell; grid cell (x, y) of the level is the interior's (x - 1, y - 1)
+	int ringCells = kRingCells;         // the rings round the interior (ringCellsFor)
+	StampPlan stamps;                   // complete only when ok: rings and fill, row-major by their top-left grid cell; grid cell (x, y) of the level is the interior's (x - ringCells, y - ringCells)
 	uint64_t hash = 0;                  // stampPlanHash of the stamps
 };
 

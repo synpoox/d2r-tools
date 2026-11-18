@@ -147,18 +147,68 @@ TEST_CASE("Kurast: the ring closes round Small to ExtraLarge, one piece per side
 		REQUIRE(frameFillSizeCells(name, &w, &h));
 		const FrameFillPlan p = planFrameFillMap(kKurast, request(5, w, h));
 		REQUIRE(p.ok);
+		REQUIRE(p.ringCells == 2);  // no size limit: the outer ring always fits
 		int ring = 0;
 		for (const Stamp &s : p.stamps.stamps) {
-			const int ix = s.cx - 1, iy = s.cy - 1;
+			const int ix = s.cx - 2, iy = s.cy - 2;
 			const bool onRing = ix < 0 || iy < 0 || ix >= w || iy >= h;
 			CHECK(kurastRing(s.lvlPrest) == onRing);
-			if (onRing) {
+			if (onRing && ix >= -1 && iy >= -1 && ix <= w && iy <= h) {
 				CHECK(s.lvlPrest == edgePieceAt(kKurast.edge, ix, iy, w, h));
 				++ring;
 			}
 		}
 		CHECK(ring == 2 * (w + h) + 4);
 	}
+}
+
+// The test's own reading of the Burbs ring DS1 walk flags (tools/d2r_readers.py, build 93847): 619 N and 621 E end in a low wall, 620 S and 622 W in open
+// floor on their outer side, so none of them may sit on the level's edge, where the black past the level shows (#550). Each side's outer ring piece is the
+// opposite side's piece, back to back: west 621, north 620, east 622, south 619; corners NW 625, NE 626, SE 624, SW 623.
+TEST_CASE("Kurast: no Burbs frame piece is on the level's edge; the outer ring closes it in the 128 x 112 slot (#550)")
+{
+	const int box[3][3] = {{625, 620, 626}, {621, 0, 622}, {623, 619, 624}};  // rows north, middle, south; columns west, middle, east
+	for (const char *name : {"Small", "Medium", "Large"}) {
+		int w = 0, h = 0;
+		REQUIRE(frameFillSizeCells(name, &w, &h));
+		FrameFillRequest r = request(9, w, h);
+		r.options.maxTilesX = 128;
+		r.options.maxTilesY = 112;
+		const FrameFillPlan p = planFrameFillMap(kKurast, r);
+		INFO(name, ": ", p.reason);
+		REQUIRE(p.ok);
+		CHECK(joined(checkFrameFillPlan(kKurast, r, p)).empty());
+		const StampPlan &sp = p.stamps;
+		CHECK(sp.cellsW == w + 4);
+		CHECK(sp.cellsH == h + 4);
+		int edge = 0;
+		for (const Stamp &s : sp.stamps) {
+			if (s.cx != 0 && s.cy != 0 && s.cx != sp.cellsW - 1 && s.cy != sp.cellsH - 1) continue;
+			const int row = s.cy == 0 ? 0 : (s.cy == sp.cellsH - 1 ? 2 : 1), col = s.cx == 0 ? 0 : (s.cx == sp.cellsW - 1 ? 2 : 1);
+			CHECK(s.lvlPrest == box[row][col]);
+			++edge;
+		}
+		CHECK(edge == 2 * (sp.cellsW + sp.cellsH) - 4);
+		CHECK(sp.entrance.x >= 2 * kGridTiles);  // the rooms stay inside both rings
+		CHECK(sp.entrance.y >= 2 * kGridTiles);
+	}
+	// ExtraLarge needs 144 x 128 tiles with the outer ring: a 128 x 112 slot keeps the one ring, a 144 x 128 one gets both.
+	FrameFillRequest xl = request(9, 14, 12);
+	xl.options.maxTilesX = 128;
+	xl.options.maxTilesY = 112;
+	const FrameFillPlan one = planFrameFillMap(kKurast, xl);
+	REQUIRE(one.ok);
+	CHECK(one.ringCells == 1);
+	CHECK(joined(checkFrameFillPlan(kKurast, xl, one)).empty());
+	xl.options.maxTilesX = 144;
+	xl.options.maxTilesY = 128;
+	const FrameFillPlan two = planFrameFillMap(kKurast, xl);
+	REQUIRE(two.ok);
+	CHECK(two.ringCells == 2);
+	CHECK(joined(checkFrameFillPlan(kKurast, xl, two)).empty());
+	// Arenas and the other frame-plus-fill tilesets keep one ring.
+	CHECK(planFrameFillArena(kKurast, arenaRequest(3, 3, 0, 0, 0)).ringCells == 1);
+	CHECK(planFrameFillMap(kMesa, request(9, 8, 6)).ringCells == 1);
 }
 
 TEST_CASE("Kurast: planOutdoorMap plans a Kurast map through the tileset table")
@@ -174,8 +224,8 @@ TEST_CASE("Kurast: planOutdoorMap plans a Kurast map through the tileset table")
 	const MapPlan plan = planOutdoorMap(m, builtinJungleCatalogue());
 	INFO(plan.reason);
 	REQUIRE(plan.ok);
-	CHECK(plan.stamps.cellsW == 14);
-	CHECK(plan.stamps.cellsH == 12);
+	CHECK(plan.stamps.cellsW == 16);  // Large, 12 x 10, in two rings
+	CHECK(plan.stamps.cellsH == 14);
 	CHECK(plan.stamps.entrance.known);
 	CHECK(plan.stamps.boss.known);
 	CHECK(plan.stamps.event.known);
@@ -212,12 +262,12 @@ TEST_CASE("Kurast: an arena is a closed square ring round a Burbs fill with one 
 	CHECK_FALSE(planFrameFillArena(kKurast, arenaRequest(3, 3, 1, 0, 0)).ok);
 }
 
-TEST_CASE("pinned Kurast plans: map and arena stamp hashes never change (issue #507)")
+TEST_CASE("pinned Kurast plans: map and arena stamp hashes never change (issue #507; maps re-pinned for the outer ring, #550)")
 {
 	struct Case { uint64_t seed; int w, h; bool pin; uint64_t hash; uint64_t rects; };
 	const Case maps[] = {
-		{0, 8, 6, false, 12762999265953426531ull, 2972327143189534596ull}, {7, 12, 10, false, 16833443606115083737ull, 10701298169011675732ull},
-		{12345, 14, 12, false, 4174389117392240279ull, 4133875070216860340ull}, {3, 10, 8, true, 15386278448725694910ull, 10292062648299786356ull},
+		{0, 8, 6, false, 3403018239417076907ull, 15537144075753436292ull}, {7, 12, 10, false, 7035451511782522895ull, 1680055067567658836ull},
+		{12345, 14, 12, false, 7114334581385018969ull, 17810577086248832308ull}, {3, 10, 8, true, 674245821697183831ull, 12593357563485428564ull},
 	};
 	for (const Case &c : maps) {
 		FrameFillRequest r = request(c.seed, c.w, c.h);
