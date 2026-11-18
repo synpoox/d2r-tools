@@ -650,9 +650,6 @@ auto LoadBosses(std::string_view text, const GameNames& names, Report& report) -
 		if (!minions.empty() && !ParseInt(minions, 0, 10, &def.minions)) {
 			fail("Minions '" + minions + "' is not a whole number " + Range(0, 10) + ".");
 		}
-		if (ok && out.size() >= MaxBosses) {
-			fail("bosses.txt may have at most " + std::to_string(MaxBosses) + " entries (the game's once-per-game spawn bit list has an unknown length).");
-		}
 		if (ok) {
 			out.push_back(std::move(def));
 		}

@@ -389,6 +389,11 @@ TEST_CASE("superSeen reads bit (row & 7) of byte (row >> 3)") {
 	CHECK_FALSE(superSeen(map, 22));
 	CHECK_FALSE(superSeen(nullptr, 0));
 	CHECK_FALSE(superSeen(map, -1));
+	uint8_t full[64];
+	std::fill(full, full + 64, uint8_t{0xff});
+	CHECK(superSeen(full, kMaxSuperRow));       // the last bit of the game's 64-byte bitmap
+	CHECK_FALSE(superSeen(full, kMaxSuperRow + 1));  // past it: never read
+	CHECK(kMaxSuperRow == 511);
 }
 
 TEST_CASE("entryLines: the map name, then the event name and message") {

@@ -33,7 +33,7 @@
                   OffsetY 3660, copied the same way as the Desert level.
     It also adds or updates the Maze, MazeCrypt, MazeLava, MazeIce, MazeDurance, MazeArcane, MazeDungeon, MazeJail, MazeLair, MazeKurastSewer, MazeBarracks, MazeHarem, MazeBasement, MazeSewer, MazeCatacombs, MazeTombs, MazeSpider, MazeTemple, Outdoor, OutdoorSnow, OutdoorSiege, OutdoorMesa, OutdoorDesert, OutdoorWilderness and OutdoorKurast rows of d2rloader\cartographer\slots.txt, which tell the plugin the level ids they got;
     any other row is kept. Vanilla rows of every table are copied from, never edited.
-      superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (at most 16; a bad entry is reported and skipped),
+      superuniques.txt  one row per valid entry of d2rloader\cartographer\bosses.txt (rows below 512; a bad entry is reported and skipped),
                     keyed 'cartoboss:<escaped Name>' (never a vanilla row; vanilla rows are copied from, not edited). Old 'cartoboss:' rows are rebuilt each run.
                     The row's Name cell is the string key 'cartographer:boss_<Name>' (ASCII only: any other character becomes _ and its hex code): the plugin registers its text (the entry's Name) while it loads.
     The Ice level ("Cartographer Ice Caves", slot MazeIce) is a fourth maze level of the same kind with LevelType 33 (Act 5 ice caves), copied from a plain game ice cave level.
@@ -935,10 +935,10 @@ foreach ($t in $MazeTilesets) {
 # superuniques.txt row, keyed 'cartoboss:' plus the escaped Name (Get-BossEscaped) so it can never be a vanilla row. Vanilla rows are copied from, never edited.
 # The 'cartoboss:' rows are rebuilt from bosses.txt each run (so a renamed or removed entry loses its old row), and running this
 # again changes nothing once they are right. An entry that does not check out is reported and not written.
-# At most $MaxBosses entries: the game keeps a once-per-game "already spawned" bit per superuniques row in a bit list of unknown
-# length (docs/reverse-engineering/cartographer/01-addresses.md), so the number of added rows stays small.
+# Any number of entries, but no boss row at superuniques row $MaxSuperRows or later: the game's once-per-game "already spawned" bitmap
+# (game + 0x1d8) holds 512 rows and the game does not bound the row (docs/reverse-engineering/cartographer/53-superunique-bitmap.md).
 $BossKeyPrefix = 'cartoboss:'
-$MaxBosses = 16
+$MaxSuperRows = 512
 $BossNameKeyPrefix = 'cartographer:'  # the plugin's string namespace (its PluginInfo.id); src/mapname BossRowKey
 # The local key is ASCII only: 'boss_' then each byte of the Name, kept when it is A-Z a-z 0-9, else '_' and two uppercase hex digits
 # ('Shoreline Warden' -> 'boss_Shoreline_20Warden'). The same rule as src/mapname BossLocalKey. The Name is UTF-8 (a Latin-1 file is converted first) and held one
@@ -1079,7 +1079,7 @@ if (Test-Path (Join-Path $ExcelDir 'superuniques.txt')) {
                 if ([int]::TryParse($bc[$minionsAt].Trim(), [ref]$v) -and $v -ge 0 -and $v -le 10) { $minions = $v }
                 else { & $skip "Minions '$($bc[$minionsAt].Trim())' is not a whole number from 0 to 10."; continue }
             }
-            if ($rows.Count -ge $MaxBosses) { & $skip "bosses.txt may have at most $MaxBosses entries."; continue }
+            if ($kept.Count - 1 + $rows.Count -ge $MaxSuperRows) { & $skip "its superuniques.txt row would be $MaxSuperRows or later, past the game's once-per-game spawn bitmap."; continue }
             $seen[(Get-AsciiLower $bossName)] = $true
             $key = $BossKeyPrefix + (Get-BossEscaped $bossName)  # escaped like the string key: ASCII only (BossKey in src/core/tables.cpp)
             # A copy of a vanilla row (read only); every cell that matters is set below.

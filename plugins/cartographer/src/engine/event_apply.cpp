@@ -471,7 +471,7 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 	*asSuper = false;
 	*unitOut = nullptr;
 	const int32_t x = s.spot.x, y = s.spot.y;
-	if (s.superUnique && On(SpawnSuperUnique)) {
+	if (s.superUnique && s.row <= ep::kMaxSuperRow && On(SpawnSuperUnique)) {  // the game writes the row's bit unbounded (note 53)
 		const uint8_t* bitmap = reinterpret_cast<const uint8_t*>(game) + GameSuperBitmapOffset;
 		if (!ep::superSeen(bitmap, s.row)) {
 			void* unit = Call<SpawnSuperFn>(SpawnSuperUnique)(game, room, x, y, s.row, flags);
@@ -589,8 +589,12 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		plog::Warn("map Boss '%s': the superunique spawn is off in this build, so the Boss cannot be placed", state.bossName.c_str());
 		return ep::BossTry::Refused;
 	}
-	const ep::BossCall call = ep::bossCall(unique, force);
 	const int row = plan.spawns.front().row;
+	if (unique && row > ep::kMaxSuperRow) {
+		plog::Warn("map Boss '%s': superuniques row %d is past the game's once-per-game spawn bitmap (rows 0 to %d), so the Boss cannot be placed", state.bossName.c_str(), row, ep::kMaxSuperRow);
+		return ep::BossTry::Refused;
+	}
+	const ep::BossCall call = ep::bossCall(unique, force);
 	uint8_t* const bitmap = reinterpret_cast<uint8_t*>(game) + GameSuperBitmapOffset;
 	bool asSuper = false;
 	void* unit = nullptr;
