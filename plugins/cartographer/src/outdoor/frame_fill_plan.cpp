@@ -23,6 +23,7 @@ const FrameFillTileset kMesa = {
 	},
 	14,
 	12,
+	{},
 };
 
 // Desert: ring 364..371 of lvlprest.txt (edge1..edge8.ds1, 1 file each; 372..375 are the inner corners, not used), in the same order as Mesa's 799..806: south, west, north, east,
@@ -39,6 +40,7 @@ const FrameFillTileset kDesert = {
 	},
 	14,
 	12,
+	{},
 };
 
 // Wilderness: lvlprest.txt 4..7 (Bord1..4, 3 files each) are the straight pieces and 8..11 (Bord5..8, 1 file) the convex corners; each has floor on one side only (DS1 walk
@@ -58,10 +60,13 @@ const FrameFillTileset kWilderness = {
 	},
 	14,
 	12,
+	{},
 };
 
 // Kurast (Act 3 city, LevelType 22): one district, the Burbs; no gates, bridge, temple, sewer or waypoint piece. Ring 619..626 (Burbs Border N, S, E, W: 2 files each; NE, NW, SE, SW: 1 file;
 // floor on the inner side, read from the DS1 walk flags), one fill set "Burbs" 635/634/633/632 (4, 4, 4 and 5 files; the 8 x 8 piece last). Notes in docs/cartographer/tilesets/a3-kurast.md.
+// The Burbs ring is a low wall (N, E) or a street with open floor on its outer side (W, S), not a cliff, so the black past the level showed beyond it (#550).
+// The outer ring puts a second district's ring back to back with it, as Kurast districts meet in the game: W faces an E piece, N an S piece, and so on.
 const FrameFillTileset kKurast = {
 	"Kurast",
 	22,  // lvltypes.txt "Act 3 - Kurast"
@@ -73,6 +78,7 @@ const FrameFillTileset kKurast = {
 	},
 	14,
 	12,
+	{621, 620, 622, 619, 625, 626, 624, 623},
 };
 
 const FrameFillTileset *const kFrameFillTilesets[] = {&kMesa, &kDesert, &kWilderness, &kKurast};
@@ -142,17 +148,17 @@ const Fill *findFill(const FrameFillTileset &t, int lvlPrest, int *set) {
 	return nullptr;
 }
 
-TileRect pieceRect(const FrameFillOptions &o, int ax, int ay, int cw, int ch) {
+TileRect pieceRect(const FrameFillOptions &o, int ring, int ax, int ay, int cw, int ch) {
 	TileRect r;
 	r.known = true;
-	r.x = o.originX + (ax + kRingCells) * kGridTiles;
-	r.y = o.originY + (ay + kRingCells) * kGridTiles;
+	r.x = o.originX + (ax + ring) * kGridTiles;
+	r.y = o.originY + (ay + ring) * kGridTiles;
 	r.w = cw * kGridTiles;
 	r.h = ch * kGridTiles;
 	return r;
 }
 
-TileRect roomRect(const FrameFillOptions &o, int ax, int ay) { return pieceRect(o, ax, ay, kRoomCells, kRoomCells); }
+TileRect roomRect(const FrameFillOptions &o, int ring, int ax, int ay) { return pieceRect(o, ring, ax, ay, kRoomCells, kRoomCells); }
 
 // Size problems, shared by the planner and the checker. Empty means the size is acceptable.
 std::string sizeProblem(const FrameFillTileset &t, const FrameFillRequest &r) {
@@ -256,6 +262,13 @@ int edgePieceAt(const EdgePieces &edge, int x, int y, int w, int h) {
 	return 0;
 }
 
+int ringCellsFor(const FrameFillTileset &tileset, const FrameFillRequest &request) {
+	if (request.arena || tileset.outer.west == 0) return kRingCells;
+	const int tilesW = (request.cellsW + 4) * kGridTiles, tilesH = (request.cellsH + 4) * kGridTiles;
+	const bool fits = (request.options.maxTilesX <= 0 || tilesW <= request.options.maxTilesX) && (request.options.maxTilesY <= 0 || tilesH <= request.options.maxTilesY);
+	return fits ? 2 : kRingCells;  // a slot level too small for it keeps the one ring (an ExtraLarge Kurast map in a 128 x 112 slot)
+}
+
 bool frameFillSizeCells(std::string_view size, int *cellsW, int *cellsH) {
 	const std::string s = lowerAscii(size);
 	int w = 0, h = 0;
@@ -285,9 +298,10 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 	};
 	if (const std::string bad = sizeProblem(tileset, request); !bad.empty()) return fail(bad);
 
-	const int w = request.cellsW, h = request.cellsH;
+	const int w = request.cellsW, h = request.cellsH, ring = ringCellsFor(tileset, request);
 	out.cellsW = w;
 	out.cellsH = h;
+	out.ringCells = ring;
 	layout::Pcg32 rng(layout::splitmix64(request.seed + 0x4D455341ull + 1));
 	out.fillSet = request.arena ? request.arenaFill : static_cast<int>(rng.below(static_cast<uint32_t>(tileset.setCount)));
 	const FillSet &set = tileset.sets[out.fillSet];
@@ -296,8 +310,8 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 	StampPlan &plan = out.stamps;
 	plan.originX = request.options.originX;
 	plan.originY = request.options.originY;
-	plan.cellsW = w + 2 * kRingCells;
-	plan.cellsH = h + 2 * kRingCells;
+	plan.cellsW = w + 2 * ring;
+	plan.cellsH = h + 2 * ring;
 	plan.tilesW = plan.cellsW * kGridTiles;
 	plan.tilesH = plan.cellsH * kGridTiles;
 	plan.macroMinX = 0;
@@ -307,14 +321,15 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 	const RoomCells rooms = request.arena ? RoomCells{true, {request.entryX, request.entryY}, {}, {}} : chooseRoomCells(request);
 	if (!rooms.known) return fail("internal: no entrance, boss and event cells fit a " + std::to_string(w) + " x " + std::to_string(h) + " map.");
 
-	// The ring first, then the fill; sorted row-major by the piece's top-left grid cell so the order does not depend on how the pieces were made.
-	for (int y = -kRingCells; y < h + kRingCells; ++y) {
-		for (int x = -kRingCells; x < w + kRingCells; ++x) {
+	// The rings first, then the fill; sorted row-major by the piece's top-left grid cell so the order does not depend on how the pieces were made.
+	for (int y = -ring; y < h + ring; ++y) {
+		for (int x = -ring; x < w + ring; ++x) {
 			if (x >= 0 && y >= 0 && x < w && y < h) continue;
+			const bool inner = x >= -1 && y >= -1 && x <= w && y <= h;
 			Stamp s;
-			s.cx = x + kRingCells;
-			s.cy = y + kRingCells;
-			s.lvlPrest = edgePieceAt(tileset.edge, x, y, w, h);
+			s.cx = x + ring;
+			s.cy = y + ring;
+			s.lvlPrest = inner ? edgePieceAt(tileset.edge, x, y, w, h) : edgePieceAt(tileset.outer, x + 1, y + 1, w + 2, h + 2);
 			s.macroX = s.cx;
 			s.macroY = s.cy;
 			plan.stamps.push_back(s);
@@ -322,8 +337,8 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 	}
 	for (const Placed &p : placed) {
 		Stamp s;
-		s.cx = p.x + kRingCells;
-		s.cy = p.y + kRingCells;
+		s.cx = p.x + ring;
+		s.cy = p.y + ring;
 		s.lvlPrest = set.fills[p.fill].lvlPrest;
 		s.macroX = s.cx;
 		s.macroY = s.cy;
@@ -344,12 +359,12 @@ FrameFillPlan planFrameFillMap(const FrameFillTileset &tileset, const FrameFillR
 		for (const Placed &p : placed) {
 			const Fill &f = set.fills[p.fill];
 			if (rooms.entrance.x >= p.x && rooms.entrance.x < p.x + f.w && rooms.entrance.y >= p.y && rooms.entrance.y < p.y + f.h)
-				plan.entrance = pieceRect(request.options, p.x, p.y, f.w, f.h);
+				plan.entrance = pieceRect(request.options, ring, p.x, p.y, f.w, f.h);
 		}
 	} else {
-		plan.entrance = roomRect(request.options, rooms.entrance.x, rooms.entrance.y);
-		plan.boss = roomRect(request.options, rooms.boss.x, rooms.boss.y);
-		plan.event = roomRect(request.options, rooms.event.x, rooms.event.y);
+		plan.entrance = roomRect(request.options, ring, rooms.entrance.x, rooms.entrance.y);
+		plan.boss = roomRect(request.options, ring, rooms.boss.x, rooms.boss.y);
+		plan.event = roomRect(request.options, ring, rooms.event.x, rooms.event.y);
 	}
 
 	out.ok = true;
@@ -394,9 +409,15 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 		return bad;
 	}
 	const std::string name = tileset.name;
-	const int w = request.cellsW, h = request.cellsH, lw = w + 2 * kRingCells, lh = h + 2 * kRingCells;
+	// The checker's own ring rule: a map gets the outer ring when the tileset has one and the box with it is inside the size limit.
+	const int outerW = (request.cellsW + 4) * kGridTiles, outerH = (request.cellsH + 4) * kGridTiles;
+	const bool outer = !request.arena && tileset.outer.west != 0 && (request.options.maxTilesX <= 0 || outerW <= request.options.maxTilesX) &&
+		(request.options.maxTilesY <= 0 || outerH <= request.options.maxTilesY);
+	const int ring = outer ? 2 : 1;
+	const int w = request.cellsW, h = request.cellsH, lw = w + 2 * ring, lh = h + 2 * ring;
 	const StampPlan &sp = plan.stamps;
 	if (plan.cellsW != w || plan.cellsH != h) bad.push_back("the plan's interior is not the request's");
+	if (plan.ringCells != ring) bad.push_back("the plan has " + std::to_string(plan.ringCells) + " ring(s), not " + std::to_string(ring));
 	if (sp.tilesW != lw * kGridTiles || sp.tilesH != lh * kGridTiles || sp.cellsW != lw || sp.cellsH != lh || sp.macroW != lw || sp.macroH != lh || sp.macroMinX != 0 ||
 		sp.macroMinY != 0 || sp.originX != request.options.originX || sp.originY != request.options.originY)
 		bad.push_back("the stamp plan's level box does not match the request");
@@ -417,15 +438,17 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 		prevX = s.cx;
 		if (s.macroX != s.cx || s.macroY != s.cy || s.mask != 0) bad.push_back(where + " has the wrong macro cell or mask");
 		int pw = 1, ph = 1, files = 0;
-		const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;  // interior coordinates
-		const bool ring = ix < 0 || iy < 0 || ix >= w || iy >= h;
-		if (ring) {
+		const int ix = s.cx - ring, iy = s.cy - ring;  // interior coordinates
+		const bool onRing = ix < 0 || iy < 0 || ix >= w || iy >= h;
+		if (onRing) {
 			if (s.cx < 0 || s.cy < 0 || s.cx >= lw || s.cy >= lh) {
 				bad.push_back(where + " is outside the level");
 				continue;
 			}
-			files = ringFiles(tileset, checkEdgePiece(tileset.edge, ix, iy, w, h));
-			if (s.lvlPrest != checkEdgePiece(tileset.edge, ix, iy, w, h)) bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", not the ring piece for that side");
+			const bool inner = ix >= -1 && iy >= -1 && ix <= w && iy <= h;
+			const int want = inner ? checkEdgePiece(tileset.edge, ix, iy, w, h) : checkEdgePiece(tileset.outer, ix + 1, iy + 1, w + 2, h + 2);
+			files = ringFiles(tileset, want);
+			if (s.lvlPrest != want) bad.push_back(where + " holds piece " + std::to_string(s.lvlPrest) + ", not the " + (inner ? "ring" : "outer ring") + " piece for that side");
 		} else {
 			int set = 0;
 			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph, plan.fillSet) && !checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph)) {
@@ -459,7 +482,7 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 			if (s.role != layout::Role::Entrance) continue;
 			++entranceStamps;
 			int set = 0, pw = 1, ph = 1;
-			const int ix = s.cx - kRingCells, iy = s.cy - kRingCells;
+			const int ix = s.cx - ring, iy = s.cy - ring;
 			if (!checkFillSize(tileset, s.lvlPrest, &set, &pw, &ph) || request.entryX < ix || request.entryX >= ix + pw || request.entryY < iy || request.entryY >= iy + ph)
 				bad.push_back("the entrance stamp does not hold the entry cell");
 			else if (sp.entrance.x != sp.originX + s.cx * kGridTiles || sp.entrance.y != sp.originY + s.cy * kGridTiles || sp.entrance.w != pw * kGridTiles ||
@@ -477,13 +500,13 @@ std::vector<std::string> checkFrameFillPlan(const FrameFillTileset &tileset, con
 		bad.push_back("no entrance, boss and event cells fit the map");
 		return bad;
 	}
-	if (!same(sp.entrance, roomRect(request.options, rooms.entrance.x, rooms.entrance.y))) bad.push_back("the entrance rectangle is not on its cell");
-	if (!same(sp.boss, roomRect(request.options, rooms.boss.x, rooms.boss.y))) bad.push_back("the boss rectangle is not on its cell");
-	if (!same(sp.event, roomRect(request.options, rooms.event.x, rooms.event.y))) bad.push_back("the event rectangle is not on its cell");
+	if (!same(sp.entrance, roomRect(request.options, ring, rooms.entrance.x, rooms.entrance.y))) bad.push_back("the entrance rectangle is not on its cell");
+	if (!same(sp.boss, roomRect(request.options, ring, rooms.boss.x, rooms.boss.y))) bad.push_back("the boss rectangle is not on its cell");
+	if (!same(sp.event, roomRect(request.options, ring, rooms.event.x, rooms.event.y))) bad.push_back("the event rectangle is not on its cell");
 	const TileRect *rects[3] = {&sp.entrance, &sp.boss, &sp.event};
 	for (int i = 0; i < 3; ++i) {
 		const TileRect &r = *rects[i];
-		const int ox = sp.originX + kRingCells * kGridTiles, oy = sp.originY + kRingCells * kGridTiles;
+		const int ox = sp.originX + ring * kGridTiles, oy = sp.originY + ring * kGridTiles;
 		if (!r.known || r.x < ox || r.y < oy || r.x + r.w > ox + w * kGridTiles || r.y + r.h > oy + h * kGridTiles) bad.push_back("a room rectangle is outside the interior");
 		for (int j = i + 1; j < 3; ++j) {
 			const TileRect &q = *rects[j];

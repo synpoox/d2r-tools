@@ -18,3 +18,13 @@ Arenas (the unit tests cover them), the legacy view, a walk of the whole ring an
 ## Note
 
 The default offset is (6000,3660), below Wilderness (3530, 112 tall).
+
+## Edges, outer ring (#550)
+
+Slot 2, Hell, level-99 test character, pd2r slot data, this branch's `cartographer.dll`. `cartographer open Ruins of Corvus` (Kurast, Medium), `cheat goto 157`, `cheat stat item_lightradius,25`, then `cheat goto` to spots by the edges and `cartographer where` at each.
+
+- `outdoor slot level 157: built as planned (126 stamps, 0 void cells; grid 168 cells: 126 pieces, 168 covered, 0 void, 0 neither), 168 rooms`: 14 x 12 cells, the 10 x 8 interior in two rings.
+- North, at the canal bank of the inner ring (tile 6056,3671, plan cell (7,1)): canal water, then the outer ring's trees; only the far top-right corner of a 1920 x 1080 screen is black. Before, the black started right past the canal (the issue's picture).
+- West (6015,3711), south (6056,3740) and east (6094,3708) at the interior's edge: trees, walls and huts to the screen edge, no black field.
+- `cheat goto` into the outer ring (6056,3660; 6002,3719; 6060,3751; 6000,3751) lands on its floor, which reaches the level's edge (black beyond). The walk-flag flood fill says it cannot be reached on foot from the interior; that was not walked in game. Monsters stand in the outer ring.
+- Not checked: Small, Large and ExtraLarge (ExtraLarge keeps one ring in the 128 x 112 slot), an ultrawide screen, the legacy view.
