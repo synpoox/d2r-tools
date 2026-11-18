@@ -1,0 +1,1 @@
+- The belt pictures now sit above each belt slot on the controller HUD.

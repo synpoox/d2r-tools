@@ -47,10 +47,11 @@ constexpr int WidgetRect = 0x70;  // x, y, width, height in layout units, local 
 // x 2, y 60 plus the cell offset 12, 6 and a column pitch of 98 + 27). Only the first layout uses these: the task
 // copies the live values over them.
 constexpr int32_t StockHudX = -1454, StockHudY = -412, StockBeltX = 1704, StockBeltY = 278;
-constexpr int32_t StockLabelX = 14, StockLabelY = 66, StockPitch = 125;
-// shortcut: the cell's top-left is taken as the label's position less the stock template's (2, 60); a layout that
-// moves HotkeyLabelTemplate inside the cell moves the squares with it. Upgrade: read the Belt's cellOffsetInRow.
-constexpr int32_t LabelInCellX = 2, LabelInCellY = 60;
+constexpr int32_t StockLabelX = 14, StockPitch = 125;
+// The first cell's top-left in the Belt is its cellOffsetInRow, (12, 6) in the mouse layout and inherited by the controller
+// layout, whose HotkeyLabelTemplate (8, 98) and column pitch (130) differ. The columns follow the live labels' spacing.
+// shortcut: a layout with another cellOffsetInRow shifts the squares; upgrade: read the Belt's cellOffsetInRow.
+constexpr int32_t CellInRowX = 12, CellInRowY = 6;
 constexpr int32_t CellWidth = 98;
 // Squares in layout units (two per 1080p pixel): one per belt row, centred over the cell, just above it on the frame.
 // Four rows must fit the 125-unit column pitch; fewer rows get bigger squares.
@@ -131,14 +132,18 @@ void ReadLayoutRaw(Layout* out) noexcept {
 	const auto* const beltBytes = static_cast<const uint8_t*>(belt);
 	const int32_t* const hudRect = Rect(hud);
 	const int32_t* const beltRect = Rect(belt);
-	int32_t labelY = StockLabelY;
+	int32_t labelX0 = StockLabelX;
+	bool haveLabel = false;  // labelX0 comes from the first label found, so a missing HotkeyLabel0 shifts no column
 	for (int c = 0; c < pc::Columns; ++c) {
 		char name[24];
 		std::snprintf(name, sizeof(name), "HotkeyLabel%d", c);
 		void* const label = g_nativeFindChild(belt, name);
 		const int32_t labelX = label != nullptr ? Rect(label)[0] : StockLabelX + c * StockPitch;
-		labelY = label != nullptr ? Rect(label)[1] : labelY;
-		out->columnX[c] = labelX - LabelInCellX;
+		if (label != nullptr && !haveLabel) {
+			haveLabel = true;
+			labelX0 = labelX - c * StockPitch;
+		}
+		out->columnX[c] = CellInRowX + labelX - labelX0;
 	}
 	if (g_beltBoxesField >= 0) {
 		out->rows = pc::RowsOf(*reinterpret_cast<const int32_t*>(beltBytes + g_beltBoxesField));
@@ -146,7 +151,7 @@ void ReadLayoutRaw(Layout* out) noexcept {
 	// The game draws the popped rows only for a belt of more than one row; then the squares would sit on them.
 	out->popped = g_beltPoppedField >= 0 && out->rows > 1 && beltBytes[g_beltPoppedField] != 0;
 	out->panelX = hudRect[0] + beltRect[0];
-	out->panelY = hudRect[1] + beltRect[1] + labelY - LabelInCellY - HeightOf(SquareOf(out->rows)) - 2;
+	out->panelY = hudRect[1] + beltRect[1] + CellInRowY - HeightOf(SquareOf(out->rows)) - 2;
 }
 
 auto GuardedReadLayout(Layout* out) noexcept -> bool {
@@ -330,9 +335,11 @@ void __cdecl UiTask(const D2RL::PluginContext*, void*) noexcept {
 		plog::Error("memory fault while setting the squares; the counter is now off");
 		return;
 	}
-	static bool s_loggedLayout = false;
-	if (!s_loggedLayout) {
-		s_loggedLayout = true;
+	static int32_t s_loggedX = INT32_MIN, s_loggedY = INT32_MIN;
+	if ((layout.panelX != s_loggedX || layout.panelY != s_loggedY) && g_loggedChanges < MaxLoggedChanges) {
+		s_loggedX = layout.panelX;
+		s_loggedY = layout.panelY;
+		++g_loggedChanges;  // the HUD switching between mouse and controller layouts
 		plog::Info("on the belt: panel at %d, %d; cells at x %d %d %d %d", layout.panelX, layout.panelY, layout.columnX[0],
 		           layout.columnX[1], layout.columnX[2], layout.columnX[3]);
 	}
@@ -391,7 +398,7 @@ void AppendLayout(std::string* json, int rows) {
 	char buf[400];
 	const int32_t square = SquareOf(rows);
 	const int32_t height = HeightOf(square);
-	const int32_t panelY = StockHudY + StockBeltY + StockLabelY - LabelInCellY - height - 2;
+	const int32_t panelY = StockHudY + StockBeltY + CellInRowY - height - 2;
 	std::snprintf(buf, sizeof(buf),
 	              "{\n\"type\": \"Panel\", \"name\": \"%s%d\",\n\"fields\": { \"priority\": %d, \"rect\": { \"x\": %d, \"y\": %d, \"width\": %d, "
 	              "\"height\": %d }, \"anchor\": { \"x\": 0.5, \"y\": 1.0 } },\n\"children\": [",
@@ -400,7 +407,7 @@ void AppendLayout(std::string* json, int rows) {
 	Layout stock;
 	stock.rows = rows;
 	for (int c = 0; c < pc::Columns; ++c) {
-		stock.columnX[c] = StockLabelX - LabelInCellX + c * StockPitch;
+		stock.columnX[c] = CellInRowX + c * StockPitch;
 	}
 	for (int c = 0; c < pc::Columns; ++c) {
 		for (int r = 0; r < rows; ++r) {
