@@ -462,7 +462,7 @@ void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int
 	const auto find = [&](int planRoom, const char* what, const char* instead) {
 		MazeEventRect out;
 		if (planRoom < 0) {
-			plog::Info("eventprobe: the maze plan has no %s room", what);
+			plog::Debug("eventprobe: the maze plan has no %s room", what);
 			return out;
 		}
 		const cm::CellRoom c = cm::planCellRoom(plan, unit, planRoom, rects, unitY);
@@ -476,7 +476,7 @@ void RecordEventRoom(const void* level, int slotIndex, const cm::Plan& plan, int
 			const cm::RoomRect& o = rects[static_cast<size_t>(c.ranked[k])];
 			out.more.push_back({o.x, o.y, o.w, o.h});
 		}
-		plog::Info("eventprobe: maze %s room (plan room %d, cell %d,%d) is the DRLG room at list index %d, level %d, rect (%d,%d) %d x %d", what, planRoom, c.cellX, c.cellY, c.room,
+		plog::Debug("eventprobe: maze %s room (plan room %d, cell %d,%d) is the DRLG room at list index %d, level %d, rect (%d,%d) %d x %d", what, planRoom, c.cellX, c.cellY, c.room,
 		           out.levelId, out.x, out.y, out.w, out.h);
 		return out;
 	};
@@ -961,7 +961,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			Write<int32_t>(level, LvlSizeY, plan.levelTilesY);
 			Write<const int32_t*>(level, LvlMazeRow, ctx.prep.row);
 			AutomapResetArm(ctx.prep.plan->hash ^ (ctx.prep.job->seed * 0x9E3779B97F4A7C15ull), id);  // a new map starts with an empty automap: skip the read of an earlier map's revealed cells in this layer
-			plog::Info("maze slot level %d: steering '%s' (%s %s %s, seed %llu): %d rooms, level %d x %d tiles, plan %016llx, %d refits", id, ctx.prep.job->name.c_str(),
+			plog::Debug("maze slot level %d: steering '%s' (%s %s %s, seed %llu): %d rooms, level %d x %d tiles, plan %016llx, %d refits", id, ctx.prep.job->name.c_str(),
 			           ctx.prep.plan->tileset.name.c_str(), ctx.prep.job->shape.c_str(), ctx.prep.job->size.c_str(), static_cast<unsigned long long>(ctx.prep.job->seed),
 			           static_cast<int>(plan.rooms.size()), plan.levelTilesX, plan.levelTilesY, static_cast<unsigned long long>(ctx.prep.plan->hash), ctx.prep.plan->seedPlan.refits);
 		}
@@ -982,7 +982,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			if (!problem.empty()) {
 				plog::Warn("maze slot level %d: %s%s", id, ctx.fellBack ? "the steered build stopped and the game finished it (or, for Arcane, left it partial): " : "the entrance was not placed as planned: ", problem.c_str());
 			} else {
-				plog::Info("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
+				plog::Debug("maze slot level %d: built as planned (%d rooms, entrance %s)", id, static_cast<int>(plan.rooms.size()), plan.entrance.place ? "placed" : "an ordinary room");
 			}
 			ProbeRooms(level, ctx.prep.plan->tileset, plan, "after the slot build");
 			const cm::Tileset &ts = ctx.prep.plan->tileset;

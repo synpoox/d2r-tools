@@ -153,7 +153,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 		return;
 	}
 	if (ShowEntryBanner(lines)) {
-		plog::Info("eventprobe: entry message handed to the banner panel (%zu line(s))", lines.size());
+		plog::Debug("eventprobe: entry message handed to the banner panel (%zu line(s))", lines.size());
 		return;
 	}
 	for (const std::string& line : lines) {
@@ -161,7 +161,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 			g_context->WriteConsoleMessage(line.c_str());
 		}
 	}
-	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no banner panel", lines.size());
+	plog::Debug("eventprobe: entry message written to the console (%zu line(s)); no banner panel", lines.size());
 }
 
 // --- Spawn names from the game's loaded tables (cartographer/11-spawn-names.md) -----------------------------------------------
@@ -476,14 +476,14 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 		if (!ep::superSeen(bitmap, s.row)) {
 			void* unit = Call<SpawnSuperFn>(SpawnSuperUnique)(game, room, x, y, s.row, flags);
 			const bool setNow = ep::superSeen(bitmap, s.row);
-			plog::Info("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
+			plog::Debug("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
 			if (unit != nullptr) {
 				*asSuper = true;
 				*unitOut = unit;
 				return true;
 			}
 		} else {
-			plog::Info("eventprobe: superunique row %d was already spawned this game; its class (monstats row %d) is spawned instead", s.row, s.classRow);
+			plog::Debug("eventprobe: superunique row %d was already spawned this game; its class (monstats row %d) is spawned instead", s.row, s.classRow);
 		}
 	}
 	const int row = s.superUnique ? s.classRow : s.row;
@@ -684,7 +684,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		number = ++state->probes;
 		if (!rects.ok) {
 			if (number <= MaxPopulateProbes) {
-				plog::Info("eventprobe: room #%d of level %d populated, but its DRLG room is not readable; ignored", number, state->level);
+				plog::Debug("eventprobe: room #%d of level %d populated, but its DRLG room is not readable; ignored", number, state->level);
 			}
 			return;
 		}
@@ -722,7 +722,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				}
 				std::vector<ep::Rect> others = haveAll ? ep::roomsFarthestFirst(rects.drlg, all, bossRanked) : std::vector<ep::Rect>{};
 				if (!bossRanked.empty()) {
-					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell and %zu other(s) in the level to fall back on)", state->bossName.c_str(),
+					plog::Debug("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell and %zu other(s) in the level to fall back on)", state->bossName.c_str(),
 					           Describe(bossRanked.front()).c_str(), bossRanked.size() - 1, others.size());
 				} else {
 					plog::Warn("the map Boss '%s' has no plan boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan): it goes in the room farthest from the entry, then any other room as it populates (%zu room(s) known)",
@@ -739,7 +739,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				// level's list, so at least one room qualifies; the event fires on the first populated room at or past it.
 				if (haveAll) {
 					distance = ep::presetEventDistance(rects.levelW, rects.levelH, rects.drlg, all);
-					plog::Info("eventprobe: level %d is %d x %d tiles and has %zu room(s); the event room is the first room at least %d tiles from the entry room %s", state->level, rects.levelW, rects.levelH, all.size(), distance, Describe(rects.drlg).c_str());
+					plog::Debug("eventprobe: level %d is %d x %d tiles and has %zu room(s); the event room is the first room at least %d tiles from the entry room %s", state->level, rects.levelW, rects.levelH, all.size(), distance, Describe(rects.drlg).c_str());
 				} else {
 					plog::Warn("eventprobe: the room list of level %d could not be read; level is %d x %d tiles, the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
 				}
@@ -760,7 +760,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 	}
 	if (number <= MaxPopulateProbes) {
-		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
+		plog::Debug("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
 		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg), ep::scaleKindName(ep::scaleKind(rects.server, rects.drlg)),
 		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
@@ -780,7 +780,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		ShowEntryMessage(lines);
 	}
 	if (fireBoss) {
-		plog::Info("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
+		plog::Debug("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
 		// The picker decides (pure, tested with this loop as `driveBoss`): the plan's boss room, then the rest of its cell, then the other rooms
 		// as each populates, then the same room again with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
 		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };

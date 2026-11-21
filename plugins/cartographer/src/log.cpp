@@ -43,6 +43,20 @@ void Info(const char* fmt, ...) noexcept {
 	va_end(args);
 }
 
+void Debug(const char* fmt, ...) noexcept {
+	static const bool on = [] {
+		const char* v = std::getenv("CARTOGRAPHER_DEBUG_LOGS");
+		return v != nullptr && v[0] == '1';
+	}();
+	if (!on) {
+		return;
+	}
+	va_list args;
+	va_start(args, fmt);
+	Write(Level::Info, fmt, args);
+	va_end(args);
+}
+
 void Warn(const char* fmt, ...) noexcept {
 	va_list args;
 	va_start(args, fmt);

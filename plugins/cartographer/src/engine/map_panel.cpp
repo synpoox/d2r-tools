@@ -253,7 +253,7 @@ auto HudUpdateHook(void* self, void* a2, void* a3, void* a4) noexcept -> uint64_
 	const HudResult shown = ShowHudText(self, text.c_str(), text.size());
 	// The plugin's own panel stays closed only while the game's field really shows the text.
 	if ((shown == HudResult::Shown) != g_hudShown.exchange(shown == HudResult::Shown)) {
-		plog::Info("map panel: %s", shown == HudResult::Shown ? "map text shown in the game's terror zone text" : "the game's terror zone text does not show the map text here; the plugin's own panel is used");
+		plog::Debug("map panel: %s", shown == HudResult::Shown ? "map text shown in the game's terror zone text" : "the game's terror zone text does not show the map text here; the plugin's own panel is used");
 	}
 	if (shown == HudResult::Fault) {
 		g_hudLive = false;  // the game's text shows again; the plugin's own panel takes over
@@ -330,7 +330,7 @@ auto SidePanelOpen() noexcept -> bool {
 		static int32_t last = -1;
 		if (shift != last) {
 			last = shift;
-			plog::Info("map panel: the game's side panel state is %d (%s)", shift, (shift & 1) != 0 ? "a right panel is open: the map panel is hidden" : "the map panel can show");
+			plog::Debug("map panel: the game's side panel state is %d (%s)", shift, (shift & 1) != 0 ? "a right panel is open: the map panel is hidden" : "the map panel can show");
 		}
 		return (shift & 1) != 0;
 	} __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -371,7 +371,7 @@ void Apply(const std::string& text, const std::string& blue) noexcept {
 		const int lines = cartographer::mappanel::padLines(bottom, PanelTop, LineUnits, MaxPadLines);
 		if (lines != g_padLines) {
 			g_padLines = lines;
-			plog::Info("map panel: the game's terror zone text ends at %d, %d blank line(s) in front of the panel text", bottom, lines);
+			plog::Debug("map panel: the game's terror zone text ends at %d, %d blank line(s) in front of the panel text", bottom, lines);
 		}
 	}
 	const std::string pad(static_cast<size_t>(g_padLines), '\n');
@@ -390,14 +390,14 @@ void Apply(const std::string& text, const std::string& blue) noexcept {
 		g_shown = both;
 		g_notFoundLogged = false;
 		if (g_sets.fetch_add(1) < 3) {
-			plog::Info("map panel: text set (%zu character(s))", want.size());
+			plog::Debug("map panel: text set (%zu character(s))", want.size());
 		}
 		break;
 	case SetResult::NoWidget:
 		g_shown.clear();
 		if (!g_notFoundLogged) {
 			g_notFoundLogged = true;
-			plog::Info("map panel: the panel's text is not there yet; trying again");
+			plog::Debug("map panel: the panel's text is not there yet; trying again");
 		}
 		break;
 	case SetResult::Fault:
@@ -587,7 +587,7 @@ void InstallHudHook(const D2RL::PluginContext* context) noexcept {
 	const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
 	const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&HudUpdateHook), reinterpret_cast<void**>(&g_hudOriginal));
 	g_hudLive = HookOutcome(part, hooked, g_hudOriginal != nullptr);
-	plog::Info("map panel: the game's terror zone text %s", g_hudLive.load() ? "shows the map text in a map" : "is not used; the panel sits below it");
+	plog::Debug("map panel: the game's terror zone text %s", g_hudLive.load() ? "shows the map text in a map" : "is not used; the panel sits below it");
 }
 
 auto InstallMapPanel(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, std::vector<PartStatus>* parts) -> bool {

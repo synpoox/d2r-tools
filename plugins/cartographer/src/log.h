@@ -19,6 +19,8 @@ void Init(const D2RL::PluginContext* context, const char* prefix) noexcept;
 void Info(const char* fmt, ...) noexcept;
 void Warn(const char* fmt, ...) noexcept;
 void Error(const char* fmt, ...) noexcept;
+// Per-map-open probe and diagnostic lines: written only when CARTOGRAPHER_DEBUG_LOGS=1 (read once); the loader flushes every line to disk.
+void Debug(const char* fmt, ...) noexcept;
 
 // True for the 1st, 100th, 10,000th and 1,000,000th call on `counter`: log a repeated event without flooding.
 //   static std::atomic<uint32_t> s_bad{0};

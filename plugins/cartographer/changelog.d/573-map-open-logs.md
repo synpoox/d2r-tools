@@ -1,0 +1,1 @@
+- Fixed map-open stalls: Cartographer writes one log line per map open; the probe lines need CARTOGRAPHER_DEBUG_LOGS=1.

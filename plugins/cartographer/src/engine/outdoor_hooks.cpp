@@ -482,7 +482,7 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	}
 	const MazeEventRect event = ToRect(level, rooms, co::chooseCellRoom(plan.event, rects));
 	const MazeEventRect boss = ToRect(level, rooms, co::chooseCellRoom(plan.boss, rects));
-	plog::Info("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
+	plog::Debug("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		const int slot = OutdoorSlotIndexOf(id);  // an arena is not a map: its event and boss cells are not kept
