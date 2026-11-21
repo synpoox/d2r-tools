@@ -1,13 +1,18 @@
-// Serves the Arcane void room's DS1 and HD preset (maze/void_room.h, issue #566) through the SDK's resource service while the plugin loads.
-// Without the service, or without install.ps1's lvlprest row, Arcane maps build as before: cells with no room, which block missiles.
+// The Arcane slot level's void (issue #566). A blank floor cell of a FillBlanks room is filled by 0x3f32c0 with tile (main 30, sub 0), which blocks
+// missiles, on every level but 74, which gets sub 1: the void that missiles cross (RE note 37 section 3). This hooks the room tile lookup 0x3f3c60
+// (RoomTileLookup) so the Arcane slot level asks for sub 1 too. Optional: a missing or refused part leaves Arcane maps' void blocking missiles, logged.
 #pragma once
+
+#include "scan.h"
 
 #include <D2RLPlugin/api.h>
 
+#include <vector>
+
 namespace carto {
 
-// Returns whether both files were registered. Call before the tables load: ArcaneVoidServed gates ReadArcaneVoid, so no map asks for a DS1 that is not there.
-auto InstallArcaneVoid(const D2RL::PluginContext* context) -> bool;
-auto ArcaneVoidServed() -> bool;
+// Finds RoomTileLookup and hooks it. Never throws. `ranges` are the exe's executable sections.
+void InstallArcaneVoidTile(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count);
+auto ArcaneVoidTilePartStatus() -> PartStatus;
 
 }  // namespace carto

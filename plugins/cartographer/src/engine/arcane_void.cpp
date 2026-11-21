@@ -1,55 +1,70 @@
 #include "arcane_void.h"
 
+#include "core/part_signatures.h"
+#include "game_memory.h"
 #include "log.h"
-#include "void_room.h"
+#include "maze_hooks.h"
 
-#include <string>
-#include <vector>
+#include <cstdint>
+#include <cstring>
 
 namespace carto {
 
 namespace {
-bool g_served = false;
-}  // namespace
+// The fill code's tile words (0x3f3582): main index 30 in bits 20..25, sub index in bits 8..15. Level 74 gets the second.
+constexpr uint64_t BlankFillTile = 0x1e00000;
+constexpr uint64_t ArcaneFillTile = 0x1e00100;
+constexpr int RoomLevel = 0x90;   // DRLG room -> its level
+constexpr int LevelId = 0x1f8;    // level -> its levels.txt id (int32)
 
-auto ArcaneVoidServed() -> bool {
-	return g_served;
-}
+// A native hook: no PluginSDK service chooses a room's tiles, and the level-74 test is a cmp the SDK cannot widen to the slot level.
+using TileLookupFn = uint64_t (*)(void* room, uint64_t orientation, uint64_t tile) noexcept;
+TileLookupFn g_lookupOriginal = nullptr;
+Part g_lookup = {"RoomTileLookup", sig::RoomTileLookup, 18, false, nullptr, {}, {}};
 
-auto InstallArcaneVoid(const D2RL::PluginContext* context) -> bool {
-	g_served = false;
-	const D2RL::ResourceService* resources = nullptr;
-	if (context->QueryService(&resources) != D2RL::ServiceQueryResult::Success || !D2RL::HasResourceServiceField(resources, D2RL::ResourceServiceRequiredSize)) {
-		plog::Warn("arcane void room: D2RLoader has no Resource service of the expected version; Arcane maps keep cells that block missiles");
+auto RoomOnArcaneSlot(const void* room) noexcept -> bool {
+	if (room == nullptr || !Readable(static_cast<const uint8_t*>(room) + RoomLevel, sizeof(void*))) {
 		return false;
 	}
-	try {
-		const std::vector<uint8_t> ds1 = cartographer::maze::voidRoomDs1();
-		const std::string preset = cartographer::maze::voidRoomPreset();
-		const struct {
-			const char* path;
-			const void* bytes;
-			size_t size;
-		} files[] = {{cartographer::maze::kVoidRoomDs1Path, ds1.data(), ds1.size()}, {cartographer::maze::kVoidRoomPresetPath, preset.data(), preset.size()}};
-		for (const auto& f : files) {
-			D2RL::Resources::ResourceRegistration resource{};
-			resource.structSize = D2RL::Resources::ResourceRegistrationSize;
-			resource.path = f.path;
-			resource.bytes = f.bytes;
-			resource.byteCount = f.size;
-			D2RL::Resources::RegistrationHandle handle = D2RL::Resources::InvalidHandle;
-			const D2RL::Resources::Result result = resources->registerResource(context, &resource, &handle);
-			if (result != D2RL::Resources::Result::Success) {
-				plog::Warn("arcane void room: D2RLoader refused %s (result %u)", f.path, static_cast<uint32_t>(result));
-				return false;
-			}
-		}
-		plog::Debug("arcane void room: registered its DS1 and HD preset");
-		g_served = true;
-	} catch (...) {
-		plog::Warn("arcane void room: building the files failed");
+	const void* level = nullptr;
+	std::memcpy(&level, static_cast<const uint8_t*>(room) + RoomLevel, sizeof(level));
+	if (level == nullptr || !Readable(static_cast<const uint8_t*>(level) + LevelId, sizeof(int32_t))) {
+		return false;
 	}
-	return g_served;
+	int32_t id = 0;
+	std::memcpy(&id, static_cast<const uint8_t*>(level) + LevelId, sizeof(id));
+	return IsArcaneSlotLevel(id);
+}
+
+auto TileLookupHook(void* room, uint64_t orientation, uint64_t tile) noexcept -> uint64_t {
+	if (orientation == 0 && tile == BlankFillTile && RoomOnArcaneSlot(room)) {
+		tile = ArcaneFillTile;
+	}
+	return g_lookupOriginal(room, orientation, tile);
+}
+}  // namespace
+
+void InstallArcaneVoidTile(const D2RL::PluginContext* context, const std::vector<SignatureOverride>& overrides, const CodeRange* ranges, int count) {
+	try {
+		ResolvePart(context, overrides, ranges, count, g_lookup);
+		if (!g_lookup.status.on) {
+			plog::Warn("arcane void tile: the room tile lookup was not found; Arcane maps' void blocks missiles");
+			return;
+		}
+		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(g_lookup.address) - context->exeBase);
+		const bool hooked = context->InstallInlineHook(rva, g_lookup.guard, g_lookup.hookSize, reinterpret_cast<void*>(&TileLookupHook), reinterpret_cast<void**>(&g_lookupOriginal));
+		if (HookOutcome(g_lookup, hooked, g_lookupOriginal != nullptr)) {
+			plog::Debug("arcane void tile: room tile lookup hooked; the Arcane slot's blank cells get level 74's void tile");
+		} else {
+			plog::Warn("arcane void tile: the hook was refused (see 'cartographer check'); Arcane maps' void blocks missiles");
+		}
+	} catch (...) {
+		plog::Error("arcane void tile: installing the hook failed; Arcane maps' void blocks missiles");
+	}
+}
+
+auto ArcaneVoidTilePartStatus() -> PartStatus {
+	return g_lookup.status;
 }
 
 }  // namespace carto

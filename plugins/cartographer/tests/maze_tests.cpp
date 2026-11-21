@@ -26,7 +26,6 @@
 #include "maze_tilesets.h"
 #include "rng.h"
 #include "steer.h"
-#include "void_room.h"
 
 using namespace cartographer;
 using namespace cartographer::maze;
@@ -931,55 +930,6 @@ TEST_CASE("planForMap: same {map, seed, slot size} gives the same plan; the slot
 	CHECK(planForMap("Cave", none, "Winding", "Large", 1, 10, 10).reason.find("less than one Cave room") != std::string::npos);
 	CHECK(mixSeed(1, 2) != mixSeed(2, 1));
 	CHECK(mixSeed(1, 2) == mixSeed(1, 2));
-}
-
-TEST_CASE("Arcane with a void room fills every free cell of its box with it, so no cell between platforms is roomless (#566)")
-{
-	const layout::ShapeTable none;
-	for (const char *size : {"Small", "Medium", "Large", "ExtraLarge"})
-		for (uint64_t seed = 1; seed <= 20; ++seed) {
-			const MapPlan bare = planForMap("Arcane", none, "Loop", size, seed, 360, 360);
-			const MapPlan p = planForMap("Arcane", none, "Loop", size, seed, 360, 360, 1095);
-			REQUIRE(bare.steer);
-			REQUIRE(p.steer);
-			CHECK(bare.seedPlan.plan.fills.empty());
-			CHECK(p.tileset.fillPiece == 1095);
-			const Plan &plan = p.seedPlan.plan;
-			std::set<std::pair<int, int>> cells;
-			int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
-			for (const Room &r : plan.rooms) {
-				cells.insert({r.dx, r.dy});
-				x0 = std::min(x0, r.dx);
-				y0 = std::min(y0, r.dy);
-				x1 = std::max(x1, r.dx);
-				y1 = std::max(y1, r.dy);
-			}
-			for (const layout::Point &f : plan.fillOffsets) {
-				CHECK(cells.insert({f.x, f.y}).second); // never on a room or another filler
-				CHECK((f.x >= x0 && f.x <= x1 && f.y >= y0 && f.y <= y1)); // no ring: only the box
-			}
-			CHECK(cells.size() == static_cast<size_t>((x1 - x0 + 1) * (y1 - y0 + 1)));
-			for (size_t k = 0; k < plan.fills.size(); ++k) CHECK(plan.fills[k].parent < static_cast<int>(plan.rooms.size() + k));
-			CHECK(plan.lvlMaze.rooms == static_cast<int>(plan.rooms.size() + plan.fills.size()));
-			CHECK(p.seedPlan.plan.rooms.size() == bare.seedPlan.plan.rooms.size()); // the platforms are the same
-		}
-}
-
-TEST_CASE("the void room DS1 is a blank 13 x 13 version 18 file with Arcane's two hidden corner tiles")
-{
-	const std::vector<uint8_t> b = voidRoomDs1();
-	auto at = [&b](size_t i) { return static_cast<uint32_t>(b[i]) | b[i + 1] << 8 | b[i + 2] << 16 | static_cast<uint32_t>(b[i + 3]) << 24; };
-	REQUIRE(b.size() == 8 * 4 + 4 * 169 * 4 + 2 * 4);
-	CHECK(at(0) == 18);
-	CHECK(at(4) == 12);
-	CHECK(at(8) == 12);
-	const size_t floor = 32 + 2 * 169 * 4;
-	int set = 0;
-	for (size_t c = 0; c < 4 * 169; ++c) set += at(32 + 4 * c) != 0 ? 1 : 0;
-	CHECK(set == 2);
-	CHECK(at(floor) == 0x800200C2u);
-	CHECK(at(floor + 168 * 4) == 0x800200C2u);
-	CHECK(voidRoomPreset().find("\"entities\": []") != std::string::npos);
 }
 
 TEST_CASE("the rotation counter stays in 0..3 whatever the call did")

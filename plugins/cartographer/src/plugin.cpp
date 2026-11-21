@@ -14,7 +14,6 @@
 #include "engine/arena_service.h"
 #include "engine/boss_names.h"
 #include "engine/map_stat_text.h"
-#include "engine/arcane_void.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
 #include "engine/map_quality.h"
@@ -326,15 +325,9 @@ auto LoadAll() -> Loaded {
 		ReadFile(g_excelDir + L"\\lvlprest.txt", &prestText);
 		ReadFile(g_excelDir + L"\\lvltypes.txt", &typesText);
 		carto::ReadSiegeBorders(loaded.tables->slots, prestText, typesText);
-		carto::ReadArcaneVoid(loaded.tables->slots, carto::ArcaneVoidServed() ? std::string_view(prestText) : std::string_view());
 		for (const carto::Slot& slot : loaded.tables->slots) {
 			if (slot.borderWest > 0) {
 				plog::Info("Siege border rows: west %d, east %d (lvlprest.txt)", slot.borderWest, slot.borderEast);
-			}
-			if (slot.voidPiece > 0) {
-				plog::Debug("Arcane void room: lvlprest.txt row %d", slot.voidPiece);
-			} else if (carto::EqualsNoCase(slot.name, "MazeArcane")) {
-				plog::Warn("Arcane maps: no '%s' row in lvlprest.txt (tools\install.ps1 adds it) or its DS1 is not served, so missiles stop where no room is", carto::ArcaneVoidName);
 			}
 		}
 		for (const carto::MapDef& map : loaded.tables->maps) {
@@ -578,7 +571,6 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 			plog::Warn("no log folder, so no report file is written; use 'cartographer check'");
 		}
 		LoadOverrides();
-		(void)carto::InstallArcaneVoid(context);  // before the tables: a void row is used only when its DS1 is served
 		const Loaded loaded = Reload();
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		carto::InstallBossNames(context);  // first: the boss strings must be there before the game compiles superuniques.txt

@@ -1,6 +1,7 @@
 #include "maze_hooks.h"
 
 #include "core/part_signatures.h"
+#include "arcane_void.h"
 #include "automap_reset.h"
 #include "core/text.h"
 #include "log.h"
@@ -125,7 +126,6 @@ struct Job {
 	uint64_t id = 0;
 	std::string name, tileset, shape, size;
 	uint64_t seed = 0;
-	int voidPiece = 0;  // the slot's void room Def (Slot::voidPiece, Arcane only), 0: none
 	cartographer::layout::ShapeTable shapes;
 };
 struct Prepared {
@@ -515,7 +515,7 @@ auto Prepare(void* level, int slotIndex, int declX, int declY, std::string* why)
 	}
 	Prepared prep;
 	prep.job = job;
-	prep.plan = std::make_shared<const cm::MapPlan>(cm::planForMap(job->tileset, job->shapes, job->shape, job->size, job->seed, declX, declY, job->voidPiece));
+	prep.plan = std::make_shared<const cm::MapPlan>(cm::planForMap(job->tileset, job->shapes, job->shape, job->size, job->seed, declX, declY));
 	if (prep.plan->steer) {
 		const auto row = cm::lvlMazeRow(Read<int32_t>(level, LvlId), prep.plan->seedPlan.plan);
 		auto* copy = new int32_t[row.size()];  // deliberately never freed
@@ -647,12 +647,10 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 	// a plan room's piece never counts the link to the filler beside it. The picker gives a filler 836 + the mask of its link to its parent (a
 	// walkable dead end), so the piece id is set back to the tileset's closed piece (pieceBase, no exits) after the pick. A refused filler is
 	// only a gap in the ring (it also makes the built box differ from the plan's, so arrival, event and boss fall back): logged, the build goes on.
-	// Arcane (#566) fills its box with the installer's void room instead (fillPiece, one DS1 file, so the file is set to File1).
 	if (!plan.fills.empty()) {
 		std::vector<void*> all(ctx.rooms);
 		int refused = 0, closed = 0;
-		const int32_t fillPiece = ctx.prep.plan->tileset.fillPiece;
-		const int32_t closedPiece = fillPiece > 0 ? fillPiece : ctx.prep.plan->tileset.pieceBase;
+		const int32_t closedPiece = ctx.prep.plan->tileset.pieceBase;
 		for (const cm::AddStep& step : plan.fills) {
 			void* parent = step.parent >= 0 && static_cast<size_t>(step.parent) < all.size() ? all[static_cast<size_t>(step.parent)] : nullptr;
 			void* made = parent != nullptr ? add(parent, step.dir, 0) : nullptr;
@@ -661,11 +659,8 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 			} else {
 				(void)pick(made, 1);
 				uint8_t* piece = Read<uint8_t*>(made, RoomPiece);
-				if (piece != nullptr && Readable(piece + PieceId, 4) && (fillPiece <= 0 || Readable(piece + PieceFile, 4))) {
+				if (piece != nullptr && Readable(piece + PieceId, 4)) {
 					Write<int32_t>(piece, PieceId, closedPiece);
-					if (fillPiece > 0) {
-						Write<int32_t>(piece, PieceFile, 0);
-					}
 					++closed;
 				}
 			}
@@ -676,7 +671,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 		if (refused != 0) {
 			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
-			plog::Debug("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
+			plog::Info("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		}
 	}
 	WovenGuestRooms(ctx);
@@ -1029,12 +1024,18 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 	for (PartStatus& status : TombGrowerStatuses()) {
 		out.push_back(std::move(status));
 	}
+	out.push_back(ArcaneVoidTilePartStatus());
 	out.push_back(AutomapResetPartStatus());
 	return out;
 }
 
 auto IsMazeSlotLevel(int level) -> bool {
 	return level > 0 && SlotIndexOfId(level) >= 0;
+}
+
+auto IsArcaneSlotLevel(int level) -> bool {
+	const int slot = level > 0 ? SlotIndexOfId(level) : -1;
+	return slot >= 0 && cm::MazeTilesets[slot].levelType == 19;
 }
 
 void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
@@ -1061,11 +1062,6 @@ auto SetJob(const MapDef& map, const Tables& tables, uint64_t seedSalt, uint64_t
 	job->shape = map.shape;
 	job->size = map.size;
 	job->shapes = tables.shapes;
-	for (const Slot& s : tables.slots) {
-		if (EqualsNoCase(s.name, cm::MazeTilesets[slot].slot)) {
-			job->voidPiece = s.voidPiece;
-		}
-	}
 	std::lock_guard<std::mutex> lock(g_lock);
 	if (requireNoBuild && g_slotStates[slot].ranAny()) {
 		return false;
@@ -1326,6 +1322,7 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	}
 	if (ok) {
 		InstallTombGrowerHooks(context, overrides, ranges, count);  // optional, like Arcane's: a refusal refuses only Tombs maps (GrowerHookMissing)
+		InstallArcaneVoidTile(context, overrides, ranges, count);  // optional: without it Arcane maps' void blocks missiles (issue #566)
 	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {

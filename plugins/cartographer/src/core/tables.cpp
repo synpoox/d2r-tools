@@ -1107,22 +1107,6 @@ void ReadSiegeBorders(std::vector<Slot>& slots, std::string_view lvlprestText, s
 	}
 }
 
-void ReadArcaneVoid(std::vector<Slot>& slots, std::string_view lvlprestText) {
-	int def = 0;
-	const Tsv prest = ParseTsv(lvlprestText);
-	const int pName = prest.Column("Name"), pDef = prest.Column("Def"), pFile = prest.Column("File1");
-	for (const TsvRow& row : prest.rows) {
-		int d = 0;
-		if (EqualsNoCase(prest.Cell(row, pName), ArcaneVoidName) && EqualsNoCase(prest.Cell(row, pFile), ArcaneVoidFile) && ParseInt(prest.Cell(row, pDef), 1, 65535, &d)) {
-			def = d;
-			break;
-		}
-	}
-	for (Slot& slot : slots) {
-		slot.voidPiece = EqualsNoCase(slot.name, "MazeArcane") ? def : 0;
-	}
-}
-
 auto LoadArenas(std::string_view text, std::string_view levelsText, const std::vector<Slot>& slots, Report& report) -> std::vector<ArenaDef> {
 	namespace ff = cartographer::outdoor::framefill;
 	std::vector<ArenaDef> out;

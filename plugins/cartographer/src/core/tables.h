@@ -133,8 +133,6 @@ struct Slot {
 	// The OutdoorSiege slot only: the lvlprest.txt Defs of the installer's Barricade border rows (SiegeBorderWestName, SiegeBorderEastName); 0 when
 	// they are not installed (issue #549). See ReadSiegeBorders.
 	int borderWest = 0, borderEast = 0;
-	// The MazeArcane slot only: the lvlprest.txt Def of the installer's void room (ArcaneVoidName), 0 when it is not installed (issue #566). See ReadArcaneVoid.
-	int voidPiece = 0;
 };
 
 // One row of arenaspots.txt: a named spot in an arena's interior (issue #488). The positions are worked out at load from the arena's levels.txt origin.
@@ -237,14 +235,6 @@ inline constexpr const char* SiegeBorderEastName = "Cartographer Siege Border Ea
 // are there and every file their Dt1Mask selects is set in the mod's lvltypes.txt row 30 (Act 5 - Siege): without those files the borders would
 // draw no tiles. An empty `lvltypesText` (the mod has no lvltypes.txt, so the game's own row without the files is used) gives 0.
 void ReadSiegeBorders(std::vector<Slot>& slots, std::string_view lvlprestText, std::string_view lvltypesText);
-
-// The lvlprest.txt Name of the void room install.ps1 adds for Arcane maps: a copy of 510 (Arcane W) whose one file is the plugin's own all-void DS1
-// (engine/arcane_void.cpp). A grid cell with no room blocks missiles; a void room blocks only walking, as the void inside Arcane's own pieces. Issue #566.
-inline constexpr const char* ArcaneVoidName = "Cartographer Arcane Void";
-inline constexpr const char* ArcaneVoidFile = "d2rloader/cartographer/arcanevoid.ds1";
-
-// Sets the MazeArcane slot's voidPiece to the Def of the ArcaneVoidName row in the mod's lvlprest.txt whose File1 is ArcaneVoidFile; 0 when there is none.
-void ReadArcaneVoid(std::vector<Slot>& slots, std::string_view lvlprestText);
 
 // Empty, or why an outdoor slot level (a slot row of the outdoor tileset table) must be left to the game: the id is a vanilla level (137 or below, towns included), or levels.txt does not
 // say Act 5 (Act 4, zero based) for it. Unlike OutdoorSlotProblem this refuses on what it does not know: the outdoor build writes into the level
