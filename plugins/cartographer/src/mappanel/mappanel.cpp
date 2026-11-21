@@ -125,6 +125,11 @@ std::string densityLine(int density)
 	return density == 0 ? std::string() : formatGameText("%+d%% Monster Density", density);
 }
 
+std::string rarityLine(int uniques)
+{
+	return uniques == 0 ? std::string() : formatGameText("Monster Rarity %+d%%", uniques);
+}
+
 std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
 {
 	std::vector<Stat> out;
@@ -151,7 +156,7 @@ std::vector<Stat> unidentifiedStats(const std::vector<Stat> &stats)
 	return out;
 }
 
-PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density)
+PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density, int uniques)
 {
 	std::vector<Stat> stats = mergedStats(rolled);
 	// Monsters first, then players: the list is cut to kMaxStatLines and the rest counted.
@@ -183,7 +188,12 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int densi
 		}
 		if (monsters && density != 0) {
 			if (!header) line("Monsters have", "");
+			header = true;
 			line("", densityLine(density));
+		}
+		if (monsters && uniques != 0) {
+			if (!header) line("Monsters have", "");
+			line("", rarityLine(uniques));
 		}
 	}
 	if (more > 0) line("", "and " + std::to_string(more) + " more");

@@ -761,7 +761,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		}
 	}
 	if (!g_monstersOn.load() && !g_playersOn.load()) {
-		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {}, densityBonus);  // the level only, no properties
+		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {}, densityBonus, routing.area("Uniques"));  // the level only, no properties
 		MapPanelMapOpened(text.gold, text.blue, slot);
 		return;
 	}
@@ -792,7 +792,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	if (unidentified) {
 		shown = cartographer::mappanel::unidentifiedStats(shown);
 	}
-	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus);
+	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus, routing.area("Uniques"));
 	MapPanelMapOpened(panel.gold, panel.blue, slot);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plans[slot] = std::move(plan);
