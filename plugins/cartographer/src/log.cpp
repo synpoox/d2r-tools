@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 
 namespace plog {
 
@@ -37,6 +38,24 @@ void Init(const D2RL::PluginContext* context, const char* prefix) noexcept {
 }
 
 void Info(const char* fmt, ...) noexcept {
+	va_list args;
+	va_start(args, fmt);
+	Write(Level::Info, fmt, args);
+	va_end(args);
+}
+
+auto DebugOn() noexcept -> bool {
+	static const bool on = [] {
+		const char* v = std::getenv("CARTOGRAPHER_DEBUG_LOGS");
+		return v != nullptr && v[0] == '1';
+	}();
+	return on;
+}
+
+void Debug(const char* fmt, ...) noexcept {
+	if (!DebugOn()) {
+		return;
+	}
 	va_list args;
 	va_start(args, fmt);
 	Write(Level::Info, fmt, args);

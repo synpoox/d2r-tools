@@ -114,7 +114,7 @@ void SendMapTo(const D2RL::PluginContext* context, net::PeerHandle peer, const m
 	}
 	const net::Result r = g_net->sendToClient(context, g_channel, peer, ms::kMsgMapOpen, buf, static_cast<uint32_t>(size));
 	if (r == net::Result::Success) {
-		plog::Info("map sync: told client %llu about the open map", static_cast<unsigned long long>(peer));
+		plog::Debug("map sync: told client %llu about the open map", static_cast<unsigned long long>(peer));
 		return;
 	}
 	plog::Warn("map sync: could not tell client %llu: %s", static_cast<unsigned long long>(peer), ResultName(r));
@@ -168,7 +168,7 @@ void __cdecl OnHostMessage(const D2RL::PluginContext* context, net::ChannelHandl
 		if (added == ms::PeerBook::Add::AddedDroppedOldest) {
 			plog::Warn("map sync: %zu clients known; the oldest was dropped to make room for client %llu", ms::kMaxPeers, static_cast<unsigned long long>(peer));
 		}
-		plog::Info("map sync: client %llu said hello (%s)", static_cast<unsigned long long>(peer), added == ms::PeerBook::Add::Added ? "new" : "again");
+		plog::Debug("map sync: client %llu said hello (%s)", static_cast<unsigned long long>(peer), added == ms::PeerBook::Add::Added ? "new" : "again");
 		// The send goes through the game thread, as the SDK sample does for a reply.
 		if (g_threads == nullptr || g_threads->runOnGameThread(context, SendCurrentCallback, reinterpret_cast<void*>(static_cast<uintptr_t>(peer))) != D2RL::Threads::Result::Success) {
 			plog::Warn("map sync: could not queue the reply to client %llu on the game thread; sending from the callback", static_cast<unsigned long long>(peer));
@@ -231,18 +231,18 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 				plog::Warn("map sync: '%s' keeps the slot level's name: no level build has been seen yet, so the data flag is unknown", map.name.c_str());
 			} else if (MapNamesBeforeOpen(map, *tables, slotLevel, static_cast<uint32_t>(flag))) {
 				note += "name applied; ";
-				plog::Info("map sync: the host's map '%s': its name is set on this client's slot level %d (data flag %d)", map.name.c_str(), slotLevel, flag);
+				plog::Debug("map sync: the host's map '%s': its name is set on this client's slot level %d (data flag %d)", map.name.c_str(), slotLevel, flag);
 			} else {
 				note += "name not applied (see the map names lines); ";
 			}
 		} else {
 			note += std::string("name skipped: ") + ms::describe(plan.namesWhy) + "; ";
-			plog::Info("map sync: the host's map '%s': name not applied here: %s", map.name.c_str(), ms::describe(plan.namesWhy));
+			plog::Debug("map sync: the host's map '%s': name not applied here: %s", map.name.c_str(), ms::describe(plan.namesWhy));
 		}
 		if (plan.maze) {
 			if (MazeRemoteMapOpened(map, *tables, id.seed)) {
 				note += "layout seed applied";
-				plog::Info("map sync: the host's map '%s': the next build of the Maze slot level here uses the host's layout seed", map.name.c_str());
+				plog::Debug("map sync: the host's map '%s': the next build of the Maze slot level here uses the host's layout seed", map.name.c_str());
 			} else {
 				note += "layout skipped: the slot level was built here first";
 				plog::Warn("map sync: the host's map '%s': the layout seed was not applied (a slot level build had already started here)", map.name.c_str());
@@ -251,14 +251,14 @@ void __cdecl ApplyStep(const D2RL::PluginContext*, void* userData) noexcept {
 			// The client plans from its own maps.txt row and the host's seed; the plan is a pure function of those (section 8a), so it equals the host's.
 			OutdoorMapOpened(map, *tables, 0, id.seed);
 			note += "outdoor layout seed applied";
-			plog::Info("map sync: the host's map '%s': the next build of the outdoor slot level here uses the host's layout seed", map.name.c_str());
+			plog::Debug("map sync: the host's map '%s': the next build of the outdoor slot level here uses the host's layout seed", map.name.c_str());
 		} else if (id.outdoor) {
 			note += std::string("outdoor layout skipped: ") + ms::describe(plan.outdoorWhy);
 			plog::Warn("map sync: the host's map '%s': the outdoor layout is not applied here: %s", map.name.c_str(), ms::describe(plan.outdoorWhy));
 		} else {
 			note += std::string("layout skipped: ") + ms::describe(plan.mazeWhy);
 			if (plan.mazeWhy == ms::Skip::NotMaze) {
-				plog::Info("map sync: the host's map '%s' is a preset map: no layout to apply", map.name.c_str());
+				plog::Debug("map sync: the host's map '%s' is a preset map: no layout to apply", map.name.c_str());
 			} else {
 				plog::Warn("map sync: the host's map '%s': the layout is not applied here: %s", map.name.c_str(), ms::describe(plan.mazeWhy));
 			}
@@ -304,7 +304,7 @@ void __cdecl OnClientMessage(const D2RL::PluginContext*, net::ChannelHandle, uin
 			}
 		}
 		if (verdict == ms::Verdict::Accepted || verdict == ms::Verdict::Unchanged) {
-			plog::Info("map sync: the host's open map: %s (%s)", Describe(id, name).c_str(), ms::describe(verdict));
+			plog::Debug("map sync: the host's open map: %s (%s)", Describe(id, name).c_str(), ms::describe(verdict));
 		} else {
 			plog::Warn("map sync: the host's open map (row %u, opening %u) was not kept: %s", static_cast<unsigned>(id.mapIndex), static_cast<unsigned>(id.opening), ms::describe(verdict));
 		}
@@ -337,7 +337,7 @@ void SendHello(const D2RL::PluginContext* context) noexcept {
 	const size_t size = ms::encodeHello(buf, sizeof(buf));
 	const net::Result r = g_net->sendToHost(context, g_channel, ms::kMsgHello, buf, static_cast<uint32_t>(size));
 	if (r == net::Result::Success) {
-		plog::Info("map sync: connected to the host, hello sent");
+		plog::Debug("map sync: connected to the host, hello sent");
 	} else {
 		plog::Warn("map sync: connected, but the hello was not sent: %s", ResultName(r));
 		std::lock_guard<std::mutex> lock(g_lock);
@@ -357,7 +357,7 @@ void __cdecl OnConnectionState(const D2RL::PluginContext* context, const net::Co
 		}
 		switch (event->state) {
 		case net::ConnectionState::Connected:
-			plog::Info("map sync: connection event: connected (peer %llu, %s)", static_cast<unsigned long long>(event->peer), client ? "this process asked to connect" : "host side");
+			plog::Debug("map sync: connection event: connected (peer %llu, %s)", static_cast<unsigned long long>(event->peer), client ? "this process asked to connect" : "host side");
 			if (client) {
 				SendHello(context);
 			}
@@ -368,7 +368,7 @@ void __cdecl OnConnectionState(const D2RL::PluginContext* context, const net::Co
 				const bool retry = event->reason == net::RejectionReason::HostUnavailable;
 				std::lock_guard<std::mutex> lock(g_lock);
 				if (ms::onRejected(g_schedule, retry)) {
-					plog::Info("map sync: the host is not available yet; the connect loop keeps retrying");
+					plog::Debug("map sync: the host is not available yet; the connect loop keeps retrying");
 				} else {
 					g_clientActive = false;
 					g_clientNote = std::string("the host refused the connection: ") + ReasonName(event->reason);
@@ -378,7 +378,7 @@ void __cdecl OnConnectionState(const D2RL::PluginContext* context, const net::Co
 		case net::ConnectionState::Disconnected: {
 			std::lock_guard<std::mutex> lock(g_lock);
 			if (event->peer != net::InvalidPeerHandle && g_peers.remove(event->peer)) {
-				plog::Info("map sync: client %llu left", static_cast<unsigned long long>(event->peer));
+				plog::Debug("map sync: client %llu left", static_cast<unsigned long long>(event->peer));
 			}
 			if (client) {
 				g_helloSent = false;
@@ -410,7 +410,7 @@ void __cdecl ConnectStep(const D2RL::PluginContext* context, void* userData) noe
 			std::lock_guard<std::mutex> lock(g_lock);
 			ms::finish(g_schedule);
 			g_clientActive = false;
-			plog::Info("map sync: this process has the server, so it does not connect to a host");
+			plog::Debug("map sync: this process has the server, so it does not connect to a host");
 			return;
 		}
 		if (step == ms::Step::GiveUp) {
@@ -446,7 +446,7 @@ void __cdecl ConnectStep(const D2RL::PluginContext* context, void* userData) noe
 				attempts = g_schedule.attempts;
 			}
 			if (attempts == 1 || r != net::Result::Busy) {
-				plog::Info("map sync: connectToHost attempt %d: %s", attempts, ResultName(r));
+				plog::Debug("map sync: connectToHost attempt %d: %s", attempts, ResultName(r));
 			}
 			if (r == net::Result::Incompatible || r == net::Result::WrongRole || r == net::Result::Unsupported || r == net::Result::OwnerInactive) {
 				plog::Warn("map sync: the host cannot be reached for map sync (%s); giving up for this game", ResultName(r));
@@ -503,7 +503,7 @@ auto InstallMapSync(const D2RL::PluginContext* context) -> bool {
 		g_ctx = context;
 		g_state = "on";
 		g_on = true;
-		plog::Info("map sync: channel registered (wire version %u)", static_cast<unsigned>(ms::kWireVersion));
+		plog::Debug("map sync: channel registered (wire version %u)", static_cast<unsigned>(ms::kWireVersion));
 		return true;
 	} catch (...) {
 		g_on = false;
@@ -551,7 +551,7 @@ void MapSyncMapOpened(const MapDef& map, const Tables& tables, int slotLevel, in
 			g_hostMap = id;
 			peers = g_peers.peers();
 		}
-		plog::Info("map sync: %s is open (%s); %zu client(s) to tell", Name(map).c_str(), Describe(id, map.name).c_str(), peers.size());
+		plog::Debug("map sync: %s is open (%s); %zu client(s) to tell", Name(map).c_str(), Describe(id, map.name).c_str(), peers.size());
 		for (const uint64_t peer : peers) {
 			SendMapTo(g_ctx, peer, id);
 		}

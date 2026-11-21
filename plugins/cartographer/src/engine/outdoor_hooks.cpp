@@ -440,7 +440,7 @@ auto PlanForJob(const Job& jobRef, const SlotGeometry& geometry, const void* lev
 		plog::Warn("outdoor slot level %d: the plan for '%s' failed; building the default %s map instead", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(), job->name.c_str(), job->tileset.c_str());
 	}
 	if (built) {
-		plog::Info("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(),
+		plog::Debug("outdoor slot level %d: planned '%s' (%s %s %s, seed %llu): %d stamps, %d void cells, level %d x %d tiles at (%d,%d), plan %016llx", level != nullptr ? Read<int32_t>(level, LvlId) : g_slotLevel.load(),
 		           job->name.c_str(), job->tileset.c_str(), job->shape.c_str(), job->size.c_str(), static_cast<unsigned long long>(job->seed), static_cast<int>(plan->stamps.stamps.size()),
 		           static_cast<int>(plan->stamps.voidCells.size()), plan->stamps.tilesW, plan->stamps.tilesH, plan->stamps.originX, plan->stamps.originY,
 		           static_cast<unsigned long long>(plan->hash));
@@ -482,7 +482,7 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 	}
 	const MazeEventRect event = ToRect(level, rooms, co::chooseCellRoom(plan.event, rects));
 	const MazeEventRect boss = ToRect(level, rooms, co::chooseCellRoom(plan.boss, rects));
-	plog::Info("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
+	plog::Debug("eventprobe: outdoor event room %s, boss room %s (the rooms at the centre of the planned cells)", event.known ? "known" : "not known", boss.known ? "known" : "not known");
 	{
 		std::lock_guard<std::mutex> lock(g_lock);
 		const int slot = OutdoorSlotIndexOf(id);  // an arena is not a map: its event and boss cells are not kept
@@ -518,7 +518,7 @@ void ArrangeRooms(const void* level, const co::StampPlan& plan, bool asPlanned) 
 			g_arrivalResult = 0;
 		}
 	}
-	plog::Info("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
+	plog::Debug("outdoor arrival: room %d of %d (at %d,%d) marked as the level entry, in the entrance cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, plan.entrance.x, plan.entrance.y, static_cast<int>(mark.clear.size()));
 }
 
@@ -588,7 +588,7 @@ void MoveArrivalToFreeSpot(uint64_t cl, void* game, uint64_t levelId, uint64_t e
 			plog::Info("outdoor arrival: no free spot in room %d (%d,%d); moved to room %d (%d,%d), free spot at subtile (%d,%d) (move %d)", marked, rects[static_cast<size_t>(marked)].x,
 			           rects[static_cast<size_t>(marked)].y, i, r.x, r.y, xy[0], xy[1], ++moved);
 		}
-		plog::Info("outdoor arrival: room %d (%d,%d) has a free spot at subtile (%d,%d) (size %u); kept", i, r.x, r.y, xy[0], xy[1], size);
+		plog::Debug("outdoor arrival: room %d (%d,%d) has a free spot at subtile (%d,%d) (size %u); kept", i, r.x, r.y, xy[0], xy[1], size);
 		return;
 	}
 	plog::Warn("outdoor arrival: no room of the level has a free spot; the game will refuse the arrival");
@@ -683,7 +683,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 			co::GridCounts counts;
 			const std::vector<std::string> problems = co::compareGrid(plan.stamps, grid, &counts);
 			if (ctx.fired && problems.empty()) {
-				plog::Info("outdoor slot level %d: built as planned (%d stamps, %d void cells; grid %d cells: %d pieces, %d covered, %d void, %d neither), %d rooms, plan %016llx%s", id, ctx.stamped, ctx.voided,
+				plog::Debug("outdoor slot level %d: built as planned (%d stamps, %d void cells; grid %d cells: %d pieces, %d covered, %d void, %d neither), %d rooms, plan %016llx%s", id, ctx.stamped, ctx.voided,
 				           counts.cells, counts.pieces, counts.covered, counts.voided, counts.other, Read<int32_t>(level, LvlRoomCount), static_cast<unsigned long long>(plan.hash), arena ? " (arena)" : "");
 			} else if (!problems.empty()) {
 				plog::Warn("outdoor slot level %d: the built grid is not the plan: %s%s", id, problems.front().c_str(), problems.size() > 1 ? " (and more; turn OutdoorProbe on)" : "");
@@ -695,7 +695,7 @@ auto RunBuild(uint8_t dataFlag, void* level, LevelBuildFn original, const co::Ma
 			asPlanned = ctx.fired && problems.empty();
 		}
 		if (plan.stamps.entrance.known) {
-			plog::Info("outdoor slot level %d: entrance cell at tile (%d,%d) %d x %d; event %s; boss %s", id, plan.stamps.entrance.x, plan.stamps.entrance.y, plan.stamps.entrance.w, plan.stamps.entrance.h,
+			plog::Debug("outdoor slot level %d: entrance cell at tile (%d,%d) %d x %d; event %s; boss %s", id, plan.stamps.entrance.x, plan.stamps.entrance.y, plan.stamps.entrance.w, plan.stamps.entrance.h,
 			           plan.stamps.event.known ? "planned" : "none", plan.stamps.boss.known ? "planned" : "none");
 		}
 		ProbeRooms(level, rect.x, rect.y);

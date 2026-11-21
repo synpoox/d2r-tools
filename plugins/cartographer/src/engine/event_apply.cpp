@@ -153,7 +153,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 		return;
 	}
 	if (ShowEntryBanner(lines)) {
-		plog::Info("eventprobe: entry message handed to the banner panel (%zu line(s))", lines.size());
+		plog::Debug("eventprobe: entry message handed to the banner panel (%zu line(s))", lines.size());
 		return;
 	}
 	for (const std::string& line : lines) {
@@ -161,7 +161,7 @@ void ShowEntryMessage(const std::vector<std::string>& lines) noexcept {
 			g_context->WriteConsoleMessage(line.c_str());
 		}
 	}
-	plog::Info("eventprobe: entry message written to the console (%zu line(s)); no banner panel", lines.size());
+	plog::Debug("eventprobe: entry message written to the console (%zu line(s)); no banner panel", lines.size());
 }
 
 // --- Spawn names from the game's loaded tables (cartographer/11-spawn-names.md) -----------------------------------------------
@@ -349,7 +349,7 @@ auto RouteFor(uint32_t dataFlag) noexcept -> ep::RouteVerdict {
 	bool transient = false;
 	ep::RouteVerdict verdict = EvaluateRoute(dataFlag, &transient);
 	const std::string bank = verdict.monsters ? std::string(" (SDK bank ") + BankName(verdict.bank) + ")" : std::string();
-	plog::Info("spawn names: data flag %u, table revision %llu: monstats from the game's table %s%s, superuniques by the game's name map %s%s%s", dataFlag,
+	plog::Debug("spawn names: data flag %u, table revision %llu: monstats from the game's table %s%s, superuniques by the game's name map %s%s%s", dataFlag,
 	           static_cast<unsigned long long>(key.revision), verdict.monsters ? "on" : "OFF", bank.c_str(), verdict.supers ? "on" : "OFF",
 	           verdict.why.empty() ? "" : "; ", verdict.why.c_str());
 	if (!transient && key.revision != 0) {
@@ -375,7 +375,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 	if (const int row = ep::findMonsterRow(static_cast<const uint8_t*>(mon.viewRows), mon.viewCount, mon.viewRowSize, spawn); row >= 0) {
 		out->kind = ev::NameKind::Monster;
 		out->row = out->classRow = row;
-		plog::Info("spawn '%s': monstats row %d from the game's table", spawn.c_str(), row);
+		plog::Debug("spawn '%s': monstats row %d from the game's table", spawn.c_str(), row);
 		return true;
 	}
 	if (!route.supers) {
@@ -415,7 +415,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 	out->kind = ev::NameKind::Unique;
 	out->row = row;
 	out->classRow = static_cast<int>(cls);
-	plog::Info("spawn '%s': superuniques row %d from the game's table, class monstats row %d", spawn.c_str(), row, out->classRow);
+	plog::Debug("spawn '%s': superuniques row %d from the game's table, class monstats row %d", spawn.c_str(), row, out->classRow);
 	return true;
 }
 
@@ -476,14 +476,14 @@ auto SpawnOne(Game* game, void* room, const ep::Spawn& s, bool* asSuper, void** 
 		if (!ep::superSeen(bitmap, s.row)) {
 			void* unit = Call<SpawnSuperFn>(SpawnSuperUnique)(game, room, x, y, s.row, flags);
 			const bool setNow = ep::superSeen(bitmap, s.row);
-			plog::Info("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
+			plog::Debug("eventprobe: superunique row %d at (%d,%d): returned %p, once-per-game bit now %s", s.row, x, y, unit, setNow ? "set" : "NOT set");
 			if (unit != nullptr) {
 				*asSuper = true;
 				*unitOut = unit;
 				return true;
 			}
 		} else {
-			plog::Info("eventprobe: superunique row %d was already spawned this game; its class (monstats row %d) is spawned instead", s.row, s.classRow);
+			plog::Debug("eventprobe: superunique row %d was already spawned this game; its class (monstats row %d) is spawned instead", s.row, s.classRow);
 		}
 	}
 	const int row = s.superUnique ? s.classRow : s.row;
@@ -624,7 +624,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		made = SpawnOne(game, room, one, &asSuper, &unit, call.flags);
 		if (made) {
 			if (tried > 1) {
-				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, total, how);
+				plog::Debug("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, total, how);
 			}
 			break;
 		}
@@ -633,7 +633,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 	return made;
 	};
 	const bool made = place();
-	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
+	plog::Debug("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
 	if (!made) {
 		return ep::BossTry::Refused;
 	}
@@ -645,7 +645,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		for (int i = 0; i < behaviours.extraBoss && place(); ++i) {
 			++placed;
 		}
-		plog::Info("map Boss '%s': extra_boss %d: %d placed in the room %s", state.bossName.c_str(), behaviours.extraBoss, placed, Describe(rects.server).c_str());
+		plog::Debug("map Boss '%s': extra_boss %d: %d placed in the room %s", state.bossName.c_str(), behaviours.extraBoss, placed, Describe(rects.server).c_str());
 	}
 	return ep::BossTry::Made;
 }
@@ -684,7 +684,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		number = ++state->probes;
 		if (!rects.ok) {
 			if (number <= MaxPopulateProbes) {
-				plog::Info("eventprobe: room #%d of level %d populated, but its DRLG room is not readable; ignored", number, state->level);
+				plog::Debug("eventprobe: room #%d of level %d populated, but its DRLG room is not readable; ignored", number, state->level);
 			}
 			return;
 		}
@@ -722,7 +722,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				}
 				std::vector<ep::Rect> others = haveAll ? ep::roomsFarthestFirst(rects.drlg, all, bossRanked) : std::vector<ep::Rect>{};
 				if (!bossRanked.empty()) {
-					plog::Info("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell and %zu other(s) in the level to fall back on)", state->bossName.c_str(),
+					plog::Debug("eventprobe: the map Boss '%s' goes in the plan's boss room %s (%zu room(s) in the cell and %zu other(s) in the level to fall back on)", state->bossName.c_str(),
 					           Describe(bossRanked.front()).c_str(), bossRanked.size() - 1, others.size());
 				} else {
 					plog::Warn("the map Boss '%s' has no plan boss room I can read (a maze with BossRoom off, an outdoor slot build that did not run as planned, a Snow map too small for a boss cell, or a level not built from a plan): it goes in the room farthest from the entry, then any other room as it populates (%zu room(s) known)",
@@ -739,7 +739,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 				// level's list, so at least one room qualifies; the event fires on the first populated room at or past it.
 				if (haveAll) {
 					distance = ep::presetEventDistance(rects.levelW, rects.levelH, rects.drlg, all);
-					plog::Info("eventprobe: level %d is %d x %d tiles and has %zu room(s); the event room is the first room at least %d tiles from the entry room %s", state->level, rects.levelW, rects.levelH, all.size(), distance, Describe(rects.drlg).c_str());
+					plog::Debug("eventprobe: level %d is %d x %d tiles and has %zu room(s); the event room is the first room at least %d tiles from the entry room %s", state->level, rects.levelW, rects.levelH, all.size(), distance, Describe(rects.drlg).c_str());
 				} else {
 					plog::Warn("eventprobe: the room list of level %d could not be read; level is %d x %d tiles, the event room is the first room at least %d tiles from the first one", state->level, rects.levelW, rects.levelH, distance);
 				}
@@ -760,7 +760,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		}
 	}
 	if (number <= MaxPopulateProbes) {
-		plog::Info("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
+		plog::Debug("eventprobe: room #%d of level %d populated: DRLG %s tiles, server %s (%d server unit(s) per DRLG tile: %s), %s%s", number, state->level,
 		           Describe(rects.drlg).c_str(), Describe(rects.server).c_str(), ep::spotScale(rects.server, rects.drlg), ep::scaleKindName(ep::scaleKind(rects.server, rects.drlg)),
 		           planned ? "event room from the plan" : "event room by distance", fire ? ": THIS IS THE EVENT ROOM" : "");
 	}
@@ -780,7 +780,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 		ShowEntryMessage(lines);
 	}
 	if (fireBoss) {
-		plog::Info("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
+		plog::Debug("eventprobe: room #%d of level %d is tried for the map Boss (DRLG %s)", number, state->level, Describe(rects.drlg).c_str());
 		// The picker decides (pure, tested with this loop as `driveBoss`): the plan's boss room, then the rest of its cell, then the other rooms
 		// as each populates, then the same room again with the collision test skipped. A refusal moves on at once, or waits for the next room to populate.
 		const auto noteRoom = [&](const ep::Rect& r) { AutoCheckNoteBossRoom(r.x, r.y, r.w, r.h); };
@@ -815,7 +815,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			noteRoom(bossRects.drlg);
 			const ep::BossTry result = SpawnMapBoss(game, bossRoom, *state, bossRects, tier == ep::BossRoomPicker::Tier::Forced);
 			if (result == ep::BossTry::Made) {
-				plog::Info("map Boss '%s': boss path: %s", state->bossName.c_str(), where);
+				plog::Debug("map Boss '%s': boss path: %s", state->bossName.c_str(), where);
 			}
 			return result;
 		});
@@ -1049,7 +1049,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		state.bossTestStrand = true;
 		plog::Warn("map Boss '%s': no room is tried, stranded from map open on purpose (CARTOGRAPHER_TEST_BOSS_STRAND is set; a game check only)", map.boss.c_str());
 	}
-	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
+	plog::Debug("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }
 
 auto SummaryNow() -> std::string {
@@ -1195,9 +1195,9 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	const cartographer::layout::Point unused{0, 0};
 	std::optional<ev::Event> event = ev::decide(tables->events, chance, ep::eventSeed(state->seed), &unused);
 	if (!event) {
-		plog::Info("event for '%s' (seed %llu, chance %d%%): none", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance);
+		plog::Debug("event for '%s' (seed %llu, chance %d%%): none", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance);
 	} else {
-		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
+		plog::Debug("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
 		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
 		if (event->kind != ev::Kind::Shrine) {  // a Treasure's Spawn is looked up too: a miss means a chest's objects name

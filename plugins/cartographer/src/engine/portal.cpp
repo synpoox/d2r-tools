@@ -278,7 +278,7 @@ auto GateStateOf(Game* game, Unit* player) noexcept -> GateState {
 }
 
 void Tell(const std::string& text) noexcept {
-	plog::Info("%s", text.c_str());
+	plog::Debug("%s", text.c_str());
 	if (g_context != nullptr) {
 		g_context->WriteConsoleMessage(text.c_str());
 	}
@@ -619,7 +619,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		Tell(problem);  // the check passed, so a slot or the steering went away in between
 		return;
 	}
-	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
+	plog::Debug("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
 	// The item's own stats, read now, before the game uses the item up: the map level and the map's properties (its rare or unique modifiers).
 	std::vector<cartographer::statplan::ItemStat> itemStats;
 	try {
@@ -641,17 +641,17 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	const int levelBonus = areas.area("AreaLevel");
 	if (levelBonus != 0) {
 		opening.level = cartographer::statplan::levelWithBonus(pick.level, levelBonus);
-		plog::Info("map area level: %d from the item %+d from its affixes = %d", pick.level, levelBonus, opening.level);
+		plog::Debug("map area level: %d from the item %+d from its affixes = %d", pick.level, levelBonus, opening.level);
 	}
 	const int uniquesBonus = areas.area("Uniques");
 	if (uniquesBonus != 0) {
 		opening.uniques = cartographer::statplan::densityWithBonus(map->uniques, uniquesBonus);
-		plog::Info("map uniques: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->uniques, uniquesBonus, opening.uniques);
+		plog::Debug("map uniques: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->uniques, uniquesBonus, opening.uniques);
 	}
 	if (!pick.note.empty()) {
 		plog::Warn("map level: %s", pick.note.c_str());
 	}
-	plog::Info("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
+	plog::Debug("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
 	// Bonus Density: the sum over the item's affixes (the Density area param of the stat routes) is added to the map's Density (uncapped).
 	cartographer::statplan::MapRouting routing = areas;
@@ -660,7 +660,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	opening.extraGroups = StatApplyExtraGroups(routing);  // extra_groups (issue #540): written into the region record by the level row hook
 	if (densityBonus != 0) {
 		opening.density = cartographer::statplan::densityWithBonus(map->density, densityBonus);
-		plog::Info("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
+		plog::Debug("map density: %d%% from maps.txt %+d%% from the item's affixes = %d%%", map->density, densityBonus, opening.density);
 	}
 	std::string refusal;
 	const int32_t opened = OpenMapPortal(game, player, opening, *tables, level, &refusal);
@@ -708,7 +708,7 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 		out.why = RefusalText(gate, *map, state);
 		return out;
 	}
-	plog::Info("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
+	plog::Debug("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
 	std::string refusal;
 	MapDef opening = *map;
 	{

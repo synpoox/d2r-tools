@@ -101,7 +101,7 @@ void RestoreLevelLocked(Space& space, int level) noexcept {
 		g_stuck = true;
 		plog::Error("map monsters: level %d %s: %d field(s) could not be put back; no further map is written this session", level, space.what, result.failed);
 	}
-	plog::Info("map monsters: level %d %s: %d field(s) put back%s", level, space.what, result.back,
+	plog::Debug("map monsters: level %d %s: %d field(s) put back%s", level, space.what, result.back,
 	           result.moved > 0 ? ", the rest were changed by someone else and left as they are" : "");
 	DropTarget(space, level);
 }
@@ -123,7 +123,7 @@ void RestoreRowsLocked() noexcept {
 void ForgetRecordsLocked() noexcept {
 	try {
 		for (const int level : g_rec.ledger.Levels()) {
-			plog::Info("map monsters: level %d record: %zu field(s) forgotten (the record goes with the game)", level, g_rec.ledger.EntriesOf(level).size());
+			plog::Debug("map monsters: level %d record: %zu field(s) forgotten (the record goes with the game)", level, g_rec.ledger.EntriesOf(level).size());
 		}
 		g_rec.ledger.Clear();
 		g_rec.targets.clear();
@@ -353,7 +353,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			request.monsterWeights.clear();
 		}
 		if (map.champions > 0) {
-			plog::Info("map monsters: '%s': Champions %d%% is not applied (the game has no field for it)", map.name.c_str(), map.champions);
+			plog::Debug("map monsters: '%s': Champions %d%% is not applied (the game has no field for it)", map.name.c_str(), map.champions);
 		}
 
 		// --- The row: Level. The row's original values are a copy of the row with the plugin's earlier writes taken out.
@@ -377,7 +377,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 		} else {
 			// A record from an earlier game (the game's memory was reused) no longer holds what the ledger wrote: forget that ledger.
 			if (g_rec.ledger.Has(level) && (BaseOf(g_rec, level) != record || !g_rec.ledger.AllHold(level, record))) {
-				plog::Info("map monsters: level %d: the region record is not the one written before; its old ledger is dropped", level);
+				plog::Debug("map monsters: level %d: the region record is not the one written before; its old ledger is dropped", level);
 				g_rec.ledger.ForgetLevel(level);
 				DropTarget(g_rec, level);
 			}
@@ -411,17 +411,17 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 						for (const int w : request.monsterWeights) {
 							sum += w;
 						}
-						plog::Info("map monsters: '%s': extra_groups: %d extra group(s) asked, the map now has %zu group(s), weight sum %d (rows %s)", map.name.c_str(), lr::ExtraGroupsAsked(extras),
+						plog::Debug("map monsters: '%s': extra_groups: %d extra group(s) asked, the map now has %zu group(s), weight sum %d (rows %s)", map.name.c_str(), lr::ExtraGroupsAsked(extras),
 						           request.monsterRows.size(), sum, ListText(request.monsterRows).c_str());
 					}
 				}
 			}
 			recPrep = lr::Prepare(g_rec.ledger, level, record, lr::PlanRecord(request, recSnap, recOn));
 			if (recOn.density && map.density > 0 && recSnap.density == 0) {
-				plog::Info("map monsters: '%s': Density %d%% adds nothing, the slot level's MonDen is 0 in this difficulty", map.name.c_str(), map.density);
+				plog::Debug("map monsters: '%s': Density %d%% adds nothing, the slot level's MonDen is 0 in this difficulty", map.name.c_str(), map.density);
 			}
 			if (recOn.uniques && map.uniques > 0 && recSnap.uMax == 0) {
-				plog::Info("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMax is 0 in this difficulty", map.name.c_str(), map.uniques);
+				plog::Debug("map monsters: '%s': Uniques %d%% adds nothing, the slot level's MonUMax is 0 in this difficulty", map.name.c_str(), map.uniques);
 			}
 		}
 
@@ -433,7 +433,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 				g_paces[level] = Pace{true, level, game, record, total, static_cast<uint8_t>(recSnap.uMin), static_cast<uint8_t>(total)};
 				g_paceFillers[level] = 0;
 				g_paceArmed.store(true);
-				plog::Info("map monsters: level %d: unique packs are paced over the whole map, %d in all (MonUMin 0, MonUMax follows the share of rooms done)", level, total);
+				plog::Debug("map monsters: level %d: unique packs are paced over the whole map, %d in all (MonUMin 0, MonUMax follows the share of rooms done)", level, total);
 			}
 		}
 
@@ -441,19 +441,19 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 		const size_t recCount = recPrep.ops.size() + recPrep.reverts.size();
 		if (rowCount == 0 && recCount == 0) {
 			Note("'" + map.name + "' changed nothing: the game already holds what it asks for");
-			plog::Info("map monsters: '%s': level %d already holds the map's values", map.name.c_str(), level);
+			plog::Debug("map monsters: '%s': level %d already holds the map's values", map.name.c_str(), level);
 			return false;
 		}
-		plog::Info("map monsters: level %d (row %p, record %p): '%s' sets %zu row and %zu record field(s) (Level %d, %zu listed monster(s)%s, Density %d%%, Uniques %d%%); %zu earlier field(s) go back to the original",
+		plog::Debug("map monsters: level %d (row %p, record %p): '%s' sets %zu row and %zu record field(s) (Level %d, %zu listed monster(s)%s, Density %d%%, Uniques %d%%); %zu earlier field(s) go back to the original",
 		           level, static_cast<const void*>(row), static_cast<const void*>(record), map.name.c_str(), rowPrep.ops.size(), recPrep.ops.size(),
 		           lr::ClampLevel(map.level), monsterRows.size(), monsterRows.empty() ? "" : (" rows " + ListText(monsterRows)).c_str(), map.density, map.uniques,
 		           rowPrep.reverts.size() + recPrep.reverts.size());
 		for (const lr::Op& op : rowPrep.ops) {
-			plog::Info("map monsters:   row 0x%02x: %u -> %u", op.field.offset, op.previous, op.field.value);
+			plog::Debug("map monsters:   row 0x%02x: %u -> %u", op.field.offset, op.previous, op.field.value);
 		}
 		for (const lr::Op& op : recPrep.ops) {
 			if (op.field.offset >= lr::RecDensityOffset || op.field.offset < lr::RecGroupsOffset) {
-				plog::Info("map monsters:   record 0x%03x: %u -> %u", op.field.offset, op.previous, op.field.value);
+				plog::Debug("map monsters:   record 0x%03x: %u -> %u", op.field.offset, op.previous, op.field.value);
 			}
 		}
 
@@ -503,7 +503,7 @@ void LevelRowOpenFailed(int level) noexcept {
 			}
 		}
 		if (undone) {
-			plog::Info("map monsters: the portal did not open; level %d is as before", level);
+			plog::Debug("map monsters: the portal did not open; level %d is as before", level);
 		}
 	} catch (...) {
 		plog::Error("map monsters: undoing the level row failed");

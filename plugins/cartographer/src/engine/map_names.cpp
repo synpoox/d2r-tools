@@ -132,7 +132,7 @@ void ApplyOnce() noexcept {
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_handle = handle;
 		g_plan.Applied(registeredNames);
-		plog::Info("map names: registered %zu map name(s) as strings", g_plan.Held().size());
+		plog::Debug("map names: registered %zu map name(s) as strings", g_plan.Held().size());
 	} catch (...) {
 		plog::Warn("map names: building the strings file failed; maps keep the slot level's name");
 	}
@@ -216,7 +216,7 @@ void RestoreLevelLocked(int level) noexcept {
 		if (!any) {
 			plog::Warn("map names: level %d row no longer holds the plugin's keys (moved or changed); left as it is", level);
 		} else if (ok) {
-			plog::Info("map names: level %d text put back", level);
+			plog::Debug("map names: level %d text put back", level);
 		} else {
 			// The saved original is dropped (Take) so the plugin's own key is never remembered as the original next game.
 			g_saver.MarkStuck();
@@ -414,7 +414,7 @@ auto MapNamesBeforeOpen(const MapDef& map, const Tables& tables, int level, uint
 			}
 		}
 		g_saver.SetKeys(level, newName, newEntry);
-		plog::Info("map names: level %d row %p: writing '%s' and '%s'", level, static_cast<const void*>(row), nameKey.c_str(), entryKey.c_str());
+		plog::Debug("map names: level %d row %p: writing '%s' and '%s'", level, static_cast<const void*>(row), nameKey.c_str(), entryKey.c_str());
 		if (!WriteGame(nameField, newName, mn::FieldSize) || !WriteGame(entryField, newEntry, mn::FieldSize)) {
 			plog::Warn("map names: writing the row failed; putting the previous text back");
 			UndoLastLocked();

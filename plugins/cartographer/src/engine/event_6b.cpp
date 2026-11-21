@@ -266,7 +266,7 @@ auto OpenDropContext(Game* game, Unit* victim) noexcept -> bool {
 	const bool eligible = alignment == 0 && (flags & MonsterMinionBit) == 0;
 	static std::atomic<uint32_t> s_killLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
 	if (plog::Sample(s_killLogged)) {
-		plog::Info("map behaviours: kill of unit %u on level %d: alignment %d, monster flags 0x%02x: %s", At<uint32_t>(victim, UnitIdOffset), level, alignment, flags, eligible ? "behaviours apply" : "not hostile or a minion, skipped");
+		plog::Debug("map behaviours: kill of unit %u on level %d: alignment %d, monster flags 0x%02x: %s", At<uint32_t>(victim, UnitIdOffset), level, alignment, flags, eligible ? "behaviours apply" : "not hostile or a minion, skipped");
 	}
 	if (!eligible) {
 		return false;
@@ -314,7 +314,7 @@ void RollDropTcs(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
 		}
 		static std::atomic<uint32_t> s_dropTcLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
 		if (plog::Sample(s_dropTcLogged)) {
-			plog::Info("map behaviours: drop_tc '%s' (treasure class %d, %d%%) hit: rolling it for unit %u", name.c_str(), tc, c.b.dropTcs[i].second, At<uint32_t>(victim, UnitIdOffset));
+			plog::Debug("map behaviours: drop_tc '%s' (treasure class %d, %d%%) hit: rolling it for unit %u", name.c_str(), tc, c.b.dropTcs[i].second, At<uint32_t>(victim, UnitIdOffset));
 		}
 		Call<DropRollerFn>(DropRoller)(game, victim, killer, static_cast<uint16_t>(tc), 0, levelValue, arg3, 0, 0, 0);
 	}
@@ -332,7 +332,7 @@ void DropRollerHook(Game* game, Unit* victim, void* killer, uint16_t tcIndex, in
 	const int picks = beh::extraDrops(c.b.dropBonusPct, c.rng);
 	static std::atomic<uint32_t> s_dropBonusLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
 	if (plog::Sample(s_dropBonusLogged)) {
-		plog::Info("map behaviours: drop_bonus %d%%: %d extra pick(s) of the monster's own treasure class %u", c.b.dropBonusPct, picks, static_cast<unsigned>(tcIndex));
+		plog::Debug("map behaviours: drop_bonus %d%%: %d extra pick(s) of the monster's own treasure class %u", c.b.dropBonusPct, picks, static_cast<unsigned>(tcIndex));
 	}
 	c.extra = true;
 	for (int i = 0; i < picks; ++i) {
@@ -364,7 +364,7 @@ auto ItemMakeHook(Game* game, void* request, int32_t a3) noexcept -> uint64_t {
 	}
 	static std::atomic<uint32_t> s_itemLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
 	if (plog::Sample(s_itemLogged)) {
-		plog::Info("map behaviours: item %p dropped: ethereal rolled %s, socket roll %s%s, sockets now %d", static_cast<void*>(unit), ethereal ? "yes" : "no", socketRoll ? "hit" : "miss", socketRoll && !socketable ? " (not socketable)" : "", sockets);
+		plog::Debug("map behaviours: item %p dropped: ethereal rolled %s, socket roll %s%s, sockets now %d", static_cast<void*>(unit), ethereal ? "yes" : "no", socketRoll ? "hit" : "miss", socketRoll && !socketable ? " (not socketable)" : "", sockets);
 	}
 	MapDropNotify(unit, c.level, c.b);
 	return item;
@@ -401,16 +401,16 @@ void OnDeath(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
 		}
 	}
 	if (in.tracked) {
-		plog::Info("eventprobe: boss drop: the tracked boss (unit %p, id %u, type %d) died: %s", static_cast<void*>(victim), id, type, e6::dropReasonName(decision.reason));
+		plog::Debug("eventprobe: boss drop: the tracked boss (unit %p, id %u, type %d) died: %s", static_cast<void*>(victim), id, type, e6::dropReasonName(decision.reason));
 	}
 	if (decision.action != e6::DropAction::Roll) {
 		return;
 	}
 	void* killer = At<void*>(info, DeathInfoKillerOffset);
 	const int32_t levelValue = Call<DropLevelFn>(DropLevel)(victim, level);
-	plog::Info("eventprobe: boss drop: rolling '%s' (treasure class %d) for unit id %u after the game's own drop: killer %p, level value %d, arg3 %d", name.c_str(), tc, id, killer, levelValue, arg3);
+	plog::Debug("eventprobe: boss drop: rolling '%s' (treasure class %d) for unit id %u after the game's own drop: killer %p, level value %d, arg3 %d", name.c_str(), tc, id, killer, levelValue, arg3);
 	Call<DropRollerFn>(DropRoller)(game, victim, killer, static_cast<uint16_t>(tc), 0, levelValue, arg3, 0, 0, 0);
-	plog::Info("eventprobe: boss drop: the roll returned");
+	plog::Debug("eventprobe: boss drop: the roll returned");
 }
 
 auto DeathDropHook(Game* game, Unit* victim, int32_t arg3, void* info) noexcept -> uint64_t {
@@ -458,7 +458,7 @@ void UnlockPlacedChest(Unit* unit) noexcept {
 	const auto get = Call<ObjectFlagsGetFn>(ObjectFlagsGet);
 	const e6::ChestUnlock unlock = e6::unlockChest(static_cast<uint8_t>(get(unit)));
 	if (!unlock.change) {
-		plog::Info("eventprobe: treasure chest: unit %p was not locked", static_cast<void*>(unit));
+		plog::Debug("eventprobe: treasure chest: unit %p was not locked", static_cast<void*>(unit));
 		return;
 	}
 	Call<ObjectFlagsSetFn>(ObjectFlagsSet)(unit, unlock.value);
@@ -472,7 +472,7 @@ void UnlockPlacedChest(Unit* unit) noexcept {
 		plog::Warn("treasure chest: unlock did not take (flag byte 0x%02x, wrote 0x%02x): the chest may need a key; the chest unlock is off", after, unlock.value);
 		return;
 	}
-	plog::Info("eventprobe: treasure chest: unit %p unlocked (flag byte 0x%02x -> 0x%02x)", static_cast<void*>(unit), static_cast<unsigned>(unlock.value | 0x80), after);
+	plog::Debug("eventprobe: treasure chest: unit %p unlocked (flag byte 0x%02x -> 0x%02x)", static_cast<void*>(unit), static_cast<unsigned>(unlock.value | 0x80), after);
 }
 
 // Rolls the chest's Drop with the roller 0x5930b0 uses for a chest, once, when the operate call changed the chest's mode.
@@ -501,7 +501,7 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 			name = tracked->chestDropName;
 		}
 	}
-	plog::Info("eventprobe: treasure chest: the operate call on the tracked chest (unit %p, activator %p) returned %d, mode %d -> %d: %s", static_cast<void*>(object), static_cast<void*>(activator), result, modeBefore, modeAfter,
+	plog::Debug("eventprobe: treasure chest: the operate call on the tracked chest (unit %p, activator %p) returned %d, mode %d -> %d: %s", static_cast<void*>(object), static_cast<void*>(activator), result, modeBefore, modeAfter,
 	           e6::chestReasonName(reason));
 	if (reason != e6::ChestReason::Rolled) {
 		return;
@@ -518,7 +518,7 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 	// For an object 0x43e8a0 ignores the level id and uses the area level of the object's own room (0x43e8dd..0x43e917); `level` only matters for a monster.
 	const int32_t levelValue = Call<DropLevelFn>(DropLevel)(object, level);
 	const void* compiled = Call<TcLookupFn>(TcLookup)(dataFlag, static_cast<uint16_t>(tc), levelValue);
-	plog::Info("eventprobe: treasure chest: Drop '%s' (treasure class %d): data flag %u, level value %d, compiled class %p", name.c_str(), tc, dataFlag, levelValue, compiled);
+	plog::Debug("eventprobe: treasure chest: Drop '%s' (treasure class %d): data flag %u, level value %d, compiled class %p", name.c_str(), tc, dataFlag, levelValue, compiled);
 	if (compiled == nullptr) {
 		plog::Warn("treasure chest: Drop '%s' not rolled: the game has no compiled treasure class %d for level value %d", name.c_str(), tc, levelValue);
 		return;
@@ -526,7 +526,7 @@ void OnChestUsed(Game* game, Unit* activator, Unit* object, int32_t modeBefore, 
 	alignas(16) uint8_t out[ChestOutSize] = {};
 	int32_t extra = 0;
 	const uint64_t rolled = Call<TcRollerFn>(TcRoller)(game, object, activator, compiled, ChestSelector, ChestRollTier, 0, out, &extra, ChestMaxItems);
-	plog::Info("eventprobe: treasure chest: the roll returned %llu (tier %d, forced quality %d, at most %d items)", static_cast<unsigned long long>(rolled), ChestRollTier, ChestSelector, ChestMaxItems);
+	plog::Debug("eventprobe: treasure chest: the roll returned %llu (tier %d, forced quality %d, at most %d items)", static_cast<unsigned long long>(rolled), ChestRollTier, ChestSelector, ChestMaxItems);
 }
 
 auto OperateHook(OperateContext* ctx) noexcept -> int32_t {
@@ -577,7 +577,7 @@ void __cdecl OnMonsterDeath(const D2RL::PluginContext*, const D2RL::Lifecycle::M
 			if (s.waves.onDeath(id)) {
 				if (s.deathProbes < MaxUntrackedDeathProbes) {
 					++s.deathProbes;
-					plog::Info("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, s.waves.wavesStarted(), s.waves.remaining());
+					plog::Debug("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, s.waves.wavesStarted(), s.waves.remaining());
 				}
 				return;
 			}
@@ -586,7 +586,7 @@ void __cdecl OnMonsterDeath(const D2RL::PluginContext*, const D2RL::Lifecycle::M
 			State& s = entry.second;
 			if (s.waves.phase() == e6::WaveTracker::Phase::Fighting && s.untrackedProbes < MaxUntrackedDeathProbes) {
 				++s.untrackedProbes;
-				plog::Info("eventprobe: ambush: a death during wave %d was not one of its units (unit id %u, class %u)", s.waves.wavesStarted(), id, event->monster.classId);
+				plog::Debug("eventprobe: ambush: a death during wave %d was not one of its units (unit id %u, class %u)", s.waves.wavesStarted(), id, event->monster.classId);
 				return;
 			}
 		}
@@ -608,7 +608,7 @@ auto ResolveDropClass(const ev::Event& event, void* player, const char* tag, int
 	const int32_t found = Call<NameToRowFn>(NameToRow)(map, event.drop.c_str(), 0);
 	std::string tcWhy;
 	const int tc = e6::tcIndexFromLookup(found, tcCount, &tcWhy);
-	plog::Info("eventprobe: %s: Drop '%s': name map %p, the game has %llu treasure classes, lookup gave %d%s%s", tag, event.drop.c_str(), map, static_cast<unsigned long long>(tcCount), found, tc < 0 ? ", refused: " : "",
+	plog::Debug("eventprobe: %s: Drop '%s': name map %p, the game has %llu treasure classes, lookup gave %d%s%s", tag, event.drop.c_str(), map, static_cast<unsigned long long>(tcCount), found, tc < 0 ? ", refused: " : "",
 	           tc < 0 ? tcWhy.c_str() : "");
 	if (tc < 0) {
 		plog::Warn("Drop '%s' of event '%s' is not applied: %s", event.drop.c_str(), event.name.c_str(), tcWhy.c_str());
@@ -785,7 +785,7 @@ auto Event6bPrepareShrine(const ev::Event& event, const std::vector<std::string>
 	const uint64_t gameRows = At<uint32_t>(dt, DtObjectCountOffset);
 	const e6::ObjectLookup lookup = e6::resolveObject(objectClasses, objectNames, event.spawn, gameRows);
 	const std::string text = e6::describeObjectLookup(lookup, event.spawn, objectNames.size(), gameRows);
-	plog::Info("eventprobe: shrine: Spawn '%s': %s (objects.txt: %zu lines, game: %llu rows)", event.spawn.c_str(), text.c_str(), objectNames.size(), static_cast<unsigned long long>(gameRows));
+	plog::Debug("eventprobe: shrine: Spawn '%s': %s (objects.txt: %zu lines, game: %llu rows)", event.spawn.c_str(), text.c_str(), objectNames.size(), static_cast<unsigned long long>(gameRows));
 	if (lookup.result != e6::ObjectResult::Found) {
 		*why = text;
 		return false;
@@ -875,7 +875,7 @@ void Event6bBossSpawned(int level, void* unit) noexcept {
 		s.bossTracked = type == UnitTypeMonster;
 		s.bossId = id;
 		s.dropped = false;
-		plog::Info("eventprobe: boss drop: tracking unit %p (type %d, id %u)%s", unit, type, id, s.bossTracked ? "" : "; not a monster, so no extra drop");
+		plog::Debug("eventprobe: boss drop: tracking unit %p (type %d, id %u)%s", unit, type, id, s.bossTracked ? "" : "; not a monster, so no extra drop");
 	} catch (...) {
 		plog::Error("boss drop: tracking the boss failed");
 	}
@@ -907,7 +907,7 @@ void Event6bArmAmbush(int level, const ev::Event& event, const std::vector<ep::S
 		s.untrackedProbes = 0;
 		s.deathProbes = 0;
 		RecomputeFlagsLocked();
-		plog::Info("eventprobe: ambush '%s': armed %d wave(s) of %zu in room %p; the first comes when a player is in that room%s (time-out %llu ms, gap %llu ms)", event.name.c_str(), waves, spawns.size(), room,
+		plog::Debug("eventprobe: ambush '%s': armed %d wave(s) of %zu in room %p; the first comes when a player is in that room%s (time-out %llu ms, gap %llu ms)", event.name.c_str(), waves, spawns.size(), room,
 		           g_deathListener ? "" : " (no death listener: this is the only wave)", static_cast<unsigned long long>(e6::kWaveTimeoutMs), static_cast<unsigned long long>(e6::kWaveGapMs));
 	} catch (...) {
 		plog::Error("ambush: arming failed");
@@ -943,7 +943,7 @@ bool Event6bAmbushTick(void* game, int playerLevel, void* playerRoom, AmbushRect
 				const auto before = s.waves.phase();
 				const e6::WaveTracker::Step step = s.waves.step(inRoom, now);
 				if (before == e6::WaveTracker::Phase::Fighting && s.waves.phase() != e6::WaveTracker::Phase::Fighting) {
-					plog::Info("eventprobe: ambush '%s': wave %d of %d ended: %s", s.ambushName.c_str(), s.waves.wavesStarted(), s.waves.wavesTotal(), e6::waveEndName(s.waves.lastEnd()));
+					plog::Debug("eventprobe: ambush '%s': wave %d of %d ended: %s", s.ambushName.c_str(), s.waves.wavesStarted(), s.waves.wavesTotal(), e6::waveEndName(s.waves.lastEnd()));
 				}
 				if (step == e6::WaveTracker::Step::Finished) {
 					plog::Info("ambush '%s': finished after %d wave(s)", s.ambushName.c_str(), s.waves.wavesStarted());
@@ -973,7 +973,7 @@ bool Event6bAmbushTick(void* game, int playerLevel, void* playerRoom, AmbushRect
 			}
 			State& s = it->second;
 			s.waves.waveSpawned(ids, GetTickCount64());
-			plog::Info("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in the event room %p (game %p)", s.ambushName.c_str(), wave.number, s.waves.wavesTotal(), ids.size(), wave.spawns.size(), playerRoom, game);
+			plog::Debug("eventprobe: ambush '%s': wave %d of %d: the game made %zu of %zu units in the event room %p (game %p)", s.ambushName.c_str(), wave.number, s.waves.wavesTotal(), ids.size(), wave.spawns.size(), playerRoom, game);
 			if (!s.waves.active()) {
 				plog::Warn("ambush '%s' abandoned: %s", s.ambushName.c_str(), e6::waveEndName(s.waves.lastEnd()));
 				s.ambushActive = false;
@@ -1042,7 +1042,7 @@ bool Event6bPlaceShrine(void* rawGame, int level, void* room, const ep::Rect& se
 			++tried;
 			Call<FreeSpotFn>(FreeSpot)(room, xy, attempt.radius, FreeSpotMask, &landed);
 			const bool inside = landed == room && e6::spotInBox(box, xy[0], xy[1]);
-			plog::Info("eventprobe: shrine: objects row %d, free spot try %d: near (%d,%d) radius %d (mask 0x%x) gave %s (%d,%d) room %p (%s the event room)", row, tried, attempt.x, attempt.y, attempt.radius, FreeSpotMask, landed == nullptr ? "nothing" : "a spot", xy[0], xy[1], landed, inside ? "in" : "NOT in");
+			plog::Debug("eventprobe: shrine: objects row %d, free spot try %d: near (%d,%d) radius %d (mask 0x%x) gave %s (%d,%d) room %p (%s the event room)", row, tried, attempt.x, attempt.y, attempt.radius, FreeSpotMask, landed == nullptr ? "nothing" : "a spot", xy[0], xy[1], landed, inside ? "in" : "NOT in");
 			if (inside) {
 				found = true;
 				break;
@@ -1058,7 +1058,7 @@ bool Event6bPlaceShrine(void* rawGame, int level, void* room, const ep::Rect& se
 			plog::Warn("shrine not placed: the game refused to create objects row %d at (%d,%d)", row, xy[0], xy[1]);
 			return false;
 		}
-		plog::Info("eventprobe: shrine: created objects row %d: unit %p (type %d, id %u) at (%d,%d)", row, unit, At<int32_t>(unit, UnitTypeOffset), At<uint32_t>(unit, UnitIdOffset), xy[0], xy[1]);
+		plog::Debug("eventprobe: shrine: created objects row %d: unit %p (type %d, id %u) at (%d,%d)", row, unit, At<int32_t>(unit, UnitTypeOffset), At<uint32_t>(unit, UnitIdOffset), xy[0], xy[1]);
 		std::lock_guard<std::mutex> lock(g_lock);
 		const auto it = g_states.find(level);
 		if (it != g_states.end() && it->second.objectIsChest) {  // a Treasure chest: remember it for the Drop roll when it is opened
@@ -1069,7 +1069,7 @@ bool Event6bPlaceShrine(void* rawGame, int level, void* room, const ep::Rect& se
 			if (s.chestTracked) {
 				UnlockPlacedChest(static_cast<Unit*>(unit));
 			}
-			plog::Info("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, s.chestId, At<int32_t>(unit, UnitModeOffset), s.chestArmed ? "" : "; no armed Drop");
+			plog::Debug("eventprobe: treasure chest: tracking unit %p (id %u, mode %d)%s", unit, s.chestId, At<int32_t>(unit, UnitModeOffset), s.chestArmed ? "" : "; no armed Drop");
 		}
 		return true;
 	} catch (...) {

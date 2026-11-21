@@ -339,14 +339,14 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		return;
 	}
 	++g_monsterCount;
-	if (probe) {
+	if (probe && plog::DebugOn()) {
 		bool found = false;
 		const int chain = Chain(monster, list, &found);
-		plog::Info("statprobe: monster #%d id %u class %d level %d: stat %d (level) was %d at the hook, maxhp %d -> %d, totals [%s] -> [%s], list on chain: %s (%d lists)",
+		plog::Debug("statprobe: monster #%d id %u class %d level %d: stat %d (level) was %d at the hook, maxhp %d -> %d, totals [%s] -> [%s], list on chain: %s (%d lists)",
 		           number + 1, At<uint32_t>(monster, UnitIdOffset), At<int32_t>(params, 0x18), levelId, StatLevel, levelBefore, lifeBefore,
 		           Stat(monster, StatMaxLife), before.c_str(), Totals(monster, entries).c_str(), found ? "yes" : "NO", chain);
 		if (physAny) {
-			plog::Info("statprobe: monster #%d phys_as: physical damage 21/22 = %d/%d at the hook, now %d/%d; fire 48/49 = %d/%d, ltng 50/51 = %d/%d, mag 52/53 = %d/%d, cold 54/55 = %d/%d, pois 57/58 = %d/%d",
+			plog::Debug("statprobe: monster #%d phys_as: physical damage 21/22 = %d/%d at the hook, now %d/%d; fire 48/49 = %d/%d, ltng 50/51 = %d/%d, mag 52/53 = %d/%d, cold 54/55 = %d/%d, pois 57/58 = %d/%d",
 			           number + 1, minDamage, maxDamage, Stat(monster, StatMinDamage), Stat(monster, StatMaxDamage), Stat(monster, 48), Stat(monster, 49), Stat(monster, 50), Stat(monster, 51),
 			           Stat(monster, 52), Stat(monster, 53), Stat(monster, 54), Stat(monster, 55), Stat(monster, 57), Stat(monster, 58));
 		}
@@ -405,7 +405,7 @@ auto AddLifesteal(Unit* attacker, uint8_t* block, int32_t* lifeBefore) noexcept 
 	const bool probe = g_leechProbes.fetch_add(1) < MonsterProbes;
 	if (probe) {
 		*lifeBefore = Stat(attacker, StatLife);
-		plog::Info("statprobe: lifesteal_pct %d on a hit by monster %u in level %d: dealt %d (1/256 life), leech in the block %d -> %d", pct,
+		plog::Debug("statprobe: lifesteal_pct %d on a hit by monster %u in level %d: dealt %d (1/256 life), leech in the block %d -> %d", pct,
 		           At<uint32_t>(attacker, UnitIdOffset), levelId, dealt, before, after);
 	}
 	return probe;
@@ -426,7 +426,7 @@ auto LeechStepHook(void* game, Unit* attacker, Unit* target, uint8_t* block) noe
 	}
 	const uint64_t result = g_leechOriginal(game, attacker, target, block);
 	if (probe) {
-		plog::Info("statprobe: lifesteal_pct: the attacker's life (stat 6, 1/256) was %d before the leech step and is %d after it (max %d)", lifeBefore, Stat(attacker, StatLife),
+		plog::Debug("statprobe: lifesteal_pct: the attacker's life (stat 6, 1/256) was %d before the leech step and is %d after it (max %d)", lifeBefore, Stat(attacker, StatLife),
 		           Stat(attacker, StatMaxLife));
 	}
 	return result;
@@ -488,7 +488,7 @@ auto ChoosePlayerState(uint32_t dataFlag, std::string* why) noexcept -> int {
 				std::snprintf(b, sizeof(b), "%02x", static_cast<const uint8_t*>(states.rows)[static_cast<size_t>(pick.state) * sp::kStateRowSize + i]);
 				rowHex += b;
 			}
-			plog::Info("statprobe: state %d carries the player's list (every column of its row is empty): bank %u, %u states, %u skills; row bytes %s", pick.state, bank,
+			plog::Debug("statprobe: state %d carries the player's list (every column of its row is empty): bank %u, %u states, %u skills; row bytes %s", pick.state, bank,
 			           states.rowCount, skills.rowCount, rowHex.c_str());
 			return pick.state;
 		}
@@ -578,7 +578,7 @@ void RemoveFromPlayer(Unit* unit, uint32_t id) noexcept {
 		plog::Error("map stats: the player's list is still on the unit after it was removed (chain %d -> %d lists)", before, after);
 	}
 	forget();
-	plog::Info("statprobe: player %u left the map: list removed (chain %d -> %d lists)", id, before, after);
+	plog::Debug("statprobe: player %u left the map: list removed (chain %d -> %d lists)", id, before, after);
 }
 
 void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, int level, uint64_t generation) noexcept {
@@ -642,7 +642,7 @@ void ApplyToPlayer(Unit* unit, uint32_t id, const sp::Plan& plan, int level, uin
 	++g_playerCount;
 	bool onChain = false;
 	const int chainAfter = Chain(unit, list, &onChain);
-	plog::Info("statprobe: player %u entered the map: totals [%s] -> [%s], list on chain: %s (%d -> %d lists), list flags 0x%x state %u (state given %d)", id, before.c_str(),
+	plog::Debug("statprobe: player %u entered the map: totals [%s] -> [%s], list on chain: %s (%d -> %d lists), list flags 0x%x state %u (state given %d)", id, before.c_str(),
 	           Totals(unit, plan.players).c_str(), onChain ? "yes" : "NO", chainBefore, chainAfter, listFlags, listState, state);
 }
 
@@ -723,7 +723,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	if (!g_monstersOn) {
 		plog::Warn("monster map stats are off (see the parts above)");
 	}
-	plog::Info("map stats: %s", SummaryNow().c_str());
+	plog::Debug("map stats: %s", SummaryNow().c_str());
 	if (parts != nullptr) {
 		*parts = StatApplyPartStatuses();
 	}
@@ -771,7 +771,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	const std::vector<cartographer::statplan::Property>& drawn = mapped.properties;
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
-	plog::Info("map stats for '%s' (open %u, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), openings, slot,
+	plog::Debug("map stats for '%s' (open %u, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), openings, slot,
 	           itemStats.size(), sp::describe(*plan).c_str());
 	for (const sp::Skipped& s : plan->skipped) {
 		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::statplan::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());
@@ -819,7 +819,7 @@ void StatApplyPlayerTick(void* game, void* rawUnit) noexcept {
 			const int lists = Chain(unit, nullptr, &found);
 			const uint8_t* owner = At<const uint8_t*>(unit, UnitOwnerListOffset);
 			const bool ok = Readable(owner, 0xa0);
-			plog::Info("statprobe: first player unit %u of this game holds %d stat lists (owner list %p, heads +0x%x = %p, +0x%x = %p)", At<uint32_t>(unit, UnitIdOffset), lists,
+			plog::Debug("statprobe: first player unit %u of this game holds %d stat lists (owner list %p, heads +0x%x = %p, +0x%x = %p)", At<uint32_t>(unit, UnitIdOffset), lists,
 			           static_cast<const void*>(owner), ListHeadOffset, ok ? At<const void*>(owner, ListHeadOffset) : nullptr, ListHeadAltOffset,
 			           ok ? At<const void*>(owner, ListHeadAltOffset) : nullptr);
 		}
@@ -875,7 +875,7 @@ void StatApplyGameLeft() noexcept {
 		g_lists.clear();  // the game frees the units and their lists; nothing is touched here
 		UpdateBusy();
 		if (had) {
-			plog::Info("statprobe: left the game: %d monster(s) and %d player(s) were given the map's stats", monsters, players);
+			plog::Debug("statprobe: left the game: %d monster(s) and %d player(s) were given the map's stats", monsters, players);
 		}
 	}
 	g_monsterCount = 0;
