@@ -619,7 +619,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 		Tell(problem);  // the check passed, so a slot or the steering went away in between
 		return;
 	}
-	plog::Info("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
+	plog::Debug("opening '%s' (%s) through level %d", map->name.c_str(), map->tileset.c_str(), level);
 	// The item's own stats, read now, before the game uses the item up: the map level and the map's properties (its rare or unique modifiers).
 	std::vector<cartographer::statplan::ItemStat> itemStats;
 	try {
@@ -708,7 +708,7 @@ auto OpenNamedMap(Game* game, Unit* player, const std::shared_ptr<const Tables>&
 		out.why = RefusalText(gate, *map, state);
 		return out;
 	}
-	plog::Info("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
+	plog::Debug("opening '%s' (%s) through level %d %s", map->name.c_str(), map->tileset.c_str(), level, via);
 	std::string refusal;
 	MapDef opening = *map;
 	{

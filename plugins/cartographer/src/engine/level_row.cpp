@@ -444,7 +444,7 @@ auto LevelRowBeforeOpen(const MapDef& map, int level, int slotLevel, const void*
 			plog::Debug("map monsters: '%s': level %d already holds the map's values", map.name.c_str(), level);
 			return false;
 		}
-		plog::Info("map monsters: level %d (row %p, record %p): '%s' sets %zu row and %zu record field(s) (Level %d, %zu listed monster(s)%s, Density %d%%, Uniques %d%%); %zu earlier field(s) go back to the original",
+		plog::Debug("map monsters: level %d (row %p, record %p): '%s' sets %zu row and %zu record field(s) (Level %d, %zu listed monster(s)%s, Density %d%%, Uniques %d%%); %zu earlier field(s) go back to the original",
 		           level, static_cast<const void*>(row), static_cast<const void*>(record), map.name.c_str(), rowPrep.ops.size(), recPrep.ops.size(),
 		           lr::ClampLevel(map.level), monsterRows.size(), monsterRows.empty() ? "" : (" rows " + ListText(monsterRows)).c_str(), map.density, map.uniques,
 		           rowPrep.reverts.size() + recPrep.reverts.size());

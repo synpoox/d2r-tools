@@ -349,7 +349,7 @@ auto RouteFor(uint32_t dataFlag) noexcept -> ep::RouteVerdict {
 	bool transient = false;
 	ep::RouteVerdict verdict = EvaluateRoute(dataFlag, &transient);
 	const std::string bank = verdict.monsters ? std::string(" (SDK bank ") + BankName(verdict.bank) + ")" : std::string();
-	plog::Info("spawn names: data flag %u, table revision %llu: monstats from the game's table %s%s, superuniques by the game's name map %s%s%s", dataFlag,
+	plog::Debug("spawn names: data flag %u, table revision %llu: monstats from the game's table %s%s, superuniques by the game's name map %s%s%s", dataFlag,
 	           static_cast<unsigned long long>(key.revision), verdict.monsters ? "on" : "OFF", bank.c_str(), verdict.supers ? "on" : "OFF",
 	           verdict.why.empty() ? "" : "; ", verdict.why.c_str());
 	if (!transient && key.revision != 0) {
@@ -375,7 +375,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 	if (const int row = ep::findMonsterRow(static_cast<const uint8_t*>(mon.viewRows), mon.viewCount, mon.viewRowSize, spawn); row >= 0) {
 		out->kind = ev::NameKind::Monster;
 		out->row = out->classRow = row;
-		plog::Info("spawn '%s': monstats row %d from the game's table", spawn.c_str(), row);
+		plog::Debug("spawn '%s': monstats row %d from the game's table", spawn.c_str(), row);
 		return true;
 	}
 	if (!route.supers) {
@@ -415,7 +415,7 @@ auto ResolveFromGameTables(const ep::RouteVerdict& route, uint32_t dataFlag, con
 	out->kind = ev::NameKind::Unique;
 	out->row = row;
 	out->classRow = static_cast<int>(cls);
-	plog::Info("spawn '%s': superuniques row %d from the game's table, class monstats row %d", spawn.c_str(), row, out->classRow);
+	plog::Debug("spawn '%s': superuniques row %d from the game's table, class monstats row %d", spawn.c_str(), row, out->classRow);
 	return true;
 }
 
@@ -1049,7 +1049,7 @@ void ArmMapBoss(State& state, const MapDef& map, const Tables& tables, void* pla
 		state.bossTestStrand = true;
 		plog::Warn("map Boss '%s': no room is tried, stranded from map open on purpose (CARTOGRAPHER_TEST_BOSS_STRAND is set; a game check only)", map.boss.c_str());
 	}
-	plog::Info("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
+	plog::Debug("map Boss for '%s': '%s', %s", map.name.c_str(), map.boss.c_str(), path == BossPath::Superunique ? "its own superuniques row" : "a plain monster of its base id");
 }
 
 auto SummaryNow() -> std::string {
@@ -1195,9 +1195,9 @@ void EventsMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tab
 	const cartographer::layout::Point unused{0, 0};
 	std::optional<ev::Event> event = ev::decide(tables->events, chance, ep::eventSeed(state->seed), &unused);
 	if (!event) {
-		plog::Info("event for '%s' (seed %llu, chance %d%%): none", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance);
+		plog::Debug("event for '%s' (seed %llu, chance %d%%): none", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance);
 	} else {
-		plog::Info("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
+		plog::Debug("event for '%s' (seed %llu, chance %d%%): %s", map.name.c_str(), static_cast<unsigned long long>(state->seed), chance, ev::describe(*event).c_str());
 		// The game's loaded tables first (section 11); the mod's .txt files only when that route is off or cannot decide.
 		// A Shrine's Spawn is an objects row (looked up in Event6bPrepareShrine), never a monster name: skip the monster lookup for it.
 		if (event->kind != ev::Kind::Shrine) {  // a Treasure's Spawn is looked up too: a miss means a chest's objects name

@@ -66,11 +66,11 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 	}
 	if (skip) {
 		// the player stands in the slot level and another layer than the one left is current: this is the new map's own layer, first read. Skip it; the cells stay empty and are saved empty on leaving.
-		plog::Info("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
+		plog::Debug("automap: the revealed cells of an earlier map in layer %d were not read back for this new map (level %d)", key, level);
 		return 0;
 	}
 	if (logKept) {
-		plog::Info("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, slot);
+		plog::Debug("automap: read of layer %d kept (the player is in level %d, the new map is level %d)", key, level, slot);
 	}
 	return g_original(a, b, c, d);
 }

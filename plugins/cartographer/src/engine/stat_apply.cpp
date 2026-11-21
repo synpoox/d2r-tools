@@ -723,7 +723,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 	if (!g_monstersOn) {
 		plog::Warn("monster map stats are off (see the parts above)");
 	}
-	plog::Info("map stats: %s", SummaryNow().c_str());
+	plog::Debug("map stats: %s", SummaryNow().c_str());
 	if (parts != nullptr) {
 		*parts = StatApplyPartStatuses();
 	}
@@ -771,7 +771,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	const std::vector<cartographer::statplan::Property>& drawn = mapped.properties;
 	const bool playerStats = g_playersOn.load() && tables->settings.playerStats != 0;
 	auto plan = std::make_shared<sp::Plan>(sp::buildPlan(drawn, tables->statIds, playerStats));
-	plog::Info("map stats for '%s' (open %u, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), openings, slot,
+	plog::Debug("map stats for '%s' (open %u, slot level %d): %zu item stat(s) read, %s", map.name.c_str(), openings, slot,
 	           itemStats.size(), sp::describe(*plan).c_str());
 	for (const sp::Skipped& s : plan->skipped) {
 		plog::Warn("map stats: %s '%s' skipped: %s", s.target == cartographer::statplan::Target::Monsters ? "monster" : "player", s.stat.c_str(), s.why.c_str());

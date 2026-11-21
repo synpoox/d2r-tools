@@ -443,7 +443,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit, int unitY) {
 		std::lock_guard<std::mutex> lock(g_lock);
 		g_entrance = {true, mark.originX, mark.originY, Read<int32_t>(level, LvlId), mark.minX, mark.minY, unit, unitY};
 	}
-	plog::Info("maze arrival: room %d of %d (at %d,%d) marked as the level entry, in plan cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
+	plog::Debug("maze arrival: room %d of %d (at %d,%d) marked as the level entry, in plan cell (%d,%d); %d other room(s) lost the mark", mark.room, static_cast<int>(rooms.size()),
 	           rects[static_cast<size_t>(mark.room)].x, rects[static_cast<size_t>(mark.room)].y, mark.cellX, mark.cellY, static_cast<int>(mark.clear.size()));
 }
 
