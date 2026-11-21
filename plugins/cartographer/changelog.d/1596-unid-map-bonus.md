@@ -1,0 +1,1 @@
+- An unidentified map opens with +30% Item Quantity and its panel shows only Density, Experience, Magic Find and Item Quantity.

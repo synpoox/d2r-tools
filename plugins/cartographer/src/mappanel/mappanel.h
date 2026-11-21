@@ -46,6 +46,10 @@ std::string statLine(const Stat &stat);
 // there is nothing to show.
 PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0);
 
+// The stats an unidentified map's panel keeps (pd2-resurrected#1596): Experience, Better Chance of Getting Magic Items and Item Quantity.
+// Density keeps its own line; Monster Rarity is an area param, never a panel stat.
+std::vector<Stat> unidentifiedStats(const std::vector<Stat> &stats);
+
 // The most property lines panelText shows, monster and player together: kMaxMonsterLines monster-side stats plus the 16 player stats the game
 // sends (statplan kMaxPlayerStats). The route table holds far more monster stats than that (the catalogue of issue #539), so a longer list ends in one
 // "and N more" line instead of growing the panel. Density has its own line.

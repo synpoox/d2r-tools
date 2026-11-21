@@ -162,3 +162,18 @@ TEST_CASE("more stat lines than the cap are cut, monsters first, and end in an '
 	CHECK(more > 0);
 	CHECK(p.blue.substr(p.blue.rfind('\n') + 1) == "and " + std::to_string(more) + " more");
 }
+
+TEST_CASE("an unidentified map's panel keeps Experience, Magic Find and Item Quantity only")
+{
+	const std::vector<Stat> all = {{true, "item_maxhp_percent", 30}, {false, "item_addexperience", 5}, {false, "fireresist", -20},
+	                               {false, "item_magicbonus", 25}, {false, "item_quantity", 30}};
+	const std::vector<Stat> kept = unidentifiedStats(all);
+	REQUIRE(kept.size() == 3);
+	CHECK(kept[0].name == "item_addexperience");
+	CHECK(kept[1].name == "item_magicbonus");
+	CHECK(kept[2].name == "item_quantity");
+	CHECK(statLine(kept[2]) == "Item Quantity +30%");
+	const PanelText p = panelText(80, kept, 15);
+	CHECK(p.blue.find("Monster Density") != std::string::npos);
+	CHECK(p.blue.find("Life") == std::string::npos);
+}

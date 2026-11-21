@@ -30,6 +30,7 @@ const Known kKnown[] = {
 	{"item_fastergethitrate", "%+d%% Faster Hit Recovery"},
 	{"item_magicbonus", "%+d%% Better Chance of Getting Magic Items"},
 	{"item_goldbonus", "%+d%% Extra Gold from Monsters"},
+	{"item_quantity", "Item Quantity %+d%%"},
 	{"item_armor_percent", "%+d%% Enhanced Defense"},
 	{"item_maxdamage_percent", "%+d%% Enhanced Damage"},
 	{"item_lifeleech", "%+d%% Life Stolen per Hit"},
@@ -138,6 +139,15 @@ std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
 		}
 		if (!merged) out.push_back(s);
 	}
+	return out;
+}
+
+std::vector<Stat> unidentifiedStats(const std::vector<Stat> &stats)
+{
+	static const char *const kShown[] = {"item_addexperience", "item_magicbonus", "item_quantity"};
+	std::vector<Stat> out;
+	for (const Stat &s : stats)
+		if (std::find_if(std::begin(kShown), std::end(kShown), [&s](const char *n) { return s.name == n; }) != std::end(kShown)) out.push_back(s);
 	return out;
 }
 

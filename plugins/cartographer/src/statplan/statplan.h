@@ -131,6 +131,13 @@ int mapLevelToStamp(int mapsLevel, int current, bool currentKnown);
 // `stats` without the map-level stat, so it is not reported as a stat with no meaning on a map.
 std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const StatIds &ids);
 
+// An unidentified map (pd2-resurrected#1596) opens with this player stat added at kUnidentifiedBonus: the mod's Item Quantity, which its
+// own plugin turns into extra drops. Nothing is added when the mod's itemstatcost.txt has no such row.
+inline constexpr const char *kUnidentifiedStat = "item_quantity";
+constexpr int kUnidentifiedBonus = 30;
+// `stats` with the unidentified bonus added (layer 0), or unchanged when `ids` has no kUnidentifiedStat.
+std::vector<ItemStat> withUnidentifiedBonus(const std::vector<ItemStat> &stats, const StatIds &ids);
+
 // The properties.txt property that sets the map level stat (install.ps1 adds the row), and its id: the row number, as the game counts rows.
 inline constexpr const char *kMapLevelProperty = "map-level";
 // The id of the property whose `code` is `code` in properties.txt text, or -1 (no such row, or no code column): the row number, not counting

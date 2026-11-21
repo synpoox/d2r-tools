@@ -332,6 +332,14 @@ std::vector<ItemStat> withoutMapLevel(const std::vector<ItemStat> &stats, const 
 	return out;
 }
 
+std::vector<ItemStat> withUnidentifiedBonus(const std::vector<ItemStat> &stats, const StatIds &ids)
+{
+	std::vector<ItemStat> out = stats;
+	const int id = ids.find(kUnidentifiedStat);
+	if (id >= 0) out.push_back({id, 0, kUnidentifiedBonus});
+	return out;
+}
+
 int densityWithBonus(int base, int bonus)
 {
 	const int64_t total = static_cast<int64_t>(base) + bonus;

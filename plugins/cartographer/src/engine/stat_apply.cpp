@@ -734,7 +734,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 }
 
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
-                        const std::vector<cartographer::statplan::ItemStat>& itemStats, int densityBonus) {
+                        const std::vector<cartographer::statplan::ItemStat>& itemStats, int densityBonus, bool unidentified) {
 	if (tables == nullptr) {
 		MapPanelNoMap();  // no tables: no map text, and not the previous map's
 		return;
@@ -788,6 +788,9 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	}
 	for (const sp::Entry& e : plan->players) {
 		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name)), GameStatText(tables->statIds.descNegKey(e.name))});
+	}
+	if (unidentified) {
+		shown = cartographer::mappanel::unidentifiedStats(shown);
 	}
 	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus);
 	MapPanelMapOpened(panel.gold, panel.blue, slot);
