@@ -778,6 +778,7 @@ if (-not (Test-Path $prestPath)) {
         $cells = Cells $prest $prest.Lines[$row]
         $before = $cells -join "`t"
         Set-Cell $prest $cells 'Name' $ArcaneVoidName
+        Set-CellIf $prest $cells 'Populate' '0'
         Set-Cell $prest $cells 'Files' '1'
         Set-Cell $prest $cells 'File1' $ArcaneVoidFile
         foreach ($n in 2..6) { Set-CellIf $prest $cells "File$n" '0' }

@@ -6,6 +6,8 @@
 
 namespace carto {
 
-void InstallArcaneVoid(const D2RL::PluginContext* context);
+// Returns whether both files were registered. Call before the tables load: ArcaneVoidServed gates ReadArcaneVoid, so no map asks for a DS1 that is not there.
+auto InstallArcaneVoid(const D2RL::PluginContext* context) -> bool;
+auto ArcaneVoidServed() -> bool;
 
 }  // namespace carto

@@ -661,7 +661,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 			} else {
 				(void)pick(made, 1);
 				uint8_t* piece = Read<uint8_t*>(made, RoomPiece);
-				if (piece != nullptr && Readable(piece + PieceId, 8)) {
+				if (piece != nullptr && Readable(piece + PieceId, 4) && (fillPiece <= 0 || Readable(piece + PieceFile, 4))) {
 					Write<int32_t>(piece, PieceId, closedPiece);
 					if (fillPiece > 0) {
 						Write<int32_t>(piece, PieceFile, 0);
@@ -676,7 +676,7 @@ auto SteeredWalk(void* level, BuildCtx& ctx, std::string* why, bool ownGrower) -
 		if (refused != 0) {
 			plog::Warn("maze filler ring: only %d of %d rooms made, %d set to the closed piece %d; the built box no longer matches the plan, so the arrival, event and boss rooms are left to the game", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		} else {
-			plog::Info("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
+			plog::Debug("maze filler ring: %d of %d rooms made, %d set to the closed piece %d", made, static_cast<int>(plan.fills.size()), closed, static_cast<int>(closedPiece));
 		}
 	}
 	WovenGuestRooms(ctx);
