@@ -42,6 +42,10 @@ auto ItemMagicStat(void* item, int stat, bool* ok = nullptr) noexcept -> int;
 // off or no list could be made. Game thread only.
 auto SetItemMagicStat(void* item, int stat, int value) noexcept -> bool;
 
+// Whether `item` (an item unit) is identified: its item data flag 0x10. An item that cannot be read counts as identified (no bonus, full panel).
+// Game thread only.
+auto ItemIdentified(void* item) noexcept -> bool;
+
 auto ItemStatsPartStatuses() -> std::vector<PartStatus>;
 
 }  // namespace carto

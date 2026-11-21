@@ -343,6 +343,16 @@ auto ItemMagicStat(void* item, int stat, bool* ok) noexcept -> int {
 	return 0;
 }
 
+auto ItemIdentified(void* item) noexcept -> bool {
+	constexpr int ItemDataFlagsOffset = 0x18;      // uint32 item flags in the item data (build 93847; the game's SetItemFlag writes them)
+	constexpr uint32_t ItemFlagIdentified = 0x10;  // as 1.13c's IFLAG_IDENTIFIED
+	if (item == nullptr || !Readable(reinterpret_cast<uint64_t>(item))) {
+		return true;
+	}
+	const uint64_t data = At<uint64_t>(item, 0x10);
+	return !Readable(data) || (At<uint32_t>(reinterpret_cast<const void*>(data), ItemDataFlagsOffset) & ItemFlagIdentified) != 0;
+}
+
 auto SetItemMagicStat(void* rawItem, int stat, int value) noexcept -> bool {
 	if (!ItemStatsWritable() || rawItem == nullptr) {
 		return false;

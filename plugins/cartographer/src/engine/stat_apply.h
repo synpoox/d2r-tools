@@ -26,9 +26,9 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 // map item's stats and starts applying them. Game thread. Does nothing when neither half is on.
 // `itemStats` are the map item's own stats (read before it is used up, without the map level): the monster-side ones apply to the map's
 // monsters, the rest to the player. A normal map has none. `densityBonus` is the item's map-density bonus, shown on the panel
-// (the map's maps.txt Density is not).
+// (the map's maps.txt Density is not). `unidentified`: the panel shows only mappanel::unidentifiedStats (all stats still apply).
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
-                        const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0);
+                        const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0, bool unidentified = false);
 
 // What the open map's item gave its area params and behaviours (statplan MapRouting: `area("Density")`, `behaviour(key)`), for the map in
 // slot level `slotLevel` (the level the map opened through); empty when no map is open there. Any thread. Set when the map opens, whether or not

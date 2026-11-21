@@ -30,6 +30,7 @@ const Known kKnown[] = {
 	{"item_fastergethitrate", "%+d%% Faster Hit Recovery"},
 	{"item_magicbonus", "%+d%% Better Chance of Getting Magic Items"},
 	{"item_goldbonus", "%+d%% Extra Gold from Monsters"},
+	{"item_quantity", "Item Quantity %+d%%"},
 	{"item_armor_percent", "%+d%% Enhanced Defense"},
 	{"item_maxdamage_percent", "%+d%% Enhanced Damage"},
 	{"item_lifeleech", "%+d%% Life Stolen per Hit"},
@@ -124,6 +125,11 @@ std::string densityLine(int density)
 	return density == 0 ? std::string() : formatGameText("%+d%% Monster Density", density);
 }
 
+std::string rarityLine(int uniques)
+{
+	return uniques == 0 ? std::string() : formatGameText("Monster Rarity %+d%%", uniques);
+}
+
 std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
 {
 	std::vector<Stat> out;
@@ -141,7 +147,16 @@ std::vector<Stat> mergedStats(const std::vector<Stat> &stats)
 	return out;
 }
 
-PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density)
+std::vector<Stat> unidentifiedStats(const std::vector<Stat> &stats)
+{
+	static const char *const kShown[] = {"item_addexperience", "item_magicbonus", "item_quantity"};
+	std::vector<Stat> out;
+	for (const Stat &s : stats)
+		if (std::find_if(std::begin(kShown), std::end(kShown), [&s](const char *n) { return s.name == n; }) != std::end(kShown)) out.push_back(s);
+	return out;
+}
+
+PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int density, int uniques)
 {
 	std::vector<Stat> stats = mergedStats(rolled);
 	// Monsters first, then players: the list is cut to kMaxStatLines and the rest counted.
@@ -173,7 +188,12 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &rolled, int densi
 		}
 		if (monsters && density != 0) {
 			if (!header) line("Monsters have", "");
+			header = true;
 			line("", densityLine(density));
+		}
+		if (monsters && uniques != 0) {
+			if (!header) line("Monsters have", "");
+			line("", rarityLine(uniques));
 		}
 	}
 	if (more > 0) line("", "and " + std::to_string(more) + " more");

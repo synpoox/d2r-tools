@@ -815,6 +815,18 @@ TEST_CASE("withoutMapLevel drops only the map-level stat")
 	CHECK(withoutMapLevel({{ID, 0, 92}}, StatIds{}).size() == 1);
 }
 
+TEST_CASE("withUnidentifiedBonus adds the Item Quantity stat only when the table has it")
+{
+	const StatIds ids = parseItemStatCost("Stat\t*ID\nstrength\t0\nitem_quantity\t652\n");
+	const auto bonus = withUnidentifiedBonus({{0, 0, 5}}, ids);
+	REQUIRE(bonus.size() == 2);
+	CHECK(bonus[1].stat == ids.find(kUnidentifiedStat));
+	CHECK(bonus[1].layer == 0);
+	CHECK(bonus[1].value == kUnidentifiedBonus);
+	CHECK(kUnidentifiedBonus == 30);
+	CHECK(withUnidentifiedBonus({{0, 0, 5}}, parseItemStatCost("Stat\t*ID\nstrength\t0\n")).size() == 1);
+}
+
 TEST_CASE("isStaticState lists the fixed ids")
 {
 	for (int s : {0, 6, 7, 11, 18, 22, 24, 52, 62, 92, 100, 107, 109, 118, 154, 164, 165, 172, 184, 186, 189, 209, 219}) CHECK(isStaticState(s));

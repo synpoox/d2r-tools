@@ -286,9 +286,9 @@ void Tell(const std::string& text) noexcept {
 
 // The map is open: reads its properties off the item and starts applying them (stat_apply.cpp). Never lets a failure reach the game.
 void StartMapStats(const MapDef& map, const std::shared_ptr<const Tables>& tables, Game* game,
-                   const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0) noexcept {
+                   const std::vector<cartographer::statplan::ItemStat>& itemStats = {}, int densityBonus = 0, bool unidentified = false) noexcept {
 	try {
-		StatApplyMapOpened(map, tables, static_cast<uint32_t>(AllOpenings(game)), itemStats, densityBonus);
+		StatApplyMapOpened(map, tables, static_cast<uint32_t>(AllOpenings(game)), itemStats, densityBonus, unidentified);
 		if (tables != nullptr) {
 			MapLightingMapOpened(map, SlotLevel(tables->slots, MapSlotName(map)));
 		}
@@ -653,6 +653,11 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 	}
 	plog::Debug("map level %d (%s)", pick.level, pick.fromItem ? "from the item's stat" : "the maps.txt Level; the item has no usable map-level stat");
 	itemStats = cartographer::statplan::withoutMapLevel(itemStats, tables->statIds);
+	// pd2-resurrected#1596: an unidentified map gives the Item Quantity bonus and shows only a few of its properties.
+	const bool unidentified = !ItemIdentified(item);
+	if (unidentified) {
+		itemStats = cartographer::statplan::withUnidentifiedBonus(itemStats, tables->statIds);
+	}
 	// Bonus Density: the sum over the item's affixes (the Density area param of the stat routes) is added to the map's Density (uncapped).
 	cartographer::statplan::MapRouting routing = areas;
 	StatApplyTestRouting(&routing);
@@ -674,7 +679,7 @@ void SpellUseHook(Game* game, Unit* player, Unit* item, Unit* target) noexcept {
 			std::lock_guard<std::mutex> lock(g_lock);
 			g_openedLevels[level] = opening.level;  // cartographer.open-extra.v1 reads the monster level of the source from here
 		}
-		StartMapStats(opening, tables, game, itemStats, densityBonus);
+		StartMapStats(opening, tables, game, itemStats, densityBonus, unidentified);
 		StartMapEvents(opening, tables, game, player, level, IsMazeMap(*map));
 		NoteMapOpenedForClients(*map, *tables, game, level, IsMazeMap(*map));
 	}

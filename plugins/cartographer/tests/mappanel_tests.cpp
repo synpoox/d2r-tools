@@ -125,7 +125,7 @@ TEST_CASE("the longest panel text fits the panel under the most padding")
 	std::vector<Stat> stats;
 	for (int i = 0; i < kMaxMonsterLines; ++i) stats.push_back({true, "mon" + std::to_string(i), 10 + i});
 	for (int i = 0; i < kMaxPlayerLines; ++i) stats.push_back({false, "plr" + std::to_string(i), 5 + i});
-	const PanelText p = panelText(85, stats, 40);
+	const PanelText p = panelText(85, stats, 40, 25);
 	CHECK(lineCount(p.gold) == kMaxLines - 1);  // the last line is the "and N more" one, shown only on overflow
 	CHECK(lineCount(p.blue) == kMaxLines - 1);
 	CHECK(lineCount("") == 0);
@@ -161,4 +161,28 @@ TEST_CASE("more stat lines than the cap are cut, monsters first, and end in an '
 	const int more = kMaxMonsterLines + 4 + kMaxPlayerLines - kMaxStatLines;
 	CHECK(more > 0);
 	CHECK(p.blue.substr(p.blue.rfind('\n') + 1) == "and " + std::to_string(more) + " more");
+}
+
+TEST_CASE("an unidentified map's panel keeps Experience, Magic Find and Item Quantity only")
+{
+	const std::vector<Stat> all = {{true, "item_maxhp_percent", 30}, {false, "item_addexperience", 5}, {false, "fireresist", -20},
+	                               {false, "item_magicbonus", 25}, {false, "item_quantity", 30}};
+	const std::vector<Stat> kept = unidentifiedStats(all);
+	REQUIRE(kept.size() == 3);
+	CHECK(kept[0].name == "item_addexperience");
+	CHECK(kept[1].name == "item_magicbonus");
+	CHECK(kept[2].name == "item_quantity");
+	CHECK(statLine(kept[2]) == "Item Quantity +30%");
+	const PanelText p = panelText(80, kept, 15, 36);
+	CHECK(p.blue.find("Monster Density") != std::string::npos);
+	CHECK(p.blue.find("Monster Rarity +36%") != std::string::npos);
+	CHECK(p.blue.find("Life") == std::string::npos);
+}
+
+TEST_CASE("Monster Rarity follows the Density line and is left out at 0")
+{
+	CHECK(panelText(0, {}, 10, 36).blue == "\n+10% Monster Density\nMonster Rarity +36%");
+	CHECK(panelText(0, {}, 0, 36).gold == "Monsters have\n");
+	CHECK(panelText(0, {}, 0, 36).blue == "\nMonster Rarity +36%");
+	CHECK(panelText(0, {}, 10, 0).blue == "\n+10% Monster Density");
 }

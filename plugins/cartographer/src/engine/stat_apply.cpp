@@ -734,7 +734,7 @@ auto InstallStatApply(const D2RL::PluginContext* context, const std::vector<Sign
 }
 
 void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& tables, uint32_t openings,
-                        const std::vector<cartographer::statplan::ItemStat>& itemStats, int densityBonus) {
+                        const std::vector<cartographer::statplan::ItemStat>& itemStats, int densityBonus, bool unidentified) {
 	if (tables == nullptr) {
 		MapPanelNoMap();  // no tables: no map text, and not the previous map's
 		return;
@@ -761,7 +761,7 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 		}
 	}
 	if (!g_monstersOn.load() && !g_playersOn.load()) {
-		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {}, densityBonus);  // the level only, no properties
+		const cartographer::mappanel::PanelText text = cartographer::mappanel::panelText(map.level, {}, densityBonus, routing.area("Uniques"));  // the level only, no properties
 		MapPanelMapOpened(text.gold, text.blue, slot);
 		return;
 	}
@@ -789,7 +789,10 @@ void StatApplyMapOpened(const MapDef& map, const std::shared_ptr<const Tables>& 
 	for (const sp::Entry& e : plan->players) {
 		shown.push_back({false, e.name, e.value, GameStatText(tables->statIds.descKey(e.name)), GameStatText(tables->statIds.descNegKey(e.name))});
 	}
-	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus);
+	if (unidentified) {
+		shown = cartographer::mappanel::unidentifiedStats(shown);
+	}
+	const cartographer::mappanel::PanelText panel = cartographer::mappanel::panelText(map.level, shown, densityBonus, routing.area("Uniques"));
 	MapPanelMapOpened(panel.gold, panel.blue, slot);
 	std::lock_guard<std::mutex> lock(g_lock);
 	g_plans[slot] = std::move(plan);

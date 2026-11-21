@@ -43,8 +43,13 @@ std::string statLine(const Stat &stat);
 // lines in `blue`. `density` is the bonus Density the map item's properties add (not the maps.txt Density), a monster value: "+N% Monster
 // Density" ends the Monsters group (left out at 0). Magic find is a player stat from the affixes (maps.txt has no MF column), so stats of one
 // name and group are added up into one line. More than kMaxStatLines stat lines are cut (monsters first) and end in "and N more". The map's name is not in it: the game shows it above Difficulty. Both empty when
-// there is nothing to show.
-PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0);
+// there is nothing to show. `uniques` is the item's Uniques area param (cartographer_map_uniques): "Monster Rarity +N%" follows the Density line
+// (left out at 0).
+PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int density = 0, int uniques = 0);
+
+// The stats an unidentified map's panel keeps (pd2-resurrected#1596): Experience, Better Chance of Getting Magic Items and Item Quantity.
+// Density and Monster Rarity keep their own lines.
+std::vector<Stat> unidentifiedStats(const std::vector<Stat> &stats);
 
 // The most property lines panelText shows, monster and player together: kMaxMonsterLines monster-side stats plus the 16 player stats the game
 // sends (statplan kMaxPlayerStats). The route table holds far more monster stats than that (the catalogue of issue #539), so a longer list ends in one
@@ -52,8 +57,9 @@ PanelText panelText(int monsterLevel, const std::vector<Stat> &stats, int densit
 constexpr int kMaxMonsterLines = 12;
 constexpr int kMaxPlayerLines = 16;  // statplan kMaxPlayerStats
 constexpr int kMaxStatLines = kMaxMonsterLines + kMaxPlayerLines;
-// The most lines panelText can give: the level, "Monsters have", the stat lines, the Density, "Players have" and the "and N more" line.
-constexpr int kMaxLines = 1 + 1 + 1 + 1 + kMaxStatLines + 1;
+// The most lines panelText can give: the level, "Monsters have", the stat lines, the Density, the Monster Rarity, "Players have" and the
+// "and N more" line.
+constexpr int kMaxLines = 1 + 1 + 1 + 1 + 1 + kMaxStatLines + 1;
 
 // The panel's layout, in layout units (twice the 1080p pixels): where it starts, the height of one text line at the panel's font size
 // (measured live) and the most blank lines of padding it puts in front of the text.
