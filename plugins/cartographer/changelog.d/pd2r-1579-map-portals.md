@@ -1,1 +1,0 @@
-- Fixed a compatibility issue that could prevent map portals from opening.
