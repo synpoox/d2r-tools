@@ -14,6 +14,7 @@
 #include "engine/arena_service.h"
 #include "engine/boss_names.h"
 #include "engine/map_stat_text.h"
+#include "engine/arcane_void.h"
 #include "engine/event_apply.h"
 #include "engine/item_stats.h"
 #include "engine/map_quality.h"
@@ -325,9 +326,15 @@ auto LoadAll() -> Loaded {
 		ReadFile(g_excelDir + L"\\lvlprest.txt", &prestText);
 		ReadFile(g_excelDir + L"\\lvltypes.txt", &typesText);
 		carto::ReadSiegeBorders(loaded.tables->slots, prestText, typesText);
+		carto::ReadArcaneVoid(loaded.tables->slots, prestText);
 		for (const carto::Slot& slot : loaded.tables->slots) {
 			if (slot.borderWest > 0) {
 				plog::Info("Siege border rows: west %d, east %d (lvlprest.txt)", slot.borderWest, slot.borderEast);
+			}
+			if (slot.voidPiece > 0) {
+				plog::Debug("Arcane void room: lvlprest.txt row %d", slot.voidPiece);
+			} else if (carto::EqualsNoCase(slot.name, "MazeArcane")) {
+				plog::Warn("Arcane maps: lvlprest.txt has no '%s' row (tools\install.ps1 adds it), so missiles stop where no room is", carto::ArcaneVoidName);
 			}
 		}
 		for (const carto::MapDef& map : loaded.tables->maps) {
@@ -575,6 +582,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* context) 
 		plog::Info("%zu map(s), %d problem(s); report at %s", loaded.tables->maps.size(), loaded.report.Errors(), Narrow(g_reportPath).c_str());
 		carto::InstallBossNames(context);  // first: the boss strings must be there before the game compiles superuniques.txt
 		carto::InstallMapStatText(context);  // likewise the map level stat's text before itemstatcost.txt is compiled
+		carto::InstallArcaneVoid(context);
 		std::vector<carto::PartStatus> parts;
 		carto::SetFirstGameStartNotify(&OnFirstGameStart);
 		(void)carto::InstallPortal(context, g_overrides, &parts);

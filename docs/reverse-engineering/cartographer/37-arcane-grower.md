@@ -24,7 +24,7 @@ Failure mode: if the signature is not found or the hook does not install, the `A
 
 ### 3. Edges
 
-No filler ring (`ringCells` 0): no closed piece exists, and the dark space around the platforms is the tileset's own look. Edges of a room are open on the sides that the piece's exit mask leaves open and the plan only puts exits where a neighbour exists. **needs game**: the check on each Size is recorded in the pull request.
+No filler ring (`ringCells` 0): no closed piece exists, and the dark space around the platforms is the tileset's own look. But a grid cell with **no room** is not the same void: the collision test `0x366250` gives `0x27` there (block-missile `0x4` included, and a missile's CollideType 3 mask is `0x184`), so missiles died at the edge of every cell the plan left empty (issue #566). The void inside Arcane's own pieces is blank DS1 floor (`SanctW.ds1` and the rest: no tile in those cells) in a row with FillBlanks 1, which blocks walking only, so missiles and Teleport (mask `0x804`) cross it. So every free cell of an Arcane map's box gets a void room: `tools/install.ps1` adds the lvlprest row "Cartographer Arcane Void" (a copy of 510 whose one file is `d2rloader/cartographer/arcanevoid.ds1`), the plugin serves that all-blank DS1 and an empty HD preset through the SDK's resource service, and the plan's fillers (`fillBox`, the same add, pick and piece-id write as Lava's ring) get that row's Def and file 0. Without the row the map builds as before, with a warning in the log. **needs game** for the missile check. Edges of a room are open on the sides that the piece's exit mask leaves open and the plan only puts exits where a neighbour exists. **needs game**: the check on each Size is recorded in the pull request.
 
 ### 4. Installer
 

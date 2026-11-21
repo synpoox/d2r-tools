@@ -69,6 +69,8 @@ struct Tileset {
 	bool fixedRing = false;         // ring-only (Harem, Palace Cellar, Spider): the layout is one fixed ring of four corner rooms (fixedRingLayout), whatever the map's shape and size
 	std::array<int, 16> pieceByMask{}; // not 0: the piece for exit mask m (a ring-only tileset's corner pieces); 0: pieceBase + m
 	int ringCells = 0;              // filler rooms (closed pieces) placed this many cells around the layout, so no void shows past its edges (Lava); 0: none
+	bool fillBox = false;           // the filler also takes every free cell of the layout's box (Arcane, #566: a cell with no room blocks missiles, a void room does not)
+	int fillPiece = 0;              // the piece a filler room gets; 0: pieceBase, the closed piece
 	DeadEndFamily prev;             // the "Prev" group: the entrance. Absent: the entrance is an ordinary room
 	// No Next / Down family: a maze has no exit, so those groups are never placed (plan section 3.6).
 };

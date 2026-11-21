@@ -520,6 +520,19 @@ TEST_CASE("the Siege border rows are read from lvlprest.txt only when lvltypes.t
 	CHECK(slots[0].borderWest == 0);
 }
 
+TEST_CASE("the Arcane void room is read from lvlprest.txt by Name and File1, for the Arcane slot only (#566)") {
+	Report report;
+	auto slots = LoadSlots("Slot\tLevel\nMazeArcane\t153\nMaze\t138\n", report);
+	const std::string prest = "Name\tDef\tFile1\nAct 2 - Arcane W\t510\tAct2/Arcane/SanctW.ds1\nCartographer Arcane Void\t1095\td2rloader/cartographer/arcanevoid.ds1\n";
+	ReadArcaneVoid(slots, prest);
+	CHECK(slots[0].voidPiece == 1095);
+	CHECK(slots[1].voidPiece == 0);
+	ReadArcaneVoid(slots, "Name\tDef\tFile1\nCartographer Arcane Void\t1095\tAct2/Arcane/SanctW.ds1\n");  // not the plugin's DS1
+	CHECK(slots[0].voidPiece == 0);
+	ReadArcaneVoid(slots, "");  // no lvlprest.txt in the mod
+	CHECK(slots[0].voidPiece == 0);
+}
+
 TEST_CASE("the Preset tileset is refused: every map is generated") {
 	Report report;
 	CHECK(Load("Old\tPreset\tLoop\t\t\tt20\n", report).empty());

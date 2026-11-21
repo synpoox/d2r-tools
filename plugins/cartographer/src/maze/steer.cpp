@@ -88,13 +88,17 @@ uint64_t mixSeed(uint64_t a, uint64_t b)
 }
 
 MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, std::string_view shape, std::string_view size,
-                   uint64_t seed, int declaredX, int declaredY)
+                   uint64_t seed, int declaredX, int declaredY, int voidPiece)
 {
 	MapPlan out;
 	Tileset base;
 	if (!builtinTileset(tileset, base)) {
 		out.reason = "Cartographer has no maze numbers for the tileset '" + std::string(tileset) + "'. Use " + mazeTilesetNames() + ".";
 		return out;
+	}
+	if (voidPiece > 0) {
+		base.fillBox = true;
+		base.fillPiece = voidPiece;
 	}
 	if (!base.steerable) {
 		out.reason = base.notSteerableReason.empty() ? base.name + " cannot be steered." : base.notSteerableReason;

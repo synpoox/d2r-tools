@@ -86,8 +86,9 @@ struct MapPlan {
 	SeedPlan seedPlan;
 	uint64_t hash = 0;    // planHash of the plan: logged so two builds can be compared
 };
+// voidPiece not 0: the lvlprest Def of a void room (Arcane, #566); every free cell of the layout's box gets one, so missiles fly over the void.
 MapPlan planForMap(std::string_view tileset, const layout::ShapeTable &shapes, std::string_view shape, std::string_view size,
-                   uint64_t seed, int declaredX, int declaredY);
+                   uint64_t seed, int declaredX, int declaredY, int voidPiece = 0);
 
 // Two numbers mixed into one seed (splitmix64), for the seed of an opening.
 uint64_t mixSeed(uint64_t a, uint64_t b);

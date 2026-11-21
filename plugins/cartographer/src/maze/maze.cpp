@@ -253,13 +253,25 @@ Plan planMaze(const Tileset &ts, const layout::Layout &l)
 			plan.links.push_back(LinkStep{static_cast<int>(a), b, d});
 		}
 
-	// The filler ring: closed cells around the layout, in the same breadth-first order (each parent is a room that already exists).
-	if (ring > 0) {
+	// The filler ring: closed cells around the layout (and, with fillBox, the free cells of its box), in the same breadth-first order (each parent is a room that already exists).
+	if (ring > 0 || ts.fillBox) {
 		auto key = [](int dx, int dy) { return (static_cast<int64_t>(dx) << 32) ^ static_cast<uint32_t>(dy); };
 		std::set<int64_t> taken;
 		for (const Room &r : plan.rooms) taken.insert(key(r.dx, r.dy));
 		std::set<int64_t> want;
 		const Capacity box = capacityAt(ts.roomTiles, levelX, levelY, ts.roomH()); // only cells inside the level can be made
+		if (ts.fillBox) {
+			int bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
+			for (const Room &r : plan.rooms) {
+				bx0 = std::min(bx0, r.dx);
+				by0 = std::min(by0, r.dy);
+				bx1 = std::max(bx1, r.dx);
+				by1 = std::max(by1, r.dy);
+			}
+			for (int fy = by0; fy <= by1; ++fy)
+				for (int fx = bx0; fx <= bx1; ++fx)
+					if (taken.count(key(fx, fy)) == 0) want.insert(key(fx, fy));
+		}
 		for (const Room &r : plan.rooms)
 			for (int oy = -ring; oy <= ring; ++oy)
 				for (int ox = -ring; ox <= ring; ++ox) {

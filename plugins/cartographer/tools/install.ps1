@@ -25,6 +25,8 @@
                   the Siege strips' Dt1Mask selects files 1..11 only, so they never load them. Left out, with a note, when the mod has no lvltypes.txt or lvlprest.txt.
     lvlprest.txt  "Cartographer Siege Border West" and "Cartographer Siege Border East", copies of 882 (Barricade Cliff Border 2) and 896 (Barricade Ravine Border 4) appended
                   with Def = the largest Def + 1 and a Dt1Mask that selects the same files by their row-30 places (#549). The plugin stamps three of each at the ends of a Siege map.
+    lvlprest.txt  "Cartographer Arcane Void", a copy of 510 (Arcane W) whose one file is the plugin's all-blank DS1 (d2rloader/cartographer/arcanevoid.ds1, served by the
+                  plugin), appended with Def = the largest Def + 1 (#566). Arcane maps fill the free cells of their box with it, so missiles fly over the void.
     levels.txt    a fifth new level (the fourth outdoor one), "Cartographer Mesa", for Mesa (Act 4 plains) maps: LevelType 27 (Act 4 - Mesa), SizeX 128 and SizeY 112 (14 x 12 fill cells of
                   8 tiles plus a one-cell frame), at OffsetX 6000, OffsetY 4200, copied from level 111 or the first plain Act 5 outdoor row, with the same Quest, LevelGroup, SubType, Vis
                   and Waypoint values as the Outdoor level.
@@ -746,6 +748,47 @@ if ($missing.Count -gt 0) {
                 Save-Table $prest
                 Write-Host "lvlprest.txt: added '$($b.Name)' as Def $($s[4]) (a copy of $($b.From), Dt1Mask $mask)."
             }
+        }
+    }
+}
+
+# --- lvlprest.txt: the Arcane void room (#566) ------------------------------------------------------------------------
+# A grid cell with no room blocks missiles, so an Arcane map's free cells get this room: a copy of 510 (Arcane W) whose one file is the plugin's
+# own all-blank DS1 (it serves the file), so the cell is void that blocks walking only, as inside Arcane's own pieces. Def = the largest Def + 1.
+$ArcaneVoidName = 'Cartographer Arcane Void'
+$ArcaneVoidFile = 'd2rloader/cartographer/arcanevoid.ds1'
+if (-not (Test-Path $prestPath)) {
+    Write-Host "lvlprest.txt: this mod has none, so Arcane maps keep cells that stop missiles. Copy the game's table into the excel folder and run the installer again."
+} else {
+    $prest = Read-Table $prestPath
+    $defCol = Column $prest 'Def'
+    $have = Find-Row $prest 'Name' $ArcaneVoidName
+    $src = if ($have -ge 0) { $null } else { Find-Row $prest 'Def' '510' }
+    $maxDef = -1; $dataRows = 0
+    for ($i = 1; $i -lt $prest.Lines.Count; $i++) {
+        $c = $prest.Lines[$i] -split "`t"; $d = 0
+        if ($c.Count -gt $defCol -and [int]::TryParse($c[$defCol], [ref]$d)) { $dataRows++; if ($d -gt $maxDef) { $maxDef = $d } }
+    }
+    if ($have -lt 0 -and $src -lt 0) {
+        Write-Host "lvlprest.txt: no row with Def 510 (Act 2 - Arcane W) to copy, so Arcane maps keep cells that stop missiles."
+    } elseif ($have -lt 0 -and $maxDef + 1 -ne $dataRows) {
+        Write-Host "lvlprest.txt: its Defs do not run 0 to $($dataRows - 1) (the largest is $maxDef), so the Arcane void room is not added and Arcane maps keep cells that stop missiles."
+    } else {
+        $row = if ($have -ge 0) { $have } else { $src }
+        $cells = Cells $prest $prest.Lines[$row]
+        $before = $cells -join "`t"
+        Set-Cell $prest $cells 'Name' $ArcaneVoidName
+        Set-Cell $prest $cells 'Files' '1'
+        Set-Cell $prest $cells 'File1' $ArcaneVoidFile
+        foreach ($n in 2..6) { Set-CellIf $prest $cells "File$n" '0' }
+        if ($have -ge 0) {
+            if (($cells -join "`t") -ne $before) { $prest.Lines[$have] = $cells -join "`t"; Save-Table $prest; Write-Host "lvlprest.txt: repaired '$ArcaneVoidName' (Def $($cells[$defCol]))." }
+            else { Write-Host "lvlprest.txt: '$ArcaneVoidName' is already there (Def $($cells[$defCol]))." }
+        } else {
+            $cells[$defCol] = "$($maxDef + 1)"
+            $prest.Lines.Add($cells -join "`t")
+            Save-Table $prest
+            Write-Host "lvlprest.txt: added '$ArcaneVoidName' as Def $($maxDef + 1) (a copy of 510 with the plugin's void DS1)."
         }
     }
 }
