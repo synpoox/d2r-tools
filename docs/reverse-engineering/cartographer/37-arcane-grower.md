@@ -24,7 +24,7 @@ Failure mode: if the signature is not found or the hook does not install, the `A
 
 ### 3. Edges
 
-No filler ring (`ringCells` 0): no closed piece exists, and the dark space around the platforms is the tileset's own look. Edges of a room are open on the sides that the piece's exit mask leaves open and the plan only puts exits where a neighbour exists. **needs game**: the check on each Size is recorded in the pull request.
+No filler ring (`ringCells` 0): no closed piece exists, and the dark space around the platforms is the tileset's own look. That space is blank DS1 floor in rows with FillBlanks 1. The blank-cell fill `0x3f32c0` asks the room tile lookup `0x3f3c60` for tile word `0x1e00000` (main 30, sub 0), except on level 74: `cmp dword [level+0x1f8], 0x4a` at `0x3f357b` swaps in `0x1e00100` (sub 1). Sub 1 is the void that missiles cross; sub 0 blocks them, so on the slot level every missile died at the platform edge (issue #566). Many other tilesets use FillBlanks, so the compare is not patched: `src/engine/arcane_void.cpp` hooks `0x3f3c60` (signature `RoomTileLookup`, 18 bytes) and asks for sub 1 when the room is on the Arcane slot level. Checked in game: Fire Ball crosses the void from the platform edge, and the player still stops at the edge. Edges of a room are open on the sides that the piece's exit mask leaves open and the plan only puts exits where a neighbour exists. **needs game**: the check on each Size is recorded in the pull request.
 
 ### 4. Installer
 

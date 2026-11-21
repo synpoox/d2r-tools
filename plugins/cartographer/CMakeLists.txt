@@ -79,6 +79,7 @@ add_library(cartographer SHARED
 	src/engine/outdoor_hooks.cpp
 	src/engine/boss_names.cpp
 	src/engine/map_stat_text.cpp
+	src/engine/arcane_void.cpp
 	src/engine/map_names.cpp
 	src/engine/map_panel.cpp
 	src/engine/level_row.cpp

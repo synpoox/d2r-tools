@@ -81,6 +81,9 @@ auto MazeTilesetProblem(const MapDef& map, const Tables& tables) -> std::string;
 // True when `level` is the slot level of any maze tileset.
 auto IsMazeSlotLevel(int level) -> bool;
 
+// True when `level` is the slot level of the Arcane maze tileset (LevelType 19).
+auto IsArcaneSlotLevel(int level) -> bool;
+
 // The plan's event room in the built slot level, as the game's own room rect (tiles; the DRLG room's x, y, width, height).
 // Known once the slot build has run for the opened map; cleared when a map is opened and when the game is left.
 struct MazeRoomRect {

@@ -60,6 +60,8 @@ inline constexpr const char* MazeArcaneGrower = "48 89 5C 24 10 48 89 6C 24 18 4
 // The Tombs case's own growers (LevelType 17; RE note 47): 0x3ea0e0 runs before the walk, 0x3eb610 after it. Both are hooked (15 bytes, whole instructions) and skipped on every slot-level build.
 inline constexpr const char* MazeTombPreGrower = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 8B 81 E4 01 00 00 4C 8B F1 48 8B 69 10 BE 03 00 00 00";
 inline constexpr const char* MazeTombSpecialRooms = "48 89 5C 24 18 48 89 74 24 20 57 48 83 EC 20 48 8B 41 10 33 D2 89 54 24 38 48 8B F9 8B DA 48 85 C0 74";
+// The room tile lookup 0x3f3c60 (room, orientation, tile word): issue #566, RE note 37 section 3. Hooked 18 bytes (whole instructions, before the RIP-relative load); the first branch is byte 49.
+inline constexpr const char* RoomTileLookup = "40 53 55 56 57 41 54 41 56 41 57 48 81 EC 90 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 80 01 00 00 33 DB 49 8B F8 8B F2 4C 8B F9 4D 85 C0";
 inline constexpr const char* MazeAddRoom = "40 55 56 57 41 56 41 57 48 83 EC 30 48 63 EA 48 8B F9 48 8B 89 90 00 00 00";
 inline constexpr const char* MazeLinkRooms = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 41 8B D8 48 8B F2 48 8B F9 E8 ?? ?? ?? ?? 44 8D 43 FE";
 inline constexpr const char* MazePiecePicker = "48 89 5C 24 18 48 89 6C 24 20 57 41 56 41 57 48 83 EC 20 4C 8B 09 33 DB";

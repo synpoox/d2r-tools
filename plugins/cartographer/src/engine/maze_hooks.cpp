@@ -1,6 +1,7 @@
 #include "maze_hooks.h"
 
 #include "core/part_signatures.h"
+#include "arcane_void.h"
 #include "automap_reset.h"
 #include "core/text.h"
 #include "log.h"
@@ -1023,12 +1024,18 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 	for (PartStatus& status : TombGrowerStatuses()) {
 		out.push_back(std::move(status));
 	}
+	out.push_back(ArcaneVoidTilePartStatus());
 	out.push_back(AutomapResetPartStatus());
 	return out;
 }
 
 auto IsMazeSlotLevel(int level) -> bool {
 	return level > 0 && SlotIndexOfId(level) >= 0;
+}
+
+auto IsArcaneSlotLevel(int level) -> bool {
+	const int slot = level > 0 ? SlotIndexOfId(level) : -1;
+	return slot >= 0 && cm::MazeTilesets[slot].levelType == 19;
 }
 
 void SetMazeTables(const std::shared_ptr<const Tables>& tables) {
@@ -1315,6 +1322,7 @@ void InstallMazeHooks(const D2RL::PluginContext* context, const std::vector<Sign
 	}
 	if (ok) {
 		InstallTombGrowerHooks(context, overrides, ranges, count);  // optional, like Arcane's: a refusal refuses only Tombs maps (GrowerHookMissing)
+		InstallArcaneVoidTile(context, overrides, ranges, count);  // optional: without it Arcane maps' void blocks missiles (issue #566)
 	}
 	ok = ok && install(LevelBuild, reinterpret_cast<void*>(&LevelBuildHook), reinterpret_cast<void**>(&g_levelOriginal));
 	if (!ok) {
