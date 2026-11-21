@@ -339,7 +339,7 @@ void ApplyToMonster(void* params, Unit* monster) noexcept {
 		return;
 	}
 	++g_monsterCount;
-	if (probe) {
+	if (probe && plog::DebugOn()) {
 		bool found = false;
 		const int chain = Chain(monster, list, &found);
 		plog::Debug("statprobe: monster #%d id %u class %d level %d: stat %d (level) was %d at the hook, maxhp %d -> %d, totals [%s] -> [%s], list on chain: %s (%d lists)",

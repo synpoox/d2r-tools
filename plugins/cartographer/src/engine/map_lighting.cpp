@@ -246,7 +246,7 @@ void MapLightingMapOpened(const MapDef& map, int slotLevel) {
 		ml::Look withoutGrade = map.look;  // hue and saturation have their own hooks: only the rest needs this one
 		withoutGrade.hue = cartographer::lutgrade::DefaultHue;
 		withoutGrade.saturation = cartographer::lutgrade::DefaultSaturation;
-		plog::Info("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(map.look).c_str(), g_live.load() || !withoutGrade.any() ? "" : " (not applied: the hook is off)");
+		plog::Debug("map look for '%s' (slot level %d): %s%s", map.name.c_str(), slotLevel, ml::describe(map.look).c_str(), g_live.load() || !withoutGrade.any() ? "" : " (not applied: the hook is off)");
 	}
 }
 
@@ -290,7 +290,7 @@ void MapLightingPlayerTick(int playerLevel) noexcept {
 	}
 	LutGradeSet(active ? &grade : nullptr);
 	if (g_active.exchange(active) != active) {
-		plog::Info("map look: %s", active ? "applied (the player is in the map)" : "off (the player left the map)");
+		plog::Debug("map look: %s", active ? "applied (the player is in the map)" : "off (the player left the map)");
 	}
 }
 

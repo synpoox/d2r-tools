@@ -2,6 +2,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 
 namespace plog {
 
@@ -43,12 +44,16 @@ void Info(const char* fmt, ...) noexcept {
 	va_end(args);
 }
 
-void Debug(const char* fmt, ...) noexcept {
+auto DebugOn() noexcept -> bool {
 	static const bool on = [] {
 		const char* v = std::getenv("CARTOGRAPHER_DEBUG_LOGS");
 		return v != nullptr && v[0] == '1';
 	}();
-	if (!on) {
+	return on;
+}
+
+void Debug(const char* fmt, ...) noexcept {
+	if (!DebugOn()) {
 		return;
 	}
 	va_list args;

@@ -216,7 +216,7 @@ void RestoreLevelLocked(int level) noexcept {
 		if (!any) {
 			plog::Warn("map names: level %d row no longer holds the plugin's keys (moved or changed); left as it is", level);
 		} else if (ok) {
-			plog::Info("map names: level %d text put back", level);
+			plog::Debug("map names: level %d text put back", level);
 		} else {
 			// The saved original is dropped (Take) so the plugin's own key is never remembered as the original next game.
 			g_saver.MarkStuck();

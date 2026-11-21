@@ -417,7 +417,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit, int unitY) {
 	static const char* const names[] = {"ArrivalFinder", "ArrivalRoomFinder", "ArrivalFlagTest"};
 	for (int i = ArrivalFinder; i <= ArrivalFlagTest; ++i) {
 		if (!g_parts[i].status.on) {
-			plog::Info("maze arrival: left to the game, because the part %s was not found", names[i - ArrivalFinder]);
+			plog::Warn("maze arrival: left to the game, because the part %s was not found", names[i - ArrivalFinder]);
 			return;
 		}
 	}
@@ -431,7 +431,7 @@ void MarkArrival(const void* level, const cm::Plan& plan, int unit, int unitY) {
 	}
 	const cm::ArrivalMark mark = cm::planArrival(plan, unit, rects, unitY);
 	if (!mark.mark) {
-		plog::Info("maze arrival: left to the game, because %s", mark.why.c_str());
+		plog::Warn("maze arrival: left to the game, because %s", mark.why.c_str());
 		return;
 	}
 	const auto flagsOf = [&](int i) { return Read<uint32_t>(rooms[static_cast<size_t>(i)], RoomFlags); };
@@ -991,7 +991,7 @@ auto LevelBuildHook(uint8_t dataFlag, void* level) noexcept -> uint64_t {
 			if (!ctx.fellBack && problem.empty()) {
 				MarkArrival(level, plan, unit, unitY);
 			} else {
-				plog::Info("maze arrival: left to the game, because the build is not the plan");
+				plog::Warn("maze arrival: left to the game, because the build is not the plan");
 			}
 			RecordEventRoom(level, slotIndex, plan, unit, unitY);
 		} catch (...) {

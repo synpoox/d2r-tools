@@ -463,7 +463,7 @@ void ApplyBanner() noexcept {
 		}
 		g_bannerOpen = true;
 		g_bannerShownSeq = 0;
-		plog::Info("entry banner: panel opened");
+		plog::Debug("entry banner: panel opened");
 	}
 	if (g_bannerShownSeq == seq) {
 		return;
@@ -486,7 +486,7 @@ void ApplyBanner() noexcept {
 	}
 	if (done) {
 		g_bannerShownSeq = seq;
-		plog::Info("entry banner: text set (%zu line(s))", lines.size());
+		plog::Debug("entry banner: text set (%zu line(s))", lines.size());
 	}
 }
 

@@ -624,7 +624,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		made = SpawnOne(game, room, one, &asSuper, &unit, call.flags);
 		if (made) {
 			if (tried > 1) {
-				plog::Info("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, total, how);
+				plog::Debug("map Boss '%s': accepted at (%d,%d), attempt %zu of %zu (%s)", state.bossName.c_str(), spawn.spot.x, spawn.spot.y, tried, total, how);
 			}
 			break;
 		}
@@ -633,7 +633,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 	return made;
 	};
 	const bool made = place();
-	plog::Info("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
+	plog::Debug("map Boss '%s': %s in the room %s (%s)", state.bossName.c_str(), made ? "spawned" : "refused by the game", Describe(rects.server).c_str(), made ? how : "no spot took it");
 	if (!made) {
 		return ep::BossTry::Refused;
 	}
@@ -645,7 +645,7 @@ ep::BossTry SpawnMapBoss(Game* game, void* room, State& state, const RoomRects& 
 		for (int i = 0; i < behaviours.extraBoss && place(); ++i) {
 			++placed;
 		}
-		plog::Info("map Boss '%s': extra_boss %d: %d placed in the room %s", state.bossName.c_str(), behaviours.extraBoss, placed, Describe(rects.server).c_str());
+		plog::Debug("map Boss '%s': extra_boss %d: %d placed in the room %s", state.bossName.c_str(), behaviours.extraBoss, placed, Describe(rects.server).c_str());
 	}
 	return ep::BossTry::Made;
 }
@@ -815,7 +815,7 @@ void OnPopulated(Game* game, void* room) noexcept {
 			noteRoom(bossRects.drlg);
 			const ep::BossTry result = SpawnMapBoss(game, bossRoom, *state, bossRects, tier == ep::BossRoomPicker::Tier::Forced);
 			if (result == ep::BossTry::Made) {
-				plog::Info("map Boss '%s': boss path: %s", state->bossName.c_str(), where);
+				plog::Debug("map Boss '%s': boss path: %s", state->bossName.c_str(), where);
 			}
 			return result;
 		});
