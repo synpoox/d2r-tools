@@ -178,6 +178,7 @@ struct State {
 	std::vector<ep::Spawn> waveSpawns;
 	std::string ambushName;
 	int untrackedProbes = 0;
+	int deathProbes = 0;  // wave deaths logged, capped like untrackedProbes
 };
 std::mutex g_lock;
 // One state per map, keyed by its slot level: a map opened later leaves the earlier maps' Drop, Shrine, Treasure and Ambush alone.
@@ -263,7 +264,10 @@ auto OpenDropContext(Game* game, Unit* victim) noexcept -> bool {
 	const uint8_t flags = data == nullptr ? 0 : data[MonsterFlagsOffset];
 	const int32_t alignment = Call<UnitStatFn>(UnitStat)(victim, StatAlignment, 0);
 	const bool eligible = alignment == 0 && (flags & MonsterMinionBit) == 0;
-	plog::Info("map behaviours: kill of unit %u on level %d: alignment %d, monster flags 0x%02x: %s", At<uint32_t>(victim, UnitIdOffset), level, alignment, flags, eligible ? "behaviours apply" : "not hostile or a minion, skipped");
+	static std::atomic<uint32_t> s_killLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+	if (plog::Sample(s_killLogged)) {
+		plog::Info("map behaviours: kill of unit %u on level %d: alignment %d, monster flags 0x%02x: %s", At<uint32_t>(victim, UnitIdOffset), level, alignment, flags, eligible ? "behaviours apply" : "not hostile or a minion, skipped");
+	}
 	if (!eligible) {
 		return false;
 	}
@@ -288,7 +292,10 @@ void RollDropTcs(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
 	const uint8_t* dt = TablesBase(At<uint8_t>(game, GameDataFlagOffset), &why);
 	void* map = dt == nullptr ? nullptr : At<void*>(dt, DtTcMapOffset);
 	if (map == nullptr) {
-		plog::Warn("map behaviours: drop_tc not rolled: %s", dt == nullptr ? why.c_str() : "the treasure class name map is null");
+		static std::atomic<uint32_t> s_notRolledLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+		if (plog::Sample(s_notRolledLogged)) {
+			plog::Warn("map behaviours: drop_tc not rolled: %s", dt == nullptr ? why.c_str() : "the treasure class name map is null");
+		}
 		return;
 	}
 	void* killer = At<void*>(info, DeathInfoKillerOffset);
@@ -299,10 +306,16 @@ void RollDropTcs(Game* game, Unit* victim, int32_t arg3, void* info) noexcept {
 		std::string tcWhy;
 		const int tc = e6::tcIndexFromLookup(Call<NameToRowFn>(NameToRow)(map, name.c_str(), 0), At<uint64_t>(dt, DtTcCountOffset), &tcWhy);
 		if (tc < 0) {
-			plog::Warn("map behaviours: drop_tc '%s' is not applied: %s", name.c_str(), tcWhy.c_str());
+			static std::atomic<uint32_t> s_notAppliedLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+			if (plog::Sample(s_notAppliedLogged)) {
+				plog::Warn("map behaviours: drop_tc '%s' is not applied: %s", name.c_str(), tcWhy.c_str());
+			}
 			continue;
 		}
-		plog::Info("map behaviours: drop_tc '%s' (treasure class %d, %d%%) hit: rolling it for unit %u", name.c_str(), tc, c.b.dropTcs[i].second, At<uint32_t>(victim, UnitIdOffset));
+		static std::atomic<uint32_t> s_dropTcLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+		if (plog::Sample(s_dropTcLogged)) {
+			plog::Info("map behaviours: drop_tc '%s' (treasure class %d, %d%%) hit: rolling it for unit %u", name.c_str(), tc, c.b.dropTcs[i].second, At<uint32_t>(victim, UnitIdOffset));
+		}
 		Call<DropRollerFn>(DropRoller)(game, victim, killer, static_cast<uint16_t>(tc), 0, levelValue, arg3, 0, 0, 0);
 	}
 	c.extra = false;
@@ -317,7 +330,10 @@ void DropRollerHook(Game* game, Unit* victim, void* killer, uint16_t tcIndex, in
 	}
 	c.rolled = true;
 	const int picks = beh::extraDrops(c.b.dropBonusPct, c.rng);
-	plog::Info("map behaviours: drop_bonus %d%%: %d extra pick(s) of the monster's own treasure class %u", c.b.dropBonusPct, picks, static_cast<unsigned>(tcIndex));
+	static std::atomic<uint32_t> s_dropBonusLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+	if (plog::Sample(s_dropBonusLogged)) {
+		plog::Info("map behaviours: drop_bonus %d%%: %d extra pick(s) of the monster's own treasure class %u", c.b.dropBonusPct, picks, static_cast<unsigned>(tcIndex));
+	}
 	c.extra = true;
 	for (int i = 0; i < picks; ++i) {
 		g_rollerOriginal(game, victim, killer, tcIndex, a5, a6, a7, a8, a9, a10);
@@ -346,7 +362,10 @@ auto ItemMakeHook(Game* game, void* request, int32_t a3) noexcept -> uint64_t {
 		Call<ItemSetSocketsFn>(ItemSetSockets)(unit, static_cast<uint32_t>(beh::socketCount(c.rng)));
 		sockets = Call<UnitStatFn>(UnitStat)(unit, StatSockets, 0);
 	}
-	plog::Info("map behaviours: item %p dropped: ethereal rolled %s, socket roll %s%s, sockets now %d", static_cast<void*>(unit), ethereal ? "yes" : "no", socketRoll ? "hit" : "miss", socketRoll && !socketable ? " (not socketable)" : "", sockets);
+	static std::atomic<uint32_t> s_itemLogged{0};  // D2RLoader flushes each log line to disk, so log the 1st, 100th, ... of this repeated line
+	if (plog::Sample(s_itemLogged)) {
+		plog::Info("map behaviours: item %p dropped: ethereal rolled %s, socket roll %s%s, sockets now %d", static_cast<void*>(unit), ethereal ? "yes" : "no", socketRoll ? "hit" : "miss", socketRoll && !socketable ? " (not socketable)" : "", sockets);
+	}
 	MapDropNotify(unit, c.level, c.b);
 	return item;
 }
@@ -556,7 +575,10 @@ void __cdecl OnMonsterDeath(const D2RL::PluginContext*, const D2RL::Lifecycle::M
 		for (auto& entry : g_states) {
 			State& s = entry.second;
 			if (s.waves.onDeath(id)) {
-				plog::Info("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, s.waves.wavesStarted(), s.waves.remaining());
+				if (s.deathProbes < MaxUntrackedDeathProbes) {
+					++s.deathProbes;
+					plog::Info("eventprobe: ambush: unit id %u of wave %d died, %zu left", id, s.waves.wavesStarted(), s.waves.remaining());
+				}
 				return;
 			}
 		}
@@ -883,6 +905,7 @@ void Event6bArmAmbush(int level, const ev::Event& event, const std::vector<ep::S
 		s.firstWaveDone = false;
 		s.ambushName = event.name;
 		s.untrackedProbes = 0;
+		s.deathProbes = 0;
 		RecomputeFlagsLocked();
 		plog::Info("eventprobe: ambush '%s': armed %d wave(s) of %zu in room %p; the first comes when a player is in that room%s (time-out %llu ms, gap %llu ms)", event.name.c_str(), waves, spawns.size(), room,
 		           g_deathListener ? "" : " (no death listener: this is the only wave)", static_cast<unsigned long long>(e6::kWaveTimeoutMs), static_cast<unsigned long long>(e6::kWaveGapMs));
