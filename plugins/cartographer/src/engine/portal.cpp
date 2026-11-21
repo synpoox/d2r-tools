@@ -69,7 +69,6 @@ struct Unit;
 using CheckFn = uint64_t (*)(Game*, Unit*, Unit*, Unit*) noexcept;
 using UseFn = void (*)(Game*, Unit*, Unit*, Unit*) noexcept;
 using ItemRecordFn = const uint8_t* (*)(uint32_t dataFlag, int32_t row) noexcept;
-using UnitClassFn = int32_t (*)(Unit*, const char* file, int32_t line) noexcept;
 using UnitRoomFn = void* (*)(Unit*) noexcept;
 using RoomLevelFn = int32_t (*)(void* room) noexcept;
 using ClientMessageFn = void (*)(Unit* player, int32_t message, Unit* from) noexcept;
@@ -82,13 +81,12 @@ using PlayerTickFn = uint64_t (*)(Game*, Unit*) noexcept;
 using CreatePortalFn = int32_t (*)(Game*, Unit* player, void* room, int32_t x, int32_t y, int32_t level, Unit** object, int32_t objectId, int32_t, int32_t) noexcept;
 using SetPortalDestFn = void (*)(Unit* object, int32_t levelByte) noexcept;
 
-enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitClassOf, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PlayerTick, PartCount };
+enum PartId { ItemSpellCheck, ItemSpellUse, ItemRecord, UnitRoom, RoomLevelId, ClientMessage, OpenRedPortal, GameCounter, UnitStat, UnitCoords, FindFreeSpot, PlayerTick, PartCount };
 
 Part g_parts[PartCount] = {
 	{"ItemSpellCheck", sig::ItemSpellCheck, 15, true, nullptr, {}, {}},
 	{"ItemSpellUse", sig::ItemSpellUse, 14, true, nullptr, {}, {}},
 	{"ItemRecord", sig::ItemRecord, 0, true, nullptr, {}, {}},
-	{"UnitClassOf", sig::UnitClassOf, 0, true, nullptr, {}, {}},
 	{"UnitRoom", sig::UnitRoom, 0, true, nullptr, {}, {}},
 	{"RoomLevelId", sig::RoomLevelId, 0, true, nullptr, {}, {}},
 	{"ClientMessage", sig::ClientMessage, 0, true, nullptr, {}, {}},
@@ -154,7 +152,7 @@ auto Call(PartId id) noexcept -> Fn {
 // --- The game's own helpers ----------------------------------------------------------------------------------------
 
 auto CodeOf(Game* game, Unit* item, const uint8_t** record) noexcept -> std::string {
-	const int32_t row = Call<UnitClassFn>(UnitClassOf)(item, __FILE__, __LINE__);
+	const int32_t row = At<int32_t>(item, UnitClassOffset);
 	*record = Call<ItemRecordFn>(ItemRecord)(At<uint8_t>(game, GameDataFlagOffset), row);
 	if (*record == nullptr) {
 		return {};
@@ -497,13 +495,12 @@ void LogOffMapUse(Game* game, Unit* item) noexcept {
 	if (g_offUseLogged.load(std::memory_order_relaxed) || game == nullptr || item == nullptr) {
 		return;
 	}
-	// Each address is read once: 'cartographer check' re-resolves the parts on the console thread.
-	const uint8_t* classAddress = g_parts[UnitClassOf].address;
+	// Read the address once: 'cartographer check' re-resolves the parts on the console thread.
 	const uint8_t* recordAddress = g_parts[ItemRecord].address;
-	if (classAddress == nullptr || recordAddress == nullptr) {
+	if (recordAddress == nullptr) {
 		return;
 	}
-	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(classAddress))(item, __FILE__, __LINE__);
+	const int32_t row = At<int32_t>(item, UnitClassOffset);
 	const uint8_t* record = reinterpret_cast<ItemRecordFn>(const_cast<uint8_t*>(recordAddress))(At<uint8_t>(game, GameDataFlagOffset), row);
 	if (record != nullptr && At<int32_t>(record, RecordSpellOffset) == MapSpell && !g_offUseLogged.exchange(true)) {
 		plog::Warn("a map item was used while the portal is off, so the game ran its plain use; parts still off: %s", OffPartsList().c_str());

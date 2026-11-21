@@ -21,6 +21,9 @@ struct CodeRange {
 // The executable sections of the exe at `exeBase` (up to `max`).
 auto CodeRanges(uintptr_t exeBase, CodeRange* out, int max) noexcept -> int;
 
+// The class field read by the native getter on image 0x6ab3782c. Other plugins can detour the getter.
+inline constexpr int UnitClassOffset = 0x04;
+
 template <typename T>
 auto At(const void* base, int offset) noexcept -> T {
 	T value{};

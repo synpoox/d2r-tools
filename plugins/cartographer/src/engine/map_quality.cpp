@@ -44,16 +44,14 @@ using QualityRollFn = uint64_t (*)(Unit* item, void* request) noexcept;
 using FallbackMagicFn = uint64_t (*)(void* a, void* request, Unit** item, int32_t* level) noexcept;
 using FallbackNormalFn = uint64_t (*)(void* a, void* request, Unit** item, int32_t level) noexcept;
 using ItemRecordFn = const uint8_t* (*)(uint32_t dataFlag, int32_t row) noexcept;
-using UnitClassFn = int32_t (*)(Unit*, const char* file, int32_t line) noexcept;
 
-enum PartId { QualityRoll, MagicFallback, NormalFallback, ItemRecord, UnitClassOf, MainRollCall, PartCount };
+enum PartId { QualityRoll, MagicFallback, NormalFallback, ItemRecord, MainRollCall, PartCount };
 
 Part g_parts[PartCount] = {
 	{"ItemQualityRoll", qsig::ItemQualityRoll, 16, false, nullptr, {}, {}},
 	{"MagicFallback", qsig::MagicFallback, 16, false, nullptr, {}, {}},
 	{"NormalFallback", qsig::NormalFallback, 0, false, nullptr, {}, {}},
 	{"ItemRecord", sig::ItemRecord, 0, false, nullptr, {}, {}},
-	{"UnitClassOf", sig::UnitClassOf, 0, false, nullptr, {}, {}},
 	{"MainRollCall", sig::MainRollCall, 0, false, nullptr, {}, {}},
 };
 
@@ -79,7 +77,7 @@ auto RecordOf(Unit* item) noexcept -> const uint8_t* {
 	if (item == nullptr) {
 		return nullptr;
 	}
-	const int32_t row = reinterpret_cast<UnitClassFn>(const_cast<uint8_t*>(g_parts[UnitClassOf].address))(item, __FILE__, __LINE__);
+	const int32_t row = At<int32_t>(item, UnitClassOffset);
 	if (row < 0) {
 		return nullptr;
 	}
@@ -221,7 +219,7 @@ auto MapsLevelRaw(Unit* item) noexcept -> int {
 
 // The maps.txt Level of a map item, 0 when `item` is not a map or no loaded map names it.
 auto MapsLevelOfItem(void* item) noexcept -> int {
-	if (!On(UnitClassOf) || !On(ItemRecord)) {
+	if (!On(ItemRecord)) {
 		return 0;
 	}
 	__try {
@@ -232,7 +230,7 @@ auto MapsLevelOfItem(void* item) noexcept -> int {
 }
 
 void StampMapOutput(void* item) noexcept {
-	if (!On(UnitClassOf) || !On(ItemRecord)) {
+	if (!On(ItemRecord)) {
 		return;
 	}
 	__try {
@@ -254,15 +252,15 @@ auto InstallMapQuality(const D2RL::PluginContext* context, const std::vector<Sig
 			ResolvePart(context, overrides, ranges, count, part);
 		}
 	}
-	// Never installed half-on: each hook needs the lookups it calls. Without them the game rolls magic maps as before.
-	const bool lookups = On(ItemRecord) && On(UnitClassOf);
-	if (On(QualityRoll) && lookups && On(MainRollCall)) {  // the roll hook is never installed without its caller check
+	// Never installed half-on: each hook needs the item record lookup. Without it the game rolls magic maps as before.
+	const bool itemRecord = On(ItemRecord);
+	if (On(QualityRoll) && itemRecord && On(MainRollCall)) {  // the roll hook is never installed without its caller check
 		g_rollLive = Hook(context, QualityRoll, reinterpret_cast<void*>(&QualityRollHook), reinterpret_cast<void**>(&g_original));
 	} else if (On(QualityRoll)) {
 		g_parts[QualityRoll].status.on = false;
 		g_parts[QualityRoll].status.detail = "off: not hooked, because a part it needs was not found";
 	}
-	if (On(MagicFallback) && On(NormalFallback) && lookups) {
+	if (On(MagicFallback) && On(NormalFallback) && itemRecord) {
 		g_fallbackLive = Hook(context, MagicFallback, reinterpret_cast<void*>(&MagicFallbackHook), reinterpret_cast<void**>(&g_originalFallback));
 	} else if (On(MagicFallback)) {
 		g_parts[MagicFallback].status.on = false;

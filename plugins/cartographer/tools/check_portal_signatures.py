@@ -33,7 +33,6 @@ PARTS = [
     ("ItemSpellCheck", 0x5817F0, 44, None, 15),
     ("ItemSpellUse", 0x581680, 38, None, 14),
     ("ItemRecord", 0x314110, 8, "E8", 0),
-    ("UnitClassOf", 0x349860, 7, "75", 0),
     ("UnitRoom", 0x34B440, 12, "75", 0),
     ("RoomLevelId", 0x2EFC10, 3, "75", 0),
     ("ClientMessage", 0x491960, 27, None, 0),
