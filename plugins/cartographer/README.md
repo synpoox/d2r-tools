@@ -4,7 +4,7 @@ A D2RLoader plugin for Diablo II: Resurrected that opens a map from the map's ow
 opens a red portal to a level built from your `maps.txt`. Maps can carry random properties and events (a boss, a horde,
 an ambush, a shrine or a treasure). MIT licensed.
 
-**Not released yet.** See Status below for what has been seen working in game.
+See Status below for what has been seen working in game.
 
 ## Features
 

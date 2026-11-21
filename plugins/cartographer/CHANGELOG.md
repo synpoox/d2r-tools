@@ -1,7 +1,72 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-11-20
 
+- Map stats go through a table of routes, with an optional `statroutes.txt` to add your own, and your summons and mercenaries no longer get the map's monster stats.
+- A `Monster` row in `statroutes.txt` can now give a `Param`, the stat's layer, so a stat that needs a skill (such as `item_splashonhit`) can be routed.
+- Fixed a compatibility issue that could prevent map portals from opening.
+- bosses.txt is no longer limited to 16 bosses; run tools\install.ps1 again.
+- Kurast maps no longer show black void past their edges.
+- Siege maps no longer show a black field at their west and east ends: run the installer again to add the border pieces.
+- The extra monster groups log line now counts the groups asked for, not the monster ids.
+- Maps can now carry extra monster groups, make their monsters heal from the damage they deal, and add a share of their physical damage as fire, lightning, cold, magic or poison damage.
+- Map items can carry 64 more stats, added by the installer: monster attack rating, armour, elemental damage, masteries, pierce, absorbs, damage reduction, deadly strike, crushing blow, open wounds, thorns, attack and cast rates, regeneration, freeze and curse resistance, plus the map's area level, unique monsters, bonus drops, ethereal and socketed drops, treasure class drops and extra bosses; mods use them by naming the properties in their affix rows.
+- Maps can drop a named treasure class on a kill, add extra drop picks, make drops ethereal or socketed, and spawn extra Bosses; other plugins can watch map drops through `cartographer.map-drop.v1`.
+- Warmth in maps.txt and arenas.txt is now described as the strength of the light around you (higher is dimmer), not colour.
+- A Kurast map (Act 3, the Burbs district) opens from its own map item.
+- Wilderness maps (Act 1 fields, a framed swamp or tree field) and Wilderness arenas.
+- A Desert map (Act 2 sand) opens from its own map item, and a Desert arena can be built from arenas.txt.
+- Mesa maps and arenas are planned from a shared tileset table, so more tilesets can get arenas; they look the same as before.
+- A boss in bosses.txt can now use a mod's own boss monster as its Base.
+- Compatibility: the installer accepts a mod that already has Cartographer's own `CartographerMap` item type (code `cmap`) row, and it checks every table before it writes any file.
+- An arena whose levels.txt OffsetX or OffsetY is past 6553 tiles is refused with a report line, because HD drew black void there (3x3 Mesa arenas).
+- An arena in arenas.txt can set its own Brightness and Warmth.
+- A fixed arena can have named spots (arenaspots.txt) that hold a monster or an object, and other plugins can look them up.
+- Other plugins can run code around each room populate and skip that room's own monsters through cartographer.room-populate.v1.
+- Cartographer can build a fixed, enclosed Mesa arena level for a mod from a new arenas.txt.
+- A plugin can open a second map in a game through cartographer.open-extra.v1, at the source map's monster level.
+- The open map panel calls the speed modifier Monster Speed, like the map tooltip.
+- An outdoor map (Jungle, Snow or Siege) whose layout cannot be built now opens that tileset's default map, instead of closing the game.
+- Every map's Boss is its real Boss, even when no room takes it.
+- Maps no longer sometimes have stairs.
+- The map panel's Monster Density line now shows only the map's bonus from its modifiers, not the Density from maps.txt.
+- Maps no longer sometimes fail to let you in through the portal.
+- Maps no longer contain waypoints, stairs or exits: the portal is the only way in and out.
+- Every map now always gets its Boss: if its room cannot take it, other rooms of the map are tried as you reach them.
+- Maps can now have a Hue and a Saturation column to turn their colours or wash them out.
+- Maps can now tint their light a colour (TintR, TintG and TintB in maps.txt) while you are in them.
+- The map panel hides while the inventory or another right-side panel is open, so it no longer covers the equipment.
+- Cartographer reads every stat on a map item, not just the first 16, so late stats such as monster speed and resists are no longer dropped.
+- A new map item shows `Area Level: N` as the first line of its properties, also on maps a cube recipe makes.
+- Compatibility: a cube `map-level` recipe now adds to the map's own Area Level (the `maps.txt` Level) instead of starting from 0.
+- Lava maps (mostly ExtraLarge) no longer leave a bare black edge on one side of their biggest layouts.
+- The map panel has room for a map with the most properties.
+- A map's Boss now waits for a boss-cell room that is not up yet, and a Boss no room took is logged as given up.
+- Snow maps end in a cliff and ravine border on all four sides, with no black void at the ends, and the border can be walked to.
+- A map with Tileset `Snow` or `Siege` can leave `Shape` blank: those tilesets ignore it.
+- Using a map whose `maps.txt` row was skipped now prints the row and the reason to the loader console.
+- The map panel now shows the map's total Density (maps.txt plus modifiers) and its total Magic Find.
+- The map panel now reads like item properties: "Monsters have" and "Players have" groups, blue lines, readable stat names, and no map name line.
+- Magic maps: the map quality log now counts every quality, so its numbers add up.
+- Maps can have their own brightness and warmth (HD), set in maps.txt and applied only while you are in that map.
+- A blank `spellicon` cell on a map row counts as 0, so set it to -1 on map rows to avoid the identify cursor.
+- Inside a map, the map info now takes the place of the terror zone text.
+- A map's old revealed cells are no longer shown on a new map for a player who joins a LAN game by Direct Join (TCP/IP).
+- Lava maps keep unique packs coming through the last third of the map instead of running out early.
+- New Act 5 Nihlathak Temples maps: a ring of four rooms, opened from their own map item.
+- New Act 3 Kurast Sewers maps (`KurastSewer`), opened from their own map item.
+- New Act 3 Spider Cavern maps: a ring of four rooms, opened from their own map item.
+- New Durance of Hate maps (Act 3 Mephisto dungeon), opened from their own map item.
+- New map tileset `Arcane` (the Act 2 Arcane Sanctuary): floating platforms joined by bridges, with the map Boss and events in it.
+- New Act 2 Maggot Lair maps, opened from their own map item.
+- New Act 2 Harem and Palace Cellar maps: a ring of four rooms, opened from their own map items.
+- New Act 1 Catacombs maps (`Catacombs`), opened from their own map item.
+- New Act 1 Jail maps (a prison maze), opened from their own map item.
+- A Barracks map (Act 1 Barracks) opens from its own map item.
+- New Act 3 Dungeon maps (the Swampy Pit and Flayer Dungeon look), opened from their own map item.
+- New Act 2 Sewers maps (`Sewer`), opened from their own map item.
+- New Act 2 Tombs maps, opened from their own map items.
+- A Mesa map (Act 4 plains) opens from its own map item.
 - The map name no longer shows as a second title on entry; only the game's own text does.
 - The map panel now sits below the terror zone text instead of over it.
 - A map can now roll rare (yellow name, blue property lines): set `compactsave` to 0 on the map rows in `misc.txt`; `cartographer check` notes rows that still have 1.
@@ -67,5 +132,4 @@
 - New map `Tileset` `Siege` (Act 5 Bloody Foothills, a long strip); run `tools\install.ps1` again for its level.
 - `tools\install.ps1` no longer adds a map level where another level of your mod already is; it tells you how to pick another spot.
 - Crypt maps: a Treasure, Boss or other event monster that is not in the map's `Monsters` list no longer causes a game assertion when it appears.
-
 - Event monsters in a map with a `Monsters` list no longer trigger a game error.
