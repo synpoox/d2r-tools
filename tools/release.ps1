@@ -38,7 +38,8 @@ $prev = @{}
 $prevTag = @(git -C $repo ls-remote --tags origin 'refs/tags/release-*') | ForEach-Object { ($_ -split '\s+')[1] -replace '^refs/tags/','' } |
     Where-Object { $_ -match '^release-[\d.]+$' -and $_ -ne $Suite } | Sort-Object { [version]($_ -replace '^release-','') } | Select-Object -Last 1
 if ($prevTag) {
-    git -C $repo fetch -q --depth 1 origin "refs/tags/${prevTag}:refs/tags/${prevTag}" 2>$null
+    $depth = if ((git -C $repo rev-parse --is-shallow-repository) -eq 'true') { '--depth=1' } else { @() }   # --depth on a full clone would make it shallow
+    git -C $repo fetch -q $depth origin "refs/tags/${prevTag}:refs/tags/${prevTag}" 2>$null
     $old = git -C $repo show "${prevTag}:release/suite.json" 2>$null
     if ($LASTEXITCODE -ne 0) { throw "Cannot read release/suite.json at $prevTag" }
     ($old -join "`n" | ConvertFrom-Json).plugins.PSObject.Properties | ForEach-Object { $prev[$_.Name] = $_.Value.version }
@@ -93,7 +94,8 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     $files += $zip
 
     if ($prev[$name] -ne $ver) { $changes += "###### $display $ver`n`n$($sec.Body)" }
-}$all = Join-Path $out "d2r-tools-$($Suite -replace '^release-','').zip"
+}
+$all = Join-Path $out "d2r-tools-$($Suite -replace '^release-','').zip"
 Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $all
 $files += $all
 Remove-Item $bundle, (Join-Path $out '_stage') -Recurse -Force
