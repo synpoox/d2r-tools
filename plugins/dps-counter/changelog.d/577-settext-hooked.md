@@ -1,0 +1,1 @@
+- Works alongside mods whose plugins also change the game's text boxes (PD2 Resurrected).

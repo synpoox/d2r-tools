@@ -34,7 +34,10 @@ constexpr const char* MissileOwnerSig =
 // For the text: FindPanel 0x846170, FindChild 0x856220, TextBoxWidget::SetText 0x86dd50 (as player-bars finds them).
 constexpr const char* FindPanelSig = "48 8B D1 48 8B 0D ?? ?? ?? ?? 48 85 C9 0F 85 ?? ?? ?? ?? 33 C0 C3";
 constexpr const char* FindChildSig = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B 59 58 48 8B F2 48 8B";
-constexpr const char* SetTextSig = "40 53 48 83 EC 20 4C 8B 42 08 48 8B D9 48 8B 12 48 81 C1 88 00 00 00 E8";
+// SetText is matched from its 16th byte (ADD RCX,0x88 / CALL / ... / JMP) and stepped back: another plugin's hook on
+// its entry (PUSH RBX / SUB RSP,0x20 / MOV R8,[RDX+8] / MOV RBX,RCX / MOV RDX,[RDX]) rewrites the first 16 bytes at most.
+constexpr const char* SetTextSig = "48 81 C1 88 00 00 00 E8 ?? ?? ?? ?? 48 8B CB 48 83 C4 20 5B E9";
+constexpr uint32_t SetTextSigAt = 16;
 
 constexpr uint32_t UnitPlayer = 0, UnitMonster = 1, UnitMissile = 3;  // u32 unit type at +0
 
@@ -308,7 +311,8 @@ auto InstallCounter(const D2RL::PluginContext* context, char* report, size_t siz
 	const uint8_t* const missileOwner = FindSig(base, MissileOwnerSig, "missile owner", report, size);
 	const uint8_t* const findPanel = FindSig(base, FindPanelSig, "FindPanel", report, size);
 	const uint8_t* const findChild = FindSig(base, FindChildSig, "FindChild", report, size);
-	const uint8_t* const setText = FindSig(base, SetTextSig, "SetText", report, size);
+	const uint8_t* const setTextBody = FindSig(base, SetTextSig, "SetText", report, size);
+	const uint8_t* const setText = setTextBody == nullptr ? nullptr : setTextBody - SetTextSigAt;
 	if (dealDamage == nullptr || missileOwner == nullptr || findPanel == nullptr ||
 	    findChild == nullptr || setText == nullptr) {
 		return false;

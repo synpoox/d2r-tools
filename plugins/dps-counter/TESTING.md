@@ -13,3 +13,4 @@ Run in a toolkit game slot, in Hell, on a level 90+ character. `dps-counter` in 
 | 6 | Leave and rejoin a game | The counter comes back; no faults in `dps-counter.log` | pass (Slot7): after Save and Exit and a rejoin, a hit showed `DPS: 1,126`; `faults 0` |
 | 7 | Label position | Just above the life globe, over `Life:` | pass (Slot7, Hell, level 95 Paladin): `DPS: 1,800` drawn right above `Life: 8191 / 8191` |
 | 8 | `enabled = false` | No label, no hook; log `counter off: enabled = false in dps-counter.toml` | pass (Slot7, Hell): zombies killed, no label; status `feed off, hits 0` |
+| 9 | Another plugin hooks SetText first (PD2 Resurrected core-ui) | Log `counter on: ...`, not `signature for SetText found 0 times` (#577) | not run |
