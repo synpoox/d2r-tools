@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 - 2026-11-23
+
+- Works alongside mods whose plugins also change the game's text boxes (PD2 Resurrected).
+
 ## 1.0.0 - 2026-11-08
 
 - Shows the damage per second you deal to monsters just above the life globe.
