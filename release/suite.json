@@ -28,8 +28,9 @@
       ]
     },
     "dps-counter": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "validation": [
+        "The 1.0.1 fix (SetText found past its entry, so another plugin's hook on it does not turn the counter off) was checked by code review, a clean build and a byte scan of the build 93847 dump: one match, at the same function. Not tested in game; the in-game checks below were made on 1.0.0.",
         "Clean x64 Release build with MSVC on GitHub Actions; the host tests of its logic pass.",
         "Tested in game on Diablo II: Resurrected 3.3.0 build 93847 with D2RLoader 1.3.1, in a test slot in Hell with level 95 characters: melee and spell damage shown above the life globe, the text disappears after the window, an immune monster counts nothing, the counter survives leaving and rejoining a game, and enabled = false shows nothing and installs no hook. Version 1.0.0 differs from the tested build only in its version number."
       ],
