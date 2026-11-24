@@ -1,5 +1,6 @@
 # Builds a suite release: one zip per plugin listed in release\suite.json, a bundle of all of them, SHA256SUMS.txt and
-# the release notes: each plugin's dated CHANGELOG section, nothing else, so the downloads stay near the top.
+# the release notes: the dated CHANGELOG section of each plugin whose version changed since the previous suite tag,
+# nothing else, so the downloads stay near the top.
 #   tools\release.ps1                      # build everything into dist\release\<suite>\ (nothing is published)
 #   tools\release.ps1 -NoBuild             # reuse dist\<plugin> from an earlier tools\build.ps1 run
 # Returns {Tag, Title, Notes, Assets}; .github/workflows/release.yml publishes them with `gh release create`.
@@ -30,6 +31,17 @@ function Read-Section([string]$text, [string]$version) {   # -> @{ Date; Body } 
     $m = [regex]::Match($text, "(?ms)^##\s+\[?$([regex]::Escape($version))\]?\s*-\s*(\d{4}-\d{2}-\d{2})[^\r\n]*\r?\n(.*?)(?=^##\s|\z)")
     if (-not $m.Success) { throw "CHANGELOG has no '## $version - YYYY-MM-DD' section" }
     @{ Date = $m.Groups[1].Value; Body = $m.Groups[2].Value.Trim() }
+}
+
+# Versions in the newest earlier suite tag's manifest: only plugins whose version changed since then get notes.
+$prev = @{}
+$prevTag = @(git -C $repo ls-remote --tags origin 'refs/tags/release-*') | ForEach-Object { ($_ -split '\s+')[1] -replace '^refs/tags/','' } |
+    Where-Object { $_ -match '^release-[\d.]+$' -and $_ -ne $Suite } | Sort-Object { [version]($_ -replace '^release-','') } | Select-Object -Last 1
+if ($prevTag) {
+    git -C $repo fetch -q --depth 1 origin "refs/tags/${prevTag}:refs/tags/${prevTag}" 2>$null
+    $old = git -C $repo show "${prevTag}:release/suite.json" 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Cannot read release/suite.json at $prevTag" }
+    ($old -join "`n" | ConvertFrom-Json).plugins.PSObject.Properties | ForEach-Object { $prev[$_.Name] = $_.Value.version }
 }
 
 $changes = @(); $files = @()
@@ -80,9 +92,8 @@ foreach ($p in $man.plugins.PSObject.Properties) {
     Copy-Item (Join-Path $stage '*') -Destination (Join-Path $bundle $name) -Recurse
     $files += $zip
 
-    $changes += "###### $display $ver`n`n$($sec.Body)"
-}
-$all = Join-Path $out "d2r-tools-$($Suite -replace '^release-','').zip"
+    if ($prev[$name] -ne $ver) { $changes += "###### $display $ver`n`n$($sec.Body)" }
+}$all = Join-Path $out "d2r-tools-$($Suite -replace '^release-','').zip"
 Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $all
 $files += $all
 Remove-Item $bundle, (Join-Path $out '_stage') -Recurse -Force

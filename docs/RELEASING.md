@@ -1,7 +1,7 @@
 # Releasing
 
 Plugins are versioned and tagged on their own (`<plugin>/vX.Y.Z`). Players get **suite releases** (`release-YYYY.MM.DD.N`):
-one GitHub Release with a zip per plugin, a bundle of all of them, `SHA256SUMS.txt` and notes made of each plugin's changelog section.
+one GitHub Release with a zip per plugin, a bundle of all of them, `SHA256SUMS.txt` and notes made of the changelog section of each plugin whose version changed since the previous suite release.
 The root `README.md` table lists released plugins only. An unreleased plugin has no row there and is not in any suite.
 
 ## 1. Release a plugin version
