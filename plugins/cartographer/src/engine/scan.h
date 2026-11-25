@@ -32,7 +32,8 @@ auto At(const void* base, int offset) noexcept -> T {
 }
 
 // One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte.
-// The signatures are in core/part_signatures.h (build 93847); the part table in docs/reverse-engineering/cartographer.md
+// One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte, except a
+// called-only part with entryOffset (its built-in signature starts that far in; a signatures.txt line must still start at the entry).
 // records each one, and signatures.txt can replace them without a rebuild.
 struct Part {
 	const char* name;
