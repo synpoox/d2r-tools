@@ -43,14 +43,15 @@ constexpr int UnitDataFlagOffset = 0x1bd;  // uint8 (what the game's own data fl
 using PropApplyFn = uint64_t (*)(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_t p5, uint64_t p6, uint64_t p7, uint64_t p8, uint64_t p9,
                                  uint64_t p10, uint64_t p11, uint64_t p12) noexcept;
 
-// The cube's output step (recipe -> output items): its second argument is the player, whose inventory holds the cube items (the recipe's inputs).
-using CubeExecFn = uint64_t (*)(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9,
+// The cube transmute (recipe search, then the output step 0x5269c0): its second argument is the player, whose inventory holds the cube items (the recipe's inputs).
+// Passed through with ten arguments, so its stack arguments reach it unchanged. The cheat transmute 0x4127c0 calls the output step directly and is not seen.
+using CubeTransmuteFn = uint64_t (*)(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9,
                                 uint64_t a10) noexcept;
 using UnitInventoryFn = void* (*)(void* unit) noexcept;
 using InventoryFirstFn = void* (*)(void* inventory) noexcept;
 using InventoryNextFn = void* (*)(void* item) noexcept;
 
-enum PartId { FindList, ListCopy, MakeList, SetListStat, PropApply, CubeExec, UnitInventory, InventoryFirst, InventoryNext, PartCount };
+enum PartId { FindList, ListCopy, MakeList, SetListStat, PropApply, CubeTransmute, UnitInventory, InventoryFirst, InventoryNext, PartCount };
 
 Part g_parts[PartCount] = {
 	{"ItemListFind", sig::ItemListFind, 0, false, nullptr, {}, {}},
@@ -58,7 +59,7 @@ Part g_parts[PartCount] = {
 	{"ItemListMake", sig::ItemListMake, 0, false, nullptr, {}, {}},
 	{"ItemSetListStat", sig::SetListStat, 0, false, nullptr, {}, {}},
 	{"ItemPropApply", sig::ItemPropApply, 14, false, nullptr, {}, {}},
-	{"CubeExec", sig::CubeExec, 21, false, nullptr, {}, {}},
+	{"CubeTransmute", sig::CubeTransmute, 15, false, nullptr, {}, {}},
 	{"UnitInventory", sig::UnitInventory, 0, false, nullptr, {}, {}},
 	{"InventoryFirst", sig::InventoryFirst, 0, false, nullptr, {}, {}},
 	{"InventoryNext", sig::InventoryNext, 0, false, nullptr, {}, {}},
@@ -75,13 +76,13 @@ std::atomic<int> g_logged{0};
 // An item's storage page is a byte in its item data; the cube's page is 3 (the game's own cube walk keeps only items on it).
 constexpr int CubePageOffset = 0x55;
 constexpr uint8_t CubePage = 3;
-CubeExecFn g_cubeOriginal = nullptr;
+CubeTransmuteFn g_cubeOriginal = nullptr;
 std::atomic<bool> g_inCube{false};            // inside the game's cube output step
 std::atomic<uint64_t> g_stampedItem{0};       // the map item just given its maps.txt Level (issue #422); its first map-level property starts from 0
 std::atomic<int> g_cubeInput{-1};  // the highest map level among the cube's inputs, read when the output step starts (the game frees the inputs during it)
 
 auto CubeInputsFound() noexcept -> bool {
-	return On(CubeExec) && g_cubeOriginal != nullptr && On(UnitInventory) && On(InventoryFirst) && On(InventoryNext);
+	return On(CubeTransmute) && g_cubeOriginal != nullptr && On(UnitInventory) && On(InventoryFirst) && On(InventoryNext);
 }
 
 auto Readable(uint64_t p) noexcept -> bool {
@@ -117,7 +118,7 @@ auto SafeSetMagicStat(void* item, int statId, int value) noexcept -> bool {
 auto CubeInputLevel(uint64_t player, int statId) noexcept -> int;
 void StampCubeOutputs(uint64_t player) noexcept;
 
-auto CubeExecHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10) noexcept -> uint64_t {
+auto CubeTransmuteHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10) noexcept -> uint64_t {
 	g_stampedItem.store(0);
 	g_inCube.store(true);
 	g_cubeInput.store(CubeInputLevel(a2, g_statId.load(std::memory_order_relaxed)));
@@ -212,7 +213,7 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 	if (!match) {
 		return g_propOriginal(a1, a2, a3, item, p5, p6, p7, p8, p9, p10, p11, p12);
 	}
-	if (g_cubeOriginal != nullptr && !g_inCube.load() && g_stampedItem.load() == item) {  // replace only with the cube hook in place, so a missing CubeExec part cannot turn a cube add into a replace
+	if (g_cubeOriginal != nullptr && !g_inCube.load() && g_stampedItem.load() == item) {  // replace only with the cube hook in place, so a missing CubeTransmute part cannot turn a cube add into a replace
 		// A map just made with its maps.txt Level: a modder's own map-level (an affix or a unique's property) is the level, not an addition to it.
 		g_stampedItem.store(0);
 		const bool cleared = SafeSetMagicStat(reinterpret_cast<void*>(item), statId, 0);
@@ -249,7 +250,7 @@ auto PropApplyHook(uint64_t a1, uint64_t a2, uint64_t a3, uint64_t item, uint64_
 		base = MapsLevelOfItem(reinterpret_cast<void*>(item));
 	}
 	const bool ok = okBefore && okAfter;
-	const bool known = sp::cubeLevelKnown(ok, inputLevel, On(CubeExec));
+	const bool known = sp::cubeLevelKnown(ok, inputLevel, On(CubeTransmute));
 	const int target = sp::cubeMapLevelTarget(base, after == before ? base : after, pmin, pmax, roll, known);
 	bool fixed = false;
 	if (target != after) {
@@ -290,17 +291,17 @@ auto InstallItemStats(const D2RL::PluginContext* context, const std::vector<Sign
 		g_parts[PropApply].status.on = false;
 		g_parts[PropApply].status.detail = "off: not hooked, because a part it needs was not found";
 	}
-	// The cube's output step is hooked only to learn the cube (the recipe's inputs); without it, or the three walkers, the level adds to the output's own stat only.
-	if (On(PropApply) && On(CubeExec) && On(UnitInventory) && On(InventoryFirst) && On(InventoryNext)) {
-		Part& part = g_parts[CubeExec];
+	// The cube transmute is hooked only to learn the cube (the recipe's inputs); without it, or the three walkers, the level adds to the output's own stat only.
+	if (On(PropApply) && On(CubeTransmute) && On(UnitInventory) && On(InventoryFirst) && On(InventoryNext)) {
+		Part& part = g_parts[CubeTransmute];
 		const uint64_t rva = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(part.address) - context->exeBase);
-		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&CubeExecHook), reinterpret_cast<void**>(&g_cubeOriginal));
+		const bool hooked = context->InstallInlineHook(rva, part.guard, part.hookSize, reinterpret_cast<void*>(&CubeTransmuteHook), reinterpret_cast<void**>(&g_cubeOriginal));
 		(void)HookOutcome(part, hooked, g_cubeOriginal != nullptr);
-		if (!On(CubeExec)) {
+		if (!On(CubeTransmute)) {
 			g_cubeOriginal = nullptr;
 		}
 	}
-	plog::Info("part %s: %s; part %s: %s", g_parts[PropApply].name, g_parts[PropApply].status.detail.c_str(), g_parts[CubeExec].name, g_parts[CubeExec].status.detail.c_str());
+	plog::Info("part %s: %s; part %s: %s", g_parts[PropApply].name, g_parts[PropApply].status.detail.c_str(), g_parts[CubeTransmute].name, g_parts[CubeTransmute].status.detail.c_str());
 	if (parts != nullptr) {
 		*parts = ItemStatsPartStatuses();
 	}

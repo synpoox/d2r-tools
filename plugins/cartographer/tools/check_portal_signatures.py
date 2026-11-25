@@ -66,10 +66,10 @@ PARTS = [
     # The map item's own stats (cartographer/14-item-stats.md); both only called.
     ("ItemListFind", 0x2F5B80, 26, "75", 0),
     ("ItemListCopy", 0x2F64E0, 0, "FF 25", 0),
-    # The cube map level (cartographer/25-cube-map-level.md): ItemPropApply and CubeExec are hooked (14 and 21 bytes; first relative operand, a call, at +29 and +26); the rest are only called.
+    # The cube map level (cartographer/25-cube-map-level.md): ItemPropApply and CubeTransmute are hooked (14 and 15 bytes; first relative operand, a call, at +29 and +15); the rest are only called.
     ("ItemPropApply", 0x3D5060, 29, "E8", 14),
     ("ItemListMake", 0x3D5230, 45, "74", 0),
-    ("CubeExec", 0x5269C0, 26, "E8", 21),
+    ("CubeTransmute", 0x4F2490, 15, "E8", 15),
     ("UnitInventory", 0x34A360, 16, "75", 0),
     ("InventoryFirst", 0x388C10, 12, "74", 0),
     ("InventoryNext", 0x38ABA0, 12, "75", 0),
