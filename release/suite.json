@@ -18,9 +18,11 @@
       ]
     },
     "cartographer": {
-      "version": "0.1.1",
+      "version": "0.1.2",
       "validation": [
-        "Clean x64 Release build and all 31 Cartographer tests passed on the map portal fix.",
+        "0.1.2: clean x64 Release build, all 31 Cartographer tests passed, and the cube and SpawnMonster signatures checked unique on the D2R 3.4.0 (image 0x6ab3782c) dump.",
+        "0.1.2 in game on D2R 3.4.0 with D2RLoader 1.3.1-beta and every PD2 Resurrected plugin and companion, Hell, level 99: every Cartographer part on at startup; a cube map recipe raised a map from Area Level 87 to 88 from its input; the AutoCheck on Tunneling Depths spawned its boss King Leoric. The other 0.1.2 fixes (Arcane missiles, logging, unidentified map bonus) were checked in their own PRs.",
+        "0.1.1: clean x64 Release build and all 31 Cartographer tests passed on the map portal fix.",
         "On D2R 3.4.0 with D2RLoader 1.3.1-beta, a level-99 character right-clicked a map in Hell Harrogath and entered Tunneling Depths."
       ],
       "limits": [

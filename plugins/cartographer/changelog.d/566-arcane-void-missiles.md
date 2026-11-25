@@ -1,1 +1,0 @@
-- Fixed Arcane maps: missiles fly over the void between platforms instead of stopping at invisible walls.

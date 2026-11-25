@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 - 2026-11-25
+
+- Fixed cube map recipes not keeping the map level when another plugin also changes the cube (PD2 Resurrected).
+- Fixed stalls when opening a map: Cartographer writes much less to its log.
+- Fixed freezes in big fights: Cartographer no longer writes a log line for every kill and drop.
+- Fixed Arcane maps: missiles fly over the void between platforms instead of stopping at invisible walls.
+- Fixed map Bosses not spawning when another plugin (Bind and Summon) hooks the game's monster spawn function.
+- The map panel shows Monster Rarity; an unidentified map adds +30% Item Quantity and shows only Density, Monster Rarity, Experience, Better Chance of Getting Magic Items and Item Quantity.
+
 ## 0.1.1 - 2026-11-20
 
 - Map stats go through a table of routes, with an optional `statroutes.txt` to add your own, and your summons and mercenaries no longer get the map's monster stats.
