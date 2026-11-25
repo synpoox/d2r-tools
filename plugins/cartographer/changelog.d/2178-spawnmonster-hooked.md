@@ -1,0 +1,1 @@
+- Fixed map Bosses not spawning when another plugin (Bind and Summon) hooks the game's monster spawn function.

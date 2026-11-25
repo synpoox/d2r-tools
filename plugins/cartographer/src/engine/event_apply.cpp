@@ -80,7 +80,7 @@ enum PartId { PopulateRoom, SpawnMonster, SpawnSuperUnique, EvUnitRoom, EvRoomLe
 
 Part g_parts[PartCount] = {
 	{"PopulateRoom", sig::PopulateRoom, 12, false, nullptr, {}, {}},
-	{"SpawnMonster", sig::SpawnMonster, 0, false, nullptr, {}, {}},
+	{"SpawnMonster", sig::SpawnMonster, 0, false, nullptr, {}, {}, 0, sig::SpawnMonsterEntryOffset},
 	{"SpawnSuperUnique", sig::SpawnSuperUnique, 0, false, nullptr, {}, {}},
 	{"EventUnitRoom", sig::UnitRoom, 0, false, nullptr, {}, {}},
 	{"EventRoomLevelId", sig::RoomLevelId, 0, false, nullptr, {}, {}},

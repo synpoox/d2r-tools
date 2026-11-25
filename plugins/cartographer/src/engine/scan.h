@@ -43,6 +43,7 @@ struct Part {
 	PartStatus status;
 	uint8_t guard[32];  // the signature's own first hookSize bytes: what D2RLoader re-checks at the entry
 	uint32_t guardExact = 0;  // leading bytes of guard the signature pinned with no wildcard (hookSize once resolved, else 0)
+	uint32_t entryOffset = 0;  // called-only part: the built-in signature starts this many bytes into the function, past an entry another plugin may hook
 };
 
 // Finds a call-site part (a signature that starts at an `E8 rel32`, hookSize 0) like ResolvePart and sets *returnRva to the call's return address

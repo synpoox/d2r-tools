@@ -143,6 +143,15 @@ void ResolvePart(const D2RL::PluginContext* context, const std::vector<Signature
 				part.address = nullptr;
 			}
 		}
+		// A built-in signature past the entry: step back, and accept it only at a .pdata function start.
+		if (part.address != nullptr && !isOverride && part.entryOffset > 0 && part.hookSize == 0) {
+			part.address -= part.entryOffset;
+			bool known = false;
+			if (!IsFunctionEntry(context->exeBase, part.address, &known) && known) {
+				why = "the signature matches, but " + std::to_string(part.entryOffset) + " bytes before it is not the start of a function";
+				part.address = nullptr;
+			}
+		}
 		part.status.on = part.address != nullptr;
 		part.status.detail = part.status.on ? (isOverride ? "found by signature (signatures.txt)" : "found by signature") : "off: " + why;
 	}

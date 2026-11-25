@@ -53,7 +53,7 @@ PARTS = [
     ("LeechStep", 0x450C90, 30, None, 18),
     # Map events (cartographer/09-map-events.md)
     ("PopulateRoom", 0x50ACF0, 12, "48 8B 05", 12),
-    ("SpawnMonster", 0x492CF0, 56, None, 0),
+    ("SpawnMonster", 0x492D01, 39, None, 0),  # the signature starts 17 bytes into 0x492cf0, past the entry (pd2-resurrected#2178)
     ("SpawnSuperUnique", 0x499BA0, 34, None, 0),
     # Event Spawn names from the game's tables (cartographer/11-spawn-names.md)
     ("DataTablesBase", 0x300A90, 16, "72", 0),
