@@ -1,1 +1,0 @@
-- The map panel shows Monster Rarity; an unidentified map adds +30% Item Quantity and shows only Density, Monster Rarity, Experience, Better Chance of Getting Magic Items and Item Quantity.

@@ -44,7 +44,7 @@
 namespace {
 
 constexpr const char* PluginName = "cartographer";
-constexpr const char* PluginVersion = "0.1.1";  // PluginInfo::version too; CHANGELOG.md
+constexpr const char* PluginVersion = "0.1.2";  // PluginInfo::version too; CHANGELOG.md
 
 const D2RL::PluginContext* g_context = nullptr;
 std::wstring g_tableDir;   // <Mod>.mpq\data\global\excel\d2rloader\cartographer

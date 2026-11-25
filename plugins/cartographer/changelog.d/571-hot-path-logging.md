@@ -1,1 +1,0 @@
-- Fixed freezes in big fights: Cartographer no longer writes a log line for every kill and drop.
