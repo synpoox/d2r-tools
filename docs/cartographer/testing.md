@@ -297,3 +297,16 @@ Exact game steps to verify (needs a game, test slot and test save only):
 Verified in game (2026-11-12, slot 6, Hell, single player, test character, `-MapItems` rows with `type` `cmap`, the `Map` type added by `install.ps1`): each of `t20`, `t21`, `t22` showed its own name on hover before use ("Shorelines Map", "Tunneling Depths Map", "Overgrown Reach Map"). A right-click on the Shorelines item removed it and opened a red portal, with the log lines `opening 'Shorelines' (Cave) through level 138` and `Shorelines is open`. After Save and Exit and a reload the Overgrown Reach item answered with its own name ("Overgrown Reach cannot be opened: a map has already been opened in this game"), the once-per-game rule; the Tunneling Depths and Overgrown Reach portals were not opened in this run. Save and Exit worked with no `Character save failed` and no `BC_ASSERT`, and the character reloaded, with the PD2 `core-maps`, `core-rules` and `core-ui` DLLs moved out of the slot's plugins folder for the run (they cause the save failure, not these rows). Later in game: a map item could not be placed in the belt (the base 4-slot belt), Malah's three tabs sold none, and a Shorelines Map sold to him for 40 gold with no plugin error; Save and Exit with a map item in the inventory kept it. Not checked: a belt with more slots, the other vendors, and the map items' own inventory art (they show the scroll picture).
 
 Test-item tip: `stage_check -MapItems` does not seed `uniqueitems.txt`. Copy the vanilla table plus your row into the slot mod's excel folder, run `cheat uniques <439>`, then `cheat spawn t20,typ u,inv 0`.
+
+## Checking a mod's shipped map catalogue in game
+
+How to check that every map a mod ships (its `maps.txt` rows and map items) opens in game. Needs a test slot and a level 99 test character; the slot is staged as above.
+
+1. Stage the mod's tables and Cartographer, start the game and run `cartographer check`: no "item ... is not in the item tables" and no "needs item spell 16" for any map code.
+2. `debug_mode`, then `cheat spawn <code>,inv 0` for each map item. Check the name, area level and property text on the tooltip (HD and legacy `g` view).
+3. In the town the maps open from, use each item: a portal opens ("Entering <name>") and the item is used up. Walk in: the area loads, monsters and the boss room are there, and the arrival portal leads back to town.
+4. Open a second map in the same game: it must answer that a map has already been opened (one map per game).
+5. Back in an ordinary area, its own name shows on the automap and no map text.
+6. Save and Exit, stop, and read `cartographer.log`, `d2rloader.log` and the crash folder: no new crash file, no plugin error line, no "Character save failed".
+
+Not covered by this check: determinism of a rebuild with a fixed seed (a console `cheat seed` does not pin a map's maze seed), frame time and memory.
