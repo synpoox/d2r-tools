@@ -31,7 +31,8 @@ auto At(const void* base, int offset) noexcept -> T {
 	return value;
 }
 
-// One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte.
+// One part: a function (or a hooked entry) found by signature. Signatures are anchored at the function's first byte, except a
+// called-only part with entryOffset (its built-in signature starts that far in; a signatures.txt line must still start at the entry).
 // The signatures are in core/part_signatures.h (build 93847); the part table in docs/reverse-engineering/cartographer.md
 // records each one, and signatures.txt can replace them without a rebuild.
 struct Part {
@@ -43,6 +44,7 @@ struct Part {
 	PartStatus status;
 	uint8_t guard[32];  // the signature's own first hookSize bytes: what D2RLoader re-checks at the entry
 	uint32_t guardExact = 0;  // leading bytes of guard the signature pinned with no wildcard (hookSize once resolved, else 0)
+	uint32_t entryOffset = 0;  // called-only part: the built-in signature starts this many bytes into the function, past an entry another plugin may hook
 };
 
 // Finds a call-site part (a signature that starts at an `E8 rel32`, hookSize 0) like ResolvePart and sets *returnRva to the call's return address
