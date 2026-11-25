@@ -26,7 +26,7 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 
 - `ItemPropApply`: `48 89 6C 24 20 56 41 56 41 57 48 83 EC 60 0F B6 F1 49 8B E9 49 8B C9 4D 8B F0 44 8B FA E8 ?? ?? ?? ?? 66 83 F8 01 72`; hook size 14, first relative operand (the call) at `+29`.
 - `ItemListMake`: `48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 8B F8 41 8B D9 48 8B F2 44 8B C3 41 8B D7 48 8B F9 48 85 C9 74 ?? E8 ?? ?? ?? ??`; only called.
-- `CubeExec`: `40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 08 EA FF FF B8 F8 16 00 00 E8 ?? ?? ?? ??` (31 bytes, unique); hook size 21 (the push sequence and `lea rbp,[rsp-0x15f8]`, no relative operand inside the 21 bytes; the first, a call, is at `+26`). The byte guard is the 21 hooked bytes, pinned in the signature, so a build whose prologue differs leaves the part off and the hook is not installed.
+- `CubeTransmute` `0x4f2490` (the cube packet handler: recipe search, then the executor `0x5269c0` at `0x4f27bd`; it returns right after it): `40 53 55 57 41 54 41 55 41 56 B8 C8 14 00 00 E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 B0 14 00 00 44 88 4C 24 40` (46 bytes, unique; the first 16 are already unique); hook size 15 (six pushes and `mov eax, 0x14c8`; the first relative operand, a call, is at `+15`). Until d2r-tools#582 the hook sat on the executor's own entry (`40 55 53 56 ... 48 8D AC 24 08 EA FF FF`, 21 bytes), but pd2-resurrected's core-rules hooks that entry too, so the signature matched nowhere and the part was off. The handler is hooked instead: same arguments (game, player first), and core-rules' own second executor run (corruption in one press) happens inside it. The cheat transmute `0x4127c0` calls the executor directly and is not seen (build 95032, image 0x6ab3782c).
 - The three walkers the cube step uses to find the cube's items are only called:
   - `UnitInventory` `0x34a360`: `48 89 5C 24 18 56 48 83 EC 20 48 8B F1 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 9E A0 00 00 00` (unit to its inventory).
   - `InventoryFirst` `0x388c10`: `40 53 48 83 EC 20 48 8B D9 48 85 C9 74 ?? 81 39 04 03 02 01 74 ??` (inventory to its first item).
@@ -36,8 +36,8 @@ Signatures (offset 0 = function entry; unique in the image, checked by `tools/ch
 
 ### Cube executor details (seen in game)
 
-- `CubeExec`'s second argument is the **player**, not the cube. The plugin walks the player's inventory and keeps the items whose item-data page byte (`[[unit + 0x10] + 0x55]`) is 3, the cube page.
-- The game frees the input items during the output step, so the input map's level is read when `CubeExec` is entered (the second hook, 21 bytes).
+- `CubeTransmute`'s (and the executor's) second argument is the **player**, not the cube. The plugin walks the player's inventory and keeps the items whose item-data page byte (`[[unit + 0x10] + 0x55]`) is 3, the cube page.
+- The game frees the input items during the output step, so the input map's level is read when `CubeTransmute` is entered (the second hook, 15 bytes), before the executor runs.
 - The cube reuses the input map's unit for a map-keeping output, so the game's own apply **adds** to the stat that is already there (10 then 20). The hook confirms that and only sets the stat when the result differs from "old level plus the recipe's value".
 - The `properties.txt` row `map-level` is game property id **284** (the row number the game counts from the table, not 285).
 - The item's stat list is read through `ItemListFind` and `ItemListCopy` with the layout guard of section 16 (`decodeItemStatList`): 16-byte entries `{layer, stat, value, 0}` (D2RLoader's replacement writes the value; section 16 corrects the earlier 8-byte pair reading).

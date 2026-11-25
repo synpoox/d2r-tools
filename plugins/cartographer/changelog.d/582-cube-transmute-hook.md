@@ -1,0 +1,1 @@
+- Fixed cube map recipes not keeping the map level when another plugin (pd2-resurrected core-rules) hooks the cube.

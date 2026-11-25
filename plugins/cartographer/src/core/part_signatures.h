@@ -31,8 +31,10 @@ inline constexpr const char* SetListStat = "FF 25 ?? ?? ?? ?? 90 90 90 90 66 89 
 // The cube map level (issue #330, cartographer/25-cube-map-level.md): the property applier (hooked) and the item list maker (called).
 inline constexpr const char* ItemPropApply = "48 89 6C 24 20 56 41 56 41 57 48 83 EC 60 0F B6 F1 49 8B E9 49 8B C9 4D 8B F0 44 8B FA E8 ?? ?? ?? ?? 66 83 F8 01 72";
 inline constexpr const char* ItemListMake = "48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 56 41 57 48 83 EC 20 45 8B F8 41 8B D9 48 8B F2 44 8B C3 41 8B D7 48 8B F9 48 85 C9 74 ?? E8 ?? ?? ?? ??";
-// The cube's output step (hooked, 21 bytes) and the three small inventory walkers it uses to find the cube's items (only called).
-inline constexpr const char* CubeExec = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 08 EA FF FF B8 F8 16 00 00 E8 ?? ?? ?? ??";
+// The cube's transmute packet handler 0x4f2490 (game, player, ...), which runs the recipe search and then the output step 0x5269c0 (hooked,
+// 15 bytes: six pushes and `mov eax, 0x14c8`, no relative operand), and the three small inventory walkers it uses to find the cube's items
+// (only called). Not the output step itself: pd2-resurrected's core-rules owns that entry (d2r-tools#582), and two hooks on one entry do not stack.
+inline constexpr const char* CubeTransmute = "40 53 55 57 41 54 41 55 41 56 B8 C8 14 00 00 E8 ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 B0 14 00 00 44 88 4C 24 40";
 inline constexpr const char* UnitInventory = "48 89 5C 24 18 56 48 83 EC 20 48 8B F1 48 85 C9 75 ?? 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? ?? ?? 84 C0 74 01 CC 48 8B 9E A0 00 00 00";
 inline constexpr const char* InventoryFirst = "40 53 48 83 EC 20 48 8B D9 48 85 C9 74 ?? 81 39 04 03 02 01 74 ??";
 inline constexpr const char* InventoryNext = "40 53 48 83 EC 20 48 8B D9 48 85 C9 75 10 88 4C 24 30 48 8D 4C 24 30 E8 ?? ?? FF FF EB 67 E8 ?? ?? FC FF 83 F8 04 74 14 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? FF FF 84 C0 74 01 CC 48 8B CB E8 ?? ?? FC FF 83 F8 04 75 41 48 8B CB E8 ?? ?? FC FF 83 F8 04 75 20 48 8B CB E8 ?? ?? FB FF 48 85 C0 75 2F 48 8D 4C 24 30 88 44 24 30 E8 ?? ?? FF FF 84 C0 74 01 CC 48 8D 4C 24 30 C6 44 24 30 00 E8 ?? ?? FF FF 84 C0 74 01 CC 33 C0 48 83 C4 20 5B C3 48 05 A0 00 00 00 74 DC 48 8B 40 10";
