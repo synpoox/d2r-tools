@@ -1025,7 +1025,7 @@ auto MazePartStatuses() -> std::vector<PartStatus> {
 		out.push_back(std::move(status));
 	}
 	out.push_back(ArcaneVoidTilePartStatus());
-	out.push_back(AutomapResetPartStatus());
+	AutomapResetPartStatuses(out);
 	return out;
 }
 

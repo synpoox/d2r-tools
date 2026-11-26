@@ -169,6 +169,11 @@ inline constexpr const char* RoomBringUp = "48 89 5C 24 08 57 48 83 EC 20 48 8B 
 // file when the layer becomes current. Hooked (the hook cuts the first 17 bytes: three whole instructions, no relative operand); a new slot map skips the one read.
 // The `cmp qword ptr [rip+x], 0` at +0x22 is the current layer object pointer.
 inline constexpr const char* AutomapRestore = "40 55 48 8D AC 24 F0 FD FF FF 48 81 EC 10 03 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 D0 01 00 00 48 83 3D ?? ?? ?? ?? 00 0F 84";
+// The layer record writer (0xd5fe0, called by the leave save 0xd6230): appends one record {next, key, act, seed hi, four list sizes} and the four lists of newly
+// revealed cells to the character's map file. Hooked (18 bytes: seven pushes and `sub rsp,1D0h`, no relative operand); a slot map's record is kept in memory instead.
+inline constexpr const char* AutomapSave = "40 53 55 56 57 41 54 41 56 41 57 48 81 EC D0 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 C0 01 00 00 48 8B C2 48 8B E9 48 8B C8 49 8B D0";
+// The cell list insert (0xd1460; list, result[16], cell{u16 kind 1, u16, i32, i32}): what 0xd5710 calls for each cell it reads back. Only called.
+inline constexpr const char* AutomapInsert = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 30 48 8B FA 49 8B E8 48 8D 54 24 20 48 8B D9 E8 ?? ?? ?? ?? 48 8B 74 24 28 48 85 F6 0F 84";
 
 // The map panel (issue #308; cartographer/22-map-panel.md). The UI text calls the other plugins use (docs/reverse-engineering/better-xp-bar.md,
 // dps-counter.md, player-bars.md): FindPanel(name), FindChild(parent, name) (direct children only) and TextBoxWidget::SetText(box, {ptr, len}). Only called.

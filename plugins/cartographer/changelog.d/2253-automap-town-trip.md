@@ -1,0 +1,1 @@
+- Fixed maps showing walls from earlier maps on the automap after a trip to town.

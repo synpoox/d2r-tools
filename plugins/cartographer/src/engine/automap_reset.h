@@ -1,7 +1,8 @@
 // A fresh slot map starts with an empty revealed automap (issue #306 review). The game keeps each character's revealed cells per layer and per game seed in
 // the character's map memory file and reads them back when the layer becomes current (0xd5710). A Cave or Crypt slot map shares its layer with a game level
 // and, in single player, the seed carries over, so the cells of an earlier map would draw on a new, different maze. The build of a slot map arms a skip of
-// that one read; the leave and return of a town trip, which read the cells the same game saved, are untouched.
+// that one read. The game's read also loads every earlier record of the layer, whatever the seed, so a map's layer never touches the file: its saves
+// (0xd5fe0) are kept in memory for the game and played back on the return from town (automap_memory.h).
 // Notes: docs/reverse-engineering/cartographer/22-automap-memory.md.
 #pragma once
 
@@ -27,6 +28,7 @@ void AutomapResetPlayerTick(int level) noexcept;
 // A game was left: forget a skip that was not used, and the map built last.
 void AutomapResetDisarm() noexcept;
 
-auto AutomapResetPartStatus() -> PartStatus;
+// AutomapRestore, AutomapSave and AutomapInsert.
+void AutomapResetPartStatuses(std::vector<PartStatus>& out);
 
 }  // namespace carto
