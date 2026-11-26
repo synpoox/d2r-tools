@@ -80,9 +80,28 @@ Nothing here is wired as a plugin part.
   under one mutex. Live (LAN, slot 5 host and slot 6 Direct Join client on one PC, Hell, Shorelines, two games in the same
   processes): the skip fired once on each side in both games, none on a host town trip and re-entry.
 - Cost: the skipped read also drops the stock level's reveal on that layer for that seed (Cave Level 1 shares Layer 2,
-  the Crypt template Layer 10, Barricade Snow Layer 84): the leave writes only the new map's cells. A follow-up could let
-  the read run and then drop only the cells inside the slot's rectangle.
+  the Crypt template Layer 10, Barricade Snow Layer 84) for that visit. The map's own cells never reach the file (next section),
+  so the stock level's saved cells load again on its next visit.
 - Game crashes at `0x1255802`: see the next section. Cause not established; no evidence that Cartographer or the probe causes them.
+
+## Every earlier map's walls after a town trip (pd2-resurrected#2253; dump 6ab3782c)
+
+- Record layout (`0xd5fe0`, called by `0xd6230` from the level switch `0xd1710` and the game exit `0xd2e40`): each leave
+  appends one record `{next, key, act, seedHi, size1..4 (bytes)}` and four lists of three 16-bit words per cell
+  (kind, x, y); `0xd7ce0` serializes only the kind-0 cells (new this visit). A bucket table of 100 u32 entries is
+  indexed by the levels.txt Layer.
+- The read (`0xd5710`) walks every record of the layer. Lists 1, 2 and 4 load whatever the seed; only list 3 checks
+  `seedHi` against the game seed. Each cell goes in with kind 1 through `0xd1460(list, result[16], cell{u16 kind, u16 a,
+  i32 b, i32 c})`; the layer object's four lists are trees at +0x08, +0x30, +0x58, +0x80.
+- So the entry skip worked only on the first entry: the return from town read the layer again and drew list 2 (walls)
+  of every earlier map and of the stock level that share it (Jail 18 for Cursed Hold). The owner's save held several
+  layer-18 records.
+- Fix: parts `AutomapSave` (`0xd5fe0`, 18 bytes hooked) and `AutomapInsert` (`0xd1460`, called only), both unique by
+  signature. While the current layer belongs to a slot map, its saves are kept in plugin memory per slot level for the
+  game and never written; the return read plays them back with the game's insert (kind 1) instead of reading the file
+  (`src/engine/automap_memory.h`, unit tested in `automap_memory_tests`). Without either part the entry skip still works alone.
+- Live (slot 3, Hell, Cursed Hold): two town trips; the return showed the corridor walked before leaving and no other
+  walls; after Save and Exit the character's `.ma` files held no layer-18 record. Not run: a planted stale layer-18 record.
 
 ## Crash at `0x1255802` (issue #328)
 
