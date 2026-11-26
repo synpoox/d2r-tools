@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <vector>
 
 namespace carto {
@@ -91,7 +92,7 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 	int slot = -1;
 	bool logKept = false;
 	ReadVerdict verdict = ReadVerdict::File;
-	AutomapLists replay;
+	std::optional<AutomapLists> replay;  // built only for a replay: an empty std::set allocates on MSVC
 	{
 		std::lock_guard<std::mutex> lock(g_mutex);
 		key = CurrentKey();
@@ -108,7 +109,7 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 			try {
 				verdict = g_memory.OnRead(key, level, skip);
 				if (verdict == ReadVerdict::Replay) {
-					replay = *g_memory.Cells(level);
+					replay.emplace(*g_memory.Cells(level));
 				}
 			} catch (...) {
 				verdict = ReadVerdict::File;  // out of memory: the game's own read
@@ -122,7 +123,7 @@ auto RestoreHook(uint64_t a, uint64_t b, uint64_t c, uint64_t d) noexcept -> uin
 	}
 	if (verdict == ReadVerdict::Replay) {
 		// the return to a map: its own cells from memory, never the file's records of this layer (every earlier map's, and the game level's)
-		Replay(replay);
+		Replay(*replay);
 		return 0;
 	}
 	if (logKept) {
