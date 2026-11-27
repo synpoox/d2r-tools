@@ -1,12 +1,17 @@
 #include "capture.h"
 #include "history.h"
 #include "settings.h"
+#include "preview.h"
 #include <cstdlib>
 #include <iostream>
 #include <thread>
 using namespace recap;
 #define CHECK(x) do { if (!(x)) { std::cerr << "line " << __LINE__ << ": " << #x << '\n'; std::exit(1); } } while (false)
 int main() {
+	const auto preview = PreviewReport();
+	CHECK(preview.life.Reconciled() && preview.mana.Reconciled());
+	CHECK(preview.life.lost == 1200 * 256 && preview.life.restored == 200 * 256);
+	CHECK(preview.mana.lost == 250 * 256 && preview.life.last == 0 && KillingBlow(preview));
 	const auto clipped = Transition(300, 0, true);
 	CHECK(clipped.lost.Confirmed() && clipped.lost.value == 300 && GrossKnown(clipped));
 	const auto regen = Transition(300, 350, false);

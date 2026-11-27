@@ -2,7 +2,7 @@
 
 2026-11-27. Consumer: `plugins/death-recap`. This implements the narrow capture paths in
 [the static contracts](death-recap-static.md). It is an alpha implementation, with incomplete mechanic coverage.
-No installation or game check was performed, at the owner's request.
+The initial pass skipped game checks. A subsequently authorized [narrow smoke check](../../plugins/death-recap/TESTING.md) verified loading/coexistence and synthetic UI appearance without a character death; combat capture remains unverified.
 
 ## Checked image
 
@@ -83,11 +83,11 @@ Client slot/player getters come from the existing Player Bars ExpBar witness (`0
 FindPanel `0x846170`, FindChild `0x856220`, and TextBox SetText `0x86dd50` use the documented Player Bars/DPS Counter
 witnesses. SetText is identified at entry +16 so an existing compatible entry hook is called through, not overwritten.
 Plugin-owned HP sample rectangles use the documented widget rect at `+0x70`, after checking their declared width.
-No stock widget is changed. All panel operations run on the UI thread via SDK services.
+No stock widget is changed. All panel operations run on the UI thread via SDK services. The later smoke check widened the owned panel and graph to contain its text at 1920x1080.
 
 The pinned Input service has keyboard actions only. Controller reopen uses the optional SDK controller route; conflicts
 leave that route off. System XInput observes D-pad/B edges only while the recap is open, without intercepting gameplay
-or revive controls. Native panel layout, input focus, controller route and revive coexistence have not been checked live.
+or revive controls. The later smoke check verified native panel rendering, keyboard dismissal/reopen and timeline paging. Controller interaction and revive coexistence remain unverified.
 
 ## Validation
 
@@ -96,5 +96,5 @@ or revive controls. Native panel layout, input focus, controller route and reviv
   against fake units/originals. The latter checks original call counts and returns, fractional flush, overkill, nested
   writes, mode-17 deduplication, remote identity, foreign threads, state truncation and a saturated death feed.
 - The dump checker passes all capture and auxiliary witnesses on the image identified above.
-- No installation, offline game, TCP/IP host/join, mechanic matrix, UI rendering, controller, or coexistence game check.
+- Initial pass: no installation, offline game, TCP/IP host/join, mechanic matrix, UI rendering, controller, or coexistence game check. The later [smoke results](../../plugins/death-recap/TESTING.md) supersede only the narrow loading/UI/coexistence portions.
   Those remain the validation gates before release. The code does not establish full handoff acceptance.

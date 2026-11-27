@@ -1,6 +1,6 @@
 # Death Recap — implementation handoff
 
-Continue the D2RLoader Death Recap plugin on `death-recap/telemetry` in `synpoox/d2r-tools`. Do not restart or repeat completed RE. The portable core now has native call-site capture, optional context/healing hooks, local death observation, a native panel, controller/keyboard controls, active-table names, bounded history and export. See [implementation evidence](../../docs/reverse-engineering/death-recap-implementation.md) for exact scope and tests. The owner requested no game check for this implementation pass; live acceptance and full mechanic coverage remain outstanding. Do not label the plugin complete or release-ready.
+Continue the D2RLoader Death Recap plugin on `death-recap/telemetry` in `synpoox/d2r-tools`. Do not restart or repeat completed RE. The portable core now has native call-site capture, optional context/healing hooks, local death observation, a native panel, controller/keyboard controls, active-table names, bounded history and export. See [implementation evidence](../../docs/reverse-engineering/death-recap-implementation.md) for exact scope and tests. The initial pass skipped game checks; a subsequently authorized [loading/coexistence and synthetic UI smoke check](TESTING.md) passed without a character death. Real capture acceptance and full mechanic coverage remain outstanding. Do not label the plugin complete or release-ready.
 
 ## 1. Resources and setup
 

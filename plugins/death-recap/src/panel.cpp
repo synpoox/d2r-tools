@@ -32,11 +32,11 @@ bool Text(void* root, const char* name, const char* text) noexcept {
 		const TextView view {text, std::strlen(text)}; setText(box, &view); return true;
 	} __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
-bool Draw(const History& history, size_t selected, size_t page) {
+bool Draw(const History& history, size_t selected, size_t page, bool preview) {
 	void* root = findPanel("death-recap/Recap");
 	if (!root) return false;
 	std::array<std::string, 24> lines;
-	lines[0] = "DEATH RECAP";
+	lines[0] = preview ? "DEATH RECAP - SYNTHETIC PREVIEW (no character death)" : "DEATH RECAP";
 	lines[22] = "F8: close/reopen  |  [ / ]: history  |  PgUp/PgDn: timeline";
 	lines[23] = "Pad: D-pad history/timeline, B dismiss  |  Escape dismiss  |  Export/clear via console";
 	const Report* report = history.empty() ? nullptr : &history[std::min(selected, history.size() - 1)];
@@ -49,12 +49,12 @@ bool Draw(const History& history, size_t selected, size_t page) {
 		const bool manaGross = std::any_of(r.timeline.begin(), r.timeline.end(), [](const Event& e) { return GrossKnown(e.mana); });
 		lines[2] = "HP lost " + (lifeGross ? Number(r.life.lost) : "unavailable") + " / restored " + (lifeGross ? Number(r.life.restored) : "unavailable") + " / unresolved net " + Number(r.life.unresolvedNet);
 		lines[3] = "Mana lost " + (manaGross ? Number(r.mana.lost) : "unavailable") + " / restored " + (manaGross ? Number(r.mana.restored) : "unavailable") + " / unresolved net " + Number(r.mana.unresolvedNet);
-		lines[4] = "Measured subtotals; poison, OW, shield/cost attribution and other writers may be missing.";
+		lines[4] = "Partial capture: poison/OW, shield/cost attribution and other writers may be missing.";
 		lines[5] = "Attempted direct damage " + Measured(summary.post) + " | overkill " + Measured(summary.overkill);
 		lines[6] = "Killing blow: ";
 		if (const auto* fatal = KillingBlow(r)) lines[6] += "confirmed event " + std::to_string(fatal->sequence);
 		else lines[6] += "unavailable (the last hit alone is not proof)";
-		lines[7] = "Source/skill: unknown when capture context is unavailable; projectile ability is never guessed.";
+		lines[7] = "Missing context means unknown attribution. Projectile abilities are never guessed.";
 		lines[8] = std::string("Accounting: ") + (r.life.Reconciled() && r.mana.Reconciled() ? "reconciled" : "incomplete") + " | dropped " + std::to_string(r.feedDropped) + (r.windowTruncated ? " | truncated window" : "") + (r.sequenceGap ? " | missing events" : "");
 		lines[9] = "HP samples across reporting window (gaps are not interpolated)";
 		lines[10] = "HP by source: ";
@@ -66,8 +66,8 @@ bool Draw(const History& history, size_t selected, size_t page) {
 			lines[10] += name + " " + Measured(measure) + "; ";
 		}
 		lines[11] = "HP by ability: unknown " + (summary.lossBySkill.contains(std::nullopt) ? Measured(summary.lossBySkill.at(std::nullopt)) : "unavailable");
-		lines[12] = "Before effects (physical/fire/lightning/cold/magic): ";
-		lines[13] = "After effects (physical/fire/lightning/cold/magic): ";
+		lines[12] = "Pre-effects (physical/fire/lightning/cold/magic): ";
+		lines[13] = "Post-effects (physical/fire/lightning/cold/magic): ";
 		for (size_t i : {0U, 1U, 2U, 3U, 5U}) {
 			lines[12] += Measured(summary.preByElement[i]) + " / ";
 			lines[13] += Measured(summary.postByElement[i]) + " / ";
@@ -106,7 +106,7 @@ void Graph(const Report& r) noexcept {
 			char name[16]; std::snprintf(name, sizeof(name), "HP%zu", i);
 			void* widget = findChild(root, name); if (!widget) continue;
 			auto* rect = reinterpret_cast<int32_t*>(static_cast<uint8_t*>(widget) + 0x70);
-			if (rect[2] != 12) continue;
+			if (rect[2] != 18) continue;
 			const int32_t height = point ? static_cast<int32_t>(std::clamp<int64_t>(int64_t(point->life.after.value) * 120 / point->maxLife.value, 1, 120)) : 0;
 			rect[1] = 590 - height; rect[3] = height;
 		}
@@ -125,13 +125,13 @@ bool Install(const D2RL::PluginContext* ctx) noexcept {
 	if (!findPanel || !findChild || !setText) return false;
 	try {
 		std::ostringstream o;
-		o << R"({"type":"Panel","name":"death-recap/Recap","fields":{"rect":{"x":-690,"y":-750,"width":1380,"height":1500},"anchor":{"x":0.5,"y":0.5}},"children":[
-{"type":"RectangleWidget","name":"Background","fields":{"rect":{"x":0,"y":0,"width":1380,"height":1500},"color":[0.035,0.02,0.015,0.96]}})";
+		o << R"({"type":"Panel","name":"death-recap/Recap","fields":{"rect":{"x":-950,"y":-750,"width":1900,"height":1500},"anchor":{"x":0.5,"y":0.5}},"children":[
+{"type":"RectangleWidget","name":"Background","fields":{"rect":{"x":0,"y":0,"width":1900,"height":1500},"color":[0.035,0.02,0.015,0.96]}})";
 		for (size_t i = 0; i < 24; ++i) {
 			const size_t y = i < 10 ? 20 + i * 43 : i < 14 ? 620 + (i - 10) * 45 : 830 + (i - 14) * 51;
-			o << ",{\"type\":\"TextBoxWidget\",\"name\":\"Line" << i << "\",\"fields\":{\"text\":\"\",\"rect\":{\"x\":24,\"y\":" << y << ",\"width\":1330,\"height\":46},\"style\":{\"pointSize\":24,\"fontColor\":{\"r\":224,\"g\":211,\"b\":177,\"a\":255},\"alignment\":{\"h\":\"left\",\"v\":\"center\"}}}}";
+			o << ",{\"type\":\"TextBoxWidget\",\"name\":\"Line" << i << "\",\"fields\":{\"text\":\"\",\"rect\":{\"x\":24,\"y\":" << y << ",\"width\":1850,\"height\":46},\"style\":{\"pointSize\":24,\"fontColor\":{\"r\":224,\"g\":211,\"b\":177,\"a\":255},\"alignment\":{\"h\":\"left\",\"v\":\"center\"}}}}";
 		}
-		for (size_t i = 0; i < 64; ++i) o << ",{\"type\":\"RectangleWidget\",\"name\":\"HP" << i << "\",\"fields\":{\"rect\":{\"x\":" << 24 + i * 20 << ",\"y\":590,\"width\":12,\"height\":0},\"color\":[0.62,0.12,0.1,1]}}";
+		for (size_t i = 0; i < 64; ++i) o << ",{\"type\":\"RectangleWidget\",\"name\":\"HP" << i << "\",\"fields\":{\"rect\":{\"x\":" << 24 + i * 28 << ",\"y\":590,\"width\":18,\"height\":0},\"color\":[0.62,0.12,0.1,1]}}";
 		o << "]}";
 		const auto json = o.str();
 		D2RL::Resources::ResourceRegistration resource {}; resource.structSize = sizeof(resource);
@@ -167,18 +167,20 @@ void Show(bool toggle) noexcept {
 	if (toggle) (void)panels->togglePanel(context, handle); else (void)panels->openPanel(context, handle);
 }
 void Close() noexcept { if (handle) (void)panels->closePanel(context, handle); }
-void Update(const History& history, size_t selected, size_t page) noexcept {
+void Update(const History& history, size_t selected, size_t page, bool preview) noexcept {
 	static bool rendered = false;
 	static size_t oldSelected = 0, oldPage = 0, oldSize = 0;
 	static uint64_t oldDeath = 0;
+	static bool oldPreview = false;
 	if (!Open()) { rendered = false; return; }
 	const uint64_t death = history.empty() ? 0 : history[std::min(selected, history.size() - 1)].deathMs;
-	if (rendered && selected == oldSelected && page == oldPage && history.size() == oldSize && death == oldDeath) return;
+	if (rendered && selected == oldSelected && page == oldPage && history.size() == oldSize && death == oldDeath && preview == oldPreview) return;
 	try {
-		if (Draw(history, selected, page)) {
+		if (Draw(history, selected, page, preview)) {
 			if (!history.empty()) Graph(history[std::min(selected, history.size() - 1)]);
 			else { const Report empty; Graph(empty); }
 			rendered = true; oldSelected = selected; oldPage = page; oldSize = history.size(); oldDeath = death;
+			oldPreview = preview;
 		}
 	}
 	catch (...) { plog::Warn("recap panel update failed"); }

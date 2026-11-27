@@ -1,6 +1,6 @@
 # Death Recap
 
-An unreleased D2RLoader plugin that records measured health and mana changes before your character dies and presents a native recap with local history. This is an alpha implementation with **partial coverage**, not a release or a claim of complete combat telemetry. It has not been installed or tested in game.
+An unreleased D2RLoader plugin that records measured health and mana changes before your character dies and presents a native recap with local history. This is an alpha implementation with **partial coverage**, not a release or a claim of complete combat telemetry. A narrow in-game loading/coexistence and synthetic-panel smoke check passed; real death capture remains unverified.
 
 ## Features
 
@@ -10,7 +10,7 @@ An unreleased D2RLoader plugin that records measured health and mana changes bef
 
 ## Requirements
 
-Target: D2R 3.3 (93847) and 3.4 (95032) under D2RLoader 1.3.1, engine image `0x6ab3782c`; offline and supported modded TCP/IP only. Runtime installation and compatibility are unverified. Each capture part uses independent signatures, byte guards and SDK mutation ownership; a mismatch leaves that part off. There is no version gate. No Battle.net support.
+Target: D2R 3.3 (93847) and 3.4 (95032) under D2RLoader 1.3.1, engine image `0x6ab3782c`; offline and supported modded TCP/IP only. A smoke check passed on 3.4 at 1920x1080 with nine peer plugins; broader compatibility remains unverified. Each capture part uses independent signatures, byte guards and SDK mutation ownership; a mismatch leaves that part off. There is no version gate. No Battle.net support.
 
 Joined clients have no authoritative game thread. They can produce clearly labeled **replicated snapshot** reports from a local living-to-dead transition; they cannot see individual authoritative hits. If native death capture is unavailable, the host can also fall back to these snapshots. Neither path claims full coverage.
 
@@ -57,7 +57,7 @@ Always interpret totals as measured subtotals. Regeneration commits can combine 
 
 Source names are copied from active compiled tables and SDK localization; unavailable numeric localization uses the active `monstats:<Id>` key. Persisted names are owned by the report and do not change with the active mod. State capture is bounded and shows truncation. A lost feed event leaves a sequence gap; a saturated death marker is retried. Nested mutations are not added twice.
 
-Windows x64 DLL build and all three host test executables pass with the installed VS2019/MSVC 19.29 toolchain. The static dump checker passes all 17 patterns/witnesses. The requested VS2022 toolchain is unavailable on this machine. No installation or game checks were performed, as requested; mechanic coverage, host/join behavior, panel/controller rendering and coexistence remain unverified.
+Windows x64 DLL build and all three host test executables pass with the installed VS2019/MSVC 19.29 toolchain. The static dump checker passes all 17 patterns/witnesses. The requested VS2022 toolchain is unavailable on this machine. A narrow 3.4/1920x1080 smoke check verified loading with nine peer plugins, synthetic-panel rendering, Escape/reopen, timeline paging, unchanged history and no new diagnostics against the baseline. No character was killed. Combat coverage, host/join behavior and controller interaction remain unverified. See [testing and synthetic preview](TESTING.md).
 
 See [native implementation evidence](../../docs/reverse-engineering/death-recap-implementation.md), [static contracts](../../docs/reverse-engineering/death-recap-static.md), and [handoff](HANDOFF.md) for remaining acceptance work.
 

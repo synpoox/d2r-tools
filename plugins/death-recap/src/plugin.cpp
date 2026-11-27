@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "names.h"
 #include "controller.h"
+#include "preview.h"
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -25,6 +26,8 @@ const D2RL::OverlayService* overlay;
 D2RL::Overlay::CallbackHandle clockHandle = 0;
 recap::Settings settings;
 recap::History history;
+recap::History previewHistory;
+bool previewActive = false;
 recap::Rolling<2048> rolling;
 uint64_t lifeToken = UINT32_MAX, consumerToken = 0, clientSequence = 0;
 uint64_t reportedToken = 0;
@@ -77,6 +80,7 @@ void ScheduleSave(bool exportOnly = false) {
 }
 void Accept(recap::Report report, bool sampled) {
 	if (reportedToken == report.session) return;
+	previewActive = false;
 	recap::CopyNames(report);
 	report.capturePartial = true; report.replicated = sampled;
 	report.feedDropped = sampled ? 0 : recap::native::Dropped();
@@ -125,20 +129,26 @@ void UiTask(const D2RL::PluginContext* ctx, void*) noexcept {
 		auto command = action.exchange(0);
 		const auto controllerCommand = controller.Poll(recap::panel::Open());
 		if (!command) command = controllerCommand;
-		if (command == 1) { if (!history.empty()) selected = history.size() - 1; page = 0; recap::panel::Show(true); }
-		if (command == 2 && !history.empty()) { selected = selected ? selected - 1 : history.size() - 1; page = 0; }
-		if (command == 3 && !history.empty()) { selected = (selected + 1) % history.size(); page = 0; }
+		if (command == 10) {
+			previewHistory = {recap::PreviewReport()}; previewActive = true; selected = page = 0; recap::panel::Show();
+			recap::Endpoints real; uint32_t mode = 0;
+			if (recap::native::ClientSample(real, mode)) plog::Info("synthetic preview; real character unchanged: life %d/%d, mana %d/%d raw, mode %u; no history write", real.life, real.maxLife, real.mana, real.maxMana, mode);
+		}
+		if (command == 1) { previewActive = false; if (!history.empty()) selected = history.size() - 1; page = 0; recap::panel::Show(true); }
+		auto& shown = previewActive ? previewHistory : history;
+		if (command == 2 && !shown.empty()) { selected = selected ? selected - 1 : shown.size() - 1; page = 0; }
+		if (command == 3 && !shown.empty()) { selected = (selected + 1) % shown.size(); page = 0; }
 		if (command == 4 && page) --page;
-		if (command == 5 && !history.empty()) {
-			const auto& timeline = history[selected].timeline;
+		if (command == 5 && !shown.empty()) {
+			const auto& timeline = shown[selected].timeline;
 			const auto count = static_cast<size_t>(std::count_if(timeline.begin(), timeline.end(), [](const recap::Event& e) { return e.kind != recap::Kind::Sample; }));
 			page = std::min(page + 1, count ? (count - 1) / 6 : 0);
 		}
-		if (command == 6) ScheduleSave(true);
+		if (command == 6 && !previewActive) ScheduleSave(true);
 		if (command == 7) { history.clear(); selected = page = 0; ScheduleSave(); }
 		if (command == 8) recap::panel::Close();
-		if (command == 9) { if (!history.empty()) selected = history.size() - 1; page = 0; recap::panel::Show(); }
-		recap::panel::Update(history, selected, page);
+		if (command == 9) { previewActive = false; if (!history.empty()) selected = history.size() - 1; page = 0; recap::panel::Show(); }
+		recap::panel::Update(previewActive ? previewHistory : history, selected, page, previewActive);
 		if (storageResult.exchange(0) == -1) plog::Warn("history/export write failed; report remains available in memory");
 	} catch (...) { plog::Warn("recap UI update failed; gameplay is unaffected"); }
 }
@@ -168,6 +178,7 @@ auto Command(D2R::Game::Client*, const D2RL::ConsoleCommandContext* cmd, void*) 
 	if (!cmd || !cmd->plugin) return D2RL::ConsoleCommandResult::Failed;
 	const std::string_view arg = cmd->args ? recap::Trim(std::string_view(cmd->args, cmd->argsLength)) : std::string_view{};
 	if (arg == "open") action = 9;
+	else if (arg == "preview") action = 10;
 	else if (arg == "previous") action = 2;
 	else if (arg == "next") action = 3;
 	else if (arg == "export") action = 6;
@@ -177,6 +188,7 @@ auto Command(D2R::Game::Client*, const D2RL::ConsoleCommandContext* cmd, void*) 
 		char line[320]; std::snprintf(line, sizeof(line), "Death Recap %s | parts 0x%x | capture %s | panel %s | dropped %llu | partial coverage. open / previous / next / export / clear / close",
 			Version, recap::native::Parts(), recap::native::Faulted() ? "off" : "available", panelReady ? "ready" : "off", static_cast<unsigned long long>(recap::native::Dropped()));
 		cmd->plugin->WriteConsoleMessage(line);
+		plog::Info("%s", line);
 	} else return D2RL::ConsoleCommandResult::InvalidArguments;
 	return D2RL::ConsoleCommandResult::Handled;
 }
