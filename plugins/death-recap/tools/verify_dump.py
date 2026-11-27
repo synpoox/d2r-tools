@@ -27,14 +27,17 @@ def verify(path):
     source = (Path(__file__).parent.parent / 'src/signatures.h').read_text()
     entries = re.findall(r'Signature (\w+) \{"[^"]+", "([^"]+)", (\d+), (\d+)\}', source)
     assert len(entries) == 8
-    witnesses = re.findall(r'const char\* (\w+Sig) = "([^"]+)"', source)
+    witnesses = re.findall(r'const char\s*\*\s*(\w+Sig)\s*=\s*"([^"]+)"', source)
+    assert len(witnesses) == 12, 'every auxiliary UI/capture witness must be checked'
     witness_rvas = {'GetterSig': 0x2f5020, 'SetterSig': 0x2f7d10, 'AdderSig': 0x2f34f0,
                     'ClientSig': 0x14cc8c0, 'FindPanelSig': 0x846170, 'FindChildSig': 0x856220, 'SetTextSig': 0x86dd60,
-                    'NameLayoutSig': 0x39dccc, 'HasStateSig': 0x3351b0}
+                    'NameLayoutSig': 0x39dccc, 'HasStateSig': 0x3351b0, 'WidgetScreenPosSig':0x8562f0, 'ImageClipSig':0x858d1a, 'AreaLayoutSig':0x33024d}
     for name, pattern in witnesses:
         regex = b''.join(b'.' if x == '??' else re.escape(bytes([int(x, 16)])) for x in pattern.split())
         matches = [rva + m.start() for rva, section in sections for m in re.finditer(regex, section, re.DOTALL)]
         assert matches == [witness_rvas[name]], (name, matches)
+        if name == 'ImageClipSig':
+            assert struct.unpack_from('<i', data, matches[0] + 3)[0] == 0xac
         print(f'{name}: unique 0x{matches[0]:x}')
     expected = {'LifeDebit': (0x44d093, 0x2f7d10), 'ManaDebit': (0x44d0c9, 0x2f7d10),
                 'LifeRegen': (0x42e6d1, 0x2f7d10), 'ManaRegen': (0x42e540, 0x2f34f0)}

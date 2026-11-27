@@ -24,10 +24,13 @@ public:
 		const WORD pressed = state.Gamepad.wButtons & ~previous_; previous_ = state.Gamepad.wButtons;
 		if (!panelOpen) return 0;
 		if (pressed & XINPUT_GAMEPAD_B) return 8;
-		if (pressed & XINPUT_GAMEPAD_DPAD_LEFT) return 2;
-		if (pressed & XINPUT_GAMEPAD_DPAD_RIGHT) return 3;
-		if (pressed & XINPUT_GAMEPAD_DPAD_UP) return 4;
-		if (pressed & XINPUT_GAMEPAD_DPAD_DOWN) return 5;
+		if (pressed & XINPUT_GAMEPAD_A) return 11;
+		if (pressed & XINPUT_GAMEPAD_LEFT_SHOULDER) return 4;
+		if (pressed & XINPUT_GAMEPAD_RIGHT_SHOULDER) return 5;
+		if (pressed & XINPUT_GAMEPAD_DPAD_LEFT) return 12;
+		if (pressed & XINPUT_GAMEPAD_DPAD_RIGHT) return 13;
+		if (pressed & XINPUT_GAMEPAD_DPAD_UP) return 2;
+		if (pressed & XINPUT_GAMEPAD_DPAD_DOWN) return 3;
 		return 0;
 	}
 	void Stop() noexcept { if (module_) FreeLibrary(module_); module_ = nullptr; read_ = nullptr; }

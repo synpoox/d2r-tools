@@ -98,3 +98,50 @@ or revive controls. The later smoke check verified native panel rendering, keybo
 - The dump checker passes all capture and auxiliary witnesses on the image identified above.
 - Initial pass: no installation, offline game, TCP/IP host/join, mechanic matrix, UI rendering, controller, or coexistence game check. The later [smoke results](../../plugins/death-recap/TESTING.md) supersede only the narrow loading/UI/coexistence portions.
   Those remain the validation gates before release. The code does not establish full handoff acceptance.
+
+
+## Native recap presentation (2026-11-27)
+
+The mockup-driven presentation remains separate from capture: `view.h` derives display data from a const report;
+`panel.cpp` registers plugin-owned native layouts/resources and updates them only on the UI thread. No overlay draw
+commands, browser surface, mod layout dependency, game asset copy, or game binary is shipped. The overlay callback
+continues to serve only as a UI-thread clock. Layout coordinates use D2R's 2160-high HD space and centered anchors.
+
+Player Bars' independently signature-identified widget screen-position function (`0x8562f0`) and image clip witness
+(`0x858d1a`, inside AbstractImageWidget::DrawFrame `0x858c50`) are reused as plugin-local patterns. The latter's first
+instruction supplies the clip offset, required to equal `0xac`. The native clip is `{x,y,width,height}` in screen
+pixels. Three stock `PANEL/Modals/Modal_No_Title_BG` image widgets, uniformly scaled, provide the textured frame;
+clipping removes their repeated top/bottom ornament. The screen-space scale is measured between the panel origin
+and an owned marker. Clips are refreshed while open, including after resolution/UI-scale changes. TooltipBorder
+nine-slice widgets provide section edges; ModalButton provides the Close texture/states. The rect guard checks the
+complete declared or last-written `{x,y,width,height}` at `+0x70` before changing an owned widget. A mismatch leaves
+presentation updates off, with a diagnostic; no gameplay or stock widget is mutated.
+
+The current loader refuses further widget paths after 256 handles (observed at graph rectangle Heal51). Graph and
+bar rectangles therefore use their guarded owned rect directly; zero extents hide unused rectangles. Other widgets
+use the SDK visibility service. The graph is a step trace of confirmed resource endpoints: no interpolation across
+sequence gaps, unknown endpoints, or intervals over 500ms. Its maximum includes observed maxima and endpoints;
+healing markers require measured gross restoration. Graph columns are aligned to physical pixels; adjacent equal-height fills and flat trace runs are combined to avoid fractional-scale artifacts. Native text ellipsis contains long labels, while advanced text wraps across pages. Element percentages divide measured element subtotals, never
+actual life loss. Missing elements, sources, ability names and fatal links remain unavailable.
+
+Native buttons use MultiSpec's proven `PanelManager:OpenPanel:death-recap/<action>` route. A SharedEvent listener
+consumes only those names, queues the action and applies it in the next UI task. Mouse-wheel capture uses a removable
+Win32 window subclass only while the recap is open; keyboard and XInput edges provide section, scroll, page and
+close operations. New reports/reopening reset expansion. Automatic opening waits for PlayerResurrected; the stock
+YouDiedModal and its Continue action are untouched. A physical controller has not been validated.
+
+Death context adds stat 12 (level, already verified by Better XP Bar) and the optional pinned SDK supported export
+GetLevelIdFromUnit (ordinal 2000) to the pre-cleanup death snapshot. No game pointer enters the immutable report.
+The Levels loader's `LevelName` descriptor at `0x33024d` sets type 1, length 39, offset `0xfd`; the unique witness is
+checked before reading a bounded key from SDK Levels rows. SDK key localization is copied at table load; only the
+report's area name is retained. Live 3.4 deaths confirmed Harrogath and Blood Moor. Missing export/layout/localization
+leaves the area unavailable. History format 2 adds these optional fields and retains format-1 decoding.
+
+Defense capture also copies stat IDs 34/35 (flat physical/magic reduction), 142/143 (percent/flat fire absorption),
+144/145 (percent/flat lightning absorption), and 148 (percent cold absorption), within the existing 16-stat bound.
+Their meanings come from active 95032 itemstatcost data; displayed percentages remain native stat units. Uncaptured
+mechanics and state-name/category mappings are explicitly unavailable rather than inferred.
+
+`tools/verify_dump.py` now verifies 20 unique signatures/witnesses on the same documented image, including the three
+new UI/context witnesses. Target engine identity remains `0x6ab3782c` for 3.3/3.4; no version gate was introduced.
+Live validation was on 3.4 only; see the plugin TESTING.md for exact scenarios, screenshots and limitations.

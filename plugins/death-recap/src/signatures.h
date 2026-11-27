@@ -11,6 +11,9 @@ inline constexpr const char* FindChildSig = "48 89 5C 24 10 48 89 74 24 18 57 48
 inline constexpr const char* SetTextSig = "48 81 C1 88 00 00 00 E8 ?? ?? ?? ?? 48 8B CB 48 83 C4 20 5B E9";
 inline constexpr const char* NameLayoutSig = "48 C7 45 48 18 00 00 00 48 C7 45 50 36 00 00 00";
 inline constexpr const char* HasStateSig = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 20 8B DA 48 8B F1 E8 ?? ?? ?? ?? 85 C0 74 0E 83 E8 01";
+inline constexpr const char *WidgetScreenPosSig = "48 8B C4 48 89 70 20 57 48 81 EC A0 00 00 00 0F 29 70 E8 48 8B F2 0F 29 78 D8 0F 57 FF 48 8B F9";
+inline constexpr const char *ImageClipSig = "0F 10 83 ?? ?? ?? ?? 0F 29 45 ?? 84 C0 74 ?? 0F 10 8B ?? ?? ?? ??";
+inline constexpr const char *AreaLayoutSig = "C7 85 E8 10 00 00 01 00 00 00 C7 85 EC 10 00 00 27 00 00 00 48 C7 85 F0 10 00 00 FD 00 00 00";
 struct Signature { const char* name; const char* bytes; size_t callOffset; size_t entrySize; };
 inline constexpr Signature Hit {"Hit", "40 55 53 56 57 41 56 41 57 48 8D AC 24 E8 FE FF FF 48 81 EC 18 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 00 01 00 00 48 8B BD 70 01 00 00 41 8B D9", 0, 17};
 inline constexpr Signature Effects {"Effects", "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 68 FD FF FF 48 81 EC 98 03 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 80 02 00 00 4C 8B EA 48 89 4C", 0, 21};

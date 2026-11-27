@@ -2,6 +2,7 @@
 #include "native.h"
 #include "scan.h"
 #include "signatures.h"
+#include "log.h"
 #include <mutex>
 
 namespace recap {
@@ -9,12 +10,31 @@ namespace {
 const D2RL::DataTableService* tables;
 const D2RL::LocalizationService* localization;
 std::mutex nameMutex;
-std::array<std::vector<std::string>, 4> names;
+std::array<std::vector<std::string>, 4> names, areas;
+bool areaLayout = false;
 void Loaded(const D2RL::PluginContext* ctx, const D2RL::Lifecycle::DataTablesLoadedEvent*, void*) noexcept {
 	try {
-		std::array<std::vector<std::string>, 4> copy;
+		std::array<std::vector<std::string>, 4> copy, areaCopy;
 		for (uint32_t bank = 1; bank <= 3; ++bank) {
 			D2RL::DataTables::TableView view {}; view.structSize = sizeof(view);
+			if (areaLayout && localization &&
+				tables->getTable(ctx, static_cast<D2RL::DataTables::Bank>(bank), D2RL::DataTables::TableId::Levels, &view) ==
+					D2RL::DataTables::Result::Success &&
+				view.rows && view.rowSize >= 0x178 && view.rowCount <= 32768) {
+				areaCopy[bank].resize(view.rowCount);
+				for (uint32_t i = 0; i < view.rowCount; ++i) {
+					const auto *row = static_cast<const uint8_t *>(view.rows) + size_t(i) * view.rowSize;
+					const auto *key = reinterpret_cast<const char *>(row + 0xfd);
+					const auto *end = static_cast<const char *>(std::memchr(key, 0, 40));
+					char text[1024]{};
+					if (end && end != key &&
+						localization->getStringByKey(ctx, ("d2r:" + std::string(key, end)).c_str(), text, sizeof(text), nullptr) ==
+							D2RL::Localization::Result::Success)
+						areaCopy[bank][i] = text;
+				}
+			}
+			view = {};
+			view.structSize = sizeof(view);
 			if (tables->getTable(ctx, static_cast<D2RL::DataTables::Bank>(bank), D2RL::DataTables::TableId::States, &view) == D2RL::DataTables::Result::Success)
 				native::StateCount(bank, std::min(view.rowCount, 1024U));
 			else native::StateCount(bank, 0);
@@ -34,12 +54,16 @@ void Loaded(const D2RL::PluginContext* ctx, const D2RL::Lifecycle::DataTablesLoa
 				}
 			}
 		}
-		std::lock_guard lock(nameMutex); names = std::move(copy);
+		std::lock_guard lock(nameMutex);
+		names = std::move(copy);
+		areas = std::move(areaCopy);
 	} catch (...) { }
 }
 }
 bool InstallNames(const D2RL::PluginContext* ctx) noexcept {
 	const D2RL::LifecycleService* lifecycle = nullptr;
+	areaLayout = native::Find(ctx->exeBase, native::AreaLayoutSig) != nullptr;
+	if (!areaLayout) plog::Warn("localized areas off: Levels layout witness unavailable");
 	if (!native::Find(ctx->exeBase, native::NameLayoutSig) ||
 		ctx->QueryService(&tables) != D2RL::ServiceQueryResult::Success || !D2RL::HasDataTableServiceField(tables, D2RL::DataTableServiceRequiredSize) ||
 		ctx->QueryService(&lifecycle) != D2RL::ServiceQueryResult::Success || !D2RL::HasLifecycleServiceField(lifecycle, D2RL::LifecycleServiceRequiredSize)) return false;
@@ -50,6 +74,12 @@ bool InstallNames(const D2RL::PluginContext* ctx) noexcept {
 }
 void CopyNames(Report& report) {
 	std::lock_guard lock(nameMutex);
+	if (!report.timeline.empty()) {
+		const auto &death = report.timeline.back();
+		if (death.areaId.Confirmed() && death.dataBank.Confirmed() && death.dataBank.value < areas.size() &&
+			death.areaId.value < areas[death.dataBank.value].size())
+			report.areaName = areas[death.dataBank.value][death.areaId.value];
+	}
 	for (const auto& e : report.timeline) {
 		if (!e.attacker.Confirmed() || !e.dataBank.Confirmed() || e.attacker.value.type != 1 || e.dataBank.value >= names.size()) continue;
 		const auto unit = e.attacker.value; const auto bank = e.dataBank.value;

@@ -7,7 +7,10 @@
 using namespace recap;
 using namespace recap::native;
 #define CHECK(x) do { if (!(x)) { std::cerr << "line " << __LINE__ << ": " << #x << '\n'; std::exit(1); } } while (false)
-struct FakeUnit { uint32_t type = 0, classId = 2, id = 5, mode = 1; std::array<int32_t, 100> stats {}; };
+struct FakeUnit {
+	uint32_t type = 0, classId = 2, id = 5, mode = 1;
+	std::array<int32_t, 200> stats{};
+};
 FakeUnit victim, attacker;
 std::array<uint8_t, 0x180> block {};
 unsigned writes = 0, heals = 0, modes = 0, hits = 0, effects = 0;
@@ -107,8 +110,14 @@ int main() {
 	events = Drain(); CHECK(events[1].damage.overkill.value == 200 && events[1].life.lost.value == 300);
 	Reset(); std::array<uint8_t, 0x108> game {}; game[0x106] = 3;
 	hasState = [](void*, int32_t state) noexcept -> int32_t { return state < 20; }; StateCount(3, 32);
+	victim.stats[12] = 99;
+	levelFromUnit = [](const void *) noexcept -> int32_t { return 108; };
 	CHECK(ModeHook(game.data(), &victim, nullptr, 0, 1, 9, 123, 456) == 73);
-	events = Drain(); CHECK(events.back().defense.stateCount == 16 && events.back().defense.statesTruncated && events.back().defense.stateEvidence == Evidence::Confirmed);
+	events = Drain();
+	CHECK(events.back().characterLevel.Confirmed() && events.back().characterLevel.value == 99 && events.back().areaId.value == 108);
+	CHECK(events.back().defense.statCount == 16);
+	levelFromUnit = nullptr;
+	CHECK(events.back().defense.stateCount == 16 && events.back().defense.statesTruncated && events.back().defense.stateEvidence == Evidence::Confirmed);
 	Reset();
 	for (unsigned i = 0; i < 2047; ++i) Emit(Sample(Get(&victim)));
 	CHECK(ModeHook(nullptr, &victim, nullptr, 0, 1, 9, 123, 456) == 73);

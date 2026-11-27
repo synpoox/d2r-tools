@@ -25,6 +25,7 @@ using ModeFn = uint64_t (*)(void*, void*, void*, uint32_t, uint32_t, uint32_t, u
 using SlotFn = uint32_t (*)() noexcept;
 using PlayerFn = void* (*)(uint32_t) noexcept;
 StatFn stat;
+D2RL::Reimplementations::GetLevelIdFromUnitFn levelFromUnit;
 using HasStateFn = int32_t (*)(void*, int32_t) noexcept;
 HasStateFn hasState;
 std::array<std::atomic<uint32_t>, 4> stateCounts {};
@@ -167,7 +168,13 @@ uint64_t EffectsHook(void* game, void* attacker, void* victim, void* block) noex
 }
 void Snapshot(void* game, void* u, Event& e) noexcept {
 	const auto p = Get(u); e = Sample(p); e.kind = Kind::Death; e.cause = Evidence::Confirmed;
-	constexpr uint32_t ids[] {36, 37, 39, 40, 41, 42, 43, 44, 45};
+	const int level = stat(u, 12, 0);
+	if (level > 0) e.characterLevel = {static_cast<uint32_t>(level), Evidence::Confirmed};
+	if (levelFromUnit) {
+		const int area = levelFromUnit(u);
+		if (area > 0) e.areaId = {static_cast<uint32_t>(area), Evidence::Confirmed};
+	}
+	constexpr uint32_t ids[]{36, 37, 39, 40, 41, 42, 43, 44, 45, 34, 35, 142, 143, 144, 145, 148};
 	for (uint32_t id : ids) e.defense.stats[e.defense.statCount++] = {id, 0, Confirm(stat(u, static_cast<int32_t>(id), 0))};
 	if (game) {
 		const uint32_t bank = Read<uint8_t>(game, 0x106);
@@ -254,6 +261,9 @@ bool Call(const Signature& s, void* replacement, WriteFn& original, const uint8_
 }
 
 bool Install(const D2RL::PluginContext* ctx) noexcept {
+	if (const auto core = GetModuleHandleW(L"D2RCore.dll"))
+		levelFromUnit = reinterpret_cast<D2RL::Reimplementations::GetLevelIdFromUnitFn>(
+			GetProcAddress(core, MAKEINTRESOURCEA(D2RL::Reimplementations::GetLevelIdFromUnitInfo.ordinal)));
 	context = ctx;
 	// Reuse proven client getters by signature; no fixed image-version gate.
 	if (const auto* p = Find(ctx->exeBase, ClientSig)) {

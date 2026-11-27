@@ -52,6 +52,7 @@ struct Event {
 	Field<uint32_t> dataBank;
 	Field<uint64_t> fatalSequence;  // only on the confirmed death marker
 	Amount maxLife, maxMana;
+	Field<uint32_t> characterLevel, areaId;
 	std::array<Field<uint32_t>, 16> modifiers {};
 	Resource life, mana;
 	Damage damage;
@@ -80,6 +81,7 @@ struct Report {
 	bool capturePartial = true, replicated = false;
 	uint64_t feedDropped = 0;
 	std::vector<NamedUnit> names;
+	std::string areaName;
 	bool Complete() const noexcept {
 		return !windowTruncated && rejected == 0 && !sequenceGap && !boundaryUnconfirmed &&
 		       !deathResourcesUnconfirmed && life.Complete() && mana.Complete();

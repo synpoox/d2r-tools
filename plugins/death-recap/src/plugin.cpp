@@ -39,6 +39,7 @@ std::atomic<bool> uiQueued {false}, gameQueued {false}, stopping {false};
 std::atomic<uint32_t> action {0};
 std::atomic<int> storageResult {0};
 bool panelReady = false;
+std::atomic<bool> recapAfterRevive{false};
 recap::Controller controller;
 std::filesystem::path historyPath;
 std::thread writer;
@@ -89,7 +90,7 @@ void Accept(recap::Report report, bool sampled) {
 	if (history.size() > settings.retention) history.erase(history.begin());
 	selected = history.size() - 1; page = 0;
 	ScheduleSave();
-	if (settings.autoOpen) recap::panel::Show();
+	if (settings.autoOpen) recapAfterRevive = true;
 }
 void Consume(const recap::Event& e, bool sampled = false) {
 	if (consumerToken != e.session || consumerSampled != sampled) { consumerToken = e.session; consumerSampled = sampled; rolling.Reset(e.session, e.ms); }
@@ -129,21 +130,20 @@ void UiTask(const D2RL::PluginContext* ctx, void*) noexcept {
 		auto command = action.exchange(0);
 		const auto controllerCommand = controller.Poll(recap::panel::Open());
 		if (!command) command = controllerCommand;
-		if (command == 10) {
-			previewHistory = {recap::PreviewReport()}; previewActive = true; selected = page = 0; recap::panel::Show();
+		if (command == 10 || command == 14) {
+			previewHistory = {recap::PreviewReport(command == 14)};
+			previewActive = true;
+			selected = page = 0;
+			recap::panel::Show();
 			recap::Endpoints real; uint32_t mode = 0;
 			if (recap::native::ClientSample(real, mode)) plog::Info("synthetic preview; real character unchanged: life %d/%d, mana %d/%d raw, mode %u; no history write", real.life, real.maxLife, real.mana, real.maxMana, mode);
 		}
 		if (command == 1) { previewActive = false; if (!history.empty()) selected = history.size() - 1; page = 0; recap::panel::Show(true); }
 		auto& shown = previewActive ? previewHistory : history;
-		if (command == 2 && !shown.empty()) { selected = selected ? selected - 1 : shown.size() - 1; page = 0; }
-		if (command == 3 && !shown.empty()) { selected = (selected + 1) % shown.size(); page = 0; }
+		if (command == 2 || command == 3 || (command >= 11 && command <= 13)) recap::panel::Input(command);
+		if (command == 2 || command == 3) page = 0;
 		if (command == 4 && page) --page;
-		if (command == 5 && !shown.empty()) {
-			const auto& timeline = shown[selected].timeline;
-			const auto count = static_cast<size_t>(std::count_if(timeline.begin(), timeline.end(), [](const recap::Event& e) { return e.kind != recap::Kind::Sample; }));
-			page = std::min(page + 1, count ? (count - 1) / 6 : 0);
-		}
+		if (command == 5 && !shown.empty()) page = std::min<size_t>(page + 1, recap::panel::Pages() - 1);
 		if (command == 6 && !previewActive) ScheduleSave(true);
 		if (command == 7) { history.clear(); selected = page = 0; ScheduleSave(); }
 		if (command == 8) recap::panel::Close();
@@ -160,10 +160,15 @@ void OnLife(const D2RL::PluginContext*, const D2RL::Lifecycle::GameplayEvent* e,
 	if (e->kind == D2RL::Lifecycle::GameplayEventKind::PlayerResurrected && e->playerId != static_cast<uint32_t>(lifeToken)) return;
 	if (e->kind == D2RL::Lifecycle::GameplayEventKind::GameLeft) {
 		lifeToken = (uint64_t(++epoch) << 32) | UINT32_MAX;
-		recap::panel::Close(); gameQueued = false;
+		recap::panel::Close();
+		gameQueued = false;
+		recapAfterRevive = false;
 	} else {
 		lifeToken = (uint64_t(++epoch) << 32) | e->playerId;
-		if (e->kind == D2RL::Lifecycle::GameplayEventKind::PlayerResurrected) recap::panel::Close();
+		if (e->kind == D2RL::Lifecycle::GameplayEventKind::PlayerResurrected) {
+			recap::panel::Close();
+			if (recapAfterRevive.exchange(false)) action = 9;
+		}
 	}
 	clientBaseline = clientDead = false; clientSequence = 0; consumerToken = 0;
 	recap::native::Identity(lifeToken);
@@ -179,14 +184,24 @@ auto Command(D2R::Game::Client*, const D2RL::ConsoleCommandContext* cmd, void*) 
 	const std::string_view arg = cmd->args ? recap::Trim(std::string_view(cmd->args, cmd->argsLength)) : std::string_view{};
 	if (arg == "open") action = 9;
 	else if (arg == "preview") action = 10;
-	else if (arg == "previous") action = 2;
-	else if (arg == "next") action = 3;
+	else if (arg == "preview-long")
+		action = 14;
+	else if (arg == "expand")
+		action = 11;
+	else if (arg == "down")
+		action = 13;
+	else if (arg == "up")
+		action = 12;
 	else if (arg == "export") action = 6;
 	else if (arg == "clear") action = 7;
 	else if (arg == "close") action = 8;
 	else if (arg.empty() || arg == "status") {
-		char line[320]; std::snprintf(line, sizeof(line), "Death Recap %s | parts 0x%x | capture %s | panel %s | dropped %llu | partial coverage. open / previous / next / export / clear / close",
-			Version, recap::native::Parts(), recap::native::Faulted() ? "off" : "available", panelReady ? "ready" : "off", static_cast<unsigned long long>(recap::native::Dropped()));
+		char line[320];
+		std::snprintf(
+			line, sizeof(line),
+			"Death Recap %s | parts 0x%x | capture %s | panel %s | dropped %llu | partial coverage. open / expand / up / down / export / clear / close",
+			Version, recap::native::Parts(), recap::native::Faulted() ? "off" : "available", panelReady ? "ready" : "off",
+			static_cast<unsigned long long>(recap::native::Dropped()));
 		cmd->plugin->WriteConsoleMessage(line);
 		plog::Info("%s", line);
 	} else return D2RL::ConsoleCommandResult::InvalidArguments;
@@ -206,12 +221,21 @@ bool Register() noexcept {
 	if (overlay->registerFrameCallback(context, &clock, &clockHandle) != D2RL::Overlay::Result::Success) return false;
 	const D2RL::InputService* input = nullptr;
 	if (context->QueryService(&input) == D2RL::ServiceQueryResult::Success && D2RL::HasInputServiceField(input, D2RL::InputServiceRequiredSize)) {
-		constexpr const char* ids[] {"reopen", "previous", "next", "timeline-previous", "timeline-next"};
-		constexpr const char* labels[] {"Toggle latest death recap", "Previous death recap", "Next death recap", "Previous recap timeline page", "Next recap timeline page"};
-		constexpr D2RL::Input::Key keys[] {D2RL::Input::Key::F8, D2RL::Input::Key::LeftBracket, D2RL::Input::Key::RightBracket, D2RL::Input::Key::PageUp, D2RL::Input::Key::PageDown};
-		for (uintptr_t i = 0; i < 5; ++i) {
-			D2RL::Input::ActionRegistration r {}; r.structSize = sizeof(r); r.logicalId = ids[i]; r.displayName = labels[i]; r.category = "Death Recap";
-			r.defaultPrimary.key = keys[i]; r.callback = OnAction; r.userData = reinterpret_cast<void*>(i + 1);
+		constexpr const char *ids[]{"reopen", "section-up", "section-down", "details-up", "details-down", "expand", "scroll-up", "scroll-down"};
+		constexpr const char *labels[]{"Toggle latest death recap", "Previous recap section", "Next recap section", "Previous detail page",
+									   "Next detail page",			"Expand recap section",	  "Scroll recap up",	"Scroll recap down"};
+		constexpr D2RL::Input::Key keys[]{D2RL::Input::Key::F8,		  D2RL::Input::Key::W,	   D2RL::Input::Key::S,	   D2RL::Input::Key::PageUp,
+										  D2RL::Input::Key::PageDown, D2RL::Input::Key::Enter, D2RL::Input::Key::Home, D2RL::Input::Key::End};
+		constexpr uintptr_t commands[]{1, 2, 3, 4, 5, 11, 12, 13};
+		for (uintptr_t i = 0; i < 8; ++i) {
+			D2RL::Input::ActionRegistration r{};
+			r.structSize = sizeof(r);
+			r.logicalId = ids[i];
+			r.displayName = labels[i];
+			r.category = "Death Recap";
+			r.defaultPrimary.key = keys[i];
+			r.callback = OnAction;
+			r.userData = reinterpret_cast<void *>(commands[i]);
 			D2RL::Input::ActionHandle h = 0;
 			if (input->registerAction(context, &r, &h) != D2RL::Input::Result::Success) plog::Warn("input action %s unavailable", ids[i]);
 		}
@@ -221,6 +245,7 @@ bool Register() noexcept {
 void Cleanup() noexcept {
 	stopping = true; recap::native::Stop();
 	controller.Stop();
+	recap::panel::Stop();
 	if (overlay && clockHandle) (void)overlay->unregisterFrameCallback(context, clockHandle);
 	{ std::lock_guard lock(storageMutex); writerStop = true; storageWake.notify_one(); }
 	if (writer.joinable()) writer.join();
@@ -247,7 +272,7 @@ D2RL_PLUGIN_EXPORT auto D2RLoaderLoadPlugin(const D2RL::PluginContext* ctx) noex
 		if (!recap::InstallNames(ctx)) plog::Warn("localized source names and state table bounds unavailable");
 		plog::Info("native panel %s", panelReady ? "ready" : "off: missing service/signature");
 		if (!recap::native::Install(ctx)) { plog::Error("capture original unavailable; rejecting load to restore mutations"); Cleanup(); return false; }
-		plog::Info("%s loaded; capture partial, no live validation", Version);
+		plog::Info("%s loaded; capture partial", Version);
 		return true;
 	} catch (...) { Cleanup(); return false; }
 }

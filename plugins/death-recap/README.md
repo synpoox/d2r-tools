@@ -1,12 +1,12 @@
 # Death Recap
 
-An unreleased D2RLoader plugin that records measured health and mana changes before your character dies and presents a native recap with local history. This is an alpha implementation with **partial coverage**, not a release or a claim of complete combat telemetry. A narrow in-game loading/coexistence and synthetic-panel smoke check passed; real death capture remains unverified.
+An unreleased D2RLoader plugin that records measured health and mana changes before your character dies and presents a native recap with local history. This is an alpha implementation with **partial coverage**, not a release or a claim of complete combat telemetry. Native UI refinement and narrow real-death/resurrection checks have passed on 3.4; the broader combat coverage matrix remains unverified.
 
 ## Features
 
 - Guarded local HP/mana commit and healing observations, separate regeneration endpoints, and one report per observed local death.
-- Native recap panel with timeline pages, HP sample graph, source and element subtotals, and a defense/state snapshot. Missing attribution, amounts and killing-blow evidence remain unavailable.
-- Reopenable history, bounded local retention, clear-history and JSON export. Storage runs on a worker outside combat callbacks.
+- Native recap with a killing-blow summary, sorted elemental bars, a life step graph with healing markers, and three initially collapsed detail sections. Missing attribution and amounts remain explicitly unavailable.
+- Reopen the latest report, scroll and page its advanced telemetry, and retain bounded local history. Storage runs on a worker outside combat callbacks.
 
 ## Requirements
 
@@ -29,14 +29,19 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin death-recap -Te
 | Input | Action |
 |---|---|
 | F8 | Dismiss or reopen latest recap |
-| [ / ] | Previous / next report while open |
-| Page Up / Page Down | Previous / next timeline page |
+| Mouse | Click a section to expand/collapse; click Close to dismiss |
+| Mouse wheel / Home / End | Scroll the recap |
+| W / S | Select previous / next section |
+| Enter | Expand / collapse selected section |
+| Page Up / Page Down | Previous / next detail page |
 | Escape | Dismiss |
-| Controller D-pad left / right | Previous / next report while open |
-| Controller D-pad up / down | Previous / next timeline page |
-| Controller B | Dismiss; stock gameplay controls remain untouched |
+| Controller D-pad up / down | Select previous / next section |
+| Controller A | Expand / collapse selected section |
+| Controller D-pad left / right | Scroll up / down |
+| Controller LB / RB | Previous / next detail page |
+| Controller B | Dismiss |
 
-Keyboard actions are rebindable in the loader. Controller reopen uses an optional native UI-switcher route after inventory, paired with inventory. The SDK allows one global route; another plugin's route is preserved if it conflicts. Auto-open works independently of that route. Controller behavior and revive compatibility have not been checked live.
+Keyboard actions are rebindable in the loader. Controller reopen uses an optional native UI-switcher route after inventory. The SDK allows one global route; another plugin's route is preserved if it conflicts. Automatic opening waits until the normal death confirmation and resurrection finish; it does not dismiss or replace the stock death prompt. Reopening resets all sections. Keyboard/mouse and resurrection have been checked live; a physical controller has not.
 
 ## Configuration
 
@@ -45,11 +50,11 @@ The embedded defaults are consumed at load; restart after edits.
 | Setting under `[death-recap]` | Default | Meaning |
 |---|---|---|
 | `enabled` | `true` | Enable observations and presentation |
-| `window_seconds` | `10` | Rolling report window, clamped to 1–60 seconds |
-| `auto_open` | `true` | Open the recap after a recorded death |
-| `history_limit` | `20` | Maximum retained reports, clamped to 1–100 |
+| `window_seconds` | `10` | Rolling report window, clamped to 1â€“60 seconds |
+| `auto_open` | `true` | Open the recap after the recorded death is confirmed and the character resurrects |
+| `history_limit` | `20` | Maximum retained reports, clamped to 1â€“100 |
 
-Malformed settings retain their defaults. Reports and `latest-export.json` live under `%LOCALAPPDATA%/D2RLoader/death-recap/`, outside character saves. History uses a versioned numeric schema, atomic replacement and a 32 MiB disk limit; the oldest reports are omitted from disk if necessary. Missing/corrupt/unsupported history starts empty in memory and never changes a character. An export contains raw resource units, field evidence, events, names and defenses; unavailable amounts use JSON null. Defense stats retain native stat units. Timestamps are monotonic process/boot-relative milliseconds, not wall-clock dates.
+Malformed settings retain their defaults. Reports and `latest-export.json` live under `%LOCALAPPDATA%/D2RLoader/death-recap/`, outside character saves. History uses a versioned numeric schema, atomic replacement and a 32 MiB disk limit; the oldest reports are omitted from disk if necessary. Missing/corrupt/unsupported history starts empty in memory and never changes a character. History format 2 preserves level and localized area context and reads earlier format-1 reports. An export contains raw resource units, field evidence, events, names and defenses; unavailable amounts use JSON null. Defense stats retain native stat units. Timestamps are monotonic process/boot-relative milliseconds, not wall-clock dates.
 
 ## Coverage and validation
 
@@ -57,7 +62,7 @@ Always interpret totals as measured subtotals. Regeneration commits can combine 
 
 Source names are copied from active compiled tables and SDK localization; unavailable numeric localization uses the active `monstats:<Id>` key. Persisted names are owned by the report and do not change with the active mod. State capture is bounded and shows truncation. A lost feed event leaves a sequence gap; a saturated death marker is retried. Nested mutations are not added twice.
 
-Windows x64 DLL build and all three host test executables pass with the installed VS2019/MSVC 19.29 toolchain. The static dump checker passes all 17 patterns/witnesses. The requested VS2022 toolchain is unavailable on this machine. A narrow 3.4/1920x1080 smoke check verified loading with nine peer plugins, synthetic-panel rendering, Escape/reopen, timeline paging, unchanged history and no new diagnostics against the baseline. No character was killed. Combat coverage, host/join behavior and controller interaction remain unverified. See [testing and synthetic preview](TESTING.md).
+Windows x64 DLL build and four host test executables pass with the installed VS2019/MSVC 19.29 toolchain. The dump checker passes all 20 capture/UI/context witnesses. VS2022 is unavailable on this machine. Native UI checks include synthetic multi-element/healing reports and actual deaths, captured level/area context, repeated reports, dismissal, reopening, expansion, paging and resurrection. Validation details and remaining platform/input gaps are in [TESTING.md](TESTING.md).
 
 See [native implementation evidence](../../docs/reverse-engineering/death-recap-implementation.md), [static contracts](../../docs/reverse-engineering/death-recap-static.md), and [handoff](HANDOFF.md) for remaining acceptance work.
 
