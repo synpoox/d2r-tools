@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.29)
+project(armory_model_tests LANGUAGES CXX)
+enable_testing()
+add_executable(armory_tests test_model.cpp)
+target_compile_features(armory_tests PRIVATE cxx_std_20)
+add_test(NAME armory_model COMMAND armory_tests)
