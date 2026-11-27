@@ -8,7 +8,7 @@ Repository base: a1b3bede94cd9047bfb446aefed768a3d2ec77bf. Pinned PluginSDK: 717
 - inventory.h exposes getLocalPlayer, getEquippedItem, forEachInventoryItem; ItemInfo supplies seeds, code, quality, affixes, location, runtime id and handle. Handles are session-bound. These fields are candidates, not proven permanent identifiers. The toolkit reports runtime service size differences on loader 1.3.1; check individual field ends and capabilities, not just header versions.
 - Toolkit knowledge/d2rloader-capabilities.md confirms storage-only move transactions and authoritative host item mutations, with clients messaging host. Do not use closed Battle.net.
 - Toolkit knowledge/d2r-93847-addresses.md identifies 0x34DBE0 as mark stats changed (unit, 1), not a complete inventory refresh.
-- Candidate addresses supplied in task: 0x471E90 mover, 0x46E050 layout validator, 0x36BC50 requirements, 0x34DBE0 stats changed, 0x470CA0 activation refresh, 0x4AA450 equip and 0x4AABA0 unequip. All are unverified for Armory. No byte guards or calling contracts have been established. Do not bind or call any of them.
+- Candidate addresses supplied in task: 0x471E90 mover, 0x46E050 layout validator, 0x36BC50 requirements, 0x34DBE0 stats changed, 0x470CA0 activation refresh, 0x4AA450 equip and 0x4AABA0 unequip. Initially unverified; see the subsequent dump audit below. Do not call these functions until native contracts and safety gates are established.
 - The domain guide path referenced by AGENTS.md was not found on main. CONTRIBUTING.md, AGENTS.md, RVA workflow and MultiSpec conventions were reviewed.
 
 ## Gate: native proof of concept
@@ -30,4 +30,33 @@ First prove swapping one worn item with an incoming stored item, with no spare c
 
 Portable model tests exercise vacated storage reuse, all-or-nothing model publication, stale revision, missing/ambiguous fingerprints, duplicate selection, partial loadout protection, full storage, unsafe context and missing validator. Run with C++20. This does not prove native atomicity, equipment requirements, persistence or network synchronization. The model assumes the adapter supplies trustworthy owned-item snapshots and a real validator. The bounded packing search can conservatively refuse a solvable layout. Slot numbering and grid bounds are model assumptions until native verification.
 
-Remaining: dump check, native proof, actual adapter, persistence, UI/hotkeys, host/client protocol, Windows DLL build and game-slot testing. No native write is present in this branch.
+Remaining: native proof, actual adapter, persistence, UI/hotkeys, host/client protocol, Windows DLL build and game-slot testing. No native write is present in this branch.
+
+## Dump audit: image 0x6AB3782C
+
+Inspected a private unpacked memory-layout x64 PE image from the supplied archive. Image size 90,451,968 bytes; SHA-256 `c6c49d1c4bf2d8f496aca6c786047a3494e99a7560e81a19aed711946c7a12d2`. PE stamp matches the target image registry. No game binary, archive, or private storage link is committed.
+
+All seven candidate entries resolve uniquely in executable .text and are corroborated by x64 exception-directory function-start entries. The portable resolver in `plugins/armory/src/native_signatures.h` returns a resolved address or null for missing/ambiguous signatures; no fixed RVA or absolute address fallback. It accepts a validated readable executable span; live module discovery, runtime function-entry corroboration, and contract checks remain adapter work. Relative instruction displacements are masked. The signatures are build witnesses, not a promise of cross-build compatibility.
+
+| Candidate | Observed static behavior |
+| --- | --- |
+| Mover | Native equipment handlers invoke it; counted array processing and a requirement-failure restoration branch observed. |
+| Layout | Validates both primary and weapon-swap arms; diagnostic strings corroborate. |
+| Requirements | Called during post-layout validation; return checked before success. |
+| StatsChanged | Sets/clears unit change flags; not a complete inventory refresh. |
+| Activation | Iterates inventory; invoked after layout application and again on restoration. |
+| Equip / Unequip | Both invoke the mover; normal successful branch tests nonzero AL. |
+
+### Mover contract evidence
+
+Windows x64 register/stack dataflow shows six argument positions: player-like pointer, source location array, destination location array, expected runtime-item-ID array, count, and a byte flag. Native callers exhibit counts of one and two; another caller forwards a variable count. Source/destination records have a 16-byte stride; ID array has a four-byte stride. Full count limit, flag semantics, page policy and valid location kinds remain unproven. The apparent size checks in the implementation are internal bounds, not permission to submit that many moves.
+
+The native mover snapshots inventory state, resolves sources against expected IDs, builds a prospective layout and invokes the layout validator. It then applies layout changes and refreshes activation before checking requirements on changed equipment. The requirement-rejection branch applies a reverse layout and refreshes activation again before returning false. This is evidence of a native transaction and an explicit restoration path, but not proof of failure atomicity: event/packet ordering, stat effects, shared stash, attribute dependencies, cursor and weapon-swap behavior still require static callee analysis and controlled game-thread tests. Do not bypass the native checks or assume the flag is safe.
+
+### Validation performed
+
+- Dump checker: all seven signatures matched exactly once and resolved to function entries.
+- Portable C++20 model and signature tests: compiled with GCC warnings-as-errors, passed. Resolver also passed against extracted executable .text.
+- No native code was executed; no item mutation, Windows DLL build, game install, or TCP/IP testing occurred.
+
+Next: audit native layout application/restoration callees for state changes and synchronization, then implement a gated native proof using a disposable character in the authorized offline/TCP/IP environment. Only enable equipment writes after proving native rollback preserves identity and all relevant state. Runtime entry discovery must use unique signatures, never hardcoded RVAs or absolute virtual addresses.
