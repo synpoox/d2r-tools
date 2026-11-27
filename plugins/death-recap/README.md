@@ -24,8 +24,8 @@ The embedded TOML contains the proposed default window and a disabled flag. No c
 
 ## Compatibility
 
-Target: D2R 3.3 / D2RLoader 1.3.1, offline and supported modded TCP/IP. This development revision is not tested in-game and must not be released. No Battle.net online support.
+Target: D2R 3.3 (93847) and 3.4 (95032) / D2RLoader 1.3.1, shared engine image `0x6ab3782c`, offline and supported modded TCP/IP. This development revision is not tested in-game and must not be released. No Battle.net online support.
 
-See [agent handoff](HANDOFF.md), [verified static capture contracts](../../docs/reverse-engineering/death-recap-static.md) and [native capture architecture](../../docs/reverse-engineering/death-recap.md). Target-image static RE has been completed for the documented direct resource commit points and player death path; live validation and alternate D2RCore writers remain outstanding. The telemetry buffer assumes a serialized producer; the adapter must supply unique canonical events and preserve resource provenance. The report owns its copied events; publish it as const across threads. A mathematically reconciled report can still have unclassified transitions, incomplete attribution, or incomplete capture.
+See [agent handoff](HANDOFF.md), [verified static capture contracts](../../docs/reverse-engineering/death-recap-static.md) and [native capture architecture](../../docs/reverse-engineering/death-recap.md). Target-image static RE has been completed for the documented direct resource commit points and player death path; native adapter implementation, alternate resource paths and live validation remain outstanding. Start with the handoff; no separate dump is a prerequisite. The telemetry buffer assumes a serialized producer; the adapter must supply unique canonical events and preserve resource provenance. The report owns its copied events; publish it as const across threads. A mathematically reconciled report can still have unclassified transitions, incomplete attribution, or incomplete capture.
 
 MIT licensed.
