@@ -11,13 +11,64 @@
 #else
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <cerrno>
 #endif
 namespace armory {
-enum class StoreResult { Ok, Missing, Invalid, IoError };
+enum class StoreResult { Ok, Missing, Invalid, IoError, Busy };
+inline bool IsArmoryPath(const std::filesystem::path& path) { return path.extension() == ".armory"; }
+// A persistent lock file is harmless; the OS releases its lock on close or
+// process termination. Never unlink a POSIX lock file while other writers may
+// be waiting on its inode.
+class WriteLock {
+#ifdef _WIN32
+    HANDLE handle_ = INVALID_HANDLE_VALUE;
+#else
+    int fd_ = -1;
+#endif
+public:
+    explicit WriteLock(const std::filesystem::path& path) {
+        if (!IsArmoryPath(path)) return;
+        auto lock=path; lock += ".lock";
+#ifdef _WIN32
+        handle_=CreateFileW(lock.c_str(),GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+        if (handle_ != INVALID_HANDLE_VALUE) {
+            BY_HANDLE_FILE_INFORMATION info{};
+            if (!GetFileInformationByHandle(handle_,&info) || (info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_DIRECTORY))) {
+                CloseHandle(handle_); handle_=INVALID_HANDLE_VALUE;
+            }
+        }
+#else
+        fd_=open(lock.c_str(),O_RDWR|O_CREAT|O_NOFOLLOW,0600);
+        if (fd_>=0) {
+            struct stat info{};
+            if (fstat(fd_,&info)!=0 || !S_ISREG(info.st_mode) || flock(fd_,LOCK_EX|LOCK_NB)!=0) { close(fd_); fd_=-1; }
+        }
+#endif
+    }
+    WriteLock(const WriteLock&)=delete;
+    WriteLock& operator=(const WriteLock&)=delete;
+    ~WriteLock() {
+#ifdef _WIN32
+        if (handle_!=INVALID_HANDLE_VALUE) CloseHandle(handle_);
+#else
+        if (fd_>=0) close(fd_);
+#endif
+    }
+    explicit operator bool() const {
+#ifdef _WIN32
+        return handle_!=INVALID_HANDLE_VALUE;
+#else
+        return fd_>=0;
+#endif
+    }
+};
 // Caller supplies a dedicated Armory path and verified character scope. A corrupt
 // existing file must never be interpreted as an empty book and overwritten.
 inline StoreResult ReadBook(const std::filesystem::path& path, std::string_view scope, Book& output) {
+    if (!IsArmoryPath(path)) return StoreResult::Invalid;
     std::error_code ec;
     auto status = std::filesystem::symlink_status(path, ec);
     if (status.type() == std::filesystem::file_type::not_found) return StoreResult::Missing;
@@ -37,6 +88,7 @@ inline StoreResult ReadBook(const std::filesystem::path& path, std::string_view 
 // Same-directory exclusive temp, flush before atomic rename. A leftover temp
 // from a crash blocks writes rather than overwriting another writer's file.
 inline bool AtomicWrite(const std::filesystem::path& path, std::string_view bytes) {
+    if (!IsArmoryPath(path) || bytes.size()>MaxFile) return false;
     auto temp = path; temp += ".tmp";
 #ifdef _WIN32
     HANDLE h = CreateFileW(temp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
@@ -63,12 +115,14 @@ inline bool AtomicWrite(const std::filesystem::path& path, std::string_view byte
 #endif
     return ok;
 }
-// One serialized writer per character is required; callers must hold the
-// character-scoped lock across the disk comparison and replacement.
+// Hold the OS lock across comparison and replacement. The caller still owns
+// synchronization of its in-memory Book and game session.
 inline StoreResult CommitBook(const std::filesystem::path& path, Book& current, const Book& next) {
-    if (!ValidBook(current) || current.scope != next.scope) return StoreResult::Invalid;
+    if (!IsArmoryPath(path) || !ValidBook(current) || current.scope != next.scope) return StoreResult::Invalid;
     auto data = Encode(next);
     if (!data) return StoreResult::Invalid;
+    WriteLock lock(path);
+    if (!lock) return StoreResult::Busy;
     Book disk;
     auto result = ReadBook(path, current.scope, disk);
     if (result == StoreResult::Ok && disk != current) return StoreResult::Invalid;

@@ -20,10 +20,15 @@ int main() {
     Check(!Decode(*bytes,"other")); Check(!Decode(*bytes+"x",book.scope));
     for (size_t i=0; i<bytes->size(); ++i) Check(!Decode(std::string_view(*bytes).substr(0,i),book.scope));
     auto wrong = *bytes; wrong[4]=2; Check(!Decode(wrong,book.scope));
+    wrong=*bytes; wrong[wrong.size()/2]^=1; Check(!Decode(wrong,book.scope));
     s.items.push_back({3,a,{0,1,0},1,1}); Check(!Capture(s,1u<<10)); Check(Active(book,s).empty());
     auto dir=std::filesystem::temp_directory_path()/ ("armory-test-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     Check(std::filesystem::create_directory(dir)); auto path=dir/"test.armory";
-    Book current{book.scope,{}}; Check(CommitBook(path,current,book)==StoreResult::Ok && current==book);
+    Book current{book.scope,{}};
+    auto nativeSave=dir/"test.d2s";
+    Check(CommitBook(nativeSave,current,book)==StoreResult::Invalid && !std::filesystem::exists(nativeSave));
+    { WriteLock lock(path); Check(static_cast<bool>(lock)); Check(CommitBook(path,current,book)==StoreResult::Busy && current.entries.empty()); }
+    Check(CommitBook(path,current,book)==StoreResult::Ok && current==book);
     Book loaded; Check(ReadBook(path,book.scope,loaded)==StoreResult::Ok && loaded==book);
     auto next=book; Check(Erase(next,"Boss"));
     { std::ofstream lock(path.string()+".tmp"); lock<<"occupied"; }

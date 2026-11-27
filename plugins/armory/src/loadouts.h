@@ -95,6 +95,15 @@ inline std::optional<size_t> Cycle(const Book& b, std::optional<size_t> current,
 // Versioned, bounded, little-endian wire format. No runtime handles or locations.
 namespace wire {
 inline void Put(std::string& out, uint32_t n) { for (unsigned i = 0; i < 4; ++i) out.push_back(static_cast<char>((n >> (8*i)) & 255)); }
+// Detect accidental corruption of the sidecar; not an authentication code.
+inline uint32_t Checksum(std::string_view bytes) {
+    uint32_t crc = 0xffffffffu;
+    for (unsigned char c : bytes) {
+        crc ^= c;
+        for (unsigned bit=0; bit<8; ++bit) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+    }
+    return ~crc;
+}
 inline void Text(std::string& out, std::string_view s) { Put(out, static_cast<uint32_t>(s.size())); out.append(s); }
 struct Reader {
     std::string_view bytes;
@@ -137,10 +146,15 @@ inline std::optional<std::string> Encode(const Book& b) {
             if (ref) wire::WriteFingerprint(out, *ref);
         }
     }
+    wire::Put(out, wire::Checksum(out));
     return out;
 }
 inline std::optional<Book> Decode(std::string_view bytes, std::string_view expectedScope) {
     if (!ValidText(expectedScope, MaxScope) || bytes.size() > MaxFile || !bytes.starts_with("ARMY")) return std::nullopt;
+    if (bytes.size() < 8) return std::nullopt;
+    wire::Reader tail{bytes.substr(bytes.size()-4)};
+    bytes.remove_suffix(4);
+    if (tail.Get() != wire::Checksum(bytes)) return std::nullopt;
     wire::Reader r{bytes.substr(4)};
     if (r.Get() != 1) return std::nullopt;
     Book b{r.Text(MaxScope), {}};
