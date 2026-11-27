@@ -1,15 +1,23 @@
-# Armory (experimental, not installable)
+# Armory (experimental diagnostics)
 
-Armory will save named equipment loadouts and switch between them in town.
+Armory will save named equipment loadouts and switch between them in town. This branch is not a player-ready release. It contains a portable loadout manager, transaction planner, sidecar store, signature resolver, and a read-only diagnostic DLL target. Equipment switching and in-game loadout persistence are not enabled.
 
-This branch contains a portable transaction planner, named-loadout model, sidecar store, signature resolver, and tests only. It does not produce a plugin DLL, touch game items or enable equipment switching. Do not merge or release until the native transaction gate in [the investigation](../../docs/reverse-engineering/armory.md) is satisfied and the normal plugin build is wired up.
+## Build and test
 
-Run the model tests:
+Windows x64, Visual Studio 2022, CMake 3.29+, and the repository's pinned PluginSDK:
+
+    powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin armory -Test
+
+The Windows DLL target has not yet been built or installed. Use only a disposable game slot for diagnostics; see [TESTING.md](TESTING.md).
+
+The portable tests also build without the SDK:
 
     cmake -S plugins/armory/tests -B build/armory-model
     cmake --build build/armory-model --config Release
     ctest --test-dir build/armory-model -C Release --output-on-failure
 
-The model treats an absent equipment slot as unchanged, an explicit empty slot as unequip, and a fingerprint as a required item. It refuses missing/ambiguous matches, unsafe contexts and stale revisions. Outgoing equipment is packed into supported storage grids after incoming cells are released in the hypothetical final layout. This does not prove the engine can execute that layout atomically.
+The model treats an absent equipment slot as unchanged, an explicit empty slot as unequip, and a fingerprint as a required item. It rejects missing/ambiguous matches, unsafe contexts and stale revisions. Outgoing equipment can reuse incoming items' vacated storage cells in the hypothetical final layout.
 
-The loadout core supports full/partial capture, add/rename/update/delete, cycling, multiple active matches, and a bounded versioned character-scoped sidecar. A failed write does not publish a new book. The caller must supply an isolated Armory path, trusted scope and serialized character writer. Identity stability and Windows persistence behavior remain unverified in game.
+Named loadouts support capture, add/rename/update/delete, cycle, multiple active matches, and a bounded character-scoped sidecar. The caller must supply an isolated Armory path, verified scope and serialized character writer. Fingerprints and the file format remain experimental.
+
+See the [native transaction investigation](../../docs/reverse-engineering/armory.md) for the release gate. No native equipment function is invoked by the DLL target, even when all signatures resolve.
