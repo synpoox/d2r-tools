@@ -1,6 +1,6 @@
 # Death Recap: capture investigation and validation gate
 
-Date: 2026-11-27. Consumer: death-recap. Target module: unpacked D2R.exe, D2R 3.3 build 93847 / Steam 94995 with D2RLoader 1.3.1, reported image stamp 0x6ab3782c.
+Date: 2026-11-27. Consumer: death-recap. Target: D2RLoader 1.3.1 engine image 0x6ab3782c, shared by D2R 3.3 (93847) and 3.4 (95032); see the verified static contracts for image identity.
 
 **Evidence level:** Initial desk audit below is retained for context. Follow-up static analysis independently verified the target executable's instructions, resource commit points, player death path and unique masked signatures. See [verified static capture contracts](death-recap-static.md) for the authoritative updated findings and [implementation handoff](../../plugins/death-recap/HANDOFF.md). The old candidate table is historical: in particular, 0x44db20 alone is not player death detection, and its proposed 24-byte guard is not unique. No native hooks are installed; live game validation remains outstanding.
 
@@ -51,5 +51,5 @@ Gate before native UI: repeatable fixture traces with exact life/mana conservati
 
 - Game-independent C++20 tests passed on Linux with GCC and Clang, -Wall -Wextra -Wpedantic -Werror -O2 -DNDEBUG, and GCC with AddressSanitizer and UndefinedBehaviorSanitizer. Committed source/test blob hashes matched tested copies. Aggregation tests check separate origin/attacker/skill unknown buckets and element coverage.
 - Windows/MSVC DLL build: not run. SDK pin not inspected in a local clone.
-- Target image static analysis: completed for the contracts and patterns in [death-recap-static.md](death-recap-static.md). Matching D2RCore implementation and live game slot: not inspected/tested. Native capture, UI, persistence and full mechanic coverage: not implemented.
+- Target image static analysis: completed for the contracts and patterns in [death-recap-static.md](death-recap-static.md). Alternate mutation/event paths and live game-slot behavior still require validation; no separate dump is a prerequisite. Native capture, UI, persistence and full mechanic coverage: not implemented.
 - Fail-open behavior: development DLL does not install engine hooks. It reports capture unavailable. Do not distribute this revision.
