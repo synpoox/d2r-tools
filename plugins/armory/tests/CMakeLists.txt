@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.29)
 project(armory_model_tests LANGUAGES CXX)
 enable_testing()
-foreach(test IN ITEMS model signatures loadouts image batch)
+foreach(test IN ITEMS model signatures loadouts image batch requirements peer)
     add_executable(armory_${test}_tests test_${test}.cpp)
     target_compile_features(armory_${test}_tests PRIVATE cxx_std_20)
     add_test(NAME armory_${test} COMMAND armory_${test}_tests)
