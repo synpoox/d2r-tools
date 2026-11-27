@@ -1,0 +1,6 @@
+# Development build: measured subtotals, always marked partial coverage.
+[death-recap]
+enabled = true
+window_seconds = 10
+auto_open = true
+history_limit = 20
