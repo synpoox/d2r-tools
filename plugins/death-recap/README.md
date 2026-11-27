@@ -5,7 +5,8 @@ Development branch only; **not a playable plugin yet**. This revision builds the
 ## Implemented
 - Bounded single-producer rolling buffer with a ten-second default reporting window.
 - Confirmed/inferred/unavailable fields; separate gross loss, restoration and unexplained net resource changes in raw 1/256 units.
-- Synthetic tests for resource conservation, overlapping healing and damage, mana changes, rejected event IDs, death freezing, rolling overflow and report ownership.
+- Synthetic tests for resource conservation, overlapping healing and damage, mana changes, rejected and missing event IDs, death freezing, rolling overflow and report ownership.
+- Confirmed fatal-sequence linking; separate source/ability and elemental pre/post totals, with explicit unknown buckets and coverage counts.
 
 ## Build and test
 
@@ -15,7 +16,7 @@ From the repository root on Windows x64 with Visual Studio 2022 and the pinned S
 powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Plugin death-recap -Test
 ```
 
-The portable test was also compiled with a Linux C++20 compiler using warnings as errors and NDEBUG. Windows DLL compilation and game installation have not been tested.
+The portable tests passed with GCC and Clang on Linux, warnings as errors and NDEBUG, and GCC with AddressSanitizer and UndefinedBehaviorSanitizer. Windows DLL compilation and game installation have not been tested.
 
 ## Configuration
 
