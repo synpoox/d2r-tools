@@ -1,0 +1,1 @@
+- Added the game-independent foundation for recording combat before death.
