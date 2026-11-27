@@ -12,7 +12,7 @@ A feature document that grows by one section per RE or game-check PR is split in
 
 ## Feature documents
 
-- [Death Recap](death-recap.md): damage and resource capture candidates, accounting contract, and live validation gate (desk audit only; no hooks installed).
+- [Death Recap](death-recap.md): capture architecture and live validation gate; [independently verified static contracts](death-recap-static.md) for damage, resources and player death (no hooks installed).
 
 - [Known RVAs reference](known-rvas-reference.md): an outside build 92777 address list, for names and notes only; not for fixed RVAs in code.
 - [Quick NPC](quick-npc.md): NPC left-click path, modifier keys, the NPC menu table, menu option handlers
