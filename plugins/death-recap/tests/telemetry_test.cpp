@@ -1,4 +1,5 @@
 #include "telemetry.h"
+#include "summary.h"
 #include <cstdlib>
 #include <iostream>
 
@@ -31,6 +32,18 @@ int main() {
 	CHECK(b.Freeze(1000)->timeline.size() == 2);
 	CHECK(b.Freeze(1000)->boundaryUnconfirmed);
 	CHECK(KillingBlow(*r) && KillingBlow(*r)->sequence == 4);
+	// A confirmed source groups measured loss; inferred source is unknown.
+	r->timeline[0].origin = {{1, 17, 2}, Evidence::Confirmed};
+	r->timeline[0].skill = {12, Evidence::Confirmed};
+	r->timeline[0].damage.postByElement[0] = C(120);
+	r->timeline[1].origin = {{1, 17, 2}, Evidence::Inferred};
+	const auto summary = Summarize(*r);
+	CHECK(summary.damageEvents == 3 && summary.actualLifeLost.total == 1150);
+	CHECK(summary.lossByOrigin.at(std::nullopt).total == 1050);
+	CHECK(summary.lossByOrigin.at(Key(r->timeline[0].origin)).total == 100);
+	CHECK(summary.lossBySkill.at(12).total == 100);
+	CHECK(summary.postByElement[0].total == 120 && summary.postByElement[0].known == 1 && summary.postByElement[0].unknown == 2);
+	CHECK(summary.overkill.known == 0 && summary.overkill.unknown == 3);
 	b.Reset(7, 0);
 	CHECK(b.Push(E(1, 100, Kind::Sample, {{}, C(1000), {}, {}})));
 	CHECK(b.Push(E(2, 200, Kind::Damage, {C(900), C(700), {}, {}})));
@@ -41,6 +54,7 @@ int main() {
 	r = b.Freeze();
 	CHECK(r->life.Reconciled() && !r->life.Complete() && r->life.lost == 0 && r->life.unresolvedNet == -300);
 	CHECK(r->rejected == 2 && !KillingBlow(*r) && r->deathResourcesUnconfirmed);
+	CHECK(Summarize(*r).actualLifeLost.unknown == 1);
 	b.Reset(7, 0);
 	CHECK(b.Push(E(1, 0, Kind::Sample, {{}, C(1000), {}, {}}, {{}, C(500), {}, {}})));
 	CHECK(b.Push(E(3, 1, Kind::Death, {{}, C(1000), {}, {}}, {{}, C(500), {}, {}})));
