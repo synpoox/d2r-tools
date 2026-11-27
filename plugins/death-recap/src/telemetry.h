@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
+#include <string>
 
 namespace recap {
 
@@ -48,6 +49,7 @@ struct Event {
 	Evidence cause = Evidence::Unavailable;
 	Field<Unit> attacker, origin, missile;
 	Field<uint32_t> skill;
+	Field<uint32_t> dataBank;
 	Field<uint64_t> fatalSequence;  // only on the confirmed death marker
 	Amount maxLife, maxMana;
 	std::array<Field<uint32_t>, 16> modifiers {};
@@ -66,6 +68,7 @@ struct Accounting {
 		return Reconciled() && unresolvedTransitions == 0 && missingEndpoints == 0;
 	}
 };
+struct NamedUnit { Unit unit; uint32_t bank = 0; std::string text; };
 struct Report {
 	uint64_t session = 0, deathMs = 0, windowStartMs = 0;
 	bool windowTruncated = false;
@@ -73,6 +76,10 @@ struct Report {
 	bool sequenceGap = false, boundaryUnconfirmed = false, deathResourcesUnconfirmed = false;
 	std::vector<Event> timeline;
 	Accounting life, mana;
+	// Accounting completeness does not establish that every engine writer was observed.
+	bool capturePartial = true, replicated = false;
+	uint64_t feedDropped = 0;
+	std::vector<NamedUnit> names;
 	bool Complete() const noexcept {
 		return !windowTruncated && rejected == 0 && !sequenceGap && !boundaryUnconfirmed &&
 		       !deathResourcesUnconfirmed && life.Complete() && mana.Complete();
