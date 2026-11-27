@@ -1,0 +1,4 @@
+# Development configuration; capture is unavailable in this revision.
+[death-recap]
+enabled = false
+window_seconds = 10
