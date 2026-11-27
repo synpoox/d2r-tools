@@ -29,8 +29,14 @@ struct Damage {
 	Amount pre, post, overkill;
 	std::array<Amount, static_cast<size_t>(Element::Count)> preByElement {}, postByElement {};
 };
+struct Stat {
+	uint32_t id = 0, layer = 0;
+	Amount amount;
+};
 struct Defense {
-	std::array<Field<int32_t>, 16> stats {};
+	std::array<Stat, 16> stats {};
+	uint8_t statCount = 0;
+	bool statsTruncated = false;
 	std::array<uint32_t, 16> states {};
 	uint8_t stateCount = 0;
 	Evidence stateEvidence = Evidence::Unavailable;
@@ -42,6 +48,8 @@ struct Event {
 	Evidence cause = Evidence::Unavailable;
 	Field<Unit> attacker, origin, missile;
 	Field<uint32_t> skill;
+	Field<uint64_t> fatalSequence;  // only on the confirmed death marker
+	Amount maxLife, maxMana;
 	std::array<Field<uint32_t>, 16> modifiers {};
 	Resource life, mana;
 	Damage damage;
@@ -62,12 +70,20 @@ struct Report {
 	uint64_t session = 0, deathMs = 0, windowStartMs = 0;
 	bool windowTruncated = false;
 	uint64_t rejected = 0;
+	bool sequenceGap = false, boundaryUnconfirmed = false, deathResourcesUnconfirmed = false;
 	std::vector<Event> timeline;
 	Accounting life, mana;
 	bool Complete() const noexcept {
-		return !windowTruncated && rejected == 0 && life.Complete() && mana.Complete();
+		return !windowTruncated && rejected == 0 && !sequenceGap && !boundaryUnconfirmed &&
+		       !deathResourcesUnconfirmed && life.Complete() && mana.Complete();
 	}
 };
+
+inline bool GrossKnown(const Resource& r) noexcept {
+	return r.before.Confirmed() && r.after.Confirmed() && r.lost.Confirmed() && r.restored.Confirmed() &&
+	       r.lost.value >= 0 && r.restored.value >= 0 &&
+	       int64_t(r.restored.value) - r.lost.value == int64_t(r.after.value) - r.before.value;
+}
 
 // Only confirmed endpoints participate in accounting. A net change does not prove
 // gross loss/healing; even a zero net change can hide simultaneous changes.
@@ -86,13 +102,12 @@ inline void Account(Accounting& a, const Resource& r, Kind kind) noexcept {
 		return;
 	}
 	if (!r.before.Confirmed()) {
-		if (kind != Kind::Sample) ++a.missingEndpoints;
+		if (kind != Kind::Sample && kind != Kind::Death && kind != Kind::State) ++a.missingEndpoints;
 		gap(r.after.value);
 		return;
 	}
 	const int64_t net = int64_t(r.after.value) - r.before.value;
-	if (r.lost.Confirmed() && r.restored.Confirmed() && r.lost.value >= 0 && r.restored.value >= 0 &&
-	    int64_t(r.restored.value) - r.lost.value == net) {
+	if (GrossKnown(r)) {
 		a.lost += r.lost.value;
 		a.restored += r.restored.value;
 	} else {
@@ -111,13 +126,13 @@ template<size_t Capacity> class Rolling {
 	std::array<Event, Capacity> entries_ {};
 	size_t head_ = 0, count_ = 0;
 	uint64_t session_ = 0, start_ = 0, lastMs_ = 0, lastSeq_ = 0, rejected_ = 0;
-	std::optional<uint64_t> overwrittenMs_;
+	std::optional<uint64_t> overwrittenMs_, lastGapMs_;
 	bool active_ = false, dead_ = false;
 public:
 	void Reset(uint64_t session, uint64_t ms) noexcept {
 		head_ = count_ = 0;
 		session_ = session; start_ = lastMs_ = ms; lastSeq_ = rejected_ = 0;
-		overwrittenMs_.reset(); active_ = true; dead_ = false;
+		overwrittenMs_.reset(); lastGapMs_.reset(); active_ = true; dead_ = false;
 	}
 	bool Push(const Event& e) noexcept {
 		if (!active_ || dead_ || e.session != session_) return false;
@@ -126,6 +141,7 @@ public:
 			++rejected_;
 			return false;
 		}
+		if (e.sequence - lastSeq_ != 1) lastGapMs_ = e.ms;
 		if (count_ == Capacity) {
 			overwrittenMs_ = entries_[head_].ms;
 			head_ = (head_ + 1) % Capacity;
@@ -144,10 +160,18 @@ public:
 		r.windowStartMs = lastMs_ >= windowMs ? lastMs_ - windowMs : 0;
 		r.windowTruncated = start_ > r.windowStartMs || (overwrittenMs_ && *overwrittenMs_ >= r.windowStartMs);
 		r.rejected = rejected_;
+		r.sequenceGap = lastGapMs_ && *lastGapMs_ >= r.windowStartMs;
+		const auto& death = entries_[(head_ + count_ - 1) % Capacity];
+		r.deathResourcesUnconfirmed = !death.life.after.Confirmed() || !death.mana.after.Confirmed();
 		r.timeline.reserve(count_);
 		for (size_t i = 0; i < count_; ++i) {
 			const auto& e = entries_[(head_ + i) % Capacity];
 			if (e.ms < r.windowStartMs) continue;
+			if (r.timeline.empty()) {
+				r.boundaryUnconfirmed = e.ms != r.windowStartMs ||
+				    !(e.life.before.Confirmed() || (e.kind == Kind::Sample && e.life.after.Confirmed())) ||
+				    !(e.mana.before.Confirmed() || (e.kind == Kind::Sample && e.mana.after.Confirmed()));
+			}
 			r.timeline.push_back(e);
 			Account(r.life, e.life, e.kind);
 			Account(r.mana, e.mana, e.kind);
@@ -155,5 +179,18 @@ public:
 		return r;
 	}
 };
+
+// Only an explicit confirmed causal link may name a killing blow. A last hit
+// is not automatically fatal (e.g. a later unattributed persistent tick).
+inline const Event* KillingBlow(const Report& report) noexcept {
+	if (report.timeline.empty()) return nullptr;
+	const auto& death = report.timeline.back();
+	if (death.kind != Kind::Death || !death.fatalSequence.Confirmed()) return nullptr;
+	for (const auto& event : report.timeline) {
+		if (event.sequence == death.fatalSequence.value && event.sequence < death.sequence &&
+		    event.kind == Kind::Damage && event.cause == Evidence::Confirmed) return &event;
+	}
+	return nullptr;
+}
 
 }  // namespace recap
