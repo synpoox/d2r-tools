@@ -21,3 +21,5 @@ The model treats an absent equipment slot as unchanged, an explicit empty slot a
 Named loadouts support capture, add/rename/update/delete, cycle, multiple active matches, and a bounded character-scoped sidecar. The store rejects non-.armory paths, checks a checksum, and holds an OS writer lock through compare-and-replace. The caller must supply an isolated Armory path, verified scope and synchronize the in-memory character state. Fingerprints and the file format remain experimental.
 
 See the [native transaction investigation](../../docs/reverse-engineering/armory.md) for the release gate. No native equipment function is invoked by the DLL target, even when all signatures resolve.
+
+Developer continuation: [implementation handoff](HANDOFF.md).
